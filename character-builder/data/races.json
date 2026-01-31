@@ -1,0 +1,578 @@
+{
+  "aasimar": {
+    "name": "Aasimar",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "cha": 2
+    },
+    "languages": ["Common", "Celestial"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Celestial Resistance - Resistance to necrotic and radiant damage",
+      "Healing Hands - Touch a creature to heal HP equal to your level (once per long rest)",
+      "Light Bearer - You know the Light cantrip"
+    ],
+    "subraces": [
+      {
+        "name": "Protector Aasimar",
+        "abilityScoreIncrease": {
+          "wis": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Celestial Resistance - Resistance to necrotic and radiant damage",
+          "Healing Hands - Touch a creature to heal HP equal to your level (once per long rest)",
+          "Light Bearer - You know the Light cantrip",
+          "Radiant Soul - Once per long rest, unleash divine energy for 1 minute. You can fly with 30 ft speed and deal extra radiant damage equal to your level once per turn"
+        ]
+      },
+      {
+        "name": "Scourge Aasimar",
+        "abilityScoreIncrease": {
+          "con": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Celestial Resistance - Resistance to necrotic and radiant damage",
+          "Healing Hands - Touch a creature to heal HP equal to your level (once per long rest)",
+          "Light Bearer - You know the Light cantrip",
+          "Radiant Consumption - Once per long rest, radiate intense light for 1 minute. You deal radiant damage equal to half your level to yourself and enemies within 10 ft at start of your turns"
+        ]
+      },
+      {
+        "name": "Fallen Aasimar",
+        "abilityScoreIncrease": {
+          "str": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Celestial Resistance - Resistance to necrotic and radiant damage",
+          "Healing Hands - Touch a creature to heal HP equal to your level (once per long rest)",
+          "Light Bearer - You know the Light cantrip",
+          "Necrotic Shroud - Once per long rest, unleash divine energy for 1 minute. Creatures within 10 ft must make CHA save or be frightened. Deal extra necrotic damage equal to your level once per turn"
+        ]
+      }
+    ]
+  },
+  "dragonborn": {
+    "name": "Dragonborn",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "str": 2,
+      "cha": 1
+    },
+    "languages": ["Common", "Draconic"],
+    "traits": [
+      "Draconic Ancestry - Choose dragon type for breath weapon and damage resistance",
+      "Breath Weapon - Exhale destructive energy (2d6 damage at level 1)",
+      "Damage Resistance - Resistance to damage type of your draconic ancestry"
+    ],
+    "subraces": [
+      {
+        "name": "Black Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Black Dragon (Acid)",
+          "Breath Weapon - 5 by 30 ft. line (Dex. save), Acid damage",
+          "Damage Resistance - Acid"
+        ]
+      },
+      {
+        "name": "Blue Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Blue Dragon (Lightning)",
+          "Breath Weapon - 5 by 30 ft. line (Dex. save), Lightning damage",
+          "Damage Resistance - Lightning"
+        ]
+      },
+      {
+        "name": "Brass Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Brass Dragon (Fire)",
+          "Breath Weapon - 5 by 30 ft. line (Dex. save), Fire damage",
+          "Damage Resistance - Fire"
+        ]
+      },
+      {
+        "name": "Bronze Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Bronze Dragon (Lightning)",
+          "Breath Weapon - 5 by 30 ft. line (Dex. save), Lightning damage",
+          "Damage Resistance - Lightning"
+        ]
+      },
+      {
+        "name": "Copper Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Copper Dragon (Acid)",
+          "Breath Weapon - 5 by 30 ft. line (Dex. save), Acid damage",
+          "Damage Resistance - Acid"
+        ]
+      },
+      {
+        "name": "Gold Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Gold Dragon (Fire)",
+          "Breath Weapon - 15 ft. cone (Dex. save), Fire damage",
+          "Damage Resistance - Fire"
+        ]
+      },
+      {
+        "name": "Green Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Green Dragon (Poison)",
+          "Breath Weapon - 15 ft. cone (Con. save), Poison damage",
+          "Damage Resistance - Poison"
+        ]
+      },
+      {
+        "name": "Red Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Red Dragon (Fire)",
+          "Breath Weapon - 15 ft. cone (Dex. save), Fire damage",
+          "Damage Resistance - Fire"
+        ]
+      },
+      {
+        "name": "Silver Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - Silver Dragon (Cold)",
+          "Breath Weapon - 15 ft. cone (Con. save), Cold damage",
+          "Damage Resistance - Cold"
+        ]
+      },
+      {
+        "name": "White Dragonborn",
+        "abilityScoreIncrease": {"str": 2, "cha": 1},
+        "traits": [
+          "Draconic Ancestry - White Dragon (Cold)",
+          "Breath Weapon - 15 ft. cone (Con. save), Cold damage",
+          "Damage Resistance - Cold"
+        ]
+      }
+    ]
+  },
+  "dwarf": {
+    "name": "Dwarf",
+    "size": "Medium",
+    "speed": 25,
+    "abilityScoreIncrease": {
+      "con": 2
+    },
+    "languages": ["Common", "Dwarvish"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Dwarven Resilience - Advantage on saving throws against poison, resistance to poison damage",
+      "Dwarven Combat Training - You have proficiency with battleaxes, handaxes, light hammers, and warhammers",
+      "Tool Proficiency - Proficiency with one artisan's tool",
+      "Stonecunning - Add double proficiency bonus on History checks for stonework"
+    ],
+    "subraces": [
+      {
+        "name": "Mountain Dwarf",
+        "abilityScoreIncrease": {
+          "str": 2
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Dwarven Resilience - Advantage on saving throws against poison, resistance to poison damage",
+          "Dwarven Combat Training - You have proficiency with battleaxes, handaxes, light hammers, and warhammers",
+          "Tool Proficiency - Proficiency with one artisan's tool",
+          "Stonecunning - Add double proficiency bonus on History checks for stonework",
+          "Dwarven Armor Training - Proficiency with light and medium armor"
+        ]
+      },
+      {
+        "name": "Hill Dwarf",
+        "abilityScoreIncrease": {
+          "wis": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Dwarven Resilience - Advantage on saving throws against poison, resistance to poison damage",
+          "Dwarven Combat Training - You have proficiency with battleaxes, handaxes, light hammers, and warhammers",
+          "Tool Proficiency - Proficiency with one artisan's tool",
+          "Stonecunning - Add double proficiency bonus on History checks for stonework",
+          "Dwarven Toughness - Hit point maximum increases by 1 per level"
+        ]
+      }
+    ]
+  },
+  "elf": {
+    "name": "Elf",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "dex": 2
+    },
+    "languages": ["Common", "Elvish"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Keen Senses - Proficiency in Perception",
+      "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+      "Trance - During a long rest, you meditate for 4 hours, rather than sleeping for 8 hours"
+    ],
+    "subraces": [
+      {
+        "name": "High Elf",
+        "abilityScoreIncrease": {
+          "int": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Keen Senses - Proficiency in Perception",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Trance - During a long rest, you meditate for 4 hours, rather than sleeping for 8 hours",
+          "Elf Weapon Training - Proficiency with longsword, shortsword, shortbow, longbow",
+          "Cantrip - Know one cantrip from wizard spell list",
+          "Extra Language - Learn one extra language"
+        ]
+      },
+      {
+        "name": "Wood Elf",
+        "abilityScoreIncrease": {
+          "wis": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Keen Senses - Proficiency in Perception",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Trance - During a long rest, you meditate for 4 hours, rather than sleeping for 8 hours",
+          "Elf Weapon Training - Proficiency with longsword, shortsword, shortbow, longbow",
+          "Fleet of Foot - Base walking speed increases to 35 feet",
+          "Mask of the Wild - Can attempt to hide in light foliage, heavy rain, falling snow, mist"
+        ]
+      },
+      {
+        "name": "Dark Elf (Drow)",
+        "abilityScoreIncrease": {
+          "cha": 1
+        },
+        "traits": [
+          "Superior Darkvision (120 ft)",
+          "Keen Senses - Proficiency in Perception",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Trance - During a long rest, you meditate for 4 hours, rather than sleeping for 8 hours",
+          "Sunlight Sensitivity - Disadvantage on attack rolls and Perception checks in sunlight",
+          "Drow Magic - Know Dancing Lights cantrip, Faerie Fire and Darkness spells at higher levels",
+          "Drow Weapon Training - Proficiency with rapiers, shortswords, hand crossbows"
+        ]
+      }
+    ]
+  },
+  "firbolg": {
+    "name": "Firbolg",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "wis": 2,
+      "str": 1
+    },
+    "languages": ["Common", "Elvish", "Giant"],
+    "traits": [
+      "Firbolg Magic - Cast Detect Magic and Disguise Self once per short rest",
+      "Hidden Step - Bonus action to turn invisible until start of your next turn (once per short rest)",
+      "Powerful Build - Count as one size larger for carrying capacity and push/drag/lift",
+      "Speech of Beast and Leaf - Can communicate simple ideas with beasts and plants"
+    ],
+    "subraces": []
+  },
+  "genasi": {
+    "name": "Genasi",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "con": 2
+    },
+    "languages": ["Common", "Primordial"],
+    "traits": [
+      "Elemental heritage - Choose your elemental subrace"
+    ],
+    "subraces": [
+      {
+        "name": "Air Genasi",
+        "abilityScoreIncrease": {
+          "dex": 1
+        },
+        "traits": [
+          "Unending Breath - You can hold your breath indefinitely",
+          "Mingle with the Wind - Cast Levitate spell once per long rest (starting at 5th level)"
+        ]
+      },
+      {
+        "name": "Earth Genasi",
+        "abilityScoreIncrease": {
+          "str": 1
+        },
+        "traits": [
+          "Earth Walk - Move across difficult terrain made of earth or stone without extra movement",
+          "Merge with Stone - Cast Pass Without Trace once per long rest (starting at 5th level)"
+        ]
+      },
+      {
+        "name": "Fire Genasi",
+        "abilityScoreIncrease": {
+          "int": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Fire Resistance - Resistance to fire damage",
+          "Reach to the Blaze - Know Produce Flame cantrip, cast Burning Hands once per long rest (starting at 3rd level)"
+        ]
+      },
+      {
+        "name": "Water Genasi",
+        "abilityScoreIncrease": {
+          "wis": 1
+        },
+        "traits": [
+          "Acid Resistance - Resistance to acid damage",
+          "Amphibious - You can breathe air and water",
+          "Swim - You have a swimming speed of 30 feet",
+          "Call to the Wave - Know Shape Water cantrip, cast Create or Destroy Water once per long rest (starting at 3rd level)"
+        ]
+      }
+    ]
+  },
+  "goliath": {
+    "name": "Goliath",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "str": 2,
+      "con": 1
+    },
+    "languages": ["Common", "Giant"],
+    "traits": [
+      "Natural Athlete - Proficiency in Athletics skill",
+      "Stone's Endurance - Reaction to reduce damage by 1d12 + CON modifier (once per short rest)",
+      "Powerful Build - Count as one size larger for carrying capacity and push/drag/lift",
+      "Mountain Born - Resistance to cold damage, acclimated to high altitude"
+    ],
+    "subraces": []
+  },
+  "half-elf": {
+    "name": "Half-Elf",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "cha": 2,
+      "choice": 2
+    },
+    "languages": ["Common", "Elvish", "One extra language of your choice"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+      "Skill Versatility - Proficiency in two skills of your choice"
+    ],
+    "subraces": [
+      {
+        "name": "Standard Half-Elf",
+        "abilityScoreIncrease": {
+          "cha": 2,
+          "choice": 2
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Skill Versatility - Proficiency in two skills of your choice"
+        ]
+      },
+      {
+        "name": "High Elf Descent",
+        "abilityScoreIncrease": {
+          "cha": 2,
+          "int": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Elf Weapon Training - Proficiency with longsword, shortsword, shortbow, longbow",
+          "Cantrip - Know one cantrip from wizard spell list"
+        ]
+      },
+      {
+        "name": "Wood Elf Descent",
+        "abilityScoreIncrease": {
+          "cha": 2,
+          "wis": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Elf Weapon Training - Proficiency with longsword, shortsword, shortbow, longbow",
+          "Fleet of Foot - Base walking speed increases to 35 feet",
+          "Mask of the Wild - Can attempt to hide in light foliage, heavy rain, falling snow, mist"
+        ]
+      },
+      {
+        "name": "Drow Descent",
+        "abilityScoreIncrease": {
+          "cha": 2,
+          "dex": 1
+        },
+        "traits": [
+          "Darkvision (60 ft)",
+          "Fey Ancestry - Advantage on saves against being charmed, magic can't put you to sleep",
+          "Drow Magic - Know Dancing Lights cantrip"
+        ]
+      }
+    ]
+  },
+  "half-orc": {
+    "name": "Half-Orc",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "str": 2,
+      "con": 1
+    },
+    "languages": ["Common", "Orc"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Menacing - Proficiency in Intimidation skill",
+      "Relentless Endurance - Drop to 1 HP instead of 0 once per long rest",
+      "Savage Attacks - Roll one extra weapon damage die on critical hits"
+    ],
+    "subraces": []
+  },
+  "halfling": {
+    "name": "Halfling",
+    "size": "Small",
+    "speed": 25,
+    "abilityScoreIncrease": {
+      "dex": 2
+    },
+    "languages": ["Common", "Halfling"],
+    "traits": [
+      "Lucky - Reroll 1s on attack rolls, ability checks, and saving throws",
+      "Brave - Advantage on saving throws against being frightened",
+      "Halfling Nimbleness - You can move through the space of any creature that is of a size larger than yours"
+    ],
+    "subraces": [
+      {
+        "name": "Lightfoot Halfling",
+        "abilityScoreIncrease": {
+          "cha": 1
+        },
+        "traits": [
+          "Lucky - Reroll 1s on attack rolls, ability checks, and saving throws",
+          "Brave - Advantage on saving throws against being frightened",
+          "Halfling Nimbleness - You can move through the space of any creature that is of a size larger than yours",
+          "Naturally Stealthy - Can hide when obscured by a creature one size larger"
+        ]
+      },
+      {
+        "name": "Stout Halfling",
+        "abilityScoreIncrease": {
+          "con": 1
+        },
+        "traits": [
+          "Lucky - Reroll 1s on attack rolls, ability checks, and saving throws",
+          "Brave - Advantage on saving throws against being frightened",
+          "Halfling Nimbleness - You can move through the space of any creature that is of a size larger than yours",
+          "Stout Resilience - Advantage on saving throws against poison, resistance to poison damage"
+        ]
+      }
+    ]
+  },
+  "human": {
+    "name": "Human",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "choice": 1
+    },
+    "languages": ["Common", "One extra language of your choice"],
+    "traits": ["Choose Standard Human or Variant Human"],
+    "subraces": [
+      {
+        "name": "Standard Human",
+        "abilityScoreIncrease": {
+          "str": 1,
+          "dex": 1,
+          "con": 1,
+          "int": 1,
+          "wis": 1,
+          "cha": 1
+        },
+        "traits": [
+          "Versatile - Gain +1 to all ability scores",
+          "Extra Language - You can speak, read, and write one extra language of your choice"
+        ]
+      },
+      {
+        "name": "Variant Human",
+        "abilityScoreIncrease": {
+          "choice": 2
+        },
+        "traits": [
+          "Ability Score Increase - +1 to two different ability scores of your choice",
+          "Skills - Proficiency in one skill of your choice",
+          "Feat - You gain one feat of your choice",
+          "Extra Language - You can speak, read, and write one extra language of your choice"
+        ]
+      }
+    ]
+  },
+  "tabaxi": {
+    "name": "Tabaxi",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "dex": 2,
+      "cha": 1
+    },
+    "languages": ["Common", "One language of your choice"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Feline Agility - Double your speed until end of turn when you move (can't use again until you move 0 feet on a turn)",
+      "Cat's Claws - Your claws are natural weapons dealing 1d4 + STR slashing damage. Climbing speed of 20 feet",
+      "Cat's Talent - Proficiency in Perception and Stealth skills"
+    ],
+    "subraces": []
+  },
+  "tiefling": {
+    "name": "Tiefling",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "int": 1,
+      "cha": 2
+    },
+    "languages": ["Common", "Infernal"],
+    "traits": [
+      "Darkvision (60 ft)",
+      "Hellish Resistance - Resistance to fire damage",
+      "Infernal Legacy - Know Thaumaturgy cantrip, cast Hellish Rebuke and Darkness at higher levels"
+    ],
+    "subraces": []
+  },
+  "warforged": {
+    "name": "Warforged",
+    "size": "Medium",
+    "speed": 30,
+    "abilityScoreIncrease": {
+      "con": 2,
+      "choice": 1
+    },
+    "languages": ["Common", "One language of your choice"],
+    "traits": [
+      "Constructed Resilience - Advantage on saves against poison, resistance to poison damage, immune to disease, doesn't need to eat/drink/breathe, doesn't need to sleep",
+      "Sentry's Rest - When you take a long rest, you spend 6 hours in an inactive state rather than sleeping",
+      "Integrated Protection - Your body has built-in defensive layers. Base AC is 11 + DEX modifier and you can use a shield",
+      "Specialized Design - You gain one skill proficiency and one tool proficiency of your choice"
+    ],
+    "subraces": []
+  }
+}

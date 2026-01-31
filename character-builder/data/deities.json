@@ -1,0 +1,136 @@
+{
+  "atheist": {
+    "name": "Atheist",
+    "description": "Does not worship any deity"
+  },
+  "agnostic": {
+    "name": "Agnostic",
+    "description": "Uncertain about the existence or nature of deities"
+  },
+  "asmodeus": {
+    "name": "Asmodeus",
+    "alignment": "LE",
+    "domain": "Trickery",
+    "description": "God of tyranny and domination"
+  },
+  "avandra": {
+    "name": "Avandra",
+    "alignment": "CG",
+    "domain": "Trickery",
+    "description": "Goddess of change and luck"
+  },
+  "bahamut": {
+    "name": "Bahamut",
+    "alignment": "LG",
+    "domain": "Life, War",
+    "description": "Dragon god of justice and protection"
+  },
+  "bane": {
+    "name": "Bane",
+    "alignment": "LE",
+    "domain": "War",
+    "description": "God of war and conquest"
+  },
+  "corellon": {
+    "name": "Corellon Larethian",
+    "alignment": "CG",
+    "domain": "Arcana, Light",
+    "description": "Elven god of art and magic"
+  },
+  "erathis": {
+    "name": "Erathis",
+    "alignment": "LN",
+    "domain": "Knowledge",
+    "description": "Goddess of civilization and invention"
+  },
+  "gruumsh": {
+    "name": "Gruumsh",
+    "alignment": "CE",
+    "domain": "Tempest, War",
+    "description": "Orc god of slaughter and destruction"
+  },
+  "ioun": {
+    "name": "Ioun",
+    "alignment": "N",
+    "domain": "Knowledge",
+    "description": "Goddess of knowledge and skill"
+  },
+  "kord": {
+    "name": "Kord",
+    "alignment": "CN",
+    "domain": "Tempest, War",
+    "description": "God of strength and storms"
+  },
+  "lolth": {
+    "name": "Lolth",
+    "alignment": "CE",
+    "domain": "Trickery",
+    "description": "Spider goddess of the drow"
+  },
+  "melora": {
+    "name": "Melora",
+    "alignment": "N",
+    "domain": "Nature, Tempest",
+    "description": "Goddess of wilderness and the sea"
+  },
+  "moradin": {
+    "name": "Moradin",
+    "alignment": "LG",
+    "domain": "Forge, Knowledge",
+    "description": "Dwarven god of creation"
+  },
+  "pelor": {
+    "name": "Pelor",
+    "alignment": "NG",
+    "domain": "Life, Light",
+    "description": "God of the sun and healing"
+  },
+  "raven_queen": {
+    "name": "The Raven Queen",
+    "alignment": "LN",
+    "domain": "Life, Death",
+    "description": "Goddess of death and fate"
+  },
+  "sehanine": {
+    "name": "Sehanine Moonbow",
+    "alignment": "CG",
+    "domain": "Trickery",
+    "description": "Goddess of the moon and illusions"
+  },
+  "tiamat": {
+    "name": "Tiamat",
+    "alignment": "LE",
+    "domain": "Trickery, War",
+    "description": "Dragon goddess of greed and evil"
+  },
+  "torog": {
+    "name": "Torog",
+    "alignment": "NE",
+    "domain": "Death",
+    "description": "God of the Underdark and imprisonment"
+  },
+  "torm": {
+    "name": "Torm",
+    "alignment": "LG",
+    "domain": "War",
+    "description": "God of courage and self-sacrifice"
+  },
+  "tymora": {
+    "name": "Tymora",
+    "alignment": "CG",
+    "domain": "Trickery",
+    "description": "Goddess of good fortune"
+  },
+  "vecna": {
+    "name": "Vecna",
+    "alignment": "NE",
+    "domain": "Arcana, Death",
+    "description": "God of evil secrets and undeath"
+  },
+  "zehir": {
+    "name": "Zehir",
+    "alignment": "CE",
+    "domain": "Trickery, Death",
+    "description": "God of darkness and poison"
+  }
+}

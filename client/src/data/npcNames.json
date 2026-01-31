@@ -1,0 +1,187 @@
+{
+  "human": {
+    "male": [
+      "Aldric", "Bram", "Cade", "Darvin", "Edmund", "Fenton", "Gareth", "Holden", "Ivan", "Jasper",
+      "Kael", "Liam", "Marcus", "Nolan", "Owen", "Pierce", "Quinn", "Roland", "Stefan", "Theron",
+      "Ulric", "Victor", "Wesley", "Xavier", "York", "Zander", "Ansel", "Barrett", "Corbin", "Drake",
+      "Emeric", "Florian", "Gideon", "Hugh", "Ira", "Jorah", "Kellan", "Leander", "Morgan", "Niall"
+    ],
+    "female": [
+      "Alanna", "Brynn", "Cara", "Delia", "Elena", "Fiona", "Gwen", "Helena", "Iris", "Jenna",
+      "Kira", "Lydia", "Mira", "Nadia", "Ophelia", "Petra", "Quinn", "Rosalind", "Sylvia", "Tessa",
+      "Una", "Vera", "Willow", "Xena", "Yara", "Zara", "Astrid", "Beatrix", "Cordelia", "Diana",
+      "Elara", "Freya", "Giselle", "Hilda", "Ingrid", "Joanna", "Katya", "Lenora", "Morrigan", "Nessa"
+    ],
+    "surnames": [
+      "Ashford", "Blackwood", "Crawford", "Dunham", "Easton", "Fletcher", "Graves", "Harmon", "Irwin", "Jarvis",
+      "Kemp", "Lawson", "Mercer", "Norris", "Oakes", "Prescott", "Quill", "Rowe", "Stone", "Thorne",
+      "Underhill", "Vale", "Winters", "Young", "Aldrich", "Brennan", "Crane", "Drake", "Everett", "Frost"
+    ]
+  },
+  "elf": {
+    "male": [
+      "Aerandir", "Belegorn", "Caladrel", "Daeron", "Elenion", "Faelar", "Galadon", "Haelion", "Ithilion", "Jorelion",
+      "Kelvhan", "Lethrandir", "Maelon", "Naelion", "Orelion", "Paelias", "Quarion", "Rhistel", "Sylron", "Tharivol",
+      "Urion", "Vaeril", "Wylion", "Xalion", "Ylaeron", "Zephyros", "Aelindel", "Berethon", "Cirion", "Daeloth"
+    ],
+    "female": [
+      "Aelene", "Belethil", "Caelynn", "Daeris", "Elenwë", "Faelwen", "Galadwen", "Haeleth", "Ithilwen", "Jelenneth",
+      "Kaelith", "Lethwë", "Maelith", "Naelith", "Orelwen", "Paelith", "Quelenna", "Rhistwë", "Sylwen", "Thariviel",
+      "Uriwë", "Vaelith", "Wyliwë", "Xaelith", "Ylaewen", "Zephyra", "Aelindra", "Berethiel", "Ciriel", "Daeloriel"
+    ],
+    "surnames": [
+      "Amakiir", "Brightwood", "Craulnober", "Dawnhorn", "Evenwood", "Floshem", "Galanodel", "Holimion", "Ilphelkiir", "Joraleth",
+      "Koehlanna", "Liadon", "Meliamne", "Nightbreeze", "Oakenheel", "Prestynen", "Qualanthri", "Ralomeir", "Siannodel", "Teinithra"
+    ]
+  },
+  "dwarf": {
+    "male": [
+      "Adrik", "Barendd", "Bruenor", "Dain", "Eberk", "Fargrim", "Gardain", "Harbek", "Ilikan", "Jormund",
+      "Kilrak", "Loragg", "Morgran", "Nuraval", "Orsik", "Pikel", "Qorik", "Rurik", "Storn", "Thoradin",
+      "Ulfgar", "Veit", "Whurbin", "Xorik", "Yurgen", "Zarag", "Thrain", "Gimli", "Dwalin", "Balin"
+    ],
+    "female": [
+      "Amber", "Bardryn", "Dagnal", "Eldeth", "Finellen", "Gunnloda", "Helja", "Ilde", "Jethra", "Kathra",
+      "Liftrasa", "Mardred", "Niswyn", "Osra", "Pidia", "Quillathe", "Riswynn", "Sannl", "Torbera", "Urshar",
+      "Vistra", "Wreniel", "Xuldra", "Yurga", "Zinra", "Tordis", "Greta", "Helga", "Brynhild", "Sigrun"
+    ],
+    "surnames": [
+      "Balderk", "Battlehammer", "Brawnanvil", "Dankil", "Fireforge", "Frostbeard", "Gorunn", "Holderhek", "Ironfist", "Jorikbrand",
+      "Kundarak", "Loderr", "Mroranon", "Nackle", "Orothiar", "Pryrok", "Quidarak", "Rumnaheim", "Strakeln", "Torunn"
+    ]
+  },
+  "halfling": {
+    "male": [
+      "Alton", "Beau", "Cade", "Corrin", "Eldon", "Finnan", "Garret", "Harbin", "Idan", "Jebeddo",
+      "Kelvin", "Lyle", "Merric", "Nebin", "Osborn", "Perrin", "Quentin", "Roscoe", "Sam", "Tobin",
+      "Ulmo", "Veit", "Wellby", "Xander", "Yarro", "Zeeke", "Bilbo", "Pippin", "Merry", "Frodo"
+    ],
+    "female": [
+      "Amaryllis", "Bree", "Cora", "Daphne", "Euphemia", "Fern", "Gilly", "Hilda", "Ivy", "Jillian",
+      "Kithri", "Lavinia", "Marigold", "Nedda", "Olive", "Pansy", "Questa", "Rosemary", "Shaena", "Trym",
+      "Ula", "Verna", "Willow", "Xanthe", "Yara", "Zinnia", "Pearl", "Ruby", "Daisy", "Poppy"
+    ],
+    "surnames": [
+      "Brushgather", "Goodbarrel", "Greenbottle", "Hilltopple", "Leagallow", "Tealeaf", "Thorngage", "Tosscobble", "Underbough", "Warmwater",
+      "Brandybuck", "Fairbairn", "Gammidge", "Headstrong", "Jumpfoot", "Kettlewhistle", "Longfoot", "Merryweather", "Nimblefingers", "Proudfoot"
+    ]
+  },
+  "dragonborn": {
+    "male": [
+      "Arjhan", "Balasar", "Bharash", "Donaar", "Ghesh", "Heskan", "Kriv", "Medrash", "Mehen", "Nadarr",
+      "Pandjed", "Patrin", "Rhogar", "Shamash", "Shedinn", "Tarhun", "Torinn", "Vrak", "Wyrmlord", "Xarrai"
+    ],
+    "female": [
+      "Akra", "Biri", "Daar", "Farideh", "Harann", "Havilar", "Jheri", "Kava", "Korinn", "Mishann",
+      "Nala", "Perra", "Raiann", "Sora", "Surina", "Thava", "Uadjit", "Vreka", "Wellvra", "Xathra"
+    ],
+    "clan": [
+      "Clethtinthiallor", "Daardendrian", "Delmirev", "Drachedandion", "Fenkenkabradon", "Kepeshkmolik", "Kerrhylon", "Kimbatuul",
+      "Linxakasendalor", "Myastan", "Nemmonis", "Norixius", "Ophinshtalajiir", "Prexijandilin", "Shestendeliath", "Turnuroth",
+      "Verthisathurgiesh", "Yarjerit"
+    ]
+  },
+  "tiefling": {
+    "male": [
+      "Akmenos", "Amnon", "Barakas", "Damakos", "Ekemon", "Iados", "Kairon", "Leucis", "Melech", "Mordai",
+      "Morthos", "Pelaios", "Skamos", "Therai", "Zariel", "Damien", "Malachar", "Cyprian", "Hadrian", "Lucius"
+    ],
+    "female": [
+      "Akta", "Anakis", "Bryseis", "Criella", "Damaia", "Ea", "Kallista", "Lerissa", "Makaria", "Nemeia",
+      "Orianna", "Phelaia", "Rieta", "Sekhmet", "Tabia", "Ulara", "Velua", "Xanthia", "Yara", "Zila"
+    ],
+    "virtue": [
+      "Art", "Carrion", "Chant", "Creed", "Despair", "Excellence", "Fear", "Glory", "Hope", "Ideal",
+      "Music", "Nowhere", "Open", "Poetry", "Quest", "Random", "Reverence", "Sorrow", "Temerity", "Torment", "Weary"
+    ]
+  },
+  "half_orc": {
+    "male": [
+      "Dench", "Feng", "Gell", "Henk", "Holg", "Imsh", "Keth", "Krusk", "Mhurren", "Ront",
+      "Shump", "Thokk", "Urzul", "Vrag", "Wrog", "Xark", "Yurk", "Zorn", "Grokk", "Drog"
+    ],
+    "female": [
+      "Baggi", "Emen", "Engong", "Kansif", "Myev", "Neega", "Ovak", "Ownka", "Shautha", "Sutha",
+      "Vola", "Volen", "Yevelda", "Zurga", "Greka", "Karga", "Lukra", "Motra", "Narga", "Oorga"
+    ]
+  },
+  "gnome": {
+    "male": [
+      "Alston", "Alvyn", "Boddynock", "Brocc", "Dimble", "Eldon", "Erky", "Fonkin", "Frug", "Gerbo",
+      "Gimble", "Glim", "Jebeddo", "Kellen", "Namfoodle", "Orryn", "Roondar", "Seebo", "Warryn", "Zook"
+    ],
+    "female": [
+      "Bimpnottin", "Breena", "Caramip", "Carlin", "Donella", "Duvamil", "Ella", "Ellyjobell", "Ellywick", "Lilli",
+      "Loopmottin", "Lorilla", "Mardnab", "Nissa", "Nyx", "Oda", "Orla", "Roywyn", "Shamil", "Tana"
+    ],
+    "clan": [
+      "Beren", "Daergel", "Folkor", "Garrick", "Nackle", "Murnig", "Ningel", "Raulnor", "Scheppen", "Timbers",
+      "Turen", "Sparklegem", "Fiddlefen", "Wobblecog", "Tinkertop", "Clockwhir", "Gemcutter", "Ironspring", "Quickfoot", "Brightbell"
+    ]
+  },
+  "half_elf": {
+    "note": "Half-elves typically use human or elven names depending on their upbringing. Use the human or elf name lists."
+  },
+  "tabaxi": {
+    "names": [
+      "Cloud on the Mountaintop", "Five Timber", "Jade Shoe", "Left-Handed Hummingbird", "Seven Thundercloud", "Skirt of Snakes",
+      "Smoking Mirror", "Summer Rains", "Swift Thunder", "Two Timing", "Dream of Stars", "Distant Rain",
+      "Hunting Moon", "Eyes Like Fire", "Whisper of Wind", "Shadow Walker", "Bright Claw", "Silent Step",
+      "Dancing Flame", "River Stone", "Morning Mist", "Night Hunter", "Swift Paw", "Storm Eye"
+    ],
+    "clan": [
+      "Bright Cliffs", "Distant Rain", "Mountain Tree", "Rumbling River", "Snoring Mountain", "Sunning Rocks",
+      "Twilight Falls", "Wandering Winds", "White Sands", "Whispering Woods", "Golden Plains", "Silver Peaks"
+    ]
+  },
+  "aasimar": {
+    "note": "Aasimar often use human names. Some adopt celestial-sounding names.",
+    "celestial": [
+      "Auriel", "Celestine", "Dawnstar", "Evangelis", "Gloriel", "Hadriel", "Israphel", "Jeremiah", "Kaliel", "Luminara",
+      "Meridia", "Nathaniel", "Ophiel", "Patroclus", "Quaelian", "Raziel", "Seraphina", "Thaddeus", "Uriel", "Veritas"
+    ]
+  },
+  "firbolg": {
+    "names": [
+      "Names are typically given later in life based on personality or deeds",
+      "Common examples: Keeper of the Grove, Gentle Rain, Strong Oak, Swift River, Quiet Wind, Morning Frost"
+    ],
+    "given": [
+      "Adran", "Arannis", "Berrian", "Carric", "Dayereth", "Enna", "Galinndan", "Hadarai", "Heian", "Immeral",
+      "Kelven", "Mindartis", "Paelias", "Perren", "Quarion", "Riardon", "Soveliss", "Thamior", "Theren", "Varis"
+    ]
+  },
+  "goliath": {
+    "male": [
+      "Aukan", "Eglath", "Gauthak", "Ilikan", "Keothi", "Lo-Kag", "Manneo", "Maveith", "Nalla", "Orilo",
+      "Paavu", "Pethani", "Thalai", "Thotham", "Uthal", "Vaunea", "Vimak"
+    ],
+    "female": [
+      "Gae-Al", "Kuori", "Manneo", "Nalla", "Orilo", "Paavu", "Pethani", "Thalai", "Uthal", "Vaunea"
+    ],
+    "clan": [
+      "Anakalathai", "Elanithino", "Gathakanathi", "Kalagiano", "Katho-Olavi", "Kolae-Gileana", "Ogolakanu", "Thuliaga",
+      "Thunukalathi", "Vaimei-Laga"
+    ],
+    "nickname": [
+      "Bearkiller", "Dawncaller", "Fearless", "Flintfinder", "Horncarver", "Keeneye", "Lonehunter", "Longleaper",
+      "Rootsmasher", "Skywatcher", "Steadyhand", "Threadtwister", "Twice-Orphaned", "Twistedlimb", "Wordpainter"
+    ]
+  },
+  "warforged": {
+    "names": [
+      "Anchor", "Banner", "Bastion", "Blade", "Blue", "Bow", "Church", "Crunch", "Crystal", "Dagger",
+      "Dent", "Five", "Glaive", "Hammer", "Iron", "Lucky", "Mace", "Oak", "Onyx", "Piston",
+      "Pommel", "Potter", "Red", "Rift", "Rod", "Rune", "Scout", "Seven", "Shield", "Smite",
+      "Smith", "Spike", "Temple", "Titan", "Tower", "Three", "Victor", "Wall", "Watcher"
+    ]
+  },
+  "genasi": {
+    "note": "Genasi typically use names from their mortal parent's culture, sometimes with elemental influences",
+    "elemental": [
+      "Ashstorm", "Blazeborn", "Cinderheart", "Dustwalker", "Embervein", "Flamekin", "Galeforce", "Hailstone",
+      "Ironearth", "Jetstream", "Kindleflame", "Lavaborn", "Mistwalker", "Nightgale", "Oceanborn", "Pebblefoot",
+      "Quartzkin", "Riverstone", "Stormborn", "Thunderchild", "Undertow", "Vaporkin", "Windrunner", "Zephyr"
+    ]
+  }
+}

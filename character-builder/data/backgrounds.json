@@ -1,0 +1,359 @@
+{
+  "acolyte": {
+    "name": "Acolyte",
+    "description": "You have spent your life in service to a temple, learning sacred rites and providing sacrifices to your deity.",
+    "skillProficiencies": ["insight", "religion"],
+    "languages": 2,
+    "equipment": [
+      "Holy symbol",
+      "Prayer book or prayer wheel",
+      "5 sticks of incense",
+      "Vestments",
+      "Common clothes",
+      "Pouch containing 15 gp"
+    ],
+    "feature": {
+      "name": "Shelter of the Faithful",
+      "description": "You and your companions can receive free healing and care at temples of your faith. Those who share your religion will support you at a modest lifestyle."
+    }
+  },
+  "charlatan": {
+    "name": "Charlatan",
+    "description": "You have always had a way with people. You know what makes them tick, you can tease out their hearts' desires after a few minutes of conversation.",
+    "skillProficiencies": ["deception", "sleight of hand"],
+    "toolProficiencies": ["Disguise kit", "Forgery kit"],
+    "equipment": [
+      "Fine clothes",
+      "Disguise kit",
+      "Tools of the con (weighted dice, marked cards, etc.)",
+      "Pouch containing 15 gp"
+    ],
+    "feature": {
+      "name": "False Identity",
+      "description": "You have created a second identity including documentation, established acquaintances, and disguises. You can forge documents including official papers and personal letters."
+    }
+  },
+  "city_watch": {
+    "name": "City Watch",
+    "description": "You have served the community where you grew up, standing as its first line of defense against crime and violence.",
+    "skillProficiencies": ["athletics", "insight"],
+    "languages": 2,
+    "equipment": [
+      "Uniform",
+      "Insignia of rank",
+      "Horn",
+      "Manacles",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Watcher's Eye",
+      "description": "You can easily pick out patterns and behaviors that are out of the ordinary. You can quickly identify the location of a hideout or identify the routine of a suspect."
+    }
+  },
+  "clan_crafter": {
+    "name": "Clan Crafter",
+    "description": "You are a respected member of a dwarven clan, trained in the ancient traditions of your people's crafts.",
+    "skillProficiencies": ["history", "insight"],
+    "toolProficiencies": ["One type of artisan's tools"],
+    "languages": 1,
+    "equipment": [
+      "Set of artisan's tools",
+      "Maker's mark chisel",
+      "Traveler's clothes",
+      "Pouch containing 5 gp",
+      "Gem worth 10 gp"
+    ],
+    "feature": {
+      "name": "Respect of the Stout Folk",
+      "description": "No one esteems clan crafters quite so highly as dwarves do. You always have free room and board in any dwarven settlement, and individuals in such settlements might provide you with weapons or armor at cost."
+    }
+  },
+  "criminal": {
+    "name": "Criminal",
+    "description": "You are an experienced criminal with a history of breaking the law.",
+    "skillProficiencies": ["deception", "stealth"],
+    "toolProficiencies": ["One type of gaming set", "Thieves' tools"],
+    "equipment": [
+      "Crowbar",
+      "Dark common clothes with hood",
+      "Pouch containing 15 gp"
+    ],
+    "feature": {
+      "name": "Criminal Contact",
+      "description": "You have a reliable contact who acts as your liaison to a network of other criminals. You can get messages to and from your contact over great distances."
+    }
+  },
+  "entertainer": {
+    "name": "Entertainer",
+    "description": "You thrive in front of an audience. You know how to entrance them, entertain them, and even inspire them.",
+    "skillProficiencies": ["acrobatics", "performance"],
+    "toolProficiencies": ["Disguise kit", "One type of musical instrument"],
+    "equipment": [
+      "Musical instrument",
+      "Favor of an admirer",
+      "Costume",
+      "Pouch containing 15 gp"
+    ],
+    "feature": {
+      "name": "By Popular Demand",
+      "description": "You can always find a place to perform. You receive free lodging and food of a modest or comfortable standard as long as you perform each night."
+    }
+  },
+  "far_traveler": {
+    "name": "Far Traveler",
+    "description": "You come from a distant place, one so remote that few people know it exists. When you came to this land, you faced many challenges.",
+    "skillProficiencies": ["insight", "perception"],
+    "toolProficiencies": ["One musical instrument or gaming set"],
+    "languages": 1,
+    "equipment": [
+      "Traveler's clothes",
+      "Musical instrument or gaming set",
+      "Maps from homeland",
+      "Small piece of jewelry worth 10 gp",
+      "Pouch containing 5 gp"
+    ],
+    "feature": {
+      "name": "All Eyes on You",
+      "description": "Your accent, mannerisms, figures of speech, and appearance mark you as foreign. Curious people are eager to hear stories of your homeland and will treat you well, though some may react with suspicion or fear."
+    }
+  },
+  "folk_hero": {
+    "name": "Folk Hero",
+    "description": "You come from a humble social rank, but you are destined for so much more. The common folk see you as their champion.",
+    "skillProficiencies": ["animal_handling", "survival"],
+    "toolProficiencies": ["One type of artisan's tools", "Vehicles (land)"],
+    "equipment": [
+      "Set of artisan's tools",
+      "Shovel",
+      "Iron pot",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Rustic Hospitality",
+      "description": "Since you come from the ranks of the common folk, you fit in among them with ease. You can find a place to hide, rest, or recuperate among commoners."
+    }
+  },
+  "guild_artisan": {
+    "name": "Guild Artisan",
+    "description": "You are a member of an artisan's guild, skilled in a particular field and closely associated with other artisans.",
+    "skillProficiencies": ["insight", "persuasion"],
+    "toolProficiencies": ["One type of artisan's tools"],
+    "languages": 1,
+    "equipment": [
+      "Set of artisan's tools",
+      "Letter of introduction from guild",
+      "Traveler's clothes",
+      "Pouch containing 15 gp"
+    ],
+    "feature": {
+      "name": "Guild Membership",
+      "description": "You can rely on the guild for lodging and food if necessary, and to pay for your funeral. The guild will also help you find work and provide access to powerful political figures through the guild."
+    }
+  },
+  "haunted_one": {
+    "name": "Haunted One",
+    "description": "You are haunted by something so terrible that you dare not speak of it. Whatever it was, it has left you scarred and forever changed.",
+    "skillProficiencies": ["arcana", "investigation"],
+    "languages": 2,
+    "equipment": [
+      "Monster hunter's pack",
+      "Gothic trinket",
+      "Common clothes",
+      "Pouch containing 1 gp"
+    ],
+    "feature": {
+      "name": "Heart of Darkness",
+      "description": "Those who look into your eyes can see that you have faced unimaginable horror. Commoners will extend you every courtesy and do their utmost to help you. They sense your haunted nature."
+    }
+  },
+  "hermit": {
+    "name": "Hermit",
+    "description": "You lived in seclusion for a formative part of your life. In your time apart from society, you found quiet, solitude, and perhaps some of the answers you were looking for.",
+    "skillProficiencies": ["medicine", "religion"],
+    "toolProficiencies": ["Herbalism kit"],
+    "languages": 1,
+    "equipment": [
+      "Scroll case with notes",
+      "Winter blanket",
+      "Common clothes",
+      "Herbalism kit",
+      "Pouch containing 5 gp"
+    ],
+    "feature": {
+      "name": "Discovery",
+      "description": "The quiet seclusion of your extended hermitage gave you access to a unique and powerful discovery. The exact nature of this revelation depends on the nature of your seclusion."
+    }
+  },
+  "investigator": {
+    "name": "Investigator",
+    "description": "You relentlessly seek the truth. Perhaps you're a detective, a reporter, or a scholarly researcher of mysteries and urban legends.",
+    "skillProficiencies": ["insight", "investigation"],
+    "languages": 2,
+    "equipment": [
+      "Magnifying glass",
+      "Evidence from past case",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Official Inquiry",
+      "description": "You have the authority to conduct official investigations. Local authorities and officials will cooperate with you and provide access to records and crime scenes."
+    }
+  },
+  "knight_of_the_order": {
+    "name": "Knight of the Order",
+    "description": "You belong to an order of knights who are sworn to a particular cause or philosophy. Whether you serve a deity, protect the innocent, or pursue knowledge, your order defines your purpose.",
+    "skillProficiencies": ["persuasion", "religion"],
+    "toolProficiencies": ["One type of gaming set or musical instrument"],
+    "languages": 1,
+    "equipment": [
+      "Traveler's clothes",
+      "Signet or insignia of your order",
+      "Banner or other symbol of your order",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Knightly Regard",
+      "description": "You receive shelter and succor from members of your order and those who are sympathetic to its aims. If your order is a religious one, you can gain aid from temples and other organizations related to your deity."
+    }
+  },
+  "mercenary_veteran": {
+    "name": "Mercenary Veteran",
+    "description": "You have been a soldier for hire, fighting for coin and glory. War has been your life, but you fought for pay rather than loyalty to a nation.",
+    "skillProficiencies": ["athletics", "persuasion"],
+    "toolProficiencies": ["One type of gaming set", "Vehicles (land)"],
+    "equipment": [
+      "Uniform of company",
+      "Insignia of rank",
+      "Gaming set",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Mercenary Life",
+      "description": "You know the mercenary life as well as you know your own weapons. You can identify mercenary companies by their emblems and know the going rates for hiring soldiers."
+    }
+  },
+  "noble": {
+    "name": "Noble",
+    "description": "You understand wealth, power, and privilege. You carry a noble title, and your family owns land, collects taxes, and wields significant political influence.",
+    "skillProficiencies": ["history", "persuasion"],
+    "toolProficiencies": ["One type of gaming set"],
+    "languages": 1,
+    "equipment": [
+      "Fine clothes",
+      "Signet ring",
+      "Scroll of pedigree",
+      "Purse containing 25 gp"
+    ],
+    "feature": {
+      "name": "Position of Privilege",
+      "description": "You are welcome in high society, and people assume you have the right to be wherever you are. The common folk make every effort to accommodate you and avoid your displeasure."
+    }
+  },
+  "outlander": {
+    "name": "Outlander",
+    "description": "You grew up in the wilds, far from civilization and the comforts of town and technology. You've witnessed the migration of herds, survived weather extremes, and enjoyed the solitude of being the only thinking creature for miles.",
+    "skillProficiencies": ["athletics", "survival"],
+    "toolProficiencies": ["One type of musical instrument"],
+    "languages": 1,
+    "equipment": [
+      "Staff",
+      "Hunting trap",
+      "Trophy from an animal you killed",
+      "Traveler's clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Wanderer",
+      "description": "You have an excellent memory for maps and geography. You can always recall the general layout of terrain, settlements, and features around you. You can find food and fresh water for yourself and up to five others each day."
+    }
+  },
+  "sage": {
+    "name": "Sage",
+    "description": "You spent years learning the lore of the multiverse. You scoured manuscripts, studied scrolls, and listened to the greatest experts.",
+    "skillProficiencies": ["arcana", "history"],
+    "languages": 2,
+    "equipment": [
+      "Bottle of black ink",
+      "Quill",
+      "Small knife",
+      "Letter from dead colleague with unanswered question",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Researcher",
+      "description": "When you attempt to learn or recall a piece of lore, if you don't know it, you often know where and from whom you can obtain it."
+    }
+  },
+  "sailor": {
+    "name": "Sailor",
+    "description": "You sailed on a seagoing vessel for years. In that time, you faced storms, monsters, and enemy ships. You know ship protocols and how to work as part of a crew.",
+    "skillProficiencies": ["athletics", "perception"],
+    "toolProficiencies": ["Navigator's tools", "Vehicles (water)"],
+    "equipment": [
+      "Belaying pin (club)",
+      "50 feet of silk rope",
+      "Lucky charm",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Ship's Passage",
+      "description": "When you need to, you can secure free passage on a sailing ship for yourself and your companions. You might sail on the ship you served on, or another ship you have good relations with."
+    }
+  },
+  "soldier": {
+    "name": "Soldier",
+    "description": "War has been your life for as long as you care to remember. You trained as a youth, studied the use of weapons and armor, and learned basic survival techniques.",
+    "skillProficiencies": ["athletics", "intimidation"],
+    "toolProficiencies": ["One type of gaming set", "Vehicles (land)"],
+    "equipment": [
+      "Insignia of rank",
+      "Trophy from fallen enemy",
+      "Set of bone dice or deck of cards",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "Military Rank",
+      "description": "You have a military rank from your career as a soldier. Soldiers loyal to your former military organization still recognize your authority and influence."
+    }
+  },
+  "urban_bounty_hunter": {
+    "name": "Urban Bounty Hunter",
+    "description": "You have made a living tracking down criminals, fugitives, or monsters in cities and settlements.",
+    "skillProficiencies": ["deception", "perception"],
+    "toolProficiencies": ["Two from: gaming set, musical instrument, or thieves' tools"],
+    "equipment": [
+      "Appropriate tools",
+      "Bounty poster",
+      "Common clothes",
+      "Pouch containing 20 gp"
+    ],
+    "feature": {
+      "name": "Ear to the Ground",
+      "description": "You are in frequent contact with people in the underworld. You can find informants who can provide information about criminals, fugitives, or the location of hidden lairs."
+    }
+  },
+  "urchin": {
+    "name": "Urchin",
+    "description": "You grew up on the streets alone, orphaned, and poor. You had no one to watch over you or provide for you, so you learned to provide for yourself.",
+    "skillProficiencies": ["sleight_of_hand", "stealth"],
+    "toolProficiencies": ["Disguise kit", "Thieves' tools"],
+    "equipment": [
+      "Small knife",
+      "Map of your city",
+      "Pet mouse",
+      "Token of your parents",
+      "Common clothes",
+      "Pouch containing 10 gp"
+    ],
+    "feature": {
+      "name": "City Secrets",
+      "description": "You know the secret patterns and flow of cities and can find passages through the urban sprawl that others would miss. When you are not in combat, you and companions can travel between any two locations in the city twice as fast as normal."
+    }
+  }
+}

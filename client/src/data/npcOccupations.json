@@ -1,0 +1,120 @@
+{
+  "commoner": [
+    { "name": "Farmer", "description": "Works the land, grows crops or raises livestock", "typicalLocations": ["farmland", "village", "rural areas"] },
+    { "name": "Fisherman", "description": "Catches fish and other aquatic creatures for a living", "typicalLocations": ["coastal town", "river village", "lakeside"] },
+    { "name": "Laborer", "description": "Performs physical work for wages", "typicalLocations": ["city", "town", "construction sites"] },
+    { "name": "Servant", "description": "Works in a household performing domestic duties", "typicalLocations": ["noble estate", "wealthy home", "inn"] },
+    { "name": "Miner", "description": "Extracts ore and minerals from the earth", "typicalLocations": ["mining town", "mountains", "underground"] },
+    { "name": "Shepherd", "description": "Tends and herds sheep or goats", "typicalLocations": ["hills", "grasslands", "rural areas"] },
+    { "name": "Woodcutter", "description": "Fells trees and prepares lumber", "typicalLocations": ["forest edge", "lumber camp", "village"] }
+  ],
+  "skilled": [
+    { "name": "Blacksmith", "description": "Forges metal items, tools, and weapons", "typicalLocations": ["town", "city", "fortress"] },
+    { "name": "Carpenter", "description": "Builds and repairs wooden structures", "typicalLocations": ["town", "city", "village"] },
+    { "name": "Cobbler", "description": "Makes and repairs footwear", "typicalLocations": ["town", "city market"] },
+    { "name": "Cook", "description": "Prepares food professionally", "typicalLocations": ["inn", "tavern", "noble household"] },
+    { "name": "Herbalist", "description": "Gathers and sells medicinal plants", "typicalLocations": ["village", "forest edge", "market"] },
+    { "name": "Jeweler", "description": "Crafts and sells jewelry and precious items", "typicalLocations": ["city", "wealthy district"] },
+    { "name": "Leatherworker", "description": "Creates leather goods and armor", "typicalLocations": ["town", "city"] },
+    { "name": "Mason", "description": "Works with stone to build structures", "typicalLocations": ["city", "quarry", "construction sites"] },
+    { "name": "Potter", "description": "Creates ceramic goods", "typicalLocations": ["village", "town market"] },
+    { "name": "Tailor", "description": "Makes and repairs clothing", "typicalLocations": ["town", "city", "market"] },
+    { "name": "Weaver", "description": "Creates cloth and textiles", "typicalLocations": ["village", "town", "textile district"] },
+    { "name": "Brewer", "description": "Makes ale, beer, and other beverages", "typicalLocations": ["tavern", "brewery", "town"] },
+    { "name": "Cartographer", "description": "Creates maps and charts", "typicalLocations": ["city", "guild hall", "explorer's lodge"] },
+    { "name": "Glassblower", "description": "Creates glass items and windows", "typicalLocations": ["city", "artisan district"] },
+    { "name": "Tanner", "description": "Processes animal hides into leather", "typicalLocations": ["town outskirts", "industrial area"] }
+  ],
+  "merchant": [
+    { "name": "General Merchant", "description": "Sells various everyday goods", "typicalLocations": ["market", "trade road", "town square"] },
+    { "name": "Weapons Dealer", "description": "Buys and sells arms and armor", "typicalLocations": ["city", "fortress town", "adventurer's quarter"] },
+    { "name": "Potion Seller", "description": "Deals in magical elixirs and remedies", "typicalLocations": ["magic district", "alchemist's row"] },
+    { "name": "Antiquarian", "description": "Trades in rare and ancient items", "typicalLocations": ["wealthy district", "collector's market"] },
+    { "name": "Horse Trader", "description": "Buys and sells horses and livestock", "typicalLocations": ["stable", "market", "trade fair"] },
+    { "name": "Pawnbroker", "description": "Offers loans against valuable items", "typicalLocations": ["city", "poor district", "trade quarter"] },
+    { "name": "Fence", "description": "Secretly deals in stolen goods", "typicalLocations": ["black market", "thieves' quarter", "hidden shop"] },
+    { "name": "Spice Merchant", "description": "Trades in exotic spices and seasonings", "typicalLocations": ["port city", "trade hub", "market"] },
+    { "name": "Book Dealer", "description": "Sells books, scrolls, and manuscripts", "typicalLocations": ["university district", "temple", "wealthy area"] },
+    { "name": "Textile Merchant", "description": "Trades in fabrics and fine cloths", "typicalLocations": ["market", "wealthy district", "trade quarter"] }
+  ],
+  "service": [
+    { "name": "Innkeeper", "description": "Runs an establishment providing lodging", "typicalLocations": ["inn", "tavern", "roadside stop"] },
+    { "name": "Barkeep", "description": "Serves drinks and manages a tavern", "typicalLocations": ["tavern", "inn", "alehouse"] },
+    { "name": "Stable Master", "description": "Cares for horses and manages stables", "typicalLocations": ["stable", "inn", "noble estate"] },
+    { "name": "Courier", "description": "Delivers messages and packages", "typicalLocations": ["city", "trade routes", "guild hall"] },
+    { "name": "Guide", "description": "Leads travelers through difficult terrain", "typicalLocations": ["wilderness edge", "mountain pass", "forest"] },
+    { "name": "Ferryman", "description": "Transports people across water", "typicalLocations": ["river crossing", "lake", "harbor"] },
+    { "name": "Gravedigger", "description": "Maintains cemeteries and buries the dead", "typicalLocations": ["cemetery", "temple grounds"] },
+    { "name": "Rat Catcher", "description": "Eliminates vermin from buildings", "typicalLocations": ["city", "sewers", "warehouses"] },
+    { "name": "Street Sweeper", "description": "Keeps streets and public areas clean", "typicalLocations": ["city streets", "market square"] },
+    { "name": "Bath House Attendant", "description": "Works at public bathing facilities", "typicalLocations": ["city", "wealthy district"] }
+  ],
+  "entertainment": [
+    { "name": "Bard", "description": "Performs music and tells stories", "typicalLocations": ["tavern", "noble court", "festival"] },
+    { "name": "Actor", "description": "Performs in theatrical productions", "typicalLocations": ["theater", "town square", "noble estate"] },
+    { "name": "Dancer", "description": "Performs dances for entertainment", "typicalLocations": ["tavern", "festival", "noble court"] },
+    { "name": "Jester", "description": "Entertains through comedy and foolery", "typicalLocations": ["noble court", "festival", "tavern"] },
+    { "name": "Fortuneteller", "description": "Claims to predict the future", "typicalLocations": ["market", "carnival", "mysterious shop"] },
+    { "name": "Pit Fighter", "description": "Fights for entertainment and profit", "typicalLocations": ["arena", "underground ring", "tavern"] },
+    { "name": "Acrobat", "description": "Performs feats of agility", "typicalLocations": ["circus", "festival", "street corner"] },
+    { "name": "Gambling Hall Owner", "description": "Runs games of chance", "typicalLocations": ["city", "port", "entertainment district"] }
+  ],
+  "scholarly": [
+    { "name": "Sage", "description": "Studies and advises on arcane matters", "typicalLocations": ["library", "tower", "university"] },
+    { "name": "Scribe", "description": "Copies documents and records information", "typicalLocations": ["temple", "library", "government building"] },
+    { "name": "Librarian", "description": "Maintains and organizes collections of books", "typicalLocations": ["library", "university", "temple"] },
+    { "name": "Tutor", "description": "Provides private education", "typicalLocations": ["noble estate", "wealthy home", "academy"] },
+    { "name": "Alchemist", "description": "Studies and creates magical substances", "typicalLocations": ["laboratory", "magic quarter", "tower"] },
+    { "name": "Astronomer", "description": "Studies the stars and celestial bodies", "typicalLocations": ["observatory", "tower", "university"] },
+    { "name": "Historian", "description": "Records and studies past events", "typicalLocations": ["library", "university", "archive"] },
+    { "name": "Translator", "description": "Converts between languages", "typicalLocations": ["port city", "embassy", "trade hub"] }
+  ],
+  "religious": [
+    { "name": "Priest", "description": "Serves a deity and tends to worshippers", "typicalLocations": ["temple", "shrine", "monastery"] },
+    { "name": "Acolyte", "description": "Assists priests and learns religious duties", "typicalLocations": ["temple", "monastery"] },
+    { "name": "Temple Guard", "description": "Protects religious sites", "typicalLocations": ["temple", "shrine", "holy site"] },
+    { "name": "Pilgrim", "description": "Travels to sacred places", "typicalLocations": ["road", "holy site", "temple"] },
+    { "name": "Monk", "description": "Lives a contemplative religious life", "typicalLocations": ["monastery", "temple", "hermitage"] },
+    { "name": "Healer", "description": "Uses divine or natural magic to cure ailments", "typicalLocations": ["temple", "hospital", "village"] },
+    { "name": "Cultist", "description": "Secretly worships dark powers", "typicalLocations": ["hidden shrine", "underground", "abandoned building"] }
+  ],
+  "military": [
+    { "name": "Guard", "description": "Protects people, places, or things", "typicalLocations": ["city gate", "palace", "merchant caravan"] },
+    { "name": "Soldier", "description": "Fights in organized military units", "typicalLocations": ["barracks", "fortress", "battlefield"] },
+    { "name": "Knight", "description": "Noble warrior bound by oath", "typicalLocations": ["castle", "noble court", "quest"] },
+    { "name": "Mercenary", "description": "Fights for pay", "typicalLocations": ["tavern", "battlefield", "hiring hall"] },
+    { "name": "Scout", "description": "Gathers information and explores ahead", "typicalLocations": ["wilderness", "military camp", "border"] },
+    { "name": "Siege Engineer", "description": "Builds and operates war machines", "typicalLocations": ["fortress", "battlefield", "military camp"] },
+    { "name": "Drill Sergeant", "description": "Trains soldiers", "typicalLocations": ["barracks", "training grounds", "military camp"] },
+    { "name": "Veteran", "description": "Experienced former soldier", "typicalLocations": ["tavern", "village", "anywhere"] }
+  ],
+  "criminal": [
+    { "name": "Thief", "description": "Steals for a living", "typicalLocations": ["city", "market", "wealthy district"] },
+    { "name": "Pickpocket", "description": "Steals from people's pockets", "typicalLocations": ["crowded market", "festival", "city streets"] },
+    { "name": "Burglar", "description": "Breaks into buildings to steal", "typicalLocations": ["wealthy district", "merchant quarter"] },
+    { "name": "Assassin", "description": "Kills for money", "typicalLocations": ["shadows", "anywhere"] },
+    { "name": "Smuggler", "description": "Illegally transports goods", "typicalLocations": ["port", "border", "secret passages"] },
+    { "name": "Bandit", "description": "Robs travelers on roads", "typicalLocations": ["wilderness road", "forest", "mountain pass"] },
+    { "name": "Crime Boss", "description": "Leads criminal organizations", "typicalLocations": ["hidden headquarters", "legitimate front business"] },
+    { "name": "Spy", "description": "Gathers secret information", "typicalLocations": ["court", "embassy", "anywhere"] },
+    { "name": "Beggar", "description": "Asks for money on streets", "typicalLocations": ["city streets", "temple steps", "market"] },
+    { "name": "Conman", "description": "Deceives others for profit", "typicalLocations": ["market", "tavern", "trade fair"] }
+  ],
+  "nobility": [
+    { "name": "Noble", "description": "Member of the aristocracy", "typicalLocations": ["manor", "castle", "court"] },
+    { "name": "Knight Errant", "description": "Wandering knight seeking adventure", "typicalLocations": ["road", "tournament", "quest"] },
+    { "name": "Diplomat", "description": "Represents political interests", "typicalLocations": ["embassy", "court", "negotiation"] },
+    { "name": "Advisor", "description": "Counsels those in power", "typicalLocations": ["court", "council chamber", "private office"] },
+    { "name": "Herald", "description": "Makes official announcements", "typicalLocations": ["court", "town square", "tournament"] },
+    { "name": "Chamberlain", "description": "Manages noble household affairs", "typicalLocations": ["manor", "castle", "estate"] }
+  ],
+  "magical": [
+    { "name": "Hedge Wizard", "description": "Practices minor magic", "typicalLocations": ["village", "forest edge", "cottage"] },
+    { "name": "Apprentice Wizard", "description": "Studies magic under a master", "typicalLocations": ["wizard's tower", "academy", "library"] },
+    { "name": "Court Wizard", "description": "Serves a noble with magic", "typicalLocations": ["castle", "court", "noble estate"] },
+    { "name": "Witch", "description": "Practices folk magic", "typicalLocations": ["forest", "swamp", "village outskirts"] },
+    { "name": "Enchanter", "description": "Creates magical items", "typicalLocations": ["workshop", "magic shop", "tower"] },
+    { "name": "Diviner", "description": "Sees the future or distant places", "typicalLocations": ["tower", "temple", "mysterious shop"] },
+    { "name": "Necromancer", "description": "Deals with death and undead", "typicalLocations": ["crypt", "hidden laboratory", "haunted place"] }
+  ]
+}

@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+*.db
+*.sqlite
+*.log
+.DS_Store
+dist/
+client/dist/
+uploads/
+.claude/
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm

@@ -1,0 +1,725 @@
+{
+  "barbarian": {
+    "name": "Barbarian",
+    "description": "A fierce warrior of primitive background who can enter a battle rage",
+    "hitDie": 12,
+    "primaryAbility": ["str"],
+    "savingThrows": ["str", "con"],
+    "skillChoices": 2,
+    "skillOptions": ["animal_handling", "athletics", "intimidation", "nature", "perception", "survival"],
+    "armorProficiencies": ["light", "medium", "shields"],
+    "weaponProficiencies": ["simple", "martial"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Greataxe",
+            "Any Martial Melee Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Two Handaxes",
+            "Any Simple Weapon"
+          ]
+        }
+      ],
+      "given": ["Explorer's Pack", "Four Javelins"]
+    },
+    "features": [
+      "Rage - In battle, you fight with primal ferocity. Gain bonus damage and resistance to physical damage",
+      "Unarmored Defense - While not wearing armor, your AC equals 10 + DEX modifier + CON modifier"
+    ],
+    "subclasses": [
+      {
+        "name": "Path of the Berserker",
+        "description": "Channel rage into violent fury",
+        "features": ["Frenzy", "Mindless Rage", "Intimidating Presence", "Retaliation"]
+      },
+      {
+        "name": "Path of the Totem Warrior",
+        "description": "Draw upon animal spirits for power",
+        "features": ["Spirit Seeker", "Totem Spirit", "Aspect of the Beast", "Spirit Walker", "Totemic Attunement"]
+      }
+    ]
+  },
+  "bard": {
+    "name": "Bard",
+    "description": "An inspiring magician whose power echoes the music of creation",
+    "hitDie": 8,
+    "primaryAbility": ["cha"],
+    "savingThrows": ["dex", "cha"],
+    "skillChoices": 3,
+    "skillOptions": ["acrobatics", "animal_handling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleight_of_hand", "stealth", "survival"],
+    "armorProficiencies": ["light"],
+    "weaponProficiencies": ["simple", "hand crossbows", "longswords", "rapiers", "shortswords"],
+    "toolProficiencies": ["Three musical instruments of your choice"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Rapier",
+            "Longsword",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Diplomat's Pack",
+            "Entertainer's Pack"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Lute",
+            "Any Other Musical Instrument"
+          ]
+        }
+      ],
+      "given": ["Leather Armor", "Dagger"]
+    },
+    "spellcasting": {
+      "ability": "cha",
+      "spellsKnown": "Limited known",
+      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+    },
+    "features": [
+      "Spellcasting - You can cast bard spells using Charisma as your spellcasting ability",
+      "Bardic Inspiration - You can inspire others through stirring words or music"
+    ],
+    "subclasses": [
+      {
+        "name": "College of Lore",
+        "description": "Master of knowledge and secrets",
+        "features": ["Bonus Proficiencies", "Cutting Words", "Additional Magical Secrets", "Peerless Skill"]
+      },
+      {
+        "name": "College of Valor",
+        "description": "Warrior poet who inspires allies in combat",
+        "features": ["Bonus Proficiencies", "Combat Inspiration", "Extra Attack", "Battle Magic"]
+      }
+    ]
+  },
+  "cleric": {
+    "name": "Cleric",
+    "description": "A priestly champion who wields divine magic in service of a higher power",
+    "hitDie": 8,
+    "primaryAbility": ["wis"],
+    "savingThrows": ["wis", "cha"],
+    "skillChoices": 2,
+    "skillOptions": ["history", "insight", "medicine", "persuasion", "religion"],
+    "armorProficiencies": ["light", "medium", "shields"],
+    "weaponProficiencies": ["simple"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Mace",
+            "Warhammer (if proficient)"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Scale Mail",
+            "Leather Armor",
+            "Chain Mail (if proficient)"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Light Crossbow and 20 Bolts",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Priest's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Shield", "Holy Symbol"]
+    },
+    "spellcasting": {
+      "ability": "wis",
+      "spellsKnown": "All prepared",
+      "cantripsKnown": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+    },
+    "features": [
+      "Spellcasting - You can cast cleric spells using Wisdom as your spellcasting ability",
+      "Divine Domain - Choose a domain related to your deity"
+    ],
+    "subclasses": [
+      {
+        "name": "Life Domain",
+        "description": "Master of healing and preservation of life",
+        "features": ["Bonus Proficiency", "Disciple of Life", "Channel Divinity: Preserve Life", "Blessed Healer", "Divine Strike", "Supreme Healing"]
+      },
+      {
+        "name": "War Domain",
+        "description": "Warrior priest who excels in battle",
+        "features": ["Bonus Proficiencies", "War Priest", "Channel Divinity: Guided Strike", "Channel Divinity: War God's Blessing", "Divine Strike", "Avatar of Battle"]
+      },
+      {
+        "name": "Trickery Domain",
+        "description": "Master of illusion and deception",
+        "features": ["Blessing of the Trickster", "Channel Divinity: Invoke Duplicity", "Channel Divinity: Cloak of Shadows", "Divine Strike", "Improved Duplicity"]
+      }
+    ]
+  },
+  "druid": {
+    "name": "Druid",
+    "description": "A priest of the Old Faith, wielding the powers of nature and adopting animal forms",
+    "hitDie": 8,
+    "primaryAbility": ["wis"],
+    "savingThrows": ["int", "wis"],
+    "skillChoices": 2,
+    "skillOptions": ["arcana", "animal_handling", "insight", "medicine", "nature", "perception", "religion", "survival"],
+    "armorProficiencies": ["light (non-metal)", "medium (non-metal)", "shields (non-metal)"],
+    "weaponProficiencies": ["clubs", "daggers", "darts", "javelins", "maces", "quarterstaffs", "scimitars", "sickles", "slings", "spears"],
+    "toolProficiencies": ["Herbalism kit"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Wooden Shield",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Scimitar",
+            "Any Simple Melee Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Leather Armor", "Druidic Focus"]
+    },
+    "spellcasting": {
+      "ability": "wis",
+      "spellsKnown": "All prepared",
+      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+    },
+    "features": [
+      "Spellcasting - You can cast druid spells using Wisdom as your spellcasting ability",
+      "Druidic - You know Druidic, the secret language of druids",
+      "Wild Shape - You can magically assume the shape of a beast"
+    ],
+    "subclasses": [
+      {
+        "name": "Circle of the Land",
+        "description": "Mystic whose power comes from the land itself",
+        "features": ["Bonus Cantrip", "Natural Recovery", "Circle Spells", "Land's Stride", "Nature's Ward", "Nature's Sanctuary"]
+      },
+      {
+        "name": "Circle of the Moon",
+        "description": "Fierce guardian who can transform into powerful beasts",
+        "features": ["Combat Wild Shape", "Circle Forms", "Primal Strike", "Elemental Wild Shape", "Thousand Forms"]
+      }
+    ]
+  },
+  "fighter": {
+    "name": "Fighter",
+    "description": "A master of martial combat, skilled with a variety of weapons and armor",
+    "hitDie": 10,
+    "primaryAbility": ["str", "dex"],
+    "savingThrows": ["str", "con"],
+    "skillChoices": 2,
+    "skillOptions": ["acrobatics", "animal_handling", "athletics", "history", "insight", "intimidation", "perception", "survival"],
+    "armorProficiencies": ["light", "medium", "heavy", "shields"],
+    "weaponProficiencies": ["simple", "martial"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Chain Mail",
+            "Leather Armor, Longbow, and 20 Arrows"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Martial Weapon and Shield",
+            "Two Martial Weapons"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Light Crossbow and 20 Bolts",
+            "Two Handaxes"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ]
+    },
+    "features": [
+      "Fighting Style - Choose a fighting style that grants combat bonuses",
+      "Second Wind - Regain hit points as a bonus action once per short rest"
+    ],
+    "subclasses": [
+      {
+        "name": "Champion",
+        "description": "Master of physical combat, excelling in critical hits",
+        "features": ["Improved Critical (19-20)", "Remarkable Athlete", "Additional Fighting Style", "Superior Critical (18-20)"]
+      },
+      {
+        "name": "Battle Master",
+        "description": "Tactical warrior who uses maneuvers in combat",
+        "features": ["Combat Superiority", "Student of War", "Know Your Enemy", "Improved Combat Superiority"]
+      },
+      {
+        "name": "Eldritch Knight",
+        "description": "Fighter who supplements martial prowess with magic",
+        "features": ["Spellcasting", "Weapon Bond", "War Magic", "Eldritch Strike"]
+      }
+    ]
+  },
+  "monk": {
+    "name": "Monk",
+    "description": "A master of martial arts, harnessing the power of the body in pursuit of physical and spiritual perfection",
+    "hitDie": 8,
+    "primaryAbility": ["dex", "wis"],
+    "savingThrows": ["str", "dex"],
+    "skillChoices": 2,
+    "skillOptions": ["acrobatics", "athletics", "history", "insight", "religion", "stealth"],
+    "armorProficiencies": [],
+    "weaponProficiencies": ["simple", "shortswords"],
+    "toolProficiencies": ["Choose one type of artisan's tools or one musical instrument"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Shortsword",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["10 Darts"]
+    },
+    "features": [
+      "Unarmored Defense - While not wearing armor or wielding a shield, your AC equals 10 + DEX modifier + WIS modifier",
+      "Martial Arts - Your practice of martial arts gives you mastery of unarmed strikes and monk weapons",
+      "Ki - You can harness the mystic energy of ki to fuel special abilities"
+    ],
+    "subclasses": [
+      {
+        "name": "Way of the Open Hand",
+        "description": "Master of unarmed combat techniques",
+        "features": ["Open Hand Technique", "Wholeness of Body", "Tranquility", "Quivering Palm"]
+      },
+      {
+        "name": "Way of Shadow",
+        "description": "Ninja-like warrior who uses stealth and shadow magic",
+        "features": ["Shadow Arts", "Shadow Step", "Cloak of Shadows", "Opportunist"]
+      },
+      {
+        "name": "Way of the Four Elements",
+        "description": "Channel the elements through ki",
+        "features": ["Disciple of the Elements", "Elemental Disciplines"]
+      }
+    ]
+  },
+  "paladin": {
+    "name": "Paladin",
+    "description": "A holy warrior bound to a sacred oath",
+    "hitDie": 10,
+    "primaryAbility": ["str", "cha"],
+    "savingThrows": ["wis", "cha"],
+    "skillChoices": 2,
+    "skillOptions": ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"],
+    "armorProficiencies": ["light", "medium", "heavy", "shields"],
+    "weaponProficiencies": ["simple", "martial"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Martial Weapon and Shield",
+            "Two Martial Weapons"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Five Javelins",
+            "Any Simple Melee Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Priest's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Chain Mail", "Holy Symbol"]
+    },
+    "spellcasting": {
+      "ability": "cha",
+      "spellsKnown": "All prepared",
+      "cantripsKnown": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    "features": [
+      "Divine Sense - Detect the presence of undead, celestials, and fiends within 60 feet",
+      "Lay on Hands - You have a pool of healing power that can restore hit points or cure diseases",
+      "Spellcasting - You can cast paladin spells using Charisma as your spellcasting ability"
+    ],
+    "subclasses": [
+      {
+        "name": "Oath of Devotion",
+        "description": "Paragon of justice and righteousness",
+        "features": ["Sacred Weapon", "Turn the Unholy", "Aura of Devotion", "Purity of Spirit", "Holy Nimbus"]
+      },
+      {
+        "name": "Oath of the Ancients",
+        "description": "Protector of light and life against darkness",
+        "features": ["Nature's Wrath", "Turn the Faithless", "Aura of Warding", "Undying Sentinel", "Elder Champion"]
+      },
+      {
+        "name": "Oath of Vengeance",
+        "description": "Avenger who punishes wrongdoers",
+        "features": ["Abjure Enemy", "Vow of Enmity", "Relentless Avenger", "Soul of Vengeance", "Avenging Angel"]
+      }
+    ]
+  },
+  "ranger": {
+    "name": "Ranger",
+    "description": "A warrior who uses martial prowess and nature magic to combat threats on the edges of civilization",
+    "hitDie": 10,
+    "primaryAbility": ["dex", "wis"],
+    "savingThrows": ["str", "dex"],
+    "skillChoices": 3,
+    "skillOptions": ["animal_handling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"],
+    "armorProficiencies": ["light", "medium", "shields"],
+    "weaponProficiencies": ["simple", "martial"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Scale Mail",
+            "Leather Armor"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Two Shortswords",
+            "Two Simple Melee Weapons"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Longbow", "Quiver of 20 Arrows"]
+    },
+    "spellcasting": {
+      "ability": "wis",
+      "spellsKnown": "Limited known",
+      "cantripsKnown": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    "features": [
+      "Favored Enemy - You have significant experience studying, tracking, and hunting a certain type of enemy",
+      "Natural Explorer - You are particularly familiar with one type of natural environment",
+      "Spellcasting - You can cast ranger spells using Wisdom as your spellcasting ability"
+    ],
+    "subclasses": [
+      {
+        "name": "Hunter",
+        "description": "Master of hunting and tracking prey",
+        "features": ["Hunter's Prey", "Defensive Tactics", "Multiattack", "Superior Hunter's Defense"]
+      },
+      {
+        "name": "Beast Master",
+        "description": "Ranger bonded with an animal companion",
+        "features": ["Ranger's Companion", "Exceptional Training", "Bestial Fury", "Share Spells"]
+      }
+    ]
+  },
+  "rogue": {
+    "name": "Rogue",
+    "description": "A scoundrel who uses stealth and trickery to overcome obstacles and enemies",
+    "hitDie": 8,
+    "primaryAbility": ["dex"],
+    "savingThrows": ["dex", "int"],
+    "skillChoices": 4,
+    "skillOptions": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleight_of_hand", "stealth"],
+    "armorProficiencies": ["light"],
+    "weaponProficiencies": ["simple", "hand crossbows", "longswords", "rapiers", "shortswords"],
+    "toolProficiencies": ["Thieves' Tools"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Rapier",
+            "Shortsword"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Shortbow and 20 Arrows",
+            "Shortsword"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Burglar's Pack",
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Leather Armor", "Two Daggers", "Thieves' Tools"]
+    },
+    "features": [
+      "Expertise - Choose two skills to double your proficiency bonus for ability checks",
+      "Sneak Attack - You know how to strike subtly and exploit a foe's distraction",
+      "Thieves' Cant - You know thieves' cant, a secret mix of dialect, jargon, and code"
+    ],
+    "subclasses": [
+      {
+        "name": "Thief",
+        "description": "Master of stealth and cunning",
+        "features": ["Fast Hands", "Second-Story Work", "Supreme Sneak", "Use Magic Device"]
+      },
+      {
+        "name": "Assassin",
+        "description": "Expert in dealing sudden, lethal strikes",
+        "features": ["Bonus Proficiencies", "Assassinate", "Infiltration Expertise", "Impostor", "Death Strike"]
+      },
+      {
+        "name": "Arcane Trickster",
+        "description": "Rogue enhanced by illusion and enchantment magic",
+        "features": ["Spellcasting", "Mage Hand Legerdemain", "Magical Ambush", "Versatile Trickster"]
+      }
+    ]
+  },
+  "sorcerer": {
+    "name": "Sorcerer",
+    "description": "A spellcaster who draws on inherent magic from a gift or bloodline",
+    "hitDie": 6,
+    "primaryAbility": ["cha"],
+    "savingThrows": ["con", "cha"],
+    "skillChoices": 2,
+    "skillOptions": ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"],
+    "armorProficiencies": [],
+    "weaponProficiencies": ["daggers", "darts", "slings", "quarterstaffs", "light crossbows"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Light Crossbow and 20 Bolts",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Component Pouch",
+            "Arcane Focus"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Two Daggers"]
+    },
+    "spellcasting": {
+      "ability": "cha",
+      "spellsKnown": "Limited known",
+      "cantripsKnown": [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+    },
+    "features": [
+      "Spellcasting - You can cast sorcerer spells using Charisma as your spellcasting ability",
+      "Sorcerous Origin - Choose an origin for your innate magic",
+      "Font of Magic - You can tap into your inner wellspring of magic to create spell slots"
+    ],
+    "subclasses": [
+      {
+        "name": "Draconic Bloodline",
+        "description": "Magic flowing from a draconic ancestor",
+        "features": ["Dragon Ancestor", "Draconic Resilience", "Elemental Affinity", "Dragon Wings", "Draconic Presence"]
+      },
+      {
+        "name": "Wild Magic",
+        "description": "Chaotic magic that can surge unexpectedly",
+        "features": ["Wild Magic Surge", "Tides of Chaos", "Bend Luck", "Controlled Chaos", "Spell Bombardment"]
+      }
+    ]
+  },
+  "warlock": {
+    "name": "Warlock",
+    "description": "A wielder of magic that is derived from a bargain with an extraplanar entity",
+    "hitDie": 8,
+    "primaryAbility": ["cha"],
+    "savingThrows": ["wis", "cha"],
+    "skillChoices": 2,
+    "skillOptions": ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"],
+    "armorProficiencies": ["light"],
+    "weaponProficiencies": ["simple"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Light Crossbow and 20 Bolts",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Component Pouch",
+            "Arcane Focus"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Scholar's Pack",
+            "Dungeoneer's Pack"
+          ]
+        }
+      ],
+      "given": ["Leather Armor", "Any Simple Weapon", "Two Daggers"]
+    },
+    "spellcasting": {
+      "ability": "cha",
+      "spellsKnown": "Limited known",
+      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+    },
+    "features": [
+      "Otherworldly Patron - You have struck a bargain with an otherworldly being",
+      "Pact Magic - Your arcane research and patron have given you facility with spells",
+      "Eldritch Invocations - Gain supernatural abilities granted by your patron"
+    ],
+    "subclasses": [
+      {
+        "name": "The Fiend",
+        "description": "Patron from the lower planes of existence",
+        "features": ["Dark One's Blessing", "Dark One's Own Luck", "Fiendish Resilience", "Hurl Through Hell"]
+      },
+      {
+        "name": "The Archfey",
+        "description": "Patron is a lord or lady of the fey",
+        "features": ["Fey Presence", "Misty Escape", "Beguiling Defenses", "Dark Delirium"]
+      },
+      {
+        "name": "The Great Old One",
+        "description": "Patron is an ancient, inscrutable entity",
+        "features": ["Awakened Mind", "Entropic Ward", "Thought Shield", "Create Thrall"]
+      }
+    ]
+  },
+  "wizard": {
+    "name": "Wizard",
+    "description": "A scholarly magic-user capable of manipulating the structures of reality",
+    "hitDie": 6,
+    "primaryAbility": ["int"],
+    "savingThrows": ["int", "wis"],
+    "skillChoices": 2,
+    "skillOptions": ["arcana", "history", "insight", "investigation", "medicine", "religion"],
+    "armorProficiencies": [],
+    "weaponProficiencies": ["daggers", "darts", "slings", "quarterstaffs", "light crossbows"],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Quarterstaff",
+            "Dagger"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Component Pouch",
+            "Arcane Focus"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Scholar's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": ["Spellbook"]
+    },
+    "spellcasting": {
+      "ability": "int",
+      "spellsKnown": "All prepared",
+      "cantripsKnown": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+    },
+    "features": [
+      "Spellcasting - You can cast wizard spells using Intelligence as your spellcasting ability",
+      "Arcane Recovery - Once per day during a short rest, you can recover expended spell slots"
+    ],
+    "subclasses": [
+      {
+        "name": "School of Evocation",
+        "description": "Master of powerful elemental magic",
+        "features": ["Sculpt Spells", "Potent Cantrip", "Empowered Evocation", "Overchannel"]
+      },
+      {
+        "name": "School of Abjuration",
+        "description": "Specialist in protective magic",
+        "features": ["Abjuration Savant", "Arcane Ward", "Projected Ward", "Improved Abjuration"]
+      },
+      {
+        "name": "School of Illusion",
+        "description": "Master of deception and misdirection",
+        "features": ["Improved Minor Illusion", "Malleable Illusions", "Illusory Self", "Illusory Reality"]
+      }
+    ]
+  }
+}

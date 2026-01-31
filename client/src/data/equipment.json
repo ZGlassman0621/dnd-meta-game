@@ -1,0 +1,429 @@
+{
+  "simpleWeapons": {
+    "melee": [
+      { "name": "Club", "damage": "1d4", "damageType": "bludgeoning", "properties": ["light"], "cost": "1 sp", "costGp": 0.1, "weight": 2, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Dagger", "damage": "1d4", "damageType": "piercing", "properties": ["finesse", "light", "thrown"], "range": "20/60", "cost": "2 gp", "costGp": 2, "weight": 1, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Greatclub", "damage": "1d8", "damageType": "bludgeoning", "properties": ["two-handed"], "cost": "2 sp", "costGp": 0.2, "weight": 10, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Handaxe", "damage": "1d6", "damageType": "slashing", "properties": ["light", "thrown"], "range": "20/60", "cost": "5 gp", "costGp": 5, "weight": 2, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Javelin", "damage": "1d6", "damageType": "piercing", "properties": ["thrown"], "range": "30/120", "cost": "5 sp", "costGp": 0.5, "weight": 2, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Light Hammer", "damage": "1d4", "damageType": "bludgeoning", "properties": ["light", "thrown"], "range": "20/60", "cost": "2 gp", "costGp": 2, "weight": 2, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Mace", "damage": "1d6", "damageType": "bludgeoning", "properties": [], "cost": "5 gp", "costGp": 5, "weight": 4, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Quarterstaff", "damage": "1d6", "damageType": "bludgeoning", "properties": ["versatile"], "versatileDamage": "1d8", "cost": "2 sp", "costGp": 0.2, "weight": 4, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Sickle", "damage": "1d4", "damageType": "slashing", "properties": ["light"], "cost": "1 gp", "costGp": 1, "weight": 2, "weaponType": "simple", "rangeType": "melee" },
+      { "name": "Spear", "damage": "1d6", "damageType": "piercing", "properties": ["thrown", "versatile"], "range": "20/60", "versatileDamage": "1d8", "cost": "1 gp", "costGp": 1, "weight": 3, "weaponType": "simple", "rangeType": "melee" }
+    ],
+    "ranged": [
+      { "name": "Light Crossbow", "damage": "1d8", "damageType": "piercing", "properties": ["ammunition", "loading", "two-handed"], "range": "80/320", "cost": "25 gp", "costGp": 25, "weight": 5, "weaponType": "simple", "rangeType": "ranged" },
+      { "name": "Dart", "damage": "1d4", "damageType": "piercing", "properties": ["finesse", "thrown"], "range": "20/60", "cost": "5 cp", "costGp": 0.05, "weight": 0.25, "weaponType": "simple", "rangeType": "ranged" },
+      { "name": "Shortbow", "damage": "1d6", "damageType": "piercing", "properties": ["ammunition", "two-handed"], "range": "80/320", "cost": "25 gp", "costGp": 25, "weight": 2, "weaponType": "simple", "rangeType": "ranged" },
+      { "name": "Sling", "damage": "1d4", "damageType": "bludgeoning", "properties": ["ammunition"], "range": "30/120", "cost": "1 sp", "costGp": 0.1, "weight": 0, "weaponType": "simple", "rangeType": "ranged" }
+    ]
+  },
+  "martialWeapons": {
+    "melee": [
+      { "name": "Battleaxe", "damage": "1d8", "damageType": "slashing", "properties": ["versatile"], "versatileDamage": "1d10", "cost": "10 gp", "costGp": 10, "weight": 4, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Flail", "damage": "1d8", "damageType": "bludgeoning", "properties": [], "cost": "10 gp", "costGp": 10, "weight": 2, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Glaive", "damage": "1d10", "damageType": "slashing", "properties": ["heavy", "reach", "two-handed"], "cost": "20 gp", "costGp": 20, "weight": 6, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Greataxe", "damage": "1d12", "damageType": "slashing", "properties": ["heavy", "two-handed"], "cost": "30 gp", "costGp": 30, "weight": 7, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Greatsword", "damage": "2d6", "damageType": "slashing", "properties": ["heavy", "two-handed"], "cost": "50 gp", "costGp": 50, "weight": 6, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Halberd", "damage": "1d10", "damageType": "slashing", "properties": ["heavy", "reach", "two-handed"], "cost": "20 gp", "costGp": 20, "weight": 6, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Lance", "damage": "1d12", "damageType": "piercing", "properties": ["reach", "special"], "cost": "10 gp", "costGp": 10, "weight": 6, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Longsword", "damage": "1d8", "damageType": "slashing", "properties": ["versatile"], "versatileDamage": "1d10", "cost": "15 gp", "costGp": 15, "weight": 3, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Maul", "damage": "2d6", "damageType": "bludgeoning", "properties": ["heavy", "two-handed"], "cost": "10 gp", "costGp": 10, "weight": 10, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Morningstar", "damage": "1d8", "damageType": "piercing", "properties": [], "cost": "15 gp", "costGp": 15, "weight": 4, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Pike", "damage": "1d10", "damageType": "piercing", "properties": ["heavy", "reach", "two-handed"], "cost": "5 gp", "costGp": 5, "weight": 18, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Rapier", "damage": "1d8", "damageType": "piercing", "properties": ["finesse"], "cost": "25 gp", "costGp": 25, "weight": 2, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Scimitar", "damage": "1d6", "damageType": "slashing", "properties": ["finesse", "light"], "cost": "25 gp", "costGp": 25, "weight": 3, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Shortsword", "damage": "1d6", "damageType": "piercing", "properties": ["finesse", "light"], "cost": "10 gp", "costGp": 10, "weight": 2, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Trident", "damage": "1d6", "damageType": "piercing", "properties": ["thrown", "versatile"], "range": "20/60", "versatileDamage": "1d8", "cost": "5 gp", "costGp": 5, "weight": 4, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "War Pick", "damage": "1d8", "damageType": "piercing", "properties": [], "cost": "5 gp", "costGp": 5, "weight": 2, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Warhammer", "damage": "1d8", "damageType": "bludgeoning", "properties": ["versatile"], "versatileDamage": "1d10", "cost": "15 gp", "costGp": 15, "weight": 2, "weaponType": "martial", "rangeType": "melee" },
+      { "name": "Whip", "damage": "1d4", "damageType": "slashing", "properties": ["finesse", "reach"], "cost": "2 gp", "costGp": 2, "weight": 3, "weaponType": "martial", "rangeType": "melee" }
+    ],
+    "ranged": [
+      { "name": "Blowgun", "damage": "1", "damageType": "piercing", "properties": ["ammunition", "loading"], "range": "25/100", "cost": "10 gp", "costGp": 10, "weight": 1, "weaponType": "martial", "rangeType": "ranged" },
+      { "name": "Hand Crossbow", "damage": "1d6", "damageType": "piercing", "properties": ["ammunition", "light", "loading"], "range": "30/120", "cost": "75 gp", "costGp": 75, "weight": 3, "weaponType": "martial", "rangeType": "ranged" },
+      { "name": "Heavy Crossbow", "damage": "1d10", "damageType": "piercing", "properties": ["ammunition", "heavy", "loading", "two-handed"], "range": "100/400", "cost": "50 gp", "costGp": 50, "weight": 18, "weaponType": "martial", "rangeType": "ranged" },
+      { "name": "Longbow", "damage": "1d8", "damageType": "piercing", "properties": ["ammunition", "heavy", "two-handed"], "range": "150/600", "cost": "50 gp", "costGp": 50, "weight": 2, "weaponType": "martial", "rangeType": "ranged" },
+      { "name": "Net", "damage": "0", "damageType": "none", "properties": ["special", "thrown"], "range": "5/15", "cost": "1 gp", "costGp": 1, "weight": 3, "weaponType": "martial", "rangeType": "ranged" }
+    ]
+  },
+  "armor": {
+    "light": [
+      { "name": "Padded", "baseAC": 11, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": true, "cost": "5 gp", "costGp": 5, "weight": 8 },
+      { "name": "Leather", "baseAC": 11, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": false, "cost": "10 gp", "costGp": 10, "weight": 10 },
+      { "name": "Studded Leather", "baseAC": 12, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": false, "cost": "45 gp", "costGp": 45, "weight": 13 }
+    ],
+    "medium": [
+      { "name": "Hide", "baseAC": 12, "armorType": "medium", "maxDexBonus": 2, "stealthDisadvantage": false, "cost": "10 gp", "costGp": 10, "weight": 12 },
+      { "name": "Chain Shirt", "baseAC": 13, "armorType": "medium", "maxDexBonus": 2, "stealthDisadvantage": false, "cost": "50 gp", "costGp": 50, "weight": 20 },
+      { "name": "Scale Mail", "baseAC": 14, "armorType": "medium", "maxDexBonus": 2, "stealthDisadvantage": true, "cost": "50 gp", "costGp": 50, "weight": 45 },
+      { "name": "Breastplate", "baseAC": 14, "armorType": "medium", "maxDexBonus": 2, "stealthDisadvantage": false, "cost": "400 gp", "costGp": 400, "weight": 20 },
+      { "name": "Half Plate", "baseAC": 15, "armorType": "medium", "maxDexBonus": 2, "stealthDisadvantage": true, "cost": "750 gp", "costGp": 750, "weight": 40 }
+    ],
+    "heavy": [
+      { "name": "Ring Mail", "baseAC": 14, "armorType": "heavy", "maxDexBonus": 0, "stealthDisadvantage": true, "cost": "30 gp", "costGp": 30, "weight": 40, "strReq": null },
+      { "name": "Chain Mail", "baseAC": 16, "armorType": "heavy", "maxDexBonus": 0, "stealthDisadvantage": true, "cost": "75 gp", "costGp": 75, "weight": 55, "strReq": 13 },
+      { "name": "Splint", "baseAC": 17, "armorType": "heavy", "maxDexBonus": 0, "stealthDisadvantage": true, "cost": "200 gp", "costGp": 200, "weight": 60, "strReq": 15 },
+      { "name": "Plate", "baseAC": 18, "armorType": "heavy", "maxDexBonus": 0, "stealthDisadvantage": true, "cost": "1,500 gp", "costGp": 1500, "weight": 65, "strReq": 15 }
+    ],
+    "shields": [
+      { "name": "Shield", "acBonus": 2, "cost": "10 gp", "costGp": 10, "weight": 6 },
+      { "name": "Wooden Shield", "acBonus": 2, "cost": "10 gp", "costGp": 10, "weight": 6 }
+    ]
+  },
+  "packs": {
+    "Burglar's Pack": {
+      "cost": "16 gp",
+      "contents": [
+        "Backpack",
+        "Bag of 1,000 ball bearings",
+        "10 feet of string",
+        "Bell",
+        "5 candles",
+        "Crowbar",
+        "Hammer",
+        "10 pitons",
+        "Hooded lantern",
+        "2 flasks of oil",
+        "5 days rations",
+        "Tinderbox",
+        "Waterskin",
+        "50 feet of hempen rope"
+      ]
+    },
+    "Diplomat's Pack": {
+      "cost": "39 gp",
+      "contents": [
+        "Chest",
+        "2 cases for maps and scrolls",
+        "Fine clothes",
+        "Bottle of ink",
+        "Ink pen",
+        "Lamp",
+        "2 flasks of oil",
+        "5 sheets of paper",
+        "Vial of perfume",
+        "Sealing wax",
+        "Soap"
+      ]
+    },
+    "Dungeoneer's Pack": {
+      "cost": "12 gp",
+      "contents": [
+        "Backpack",
+        "Crowbar",
+        "Hammer",
+        "10 pitons",
+        "10 torches",
+        "Tinderbox",
+        "10 days of rations",
+        "Waterskin",
+        "50 feet of hempen rope"
+      ]
+    },
+    "Entertainer's Pack": {
+      "cost": "40 gp",
+      "contents": [
+        "Backpack",
+        "Bedroll",
+        "2 costumes",
+        "5 candles",
+        "5 days of rations",
+        "Waterskin",
+        "Disguise kit"
+      ]
+    },
+    "Explorer's Pack": {
+      "cost": "10 gp",
+      "contents": [
+        "Backpack",
+        "Bedroll",
+        "Mess kit",
+        "Tinderbox",
+        "10 torches",
+        "10 days of rations",
+        "Waterskin",
+        "50 feet of hempen rope"
+      ]
+    },
+    "Priest's Pack": {
+      "cost": "19 gp",
+      "contents": [
+        "Backpack",
+        "Blanket",
+        "10 candles",
+        "Tinderbox",
+        "Alms box",
+        "2 blocks of incense",
+        "Censer",
+        "Vestments",
+        "2 days of rations",
+        "Waterskin"
+      ]
+    },
+    "Scholar's Pack": {
+      "cost": "40 gp",
+      "contents": [
+        "Backpack",
+        "Book of lore",
+        "Bottle of ink",
+        "Ink pen",
+        "10 sheets of parchment",
+        "Little bag of sand",
+        "Small knife"
+      ]
+    }
+  },
+  "musicalInstruments": [
+    "Bagpipes",
+    "Drum",
+    "Dulcimer",
+    "Flute",
+    "Lute",
+    "Lyre",
+    "Horn",
+    "Pan Flute",
+    "Shawm",
+    "Viol"
+  ],
+  "arcaneFocus": [
+    "Crystal",
+    "Orb",
+    "Rod",
+    "Staff",
+    "Wand"
+  ],
+  "druidicFocus": [
+    "Sprig of Mistletoe",
+    "Totem",
+    "Wooden Staff",
+    "Yew Wand"
+  ],
+  "holySymbol": [
+    "Amulet",
+    "Emblem",
+    "Reliquary"
+  ],
+  "ammunition": [
+    { "name": "Arrows (20)", "cost": "1 gp", "weight": "1 lb" },
+    { "name": "Blowgun Needles (50)", "cost": "1 gp", "weight": "1 lb" },
+    { "name": "Crossbow Bolts (20)", "cost": "1 gp", "weight": "1.5 lb" },
+    { "name": "Sling Bullets (20)", "cost": "4 cp", "weight": "1.5 lb" }
+  ],
+  "adventuringGear": [
+    { "name": "Abacus", "cost": "2 gp", "weight": "2 lb" },
+    { "name": "Acid (vial)", "cost": "25 gp", "weight": "1 lb" },
+    { "name": "Alchemist's Fire (flask)", "cost": "50 gp", "weight": "1 lb" },
+    { "name": "Antitoxin (vial)", "cost": "50 gp", "weight": "0 lb" },
+    { "name": "Backpack", "cost": "2 gp", "weight": "5 lb" },
+    { "name": "Ball Bearings (bag of 1,000)", "cost": "1 gp", "weight": "2 lb" },
+    { "name": "Barrel", "cost": "2 gp", "weight": "70 lb" },
+    { "name": "Basket", "cost": "4 sp", "weight": "2 lb" },
+    { "name": "Bedroll", "cost": "1 gp", "weight": "7 lb" },
+    { "name": "Bell", "cost": "1 gp", "weight": "0 lb" },
+    { "name": "Blanket", "cost": "5 sp", "weight": "3 lb" },
+    { "name": "Block and Tackle", "cost": "1 gp", "weight": "5 lb" },
+    { "name": "Book", "cost": "25 gp", "weight": "5 lb" },
+    { "name": "Bottle, glass", "cost": "2 gp", "weight": "2 lb" },
+    { "name": "Bucket", "cost": "5 cp", "weight": "2 lb" },
+    { "name": "Caltrops (bag of 20)", "cost": "1 gp", "weight": "2 lb" },
+    { "name": "Candle", "cost": "1 cp", "weight": "0 lb" },
+    { "name": "Case, crossbow bolt", "cost": "1 gp", "weight": "1 lb" },
+    { "name": "Case, map or scroll", "cost": "1 gp", "weight": "1 lb" },
+    { "name": "Chain (10 feet)", "cost": "5 gp", "weight": "10 lb" },
+    { "name": "Chalk (1 piece)", "cost": "1 cp", "weight": "0 lb" },
+    { "name": "Chest", "cost": "5 gp", "weight": "25 lb" },
+    { "name": "Climber's Kit", "cost": "25 gp", "weight": "12 lb" },
+    { "name": "Clothes, common", "cost": "5 sp", "weight": "3 lb" },
+    { "name": "Clothes, costume", "cost": "5 gp", "weight": "4 lb" },
+    { "name": "Clothes, fine", "cost": "15 gp", "weight": "6 lb" },
+    { "name": "Clothes, traveler's", "cost": "2 gp", "weight": "4 lb" },
+    { "name": "Component Pouch", "cost": "25 gp", "weight": "2 lb" },
+    { "name": "Crowbar", "cost": "2 gp", "weight": "5 lb" },
+    { "name": "Fishing Tackle", "cost": "1 gp", "weight": "4 lb" },
+    { "name": "Flask or Tankard", "cost": "2 cp", "weight": "1 lb" },
+    { "name": "Grappling Hook", "cost": "2 gp", "weight": "4 lb" },
+    { "name": "Hammer", "cost": "1 gp", "weight": "3 lb" },
+    { "name": "Hammer, sledge", "cost": "2 gp", "weight": "10 lb" },
+    { "name": "Healer's Kit", "cost": "5 gp", "weight": "3 lb" },
+    { "name": "Holy Water (flask)", "cost": "25 gp", "weight": "1 lb" },
+    { "name": "Hourglass", "cost": "25 gp", "weight": "1 lb" },
+    { "name": "Hunting Trap", "cost": "5 gp", "weight": "25 lb" },
+    { "name": "Ink (1 ounce bottle)", "cost": "10 gp", "weight": "0 lb" },
+    { "name": "Ink Pen", "cost": "2 cp", "weight": "0 lb" },
+    { "name": "Jug or Pitcher", "cost": "2 cp", "weight": "4 lb" },
+    { "name": "Ladder (10-foot)", "cost": "1 sp", "weight": "25 lb" },
+    { "name": "Lamp", "cost": "5 sp", "weight": "1 lb" },
+    { "name": "Lantern, bullseye", "cost": "10 gp", "weight": "2 lb" },
+    { "name": "Lantern, hooded", "cost": "5 gp", "weight": "2 lb" },
+    { "name": "Lock", "cost": "10 gp", "weight": "1 lb" },
+    { "name": "Magnifying Glass", "cost": "100 gp", "weight": "0 lb" },
+    { "name": "Manacles", "cost": "2 gp", "weight": "6 lb" },
+    { "name": "Mess Kit", "cost": "2 sp", "weight": "1 lb" },
+    { "name": "Mirror, steel", "cost": "5 gp", "weight": "0.5 lb" },
+    { "name": "Oil (flask)", "cost": "1 sp", "weight": "1 lb" },
+    { "name": "Paper (one sheet)", "cost": "2 sp", "weight": "0 lb" },
+    { "name": "Parchment (one sheet)", "cost": "1 sp", "weight": "0 lb" },
+    { "name": "Perfume (vial)", "cost": "5 gp", "weight": "0 lb" },
+    { "name": "Pick, miner's", "cost": "2 gp", "weight": "10 lb" },
+    { "name": "Piton", "cost": "5 cp", "weight": "0.25 lb" },
+    { "name": "Poison, basic (vial)", "cost": "100 gp", "weight": "0 lb" },
+    { "name": "Pole (10-foot)", "cost": "5 cp", "weight": "7 lb" },
+    { "name": "Pot, iron", "cost": "2 gp", "weight": "10 lb" },
+    { "name": "Potion of Healing", "cost": "50 gp", "weight": "0.5 lb" },
+    { "name": "Pouch", "cost": "5 sp", "weight": "1 lb" },
+    { "name": "Quiver", "cost": "1 gp", "weight": "1 lb" },
+    { "name": "Ram, portable", "cost": "4 gp", "weight": "35 lb" },
+    { "name": "Rations (1 day)", "cost": "5 sp", "weight": "2 lb" },
+    { "name": "Robes", "cost": "1 gp", "weight": "4 lb" },
+    { "name": "Rope, hempen (50 feet)", "cost": "1 gp", "weight": "10 lb" },
+    { "name": "Rope, silk (50 feet)", "cost": "10 gp", "weight": "5 lb" },
+    { "name": "Sack", "cost": "1 cp", "weight": "0.5 lb" },
+    { "name": "Scale, merchant's", "cost": "5 gp", "weight": "3 lb" },
+    { "name": "Sealing Wax", "cost": "5 sp", "weight": "0 lb" },
+    { "name": "Shovel", "cost": "2 gp", "weight": "5 lb" },
+    { "name": "Signal Whistle", "cost": "5 cp", "weight": "0 lb" },
+    { "name": "Signet Ring", "cost": "5 gp", "weight": "0 lb" },
+    { "name": "Soap", "cost": "2 cp", "weight": "0 lb" },
+    { "name": "Spellbook", "cost": "50 gp", "weight": "3 lb" },
+    { "name": "Spikes, iron (10)", "cost": "1 gp", "weight": "5 lb" },
+    { "name": "Spyglass", "cost": "1000 gp", "weight": "1 lb" },
+    { "name": "Tent, two-person", "cost": "2 gp", "weight": "20 lb" },
+    { "name": "Tinderbox", "cost": "5 sp", "weight": "1 lb" },
+    { "name": "Torch", "cost": "1 cp", "weight": "1 lb" },
+    { "name": "Vial", "cost": "1 gp", "weight": "0 lb" },
+    { "name": "Waterskin", "cost": "2 sp", "weight": "5 lb (full)" },
+    { "name": "Whetstone", "cost": "1 cp", "weight": "1 lb" }
+  ],
+  "tools": {
+    "artisansTools": [
+      { "name": "Alchemist's Supplies", "cost": "50 gp", "weight": "8 lb" },
+      { "name": "Brewer's Supplies", "cost": "20 gp", "weight": "9 lb" },
+      { "name": "Calligrapher's Supplies", "cost": "10 gp", "weight": "5 lb" },
+      { "name": "Carpenter's Tools", "cost": "8 gp", "weight": "6 lb" },
+      { "name": "Cartographer's Tools", "cost": "15 gp", "weight": "6 lb" },
+      { "name": "Cobbler's Tools", "cost": "5 gp", "weight": "5 lb" },
+      { "name": "Cook's Utensils", "cost": "1 gp", "weight": "8 lb" },
+      { "name": "Glassblower's Tools", "cost": "30 gp", "weight": "5 lb" },
+      { "name": "Jeweler's Tools", "cost": "25 gp", "weight": "2 lb" },
+      { "name": "Leatherworker's Tools", "cost": "5 gp", "weight": "5 lb" },
+      { "name": "Mason's Tools", "cost": "10 gp", "weight": "8 lb" },
+      { "name": "Painter's Supplies", "cost": "10 gp", "weight": "5 lb" },
+      { "name": "Potter's Tools", "cost": "10 gp", "weight": "3 lb" },
+      { "name": "Smith's Tools", "cost": "20 gp", "weight": "8 lb" },
+      { "name": "Tinker's Tools", "cost": "50 gp", "weight": "10 lb" },
+      { "name": "Weaver's Tools", "cost": "1 gp", "weight": "5 lb" },
+      { "name": "Woodcarver's Tools", "cost": "1 gp", "weight": "5 lb" }
+    ],
+    "gamingSets": [
+      { "name": "Dice Set", "cost": "1 sp", "weight": "0 lb" },
+      { "name": "Dragonchess Set", "cost": "1 gp", "weight": "0.5 lb" },
+      { "name": "Playing Card Set", "cost": "5 sp", "weight": "0 lb" },
+      { "name": "Three-Dragon Ante Set", "cost": "1 gp", "weight": "0 lb" }
+    ],
+    "otherTools": [
+      { "name": "Disguise Kit", "cost": "25 gp", "weight": "3 lb" },
+      { "name": "Forgery Kit", "cost": "15 gp", "weight": "5 lb" },
+      { "name": "Herbalism Kit", "cost": "5 gp", "weight": "3 lb" },
+      { "name": "Navigator's Tools", "cost": "25 gp", "weight": "2 lb" },
+      { "name": "Poisoner's Kit", "cost": "50 gp", "weight": "2 lb" },
+      { "name": "Thieves' Tools", "cost": "25 gp", "weight": "1 lb" }
+    ]
+  },
+  "mounts": [
+    { "name": "Camel", "cost": "50 gp", "speed": "50 ft.", "capacity": "480 lb" },
+    { "name": "Donkey or Mule", "cost": "8 gp", "speed": "40 ft.", "capacity": "420 lb" },
+    { "name": "Elephant", "cost": "200 gp", "speed": "40 ft.", "capacity": "1,320 lb" },
+    { "name": "Horse, draft", "cost": "50 gp", "speed": "40 ft.", "capacity": "540 lb" },
+    { "name": "Horse, riding", "cost": "75 gp", "speed": "60 ft.", "capacity": "480 lb" },
+    { "name": "Mastiff", "cost": "25 gp", "speed": "40 ft.", "capacity": "195 lb" },
+    { "name": "Pony", "cost": "30 gp", "speed": "40 ft.", "capacity": "225 lb" },
+    { "name": "Warhorse", "cost": "400 gp", "speed": "60 ft.", "capacity": "540 lb" }
+  ],
+  "tack": [
+    { "name": "Barding", "cost": "x4 armor cost", "weight": "x2 armor weight" },
+    { "name": "Bit and Bridle", "cost": "2 gp", "weight": "1 lb" },
+    { "name": "Exotic Saddle", "cost": "60 gp", "weight": "40 lb" },
+    { "name": "Military Saddle", "cost": "20 gp", "weight": "30 lb" },
+    { "name": "Pack Saddle", "cost": "5 gp", "weight": "15 lb" },
+    { "name": "Riding Saddle", "cost": "10 gp", "weight": "25 lb" },
+    { "name": "Saddlebags", "cost": "4 gp", "weight": "8 lb" }
+  ],
+  "vehicles": [
+    { "name": "Carriage", "cost": "100 gp", "weight": "600 lb" },
+    { "name": "Cart", "cost": "15 gp", "weight": "200 lb" },
+    { "name": "Chariot", "cost": "250 gp", "weight": "100 lb" },
+    { "name": "Sled", "cost": "20 gp", "weight": "300 lb" },
+    { "name": "Wagon", "cost": "35 gp", "weight": "400 lb" }
+  ],
+  "waterVehicles": [
+    { "name": "Galley", "cost": "30,000 gp", "speed": "4 mph" },
+    { "name": "Keelboat", "cost": "3,000 gp", "speed": "1 mph" },
+    { "name": "Longship", "cost": "10,000 gp", "speed": "3 mph" },
+    { "name": "Rowboat", "cost": "50 gp", "speed": "1.5 mph" },
+    { "name": "Sailing Ship", "cost": "10,000 gp", "speed": "2 mph" },
+    { "name": "Warship", "cost": "25,000 gp", "speed": "2.5 mph" }
+  ],
+  "equipmentSlots": {
+    "mainHand": { "name": "Main Hand", "accepts": ["weapon"] },
+    "offHand": { "name": "Off Hand", "accepts": ["weapon", "shield"] },
+    "armor": { "name": "Armor", "accepts": ["armor"] },
+    "head": { "name": "Head", "accepts": ["helm", "hat", "circlet"] },
+    "neck": { "name": "Neck", "accepts": ["amulet", "necklace", "cloak"] },
+    "cloak": { "name": "Cloak", "accepts": ["cloak", "cape"] },
+    "ring1": { "name": "Ring", "accepts": ["ring"] },
+    "ring2": { "name": "Ring", "accepts": ["ring"] },
+    "gloves": { "name": "Gloves", "accepts": ["gloves", "gauntlets"] },
+    "belt": { "name": "Belt", "accepts": ["belt"] },
+    "boots": { "name": "Boots", "accepts": ["boots", "shoes"] }
+  },
+  "qualityRanks": {
+    "poor": {
+      "name": "Poor",
+      "description": "Worn, damaged, or shoddily made",
+      "weaponBonus": -1,
+      "armorBonus": -1,
+      "costMultiplier": 0.5
+    },
+    "common": {
+      "name": "Common",
+      "description": "Standard quality equipment",
+      "weaponBonus": 0,
+      "armorBonus": 0,
+      "costMultiplier": 1
+    },
+    "fine": {
+      "name": "Fine",
+      "description": "Well-crafted with quality materials",
+      "weaponBonus": 0,
+      "armorBonus": 0,
+      "costMultiplier": 2,
+      "note": "Better appearance, no mechanical bonus"
+    },
+    "masterwork": {
+      "name": "Masterwork",
+      "description": "Expertly crafted by a master artisan",
+      "weaponBonus": 1,
+      "armorBonus": 0,
+      "costMultiplier": 10,
+      "note": "+1 to attack rolls (non-magical)"
+    },
+    "exceptional": {
+      "name": "Exceptional",
+      "description": "Rare quality, nearly magical craftsmanship",
+      "weaponBonus": 1,
+      "armorBonus": 1,
+      "costMultiplier": 25,
+      "note": "+1 to attack (weapons) or +1 AC (armor), non-magical"
+    },
+    "legendary": {
+      "name": "Legendary",
+      "description": "One-of-a-kind masterpiece, often named",
+      "weaponBonus": 2,
+      "armorBonus": 1,
+      "costMultiplier": 100,
+      "note": "+2 to attack (weapons) or +1 AC (armor), non-magical"
+    }
+  }
+}
