@@ -21,6 +21,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
     "@libsql/client": "^0.17.0",
     "better-sqlite3": "^11.8.0",
     "cors": "^2.8.5",
