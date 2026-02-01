@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../database.js';
+import { dbAll, dbGet, dbRun } from '../database.js';
 import {
   HIT_DICE,
   PROFICIENCY_BONUS,
@@ -12,9 +12,9 @@ import {
 const router = express.Router();
 
 // Get all companions for a character
-router.get('/character/:characterId', (req, res) => {
+router.get('/character/:characterId', async (req, res) => {
   try {
-    const companions = db.prepare(`
+    const companions = await dbAll(`
       SELECT c.*, c.inventory as companion_inventory, c.gold_gp, c.gold_sp, c.gold_cp, c.equipment,
              c.skill_proficiencies,
              n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
@@ -27,7 +27,7 @@ router.get('/character/:characterId', (req, res) => {
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.recruited_by_character_id = ? AND c.status = 'active'
       ORDER BY c.recruited_at DESC
-    `).all(req.params.characterId);
+    `, [req.params.characterId]);
 
     res.json(companions);
   } catch (error) {
@@ -36,9 +36,9 @@ router.get('/character/:characterId', (req, res) => {
 });
 
 // Get single companion with full details
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, c.inventory as companion_inventory, c.gold_gp, c.gold_sp, c.gold_cp, c.equipment,
              c.skill_proficiencies,
              n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
@@ -50,7 +50,7 @@ router.get('/:id', (req, res) => {
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     if (!companion) {
       return res.status(404).json({ error: 'Companion not found' });
@@ -63,7 +63,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Recruit an NPC as a companion
-router.post('/recruit', (req, res) => {
+router.post('/recruit', async (req, res) => {
   try {
     const {
       npc_id,
@@ -77,23 +77,23 @@ router.post('/recruit', (req, res) => {
     } = req.body;
 
     // Verify NPC exists and is available as companion
-    const npc = db.prepare('SELECT * FROM npcs WHERE id = ?').get(npc_id);
+    const npc = await dbGet('SELECT * FROM npcs WHERE id = ?', [npc_id]);
     if (!npc) {
       return res.status(404).json({ error: 'NPC not found' });
     }
 
     // Check if this NPC is already a companion for this character
-    const existingCompanion = db.prepare(`
+    const existingCompanion = await dbGet(`
       SELECT * FROM companions
       WHERE npc_id = ? AND recruited_by_character_id = ? AND status = 'active'
-    `).get(npc_id, recruited_by_character_id);
+    `, [npc_id, recruited_by_character_id]);
 
     if (existingCompanion) {
       return res.status(400).json({ error: 'This NPC is already a companion' });
     }
 
     // Get recruiting character's level for class-based companions
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(recruited_by_character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [recruited_by_character_id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -141,16 +141,14 @@ router.post('/recruit', (req, res) => {
     }
 
     // Insert the companion
-    const stmt = db.prepare(`
+    const result = await dbRun(`
       INSERT INTO companions (
         npc_id, recruited_by_character_id, recruited_session_id,
         progression_type, original_stats_snapshot,
         companion_class, companion_subclass, companion_level, companion_max_hp, companion_current_hp,
         companion_ability_scores, notes, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
-    `);
-
-    const result = stmt.run(
+    `, [
       npc_id,
       recruited_by_character_id,
       recruited_session_id || null,
@@ -163,16 +161,16 @@ router.post('/recruit', (req, res) => {
       companionCurrentHp,
       companionAbilityScores,
       notes
-    );
+    ]);
 
     // Fetch the created companion with NPC details
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation,
              n.avatar, n.personality_trait_1, n.personality_trait_2
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(result.lastInsertRowid);
+    `, [result.lastInsertRowid]);
 
     res.status(201).json({
       message: `${npc.name} has joined your party!`,
@@ -184,7 +182,7 @@ router.post('/recruit', (req, res) => {
 });
 
 // Update companion
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const updates = [];
     const values = [];
@@ -209,16 +207,15 @@ router.put('/:id', (req, res) => {
 
     values.push(req.params.id);
 
-    const stmt = db.prepare(`UPDATE companions SET ${updates.join(', ')} WHERE id = ?`);
-    stmt.run(...values);
+    await dbRun(`UPDATE companions SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, c.inventory as companion_inventory, c.gold_gp, c.gold_sp, c.gold_cp, c.equipment,
              n.name, n.nickname, n.race, n.gender, n.occupation, n.avatar
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     res.json(companion);
   } catch (error) {
@@ -227,7 +224,7 @@ router.put('/:id', (req, res) => {
 });
 
 // Convert NPC-stats companion to class-based
-router.post('/:id/convert-to-class', (req, res) => {
+router.post('/:id/convert-to-class', async (req, res) => {
   try {
     const { companion_class, starting_level } = req.body;
 
@@ -235,12 +232,12 @@ router.post('/:id/convert-to-class', (req, res) => {
       return res.status(400).json({ error: 'companion_class is required' });
     }
 
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.ability_scores as npc_ability_scores
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     if (!companion) {
       return res.status(404).json({ error: 'Companion not found' });
@@ -251,8 +248,7 @@ router.post('/:id/convert-to-class', (req, res) => {
     }
 
     // Get recruiting character's level
-    const character = db.prepare('SELECT level FROM characters WHERE id = ?')
-      .get(companion.recruited_by_character_id);
+    const character = await dbGet('SELECT level FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
 
     const companionLevel = starting_level || character?.level || 1;
 
@@ -271,7 +267,7 @@ router.post('/:id/convert-to-class', (req, res) => {
     }
     companionMaxHp = Math.max(companionMaxHp, 1);
 
-    db.prepare(`
+    await dbRun(`
       UPDATE companions SET
         progression_type = 'class_based',
         companion_class = ?,
@@ -280,21 +276,21 @@ router.post('/:id/convert-to-class', (req, res) => {
         companion_current_hp = ?,
         companion_ability_scores = ?
       WHERE id = ?
-    `).run(
+    `, [
       companion_class,
       companionLevel,
       companionMaxHp,
       companionMaxHp,
       JSON.stringify(abilityScores),
       req.params.id
-    );
+    ]);
 
-    const updatedCompanion = db.prepare(`
+    const updatedCompanion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation, n.avatar
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     res.json({
       message: 'Companion converted to class-based progression',
@@ -306,14 +302,14 @@ router.post('/:id/convert-to-class', (req, res) => {
 });
 
 // Level up companion (class-based only)
-router.post('/:id/level-up', (req, res) => {
+router.post('/:id/level-up', async (req, res) => {
   try {
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.name
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     if (!companion) {
       return res.status(404).json({ error: 'Companion not found' });
@@ -393,7 +389,7 @@ router.post('/:id/level-up', (req, res) => {
     const newMaxHp = companion.companion_max_hp + hpGain;
     const newCurrentHp = companion.companion_current_hp + hpGain;
 
-    db.prepare(`
+    await dbRun(`
       UPDATE companions SET
         companion_level = ?,
         companion_max_hp = ?,
@@ -401,21 +397,21 @@ router.post('/:id/level-up', (req, res) => {
         companion_ability_scores = ?,
         companion_subclass = ?
       WHERE id = ?
-    `).run(
+    `, [
       newLevel,
       newMaxHp,
       newCurrentHp,
       JSON.stringify(newAbilityScores),
       newSubclass,
       req.params.id
-    );
+    ]);
 
-    const updatedCompanion = db.prepare(`
+    const updatedCompanion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation, n.avatar
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     res.json({
       message: `${companion.name} is now level ${newLevel}!`,
@@ -435,14 +431,14 @@ router.post('/:id/level-up', (req, res) => {
 });
 
 // Get level-up info for companion
-router.get('/:id/level-up-info', (req, res) => {
+router.get('/:id/level-up-info', async (req, res) => {
   try {
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.name
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     if (!companion) {
       return res.status(404).json({ error: 'Companion not found' });
@@ -500,25 +496,25 @@ router.get('/:id/level-up-info', (req, res) => {
 });
 
 // Dismiss companion
-router.post('/:id/dismiss', (req, res) => {
+router.post('/:id/dismiss', async (req, res) => {
   try {
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.name
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     if (!companion) {
       return res.status(404).json({ error: 'Companion not found' });
     }
 
-    db.prepare(`
+    await dbRun(`
       UPDATE companions SET
         status = 'dismissed',
         dismissed_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(req.params.id);
+    `, [req.params.id]);
 
     res.json({
       message: `${companion.name} has left your party.`,
@@ -530,25 +526,25 @@ router.post('/:id/dismiss', (req, res) => {
 });
 
 // Mark companion as deceased
-router.post('/:id/deceased', (req, res) => {
+router.post('/:id/deceased', async (req, res) => {
   try {
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.name
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(req.params.id);
+    `, [req.params.id]);
 
     if (!companion) {
       return res.status(404).json({ error: 'Companion not found' });
     }
 
-    db.prepare(`
+    await dbRun(`
       UPDATE companions SET
         status = 'deceased',
         dismissed_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(req.params.id);
+    `, [req.params.id]);
 
     res.json({
       message: `${companion.name} has fallen.`,
@@ -560,7 +556,7 @@ router.post('/:id/deceased', (req, res) => {
 });
 
 // Create a new party member from scratch (creates NPC + companion in one go)
-router.post('/create-party-member', (req, res) => {
+router.post('/create-party-member', async (req, res) => {
   try {
     const {
       recruited_by_character_id,
@@ -605,7 +601,7 @@ router.post('/create-party-member', (req, res) => {
     }
 
     // Get recruiting character for default level
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(recruited_by_character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [recruited_by_character_id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -618,7 +614,7 @@ router.post('/create-party-member', (req, res) => {
     });
 
     // First, create the NPC
-    const npcStmt = db.prepare(`
+    const npcResult = await dbRun(`
       INSERT INTO npcs (
         name, nickname, race, gender, age, occupation,
         height, build, hair_color, hair_style, eye_color, skin_tone,
@@ -626,9 +622,7 @@ router.post('/create-party-member', (req, res) => {
         voice, mannerism, motivation, ability_scores, background_notes,
         relationship_to_party, campaign_availability
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'party_member')
-    `);
-
-    const npcResult = npcStmt.run(
+    `, [
       name,
       nickname || null,
       subrace ? `${subrace} ${race}` : race,
@@ -650,7 +644,7 @@ router.post('/create-party-member', (req, res) => {
       abilityScoresJson,
       backstory || null,
       relationship_to_party || null
-    );
+    ]);
 
     const npcId = npcResult.lastInsertRowid;
 
@@ -676,16 +670,14 @@ router.post('/create-party-member', (req, res) => {
     const skillProficienciesJson = JSON.stringify(skill_proficiencies || []);
 
     // Now create the companion record
-    const companionStmt = db.prepare(`
+    const companionResult = await dbRun(`
       INSERT INTO companions (
         npc_id, recruited_by_character_id, progression_type,
         original_stats_snapshot, companion_class, companion_subclass, companion_level,
         companion_max_hp, companion_current_hp, companion_ability_scores,
         skill_proficiencies, notes, status
       ) VALUES (?, ?, 'class_based', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
-    `);
-
-    const companionResult = companionStmt.run(
+    `, [
       npcId,
       recruited_by_character_id,
       originalStatsSnapshot,
@@ -697,10 +689,10 @@ router.post('/create-party-member', (req, res) => {
       abilityScoresJson,
       skillProficienciesJson,
       relationship_to_party || null
-    );
+    ]);
 
     // Fetch the created companion with NPC details
-    const companion = db.prepare(`
+    const companion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice,
              n.height, n.build, n.hair_color, n.eye_color, n.skin_tone,
@@ -708,7 +700,7 @@ router.post('/create-party-member', (req, res) => {
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
-    `).get(companionResult.lastInsertRowid);
+    `, [companionResult.lastInsertRowid]);
 
     res.status(201).json({
       message: `${name} has joined your party!`,
@@ -721,10 +713,10 @@ router.post('/create-party-member', (req, res) => {
 });
 
 // Get NPCs available for recruitment (campaign_availability = 'companion')
-router.get('/available/:characterId', (req, res) => {
+router.get('/available/:characterId', async (req, res) => {
   try {
     // Get NPCs marked as available companions that aren't already recruited
-    const availableNpcs = db.prepare(`
+    const availableNpcs = await dbAll(`
       SELECT n.* FROM npcs n
       WHERE n.campaign_availability = 'companion'
       AND n.id NOT IN (
@@ -732,7 +724,7 @@ router.get('/available/:characterId', (req, res) => {
         WHERE recruited_by_character_id = ? AND status = 'active'
       )
       ORDER BY n.name
-    `).all(req.params.characterId);
+    `, [req.params.characterId]);
 
     res.json(availableNpcs);
   } catch (error) {

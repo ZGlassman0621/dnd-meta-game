@@ -31,8 +31,8 @@ app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 const clientDistPath = join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDistPath));
 
-// Initialize database
-initDatabase();
+// Initialize database (async for Turso cloud)
+await initDatabase();
 
 // Routes
 app.use('/api/character', characterRoutes);

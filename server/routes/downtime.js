@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../database.js';
+import { dbAll, dbGet, dbRun } from '../database.js';
 
 const router = express.Router();
 
@@ -576,9 +576,9 @@ function analyzeInventory(inventoryJson) {
 }
 
 // Get available activities for a character based on location and inventory
-router.get('/available/:characterId', (req, res) => {
+router.get('/available/:characterId', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.characterId);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -649,9 +649,9 @@ router.get('/available/:characterId', (req, res) => {
 });
 
 // Get available work options for a character
-router.get('/work-options/:characterId', (req, res) => {
+router.get('/work-options/:characterId', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.characterId);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -723,14 +723,14 @@ router.get('/work-options/:characterId', (req, res) => {
 });
 
 // Check for active downtime
-router.get('/status/:characterId', (req, res) => {
+router.get('/status/:characterId', async (req, res) => {
   try {
-    const active = db.prepare(`
+    const active = await dbGet(`
       SELECT * FROM downtime
       WHERE character_id = ? AND status = 'active'
       ORDER BY start_time DESC
       LIMIT 1
-    `).get(req.params.characterId);
+    `, [req.params.characterId]);
 
     if (active) {
       const now = new Date();
@@ -762,7 +762,7 @@ router.get('/status/:characterId', (req, res) => {
 });
 
 // Start a downtime activity
-router.post('/start', (req, res) => {
+router.post('/start', async (req, res) => {
   try {
     const { characterId, activityType, durationHours, workType, restType } = req.body;
 
@@ -789,27 +789,27 @@ router.post('/start', (req, res) => {
     }
 
     // Check for existing active downtime
-    const existing = db.prepare(`
+    const existing = await dbGet(`
       SELECT * FROM downtime
       WHERE character_id = ? AND status = 'active'
-    `).get(characterId);
+    `, [characterId]);
 
     if (existing) {
       return res.status(400).json({ error: 'Character already has an active downtime activity' });
     }
 
     // Check for active adventure
-    const activeAdventure = db.prepare(`
+    const activeAdventure = await dbGet(`
       SELECT * FROM adventures
       WHERE character_id = ? AND status = 'active'
-    `).get(characterId);
+    `, [characterId]);
 
     if (activeAdventure) {
       return res.status(400).json({ error: 'Character is currently on an adventure' });
     }
 
     // Get character for context validation
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -851,14 +851,12 @@ router.post('/start', (req, res) => {
     const now = new Date();
     const endTime = new Date(now.getTime() + (actualDuration * 60 * 60 * 1000));
 
-    const stmt = db.prepare(`
+    const result = await dbRun(`
       INSERT INTO downtime (character_id, activity_type, work_type, rest_type, duration_hours, start_time, end_time, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-    `);
+    `, [characterId, activityType, workType || null, restType || null, actualDuration, now.toISOString(), endTime.toISOString()]);
 
-    const result = stmt.run(characterId, activityType, workType || null, restType || null, actualDuration, now.toISOString(), endTime.toISOString());
-
-    const newDowntime = db.prepare('SELECT * FROM downtime WHERE id = ?').get(result.lastInsertRowid);
+    const newDowntime = await dbGet('SELECT * FROM downtime WHERE id = ?', [result.lastInsertRowid]);
 
     // Determine display name
     let activityName = activity.name;
@@ -882,9 +880,9 @@ router.post('/start', (req, res) => {
 });
 
 // Complete/claim downtime results
-router.post('/complete/:id', (req, res) => {
+router.post('/complete/:id', async (req, res) => {
   try {
-    const downtime = db.prepare('SELECT * FROM downtime WHERE id = ?').get(req.params.id);
+    const downtime = await dbGet('SELECT * FROM downtime WHERE id = ?', [req.params.id]);
 
     if (!downtime) {
       return res.status(404).json({ error: 'Downtime activity not found' });
@@ -904,27 +902,27 @@ router.post('/complete/:id', (req, res) => {
       });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(downtime.character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [downtime.character_id]);
     const activity = ACTIVITIES[downtime.activity_type];
 
     // Calculate benefits based on activity type and duration
     const benefits = calculateBenefits(downtime, character, activity);
 
     // Update downtime record
-    db.prepare(`
+    await dbRun(`
       UPDATE downtime
       SET status = 'completed', results = ?, benefits = ?
       WHERE id = ?
-    `).run(benefits.description, JSON.stringify(benefits), req.params.id);
+    `, [benefits.description, JSON.stringify(benefits), req.params.id]);
 
     // Apply benefits to character
-    applyBenefits(character, benefits);
+    await applyBenefits(character, benefits);
 
     // Save a pending narrative event for the next DM session
-    saveDowntimeNarrative(character, downtime, activity, benefits);
+    await saveDowntimeNarrative(character, downtime, activity, benefits);
 
-    const updatedDowntime = db.prepare('SELECT * FROM downtime WHERE id = ?').get(req.params.id);
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(downtime.character_id);
+    const updatedDowntime = await dbGet('SELECT * FROM downtime WHERE id = ?', [req.params.id]);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [downtime.character_id]);
 
     res.json({
       downtime: updatedDowntime,
@@ -938,9 +936,9 @@ router.post('/complete/:id', (req, res) => {
 });
 
 // Cancel active downtime
-router.post('/cancel/:id', (req, res) => {
+router.post('/cancel/:id', async (req, res) => {
   try {
-    const downtime = db.prepare('SELECT * FROM downtime WHERE id = ?').get(req.params.id);
+    const downtime = await dbGet('SELECT * FROM downtime WHERE id = ?', [req.params.id]);
 
     if (!downtime) {
       return res.status(404).json({ error: 'Downtime activity not found' });
@@ -950,7 +948,7 @@ router.post('/cancel/:id', (req, res) => {
       return res.status(400).json({ error: 'Downtime activity is not active' });
     }
 
-    db.prepare('UPDATE downtime SET status = ? WHERE id = ?').run('cancelled', req.params.id);
+    await dbRun('UPDATE downtime SET status = ? WHERE id = ?', ['cancelled', req.params.id]);
 
     res.json({ message: 'Downtime activity cancelled' });
   } catch (error) {
@@ -960,14 +958,14 @@ router.post('/cancel/:id', (req, res) => {
 });
 
 // Get downtime history
-router.get('/history/:characterId', (req, res) => {
+router.get('/history/:characterId', async (req, res) => {
   try {
-    const history = db.prepare(`
+    const history = await dbAll(`
       SELECT * FROM downtime
       WHERE character_id = ? AND status = 'completed'
       ORDER BY end_time DESC
       LIMIT 20
-    `).all(req.params.characterId);
+    `, [req.params.characterId]);
 
     // Enrich with activity info
     const enriched = history.map(d => ({
@@ -1279,7 +1277,7 @@ function calculateBenefits(downtime, character, activity) {
 }
 
 // Apply benefits to character
-function applyBenefits(character, benefits) {
+async function applyBenefits(character, benefits) {
   const updates = [];
   const params = [];
 
@@ -1310,12 +1308,12 @@ function applyBenefits(character, benefits) {
 
   if (updates.length > 0) {
     params.push(character.id);
-    db.prepare(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, params);
   }
 }
 
 // Save a pending narrative event for the next DM session
-function saveDowntimeNarrative(character, downtime, activity, benefits) {
+async function saveDowntimeNarrative(character, downtime, activity, benefits) {
   try {
     // Parse existing pending narratives
     let pendingNarratives = [];
@@ -1363,11 +1361,11 @@ function saveDowntimeNarrative(character, downtime, activity, benefits) {
     }
 
     // Save back to character
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET pending_downtime_narratives = ?
       WHERE id = ?
-    `).run(JSON.stringify(pendingNarratives), character.id);
+    `, [JSON.stringify(pendingNarratives), character.id]);
   } catch (e) {
     console.error('Error saving downtime narrative:', e);
     // Don't fail the main operation if narrative saving fails

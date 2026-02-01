@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../database.js';
+import { dbAll, dbGet, dbRun } from '../database.js';
 import {
   PROFICIENCY_BONUS,
   HIT_DICE,
@@ -23,9 +23,9 @@ import {
 const router = express.Router();
 
 // Get all characters
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const characters = db.prepare('SELECT * FROM characters ORDER BY updated_at DESC').all();
+    const characters = await dbAll('SELECT * FROM characters ORDER BY updated_at DESC', []);
     res.json(characters);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -33,9 +33,9 @@ router.get('/', (req, res) => {
 });
 
 // Get single character
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -46,7 +46,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Create new character
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       name,
@@ -100,7 +100,7 @@ router.post('/', (req, res) => {
       other_notes = null
     } = req.body;
 
-    const stmt = db.prepare(`
+    const sql = `
       INSERT INTO characters (
         name, first_name, last_name, nickname, gender,
         class, subclass, race, subrace, background,
@@ -114,9 +114,9 @@ router.post('/', (req, res) => {
         personality_traits, ideals, bonds, flaws,
         organizations, allies, enemies, backstory, other_notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    `;
 
-    const result = stmt.run(
+    const result = await dbRun(sql, [
       name, first_name, last_name, nickname, gender,
       charClass, subclass, race, subrace, background,
       level, current_hp, max_hp, current_location, current_quest,
@@ -128,9 +128,9 @@ router.post('/', (req, res) => {
       hair_color, skin_color, eye_color, height, weight, age,
       personality_traits, ideals, bonds, flaws,
       organizations, allies, enemies, backstory, other_notes
-    );
+    ]);
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json(character);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -138,7 +138,7 @@ router.post('/', (req, res) => {
 });
 
 // Update character
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const updates = [];
     const values = [];
@@ -173,10 +173,9 @@ router.put('/:id', (req, res) => {
     updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(req.params.id);
 
-    const stmt = db.prepare(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`);
-    stmt.run(...values);
+    await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(character);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -184,15 +183,14 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete character
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     // Delete all related records first (to satisfy foreign key constraints)
-    db.prepare('DELETE FROM dm_sessions WHERE character_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM adventures WHERE character_id = ?').run(req.params.id);
+    await dbRun('DELETE FROM dm_sessions WHERE character_id = ?', [req.params.id]);
+    await dbRun('DELETE FROM adventures WHERE character_id = ?', [req.params.id]);
 
     // Then delete the character
-    const stmt = db.prepare('DELETE FROM characters WHERE id = ?');
-    stmt.run(req.params.id);
+    await dbRun('DELETE FROM characters WHERE id = ?', [req.params.id]);
 
     res.json({ message: 'Character deleted successfully' });
   } catch (error) {
@@ -201,10 +199,10 @@ router.delete('/:id', (req, res) => {
 });
 
 // Rest to restore HP (and spell slots on long rest)
-router.post('/rest/:id', (req, res) => {
+router.post('/rest/:id', async (req, res) => {
   try {
     const { restType = 'long' } = req.body; // 'short' or 'long'
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -219,11 +217,11 @@ router.post('/rest/:id', (req, res) => {
       newHp = character.max_hp;
 
       // Reset spell slots used to empty (restores all slots)
-      db.prepare(`
+      await dbRun(`
         UPDATE characters
         SET current_hp = ?, spell_slots_used = '{}', updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(newHp, req.params.id);
+      `, [newHp, req.params.id]);
       spellSlotsRestored = true;
     } else {
       // Short rest: restore 50% of missing HP, partial spell slot recovery for some classes
@@ -234,19 +232,18 @@ router.post('/rest/:id', (req, res) => {
       // Warlocks recover spell slots on short rest
       const characterClass = character.class?.toLowerCase();
       if (characterClass === 'warlock') {
-        db.prepare(`
+        await dbRun(`
           UPDATE characters
           SET current_hp = ?, spell_slots_used = '{}', updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(newHp, req.params.id);
+        `, [newHp, req.params.id]);
         spellSlotsRestored = true;
       } else {
-        db.prepare('UPDATE characters SET current_hp = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(newHp, req.params.id);
+        await dbRun('UPDATE characters SET current_hp = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newHp, req.params.id]);
       }
     }
 
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json({
       success: true,
       message: restType === 'long'
@@ -263,9 +260,9 @@ router.post('/rest/:id', (req, res) => {
 });
 
 // Get character's spell slots (max and used)
-router.get('/spell-slots/:id', (req, res) => {
+router.get('/spell-slots/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -286,14 +283,14 @@ router.get('/spell-slots/:id', (req, res) => {
 });
 
 // Use a spell slot
-router.post('/spell-slots/:id/use', (req, res) => {
+router.post('/spell-slots/:id/use', async (req, res) => {
   try {
     const { level } = req.body;
     if (!level || level < 1 || level > 9) {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -314,8 +311,7 @@ router.post('/spell-slots/:id/use', (req, res) => {
 
     usedSlots[level] = usedForLevel + 1;
 
-    db.prepare('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(JSON.stringify(usedSlots), req.params.id);
+    await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
 
     res.json({
       success: true,
@@ -329,14 +325,14 @@ router.post('/spell-slots/:id/use', (req, res) => {
 });
 
 // Restore a spell slot (for abilities like Arcane Recovery)
-router.post('/spell-slots/:id/restore', (req, res) => {
+router.post('/spell-slots/:id/restore', async (req, res) => {
   try {
     const { level } = req.body;
     if (!level || level < 1 || level > 9) {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -353,8 +349,7 @@ router.post('/spell-slots/:id/restore', (req, res) => {
 
     usedSlots[level] = usedForLevel - 1;
 
-    db.prepare('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(JSON.stringify(usedSlots), req.params.id);
+    await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
 
     res.json({
       success: true,
@@ -368,17 +363,16 @@ router.post('/spell-slots/:id/restore', (req, res) => {
 });
 
 // Reset character XP to 0
-router.post('/reset-xp/:id', (req, res) => {
+router.post('/reset-xp/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    db.prepare('UPDATE characters SET experience = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(req.params.id);
+    await dbRun('UPDATE characters SET experience = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
 
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json({
       message: 'XP reset to 0',
       character: updatedCharacter
@@ -389,15 +383,15 @@ router.post('/reset-xp/:id', (req, res) => {
 });
 
 // Full character reset (XP, HP, inventory, clear adventures)
-router.post('/full-reset/:id', (req, res) => {
+router.post('/full-reset/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
     // Reset character stats to starting values
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET experience = 0,
           current_hp = max_hp,
@@ -408,12 +402,12 @@ router.post('/full-reset/:id', (req, res) => {
           debuffs = '[]',
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(req.params.id);
+    `, [req.params.id]);
 
     // Clear all adventures for this character
-    db.prepare('DELETE FROM adventures WHERE character_id = ?').run(req.params.id);
+    await dbRun('DELETE FROM adventures WHERE character_id = ?', [req.params.id]);
 
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json({
       message: 'Character fully reset',
       character: updatedCharacter
@@ -424,9 +418,9 @@ router.post('/full-reset/:id', (req, res) => {
 });
 
 // Check if character can level up
-router.get('/can-level-up/:id', (req, res) => {
+router.get('/can-level-up/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -449,9 +443,9 @@ router.get('/can-level-up/:id', (req, res) => {
 });
 
 // Get level-up information (what choices need to be made)
-router.get('/level-up-info/:id', (req, res) => {
+router.get('/level-up-info/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -600,9 +594,9 @@ router.get('/level-up-info/:id', (req, res) => {
 });
 
 // Execute level up with choices
-router.post('/level-up/:id', (req, res) => {
+router.post('/level-up/:id', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -753,7 +747,7 @@ router.post('/level-up/:id', (req, res) => {
     // Determine the "primary" class for legacy field (highest level class)
     const primaryClass = classLevels.reduce((a, b) => a.level >= b.level ? a : b);
 
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET level = ?,
           class = ?,
@@ -766,7 +760,7 @@ router.post('/level-up/:id', (req, res) => {
           experience_to_next_level = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
+    `, [
       newTotalLevel,
       primaryClass.class,
       newMaxHp,
@@ -777,9 +771,9 @@ router.post('/level-up/:id', (req, res) => {
       JSON.stringify(hitDiceBreakdown),
       newXPToNextLevel,
       req.params.id
-    );
+    ]);
 
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
 
     // Get features gained
     const newFeatures = getClassFeatures(targetClassName, newClassLevel);
@@ -813,10 +807,9 @@ router.post('/level-up/:id', (req, res) => {
 });
 
 // Get campaign notes for a character
-router.get('/:id/campaign-notes', (req, res) => {
+router.get('/:id/campaign-notes', async (req, res) => {
   try {
-    const character = db.prepare('SELECT id, name, campaign_notes FROM characters WHERE id = ?')
-      .get(req.params.id);
+    const character = await dbGet('SELECT id, name, campaign_notes FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -831,23 +824,23 @@ router.get('/:id/campaign-notes', (req, res) => {
 });
 
 // Update campaign notes for a character
-router.put('/:id/campaign-notes', (req, res) => {
+router.put('/:id/campaign-notes', async (req, res) => {
   try {
     const { notes } = req.body;
     if (typeof notes !== 'string') {
       return res.status(400).json({ error: 'Notes must be a string' });
     }
 
-    const character = db.prepare('SELECT id FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET campaign_notes = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(notes, req.params.id);
+    `, [notes, req.params.id]);
 
     res.json({
       success: true,
@@ -861,20 +854,20 @@ router.put('/:id/campaign-notes', (req, res) => {
 // Generate campaign notes from session history (for retroactive population)
 router.post('/:id/generate-campaign-notes', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(req.params.id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
     // Get all completed sessions with their messages
-    const sessions = db.prepare(`
+    const sessions = await dbAll(`
       SELECT id, title, summary, messages, setting, start_time, end_time,
              game_start_day, game_start_year, game_end_day, game_end_year
       FROM dm_sessions
       WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 1
       ORDER BY created_at ASC
       LIMIT 10
-    `).all(req.params.id);
+    `, [req.params.id]);
 
     if (sessions.length === 0) {
       return res.json({
@@ -1005,11 +998,11 @@ Be concise but specific. Use names and details from the sessions. Only include t
     }
 
     // Save the generated notes
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET campaign_notes = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(finalNotes, req.params.id);
+    `, [finalNotes, req.params.id]);
 
     res.json({
       success: true,

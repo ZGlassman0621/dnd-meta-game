@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../database.js';
+import { dbAll, dbGet, dbRun } from '../database.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
 import {
@@ -66,22 +66,22 @@ router.get('/models', async (req, res) => {
 });
 
 // Get active session for a character (including paused and completed but unclaimed)
-router.get('/active/:characterId', (req, res) => {
+router.get('/active/:characterId', async (req, res) => {
   try {
     // Check for active or paused session first
-    let session = db.prepare(`
+    let session = await dbGet(`
       SELECT * FROM dm_sessions
       WHERE character_id = ? AND (status = 'active' OR status = 'paused')
       ORDER BY created_at DESC LIMIT 1
-    `).get(req.params.characterId);
+    `, [req.params.characterId]);
 
     // If no active/paused, check for completed but unclaimed
     if (!session) {
-      session = db.prepare(`
+      session = await dbGet(`
         SELECT * FROM dm_sessions
         WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 0
         ORDER BY created_at DESC LIMIT 1
-      `).get(req.params.characterId);
+      `, [req.params.characterId]);
     }
 
     if (session) {
@@ -102,16 +102,16 @@ router.get('/active/:characterId', (req, res) => {
 });
 
 // Get session history for a character (claimed sessions)
-router.get('/history/:characterId', (req, res) => {
+router.get('/history/:characterId', async (req, res) => {
   try {
-    const sessions = db.prepare(`
+    const sessions = await dbAll(`
       SELECT id, title, setting, tone, status, summary, rewards, hp_change,
              new_location, new_quest, start_time, end_time, created_at
       FROM dm_sessions
       WHERE character_id = ? AND (status = 'completed' AND rewards_claimed = 1)
       ORDER BY created_at DESC
       LIMIT 20
-    `).all(req.params.characterId);
+    `, [req.params.characterId]);
 
     // Parse rewards JSON
     sessions.forEach(s => {
@@ -125,12 +125,12 @@ router.get('/history/:characterId', (req, res) => {
 });
 
 // Get campaign continuity info - last session's config and recent summaries
-router.get('/campaign-context/:characterId', (req, res) => {
+router.get('/campaign-context/:characterId', async (req, res) => {
   try {
     // Get the character's persistent campaign config
-    const character = db.prepare(`
+    const character = await dbGet(`
       SELECT campaign_config FROM characters WHERE id = ?
-    `).get(req.params.characterId);
+    `, [req.params.characterId]);
 
     let campaignConfig = {};
     try {
@@ -140,14 +140,14 @@ router.get('/campaign-context/:characterId', (req, res) => {
     }
 
     // Get the most recent completed session with its full config
-    const lastSession = db.prepare(`
+    const lastSession = await dbGet(`
       SELECT id, title, setting, tone, summary, session_config,
              game_end_day, game_end_year, end_time
       FROM dm_sessions
       WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 1
       ORDER BY created_at DESC
       LIMIT 1
-    `).get(req.params.characterId);
+    `, [req.params.characterId]);
 
     if (!lastSession) {
       // Return campaign config even without previous sessions
@@ -158,14 +158,14 @@ router.get('/campaign-context/:characterId', (req, res) => {
     }
 
     // Get recent session summaries for story context (last 5 sessions)
-    const recentSessions = db.prepare(`
+    const recentSessions = await dbAll(`
       SELECT id, title, summary, game_start_day, game_start_year,
              game_end_day, game_end_year, end_time
       FROM dm_sessions
       WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 1
       ORDER BY created_at DESC
       LIMIT 5
-    `).all(req.params.characterId);
+    `, [req.params.characterId]);
 
     // Parse the session config from the last session
     let sessionConfig = {};
@@ -209,9 +209,9 @@ router.get('/campaign-context/:characterId', (req, res) => {
 });
 
 // Get a specific session
-router.get('/:sessionId', (req, res) => {
+router.get('/:sessionId', async (req, res) => {
   try {
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(req.params.sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -243,10 +243,10 @@ router.post('/start', async (req, res) => {
     } = req.body;
 
     // Check for existing active or paused DM session
-    const existingSession = db.prepare(`
+    const existingSession = await dbGet(`
       SELECT id FROM dm_sessions
       WHERE character_id = ? AND (status = 'active' OR status = 'paused')
-    `).get(characterId);
+    `, [characterId]);
 
     if (existingSession) {
       return res.status(400).json({
@@ -256,10 +256,10 @@ router.post('/start', async (req, res) => {
     }
 
     // Check for unclaimed DM session
-    const unclaimedSession = db.prepare(`
+    const unclaimedSession = await dbGet(`
       SELECT id FROM dm_sessions
       WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 0
-    `).get(characterId);
+    `, [characterId]);
 
     if (unclaimedSession) {
       return res.status(400).json({
@@ -269,10 +269,10 @@ router.post('/start', async (req, res) => {
     }
 
     // Check for active time-based adventure
-    const activeAdventure = db.prepare(`
+    const activeAdventure = await dbGet(`
       SELECT id FROM adventures
       WHERE character_id = ? AND (status = 'active' OR status = 'completed')
-    `).get(characterId);
+    `, [characterId]);
 
     if (activeAdventure) {
       return res.status(400).json({
@@ -282,13 +282,13 @@ router.post('/start', async (req, res) => {
     }
 
     // Get character data
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
     // Get active companions for this character
-    const companions = db.prepare(`
+    const companions = await dbAll(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
              n.stat_block, n.cr, n.ac, n.hp, n.speed, n.ability_scores as npc_ability_scores,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice, n.mannerism,
@@ -296,18 +296,18 @@ router.post('/start', async (req, res) => {
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.recruited_by_character_id = ? AND c.status = 'active'
-    `).all(characterId);
+    `, [characterId]);
 
     // Get second character if specified
     let secondCharacter = null;
     if (secondCharacterId) {
-      secondCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(secondCharacterId);
+      secondCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [secondCharacterId]);
 
       // Check if second character has any blocking sessions
-      const secondCharActive = db.prepare(`
+      const secondCharActive = await dbGet(`
         SELECT id FROM dm_sessions
         WHERE character_id = ? AND status = 'active'
-      `).get(secondCharacterId);
+      `, [secondCharacterId]);
 
       if (secondCharActive) {
         return res.status(400).json({
@@ -315,10 +315,10 @@ router.post('/start', async (req, res) => {
         });
       }
 
-      const secondCharAdventure = db.prepare(`
+      const secondCharAdventure = await dbGet(`
         SELECT id FROM adventures
         WHERE character_id = ? AND (status = 'active' OR status = 'completed')
-      `).get(secondCharacterId);
+      `, [secondCharacterId]);
 
       if (secondCharAdventure) {
         return res.status(400).json({
@@ -346,11 +346,11 @@ router.post('/start', async (req, res) => {
 
       // Also extract from recent session messages if we need more context
       if (usedNames.length < 10) {
-        const recentSessions = db.prepare(`
+        const recentSessions = await dbAll(`
           SELECT messages FROM dm_sessions
           WHERE character_id = ? AND status = 'completed'
           ORDER BY created_at DESC LIMIT 5
-        `).all(characterId);
+        `, [characterId]);
 
         for (const sess of recentSessions) {
           try {
@@ -484,12 +484,10 @@ router.post('/start', async (req, res) => {
     }
     const gameDate = dayToDate(gameStartDay, gameStartYear);
 
-    const stmt = db.prepare(`
+    const info = await dbRun(`
       INSERT INTO dm_sessions (character_id, second_character_id, title, setting, tone, model, status, messages, start_time, session_config, game_start_day, game_start_year)
       VALUES (?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), ?, ?, ?)
-    `);
-
-    const info = stmt.run(
+    `, [
       characterId,
       secondCharacterId || null,
       title,
@@ -500,15 +498,15 @@ router.post('/start', async (req, res) => {
       JSON.stringify(sessionConfig),
       gameStartDay,
       gameStartYear
-    );
+    ]);
 
     // Clear pending downtime narratives now that they've been included in the session
     if (pendingNarratives.length > 0) {
-      db.prepare(`
+      await dbRun(`
         UPDATE characters
         SET pending_downtime_narratives = '[]'
         WHERE id = ?
-      `).run(characterId);
+      `, [characterId]);
     }
 
     // Save campaign-level settings to character's campaign_config for persistence
@@ -523,11 +521,11 @@ router.post('/start', async (req, res) => {
       contentPreferences: contentPreferences || {}
     };
 
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET campaign_config = ?
       WHERE id = ?
-    `).run(JSON.stringify(campaignConfigToSave), characterId);
+    `, [JSON.stringify(campaignConfigToSave), characterId]);
 
     res.json({
       sessionId: info.lastInsertRowid,
@@ -660,7 +658,7 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     // Get the session
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -693,8 +691,7 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     // Update the session in the database
-    db.prepare('UPDATE dm_sessions SET messages = ? WHERE id = ?')
-      .run(JSON.stringify(result.messages), sessionId);
+    await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
 
     // Check for recruitment in the response
     const recruitment = detectRecruitment(result.narrative, action);
@@ -703,7 +700,7 @@ router.post('/:sessionId/message', async (req, res) => {
     let recruitmentData = null;
     if (recruitment) {
       // Look for an NPC with this name who is available as a companion
-      const npc = db.prepare(`
+      const npc = await dbGet(`
         SELECT id, name, nickname, race, gender, occupation, avatar
         FROM npcs
         WHERE (name LIKE ? OR nickname LIKE ?)
@@ -711,14 +708,14 @@ router.post('/:sessionId/message', async (req, res) => {
         ORDER BY
           CASE WHEN name = ? THEN 1 WHEN nickname = ? THEN 2 ELSE 3 END
         LIMIT 1
-      `).get(`%${recruitment.npcName}%`, `%${recruitment.npcName}%`, recruitment.npcName, recruitment.npcName);
+      `, [`%${recruitment.npcName}%`, `%${recruitment.npcName}%`, recruitment.npcName, recruitment.npcName]);
 
       if (npc) {
         // Check if already a companion for this character
-        const existingCompanion = db.prepare(`
+        const existingCompanion = await dbGet(`
           SELECT id FROM companions
           WHERE npc_id = ? AND recruited_by_character_id = ? AND status = 'active'
-        `).get(npc.id, session.character_id);
+        `, [npc.id, session.character_id]);
 
         if (!existingCompanion) {
           recruitmentData = {
@@ -760,7 +757,7 @@ router.post('/:sessionId/message', async (req, res) => {
 });
 
 // Adjust the game date during a session
-router.post('/:sessionId/adjust-date', (req, res) => {
+router.post('/:sessionId/adjust-date', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { daysToAdd } = req.body;
@@ -769,7 +766,7 @@ router.post('/:sessionId/adjust-date', (req, res) => {
       return res.status(400).json({ error: 'daysToAdd must be a number' });
     }
 
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -782,11 +779,11 @@ router.post('/:sessionId/adjust-date', (req, res) => {
     const newDate = advanceTime(currentDay, currentYear, daysToAdd);
 
     // Update the session with new date
-    db.prepare(`
+    await dbRun(`
       UPDATE dm_sessions
       SET game_start_day = ?, game_start_year = ?
       WHERE id = ?
-    `).run(newDate.day, newDate.year, sessionId);
+    `, [newDate.day, newDate.year, sessionId]);
 
     // Return the formatted date
     const gameDate = dayToDate(newDate.day, newDate.year);
@@ -809,7 +806,7 @@ router.post('/:sessionId/end', async (req, res) => {
     const { sessionId } = req.params;
 
     // Get the session
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -819,7 +816,7 @@ router.post('/:sessionId/end', async (req, res) => {
     }
 
     const messages = JSON.parse(session.messages || '[]');
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(session.character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
 
     // Count player actions (user messages after the initial opening prompt)
     // Messages structure: [system, user (opening prompt), assistant (DM opening), user (player action), assistant, ...]
@@ -828,12 +825,12 @@ router.post('/:sessionId/end', async (req, res) => {
 
     // If no player actions were taken, end session with no rewards
     if (playerActionCount === 0) {
-      db.prepare(`
+      await dbRun(`
         UPDATE dm_sessions
         SET status = 'completed', summary = ?, rewards = ?, hp_change = ?,
             end_time = datetime('now')
         WHERE id = ?
-      `).run('The adventure ended before it truly began.', JSON.stringify({ xp: 0, gold: { cp: 0, sp: 0, gp: 0 }, loot: null }), 0, sessionId);
+      `, ['The adventure ended before it truly began.', JSON.stringify({ xp: 0, gold: { cp: 0, sp: 0, gp: 0 }, loot: null }), 0, sessionId]);
 
       return res.json({
         success: true,
@@ -1026,11 +1023,11 @@ ITEMS_GAINED: [item1, item2] or [none]`;
     const newGameDate = advanceTime(currentGameDay, currentGameYear, daysElapsed);
 
     // Update character's game date
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET game_day = ?, game_year = ?
       WHERE id = ?
-    `).run(newGameDate.day, newGameDate.year, session.character_id);
+    `, [newGameDate.day, newGameDate.year, session.character_id]);
 
     // Extract key campaign details for persistent memory
     let extractedNotes = '';
@@ -1096,11 +1093,11 @@ ONLY include things that ACTUALLY happened. Be specific with names and details. 
             }
           }
 
-          db.prepare(`
+          await dbRun(`
             UPDATE characters
             SET campaign_notes = ?
             WHERE id = ?
-          `).run(updatedNotes, session.character_id);
+          `, [updatedNotes, session.character_id]);
         }
       }
     } catch (e) {
@@ -1154,23 +1151,23 @@ ONLY include things that ACTUALLY happened. Be specific with names and details. 
       }
 
       // Save updated campaign config
-      db.prepare(`
+      await dbRun(`
         UPDATE characters
         SET campaign_config = ?
         WHERE id = ?
-      `).run(JSON.stringify(campaignConfig), session.character_id);
+      `, [JSON.stringify(campaignConfig), session.character_id]);
     } catch (e) {
       console.error('Error extracting used names:', e);
       // Non-fatal - continue
     }
 
     // Update the session with end game date
-    db.prepare(`
+    await dbRun(`
       UPDATE dm_sessions
       SET status = 'completed', summary = ?, rewards = ?, hp_change = ?,
           end_time = datetime('now'), game_end_day = ?, game_end_year = ?
       WHERE id = ?
-    `).run(summary, JSON.stringify(rewards), hpChange, newGameDate.day, newGameDate.year, sessionId);
+    `, [summary, JSON.stringify(rewards), hpChange, newGameDate.day, newGameDate.year, sessionId]);
 
     res.json({
       success: true,
@@ -1188,17 +1185,17 @@ ONLY include things that ACTUALLY happened. Be specific with names and details. 
 });
 
 // Apply inventory changes from session wrap-up
-router.post('/:sessionId/apply-inventory', (req, res) => {
+router.post('/:sessionId/apply-inventory', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { consumed, gained, goldSpent } = req.body;
 
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(session.character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -1273,11 +1270,11 @@ router.post('/:sessionId/apply-inventory', (req, res) => {
     }
 
     // Update character
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(JSON.stringify(inventory), newGp, newSp, newCp, character.id);
+    `, [JSON.stringify(inventory), newGp, newSp, newCp, character.id]);
 
     res.json({
       success: true,
@@ -1296,7 +1293,7 @@ router.post('/:sessionId/resume', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -1306,7 +1303,7 @@ router.post('/:sessionId/resume', async (req, res) => {
     }
 
     // Get character and check for pending downtime narratives
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(session.character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
     let pendingNarratives = [];
     let downtimeContext = '';
     try {
@@ -1335,15 +1332,14 @@ router.post('/:sessionId/resume', async (req, res) => {
         // Append downtime context to the system prompt
         messages[systemMessageIndex].content += downtimeContext;
         // Save updated messages
-        db.prepare('UPDATE dm_sessions SET messages = ? WHERE id = ?')
-          .run(JSON.stringify(messages), sessionId);
+        await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(messages), sessionId]);
       }
       // Clear the pending narratives
-      db.prepare(`
+      await dbRun(`
         UPDATE characters
         SET pending_downtime_narratives = '[]'
         WHERE id = ?
-      `).run(character.id);
+      `, [character.id]);
     }
 
     // Generate a "Previously on..." recap if we don't have one yet
@@ -1372,7 +1368,7 @@ router.post('/:sessionId/resume', async (req, res) => {
           }
 
           // Save the recap so we don't regenerate it each time
-          db.prepare('UPDATE dm_sessions SET recap = ? WHERE id = ?').run(recap, sessionId);
+          await dbRun('UPDATE dm_sessions SET recap = ? WHERE id = ?', [recap, sessionId]);
         }
       } catch (e) {
         console.error('Could not generate recap:', e);
@@ -1381,11 +1377,11 @@ router.post('/:sessionId/resume', async (req, res) => {
     }
 
     // Update session status to active
-    db.prepare(`
+    await dbRun(`
       UPDATE dm_sessions
       SET status = 'active'
       WHERE id = ?
-    `).run(sessionId);
+    `, [sessionId]);
 
     res.json({
       success: true,
@@ -1400,11 +1396,11 @@ router.post('/:sessionId/resume', async (req, res) => {
 });
 
 // Pause a session - saves state for later
-router.post('/:sessionId/pause', (req, res) => {
+router.post('/:sessionId/pause', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -1414,11 +1410,11 @@ router.post('/:sessionId/pause', (req, res) => {
     }
 
     // Update session status to paused
-    db.prepare(`
+    await dbRun(`
       UPDATE dm_sessions
       SET status = 'paused'
       WHERE id = ?
-    `).run(sessionId);
+    `, [sessionId]);
 
     res.json({
       success: true,
@@ -1431,11 +1427,11 @@ router.post('/:sessionId/pause', (req, res) => {
 });
 
 // Abort a session - ends without saving to history or giving rewards
-router.post('/:sessionId/abort', (req, res) => {
+router.post('/:sessionId/abort', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -1445,7 +1441,7 @@ router.post('/:sessionId/abort', (req, res) => {
     }
 
     // Delete the session entirely - no logging, no rewards
-    db.prepare('DELETE FROM dm_sessions WHERE id = ?').run(sessionId);
+    await dbRun('DELETE FROM dm_sessions WHERE id = ?', [sessionId]);
 
     res.json({
       success: true,
@@ -1458,11 +1454,11 @@ router.post('/:sessionId/abort', (req, res) => {
 });
 
 // Claim rewards from a completed session
-router.post('/:sessionId/claim', (req, res) => {
+router.post('/:sessionId/claim', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const session = db.prepare('SELECT * FROM dm_sessions WHERE id = ?').get(sessionId);
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -1475,7 +1471,7 @@ router.post('/:sessionId/claim', (req, res) => {
       return res.status(400).json({ error: 'Rewards already claimed' });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(session.character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
     const rewards = JSON.parse(session.rewards || '{}');
 
     // Apply rewards to character
@@ -1498,13 +1494,13 @@ router.post('/:sessionId/claim', (req, res) => {
     const newQuest = session.new_quest || character.current_quest;
 
     // Update character
-    db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
           current_hp = ?, inventory = ?, current_location = ?, current_quest = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
+    `, [
       updates.experience,
       updates.gold_cp,
       updates.gold_sp,
@@ -1514,18 +1510,18 @@ router.post('/:sessionId/claim', (req, res) => {
       newLocation,
       newQuest,
       session.character_id
-    );
+    ]);
 
     // Award XP to active companions (full XP - party shares equally, not split)
     const companionXP = rewards.xp || 0;
     const companionXPResults = [];
     if (companionXP > 0) {
-      const companions = db.prepare(`
+      const companions = await dbAll(`
         SELECT c.id, c.companion_level, c.companion_experience, c.companion_class, n.name
         FROM companions c
         JOIN npcs n ON c.npc_id = n.id
         WHERE c.recruited_by_character_id = ? AND c.status = 'active' AND c.progression_type = 'class_based'
-      `).all(session.character_id);
+      `, [session.character_id]);
 
       for (const companion of companions) {
         const oldXP = companion.companion_experience || 0;
@@ -1534,9 +1530,9 @@ router.post('/:sessionId/claim', (req, res) => {
         const nextLevelXP = currentLevel < 20 ? XP_THRESHOLDS[currentLevel + 1] : null;
         const canLevelUp = nextLevelXP !== null && newXP >= nextLevelXP;
 
-        db.prepare(`
+        await dbRun(`
           UPDATE companions SET companion_experience = ? WHERE id = ?
-        `).run(newXP, companion.id);
+        `, [newXP, companion.id]);
 
         companionXPResults.push({
           id: companion.id,
@@ -1552,9 +1548,9 @@ router.post('/:sessionId/claim', (req, res) => {
     }
 
     // Mark rewards as claimed
-    db.prepare('UPDATE dm_sessions SET rewards_claimed = 1 WHERE id = ?').run(sessionId);
+    await dbRun('UPDATE dm_sessions SET rewards_claimed = 1 WHERE id = ?', [sessionId]);
 
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(session.character_id);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
 
     res.json({
       message: 'Session rewards claimed!',
@@ -1571,9 +1567,9 @@ router.post('/:sessionId/claim', (req, res) => {
 });
 
 // Delete a session
-router.delete('/:sessionId', (req, res) => {
+router.delete('/:sessionId', async (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM dm_sessions WHERE id = ?').run(req.params.sessionId);
+    const result = await dbRun('DELETE FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -1584,16 +1580,16 @@ router.delete('/:sessionId', (req, res) => {
 });
 
 // Clear all session history for a character
-router.delete('/character/:characterId/history', (req, res) => {
+router.delete('/character/:characterId/history', async (req, res) => {
   try {
     const { characterId } = req.params;
 
     // Only delete completed sessions (not active ones)
-    const result = db.prepare(`
+    const result = await dbRun(`
       DELETE FROM dm_sessions
       WHERE (character_id = ? OR second_character_id = ?)
       AND status = 'completed'
-    `).run(characterId, characterId);
+    `, [characterId, characterId]);
 
     res.json({
       success: true,

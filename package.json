@@ -10,16 +10,22 @@
     "build": "cd client && npm run build",
     "start": "node server/index.js",
     "offline": "npm run build && npm run start",
-    "install-all": "npm install && cd client && npm install"
+    "install-all": "npm install && cd client && npm install",
+    "migrate-to-cloud": "node server/scripts/migrate-to-turso.js"
   },
-  "keywords": ["dnd", "rpg", "meta-game"],
+  "keywords": [
+    "dnd",
+    "rpg",
+    "meta-game"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
+    "@libsql/client": "^0.17.0",
     "better-sqlite3": "^11.8.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "multer": "^2.0.2",
     "pdf-parse": "^1.1.1"
   },

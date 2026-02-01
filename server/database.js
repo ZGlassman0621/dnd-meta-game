@@ -1,15 +1,17 @@
-import Database from 'better-sqlite3';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { createClient } from '@libsql/client';
+import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+dotenv.config();
 
-const db = new Database(join(__dirname, 'data/game.db'));
+// Create Turso client (cloud SQLite)
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 
-export function initDatabase() {
+export async function initDatabase() {
   // Characters table
-  db.exec(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS characters (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -41,163 +43,75 @@ export function initDatabase() {
   `);
 
   // Add new columns to existing table if they don't exist
-  const columns = db.prepare("PRAGMA table_info(characters)").all();
-  const columnNames = columns.map(col => col.name);
+  const columns = await db.execute("PRAGMA table_info(characters)");
+  const columnNames = columns.rows.map(col => col.name);
 
-  if (!columnNames.includes('race')) {
-    db.exec('ALTER TABLE characters ADD COLUMN race TEXT');
-  }
-  if (!columnNames.includes('armor_class')) {
-    db.exec('ALTER TABLE characters ADD COLUMN armor_class INTEGER DEFAULT 10');
-  }
-  if (!columnNames.includes('speed')) {
-    db.exec('ALTER TABLE characters ADD COLUMN speed INTEGER DEFAULT 30');
-  }
-  if (!columnNames.includes('ability_scores')) {
-    db.exec('ALTER TABLE characters ADD COLUMN ability_scores TEXT DEFAULT \'{"str":10,"dex":10,"con":10,"int":10,"wis":10,"cha":10}\'');
-  }
-  if (!columnNames.includes('skills')) {
-    db.exec('ALTER TABLE characters ADD COLUMN skills TEXT DEFAULT \'[]\'');
-  }
-  if (!columnNames.includes('advantages')) {
-    db.exec('ALTER TABLE characters ADD COLUMN advantages TEXT DEFAULT \'[]\'');
-  }
-  if (!columnNames.includes('inventory')) {
-    db.exec('ALTER TABLE characters ADD COLUMN inventory TEXT DEFAULT \'[]\'');
-  }
-  if (!columnNames.includes('starting_gold_cp')) {
-    db.exec('ALTER TABLE characters ADD COLUMN starting_gold_cp INTEGER DEFAULT 0');
-  }
-  if (!columnNames.includes('starting_gold_sp')) {
-    db.exec('ALTER TABLE characters ADD COLUMN starting_gold_sp INTEGER DEFAULT 0');
-  }
-  if (!columnNames.includes('starting_gold_gp')) {
-    db.exec('ALTER TABLE characters ADD COLUMN starting_gold_gp INTEGER DEFAULT 0');
-  }
-  if (!columnNames.includes('gender')) {
-    db.exec('ALTER TABLE characters ADD COLUMN gender TEXT');
-  }
-  if (!columnNames.includes('subrace')) {
-    db.exec('ALTER TABLE characters ADD COLUMN subrace TEXT');
-  }
-  if (!columnNames.includes('first_name')) {
-    db.exec('ALTER TABLE characters ADD COLUMN first_name TEXT');
-  }
-  if (!columnNames.includes('last_name')) {
-    db.exec('ALTER TABLE characters ADD COLUMN last_name TEXT');
-  }
-  if (!columnNames.includes('background')) {
-    db.exec('ALTER TABLE characters ADD COLUMN background TEXT');
-  }
-  if (!columnNames.includes('avatar')) {
-    db.exec('ALTER TABLE characters ADD COLUMN avatar TEXT');
-  }
-  if (!columnNames.includes('alignment')) {
-    db.exec('ALTER TABLE characters ADD COLUMN alignment TEXT');
-  }
-  if (!columnNames.includes('faith')) {
-    db.exec('ALTER TABLE characters ADD COLUMN faith TEXT');
-  }
-  if (!columnNames.includes('lifestyle')) {
-    db.exec('ALTER TABLE characters ADD COLUMN lifestyle TEXT');
-  }
-  if (!columnNames.includes('hair_color')) {
-    db.exec('ALTER TABLE characters ADD COLUMN hair_color TEXT');
-  }
-  if (!columnNames.includes('skin_color')) {
-    db.exec('ALTER TABLE characters ADD COLUMN skin_color TEXT');
-  }
-  if (!columnNames.includes('eye_color')) {
-    db.exec('ALTER TABLE characters ADD COLUMN eye_color TEXT');
-  }
-  if (!columnNames.includes('height')) {
-    db.exec('ALTER TABLE characters ADD COLUMN height TEXT');
-  }
-  if (!columnNames.includes('weight')) {
-    db.exec('ALTER TABLE characters ADD COLUMN weight TEXT');
-  }
-  if (!columnNames.includes('age')) {
-    db.exec('ALTER TABLE characters ADD COLUMN age TEXT');
-  }
-  if (!columnNames.includes('personality_traits')) {
-    db.exec('ALTER TABLE characters ADD COLUMN personality_traits TEXT');
-  }
-  if (!columnNames.includes('ideals')) {
-    db.exec('ALTER TABLE characters ADD COLUMN ideals TEXT');
-  }
-  if (!columnNames.includes('bonds')) {
-    db.exec('ALTER TABLE characters ADD COLUMN bonds TEXT');
-  }
-  if (!columnNames.includes('flaws')) {
-    db.exec('ALTER TABLE characters ADD COLUMN flaws TEXT');
-  }
-  if (!columnNames.includes('organizations')) {
-    db.exec('ALTER TABLE characters ADD COLUMN organizations TEXT');
-  }
-  if (!columnNames.includes('allies')) {
-    db.exec('ALTER TABLE characters ADD COLUMN allies TEXT');
-  }
-  if (!columnNames.includes('enemies')) {
-    db.exec('ALTER TABLE characters ADD COLUMN enemies TEXT');
-  }
-  if (!columnNames.includes('backstory')) {
-    db.exec('ALTER TABLE characters ADD COLUMN backstory TEXT');
-  }
-  if (!columnNames.includes('other_notes')) {
-    db.exec('ALTER TABLE characters ADD COLUMN other_notes TEXT');
-  }
-  if (!columnNames.includes('subclass')) {
-    db.exec('ALTER TABLE characters ADD COLUMN subclass TEXT');
-  }
-  if (!columnNames.includes('nickname')) {
-    db.exec('ALTER TABLE characters ADD COLUMN nickname TEXT');
-  }
-  if (!columnNames.includes('known_cantrips')) {
-    db.exec('ALTER TABLE characters ADD COLUMN known_cantrips TEXT DEFAULT \'[]\'');
-  }
-  if (!columnNames.includes('prepared_spells')) {
-    db.exec('ALTER TABLE characters ADD COLUMN prepared_spells TEXT DEFAULT \'[]\'');
-  }
-  // Multiclassing support columns
-  if (!columnNames.includes('class_levels')) {
-    db.exec('ALTER TABLE characters ADD COLUMN class_levels TEXT');
-  }
-  if (!columnNames.includes('hit_dice')) {
-    db.exec('ALTER TABLE characters ADD COLUMN hit_dice TEXT');
-  }
-  // Spell slot tracking
-  if (!columnNames.includes('spell_slots')) {
-    db.exec('ALTER TABLE characters ADD COLUMN spell_slots TEXT DEFAULT \'{}\'');
-  }
-  if (!columnNames.includes('spell_slots_used')) {
-    db.exec('ALTER TABLE characters ADD COLUMN spell_slots_used TEXT DEFAULT \'{}\'');
-  }
-  // In-game calendar tracking (Harptos calendar - day of year 1-365, year in DR)
-  if (!columnNames.includes('game_day')) {
-    db.exec('ALTER TABLE characters ADD COLUMN game_day INTEGER DEFAULT 1');
-  }
-  if (!columnNames.includes('game_year')) {
-    db.exec('ALTER TABLE characters ADD COLUMN game_year INTEGER DEFAULT 1492');
-  }
-  // Pending narrative events from downtime activities (to be woven into next DM session)
-  if (!columnNames.includes('pending_downtime_narratives')) {
-    db.exec("ALTER TABLE characters ADD COLUMN pending_downtime_narratives TEXT DEFAULT '[]'");
-  }
-  // Persistent campaign notes - AI extracts + player edits, included in every session
-  if (!columnNames.includes('campaign_notes')) {
-    db.exec("ALTER TABLE characters ADD COLUMN campaign_notes TEXT DEFAULT ''");
-  }
-  // Equipment slots - JSON object with slot -> item mapping (same as companions)
-  if (!columnNames.includes('equipment')) {
-    db.exec("ALTER TABLE characters ADD COLUMN equipment TEXT DEFAULT '{}'");
-  }
-  // Campaign config - persists custom concepts, NPCs, settings across sessions
-  if (!columnNames.includes('campaign_config')) {
-    db.exec("ALTER TABLE characters ADD COLUMN campaign_config TEXT DEFAULT '{}'");
+  const characterMigrations = [
+    { col: 'race', sql: 'ALTER TABLE characters ADD COLUMN race TEXT' },
+    { col: 'armor_class', sql: 'ALTER TABLE characters ADD COLUMN armor_class INTEGER DEFAULT 10' },
+    { col: 'speed', sql: 'ALTER TABLE characters ADD COLUMN speed INTEGER DEFAULT 30' },
+    { col: 'ability_scores', sql: "ALTER TABLE characters ADD COLUMN ability_scores TEXT DEFAULT '{\"str\":10,\"dex\":10,\"con\":10,\"int\":10,\"wis\":10,\"cha\":10}'" },
+    { col: 'skills', sql: "ALTER TABLE characters ADD COLUMN skills TEXT DEFAULT '[]'" },
+    { col: 'advantages', sql: "ALTER TABLE characters ADD COLUMN advantages TEXT DEFAULT '[]'" },
+    { col: 'inventory', sql: "ALTER TABLE characters ADD COLUMN inventory TEXT DEFAULT '[]'" },
+    { col: 'starting_gold_cp', sql: 'ALTER TABLE characters ADD COLUMN starting_gold_cp INTEGER DEFAULT 0' },
+    { col: 'starting_gold_sp', sql: 'ALTER TABLE characters ADD COLUMN starting_gold_sp INTEGER DEFAULT 0' },
+    { col: 'starting_gold_gp', sql: 'ALTER TABLE characters ADD COLUMN starting_gold_gp INTEGER DEFAULT 0' },
+    { col: 'gender', sql: 'ALTER TABLE characters ADD COLUMN gender TEXT' },
+    { col: 'subrace', sql: 'ALTER TABLE characters ADD COLUMN subrace TEXT' },
+    { col: 'first_name', sql: 'ALTER TABLE characters ADD COLUMN first_name TEXT' },
+    { col: 'last_name', sql: 'ALTER TABLE characters ADD COLUMN last_name TEXT' },
+    { col: 'background', sql: 'ALTER TABLE characters ADD COLUMN background TEXT' },
+    { col: 'avatar', sql: 'ALTER TABLE characters ADD COLUMN avatar TEXT' },
+    { col: 'alignment', sql: 'ALTER TABLE characters ADD COLUMN alignment TEXT' },
+    { col: 'faith', sql: 'ALTER TABLE characters ADD COLUMN faith TEXT' },
+    { col: 'lifestyle', sql: 'ALTER TABLE characters ADD COLUMN lifestyle TEXT' },
+    { col: 'hair_color', sql: 'ALTER TABLE characters ADD COLUMN hair_color TEXT' },
+    { col: 'skin_color', sql: 'ALTER TABLE characters ADD COLUMN skin_color TEXT' },
+    { col: 'eye_color', sql: 'ALTER TABLE characters ADD COLUMN eye_color TEXT' },
+    { col: 'height', sql: 'ALTER TABLE characters ADD COLUMN height TEXT' },
+    { col: 'weight', sql: 'ALTER TABLE characters ADD COLUMN weight TEXT' },
+    { col: 'age', sql: 'ALTER TABLE characters ADD COLUMN age TEXT' },
+    { col: 'personality_traits', sql: 'ALTER TABLE characters ADD COLUMN personality_traits TEXT' },
+    { col: 'ideals', sql: 'ALTER TABLE characters ADD COLUMN ideals TEXT' },
+    { col: 'bonds', sql: 'ALTER TABLE characters ADD COLUMN bonds TEXT' },
+    { col: 'flaws', sql: 'ALTER TABLE characters ADD COLUMN flaws TEXT' },
+    { col: 'organizations', sql: 'ALTER TABLE characters ADD COLUMN organizations TEXT' },
+    { col: 'allies', sql: 'ALTER TABLE characters ADD COLUMN allies TEXT' },
+    { col: 'enemies', sql: 'ALTER TABLE characters ADD COLUMN enemies TEXT' },
+    { col: 'backstory', sql: 'ALTER TABLE characters ADD COLUMN backstory TEXT' },
+    { col: 'other_notes', sql: 'ALTER TABLE characters ADD COLUMN other_notes TEXT' },
+    { col: 'subclass', sql: 'ALTER TABLE characters ADD COLUMN subclass TEXT' },
+    { col: 'nickname', sql: 'ALTER TABLE characters ADD COLUMN nickname TEXT' },
+    { col: 'known_cantrips', sql: "ALTER TABLE characters ADD COLUMN known_cantrips TEXT DEFAULT '[]'" },
+    { col: 'prepared_spells', sql: "ALTER TABLE characters ADD COLUMN prepared_spells TEXT DEFAULT '[]'" },
+    { col: 'class_levels', sql: 'ALTER TABLE characters ADD COLUMN class_levels TEXT' },
+    { col: 'hit_dice', sql: 'ALTER TABLE characters ADD COLUMN hit_dice TEXT' },
+    { col: 'spell_slots', sql: "ALTER TABLE characters ADD COLUMN spell_slots TEXT DEFAULT '{}'" },
+    { col: 'spell_slots_used', sql: "ALTER TABLE characters ADD COLUMN spell_slots_used TEXT DEFAULT '{}'" },
+    { col: 'game_day', sql: 'ALTER TABLE characters ADD COLUMN game_day INTEGER DEFAULT 1' },
+    { col: 'game_year', sql: 'ALTER TABLE characters ADD COLUMN game_year INTEGER DEFAULT 1492' },
+    { col: 'pending_downtime_narratives', sql: "ALTER TABLE characters ADD COLUMN pending_downtime_narratives TEXT DEFAULT '[]'" },
+    { col: 'campaign_notes', sql: "ALTER TABLE characters ADD COLUMN campaign_notes TEXT DEFAULT ''" },
+    { col: 'equipment', sql: "ALTER TABLE characters ADD COLUMN equipment TEXT DEFAULT '{}'" },
+    { col: 'campaign_config', sql: "ALTER TABLE characters ADD COLUMN campaign_config TEXT DEFAULT '{}'" },
+  ];
+
+  for (const migration of characterMigrations) {
+    if (!columnNames.includes(migration.col)) {
+      try {
+        await db.execute(migration.sql);
+      } catch (e) {
+        // Column might already exist, ignore duplicate column errors
+        if (!e.message.includes('duplicate column')) {
+          console.error(`Migration error for ${migration.col}:`, e.message);
+        }
+      }
+    }
   }
 
   // Adventures table
-  db.exec(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS adventures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -217,8 +131,8 @@ export function initDatabase() {
     )
   `);
 
-  // Adventure options cache (to avoid regenerating same options repeatedly)
-  db.exec(`
+  // Adventure options cache
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS adventure_options (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -232,7 +146,7 @@ export function initDatabase() {
   `);
 
   // DM Sessions table for AI-powered text adventure sessions
-  db.exec(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS dm_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -256,50 +170,38 @@ export function initDatabase() {
   `);
 
   // Add new columns to dm_sessions if they don't exist
-  const dmColumns = db.prepare("PRAGMA table_info(dm_sessions)").all();
-  const dmColumnNames = dmColumns.map(col => col.name);
+  const dmColumns = await db.execute("PRAGMA table_info(dm_sessions)");
+  const dmColumnNames = dmColumns.rows.map(col => col.name);
 
-  if (!dmColumnNames.includes('rewards')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN rewards TEXT');
-  }
-  if (!dmColumnNames.includes('rewards_claimed')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN rewards_claimed INTEGER DEFAULT 0');
-  }
-  if (!dmColumnNames.includes('hp_change')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN hp_change INTEGER DEFAULT 0');
-  }
-  if (!dmColumnNames.includes('new_location')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN new_location TEXT');
-  }
-  if (!dmColumnNames.includes('new_quest')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN new_quest TEXT');
-  }
-  if (!dmColumnNames.includes('second_character_id')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN second_character_id INTEGER');
-  }
-  if (!dmColumnNames.includes('session_config')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN session_config TEXT');
-  }
-  // Session recap for "Previously on..." when resuming
-  if (!dmColumnNames.includes('recap')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN recap TEXT');
-  }
-  // In-game time tracking for this session
-  if (!dmColumnNames.includes('game_start_day')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN game_start_day INTEGER');
-  }
-  if (!dmColumnNames.includes('game_start_year')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN game_start_year INTEGER');
-  }
-  if (!dmColumnNames.includes('game_end_day')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN game_end_day INTEGER');
-  }
-  if (!dmColumnNames.includes('game_end_year')) {
-    db.exec('ALTER TABLE dm_sessions ADD COLUMN game_end_year INTEGER');
+  const dmMigrations = [
+    { col: 'rewards', sql: 'ALTER TABLE dm_sessions ADD COLUMN rewards TEXT' },
+    { col: 'rewards_claimed', sql: 'ALTER TABLE dm_sessions ADD COLUMN rewards_claimed INTEGER DEFAULT 0' },
+    { col: 'hp_change', sql: 'ALTER TABLE dm_sessions ADD COLUMN hp_change INTEGER DEFAULT 0' },
+    { col: 'new_location', sql: 'ALTER TABLE dm_sessions ADD COLUMN new_location TEXT' },
+    { col: 'new_quest', sql: 'ALTER TABLE dm_sessions ADD COLUMN new_quest TEXT' },
+    { col: 'second_character_id', sql: 'ALTER TABLE dm_sessions ADD COLUMN second_character_id INTEGER' },
+    { col: 'session_config', sql: 'ALTER TABLE dm_sessions ADD COLUMN session_config TEXT' },
+    { col: 'recap', sql: 'ALTER TABLE dm_sessions ADD COLUMN recap TEXT' },
+    { col: 'game_start_day', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_start_day INTEGER' },
+    { col: 'game_start_year', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_start_year INTEGER' },
+    { col: 'game_end_day', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_end_day INTEGER' },
+    { col: 'game_end_year', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_end_year INTEGER' },
+  ];
+
+  for (const migration of dmMigrations) {
+    if (!dmColumnNames.includes(migration.col)) {
+      try {
+        await db.execute(migration.sql);
+      } catch (e) {
+        if (!e.message.includes('duplicate column')) {
+          console.error(`Migration error for ${migration.col}:`, e.message);
+        }
+      }
+    }
   }
 
   // NPCs table for custom NPC creation
-  db.exec(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS npcs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -348,14 +250,20 @@ export function initDatabase() {
   `);
 
   // Add campaign_availability column if it doesn't exist (migration)
-  const npcColumns = db.prepare("PRAGMA table_info(npcs)").all();
-  const npcColumnNames = npcColumns.map(c => c.name);
+  const npcColumns = await db.execute("PRAGMA table_info(npcs)");
+  const npcColumnNames = npcColumns.rows.map(c => c.name);
   if (!npcColumnNames.includes('campaign_availability')) {
-    db.exec("ALTER TABLE npcs ADD COLUMN campaign_availability TEXT DEFAULT 'available'");
+    try {
+      await db.execute("ALTER TABLE npcs ADD COLUMN campaign_availability TEXT DEFAULT 'available'");
+    } catch (e) {
+      if (!e.message.includes('duplicate column')) {
+        console.error('Migration error for campaign_availability:', e.message);
+      }
+    }
   }
 
   // Downtime activities table
-  db.exec(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS downtime (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -373,17 +281,28 @@ export function initDatabase() {
   `);
 
   // Add work_type column if it doesn't exist (migration)
-  const downtimeColumns = db.prepare("PRAGMA table_info(downtime)").all();
-  const downtimeColumnNames = downtimeColumns.map(c => c.name);
-  if (!downtimeColumnNames.includes('work_type')) {
-    db.exec("ALTER TABLE downtime ADD COLUMN work_type TEXT");
-  }
-  if (!downtimeColumnNames.includes('rest_type')) {
-    db.exec("ALTER TABLE downtime ADD COLUMN rest_type TEXT");
+  const downtimeColumns = await db.execute("PRAGMA table_info(downtime)");
+  const downtimeColumnNames = downtimeColumns.rows.map(c => c.name);
+
+  const downtimeMigrations = [
+    { col: 'work_type', sql: 'ALTER TABLE downtime ADD COLUMN work_type TEXT' },
+    { col: 'rest_type', sql: 'ALTER TABLE downtime ADD COLUMN rest_type TEXT' },
+  ];
+
+  for (const migration of downtimeMigrations) {
+    if (!downtimeColumnNames.includes(migration.col)) {
+      try {
+        await db.execute(migration.sql);
+      } catch (e) {
+        if (!e.message.includes('duplicate column')) {
+          console.error(`Migration error for ${migration.col}:`, e.message);
+        }
+      }
+    }
   }
 
   // Companions table - NPCs recruited by player characters
-  db.exec(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS companions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       npc_id INTEGER NOT NULL,
@@ -418,34 +337,49 @@ export function initDatabase() {
     )
   `);
 
-  // Add inventory column to companions table if it doesn't exist
-  const companionColumns = db.prepare("PRAGMA table_info(companions)").all().map(c => c.name);
-  if (!companionColumns.includes('inventory')) {
-    db.exec("ALTER TABLE companions ADD COLUMN inventory TEXT DEFAULT '[]'");
-  }
-  if (!companionColumns.includes('gold_gp')) {
-    db.exec("ALTER TABLE companions ADD COLUMN gold_gp INTEGER DEFAULT 0");
-  }
-  if (!companionColumns.includes('gold_sp')) {
-    db.exec("ALTER TABLE companions ADD COLUMN gold_sp INTEGER DEFAULT 0");
-  }
-  if (!companionColumns.includes('gold_cp')) {
-    db.exec("ALTER TABLE companions ADD COLUMN gold_cp INTEGER DEFAULT 0");
-  }
-  // Equipment slots - JSON object with slot -> item mapping
-  if (!companionColumns.includes('equipment')) {
-    db.exec("ALTER TABLE companions ADD COLUMN equipment TEXT DEFAULT '{}'");
-  }
-  // Experience tracking for class-based companions
-  if (!companionColumns.includes('companion_experience')) {
-    db.exec("ALTER TABLE companions ADD COLUMN companion_experience INTEGER DEFAULT 0");
-  }
-  // Skill proficiencies - JSON array of skill names
-  if (!companionColumns.includes('skill_proficiencies')) {
-    db.exec("ALTER TABLE companions ADD COLUMN skill_proficiencies TEXT DEFAULT '[]'");
+  // Add columns to companions table if they don't exist
+  const companionColumns = await db.execute("PRAGMA table_info(companions)");
+  const companionColumnNames = companionColumns.rows.map(c => c.name);
+
+  const companionMigrations = [
+    { col: 'inventory', sql: "ALTER TABLE companions ADD COLUMN inventory TEXT DEFAULT '[]'" },
+    { col: 'gold_gp', sql: 'ALTER TABLE companions ADD COLUMN gold_gp INTEGER DEFAULT 0' },
+    { col: 'gold_sp', sql: 'ALTER TABLE companions ADD COLUMN gold_sp INTEGER DEFAULT 0' },
+    { col: 'gold_cp', sql: 'ALTER TABLE companions ADD COLUMN gold_cp INTEGER DEFAULT 0' },
+    { col: 'equipment', sql: "ALTER TABLE companions ADD COLUMN equipment TEXT DEFAULT '{}'" },
+    { col: 'companion_experience', sql: 'ALTER TABLE companions ADD COLUMN companion_experience INTEGER DEFAULT 0' },
+    { col: 'skill_proficiencies', sql: "ALTER TABLE companions ADD COLUMN skill_proficiencies TEXT DEFAULT '[]'" },
+  ];
+
+  for (const migration of companionMigrations) {
+    if (!companionColumnNames.includes(migration.col)) {
+      try {
+        await db.execute(migration.sql);
+      } catch (e) {
+        if (!e.message.includes('duplicate column')) {
+          console.error(`Migration error for ${migration.col}:`, e.message);
+        }
+      }
+    }
   }
 
-  console.log('Database initialized successfully');
+  console.log('Database initialized successfully (Turso cloud)');
+}
+
+// Helper functions for common database operations (async wrappers)
+export async function dbAll(sql, params = []) {
+  const result = await db.execute({ sql, args: params });
+  return result.rows;
+}
+
+export async function dbGet(sql, params = []) {
+  const result = await db.execute({ sql, args: params });
+  return result.rows[0] || null;
+}
+
+export async function dbRun(sql, params = []) {
+  const result = await db.execute({ sql, args: params });
+  return { lastInsertRowid: result.lastInsertRowid, changes: result.rowsAffected };
 }
 
 export default db;

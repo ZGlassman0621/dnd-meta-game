@@ -1,12 +1,12 @@
 import express from 'express';
-import db from '../database.js';
+import { dbAll, dbGet, dbRun } from '../database.js';
 
 const router = express.Router();
 
 // Get all NPCs
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const npcs = db.prepare('SELECT * FROM npcs ORDER BY created_at DESC').all();
+    const npcs = await dbAll('SELECT * FROM npcs ORDER BY created_at DESC');
     res.json(npcs);
   } catch (error) {
     console.error('Error fetching NPCs:', error);
@@ -15,9 +15,9 @@ router.get('/', (req, res) => {
 });
 
 // Get a single NPC by ID
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const npc = db.prepare('SELECT * FROM npcs WHERE id = ?').get(req.params.id);
+    const npc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
     if (!npc) {
       return res.status(404).json({ error: 'NPC not found' });
     }
@@ -29,7 +29,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Create a new NPC
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       name,
@@ -78,7 +78,7 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Name and race are required' });
     }
 
-    const stmt = db.prepare(`
+    const result = await dbRun(`
       INSERT INTO npcs (
         name, nickname, race, gender, age, occupation, occupation_category,
         stat_block, cr, ac, hp, speed, ability_scores, skills, languages,
@@ -88,9 +88,7 @@ router.post('/', (req, res) => {
         mannerism, motivation, fear, secret, quirk, current_location,
         typical_locations, background_notes, relationship_to_party, campaign_availability, avatar
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = stmt.run(
+    `, [
       name,
       nickname || null,
       race,
@@ -131,9 +129,9 @@ router.post('/', (req, res) => {
       relationship_to_party || null,
       campaign_availability || 'available',
       avatar || null
-    );
+    ]);
 
-    const newNpc = db.prepare('SELECT * FROM npcs WHERE id = ?').get(result.lastInsertRowid);
+    const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json(newNpc);
   } catch (error) {
     console.error('Error creating NPC:', error);
@@ -142,9 +140,9 @@ router.post('/', (req, res) => {
 });
 
 // Update an NPC
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const npc = db.prepare('SELECT * FROM npcs WHERE id = ?').get(req.params.id);
+    const npc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
     if (!npc) {
       return res.status(404).json({ error: 'NPC not found' });
     }
@@ -192,7 +190,7 @@ router.put('/:id', (req, res) => {
       avatar
     } = req.body;
 
-    const stmt = db.prepare(`
+    await dbRun(`
       UPDATE npcs SET
         name = ?, nickname = ?, race = ?, gender = ?, age = ?,
         occupation = ?, occupation_category = ?, stat_block = ?,
@@ -206,9 +204,7 @@ router.put('/:id', (req, res) => {
         current_location = ?, typical_locations = ?, background_notes = ?,
         relationship_to_party = ?, campaign_availability = ?, avatar = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `);
-
-    stmt.run(
+    `, [
       name || npc.name,
       nickname !== undefined ? nickname : npc.nickname,
       race || npc.race,
@@ -250,9 +246,9 @@ router.put('/:id', (req, res) => {
       campaign_availability !== undefined ? campaign_availability : npc.campaign_availability,
       avatar !== undefined ? avatar : npc.avatar,
       req.params.id
-    );
+    ]);
 
-    const updatedNpc = db.prepare('SELECT * FROM npcs WHERE id = ?').get(req.params.id);
+    const updatedNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
     res.json(updatedNpc);
   } catch (error) {
     console.error('Error updating NPC:', error);
@@ -261,14 +257,14 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete an NPC
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const npc = db.prepare('SELECT * FROM npcs WHERE id = ?').get(req.params.id);
+    const npc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
     if (!npc) {
       return res.status(404).json({ error: 'NPC not found' });
     }
 
-    db.prepare('DELETE FROM npcs WHERE id = ?').run(req.params.id);
+    await dbRun('DELETE FROM npcs WHERE id = ?', [req.params.id]);
     res.json({ message: 'NPC deleted successfully' });
   } catch (error) {
     console.error('Error deleting NPC:', error);
@@ -277,13 +273,13 @@ router.delete('/:id', (req, res) => {
 });
 
 // Get NPCs available for campaigns (not marked as 'hidden')
-router.get('/available/campaign', (req, res) => {
+router.get('/available/campaign', async (req, res) => {
   try {
-    const npcs = db.prepare(`
+    const npcs = await dbAll(`
       SELECT * FROM npcs
       WHERE campaign_availability != 'hidden'
       ORDER BY name ASC
-    `).all();
+    `);
     res.json(npcs);
   } catch (error) {
     console.error('Error fetching available NPCs:', error);
@@ -292,14 +288,14 @@ router.get('/available/campaign', (req, res) => {
 });
 
 // Search NPCs by name or occupation
-router.get('/search/:query', (req, res) => {
+router.get('/search/:query', async (req, res) => {
   try {
     const query = `%${req.params.query}%`;
-    const npcs = db.prepare(`
+    const npcs = await dbAll(`
       SELECT * FROM npcs
       WHERE name LIKE ? OR nickname LIKE ? OR occupation LIKE ? OR current_location LIKE ?
       ORDER BY name ASC
-    `).all(query, query, query, query);
+    `, [query, query, query, query]);
     res.json(npcs);
   } catch (error) {
     console.error('Error searching NPCs:', error);

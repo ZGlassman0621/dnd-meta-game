@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../database.js';
+import { dbAll, dbGet, dbRun } from '../database.js';
 import { generateAdventureOptions, generateAdventureNarrative } from '../services/adventureGenerator.js';
 import {
   getTimeMultiplier,
@@ -21,7 +21,7 @@ router.post('/options', async (req, res) => {
       return res.status(400).json({ error: 'Invalid risk level' });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [character_id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -41,24 +41,26 @@ router.post('/start', async (req, res) => {
   try {
     const { character_id, adventure, duration_hours, risk_level } = req.body;
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [character_id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
     // Check if character already has an active adventure
-    const activeAdventure = db.prepare(
-      'SELECT * FROM adventures WHERE character_id = ? AND status = ?'
-    ).get(character_id, 'active');
+    const activeAdventure = await dbGet(
+      'SELECT * FROM adventures WHERE character_id = ? AND status = ?',
+      [character_id, 'active']
+    );
 
     if (activeAdventure) {
       return res.status(400).json({ error: 'Character already on an adventure' });
     }
 
     // Check if character has an active DM session
-    const activeDMSession = db.prepare(
-      'SELECT id FROM dm_sessions WHERE character_id = ? AND (status = ? OR (status = ? AND rewards_claimed = 0))'
-    ).get(character_id, 'active', 'completed');
+    const activeDMSession = await dbGet(
+      'SELECT id FROM dm_sessions WHERE character_id = ? AND (status = ? OR (status = ? AND rewards_claimed = 0))',
+      [character_id, 'active', 'completed']
+    );
 
     if (activeDMSession) {
       return res.status(400).json({
@@ -70,14 +72,12 @@ router.post('/start', async (req, res) => {
     const startTime = new Date();
     const endTime = new Date(startTime.getTime() + duration_hours * 60 * 60 * 1000);
 
-    const stmt = db.prepare(`
+    const result = await dbRun(`
       INSERT INTO adventures (
         character_id, title, description, location, risk_level,
         duration_hours, start_time, end_time, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = stmt.run(
+    `, [
       character_id,
       adventure.title,
       adventure.description,
@@ -87,9 +87,9 @@ router.post('/start', async (req, res) => {
       startTime.toISOString(),
       endTime.toISOString(),
       'active'
-    );
+    ]);
 
-    const newAdventure = db.prepare('SELECT * FROM adventures WHERE id = ?').get(result.lastInsertRowid);
+    const newAdventure = await dbGet('SELECT * FROM adventures WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json(newAdventure);
   } catch (error) {
     console.error('Error starting adventure:', error);
@@ -103,9 +103,10 @@ router.get('/status/:character_id', async (req, res) => {
     const character_id = req.params.character_id;
 
     // First check for completed adventures
-    const completedAdventure = db.prepare(
-      'SELECT * FROM adventures WHERE character_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1'
-    ).get(character_id, 'completed');
+    const completedAdventure = await dbGet(
+      'SELECT * FROM adventures WHERE character_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1',
+      [character_id, 'completed']
+    );
 
     if (completedAdventure) {
       return res.json({
@@ -115,9 +116,10 @@ router.get('/status/:character_id', async (req, res) => {
     }
 
     // Then check for active adventures
-    const adventure = db.prepare(
-      'SELECT * FROM adventures WHERE character_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1'
-    ).get(character_id, 'active');
+    const adventure = await dbGet(
+      'SELECT * FROM adventures WHERE character_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1',
+      [character_id, 'active']
+    );
 
     if (!adventure) {
       return res.json({ status: 'none', adventure: null });
@@ -140,7 +142,7 @@ router.get('/status/:character_id', async (req, res) => {
     }
 
     // Adventure is complete - process results
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [character_id]);
     const results = await processAdventureCompletion(adventure, character);
 
     res.json({
@@ -159,7 +161,7 @@ router.post('/claim/:adventure_id', async (req, res) => {
   try {
     const adventure_id = req.params.adventure_id;
 
-    const adventure = db.prepare('SELECT * FROM adventures WHERE id = ?').get(adventure_id);
+    const adventure = await dbGet('SELECT * FROM adventures WHERE id = ?', [adventure_id]);
     if (!adventure) {
       return res.status(404).json({ error: 'Adventure not found' });
     }
@@ -168,7 +170,7 @@ router.post('/claim/:adventure_id', async (req, res) => {
       return res.status(400).json({ error: 'Adventure not completed yet' });
     }
 
-    const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(adventure.character_id);
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [adventure.character_id]);
     const results = JSON.parse(adventure.results);
     const rewards = results.rewards;
     const consequences = results.consequences;
@@ -216,15 +218,13 @@ router.post('/claim/:adventure_id', async (req, res) => {
     }
 
     // Update character
-    const updateStmt = db.prepare(`
+    await dbRun(`
       UPDATE characters
       SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
           current_hp = ?, debuffs = COALESCE(?, debuffs),
           inventory = COALESCE(?, inventory), updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `);
-
-    updateStmt.run(
+    `, [
       updates.experience,
       updates.gold_cp,
       updates.gold_sp,
@@ -233,12 +233,12 @@ router.post('/claim/:adventure_id', async (req, res) => {
       updates.debuffs,
       updates.inventory,
       adventure.character_id
-    );
+    ]);
 
     // Mark adventure as claimed
-    db.prepare('UPDATE adventures SET status = ? WHERE id = ?').run('claimed', adventure_id);
+    await dbRun('UPDATE adventures SET status = ? WHERE id = ?', ['claimed', adventure_id]);
 
-    const updatedCharacter = db.prepare('SELECT * FROM characters WHERE id = ?').get(adventure.character_id);
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [adventure.character_id]);
 
     res.json({
       message: 'Adventure rewards claimed',
@@ -252,21 +252,22 @@ router.post('/claim/:adventure_id', async (req, res) => {
 });
 
 // Cancel/Clear an active adventure
-router.delete('/cancel/:character_id', (req, res) => {
+router.delete('/cancel/:character_id', async (req, res) => {
   try {
     const character_id = req.params.character_id;
 
     // Find active or completed adventure
-    const adventure = db.prepare(
-      'SELECT * FROM adventures WHERE character_id = ? AND (status = ? OR status = ?) ORDER BY start_time DESC LIMIT 1'
-    ).get(character_id, 'active', 'completed');
+    const adventure = await dbGet(
+      'SELECT * FROM adventures WHERE character_id = ? AND (status = ? OR status = ?) ORDER BY start_time DESC LIMIT 1',
+      [character_id, 'active', 'completed']
+    );
 
     if (!adventure) {
       return res.status(404).json({ error: 'No active adventure to cancel' });
     }
 
     // Mark adventure as cancelled
-    db.prepare('UPDATE adventures SET status = ? WHERE id = ?').run('cancelled', adventure.id);
+    await dbRun('UPDATE adventures SET status = ? WHERE id = ?', ['cancelled', adventure.id]);
 
     res.json({ message: 'Adventure cancelled successfully' });
   } catch (error) {
@@ -276,11 +277,12 @@ router.delete('/cancel/:character_id', (req, res) => {
 });
 
 // Get adventure history for a character
-router.get('/history/:character_id', (req, res) => {
+router.get('/history/:character_id', async (req, res) => {
   try {
-    const adventures = db.prepare(
-      'SELECT * FROM adventures WHERE character_id = ? ORDER BY start_time DESC LIMIT 20'
-    ).all(req.params.character_id);
+    const adventures = await dbAll(
+      'SELECT * FROM adventures WHERE character_id = ? ORDER BY start_time DESC LIMIT 20',
+      [req.params.character_id]
+    );
 
     res.json(adventures);
   } catch (error) {
@@ -289,12 +291,12 @@ router.get('/history/:character_id', (req, res) => {
 });
 
 // Clear adventure history for a character
-router.delete('/clear-history/:character_id', (req, res) => {
+router.delete('/clear-history/:character_id', async (req, res) => {
   try {
     const character_id = req.params.character_id;
 
     // Delete all adventures for this character
-    const result = db.prepare('DELETE FROM adventures WHERE character_id = ?').run(character_id);
+    const result = await dbRun('DELETE FROM adventures WHERE character_id = ?', [character_id]);
 
     res.json({
       message: 'Adventure history cleared successfully',
@@ -354,17 +356,17 @@ async function processAdventureCompletion(adventure, character) {
   };
 
   // Update adventure with results
-  db.prepare(`
+  await dbRun(`
     UPDATE adventures
     SET status = ?, results = ?, rewards = ?, consequences = ?
     WHERE id = ?
-  `).run(
+  `, [
     'completed',
     JSON.stringify(results),
     JSON.stringify(rewards),
     JSON.stringify(consequences),
     adventure.id
-  );
+  ]);
 
   return results;
 }
