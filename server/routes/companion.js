@@ -495,11 +495,11 @@ router.get('/:id/level-up-info', async (req, res) => {
   }
 });
 
-// Dismiss companion
+// Dismiss companion - removes from party and makes NPC available for re-recruitment
 router.post('/:id/dismiss', async (req, res) => {
   try {
     const companion = await dbGet(`
-      SELECT c.*, n.name
+      SELECT c.*, n.name, c.npc_id
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
@@ -509,16 +509,18 @@ router.post('/:id/dismiss', async (req, res) => {
       return res.status(404).json({ error: 'Companion not found' });
     }
 
+    // Delete the companion record entirely so they can be re-recruited fresh
+    await dbRun('DELETE FROM companions WHERE id = ?', [req.params.id]);
+
+    // Update NPC to be available for recruitment again
     await dbRun(`
-      UPDATE companions SET
-        status = 'dismissed',
-        dismissed_at = CURRENT_TIMESTAMP
+      UPDATE npcs SET campaign_availability = 'companion'
       WHERE id = ?
-    `, [req.params.id]);
+    `, [companion.npc_id]);
 
     res.json({
-      message: `${companion.name} has left your party.`,
-      companion: { ...companion, status: 'dismissed' }
+      message: `${companion.name} has left your party and is available for re-recruitment.`,
+      npcId: companion.npc_id
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
