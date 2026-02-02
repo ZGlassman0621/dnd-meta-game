@@ -289,7 +289,10 @@ router.post('/start', async (req, res) => {
 
     // Get active companions for this character
     const companions = await dbAll(`
-      SELECT c.*, n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
+      SELECT c.*, c.inventory as companion_inventory, c.gold_gp, c.gold_sp, c.gold_cp, c.equipment,
+             c.alignment, c.faith, c.lifestyle, c.ideals, c.bonds, c.flaws,
+             c.armor_class, c.speed as companion_speed, c.subrace as companion_subrace, c.background as companion_background,
+             n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
              n.stat_block, n.cr, n.ac, n.hp, n.speed, n.ability_scores as npc_ability_scores,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice, n.mannerism,
              n.motivation, n.background_notes, n.relationship_to_party
@@ -541,9 +544,50 @@ router.post('/start', async (req, res) => {
   }
 });
 
+// Helper: Parse the structured NPC_WANTS_TO_JOIN marker from AI response
+function parseNpcJoinMarker(narrative) {
+  // Match the structured marker format:
+  // [NPC_WANTS_TO_JOIN: Name="NPC Name" Race="Race" Gender="Gender" Occupation="Their Role" Personality="Brief traits" Reason="Why they want to join"]
+  const markerMatch = narrative.match(/\[NPC_WANTS_TO_JOIN:\s*([^\]]+)\]/i);
+  if (!markerMatch) return null;
+
+  const markerContent = markerMatch[1];
+  const npcData = {};
+
+  // Parse key="value" pairs
+  const pairRegex = /(\w+)="([^"]+)"/g;
+  let match;
+  while ((match = pairRegex.exec(markerContent)) !== null) {
+    const key = match[1].toLowerCase();
+    npcData[key] = match[2];
+  }
+
+  if (!npcData.name) return null;
+
+  return {
+    detected: true,
+    trigger: 'structured_marker',
+    npcName: npcData.name,
+    npcData: {
+      name: npcData.name,
+      race: npcData.race || 'Human',
+      gender: npcData.gender || null,
+      occupation: npcData.occupation || null,
+      personality: npcData.personality || null,
+      reason: npcData.reason || null
+    }
+  };
+}
+
 // Helper: Detect if an NPC has agreed to join the party
 function detectRecruitment(narrative, playerAction) {
-  // Check if player asked someone to join OR if narrative shows organic joining
+  // First, check for the structured marker (preferred method)
+  const structuredResult = parseNpcJoinMarker(narrative);
+  if (structuredResult) {
+    return structuredResult;
+  }
+
+  // Fallback: Check if player asked someone to join OR if narrative shows organic joining
   const joinPhrases = [
     /join (?:us|me|my party|our party|the party)/i,
     /travel with (?:us|me)/i,
@@ -696,11 +740,11 @@ router.post('/:sessionId/message', async (req, res) => {
     // Check for recruitment in the response
     const recruitment = detectRecruitment(result.narrative, action);
 
-    // If recruitment detected, try to find the NPC in the database
+    // If recruitment detected, try to find or create the NPC in the database
     let recruitmentData = null;
     if (recruitment) {
       // Look for an NPC with this name who is available as a companion
-      const npc = await dbGet(`
+      let npc = await dbGet(`
         SELECT id, name, nickname, race, gender, occupation, avatar
         FROM npcs
         WHERE (name LIKE ? OR nickname LIKE ?)
@@ -709,6 +753,42 @@ router.post('/:sessionId/message', async (req, res) => {
           CASE WHEN name = ? THEN 1 WHEN nickname = ? THEN 2 ELSE 3 END
         LIMIT 1
       `, [`%${recruitment.npcName}%`, `%${recruitment.npcName}%`, recruitment.npcName, recruitment.npcName]);
+
+      // If NPC not found but we have structured data from the marker, create them
+      if (!npc && recruitment.npcData) {
+        const npcData = recruitment.npcData;
+        // Parse personality traits
+        let personality1 = null;
+        let personality2 = null;
+        if (npcData.personality) {
+          const traits = npcData.personality.split(',').map(t => t.trim());
+          personality1 = traits[0] || null;
+          personality2 = traits[1] || null;
+        }
+
+        // Create the NPC in the database
+        const insertResult = await dbRun(`
+          INSERT INTO npcs (
+            name, race, gender, occupation,
+            personality_trait_1, personality_trait_2,
+            relationship_to_party, campaign_availability,
+            background_notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          npcData.name,
+          npcData.race || 'Human',
+          npcData.gender || null,
+          npcData.occupation || null,
+          personality1,
+          personality2,
+          'ally',
+          'companion',
+          npcData.reason ? `Reason for joining: ${npcData.reason}. First encountered in session #${sessionId}.` : `First encountered in session #${sessionId}`
+        ]);
+
+        // Fetch the newly created NPC
+        npc = await dbGet('SELECT id, name, nickname, race, gender, occupation, avatar FROM npcs WHERE id = ?', [insertResult.lastInsertRowid]);
+      }
 
       if (npc) {
         // Check if already a companion for this character
@@ -730,11 +810,12 @@ router.post('/:sessionId/message', async (req, res) => {
               avatar: npc.avatar
             },
             sessionId: parseInt(sessionId),
-            characterId: session.character_id
+            characterId: session.character_id,
+            wasCreated: !!(recruitment.npcData) // Flag if this was a newly created NPC
           };
         }
       } else {
-        // NPC not in database - could offer to create them
+        // NPC not in database and no structured data - offer to create them manually
         recruitmentData = {
           detected: true,
           npcName: recruitment.npcName,

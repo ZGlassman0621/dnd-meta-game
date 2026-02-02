@@ -197,39 +197,6 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
     })
   }
 
-  const handleUpdateLocation = async (location) => {
-    if (!selectedCharacter) return
-
-    try {
-      const response = await fetch(`/api/character/${selectedCharacter.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_location: location })
-      })
-
-      const character = await response.json()
-      onCharacterUpdated(character)
-    } catch (error) {
-      console.error('Error updating location:', error)
-    }
-  }
-
-  const handleUpdateQuest = async (quest) => {
-    if (!selectedCharacter) return
-
-    try {
-      const response = await fetch(`/api/character/${selectedCharacter.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_quest: quest })
-      })
-
-      const character = await response.json()
-      onCharacterUpdated(character)
-    } catch (error) {
-      console.error('Error updating quest:', error)
-    }
-  }
 
   return (
     <div className="container">
@@ -1050,31 +1017,6 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
         </form>
           )}
 
-          {selectedCharacter && (
-            <div style={{ marginTop: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem' }}>Update Context</h3>
-
-              <div className="form-group">
-                <label>Current Location</label>
-                <input
-                  type="text"
-                  defaultValue={selectedCharacter.current_location}
-                  onBlur={(e) => handleUpdateLocation(e.target.value)}
-                  placeholder="Where is your character now?"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Current Quest</label>
-                <textarea
-                  defaultValue={selectedCharacter.current_quest}
-                  onBlur={(e) => handleUpdateQuest(e.target.value)}
-                  placeholder="What quest are you on?"
-                  rows="3"
-                />
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

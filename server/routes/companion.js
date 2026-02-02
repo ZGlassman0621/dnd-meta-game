@@ -4,7 +4,6 @@ import {
   HIT_DICE,
   PROFICIENCY_BONUS,
   getClassFeatures,
-  needsSubclassSelection,
   hasASI,
   SUBCLASS_LEVELS
 } from '../config/levelProgression.js';
@@ -191,7 +190,10 @@ router.put('/:id', async (req, res) => {
       'companion_class', 'companion_level', 'companion_subclass',
       'companion_max_hp', 'companion_current_hp', 'companion_ability_scores',
       'progression_type', 'status', 'notes', 'skill_proficiencies',
-      'inventory', 'gold_gp', 'gold_sp', 'gold_cp', 'equipment'
+      'inventory', 'gold_gp', 'gold_sp', 'gold_cp', 'equipment',
+      // Character-like fields
+      'alignment', 'faith', 'lifestyle', 'ideals', 'bonds', 'flaws',
+      'armor_class', 'speed', 'subrace', 'background'
     ];
 
     for (const [key, value] of Object.entries(req.body)) {
@@ -380,9 +382,12 @@ router.post('/:id/level-up', async (req, res) => {
       }
     }
 
-    // Handle subclass
+    // Handle subclass - allow selection if:
+    // 1. At the exact subclass level, OR
+    // 2. Past subclass level but never selected one (e.g., created at higher level)
     let newSubclass = companion.companion_subclass;
-    if (needsSubclassSelection(className, newLevel) && !companion.companion_subclass && subclass) {
+    const subclassLevel = SUBCLASS_LEVELS[className] || 3;
+    if (!companion.companion_subclass && currentLevel >= subclassLevel && subclass) {
       newSubclass = subclass;
     }
 
@@ -466,6 +471,12 @@ router.get('/:id/level-up-info', async (req, res) => {
     const conMod = Math.floor((abilityScores.con - 10) / 2);
     const avgHpGain = Math.floor(hitDie / 2) + 1 + conMod;
 
+    // Check if subclass is needed:
+    // 1. Normally needed at the exact subclass level
+    // 2. Also needed if past subclass level but never selected one (e.g., created at higher level)
+    const subclassLevel = SUBCLASS_LEVELS[className] || 3;
+    const needsSubclass = !companion.companion_subclass && currentLevel >= subclassLevel;
+
     res.json({
       companionName: companion.name,
       currentLevel,
@@ -474,7 +485,7 @@ router.get('/:id/level-up-info', async (req, res) => {
       subclass: companion.companion_subclass,
       newFeatures: getClassFeatures(className, newLevel),
       choices: {
-        needsSubclass: needsSubclassSelection(className, newLevel) && !companion.companion_subclass,
+        needsSubclass,
         needsASI: hasASI(className, newLevel)
       },
       hpGain: {
@@ -558,10 +569,12 @@ router.post('/:id/deceased', async (req, res) => {
 });
 
 // Create a new party member from scratch (creates NPC + companion in one go)
+// If npc_id is provided, uses the existing NPC instead of creating a new one
 router.post('/create-party-member', async (req, res) => {
   try {
     const {
       recruited_by_character_id,
+      npc_id, // Optional: if provided, use existing NPC instead of creating new one
       name,
       nickname,
       race,
@@ -586,13 +599,31 @@ router.post('/create-party-member', async (req, res) => {
       voice,
       mannerism,
       motivation,
+      // Character details (like PC creation)
+      alignment,
+      faith,
+      lifestyle,
+      ideals,
+      bonds,
+      flaws,
       // Ability scores
       ability_scores,
       // Skills
       skill_proficiencies,
+      // Spells
+      cantrips,
+      spells_known,
       // Origin
       backstory,
-      relationship_to_party
+      relationship_to_party,
+      // Starting equipment and gold
+      starting_equipment,
+      starting_gold_gp,
+      starting_gold_sp,
+      starting_gold_cp,
+      // Combat stats
+      armor_class,
+      speed
     } = req.body;
 
     // Validate required fields
@@ -615,40 +646,58 @@ router.post('/create-party-member', async (req, res) => {
       str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10
     });
 
-    // First, create the NPC
-    const npcResult = await dbRun(`
-      INSERT INTO npcs (
-        name, nickname, race, gender, age, occupation,
-        height, build, hair_color, hair_style, eye_color, skin_tone,
-        distinguishing_marks, personality_trait_1, personality_trait_2,
-        voice, mannerism, motivation, ability_scores, background_notes,
-        relationship_to_party, campaign_availability
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'party_member')
-    `, [
-      name,
-      nickname || null,
-      subrace ? `${subrace} ${race}` : race,
-      gender || null,
-      age || null,
-      background || null, // Using background as occupation
-      height || null,
-      build || null,
-      hair_color || null,
-      hair_style || null,
-      eye_color || null,
-      skin_tone || null,
-      distinguishing_marks || null,
-      personality_trait_1 || null,
-      personality_trait_2 || null,
-      voice || null,
-      mannerism || null,
-      motivation || null,
-      abilityScoresJson,
-      backstory || null,
-      relationship_to_party || null
-    ]);
+    let npcId;
 
-    const npcId = npcResult.lastInsertRowid;
+    // Check if we're using an existing NPC or creating a new one
+    if (npc_id) {
+      // Using existing NPC - verify it exists
+      const existingNpc = await dbGet('SELECT id FROM npcs WHERE id = ?', [npc_id]);
+      if (!existingNpc) {
+        return res.status(404).json({ error: 'NPC not found' });
+      }
+      npcId = npc_id;
+
+      // Update the NPC's campaign availability to indicate they're now a party member
+      await dbRun(
+        'UPDATE npcs SET campaign_availability = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        ['party_member', npcId]
+      );
+    } else {
+      // Create a new NPC
+      const npcResult = await dbRun(`
+        INSERT INTO npcs (
+          name, nickname, race, gender, age, occupation,
+          height, build, hair_color, hair_style, eye_color, skin_tone,
+          distinguishing_marks, personality_trait_1, personality_trait_2,
+          voice, mannerism, motivation, ability_scores, background_notes,
+          relationship_to_party, campaign_availability
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'party_member')
+      `, [
+        name,
+        nickname || null,
+        subrace ? `${subrace} ${race}` : race,
+        gender || null,
+        age || null,
+        background || null, // Using background as occupation
+        height || null,
+        build || null,
+        hair_color || null,
+        hair_style || null,
+        eye_color || null,
+        skin_tone || null,
+        distinguishing_marks || null,
+        personality_trait_1 || null,
+        personality_trait_2 || null,
+        voice || null,
+        mannerism || null,
+        motivation || null,
+        abilityScoresJson,
+        backstory || null,
+        relationship_to_party || null
+      ]);
+
+      npcId = npcResult.lastInsertRowid;
+    }
 
     // Calculate HP based on class and level
     const hitDie = HIT_DICE[companion_class.toLowerCase()] || 8;
@@ -671,14 +720,35 @@ router.post('/create-party-member', async (req, res) => {
     // Format skill proficiencies as JSON
     const skillProficienciesJson = JSON.stringify(skill_proficiencies || []);
 
+    // Format spells as JSON
+    const cantripsJson = JSON.stringify(cantrips || []);
+    const spellsKnownJson = JSON.stringify(spells_known || []);
+
+    // Format starting equipment as JSON
+    const equipmentJson = JSON.stringify(starting_equipment || {});
+    const inventoryJson = JSON.stringify([]);
+
+    // Calculate default AC if not provided (10 + DEX mod)
+    const dexMod = Math.floor(((ability_scores?.dex || 10) - 10) / 2);
+    const calculatedAC = armor_class || (10 + dexMod);
+
+    // Default speed is 30, but some races have different speeds
+    const calculatedSpeed = speed || 30;
+
     // Now create the companion record
     const companionResult = await dbRun(`
       INSERT INTO companions (
         npc_id, recruited_by_character_id, progression_type,
         original_stats_snapshot, companion_class, companion_subclass, companion_level,
         companion_max_hp, companion_current_hp, companion_ability_scores,
-        skill_proficiencies, notes, status
-      ) VALUES (?, ?, 'class_based', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        skill_proficiencies, cantrips, spells_known, notes, status,
+        alignment, faith, lifestyle, ideals, bonds, flaws,
+        armor_class, speed, subrace, background,
+        equipment, inventory, gold_gp, gold_sp, gold_cp
+      ) VALUES (?, ?, 'class_based', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?)
     `, [
       npcId,
       recruited_by_character_id,
@@ -690,12 +760,34 @@ router.post('/create-party-member', async (req, res) => {
       companionMaxHp, // Start at full HP
       abilityScoresJson,
       skillProficienciesJson,
-      relationship_to_party || null
+      cantripsJson,
+      spellsKnownJson,
+      relationship_to_party || null,
+      // New character-like fields
+      alignment || null,
+      faith || null,
+      lifestyle || null,
+      ideals || null,
+      bonds || null,
+      flaws || null,
+      calculatedAC,
+      calculatedSpeed,
+      subrace || null,
+      background || null,
+      // Equipment and gold
+      equipmentJson,
+      inventoryJson,
+      starting_gold_gp || 0,
+      starting_gold_sp || 0,
+      starting_gold_cp || 0
     ]);
 
     // Fetch the created companion with NPC details
     const companion = await dbGet(`
-      SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation,
+      SELECT c.*, c.inventory as companion_inventory, c.gold_gp, c.gold_sp, c.gold_cp, c.equipment,
+             c.alignment, c.faith, c.lifestyle, c.ideals, c.bonds, c.flaws,
+             c.armor_class, c.speed, c.subrace as companion_subrace, c.background as companion_background,
+             n.name, n.nickname, n.race, n.gender, n.occupation,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice,
              n.height, n.build, n.hair_color, n.eye_color, n.skin_tone,
              n.distinguishing_marks, n.background_notes, n.motivation

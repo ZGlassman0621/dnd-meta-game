@@ -303,4 +303,118 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
+// Save an AI-generated NPC from a session
+// This endpoint is specifically for capturing NPCs that were introduced by the AI during DM sessions
+router.post('/from-session', async (req, res) => {
+  try {
+    const {
+      name,
+      race,
+      gender,
+      occupation,
+      current_location,
+      personality_traits,
+      appearance,
+      wants_to_join,
+      session_id,
+      relationship_to_party
+    } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'NPC name is required' });
+    }
+
+    // Check if an NPC with this name already exists
+    const existing = await dbGet('SELECT id FROM npcs WHERE name = ?', [name]);
+    if (existing) {
+      // Return existing NPC instead of creating duplicate
+      const existingNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [existing.id]);
+      return res.json({ npc: existingNpc, existed: true });
+    }
+
+    // Parse personality traits if provided
+    let personality1 = null;
+    let personality2 = null;
+    if (personality_traits) {
+      if (Array.isArray(personality_traits)) {
+        personality1 = personality_traits[0] || null;
+        personality2 = personality_traits[1] || null;
+      } else if (typeof personality_traits === 'string') {
+        // Split comma-separated traits
+        const traits = personality_traits.split(',').map(t => t.trim());
+        personality1 = traits[0] || null;
+        personality2 = traits[1] || null;
+      }
+    }
+
+    // Parse appearance into physical attributes if provided
+    let height = null;
+    let build = null;
+    let hair_color = null;
+    let eye_color = null;
+    let distinguishing_marks = null;
+
+    if (appearance && typeof appearance === 'string') {
+      // Store full appearance as background notes if can't parse
+      distinguishing_marks = appearance;
+    }
+
+    // Set campaign availability based on whether NPC wants to join
+    const campaign_availability = wants_to_join ? 'companion' : 'available';
+
+    const result = await dbRun(`
+      INSERT INTO npcs (
+        name, race, gender, occupation, current_location,
+        personality_trait_1, personality_trait_2,
+        height, build, hair_color, eye_color, distinguishing_marks,
+        relationship_to_party, campaign_availability,
+        background_notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      name,
+      race || 'Human',
+      gender || null,
+      occupation || null,
+      current_location || null,
+      personality1,
+      personality2,
+      height,
+      build,
+      hair_color,
+      eye_color,
+      distinguishing_marks,
+      relationship_to_party || 'neutral',
+      campaign_availability,
+      session_id ? `First encountered in session #${session_id}` : null
+    ]);
+
+    const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
+    res.status(201).json({ npc: newNpc, existed: false });
+  } catch (error) {
+    console.error('Error saving AI-generated NPC:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark an NPC as interested in joining the party (companion availability)
+router.post('/:id/mark-recruitable', async (req, res) => {
+  try {
+    const npc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
+    if (!npc) {
+      return res.status(404).json({ error: 'NPC not found' });
+    }
+
+    await dbRun(
+      'UPDATE npcs SET campaign_availability = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      ['companion', req.params.id]
+    );
+
+    const updatedNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
+    res.json(updatedNpc);
+  } catch (error) {
+    console.error('Error marking NPC as recruitable:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

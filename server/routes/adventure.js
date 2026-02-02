@@ -1,6 +1,6 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { generateAdventureOptions, generateAdventureNarrative } from '../services/adventureGenerator.js';
+import { generateAdventureOptions, generateAdventureNarrative, generateContextualAdventures, generateAllRiskLevelAdventures } from '../services/adventureGenerator.js';
 import {
   getTimeMultiplier,
   calculateXPReward,
@@ -15,21 +15,33 @@ const router = express.Router();
 // Get adventure options for a character
 router.post('/options', async (req, res) => {
   try {
-    const { character_id, risk_level } = req.body;
-
-    if (!['low', 'medium', 'high'].includes(risk_level)) {
-      return res.status(400).json({ error: 'Invalid risk level' });
-    }
+    const { character_id, risk_level, use_context } = req.body;
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [character_id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    // Generate adventure options using LLM
-    const options = await generateAdventureOptions(character, risk_level);
+    let options;
 
-    res.json({ options, risk_level });
+    // If risk_level is 'all' or not provided, generate one adventure per risk level
+    if (risk_level === 'all' || !risk_level) {
+      options = await generateAllRiskLevelAdventures(character_id);
+      return res.json({ options, multi_risk: true, contextual: true });
+    }
+
+    // Single risk level mode (backward compatible)
+    if (!['low', 'medium', 'high'].includes(risk_level)) {
+      return res.status(400).json({ error: 'Invalid risk level' });
+    }
+
+    // Generate adventure options using LLM
+    // use_context=true uses the full campaign context for more intelligent generation
+    options = use_context
+      ? await generateContextualAdventures(character_id, risk_level)
+      : await generateAdventureOptions(character, risk_level);
+
+    res.json({ options, risk_level, contextual: !!use_context });
   } catch (error) {
     console.error('Error generating adventure options:', error);
     res.status(500).json({ error: error.message });
@@ -218,6 +230,7 @@ router.post('/claim/:adventure_id', async (req, res) => {
     }
 
     // Update character
+    // Note: Must use null instead of undefined for database binding
     await dbRun(`
       UPDATE characters
       SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
@@ -230,8 +243,8 @@ router.post('/claim/:adventure_id', async (req, res) => {
       updates.gold_sp,
       updates.gold_gp,
       updates.current_hp,
-      updates.debuffs,
-      updates.inventory,
+      updates.debuffs ?? null,
+      updates.inventory ?? null,
       adventure.character_id
     ]);
 

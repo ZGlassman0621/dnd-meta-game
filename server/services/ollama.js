@@ -380,17 +380,26 @@ function formatCompanions(companions) {
       limitationsLine = `  LIMITATIONS (respect these): ${limitationsList.join(', ')}`;
     }
 
+    // Build character identity line
+    const backgroundName = companion.companion_background || companion.background || companion.occupation;
+
     const parts = [
       `- ${companion.name}${companion.nickname ? ` "${companion.nickname}"` : ''} (Companion)`,
       `  Gender: ${companion.gender || 'unspecified'} - USE ${pronouns.toUpperCase()} PRONOUNS`,
-      `  Race: ${companion.race}${companion.age ? `, Age: ${companion.age}` : ''}`,
-      companion.occupation ? `  Background/Former Occupation: ${companion.occupation}` : null,
+      `  Race: ${companion.companion_subrace ? `${companion.companion_subrace} ` : ''}${companion.race}${companion.age ? `, Age: ${companion.age}` : ''}`,
+      backgroundName ? `  Background: ${backgroundName}` : null,
+      companion.alignment ? `  Alignment: ${companion.alignment}` : null,
+      companion.faith ? `  Faith/Deity: ${companion.faith}` : null,
       statsLine,
+      companion.armor_class ? `  AC: ${companion.armor_class}, Speed: ${companion.companion_speed || companion.speed || 30} ft.` : null,
       equipmentLine || null,
       skillsLine || null,
       languagesNote,
       limitationsLine || null,
       companion.personality_trait_1 ? `  Personality: ${companion.personality_trait_1}${companion.personality_trait_2 ? '. ' + companion.personality_trait_2 : ''}` : null,
+      companion.ideals ? `  Ideals: ${companion.ideals}` : null,
+      companion.bonds ? `  Bonds: ${companion.bonds}` : null,
+      companion.flaws ? `  Flaws: ${companion.flaws}` : null,
       companion.voice ? `  Voice/Speech: ${companion.voice}` : null,
       companion.mannerism ? `  Mannerism: ${companion.mannerism}` : null,
       companion.motivation ? `  Motivation: ${companion.motivation}` : null,
@@ -785,18 +794,43 @@ NPC CONVENTIONS:
 - NPCs should react realistically to player actions - including hostile or unexpected ones
 - If a player attacks an NPC, the NPC defends themselves, flees, or calls for help as appropriate
 
-COMPANION RECRUITMENT - WHEN NPCs JOIN THE PARTY:
-When an NPC pledges loyalty, swears an oath, or clearly commits to traveling with the player, you MUST explicitly confirm:
+COMPANION RECRUITMENT - WHEN NPCs MAY JOIN THE PARTY:
 
-After the narrative moment, add a clear out-of-character question:
+IMPORTANT: NPCs wanting to join the party should be RARE. Most NPCs have their own lives, families, and responsibilities.
+Only an NPC with GENUINE PERSONAL STAKES should ever express interest in joining:
+
+When an NPC might offer to join (rare circumstances):
+- They have a deep personal connection to the quest (their family was killed by the villain, their village was destroyed)
+- They've formed a strong bond with the player over MULTIPLE meaningful interactions
+- They owe the player a life debt they feel compelled to repay
+- Their personal goals directly align with the party's mission
+- They have nothing left to lose and nowhere else to go
+
+When NPCs should NOT offer to join:
+- Random tavern encounters or brief meetings
+- NPCs with stable lives, jobs, or families
+- Just because the player was friendly or helpful
+- Quest givers who have their own responsibilities
+- Merchants, innkeepers, or other service NPCs
+
+WHEN AN NPC GENUINELY WANTS TO JOIN:
+The NPC should express this IN CHARACTER with dialogue that fits their personality:
+- A gruff warrior: "I've got nothing keeping me here. If you'll have me, my axe is yours."
+- A young scholar: "I... I want to see this through. What we discovered - I need to understand it."
+- A vengeful survivor: "They took everything from me. Let me help you stop them."
+
+After the narrative moment, add a STRUCTURED MARKER for the system to detect:
+[NPC_WANTS_TO_JOIN: Name="NPC Name" Race="Race" Gender="Gender" Occupation="Their Role" Personality="Brief traits" Reason="Why they want to join"]
+
+Then add a clear out-of-character question:
 "[OOC: Would you like to formally recruit [NPC Name] as a companion? They would join your party and travel with you.]"
 
-This should happen when:
-- An NPC says "I'll follow you" or "I'm with you" or similar
-- Characters pledge "Together" or make an oath of fellowship
-- An NPC offers their sword/bow/staff/service
-- After a bonding moment where an NPC clearly commits to the party's cause
-- When an NPC says they'll accompany the party on their journey
+EXAMPLE:
+The old soldier's eyes harden with resolve. "Those bastards burned my farm and killed my wife. I've been waiting for someone brave enough to stand against them." He draws his battered sword. "I may be past my prime, but I can still swing a blade. Take me with you."
+
+[NPC_WANTS_TO_JOIN: Name="Garrick Thornwood" Race="Human" Gender="Male" Occupation="Former Soldier/Farmer" Personality="Gruff, determined, vengeful but honorable" Reason="Seeking revenge for his murdered wife"]
+
+[OOC: Would you like to formally recruit Garrick Thornwood as a companion? He would join your party and travel with you.]
 
 Do NOT skip this prompt - the player needs to formally add companions to their party sheet.
 Wait for the player's response before continuing the narrative.

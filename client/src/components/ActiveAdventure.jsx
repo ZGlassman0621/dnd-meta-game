@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react'
 
 function ActiveAdventure({ adventure, character, onAdventureClaimed, onAdventureComplete }) {
   const [timeRemaining, setTimeRemaining] = useState('')
+  const [progress, setProgress] = useState(0)
   const [hasNotified, setHasNotified] = useState(false)
 
   useEffect(() => {
     if (adventure.status === 'active') {
+      // Update every 100ms for smooth progress bar
       const interval = setInterval(() => {
         updateTimeRemaining()
-      }, 1000)
+      }, 100)
 
       updateTimeRemaining()
       return () => clearInterval(interval)
@@ -17,11 +19,18 @@ function ActiveAdventure({ adventure, character, onAdventureClaimed, onAdventure
 
   const updateTimeRemaining = () => {
     const now = new Date()
+    const start = new Date(adventure.adventure.start_time)
     const end = new Date(adventure.adventure.end_time)
     const diff = end - now
+    const total = end - start
+
+    // Calculate progress locally for smooth updates
+    const currentProgress = Math.min(100, Math.max(0, ((now - start) / total) * 100))
+    setProgress(currentProgress)
 
     if (diff <= 0) {
       setTimeRemaining('Complete!')
+      setProgress(100)
       // Notify parent that adventure is complete so it can refresh status
       if (!hasNotified && onAdventureComplete) {
         setHasNotified(true)
@@ -87,12 +96,10 @@ function ActiveAdventure({ adventure, character, onAdventureClaimed, onAdventure
         <div style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
             <span>Progress</span>
-            <span>{Math.floor(adventure.progress)}%</span>
+            <span>{Math.floor(progress)}%</span>
           </div>
           <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${adventure.progress}%` }}>
-              {adventure.progress > 10 && `${Math.floor(adventure.progress)}%`}
-            </div>
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
         </div>
 

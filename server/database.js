@@ -349,6 +349,20 @@ export async function initDatabase() {
     { col: 'equipment', sql: "ALTER TABLE companions ADD COLUMN equipment TEXT DEFAULT '{}'" },
     { col: 'companion_experience', sql: 'ALTER TABLE companions ADD COLUMN companion_experience INTEGER DEFAULT 0' },
     { col: 'skill_proficiencies', sql: "ALTER TABLE companions ADD COLUMN skill_proficiencies TEXT DEFAULT '[]'" },
+    // Character-like fields for fully-fleshed companions
+    { col: 'alignment', sql: 'ALTER TABLE companions ADD COLUMN alignment TEXT' },
+    { col: 'faith', sql: 'ALTER TABLE companions ADD COLUMN faith TEXT' },
+    { col: 'lifestyle', sql: 'ALTER TABLE companions ADD COLUMN lifestyle TEXT' },
+    { col: 'ideals', sql: 'ALTER TABLE companions ADD COLUMN ideals TEXT' },
+    { col: 'bonds', sql: 'ALTER TABLE companions ADD COLUMN bonds TEXT' },
+    { col: 'flaws', sql: 'ALTER TABLE companions ADD COLUMN flaws TEXT' },
+    { col: 'armor_class', sql: 'ALTER TABLE companions ADD COLUMN armor_class INTEGER DEFAULT 10' },
+    { col: 'speed', sql: 'ALTER TABLE companions ADD COLUMN speed INTEGER DEFAULT 30' },
+    { col: 'subrace', sql: 'ALTER TABLE companions ADD COLUMN subrace TEXT' },
+    { col: 'background', sql: 'ALTER TABLE companions ADD COLUMN background TEXT' },
+    // Spellcasting
+    { col: 'cantrips', sql: "ALTER TABLE companions ADD COLUMN cantrips TEXT DEFAULT '[]'" },
+    { col: 'spells_known', sql: "ALTER TABLE companions ADD COLUMN spells_known TEXT DEFAULT '[]'" },
   ];
 
   for (const migration of companionMigrations) {
@@ -362,6 +376,24 @@ export async function initDatabase() {
       }
     }
   }
+
+  // Activity queue table for Meta Game scheduling
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS activity_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      character_id INTEGER NOT NULL,
+      activity_type TEXT NOT NULL,
+      duration_hours INTEGER NOT NULL,
+      options TEXT DEFAULT '{}',
+      queue_order INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      started_at DATETIME,
+      completed_at DATETIME,
+      results TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (character_id) REFERENCES characters(id)
+    )
+  `);
 
   console.log('Database initialized successfully (Turso cloud)');
 }

@@ -1,12 +1,53 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+// Time ratio presets (matching server)
+const TIME_RATIOS = {
+  realtime: { label: 'Real-Time', ratio: 1, description: '1 real hour = 1 in-game hour' },
+  leisurely: { label: 'Leisurely', ratio: 4, description: '1 real hour = 4 in-game hours' },
+  normal: { label: 'Normal', ratio: 6, description: '1 real hour = 6 in-game hours' },
+  fast: { label: 'Fast', ratio: 12, description: '1 real hour = 12 in-game hours' },
+  montage: { label: 'Montage', ratio: 24, description: '1 real hour = 1 in-game day' }
+}
 
 function AdventureManager({ character, onAdventureStarted }) {
-  const [riskLevel, setRiskLevel] = useState('medium')
   const [duration, setDuration] = useState(8)
   const [options, setOptions] = useState([])
   const [selectedOption, setSelectedOption] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [campaignContext, setCampaignContext] = useState(null)
+  const [loadingContext, setLoadingContext] = useState(true)
+
+  // Load campaign context on mount
+  useEffect(() => {
+    loadCampaignContext()
+  }, [character.id])
+
+  const loadCampaignContext = async () => {
+    setLoadingContext(true)
+    try {
+      const contextRes = await fetch(`/api/meta-game/context/${character.id}`)
+      if (contextRes.ok) {
+        setCampaignContext(await contextRes.json())
+      }
+    } catch (err) {
+      console.error('Error loading campaign context:', err)
+    }
+    setLoadingContext(false)
+  }
+
+  const changeTimeRatio = async (newRatio) => {
+    try {
+      await fetch(`/api/meta-game/time-ratio/${character.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ratio: newRatio })
+      })
+      await loadCampaignContext()
+    } catch (err) {
+      console.error('Error changing time ratio:', err)
+    }
+  }
 
   const handleGenerateOptions = async () => {
     setLoading(true)
@@ -20,7 +61,7 @@ function AdventureManager({ character, onAdventureStarted }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character_id: character.id,
-          risk_level: riskLevel
+          risk_level: 'all'  // Generate one adventure per risk level
         })
       })
 
@@ -48,7 +89,7 @@ function AdventureManager({ character, onAdventureStarted }) {
           character_id: character.id,
           adventure: selectedOption,
           duration_hours: duration,
-          risk_level: riskLevel
+          risk_level: selectedOption.risk_level || 'medium'
         })
       })
 
@@ -75,20 +116,90 @@ function AdventureManager({ character, onAdventureStarted }) {
     return 0.3
   }
 
+  const currentRatio = campaignContext?.calendar?.timeRatio || 'normal'
+  const calendar = campaignContext?.calendar
+
   return (
     <div className="container">
+      {/* Campaign Context Header */}
+      {campaignContext && (
+        <div style={{
+          background: 'rgba(46, 204, 113, 0.1)',
+          border: '1px solid rgba(46, 204, 113, 0.3)',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1.5rem'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Campaign Date</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#2ecc71' }}>
+                {calendar?.formatted || 'Unknown'}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
+                {calendar?.season?.charAt(0).toUpperCase() + calendar?.season?.slice(1)} Season
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Time Flow</div>
+              <select
+                value={currentRatio}
+                onChange={(e) => changeTimeRatio(e.target.value)}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  color: '#fff',
+                  padding: '0.4rem 0.6rem',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem'
+                }}
+              >
+                {Object.entries(TIME_RATIOS).map(([key, info]) => (
+                  <option key={key} value={key} style={{ background: '#1a1a2e', color: '#fff' }}>
+                    {info.label}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+                {TIME_RATIOS[currentRatio]?.description}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div style={{
+            display: 'flex',
+            gap: '1.5rem',
+            marginTop: '1rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            flexWrap: 'wrap'
+          }}>
+            <div>
+              <span style={{ color: '#888', fontSize: '0.8rem' }}>Location: </span>
+              <span style={{ color: '#fff' }}>{campaignContext.character?.currentLocation || 'Unknown'}</span>
+            </div>
+            {campaignContext.companions?.length > 0 && (
+              <div>
+                <span style={{ color: '#888', fontSize: '0.8rem' }}>Party: </span>
+                <span style={{ color: '#fff' }}>
+                  {campaignContext.companions.map(c => (c.name || c.npc_name || '').split(' ')[0]).join(', ')}
+                </span>
+              </div>
+            )}
+            {campaignContext.character?.currentQuest && (
+              <div style={{ flex: 1 }}>
+                <span style={{ color: '#888', fontSize: '0.8rem' }}>Quest: </span>
+                <span style={{ color: '#f39c12' }}>{campaignContext.character.currentQuest}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <h2>Start New Adventure</h2>
 
       {error && <div className="error">{error}</div>}
-
-      <div className="form-group">
-        <label>Risk Level</label>
-        <select value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)}>
-          <option value="low">Low Risk (10% XP, 50% gold, 10% failure)</option>
-          <option value="medium">Medium Risk (25% XP, 100% gold, 25% failure)</option>
-          <option value="high">High Risk (40% XP, 180% gold, 40% failure)</option>
-        </select>
-      </div>
 
       <div className="form-group">
         <label>Duration (Real-World Hours)</label>
@@ -104,7 +215,7 @@ function AdventureManager({ character, onAdventureStarted }) {
         <small style={{ color: '#bbb', marginTop: '0.5rem', display: 'block' }}>
           {duration === 0.033
             ? 'TEST MODE: 2 minutes real time, simulates 8-hour (x1.0) rewards'
-            : `In-game time: ${duration * 4} hours (${Math.floor(duration * 4 / 24)} days, ${(duration * 4) % 24} hours)`
+            : `In-game time: ${Math.round(duration * (TIME_RATIOS[currentRatio]?.ratio || 6))} hours (${Math.floor(duration * (TIME_RATIOS[currentRatio]?.ratio || 6) / 24)} days)`
           }
         </small>
       </div>
@@ -147,7 +258,7 @@ function AdventureManager({ character, onAdventureStarted }) {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
                 <h4>{option.title}</h4>
-                <span className={`risk-badge risk-${riskLevel}`}>{riskLevel}</span>
+                <span className={`risk-badge risk-${option.risk_level || 'medium'}`}>{option.risk_level || 'medium'}</span>
               </div>
               <p style={{ color: '#bbb', marginBottom: '0.5rem' }}>{option.description}</p>
               <div style={{ fontSize: '0.85rem', color: '#888' }}>
@@ -170,10 +281,13 @@ function AdventureManager({ character, onAdventureStarted }) {
       <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(52, 152, 219, 0.1)', borderRadius: '6px' }}>
         <h4 style={{ marginBottom: '0.5rem', color: '#3498db' }}>Time Scale Info</h4>
         <p style={{ fontSize: '0.9rem', color: '#bbb', marginBottom: '0.5rem' }}>
-          1 real-world hour = 4 in-game hours
+          {TIME_RATIOS[currentRatio]?.description || '1 real-world hour = 6 in-game hours'}
+        </p>
+        <p style={{ fontSize: '0.9rem', color: '#bbb', marginBottom: '0.5rem' }}>
+          In-game duration: ~{Math.round(duration * (TIME_RATIOS[currentRatio]?.ratio || 6))} hours ({Math.floor(duration * (TIME_RATIOS[currentRatio]?.ratio || 6) / 24)} days)
         </p>
         <p style={{ fontSize: '0.9rem', color: '#bbb' }}>
-          Current multiplier: x{getTimeMultiplier()} rewards
+          Reward multiplier: x{getTimeMultiplier()}
         </p>
       </div>
     </div>

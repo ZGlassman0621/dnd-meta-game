@@ -2522,6 +2522,9 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             <CompanionManager
               characterId={character.id}
               characterLevel={character.level}
+              campaignConfig={typeof character.campaign_config === 'string'
+                ? JSON.parse(character.campaign_config || '{}')
+                : (character.campaign_config || {})}
               onCompanionChange={() => {
                 // Refresh character data if needed
               }}

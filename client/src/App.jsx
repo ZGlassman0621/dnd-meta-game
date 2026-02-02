@@ -9,6 +9,7 @@ import DMSession from './components/DMSession'
 import NPCGenerator from './components/NPCGenerator'
 import Downtime from './components/Downtime'
 import LevelUpPage from './components/LevelUpPage'
+import MetaGameDashboard from './components/MetaGameDashboard'
 
 function App() {
   const [characters, setCharacters] = useState([])
@@ -22,6 +23,7 @@ function App() {
   const [showCharacterSheet, setShowCharacterSheet] = useState(false)
   const [showDowntime, setShowDowntime] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
+  const [showMetaGame, setShowMetaGame] = useState(false)
   const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
   const [llmStatus, setLlmStatus] = useState(null)
 
@@ -173,9 +175,9 @@ function App() {
             display: 'flex',
             gap: '0.5rem'
           }}>
-            {(showNPCGenerator || showDMSession || showSettings || showCharacterSheet || showDowntime) && (
+            {(showNPCGenerator || showDMSession || showSettings || showCharacterSheet || showDowntime || showMetaGame) && (
               <button
-                onClick={() => { setShowNPCGenerator(false); setShowDMSession(false); setShowSettings(false); setShowCharacterSheet(false); setShowDowntime(false); }}
+                onClick={() => { setShowNPCGenerator(false); setShowDMSession(false); setShowSettings(false); setShowCharacterSheet(false); setShowDowntime(false); setShowMetaGame(false); }}
                 style={{
                   background: 'rgba(255, 255, 255, 0.1)',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -190,7 +192,7 @@ function App() {
               </button>
             )}
             <button
-              onClick={() => { setShowNPCGenerator(!showNPCGenerator); setShowDMSession(false); setShowSettings(false); setShowCharacterSheet(false); setShowDowntime(false); }}
+              onClick={() => { setShowNPCGenerator(!showNPCGenerator); setShowDMSession(false); setShowSettings(false); setShowCharacterSheet(false); setShowDowntime(false); setShowMetaGame(false); }}
               style={{
                 background: showNPCGenerator ? 'rgba(230, 126, 34, 0.3)' : 'rgba(255, 255, 255, 0.1)',
                 border: showNPCGenerator ? '1px solid #e67e22' : '1px solid rgba(255, 255, 255, 0.2)',
@@ -206,7 +208,7 @@ function App() {
             {selectedCharacter && (
               <>
                 <button
-                  onClick={() => { setShowCharacterSheet(!showCharacterSheet); setShowDMSession(false); setShowSettings(false); setShowNPCGenerator(false); setShowDowntime(false); }}
+                  onClick={() => { setShowCharacterSheet(!showCharacterSheet); setShowDMSession(false); setShowSettings(false); setShowNPCGenerator(false); setShowDowntime(false); setShowMetaGame(false); }}
                   style={{
                     background: showCharacterSheet ? 'rgba(52, 152, 219, 0.3)' : 'rgba(255, 255, 255, 0.1)',
                     border: showCharacterSheet ? '1px solid #3498db' : '1px solid rgba(255, 255, 255, 0.2)',
@@ -220,7 +222,7 @@ function App() {
                   {showCharacterSheet ? '← Back' : '📜 Character'}
                 </button>
                 <button
-                  onClick={() => { setShowDowntime(!showDowntime); setShowDMSession(false); setShowSettings(false); setShowNPCGenerator(false); setShowCharacterSheet(false); }}
+                  onClick={() => { setShowDowntime(!showDowntime); setShowDMSession(false); setShowSettings(false); setShowNPCGenerator(false); setShowCharacterSheet(false); setShowMetaGame(false); }}
                   style={{
                     background: showDowntime ? 'rgba(155, 89, 182, 0.3)' : 'rgba(255, 255, 255, 0.1)',
                     border: showDowntime ? '1px solid #9b59b6' : '1px solid rgba(255, 255, 255, 0.2)',
@@ -234,7 +236,7 @@ function App() {
                   {showDowntime ? '← Back' : '🛏️ Downtime'}
                 </button>
                 <button
-                  onClick={() => { setShowDMSession(!showDMSession); setShowSettings(false); setShowNPCGenerator(false); setShowCharacterSheet(false); setShowDowntime(false); }}
+                  onClick={() => { setShowDMSession(!showDMSession); setShowSettings(false); setShowNPCGenerator(false); setShowCharacterSheet(false); setShowDowntime(false); setShowMetaGame(false); }}
                   style={{
                     background: showDMSession ? 'rgba(243, 156, 18, 0.3)' : 'rgba(255, 255, 255, 0.1)',
                     border: showDMSession ? '1px solid #f39c12' : '1px solid rgba(255, 255, 255, 0.2)',
@@ -248,7 +250,7 @@ function App() {
                   {showDMSession ? '← Back' : '🎲 AI DM'}
                 </button>
                 <button
-                  onClick={() => { setShowSettings(!showSettings); setShowDMSession(false); setShowNPCGenerator(false); setShowCharacterSheet(false); setShowDowntime(false); }}
+                  onClick={() => { setShowSettings(!showSettings); setShowDMSession(false); setShowNPCGenerator(false); setShowCharacterSheet(false); setShowDowntime(false); setShowMetaGame(false); }}
                   style={{
                     background: showSettings ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
                     border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -260,6 +262,20 @@ function App() {
                   }}
                 >
                   {showSettings ? '← Back' : '⚙️ Settings'}
+                </button>
+                <button
+                  onClick={() => { setShowMetaGame(!showMetaGame); setShowDMSession(false); setShowSettings(false); setShowNPCGenerator(false); setShowCharacterSheet(false); setShowDowntime(false); }}
+                  style={{
+                    background: showMetaGame ? 'rgba(46, 204, 113, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                    border: showMetaGame ? '1px solid #2ecc71' : '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#fff',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {showMetaGame ? '← Back' : '📊 Campaign'}
                 </button>
               </>
             )}
@@ -298,6 +314,11 @@ function App() {
         <Downtime
           character={selectedCharacter}
           onCharacterUpdated={handleCharacterUpdated}
+        />
+      ) : showMetaGame && selectedCharacter ? (
+        <MetaGameDashboard
+          character={selectedCharacter}
+          onCharacterUpdated={() => loadCharacters()}
         />
       ) : showSettings && selectedCharacter ? (
         <CharacterSettings

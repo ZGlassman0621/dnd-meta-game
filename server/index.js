@@ -11,6 +11,7 @@ import dmSessionRoutes from './routes/dmSession.js';
 import npcRoutes from './routes/npc.js';
 import downtimeRoutes from './routes/downtime.js';
 import companionRoutes from './routes/companion.js';
+import metaGameRoutes from './routes/metaGame.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,6 +43,7 @@ app.use('/api/dm-session', dmSessionRoutes);
 app.use('/api/npc', npcRoutes);
 app.use('/api/downtime', downtimeRoutes);
 app.use('/api/companion', companionRoutes);
+app.use('/api/meta-game', metaGameRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
