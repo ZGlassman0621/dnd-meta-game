@@ -19,11 +19,19 @@ function AdventureManager({ character, onAdventureStarted }) {
   const [loadingContext, setLoadingContext] = useState(true)
   const [timeAdvanceHours, setTimeAdvanceHours] = useState(1)
   const [advancingTime, setAdvancingTime] = useState(false)
+  const [selectedCompanions, setSelectedCompanions] = useState([])
 
   // Load campaign context on mount
   useEffect(() => {
     loadCampaignContext()
   }, [character.id])
+
+  // Initialize selected companions when context loads (all selected by default)
+  useEffect(() => {
+    if (campaignContext?.companions) {
+      setSelectedCompanions(campaignContext.companions.map(c => c.id))
+    }
+  }, [campaignContext?.companions])
 
   const loadCampaignContext = async () => {
     setLoadingContext(true)
@@ -107,7 +115,8 @@ function AdventureManager({ character, onAdventureStarted }) {
           character_id: character.id,
           adventure: selectedOption,
           duration_hours: duration,
-          risk_level: selectedOption.risk_level || 'medium'
+          risk_level: selectedOption.risk_level || 'medium',
+          participating_companions: selectedCompanions
         })
       })
 
@@ -325,6 +334,65 @@ function AdventureManager({ character, onAdventureStarted }) {
               </div>
             </div>
           ))}
+
+          {/* Companion Selection */}
+          {campaignContext?.companions?.length > 0 && (
+            <div style={{
+              marginTop: '1.5rem',
+              padding: '1rem',
+              background: 'rgba(155, 89, 182, 0.1)',
+              border: '1px solid rgba(155, 89, 182, 0.3)',
+              borderRadius: '6px'
+            }}>
+              <h4 style={{ marginBottom: '0.75rem', color: '#9b59b6' }}>Party Members</h4>
+              <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.75rem' }}>
+                Select companions to bring on this adventure. Participating companions receive full XP; others receive 50%.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {campaignContext.companions.map(companion => (
+                  <label
+                    key={companion.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      cursor: 'pointer',
+                      padding: '0.5rem',
+                      background: selectedCompanions.includes(companion.id)
+                        ? 'rgba(155, 89, 182, 0.2)'
+                        : 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: '4px',
+                      transition: 'background 0.2s'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCompanions.includes(companion.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedCompanions([...selectedCompanions, companion.id])
+                        } else {
+                          setSelectedCompanions(selectedCompanions.filter(id => id !== companion.id))
+                        }
+                      }}
+                      style={{ accentColor: '#9b59b6' }}
+                    />
+                    <span style={{ color: '#fff' }}>
+                      {companion.name?.split(' ')[0] || companion.nickname}
+                    </span>
+                    {companion.class && companion.level && (
+                      <span style={{ color: '#888', fontSize: '0.85rem' }}>
+                        (Lvl {companion.level} {companion.class})
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
+                {selectedCompanions.length} of {campaignContext.companions.length} companions participating
+              </div>
+            </div>
+          )}
 
           <button
             className="button"

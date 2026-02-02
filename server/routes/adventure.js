@@ -52,7 +52,7 @@ router.post('/options', async (req, res) => {
 // Start an adventure
 router.post('/start', async (req, res) => {
   try {
-    const { character_id, adventure, duration_hours, risk_level } = req.body;
+    const { character_id, adventure, duration_hours, risk_level, participating_companions } = req.body;
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [character_id]);
     if (!character) {
@@ -85,11 +85,15 @@ router.post('/start', async (req, res) => {
     const startTime = new Date();
     const endTime = new Date(startTime.getTime() + duration_hours * 60 * 60 * 1000);
 
+    // Store participating companions (array of companion IDs)
+    const companionsJson = JSON.stringify(participating_companions || []);
+
     const result = await dbRun(`
       INSERT INTO adventures (
         character_id, title, description, location, risk_level,
-        duration_hours, start_time, end_time, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration_hours, start_time, end_time, status, participating_companions,
+        estimated_game_hours
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       character_id,
       adventure.title,
@@ -99,7 +103,9 @@ router.post('/start', async (req, res) => {
       duration_hours,
       startTime.toISOString(),
       endTime.toISOString(),
-      'active'
+      'active',
+      companionsJson,
+      adventure.estimated_game_hours || 8
     ]);
 
     const newAdventure = await dbGet('SELECT * FROM adventures WHERE id = ?', [result.lastInsertRowid]);
@@ -292,6 +298,52 @@ router.post('/claim/:adventure_id', async (req, res) => {
       adventure.character_id
     ]);
 
+    // Distribute XP to companions
+    const xpGained = rewards?.xp || 0;
+    const companionXpResults = [];
+
+    if (xpGained > 0) {
+      // Get all active companions for this character
+      const allCompanions = await dbAll(`
+        SELECT c.*, n.name as npc_name
+        FROM companions c
+        JOIN npcs n ON c.npc_id = n.id
+        WHERE c.recruited_by_character_id = ? AND c.status = 'active'
+      `, [adventure.character_id]);
+
+      // Get participating companion IDs from the adventure
+      let participatingIds = [];
+      try {
+        participatingIds = JSON.parse(adventure.participating_companions || '[]');
+      } catch (e) {
+        participatingIds = [];
+      }
+
+      // Distribute XP to each companion
+      for (const companion of allCompanions) {
+        const isParticipating = participatingIds.includes(companion.id);
+        // Participating companions get full XP, others get 50%
+        const companionXp = isParticipating ? xpGained : Math.floor(xpGained * 0.5);
+
+        const currentXp = companion.companion_experience || 0;
+        const newXp = currentXp + companionXp;
+
+        await dbRun(`
+          UPDATE companions
+          SET companion_experience = ?
+          WHERE id = ?
+        `, [newXp, companion.id]);
+
+        companionXpResults.push({
+          id: companion.id,
+          name: companion.npc_name,
+          xpGained: companionXp,
+          participated: isParticipating,
+          totalXp: newXp
+        });
+      }
+    }
+
     // Mark adventure as claimed
     await dbRun('UPDATE adventures SET status = ? WHERE id = ?', ['claimed', adventure_id]);
 
@@ -300,7 +352,8 @@ router.post('/claim/:adventure_id', async (req, res) => {
     res.json({
       message: 'Adventure rewards claimed',
       character: updatedCharacter,
-      results
+      results,
+      companionXp: companionXpResults
     });
   } catch (error) {
     console.error('Error claiming adventure:', error);

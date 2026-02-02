@@ -132,6 +132,27 @@ export async function initDatabase() {
     )
   `);
 
+  // Add new columns to adventures table if they don't exist
+  const adventureColumns = await db.execute("PRAGMA table_info(adventures)");
+  const adventureColumnNames = adventureColumns.rows.map(col => col.name);
+
+  const adventureMigrations = [
+    { col: 'participating_companions', sql: "ALTER TABLE adventures ADD COLUMN participating_companions TEXT DEFAULT '[]'" },
+    { col: 'estimated_game_hours', sql: 'ALTER TABLE adventures ADD COLUMN estimated_game_hours INTEGER DEFAULT 8' },
+  ];
+
+  for (const migration of adventureMigrations) {
+    if (!adventureColumnNames.includes(migration.col)) {
+      try {
+        await db.execute(migration.sql);
+      } catch (e) {
+        if (!e.message.includes('duplicate column')) {
+          console.error(`Migration error for ${migration.col}:`, e.message);
+        }
+      }
+    }
+  }
+
   // Adventure options cache
   await db.execute(`
     CREATE TABLE IF NOT EXISTS adventure_options (
