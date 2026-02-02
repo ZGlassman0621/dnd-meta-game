@@ -18,7 +18,9 @@ import {
   getNextEvent,
   setTimeRatio,
   advanceGameTime,
-  dayToHarptosDate
+  dayToHarptosDate,
+  getTimeOfDay,
+  formatGameTime
 } from '../services/metaGame.js';
 
 const router = express.Router();
@@ -359,7 +361,13 @@ router.post('/process/:characterId', async (req, res) => {
     // Calculate game time advancement based on real time elapsed
     // This would typically compare to a "last processed" timestamp
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
-    results.newGameDate = dayToHarptosDate(character.game_day || 1, character.game_year || 1492);
+    const currentHour = character.game_hour ?? 8;
+    results.newGameDate = {
+      ...dayToHarptosDate(character.game_day || 1, character.game_year || 1492),
+      hour: currentHour,
+      timeOfDay: getTimeOfDay(currentHour),
+      formattedTime: formatGameTime(currentHour)
+    };
 
     res.json(results);
   } catch (error) {
@@ -382,18 +390,22 @@ router.post('/advance-time/:characterId', async (req, res) => {
 
     const totalHours = (hours || 0) + (days || 0) * 24;
 
-    const character = await dbGet('SELECT game_day, game_year FROM characters WHERE id = ?', [req.params.characterId]);
+    const character = await dbGet('SELECT game_day, game_year, game_hour FROM characters WHERE id = ?', [req.params.characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    const newTime = advanceGameTime(character.game_day || 1, character.game_year || 1492, totalHours);
+    const currentDay = character.game_day || 1;
+    const currentYear = character.game_year || 1492;
+    const currentHour = character.game_hour ?? 8;
+
+    const newTime = advanceGameTime(currentDay, currentYear, currentHour, totalHours);
 
     await dbRun(`
       UPDATE characters
-      SET game_day = ?, game_year = ?
+      SET game_day = ?, game_year = ?, game_hour = ?
       WHERE id = ?
-    `, [newTime.day, newTime.year, req.params.characterId]);
+    `, [newTime.day, newTime.year, newTime.hour, req.params.characterId]);
 
     const newDate = dayToHarptosDate(newTime.day, newTime.year);
 
@@ -402,7 +414,12 @@ router.post('/advance-time/:characterId', async (req, res) => {
         hours: totalHours,
         days: Math.floor(totalHours / 24)
       },
-      newDate
+      newDate: {
+        ...newDate,
+        hour: newTime.hour,
+        timeOfDay: getTimeOfDay(newTime.hour),
+        formattedTime: formatGameTime(newTime.hour)
+      }
     });
   } catch (error) {
     console.error('Error advancing time:', error);
@@ -416,7 +433,7 @@ router.post('/advance-time/:characterId', async (req, res) => {
  */
 router.get('/calendar/:characterId', async (req, res) => {
   try {
-    const character = await dbGet('SELECT game_day, game_year, campaign_config FROM characters WHERE id = ?', [req.params.characterId]);
+    const character = await dbGet('SELECT game_day, game_year, game_hour, campaign_config FROM characters WHERE id = ?', [req.params.characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
@@ -430,10 +447,14 @@ router.get('/calendar/:characterId', async (req, res) => {
 
     const currentDate = dayToHarptosDate(character.game_day || 1, character.game_year || 1492);
     const timeRatio = TIME_RATIOS[campaignConfig.timeRatio || 'normal'];
+    const currentHour = character.game_hour ?? 8;
 
     res.json({
       currentDay: character.game_day || 1,
       currentYear: character.game_year || 1492,
+      currentHour,
+      timeOfDay: getTimeOfDay(currentHour),
+      formattedTime: formatGameTime(currentHour),
       ...currentDate,
       timeRatio: {
         key: campaignConfig.timeRatio || 'normal',

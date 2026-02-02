@@ -9,6 +9,7 @@ import {
   generateConsequences,
   generateLoot
 } from '../config/rewards.js';
+import { advanceGameTime, TIME_RATIOS } from '../services/metaGame.js';
 
 const router = express.Router();
 
@@ -229,13 +230,52 @@ router.post('/claim/:adventure_id', async (req, res) => {
       }
     }
 
-    // Update character
+    // Calculate in-game time elapsed and advance game clock
+    const campaignConfig = JSON.parse(character.campaign_config || '{}');
+    const timeRatioKey = campaignConfig.timeRatio || 'normal';
+    const timeRatio = TIME_RATIOS[timeRatioKey]?.ratio || 6;
+    const inGameHours = Math.round(adventure.duration_hours * timeRatio);
+
+    const currentDay = character.game_day || 1;
+    const currentYear = character.game_year || 1492;
+    const currentHour = character.game_hour ?? 8;
+
+    const newTime = advanceGameTime(currentDay, currentYear, currentHour, inGameHours);
+
+    // Add adventure narrative to pending_downtime_narratives for AI DM context
+    let pendingNarratives = [];
+    try {
+      pendingNarratives = JSON.parse(character.pending_downtime_narratives || '[]');
+    } catch (e) {
+      pendingNarratives = [];
+    }
+
+    // Add adventure summary to pending narratives
+    pendingNarratives.push({
+      type: 'meta_adventure',
+      title: adventure.title,
+      success: results.success,
+      summary: results.narrative,
+      rewards: rewards ? {
+        xp: rewards.xp,
+        gold: rewards.gold,
+        loot: rewards.loot
+      } : null,
+      consequences: consequences,
+      inGameHours,
+      timestamp: new Date().toISOString()
+    });
+
+    // Update character with rewards, time advancement, and narrative
     // Note: Must use null instead of undefined for database binding
     await dbRun(`
       UPDATE characters
       SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
           current_hp = ?, debuffs = COALESCE(?, debuffs),
-          inventory = COALESCE(?, inventory), updated_at = CURRENT_TIMESTAMP
+          inventory = COALESCE(?, inventory),
+          game_day = ?, game_year = ?, game_hour = ?,
+          pending_downtime_narratives = ?,
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
       updates.experience,
@@ -245,6 +285,10 @@ router.post('/claim/:adventure_id', async (req, res) => {
       updates.current_hp,
       updates.debuffs ?? null,
       updates.inventory ?? null,
+      newTime.day,
+      newTime.year,
+      newTime.hour,
+      JSON.stringify(pendingNarratives),
       adventure.character_id
     ]);
 

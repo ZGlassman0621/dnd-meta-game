@@ -91,6 +91,7 @@ export async function initDatabase() {
     { col: 'spell_slots_used', sql: "ALTER TABLE characters ADD COLUMN spell_slots_used TEXT DEFAULT '{}'" },
     { col: 'game_day', sql: 'ALTER TABLE characters ADD COLUMN game_day INTEGER DEFAULT 1' },
     { col: 'game_year', sql: 'ALTER TABLE characters ADD COLUMN game_year INTEGER DEFAULT 1492' },
+    { col: 'game_hour', sql: 'ALTER TABLE characters ADD COLUMN game_hour INTEGER DEFAULT 8' },
     { col: 'pending_downtime_narratives', sql: "ALTER TABLE characters ADD COLUMN pending_downtime_narratives TEXT DEFAULT '[]'" },
     { col: 'campaign_notes', sql: "ALTER TABLE characters ADD COLUMN campaign_notes TEXT DEFAULT ''" },
     { col: 'equipment', sql: "ALTER TABLE characters ADD COLUMN equipment TEXT DEFAULT '{}'" },

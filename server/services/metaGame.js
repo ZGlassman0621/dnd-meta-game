@@ -111,10 +111,21 @@ export function dayToHarptosDate(dayOfYear, year) {
 
 /**
  * Advance time by a number of in-game hours
+ * @param {number} currentDay - Current day of year (1-365)
+ * @param {number} currentYear - Current year
+ * @param {number} currentHour - Current hour of day (0-23)
+ * @param {number} hoursToAdvance - Number of in-game hours to advance
  */
-export function advanceGameTime(currentDay, currentYear, hoursToAdvance) {
-  const daysToAdvance = Math.floor(hoursToAdvance / 24);
-  const remainingHours = hoursToAdvance % 24;
+export function advanceGameTime(currentDay, currentYear, currentHour, hoursToAdvance) {
+  // Handle legacy calls without currentHour
+  if (typeof currentHour !== 'number') {
+    hoursToAdvance = currentHour;
+    currentHour = 8; // Default to 8am
+  }
+
+  let totalHours = currentHour + hoursToAdvance;
+  const daysToAdvance = Math.floor(totalHours / 24);
+  const newHour = totalHours % 24;
 
   let newDay = currentDay + daysToAdvance;
   const daysInYear = 365; // Harptos calendar
@@ -128,8 +139,32 @@ export function advanceGameTime(currentDay, currentYear, hoursToAdvance) {
   return {
     day: newDay,
     year: newYear,
-    hoursIntoDay: remainingHours
+    hour: newHour,
+    // Legacy compatibility
+    hoursIntoDay: newHour
   };
+}
+
+/**
+ * Get time of day description from hour
+ */
+export function getTimeOfDay(hour) {
+  if (hour >= 5 && hour < 7) return 'dawn';
+  if (hour >= 7 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 14) return 'midday';
+  if (hour >= 14 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 20) return 'evening';
+  if (hour >= 20 && hour < 22) return 'dusk';
+  return 'night';
+}
+
+/**
+ * Format hour as readable time string
+ */
+export function formatGameTime(hour) {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${displayHour}:00 ${period}`;
 }
 
 /**
@@ -222,8 +257,11 @@ export async function aggregateCampaignContext(characterId) {
     ? JSON.parse(character.equipment || '{}')
     : (character.equipment || {});
 
-  // Build current game date
+  // Build current game date and time
   const gameDate = dayToHarptosDate(character.game_day || 1, character.game_year || 1492);
+  const currentHour = character.game_hour ?? 8;
+  const timeOfDay = getTimeOfDay(currentHour);
+  const formattedTime = formatGameTime(currentHour);
 
   // Build the aggregated context
   return {
@@ -268,6 +306,9 @@ export async function aggregateCampaignContext(characterId) {
     calendar: {
       currentDay: character.game_day || 1,
       currentYear: character.game_year || 1492,
+      currentHour,
+      timeOfDay,
+      formattedTime,
       ...gameDate,
       timeRatio: campaignConfig.timeRatio || 'normal'
     },
@@ -581,6 +622,8 @@ export default {
   TIME_RATIOS,
   dayToHarptosDate,
   advanceGameTime,
+  getTimeOfDay,
+  formatGameTime,
   aggregateCampaignContext,
   generateActivitySuggestions,
   calculateElapsedGameTime,
