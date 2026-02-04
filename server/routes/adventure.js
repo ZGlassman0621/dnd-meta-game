@@ -14,6 +14,7 @@ import {
 } from '../config/rewards.js';
 import { advanceGameTime, TIME_RATIOS } from '../services/metaGame.js';
 import { createThreadsFromAdventure } from '../services/storyThreads.js';
+import { onAdventureComplete, onStoryThreadCreated } from '../services/narrativeIntegration.js';
 
 const router = express.Router();
 
@@ -575,9 +576,22 @@ async function processAdventureCompletion(adventure, character) {
   try {
     const storyThreads = await createThreadsFromAdventure(adventure, results, character);
     results.storyThreads = storyThreads;
+
+    // Emit story thread created events for narrative system
+    for (const thread of storyThreads) {
+      await onStoryThreadCreated(thread, character.id);
+    }
   } catch (err) {
     console.error('Error creating story threads:', err);
     // Don't fail the adventure completion if thread creation fails
+  }
+
+  // Emit adventure complete event for narrative system
+  // This triggers quest progress checker and companion trigger checker
+  try {
+    await onAdventureComplete(adventure, results, character);
+  } catch (err) {
+    console.error('Error emitting adventure complete event:', err);
   }
 
   return results;

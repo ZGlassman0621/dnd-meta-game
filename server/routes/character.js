@@ -1,5 +1,7 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
+import * as questService from '../services/questService.js';
+import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import {
   PROFICIENCY_BONUS,
   HIT_DICE,
@@ -28,7 +30,7 @@ router.get('/', async (req, res) => {
     const characters = await dbAll('SELECT * FROM characters ORDER BY updated_at DESC', []);
     res.json(characters);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch characters');
   }
 });
 
@@ -37,11 +39,11 @@ router.get('/:id', async (req, res) => {
   try {
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
+      return notFound(res, 'Character');
     }
     res.json(character);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch character');
   }
 });
 
@@ -133,7 +135,7 @@ router.post('/', async (req, res) => {
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json(character);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'create character');
   }
 });
 
@@ -167,7 +169,7 @@ router.put('/:id', async (req, res) => {
     }
 
     if (updates.length === 0) {
-      return res.status(400).json({ error: 'No valid fields to update' });
+      return validationError(res, 'No valid fields to update');
     }
 
     updates.push('updated_at = CURRENT_TIMESTAMP');
@@ -178,7 +180,7 @@ router.put('/:id', async (req, res) => {
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(character);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'update character');
   }
 });
 
@@ -194,7 +196,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ message: 'Character deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'delete character');
   }
 });
 
@@ -798,6 +800,167 @@ router.post('/level-up/:id', async (req, res) => {
         newSubclass: subclass || null
       }
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get the character's current campaign
+router.get('/:id/campaign', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT id, name, campaign_id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    if (!character.campaign_id) {
+      return res.json({ campaign: null });
+    }
+
+    const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [character.campaign_id]);
+    res.json({ campaign });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign character to a campaign
+router.put('/:id/campaign', async (req, res) => {
+  try {
+    const { campaign_id } = req.body;
+
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    if (campaign_id) {
+      const campaign = await dbGet('SELECT id FROM campaigns WHERE id = ?', [campaign_id]);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+    }
+
+    await dbRun(`
+      UPDATE characters
+      SET campaign_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [campaign_id || null, req.params.id]);
+
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+    res.json(updatedCharacter);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove character from campaign
+router.delete('/:id/campaign', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    await dbRun(`
+      UPDATE characters
+      SET campaign_id = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [req.params.id]);
+
+    res.json({ success: true, message: 'Character removed from campaign' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// CHARACTER QUEST TRACKING
+// ============================================================
+
+// Get all quests for a character
+router.get('/:id/quests', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const { type, status } = req.query;
+    let quests;
+
+    if (type) {
+      quests = await questService.getQuestsByType(req.params.id, type);
+    } else if (status === 'active') {
+      quests = await questService.getActiveQuests(req.params.id);
+    } else {
+      quests = await questService.getCharacterQuests(req.params.id);
+    }
+
+    res.json(quests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get only active quests for a character
+router.get('/:id/quests/active', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const quests = await questService.getActiveQuests(req.params.id);
+    res.json(quests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get the character's main quest
+router.get('/:id/quests/main', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const quest = await questService.getMainQuest(req.params.id);
+    res.json(quest);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get quest summary for a character (counts by type and status)
+router.get('/:id/quests/summary', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const allQuests = await questService.getCharacterQuests(req.params.id);
+
+    const summary = {
+      total: allQuests.length,
+      byStatus: {
+        active: allQuests.filter(q => q.status === 'active').length,
+        completed: allQuests.filter(q => q.status === 'completed').length,
+        failed: allQuests.filter(q => q.status === 'failed').length,
+        abandoned: allQuests.filter(q => q.status === 'abandoned').length
+      },
+      byType: {
+        main: allQuests.filter(q => q.quest_type === 'main').length,
+        side: allQuests.filter(q => q.quest_type === 'side').length,
+        companion: allQuests.filter(q => q.quest_type === 'companion').length,
+        one_time: allQuests.filter(q => q.quest_type === 'one_time').length
+      },
+      hasMainQuest: allQuests.some(q => q.quest_type === 'main' && q.status === 'active')
+    };
+
+    res.json(summary);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

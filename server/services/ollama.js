@@ -688,7 +688,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCampaignNotes(sessionContext.campaignNotes)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCampaignNotes(sessionContext.campaignNotes)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}
 
 CONTENT PREFERENCES:${formatContentPreferences(contentPrefs, isPublishedModule)}
 

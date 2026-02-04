@@ -7,6 +7,9 @@ import {
   hasASI,
   SUBCLASS_LEVELS
 } from '../config/levelProgression.js';
+import { onCompanionRecruited, onCompanionDismissed, onCompanionLoyaltyChanged } from '../services/narrativeIntegration.js';
+import * as companionBackstoryGenerator from '../services/companionBackstoryGenerator.js';
+import * as companionBackstoryService from '../services/companionBackstoryService.js';
 
 const router = express.Router();
 
@@ -165,11 +168,18 @@ router.post('/recruit', async (req, res) => {
     // Fetch the created companion with NPC details
     const companion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation,
-             n.avatar, n.personality_trait_1, n.personality_trait_2
+             n.avatar, n.personality_trait_1, n.personality_trait_2,
+             n.motivation, n.background_notes, n.current_location
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
     `, [result.lastInsertRowid]);
+
+    // Generate backstory for the companion (async, non-blocking)
+    // This will also emit the companion_recruited event
+    onCompanionRecruited(companion, character).catch(err => {
+      console.error('Error generating companion backstory:', err);
+    });
 
     res.status(201).json({
       message: `${npc.name} has joined your party!`,
@@ -510,7 +520,7 @@ router.get('/:id/level-up-info', async (req, res) => {
 router.post('/:id/dismiss', async (req, res) => {
   try {
     const companion = await dbGet(`
-      SELECT c.*, n.name, c.npc_id
+      SELECT c.*, n.name, c.npc_id, c.recruited_by_character_id
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
@@ -520,6 +530,9 @@ router.post('/:id/dismiss', async (req, res) => {
       return res.status(404).json({ error: 'Companion not found' });
     }
 
+    // Get the character for the event
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
+
     // Delete the companion record entirely so they can be re-recruited fresh
     await dbRun('DELETE FROM companions WHERE id = ?', [req.params.id]);
 
@@ -528,6 +541,13 @@ router.post('/:id/dismiss', async (req, res) => {
       UPDATE npcs SET campaign_availability = 'companion'
       WHERE id = ?
     `, [companion.npc_id]);
+
+    // Emit companion dismissed event
+    if (character) {
+      onCompanionDismissed(companion, character).catch(err => {
+        console.error('Error emitting companion dismissed event:', err);
+      });
+    }
 
     res.json({
       message: `${companion.name} has left your party and is available for re-recruitment.`,
@@ -823,6 +843,262 @@ router.get('/available/:characterId', async (req, res) => {
     res.json(availableNpcs);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// COMPANION BACKSTORY ROUTES
+// ============================================================
+
+// GET /api/companion/:id/backstory - Get companion's backstory
+router.get('/:id/backstory', async (req, res) => {
+  try {
+    const backstory = await companionBackstoryService.getBackstoryByCompanionId(req.params.id);
+
+    if (!backstory) {
+      return res.status(404).json({ error: 'Backstory not found for this companion' });
+    }
+
+    res.json(backstory);
+  } catch (error) {
+    console.error('Error fetching backstory:', error);
+    res.status(500).json({ error: 'Failed to fetch backstory' });
+  }
+});
+
+// POST /api/companion/:id/backstory/generate - Generate or regenerate backstory
+router.post('/:id/backstory/generate', async (req, res) => {
+  try {
+    const { regenerate = false } = req.body;
+
+    // Get companion with NPC details
+    const companion = await dbGet(`
+      SELECT c.*, n.name, n.race, n.gender, n.occupation, n.personality_trait_1,
+             n.personality_trait_2, n.motivation, n.background_notes
+      FROM companions c
+      JOIN npcs n ON c.npc_id = n.id
+      WHERE c.id = ?
+    `, [req.params.id]);
+
+    if (!companion) {
+      return res.status(404).json({ error: 'Companion not found' });
+    }
+
+    // Check for existing backstory
+    const existingBackstory = await companionBackstoryService.getBackstoryByCompanionId(req.params.id);
+
+    if (existingBackstory && !regenerate) {
+      return res.json({
+        message: 'Backstory already exists. Set regenerate=true to overwrite.',
+        backstory: existingBackstory
+      });
+    }
+
+    // Get character for context
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
+
+    // Get campaign if available
+    const campaign = character?.campaign_id
+      ? await dbGet('SELECT * FROM campaigns WHERE id = ?', [character.campaign_id])
+      : null;
+
+    // Generate the backstory
+    const generated = await companionBackstoryGenerator.generateBackstory({
+      companion,
+      character,
+      campaign
+    });
+
+    let backstory;
+    if (existingBackstory) {
+      // Update existing
+      backstory = await companionBackstoryService.updateBackstory(existingBackstory.id, generated);
+    } else {
+      // Create new
+      backstory = await companionBackstoryService.createBackstory({
+        companion_id: req.params.id,
+        ...generated
+      });
+    }
+
+    res.status(201).json({
+      message: existingBackstory ? 'Backstory regenerated' : 'Backstory generated',
+      backstory
+    });
+  } catch (error) {
+    console.error('Error generating backstory:', error);
+    res.status(500).json({ error: 'Failed to generate backstory' });
+  }
+});
+
+// POST /api/companion/:id/backstory/threads - Add new threads to backstory
+router.post('/:id/backstory/threads', async (req, res) => {
+  try {
+    const { count = 1, theme } = req.body;
+
+    const backstory = await companionBackstoryService.getBackstoryByCompanionId(req.params.id);
+
+    if (!backstory) {
+      return res.status(404).json({ error: 'Backstory not found. Generate one first.' });
+    }
+
+    // Get companion for context
+    const companion = await dbGet(`
+      SELECT c.*, n.name, n.race, n.gender, n.occupation
+      FROM companions c
+      JOIN npcs n ON c.npc_id = n.id
+      WHERE c.id = ?
+    `, [req.params.id]);
+
+    // Generate additional threads
+    const newThreads = await companionBackstoryGenerator.generateAdditionalThreads({
+      companion,
+      existingBackstory: backstory,
+      count,
+      theme
+    });
+
+    // Merge with existing threads
+    const existingThreads = backstory.unresolved_threads || [];
+    const allThreads = [...existingThreads, ...newThreads];
+
+    // Update backstory
+    const updated = await companionBackstoryService.updateBackstory(backstory.id, {
+      unresolved_threads: allThreads
+    });
+
+    res.json({
+      message: `Added ${newThreads.length} new thread(s)`,
+      newThreads,
+      backstory: updated
+    });
+  } catch (error) {
+    console.error('Error adding threads:', error);
+    res.status(500).json({ error: 'Failed to add threads' });
+  }
+});
+
+// POST /api/companion/:id/backstory/secret - Generate a new secret
+router.post('/:id/backstory/secret', async (req, res) => {
+  try {
+    const { category } = req.body;
+
+    const backstory = await companionBackstoryService.getBackstoryByCompanionId(req.params.id);
+
+    if (!backstory) {
+      return res.status(404).json({ error: 'Backstory not found. Generate one first.' });
+    }
+
+    // Get companion for context
+    const companion = await dbGet(`
+      SELECT c.*, n.name, n.race, n.gender, n.occupation
+      FROM companions c
+      JOIN npcs n ON c.npc_id = n.id
+      WHERE c.id = ?
+    `, [req.params.id]);
+
+    // Generate new secret
+    const newSecret = await companionBackstoryGenerator.generateSecret({
+      companion,
+      existingBackstory: backstory,
+      category
+    });
+
+    if (!newSecret) {
+      return res.status(500).json({ error: 'Failed to generate secret' });
+    }
+
+    // Add to existing secrets
+    const existingSecrets = backstory.secrets || [];
+    const allSecrets = [...existingSecrets, newSecret];
+
+    // Update backstory
+    const updated = await companionBackstoryService.updateBackstory(backstory.id, {
+      secrets: allSecrets
+    });
+
+    res.json({
+      message: 'New secret generated',
+      secret: newSecret,
+      backstory: updated
+    });
+  } catch (error) {
+    console.error('Error generating secret:', error);
+    res.status(500).json({ error: 'Failed to generate secret' });
+  }
+});
+
+// PUT /api/companion/:id/backstory/thread/:threadId - Update a thread's status
+router.put('/:id/backstory/thread/:threadId', async (req, res) => {
+  try {
+    const { status, resolution } = req.body;
+
+    const backstory = await companionBackstoryService.getBackstoryByCompanionId(req.params.id);
+
+    if (!backstory) {
+      return res.status(404).json({ error: 'Backstory not found' });
+    }
+
+    const threads = backstory.unresolved_threads || [];
+    const threadIndex = threads.findIndex(t => t.id === req.params.threadId);
+
+    if (threadIndex === -1) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+
+    // Update thread
+    threads[threadIndex] = {
+      ...threads[threadIndex],
+      status: status || threads[threadIndex].status,
+      resolution: resolution || threads[threadIndex].resolution
+    };
+
+    const updated = await companionBackstoryService.updateBackstory(backstory.id, {
+      unresolved_threads: threads
+    });
+
+    res.json({
+      message: 'Thread updated',
+      thread: threads[threadIndex],
+      backstory: updated
+    });
+  } catch (error) {
+    console.error('Error updating thread:', error);
+    res.status(500).json({ error: 'Failed to update thread' });
+  }
+});
+
+// POST /api/companion/:id/backstory/secret/:secretId/reveal - Reveal a secret
+router.post('/:id/backstory/secret/:secretId/reveal', async (req, res) => {
+  try {
+    const backstory = await companionBackstoryService.getBackstoryByCompanionId(req.params.id);
+
+    if (!backstory) {
+      return res.status(404).json({ error: 'Backstory not found' });
+    }
+
+    const secrets = backstory.secrets || [];
+    const secretIndex = secrets.findIndex(s => s.id === req.params.secretId);
+
+    if (secretIndex === -1) {
+      return res.status(404).json({ error: 'Secret not found' });
+    }
+
+    // Mark as revealed
+    secrets[secretIndex].revealed = true;
+
+    const updated = await companionBackstoryService.updateBackstory(backstory.id, {
+      secrets
+    });
+
+    res.json({
+      message: 'Secret revealed',
+      secret: secrets[secretIndex],
+      backstory: updated
+    });
+  } catch (error) {
+    console.error('Error revealing secret:', error);
+    res.status(500).json({ error: 'Failed to reveal secret' });
   }
 });
 

@@ -10,6 +10,7 @@ import {
 import { dayToDate, advanceTime } from '../config/harptos.js';
 import { XP_THRESHOLDS } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
+import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted, onDMSessionEnded } from '../services/narrativeIntegration.js';
 
 const router = express.Router();
 
@@ -402,6 +403,19 @@ router.post('/start', async (req, res) => {
       console.error('Error fetching story threads:', e);
     }
 
+    // Get narrative queue items (quest progress, companion reactions, etc.)
+    let narrativeQueueContext = null;
+    let narrativeQueueItemIds = [];
+    try {
+      const narrativeContext = await getNarrativeContextForSession(characterId);
+      if (narrativeContext && narrativeContext.formattedContext) {
+        narrativeQueueContext = narrativeContext.formattedContext;
+        narrativeQueueItemIds = narrativeContext.narrativeQueueItems.map(item => item.id);
+      }
+    } catch (e) {
+      console.error('Error fetching narrative queue:', e);
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -418,7 +432,9 @@ router.post('/start', async (req, res) => {
       previousSessionSummaries: previousSessionSummaries || [],
       campaignNotes: character.campaign_notes || '',
       usedNames,
-      storyThreadsContext
+      storyThreadsContext,
+      narrativeQueueContext,
+      narrativeQueueItemIds
     };
 
     // Check which LLM provider is available (prefers Claude)
@@ -546,13 +562,32 @@ router.post('/start', async (req, res) => {
       WHERE id = ?
     `, [JSON.stringify(campaignConfigToSave), characterId]);
 
+    const sessionId = Number(info.lastInsertRowid);
+
+    // Mark narrative queue items as delivered now that they're included in session context
+    if (narrativeQueueItemIds && narrativeQueueItemIds.length > 0) {
+      try {
+        await markNarrativeItemsDelivered(narrativeQueueItemIds, sessionId);
+      } catch (e) {
+        console.error('Error marking narrative items delivered:', e);
+      }
+    }
+
+    // Emit DM session started event
+    try {
+      await onDMSessionStarted({ id: sessionId, title }, character);
+    } catch (e) {
+      console.error('Error emitting session started event:', e);
+    }
+
     res.json({
-      sessionId: Number(info.lastInsertRowid),
+      sessionId,
       title,
       openingNarrative: result.openingNarrative,
       startingLocation,
       era,
-      gameDate
+      gameDate,
+      narrativeItemsIncluded: narrativeQueueItemIds?.length || 0
     });
   } catch (error) {
     console.error('Error starting DM session:', error);

@@ -7,6 +7,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { generateStoryConsequences } from '../config/rewards.js';
+import { emit, GAME_EVENTS } from './eventEmitter.js';
 
 // Thread types that can be created from adventures
 export const THREAD_TYPES = {
@@ -198,13 +199,33 @@ export async function getQuestResolvingThreads(characterId) {
  * Resolve a story thread
  */
 export async function resolveThread(threadId, resolution) {
+  // Get thread before resolving to have character_id for event
+  const thread = await dbGet('SELECT * FROM story_threads WHERE id = ?', [threadId]);
+
   await dbRun(`
     UPDATE story_threads
     SET status = 'resolved', resolution = ?, resolved_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ?
   `, [resolution, threadId]);
 
-  return await dbGet('SELECT * FROM story_threads WHERE id = ?', [threadId]);
+  const resolvedThread = await dbGet('SELECT * FROM story_threads WHERE id = ?', [threadId]);
+
+  // Emit story thread resolved event for narrative system
+  if (thread) {
+    await emit(GAME_EVENTS.STORY_THREAD_RESOLVED, {
+      character_id: thread.character_id,
+      thread_id: threadId,
+      thread: {
+        title: thread.title,
+        description: thread.description,
+        type: thread.thread_type,
+        consequence_category: thread.consequence_category
+      },
+      resolution
+    });
+  }
+
+  return resolvedThread;
 }
 
 /**
