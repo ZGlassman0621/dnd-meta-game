@@ -139,6 +139,8 @@ export async function initDatabase() {
   const adventureMigrations = [
     { col: 'participating_companions', sql: "ALTER TABLE adventures ADD COLUMN participating_companions TEXT DEFAULT '[]'" },
     { col: 'estimated_game_hours', sql: 'ALTER TABLE adventures ADD COLUMN estimated_game_hours INTEGER DEFAULT 8' },
+    { col: 'activity_type', sql: "ALTER TABLE adventures ADD COLUMN activity_type TEXT DEFAULT 'combat'" },
+    { col: 'quest_relevance', sql: "ALTER TABLE adventures ADD COLUMN quest_relevance TEXT DEFAULT 'side_quest'" },
   ];
 
   for (const migration of adventureMigrations) {
@@ -416,6 +418,52 @@ export async function initDatabase() {
       FOREIGN KEY (character_id) REFERENCES characters(id)
     )
   `);
+
+  // Story threads table for persistent campaign consequences
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS story_threads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      character_id INTEGER NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id INTEGER,
+      thread_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      priority TEXT DEFAULT 'normal',
+      quest_relevance TEXT DEFAULT 'side_quest',
+      related_npcs TEXT DEFAULT '[]',
+      related_locations TEXT DEFAULT '[]',
+      potential_outcomes TEXT DEFAULT '[]',
+      resolution TEXT,
+      resolved_at DATETIME,
+      expires_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (character_id) REFERENCES characters(id)
+    )
+  `);
+
+  // Add columns to story_threads if they don't exist
+  const storyThreadColumns = await db.execute("PRAGMA table_info(story_threads)");
+  const storyThreadColumnNames = storyThreadColumns.rows.map(c => c.name);
+
+  const storyThreadMigrations = [
+    { col: 'consequence_category', sql: "ALTER TABLE story_threads ADD COLUMN consequence_category TEXT DEFAULT 'intel'" },
+    { col: 'can_resolve_quest', sql: 'ALTER TABLE story_threads ADD COLUMN can_resolve_quest INTEGER DEFAULT 0' },
+  ];
+
+  for (const migration of storyThreadMigrations) {
+    if (!storyThreadColumnNames.includes(migration.col)) {
+      try {
+        await db.execute(migration.sql);
+      } catch (e) {
+        if (!e.message.includes('duplicate column')) {
+          console.error(`Migration error for ${migration.col}:`, e.message);
+        }
+      }
+    }
+  }
 
   console.log('Database initialized successfully (Turso cloud)');
 }

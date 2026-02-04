@@ -6,12 +6,15 @@ import npcPhysical from '../data/npcPhysical.json'
 import npcStatBlocks from '../data/npcStatBlocks.json'
 import npcNames from '../data/npcNames.json'
 
-function NPCGenerator({ onBack }) {
+function NPCGenerator({ onBack, character }) {
   const [npcs, setNpcs] = useState([])
   const [selectedNpc, setSelectedNpc] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const [extractionResult, setExtractionResult] = useState(null)
+  const [showHidden, setShowHidden] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -70,6 +73,36 @@ function NPCGenerator({ onBack }) {
       console.error('Error loading NPCs:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const extractNpcsFromHistory = async () => {
+    if (!character) {
+      alert('Please select a character first to extract NPCs from their adventure history.')
+      return
+    }
+
+    setExtracting(true)
+    setExtractionResult(null)
+
+    try {
+      const response = await fetch(`/api/dm-session/character/${character.id}/extract-all-npcs`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+
+      if (response.ok) {
+        setExtractionResult(data)
+        // Reload NPCs to show newly extracted ones
+        loadNpcs()
+      } else {
+        setExtractionResult({ error: data.error || 'Failed to extract NPCs' })
+      }
+    } catch (error) {
+      console.error('Error extracting NPCs:', error)
+      setExtractionResult({ error: error.message })
+    } finally {
+      setExtracting(false)
     }
   }
 
@@ -155,6 +188,26 @@ function NPCGenerator({ onBack }) {
       }
     } catch (error) {
       console.error('Error deleting NPC:', error)
+    }
+  }
+
+  const handleToggleArchive = async (npc) => {
+    const newStatus = npc.campaign_availability === 'hidden' ? 'available' : 'hidden'
+    try {
+      const response = await fetch(`/api/npc/${npc.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_availability: newStatus })
+      })
+      if (response.ok) {
+        const updatedNpc = await response.json()
+        setNpcs(npcs.map(n => n.id === npc.id ? updatedNpc : n))
+        if (selectedNpc?.id === npc.id) {
+          setSelectedNpc(updatedNpc)
+        }
+      }
+    } catch (error) {
+      console.error('Error archiving NPC:', error)
     }
   }
 
@@ -424,17 +477,113 @@ function NPCGenerator({ onBack }) {
           ← Back
         </button>
         <h2>NPC Generator</h2>
-        <button
-          className="button"
-          onClick={() => {
-            setSelectedNpc(null)
-            resetForm()
-            setShowForm(true)
-          }}
-        >
-          + Create NPC
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {character && (
+            <button
+              className="button button-secondary"
+              onClick={extractNpcsFromHistory}
+              disabled={extracting}
+              style={{
+                background: 'rgba(230, 126, 34, 0.2)',
+                border: '1px solid #e67e22',
+                color: '#e67e22'
+              }}
+              title="Extract NPCs from past DM sessions"
+            >
+              {extracting ? 'Extracting...' : 'Extract from History'}
+            </button>
+          )}
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            fontSize: '0.85rem',
+            color: '#888',
+            cursor: 'pointer',
+            padding: '0.5rem 0.75rem',
+            background: showHidden ? 'rgba(155, 89, 182, 0.2)' : 'transparent',
+            border: showHidden ? '1px solid #9b59b6' : '1px solid transparent',
+            borderRadius: '4px'
+          }}>
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={(e) => setShowHidden(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Show Archived ({npcs.filter(n => n.campaign_availability === 'hidden').length})
+          </label>
+          <button
+            className="button"
+            onClick={() => {
+              setSelectedNpc(null)
+              resetForm()
+              setShowForm(true)
+            }}
+          >
+            + Create NPC
+          </button>
+        </div>
       </div>
+
+      {/* Extraction Result Banner */}
+      {extractionResult && (
+        <div style={{
+          padding: '1rem',
+          marginBottom: '1rem',
+          borderRadius: '8px',
+          background: extractionResult.error
+            ? 'rgba(231, 76, 60, 0.1)'
+            : 'rgba(46, 204, 113, 0.1)',
+          border: `1px solid ${extractionResult.error ? '#e74c3c' : '#2ecc71'}`
+        }}>
+          {extractionResult.error ? (
+            <p style={{ color: '#e74c3c', margin: 0 }}>Error: {extractionResult.error}</p>
+          ) : (
+            <>
+              <p style={{ color: '#2ecc71', margin: '0 0 0.5rem 0', fontWeight: 'bold' }}>
+                Extraction Complete!
+              </p>
+              <p style={{ color: '#bbb', margin: 0 }}>
+                Processed {extractionResult.sessionsProcessed} sessions, found {extractionResult.totalExtracted} new NPCs.
+              </p>
+              {extractionResult.npcs && extractionResult.npcs.length > 0 && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <p style={{ color: '#888', margin: '0 0 0.25rem 0', fontSize: '0.9rem' }}>New NPCs:</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {extractionResult.npcs.map((npc, idx) => (
+                      <span key={idx} style={{
+                        padding: '0.25rem 0.5rem',
+                        background: 'rgba(230, 126, 34, 0.2)',
+                        borderRadius: '4px',
+                        fontSize: '0.85rem',
+                        color: '#e67e22'
+                      }}>
+                        {npc.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => setExtractionResult(null)}
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '0.25rem 0.5rem',
+                  background: 'transparent',
+                  border: '1px solid #888',
+                  borderRadius: '4px',
+                  color: '#888',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem'
+                }}
+              >
+                Dismiss
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {showForm ? (
         <div className="npc-form-container">
@@ -1086,8 +1235,14 @@ function NPCGenerator({ onBack }) {
             <div className="empty-state">
               <p>No NPCs created yet. Click "Create NPC" to get started!</p>
             </div>
+          ) : npcs.filter(npc => showHidden || npc.campaign_availability !== 'hidden').length === 0 ? (
+            <div className="empty-state">
+              <p>All NPCs are archived. Check "Show Archived" to see them.</p>
+            </div>
           ) : (
-            npcs.map(npc => (
+            npcs
+              .filter(npc => showHidden || npc.campaign_availability !== 'hidden')
+              .map(npc => (
               <div key={npc.id} className="npc-card" onClick={() => setSelectedNpc(selectedNpc?.id === npc.id ? null : npc)}>
                 <div className="npc-card-header">
                   {npc.avatar ? (
@@ -1142,6 +1297,25 @@ function NPCGenerator({ onBack }) {
                       }}
                     >
                       Edit
+                    </button>
+                    <button
+                      className="button button-small"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleArchive(npc)
+                      }}
+                      style={{
+                        background: npc.campaign_availability === 'hidden'
+                          ? 'rgba(46, 204, 113, 0.2)'
+                          : 'rgba(155, 89, 182, 0.2)',
+                        border: npc.campaign_availability === 'hidden'
+                          ? '1px solid #2ecc71'
+                          : '1px solid #9b59b6',
+                        color: npc.campaign_availability === 'hidden' ? '#2ecc71' : '#9b59b6'
+                      }}
+                      title={npc.campaign_availability === 'hidden' ? 'Restore this NPC' : 'Archive this NPC (hides from extraction)'}
+                    >
+                      {npc.campaign_availability === 'hidden' ? 'Restore' : 'Archive'}
                     </button>
                     <button
                       className="button button-small button-danger"

@@ -148,6 +148,34 @@ function ActiveAdventure({ adventure, character, onAdventureClaimed, onAdventure
           <strong>{results.success ? 'Success!' : 'Failed'}</strong>
         </div>
 
+        {/* Odds breakdown */}
+        {results.odds && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '0.75rem',
+            background: 'rgba(52, 152, 219, 0.1)',
+            border: '1px solid rgba(52, 152, 219, 0.3)',
+            borderRadius: '6px'
+          }}>
+            <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>
+              Roll Result: {results.odds.finalChance}% success chance
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+              {results.odds.breakdown?.map((item, idx) => (
+                <div key={idx} style={{ color: '#aaa' }}>
+                  <span>{item.factor}: </span>
+                  <span style={{
+                    color: item.value.startsWith('+') ? '#2ecc71' :
+                           item.value.startsWith('-') ? '#e74c3c' : '#fff'
+                  }}>
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {results.narrative && (
           <div className="narrative">
             {results.narrative}
@@ -210,6 +238,50 @@ function ActiveAdventure({ adventure, character, onAdventureClaimed, onAdventure
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Story Threads Created */}
+        {results.storyThreads && results.storyThreads.length > 0 && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '1rem',
+            background: 'rgba(155, 89, 182, 0.1)',
+            border: '1px solid rgba(155, 89, 182, 0.3)',
+            borderRadius: '6px'
+          }}>
+            <h4 style={{ marginBottom: '0.75rem', color: '#9b59b6' }}>Story Developments</h4>
+            <div style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
+              Your actions have set events in motion that may affect future adventures:
+            </div>
+            {results.storyThreads.map((thread, index) => (
+              <div key={index} style={{
+                padding: '0.5rem',
+                marginTop: '0.5rem',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '4px',
+                borderLeft: `3px solid ${
+                  thread.consequence_category === 'new_enemy' ? '#e74c3c' :
+                  thread.consequence_category === 'new_ally' ? '#2ecc71' :
+                  thread.consequence_category === 'intel' ? '#3498db' :
+                  thread.consequence_category === 'reputation' ? '#f39c12' :
+                  '#9b59b6'
+                }`
+              }}>
+                <div style={{ color: '#fff', fontWeight: 500 }}>{thread.title}</div>
+                <div style={{ color: '#aaa', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  {thread.quest_relevance === 'quest_advancing' && (
+                    <span style={{ color: '#2ecc71', marginRight: '0.5rem' }}>⭐ Quest Advancing</span>
+                  )}
+                  {thread.quest_relevance === 'quest_adjacent' && (
+                    <span style={{ color: '#f39c12', marginRight: '0.5rem' }}>🔗 Quest Adjacent</span>
+                  )}
+                  {thread.can_resolve_quest === 1 && (
+                    <span style={{ color: '#2ecc71' }}>✓ Could resolve quest!</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

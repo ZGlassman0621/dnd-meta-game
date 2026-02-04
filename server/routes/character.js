@@ -495,7 +495,7 @@ router.get('/level-up-info/:id', async (req, res) => {
 
         classOptions.push({
           type: 'existing',
-          class: classInfo.class,
+          class: classInfo.class.charAt(0).toUpperCase() + classInfo.class.slice(1),
           currentLevel: currentClassLevel,
           newLevel: newClassLevel,
           subclass: classInfo.subclass,
@@ -522,42 +522,39 @@ router.get('/level-up-info/:id', async (req, res) => {
       }
     }
 
-    // Option 2: Multiclass into new classes (if prerequisites are met)
+    // Option 2: Multiclass into new classes (all available - prerequisites shown but not enforced)
     const availableMulticlasses = getAvailableMulticlassOptions(abilityScores, classLevels);
 
-    // Also check that character meets prerequisites for their current class(es) to multiclass out
-    const canMulticlass = classLevels.every(c => meetsMulticlassRequirements(abilityScores, c.class));
+    // Always show multiclass options - prerequisites are informational only
+    for (const newClass of availableMulticlasses) {
+      const newFeatures = getClassFeatures(newClass, 1);
+      const hitDie = HIT_DICE[newClass] || 8;
+      const conMod = Math.floor((abilityScores.con - 10) / 2);
 
-    if (canMulticlass) {
-      for (const newClass of availableMulticlasses) {
-        const newFeatures = getClassFeatures(newClass, 1);
-        const hitDie = HIT_DICE[newClass] || 8;
-        const conMod = Math.floor((abilityScores.con - 10) / 2);
-
-        classOptions.push({
-          type: 'multiclass',
-          class: newClass.charAt(0).toUpperCase() + newClass.slice(1),
-          currentLevel: 0,
-          newLevel: 1,
-          subclass: null,
-          newFeatures,
-          requirements: MULTICLASS_REQUIREMENTS[newClass],
-          choices: {
-            needsSubclass: needsSubclassSelection(newClass, 1),
-            needsASI: hasASI(newClass, 1),
-            newCantrips: getCantripsKnown(newClass, 1),
-            newSpellsKnown: getSpellsKnown(newClass, 1) || 0
-          },
-          hpGain: {
-            hitDie,
-            conMod,
-            average: Math.floor(hitDie / 2) + 1 + conMod,
-            minimum: 1 + conMod,
-            maximum: hitDie + conMod
-          },
-          subclassLevel: SUBCLASS_LEVELS[newClass]
-        });
-      }
+      classOptions.push({
+        type: 'multiclass',
+        class: newClass.charAt(0).toUpperCase() + newClass.slice(1),
+        currentLevel: 0,
+        newLevel: 1,
+        subclass: null,
+        newFeatures,
+        requirements: MULTICLASS_REQUIREMENTS[newClass],
+        meetsRequirements: meetsMulticlassRequirements(abilityScores, newClass),
+        choices: {
+          needsSubclass: needsSubclassSelection(newClass, 1),
+          needsASI: hasASI(newClass, 1),
+          newCantrips: getCantripsKnown(newClass, 1),
+          newSpellsKnown: getSpellsKnown(newClass, 1) || 0
+        },
+        hpGain: {
+          hitDie,
+          conMod,
+          average: Math.floor(hitDie / 2) + 1 + conMod,
+          minimum: 1 + conMod,
+          maximum: hitDie + conMod
+        },
+        subclassLevel: SUBCLASS_LEVELS[newClass]
+      });
     }
 
     // Get proficiency bonus change (based on total level)
@@ -573,7 +570,7 @@ router.get('/level-up-info/:id', async (req, res) => {
       newLevel: newTotalLevel,
       classLevels,
       classOptions,
-      canMulticlass,
+      canMulticlass: true, // Always allow multiclass selection - prerequisites shown but not enforced
       multiclassSpellSlots,
       proficiencyBonus: {
         current: currentProficiency,

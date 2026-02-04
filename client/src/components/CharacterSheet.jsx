@@ -5,7 +5,6 @@ import backgroundsData from '../data/backgrounds.json'
 import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
 import spellsData from '../data/spells.json'
-import CompanionManager from './CompanionManager'
 
 function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdated, onEditInWizard, onLevelUp }) {
   const [character, setCharacter] = useState(initialCharacter)
@@ -607,7 +606,6 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     { id: 'spells', label: 'Spells' },
     { id: 'equipment', label: 'Equipment' },
     { id: 'inventory', label: 'Inventory' },
-    { id: 'companions', label: 'Companions' },
     { id: 'background', label: 'Background' }
   ]
 
@@ -2513,22 +2511,6 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                 </div>
               </div>
             </section>
-          </div>
-        )}
-
-        {/* Companions Tab */}
-        {activeTab === 'companions' && (
-          <div className="tab-panel">
-            <CompanionManager
-              characterId={character.id}
-              characterLevel={character.level}
-              campaignConfig={typeof character.campaign_config === 'string'
-                ? JSON.parse(character.campaign_config || '{}')
-                : (character.campaign_config || {})}
-              onCompanionChange={() => {
-                // Refresh character data if needed
-              }}
-            />
           </div>
         )}
 

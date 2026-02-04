@@ -6,10 +6,14 @@ import {
   calculateXPReward,
   calculateGoldReward,
   determineSuccess,
+  determineSuccessWithOdds,
+  previewOdds,
   generateConsequences,
-  generateLoot
+  generateLoot,
+  generateStoryConsequences
 } from '../config/rewards.js';
 import { advanceGameTime, TIME_RATIOS } from '../services/metaGame.js';
+import { createThreadsFromAdventure } from '../services/storyThreads.js';
 
 const router = express.Router();
 
@@ -45,6 +49,53 @@ router.post('/options', async (req, res) => {
     res.json({ options, risk_level, contextual: !!use_context });
   } catch (error) {
     console.error('Error generating adventure options:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview odds for an adventure (before starting)
+router.post('/preview-odds', async (req, res) => {
+  try {
+    const { character_id, risk_level, activity_type, participating_companions } = req.body;
+
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [character_id]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Build party members array starting with the main character
+    const partyMembers = [{
+      name: character.first_name || character.name?.split(' ')[0] || character.name,
+      class: character.class,
+      level: character.level
+    }];
+
+    // Get companion details if participating
+    if (participating_companions && participating_companions.length > 0) {
+      const companions = await dbAll(`
+        SELECT c.*, n.name as npc_name, n.occupation
+        FROM companions c
+        JOIN npcs n ON c.npc_id = n.id
+        WHERE c.id IN (${participating_companions.map(() => '?').join(',')})
+      `, participating_companions);
+
+      for (const companion of companions) {
+        partyMembers.push({
+          name: companion.npc_name?.split(' ')[0] || 'Companion',
+          class: companion.companion_class || companion.occupation || 'adventurer',
+          level: companion.companion_level || 1
+        });
+      }
+    }
+
+    const odds = previewOdds(risk_level, partyMembers, activity_type);
+
+    res.json({
+      odds,
+      partyMembers: partyMembers.map(m => ({ name: m.name, class: m.class }))
+    });
+  } catch (error) {
+    console.error('Error previewing odds:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -92,8 +143,8 @@ router.post('/start', async (req, res) => {
       INSERT INTO adventures (
         character_id, title, description, location, risk_level,
         duration_hours, start_time, end_time, status, participating_companions,
-        estimated_game_hours
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        estimated_game_hours, activity_type, quest_relevance
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       character_id,
       adventure.title,
@@ -105,7 +156,9 @@ router.post('/start', async (req, res) => {
       endTime.toISOString(),
       'active',
       companionsJson,
-      adventure.estimated_game_hours || 8
+      adventure.estimated_game_hours || 8,
+      adventure.activity_type || 'combat',
+      adventure.quest_relevance || 'side_quest'
     ]);
 
     const newAdventure = await dbGet('SELECT * FROM adventures WHERE id = ?', [result.lastInsertRowid]);
@@ -421,7 +474,45 @@ router.delete('/clear-history/:character_id', async (req, res) => {
 // Helper function to process adventure completion
 async function processAdventureCompletion(adventure, character) {
   const timeMultiplier = getTimeMultiplier(adventure.duration_hours);
-  const success = determineSuccess(adventure.risk_level);
+
+  // Build party members array for synergy calculation
+  const partyMembers = [{
+    name: character.first_name || character.name?.split(' ')[0] || character.name,
+    class: character.class,
+    level: character.level
+  }];
+
+  // Get participating companions for synergy calculation
+  let participatingIds = [];
+  try {
+    participatingIds = JSON.parse(adventure.participating_companions || '[]');
+  } catch (e) {
+    participatingIds = [];
+  }
+
+  if (participatingIds.length > 0) {
+    const companions = await dbAll(`
+      SELECT c.*, n.name as npc_name, n.occupation
+      FROM companions c
+      JOIN npcs n ON c.npc_id = n.id
+      WHERE c.id IN (${participatingIds.map(() => '?').join(',')})
+    `, participatingIds);
+
+    for (const companion of companions) {
+      partyMembers.push({
+        name: companion.npc_name?.split(' ')[0] || 'Companion',
+        class: companion.companion_class || companion.occupation || 'adventurer',
+        level: companion.companion_level || 1
+      });
+    }
+  }
+
+  // Get activity type from adventure (if stored) or default to combat
+  const activityType = adventure.activity_type || 'combat';
+
+  // Determine success with party synergy
+  const successResult = determineSuccessWithOdds(adventure.risk_level, partyMembers, activityType);
+  const success = successResult.success;
 
   let rewards = null;
   let consequences = null;
@@ -449,20 +540,22 @@ async function processAdventureCompletion(adventure, character) {
     consequences = generateConsequences(character, adventure.risk_level);
   }
 
-  // Generate narrative
+  // Generate narrative with party members
   const narrative = await generateAdventureNarrative(
     adventure,
     character,
     success,
     rewards,
-    consequences
+    consequences,
+    partyMembers
   );
 
   const results = {
     success,
     rewards,
     consequences,
-    narrative
+    narrative,
+    odds: successResult.odds
   };
 
   // Update adventure with results
@@ -477,6 +570,15 @@ async function processAdventureCompletion(adventure, character) {
     JSON.stringify(consequences),
     adventure.id
   ]);
+
+  // Create story threads from the adventure outcome
+  try {
+    const storyThreads = await createThreadsFromAdventure(adventure, results, character);
+    results.storyThreads = storyThreads;
+  } catch (err) {
+    console.error('Error creating story threads:', err);
+    // Don't fail the adventure completion if thread creation fails
+  }
 
   return results;
 }

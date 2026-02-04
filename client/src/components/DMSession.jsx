@@ -8,6 +8,7 @@ import {
 } from '../data/forgottenRealms';
 import { CAMPAIGN_MODULES, getCampaignModule } from '../data/campaignModules';
 import { SEASON_ICONS } from '../data/harptos';
+import classesData from '../data/classes.json';
 
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'llama3.1:8b';
@@ -57,6 +58,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [hpChange, setHpChange] = useState(0);
   const [inventoryChanges, setInventoryChanges] = useState(null);
   const [inventoryApplied, setInventoryApplied] = useState(false);
+  const [extractedNpcs, setExtractedNpcs] = useState([]);
 
   const [sessionHistory, setSessionHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -77,6 +79,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Quick reference panel state (view character info without leaving game)
   const [showQuickRef, setShowQuickRef] = useState(false);
   const [quickRefTab, setQuickRefTab] = useState('equipment'); // 'equipment', 'spells', 'abilities'
+
+  // Companions quick reference panel state
+  const [showCompanionsRef, setShowCompanionsRef] = useState(false);
+  const [companions, setCompanions] = useState([]);
+  const [selectedCompanionIdx, setSelectedCompanionIdx] = useState(0);
 
   // Parse campaign notes into AI section and My Notes section
   const parseNotesIntoSections = (notes) => {
@@ -118,6 +125,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [pendingRecruitment, setPendingRecruitment] = useState(null);
   const [recruitmentLoading, setRecruitmentLoading] = useState(false);
 
+  // Downtime detection state
+  const [pendingDowntime, setPendingDowntime] = useState(null);
+  const [downtimeLoading, setDowntimeLoading] = useState(false);
+
   const messagesEndRef = useRef(null);
 
   // Check LLM status on mount
@@ -127,7 +138,20 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     checkForActiveSession();
     fetchAvailableNpcs();
     fetchCampaignContext();
+    fetchCompanions();
   }, [character.id]);
+
+  const fetchCompanions = async () => {
+    try {
+      const response = await fetch(`/api/companion/character/${character.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCompanions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching companions:', error);
+    }
+  };
 
   const fetchCampaignContext = async () => {
     try {
@@ -586,6 +610,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         setPendingRecruitment(data.recruitment);
       }
 
+      // Check for downtime detection
+      if (data.downtime) {
+        setPendingDowntime(data.downtime);
+      }
+
     } catch (err) {
       setError(err.message);
       // Remove the action on error
@@ -634,6 +663,80 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
   const dismissRecruitment = () => {
     setPendingRecruitment(null);
+  };
+
+  // Handle downtime activity
+  const startDowntimeActivity = async (activityType, duration, options = {}) => {
+    setDowntimeLoading(true);
+    try {
+      const response = await fetch('/api/downtime/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          character_id: character.id,
+          activity_type: activityType,
+          duration_hours: duration,
+          ...options
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to start downtime');
+      }
+
+      // Show confirmation in chat
+      const activityNames = {
+        training: 'Training',
+        rest: options.restType === 'long' ? 'Long Rest' : (options.restType === 'short' ? 'Short Rest' : 'Rest'),
+        study: 'Study',
+        crafting: 'Crafting',
+        work: 'Work'
+      };
+
+      setMessages(prev => [...prev, {
+        type: 'narrative',
+        content: `*${character.name} begins ${duration} hour${duration !== 1 ? 's' : ''} of ${activityNames[activityType] || activityType}...*`
+      }]);
+
+      // Advance game time if we have a game date
+      if (gameDate && duration) {
+        const hoursToAdvance = duration;
+        const daysToAdvance = Math.floor(hoursToAdvance / 24);
+        if (daysToAdvance > 0) {
+          try {
+            await fetch(`/api/dm-session/${activeSession.id}/adjust-date`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ daysToAdd: daysToAdvance })
+            });
+          } catch (e) {
+            console.error('Failed to advance game time:', e);
+          }
+        }
+      }
+
+      setPendingDowntime(null);
+
+      // Refresh character data to show any benefits
+      if (onCharacterUpdated) {
+        const charResponse = await fetch(`/api/character/${character.id}`);
+        if (charResponse.ok) {
+          const updatedChar = await charResponse.json();
+          onCharacterUpdated(updatedChar);
+        }
+      }
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDowntimeLoading(false);
+    }
+  };
+
+  const dismissDowntime = () => {
+    setPendingDowntime(null);
   };
 
   const [showEndOptions, setShowEndOptions] = useState(false);
@@ -718,6 +821,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setShowEndOptions(false);
       setInventoryChanges(data.analysis?.inventoryChanges || null);
       setInventoryApplied(false);
+      setExtractedNpcs(data.npcsExtracted || []);
 
       // Update game date if returned
       if (data.newGameDate) {
@@ -1331,6 +1435,38 @@ Examples:
             </div>
           )}
 
+          {/* NPCs Discovered Section */}
+          {extractedNpcs && extractedNpcs.length > 0 && (
+            <div style={{
+              marginTop: '1rem',
+              padding: '1rem',
+              background: 'rgba(230, 126, 34, 0.1)',
+              borderRadius: '8px',
+              border: '1px solid rgba(230, 126, 34, 0.3)'
+            }}>
+              <h4 style={{ margin: '0 0 0.75rem 0', color: '#e67e22' }}>
+                👤 NPCs Added to Database
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {extractedNpcs.map((npc, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.9rem'
+                  }}>
+                    <span style={{ color: '#f39c12', fontWeight: 'bold' }}>{npc.name}</span>
+                    {npc.race && <span style={{ color: '#888' }}>({npc.race})</span>}
+                    {npc.occupation && <span style={{ color: '#aaa' }}>- {npc.occupation}</span>}
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.8rem', color: '#888' }}>
+                These NPCs are now available on the NPCs page where you can view and edit their details.
+              </p>
+            </div>
+          )}
+
           {error && <div className="dm-error">{error}</div>}
 
           <button
@@ -1353,7 +1489,7 @@ Examples:
           <h2>{activeSession.title || 'Adventure in Progress'}</h2>
           <div className="session-controls" style={{ display: 'flex', gap: '0.5rem' }}>
             <button
-              onClick={() => setShowQuickRef(!showQuickRef)}
+              onClick={() => { setShowQuickRef(!showQuickRef); setShowCompanionsRef(false); }}
               style={{
                 background: showQuickRef ? 'rgba(59, 130, 246, 0.4)' : 'rgba(59, 130, 246, 0.2)',
                 border: '1px solid rgba(59, 130, 246, 0.4)',
@@ -1367,6 +1503,23 @@ Examples:
             >
               Character
             </button>
+            {companions.length > 0 && (
+              <button
+                onClick={() => { setShowCompanionsRef(!showCompanionsRef); setShowQuickRef(false); }}
+                style={{
+                  background: showCompanionsRef ? 'rgba(155, 89, 182, 0.4)' : 'rgba(155, 89, 182, 0.2)',
+                  border: '1px solid rgba(155, 89, 182, 0.4)',
+                  color: '#9b59b6',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+                title="View companion info"
+              >
+                Party ({companions.length})
+              </button>
+            )}
             <button
               onClick={openCampaignNotes}
               style={{
@@ -1589,25 +1742,52 @@ Examples:
               {quickRefTab === 'spells' && (
                 <div className="quick-ref-spells">
                   {(() => {
-                    const spells = typeof character.spells === 'string'
-                      ? JSON.parse(character.spells || '[]')
-                      : (character.spells || []);
+                    // Parse cantrips and prepared spells from character
+                    const cantrips = typeof character.known_cantrips === 'string'
+                      ? JSON.parse(character.known_cantrips || '[]')
+                      : (character.known_cantrips || []);
 
-                    if (spells.length === 0) {
+                    const preparedSpells = typeof character.prepared_spells === 'string'
+                      ? JSON.parse(character.prepared_spells || '[]')
+                      : (character.prepared_spells || []);
+
+                    if (cantrips.length === 0 && preparedSpells.length === 0) {
+                      // Check if this is a non-spellcasting class
+                      const charClass = character.class?.toLowerCase();
+                      const nonCasters = ['barbarian', 'fighter', 'monk', 'rogue'];
+                      if (nonCasters.includes(charClass)) {
+                        return (
+                          <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
+                            {character.class} does not use spellcasting
+                          </p>
+                        );
+                      }
                       return (
                         <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
-                          No spells known
+                          No spells prepared
                         </p>
                       );
                     }
 
                     // Group spells by level
-                    const spellsByLevel = {};
-                    spells.forEach(spell => {
-                      const level = spell.level !== undefined ? spell.level : 0;
-                      if (!spellsByLevel[level]) spellsByLevel[level] = [];
-                      spellsByLevel[level].push(spell);
+                    const spellsByLevel = { 0: [] };
+
+                    // Add cantrips (level 0)
+                    cantrips.forEach(cantrip => {
+                      const spell = typeof cantrip === 'string' ? { name: cantrip } : cantrip;
+                      spellsByLevel[0].push({ ...spell, level: 0 });
                     });
+
+                    // Add prepared spells
+                    preparedSpells.forEach(spell => {
+                      const spellObj = typeof spell === 'string' ? { name: spell, level: 1 } : spell;
+                      const level = spellObj.level || 1;
+                      if (!spellsByLevel[level]) spellsByLevel[level] = [];
+                      spellsByLevel[level].push(spellObj);
+                    });
+
+                    // Remove empty level 0 if no cantrips
+                    if (spellsByLevel[0].length === 0) delete spellsByLevel[0];
 
                     return Object.entries(spellsByLevel)
                       .sort(([a], [b]) => parseInt(a) - parseInt(b))
@@ -1672,49 +1852,93 @@ Examples:
                     <h4 style={{ color: '#f59e0b', marginBottom: '0.5rem', borderBottom: '1px solid rgba(245, 158, 11, 0.3)', paddingBottom: '0.25rem' }}>
                       Ability Scores
                     </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                      {[
-                        { abbr: 'STR', full: 'strength' },
-                        { abbr: 'DEX', full: 'dexterity' },
-                        { abbr: 'CON', full: 'constitution' },
-                        { abbr: 'INT', full: 'intelligence' },
-                        { abbr: 'WIS', full: 'wisdom' },
-                        { abbr: 'CHA', full: 'charisma' }
-                      ].map(stat => {
-                        const score = character[stat.full] || 10;
-                        const modifier = Math.floor((score - 10) / 2);
-                        return (
-                          <div key={stat.abbr} style={{
-                            padding: '0.5rem',
-                            background: 'rgba(245, 158, 11, 0.1)',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                          }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#fbbf24' }}>{stat.abbr}</div>
-                            <div style={{ fontSize: '1.1rem' }}>{score}</div>
-                            <div style={{ fontSize: '0.8rem', color: modifier >= 0 ? '#10b981' : '#ef4444' }}>
-                              {modifier >= 0 ? '+' : ''}{modifier}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {(() => {
+                      // Parse ability_scores from JSON string
+                      let abilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+                      try {
+                        const parsed = typeof character.ability_scores === 'string'
+                          ? JSON.parse(character.ability_scores || '{}')
+                          : (character.ability_scores || {});
+                        abilityScores = { ...abilityScores, ...parsed };
+                      } catch (e) {
+                        console.error('Error parsing ability_scores:', e);
+                      }
+
+                      return (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                          {[
+                            { abbr: 'STR', key: 'str' },
+                            { abbr: 'DEX', key: 'dex' },
+                            { abbr: 'CON', key: 'con' },
+                            { abbr: 'INT', key: 'int' },
+                            { abbr: 'WIS', key: 'wis' },
+                            { abbr: 'CHA', key: 'cha' }
+                          ].map(stat => {
+                            const score = abilityScores[stat.key] || 10;
+                            const modifier = Math.floor((score - 10) / 2);
+                            return (
+                              <div key={stat.abbr} style={{
+                                padding: '0.5rem',
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                borderRadius: '4px',
+                                textAlign: 'center'
+                              }}>
+                                <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#fbbf24' }}>{stat.abbr}</div>
+                                <div style={{ fontSize: '1.1rem' }}>{score}</div>
+                                <div style={{ fontSize: '0.8rem', color: modifier >= 0 ? '#10b981' : '#ef4444' }}>
+                                  {modifier >= 0 ? '+' : ''}{modifier}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  {/* Class Features */}
+                  {/* Class Features - loaded from classes.json based on character class/level */}
                   <div style={{ marginBottom: '1.5rem' }}>
                     <h4 style={{ color: '#ec4899', marginBottom: '0.5rem', borderBottom: '1px solid rgba(236, 72, 153, 0.3)', paddingBottom: '0.25rem' }}>
                       Class Features
                     </h4>
                     {(() => {
-                      const features = typeof character.features === 'string'
-                        ? JSON.parse(character.features || '[]')
-                        : (character.features || []);
+                      const features = [];
+
+                      // Get base class features
+                      const charClass = character.class?.toLowerCase();
+                      const classInfo = classesData[charClass];
+
+                      if (classInfo?.features) {
+                        classInfo.features.forEach(f => {
+                          if (typeof f === 'string') {
+                            const [name, ...descParts] = f.split(' - ');
+                            features.push({ name: name.trim(), description: descParts.join(' - ').trim() });
+                          } else {
+                            features.push(f);
+                          }
+                        });
+                      }
+
+                      // Get subclass features based on level
+                      if (character.subclass && classInfo?.subclasses) {
+                        const subclass = classInfo.subclasses.find(
+                          sc => sc.name.toLowerCase() === character.subclass?.toLowerCase()
+                        );
+                        if (subclass?.featuresByLevel) {
+                          Object.entries(subclass.featuresByLevel).forEach(([level, levelFeatures]) => {
+                            if (parseInt(level) <= character.level) {
+                              levelFeatures.forEach(f => {
+                                features.push({ ...f, level: parseInt(level), source: subclass.name });
+                              });
+                            }
+                          });
+                        }
+                      }
 
                       if (features.length === 0) {
                         return (
                           <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            No class features recorded
+                            No class features available
                           </p>
                         );
                       }
@@ -1728,12 +1952,15 @@ Examples:
                               borderRadius: '4px',
                               fontSize: '0.9rem'
                             }}>
-                              <div style={{ fontWeight: 'bold' }}>
-                                {typeof feature === 'string' ? feature : feature.name}
+                              <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>{feature.name}</span>
+                                {feature.level && (
+                                  <span style={{ color: '#888', fontSize: '0.75rem' }}>Lvl {feature.level}</span>
+                                )}
                               </div>
                               {feature.description && (
                                 <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                  {feature.description.length > 80 ? feature.description.substring(0, 80) + '...' : feature.description}
+                                  {feature.description.length > 120 ? feature.description.substring(0, 120) + '...' : feature.description}
                                 </div>
                               )}
                             </div>
@@ -1743,36 +1970,88 @@ Examples:
                     })()}
                   </div>
 
-                  {/* Proficiencies */}
-                  <div>
+                  {/* Skill Proficiencies */}
+                  <div style={{ marginBottom: '1.5rem' }}>
                     <h4 style={{ color: '#22c55e', marginBottom: '0.5rem', borderBottom: '1px solid rgba(34, 197, 94, 0.3)', paddingBottom: '0.25rem' }}>
-                      Proficiencies
+                      Skill Proficiencies
                     </h4>
                     {(() => {
-                      const proficiencies = typeof character.proficiencies === 'string'
-                        ? JSON.parse(character.proficiencies || '[]')
-                        : (character.proficiencies || []);
+                      const skills = typeof character.skills === 'string'
+                        ? JSON.parse(character.skills || '[]')
+                        : (character.skills || []);
 
-                      if (proficiencies.length === 0) {
+                      if (skills.length === 0) {
                         return (
                           <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            No proficiencies recorded
+                            No skill proficiencies recorded
                           </p>
                         );
                       }
 
+                      // Format skill names nicely
+                      const formatSkill = (skill) => {
+                        const name = typeof skill === 'string' ? skill : skill.name;
+                        return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                      };
+
                       return (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {proficiencies.map((prof, idx) => (
+                          {skills.map((skill, idx) => (
                             <span key={idx} style={{
                               padding: '0.25rem 0.5rem',
                               background: 'rgba(34, 197, 94, 0.1)',
                               borderRadius: '4px',
                               fontSize: '0.85rem'
                             }}>
-                              {typeof prof === 'string' ? prof : prof.name}
+                              {formatSkill(skill)}
                             </span>
                           ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Armor & Weapon Proficiencies from class */}
+                  <div>
+                    <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
+                      Equipment Proficiencies
+                    </h4>
+                    {(() => {
+                      const charClass = character.class?.toLowerCase();
+                      const classInfo = classesData[charClass];
+
+                      if (!classInfo) {
+                        return (
+                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                            Class info not found
+                          </p>
+                        );
+                      }
+
+                      const armor = classInfo.armorProficiencies || [];
+                      const weapons = classInfo.weaponProficiencies || [];
+                      const tools = classInfo.toolProficiencies ? [classInfo.toolProficiencies] : [];
+
+                      return (
+                        <div style={{ fontSize: '0.85rem' }}>
+                          {armor.length > 0 && (
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <span style={{ color: '#60a5fa' }}>Armor: </span>
+                              <span style={{ color: '#ccc' }}>{armor.map(a => a.charAt(0).toUpperCase() + a.slice(1)).join(', ')}</span>
+                            </div>
+                          )}
+                          {weapons.length > 0 && (
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <span style={{ color: '#60a5fa' }}>Weapons: </span>
+                              <span style={{ color: '#ccc' }}>{weapons.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(', ')}</span>
+                            </div>
+                          )}
+                          {tools.length > 0 && tools[0] && (
+                            <div>
+                              <span style={{ color: '#60a5fa' }}>Tools: </span>
+                              <span style={{ color: '#ccc' }}>{tools.join(', ')}</span>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -1804,6 +2083,286 @@ Examples:
                   <span style={{ color: '#888' }}> {character.class}</span>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Companions Quick Reference Panel (Overlay) */}
+        {showCompanionsRef && companions.length > 0 && (
+          <div className="companions-ref-overlay" style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            width: '400px',
+            maxWidth: '90vw',
+            height: '100vh',
+            background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(30, 30, 45, 0.98) 100%)',
+            borderLeft: '1px solid rgba(155, 89, 182, 0.3)',
+            boxShadow: '-5px 0 20px rgba(0, 0, 0, 0.5)',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}>
+            {/* Panel Header */}
+            <div style={{
+              padding: '1rem',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, color: '#9b59b6' }}>
+                Party Companions
+              </h3>
+              <button
+                onClick={() => setShowCompanionsRef(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#888',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  padding: '0.25rem'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Companion Selector Tabs */}
+            <div style={{
+              display: 'flex',
+              overflowX: 'auto',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              padding: '0.5rem',
+              gap: '0.5rem'
+            }}>
+              {companions.map((comp, idx) => (
+                <button
+                  key={comp.id}
+                  onClick={() => setSelectedCompanionIdx(idx)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    background: selectedCompanionIdx === idx ? 'rgba(155, 89, 182, 0.3)' : 'transparent',
+                    border: selectedCompanionIdx === idx ? '1px solid #9b59b6' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '4px',
+                    color: selectedCompanionIdx === idx ? '#9b59b6' : '#888',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {comp.name?.split(' ')[0] || comp.nickname}
+                </button>
+              ))}
+            </div>
+
+            {/* Selected Companion Content */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '1rem'
+            }}>
+              {(() => {
+                const companion = companions[selectedCompanionIdx];
+                if (!companion) return null;
+
+                const isClassBased = companion.progression_type === 'class_based';
+
+                // Parse ability scores
+                let abilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+                try {
+                  const rawScores = companion.companion_ability_scores || companion.npc_ability_scores;
+                  const parsed = typeof rawScores === 'string' ? JSON.parse(rawScores || '{}') : (rawScores || {});
+                  abilityScores = { ...abilityScores, ...parsed };
+                } catch (e) {}
+
+                return (
+                  <>
+                    {/* Companion Header */}
+                    <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      {companion.avatar && (
+                        <img
+                          src={companion.avatar}
+                          alt={companion.name}
+                          style={{
+                            width: '60px',
+                            height: '60px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: '2px solid #9b59b6'
+                          }}
+                        />
+                      )}
+                      <div>
+                        <h4 style={{ margin: 0, color: '#9b59b6' }}>
+                          {companion.nickname && companion.name
+                            ? `${companion.name.split(' ')[0]} "${companion.nickname}"`
+                            : companion.name || companion.nickname}
+                        </h4>
+                        <div style={{ color: '#888', fontSize: '0.85rem' }}>
+                          {companion.race} {companion.gender && `(${companion.gender})`}
+                        </div>
+                        {isClassBased ? (
+                          <div style={{ color: '#3498db', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                            Level {companion.companion_level} {companion.companion_class}
+                            {companion.companion_subclass && ` (${companion.companion_subclass})`}
+                          </div>
+                        ) : (
+                          <div style={{ color: '#e67e22', fontSize: '0.85rem' }}>
+                            {companion.occupation || 'Companion'} {companion.cr && `(CR ${companion.cr})`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* HP Bar */}
+                    {isClassBased && (
+                      <div style={{
+                        marginBottom: '1rem',
+                        padding: '0.75rem',
+                        background: 'rgba(231, 76, 60, 0.1)',
+                        border: '1px solid rgba(231, 76, 60, 0.3)',
+                        borderRadius: '6px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                          <span style={{ color: '#888', fontSize: '0.8rem' }}>Hit Points</span>
+                          <span style={{
+                            fontWeight: 'bold',
+                            color: companion.companion_current_hp < companion.companion_max_hp * 0.5 ? '#e74c3c' : '#2ecc71'
+                          }}>
+                            {companion.companion_current_hp}/{companion.companion_max_hp}
+                          </span>
+                        </div>
+                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px' }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${Math.min(100, (companion.companion_current_hp / companion.companion_max_hp) * 100)}%`,
+                            background: companion.companion_current_hp < companion.companion_max_hp * 0.5
+                              ? 'linear-gradient(90deg, #e74c3c, #c0392b)'
+                              : 'linear-gradient(90deg, #2ecc71, #27ae60)',
+                            borderRadius: '3px',
+                            transition: 'width 0.3s'
+                          }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ability Scores */}
+                    <div style={{ marginBottom: '1rem' }}>
+                      <h5 style={{ color: '#f59e0b', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                        Ability Scores
+                      </h5>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.25rem' }}>
+                        {[
+                          { abbr: 'STR', key: 'str' },
+                          { abbr: 'DEX', key: 'dex' },
+                          { abbr: 'CON', key: 'con' },
+                          { abbr: 'INT', key: 'int' },
+                          { abbr: 'WIS', key: 'wis' },
+                          { abbr: 'CHA', key: 'cha' }
+                        ].map(stat => {
+                          const score = abilityScores[stat.key] || 10;
+                          const modifier = Math.floor((score - 10) / 2);
+                          return (
+                            <div key={stat.abbr} style={{
+                              padding: '0.35rem',
+                              background: 'rgba(245, 158, 11, 0.1)',
+                              borderRadius: '4px',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{ fontWeight: 'bold', fontSize: '0.7rem', color: '#fbbf24' }}>{stat.abbr}</div>
+                              <div style={{ fontSize: '0.9rem' }}>{score}</div>
+                              <div style={{ fontSize: '0.7rem', color: modifier >= 0 ? '#10b981' : '#ef4444' }}>
+                                {modifier >= 0 ? '+' : ''}{modifier}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Personality */}
+                    {(companion.personality_trait_1 || companion.personality_trait_2) && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h5 style={{ color: '#ec4899', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                          Personality
+                        </h5>
+                        <div style={{ fontSize: '0.85rem', color: '#ccc' }}>
+                          {companion.personality_trait_1 && <p style={{ margin: '0 0 0.5rem 0' }}>{companion.personality_trait_1}</p>}
+                          {companion.personality_trait_2 && <p style={{ margin: 0 }}>{companion.personality_trait_2}</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Motivation */}
+                    {companion.motivation && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h5 style={{ color: '#22c55e', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                          Motivation
+                        </h5>
+                        <div style={{ fontSize: '0.85rem', color: '#ccc' }}>
+                          {companion.motivation}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Combat Stats for NPC companions */}
+                    {!isClassBased && (companion.ac || companion.hp) && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h5 style={{ color: '#ef4444', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                          Combat
+                        </h5>
+                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem' }}>
+                          {companion.ac && (
+                            <div>
+                              <span style={{ color: '#888' }}>AC: </span>
+                              <span style={{ fontWeight: 'bold', color: '#60a5fa' }}>{companion.ac}</span>
+                            </div>
+                          )}
+                          {companion.hp && (
+                            <div>
+                              <span style={{ color: '#888' }}>HP: </span>
+                              <span style={{ fontWeight: 'bold', color: '#2ecc71' }}>{companion.hp}</span>
+                            </div>
+                          )}
+                          {companion.speed && (
+                            <div>
+                              <span style={{ color: '#888' }}>Speed: </span>
+                              <span>{companion.speed}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Voice/Mannerism */}
+                    {(companion.voice || companion.mannerism) && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h5 style={{ color: '#a78bfa', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                          Roleplay Notes
+                        </h5>
+                        <div style={{ fontSize: '0.85rem', color: '#ccc' }}>
+                          {companion.voice && <p style={{ margin: '0 0 0.25rem 0' }}><strong>Voice:</strong> {companion.voice}</p>}
+                          {companion.mannerism && <p style={{ margin: 0 }}><strong>Mannerism:</strong> {companion.mannerism}</p>}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Panel Footer */}
+            <div style={{
+              padding: '0.75rem 1rem',
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(0, 0, 0, 0.2)',
+              fontSize: '0.8rem',
+              color: '#888'
+            }}>
+              {companions.length} companion{companions.length !== 1 ? 's' : ''} in party
             </div>
           </div>
         )}
@@ -2150,6 +2709,126 @@ Examples:
           </div>
         )}
 
+        {/* Downtime Activity Confirmation Modal */}
+        {pendingDowntime && (
+          <div className="modal-overlay" onClick={dismissDowntime}>
+            <div className="downtime-modal" onClick={(e) => e.stopPropagation()} style={{
+              background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '450px',
+              width: '90%',
+              border: '1px solid rgba(46, 204, 113, 0.4)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.5rem'
+                }}>
+                  {pendingDowntime.type === 'training' && '⚔️'}
+                  {pendingDowntime.type === 'rest' && '🛏️'}
+                  {pendingDowntime.type === 'study' && '📚'}
+                  {pendingDowntime.type === 'crafting' && '🔨'}
+                  {pendingDowntime.type === 'work' && '💰'}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: '#2ecc71' }}>Downtime Activity Detected</h3>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem', color: '#bbb' }}>
+                    {pendingDowntime.type === 'training' && 'Training / Practice'}
+                    {pendingDowntime.type === 'rest' && (pendingDowntime.restType === 'long' ? 'Long Rest' : pendingDowntime.restType === 'short' ? 'Short Rest' : 'Rest')}
+                    {pendingDowntime.type === 'study' && 'Study / Research'}
+                    {pendingDowntime.type === 'crafting' && 'Crafting'}
+                    {pendingDowntime.type === 'work' && 'Work for Pay'}
+                  </p>
+                </div>
+              </div>
+
+              <p style={{
+                background: 'rgba(0, 0, 0, 0.3)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                margin: '1rem 0',
+                color: '#ccc'
+              }}>
+                Would you like to use the Downtime system for this activity? This will track time, apply benefits, and advance the in-game clock.
+              </p>
+
+              {/* Duration selector */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#888', fontSize: '0.85rem' }}>
+                  Duration (hours):
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="24"
+                  defaultValue={pendingDowntime.duration || (pendingDowntime.type === 'rest' && pendingDowntime.restType === 'long' ? 8 : 4)}
+                  id="downtime-duration-input"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: 'rgba(0,0,0,0.3)',
+                    color: 'white',
+                    fontSize: '1rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                <button
+                  onClick={() => {
+                    const duration = parseInt(document.getElementById('downtime-duration-input').value) || 4;
+                    startDowntimeActivity(pendingDowntime.type, duration, {
+                      restType: pendingDowntime.restType
+                    });
+                  }}
+                  disabled={downtimeLoading}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
+                    color: 'white',
+                    cursor: downtimeLoading ? 'wait' : 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {downtimeLoading ? 'Starting...' : 'Start Downtime'}
+                </button>
+                <button
+                  onClick={dismissDowntime}
+                  disabled={downtimeLoading}
+                  style={{
+                    padding: '0.75rem 1.25rem',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Continue Narrative
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '1rem', textAlign: 'center' }}>
+                "Continue Narrative" lets the DM describe it without mechanics
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="dm-messages">
           {messages.map((msg, idx) => (
             <div key={idx} className={`dm-message ${msg.type}`}>
@@ -2366,7 +3045,198 @@ Examples:
               </button>
             )}
 
-            {/* Campaign Module Selection */}
+            {/* Campaign Summary - shown when continuing an existing campaign */}
+            {continueCampaign && campaignContext?.hasPreviousSessions && (
+              <div className="campaign-summary" style={{
+                background: 'rgba(139, 92, 246, 0.1)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: '8px',
+                padding: '1rem',
+                marginBottom: '1.5rem'
+              }}>
+                <h4 style={{ margin: '0 0 1rem 0', color: '#a78bfa' }}>
+                  📋 Campaign Settings
+                </h4>
+
+                {/* Campaign Type */}
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <span style={{ color: '#888', fontSize: '0.85rem' }}>Campaign Type:</span>
+                  <div style={{ marginTop: '0.25rem' }}>
+                    {getCampaignModule(selectedModule)?.icon} {getCampaignModule(selectedModule)?.name}
+                  </div>
+                </div>
+
+                {/* Custom adventure settings - only for custom campaigns */}
+                {selectedModule === 'custom' && (
+                  <>
+                    {/* Starting Location */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#888', fontSize: '0.85rem' }}>Location:</span>
+                      {startingLocation ? (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          📍 {STARTING_LOCATIONS.find(loc => loc.id === startingLocation)?.name}
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          <select
+                            value={startingLocation}
+                            onChange={(e) => setStartingLocation(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              borderRadius: '4px',
+                              background: 'rgba(0,0,0,0.3)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: 'inherit'
+                            }}
+                          >
+                            <option value="">Choose a location...</option>
+                            <optgroup label="Major Cities">
+                              {STARTING_LOCATIONS.filter(loc => loc.type === 'city').map(loc => (
+                                <option key={loc.id} value={loc.id}>{loc.name} ({loc.region})</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Regions & Wilderness">
+                              {STARTING_LOCATIONS.filter(loc => loc.type === 'region').map(loc => (
+                                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Era/Year */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#888', fontSize: '0.85rem' }}>Era:</span>
+                      {era ? (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          📅 {ERAS.find(e => e.id === era)?.name}
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          <select
+                            value={era}
+                            onChange={(e) => setEra(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              borderRadius: '4px',
+                              background: 'rgba(0,0,0,0.3)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: 'inherit'
+                            }}
+                          >
+                            <option value="">Choose an era...</option>
+                            {ERAS.map(e => (
+                              <option key={e.id} value={e.id}>{e.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Arrival Hook */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#888', fontSize: '0.85rem' }}>What Brought You Here:</span>
+                      {arrivalHook && !(arrivalHook === 'custom' && !customArrivalHook.trim()) ? (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          🎭 {arrivalHook === 'custom' ? customArrivalHook : ARRIVAL_HOOKS.find(h => h.id === arrivalHook)?.name}
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          <select
+                            value={arrivalHook}
+                            onChange={(e) => setArrivalHook(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              borderRadius: '4px',
+                              background: 'rgba(0,0,0,0.3)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: 'inherit'
+                            }}
+                          >
+                            <option value="">Choose your backstory hook...</option>
+                            {ARRIVAL_HOOKS.map(hook => (
+                              <option key={hook.id} value={hook.id}>{hook.name}</option>
+                            ))}
+                          </select>
+                          {arrivalHook === 'custom' && (
+                            <textarea
+                              value={customArrivalHook}
+                              onChange={(e) => setCustomArrivalHook(e.target.value)}
+                              placeholder="What originally brought your character to this region?"
+                              rows={2}
+                              style={{
+                                width: '100%',
+                                marginTop: '0.5rem',
+                                padding: '0.5rem',
+                                borderRadius: '4px',
+                                background: 'rgba(0,0,0,0.3)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                color: 'inherit'
+                              }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Campaign Length */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#888', fontSize: '0.85rem' }}>Campaign Length:</span>
+                      <div style={{ marginTop: '0.25rem' }}>
+                        ⏱️ {CAMPAIGN_LENGTHS.find(l => l.id === campaignLength)?.name || 'Ongoing Saga'}
+                      </div>
+                    </div>
+
+                    {/* Narrative Vision */}
+                    {customConcepts && (
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <span style={{ color: '#888', fontSize: '0.85rem' }}>Narrative Vision:</span>
+                        <div style={{ marginTop: '0.25rem', fontStyle: 'italic', opacity: 0.9 }}>
+                          "{customConcepts}"
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Content Preferences Summary */}
+                {Object.entries(contentPreferences).some(([_, enabled]) => enabled) && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <span style={{ color: '#888', fontSize: '0.85rem' }}>Content Preferences:</span>
+                    <div style={{ marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {CONTENT_PREFERENCES.filter(pref => contentPreferences[pref.id]).map(pref => (
+                        <span key={pref.id} style={{
+                          background: 'rgba(139, 92, 246, 0.2)',
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          fontSize: '0.85rem'
+                        }}>
+                          {pref.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected NPCs */}
+                {selectedNpcIds.length > 0 && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <span style={{ color: '#888', fontSize: '0.85rem' }}>Custom NPCs:</span>
+                    <div style={{ marginTop: '0.25rem' }}>
+                      👥 {availableNpcs.filter(npc => selectedNpcIds.includes(npc.id)).map(npc => npc.name).join(', ')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Campaign Module Selection - hide when continuing existing campaign */}
+            {!(continueCampaign && campaignContext?.hasPreviousSessions) && (
+            <>
             <div className="form-group">
               <label>Campaign Type</label>
               <div className="campaign-module-grid">
@@ -2587,13 +3457,15 @@ Examples:
                 </div>
               </div>
             )}
+            </>
+            )}
 
             {error && <div className="dm-error">{error}</div>}
 
             <button
               className="start-adventure-btn"
               onClick={startSession}
-              disabled={isLoading || (selectedModule === 'custom' && (!startingLocation || !era || !arrivalHook || (arrivalHook === 'custom' && !customArrivalHook.trim())))}
+              disabled={isLoading || (selectedModule === 'custom' && !continueCampaign && (!startingLocation || !era || !arrivalHook || (arrivalHook === 'custom' && !customArrivalHook.trim())))}
             >
               {isLoading ? 'Starting Adventure...' : 'Begin Adventure'}
             </button>

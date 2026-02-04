@@ -9,29 +9,35 @@ import {
 } from '../config/rewards.js';
 import { dayToDate, advanceTime } from '../config/harptos.js';
 import { XP_THRESHOLDS } from '../config/levelProgression.js';
+import { formatThreadsForAI } from '../services/storyThreads.js';
 
 const router = express.Router();
 
 // Helper to determine which LLM provider to use
 async function getLLMProvider() {
-  // If Claude API key is configured, use Claude exclusively
-  // Don't silently fall back to Ollama - surface Claude errors so user knows about issues
+  // Try Claude first if API key is configured
   if (claude.isClaudeAvailable()) {
     const status = await claude.checkClaudeStatus();
     if (status.available) {
       return { provider: 'claude', status };
     }
-    // Claude key is set but not working - return the error, don't fall back
-    return { provider: null, status: { available: false, error: status.error || 'Claude API error' } };
+    // Claude key is set but not working (no internet, etc.) - try Ollama as fallback
+    console.log('Claude unavailable, checking Ollama fallback...');
   }
 
-  // No Claude API key configured - use Ollama as the local fallback
+  // Try Ollama as fallback (or primary if no Claude key)
   const ollamaStatus = await ollama.checkOllamaStatus();
   if (ollamaStatus.available) {
     return { provider: 'ollama', status: ollamaStatus };
   }
 
-  return { provider: null, status: { available: false, error: 'No LLM provider available. Set ANTHROPIC_API_KEY for Claude or install Ollama for local AI.' } };
+  // Neither provider available
+  const claudeConfigured = claude.isClaudeAvailable();
+  const errorMsg = claudeConfigured
+    ? 'Claude API unavailable (no internet?) and Ollama not running. Start Ollama for offline mode.'
+    : 'No LLM provider available. Set ANTHROPIC_API_KEY for Claude or install Ollama for local AI.';
+
+  return { provider: null, status: { available: false, error: errorMsg } };
 }
 
 // Check LLM status (prefers Claude, falls back to Ollama)
@@ -388,6 +394,14 @@ router.post('/start', async (req, res) => {
       usedNames = [];
     }
 
+    // Get active story threads to include in session context
+    let storyThreadsContext = '';
+    try {
+      storyThreadsContext = await formatThreadsForAI(characterId, 5) || '';
+    } catch (e) {
+      console.error('Error fetching story threads:', e);
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -403,7 +417,8 @@ router.post('/start', async (req, res) => {
       continueCampaign: continueCampaign || false,
       previousSessionSummaries: previousSessionSummaries || [],
       campaignNotes: character.campaign_notes || '',
-      usedNames
+      usedNames,
+      storyThreadsContext
     };
 
     // Check which LLM provider is available (prefers Claude)
@@ -520,6 +535,7 @@ router.post('/start', async (req, res) => {
       campaignModule: campaignModule?.id || 'custom',
       startingLocation: startingLocation?.id || '',
       era: era?.id || '',
+      arrivalHook: arrivalHook || null,  // Store the full hook object { id, name, description }
       campaignLength: campaignLength || 'ongoing-saga',
       contentPreferences: contentPreferences || {}
     };
@@ -531,7 +547,7 @@ router.post('/start', async (req, res) => {
     `, [JSON.stringify(campaignConfigToSave), characterId]);
 
     res.json({
-      sessionId: info.lastInsertRowid,
+      sessionId: Number(info.lastInsertRowid),
       title,
       openingNarrative: result.openingNarrative,
       startingLocation,
@@ -577,6 +593,95 @@ function parseNpcJoinMarker(narrative) {
       reason: npcData.reason || null
     }
   };
+}
+
+// Helper: Detect if player is initiating a downtime activity
+function detectDowntime(playerAction) {
+  if (!playerAction) return null;
+
+  const action = playerAction.toLowerCase();
+
+  // Training patterns
+  const trainingPatterns = [
+    /(?:we |i )?(?:train|practice|drill|exercise|spar|workout)\s*(?:for\s+)?(\d+)?\s*(?:hours?|hrs?)?/i,
+    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+(?:to\s+)?)?(?:training|practicing|drilling|exercising|sparring)/i,
+    /(?:hone|improve|work on)\s+(?:my|our)?\s*(?:skills?|abilities?|combat|martial|fighting)/i
+  ];
+
+  // Rest patterns
+  const restPatterns = [
+    /(?:we |i )?(?:take a |take )?(?:short|long)\s+rest/i,
+    /(?:we |i )?(?:rest|sleep|recuperate|recover)\s*(?:for\s+)?(\d+)?\s*(?:hours?|hrs?)?/i,
+    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+)?(?:resting|sleeping|recovering)/i,
+    /(?:get some |catch some )?(?:rest|sleep|shut-eye)/i,
+    /(?:camp|make camp|set up camp)/i
+  ];
+
+  // Study/research patterns
+  const studyPatterns = [
+    /(?:we |i )?(?:study|research|read|learn|investigate)\s*(?:for\s+)?(\d+)?\s*(?:hours?|hrs?)?/i,
+    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+)?(?:studying|researching|reading|learning)/i,
+    /(?:pore over|examine|analyze)\s+(?:books?|tomes?|scrolls?|texts?|documents?)/i
+  ];
+
+  // Crafting patterns
+  const craftingPatterns = [
+    /(?:we |i )?(?:craft|create|make|forge|brew|enchant)\s/i,
+    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+)?(?:crafting|forging|brewing|creating)/i,
+    /(?:work on|tinker with)\s+(?:equipment|gear|items?|potions?)/i
+  ];
+
+  // Work/earn gold patterns
+  const workPatterns = [
+    /(?:we |i )?(?:work|earn|make money|find work|look for work)/i,
+    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?\s*(?:working|earning)/i,
+    /(?:do some |find )?(?:odd jobs|manual labor|honest work)/i
+  ];
+
+  // Extract duration if mentioned
+  const durationMatch = action.match(/(\d+)\s*(?:hours?|hrs?)/i);
+  const duration = durationMatch ? parseInt(durationMatch[1]) : null;
+
+  // Check each activity type
+  for (const pattern of trainingPatterns) {
+    if (pattern.test(action)) {
+      return { type: 'training', duration, trigger: 'player_action' };
+    }
+  }
+
+  for (const pattern of restPatterns) {
+    if (pattern.test(action)) {
+      // Determine short vs long rest
+      const isLongRest = /long\s+rest|sleep|8\s*hours?|overnight|camp/i.test(action);
+      const isShortRest = /short\s+rest/i.test(action);
+      return {
+        type: 'rest',
+        restType: isShortRest ? 'short' : (isLongRest ? 'long' : null),
+        duration: duration || (isLongRest ? 8 : (isShortRest ? 1 : null)),
+        trigger: 'player_action'
+      };
+    }
+  }
+
+  for (const pattern of studyPatterns) {
+    if (pattern.test(action)) {
+      return { type: 'study', duration, trigger: 'player_action' };
+    }
+  }
+
+  for (const pattern of craftingPatterns) {
+    if (pattern.test(action)) {
+      return { type: 'crafting', duration, trigger: 'player_action' };
+    }
+  }
+
+  for (const pattern of workPatterns) {
+    if (pattern.test(action)) {
+      return { type: 'work', duration, trigger: 'player_action' };
+    }
+  }
+
+  return null;
 }
 
 // Helper: Detect if an NPC has agreed to join the party
@@ -737,6 +842,9 @@ router.post('/:sessionId/message', async (req, res) => {
     // Update the session in the database
     await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
 
+    // Check for downtime activity in the player action
+    const downtimeDetected = detectDowntime(action);
+
     // Check for recruitment in the response
     const recruitment = detectRecruitment(result.narrative, action);
 
@@ -829,7 +937,8 @@ router.post('/:sessionId/message', async (req, res) => {
     res.json({
       narrative: result.narrative,
       messageCount: result.messages.length,
-      recruitment: recruitmentData
+      recruitment: recruitmentData,
+      downtime: downtimeDetected
     });
   } catch (error) {
     console.error('Error in DM session message:', error);
@@ -1186,6 +1295,103 @@ ONLY include things that ACTUALLY happened. Be specific with names and details. 
       // Non-fatal - continue without notes extraction
     }
 
+    // Extract and save NPCs introduced in this session to the database
+    let extractedNpcs = [];
+    try {
+      const { provider } = await getLLMProvider();
+      if (provider && playerActionCount > 0) {
+        const npcExtractionPrompt = `List ALL named NPCs (non-player characters) who appeared in this session. For each NPC, provide their details in this EXACT format, one per line:
+
+NPC: Name="Full Name" Race="Race" Gender="Male/Female/Other" Occupation="Their role or job" Location="Where encountered" Relationship="ally/neutral/enemy/unknown" Description="One sentence physical or personality description"
+
+Rules:
+- Only include NPCs with actual names (not "the guard" or "a merchant")
+- Include NPCs who were just mentioned or referenced, not just those who spoke
+- Use "unknown" for any field you're not sure about
+- Do not include the player characters
+- Include ALL named characters, even minor ones
+
+If no named NPCs appeared, respond with: NO_NPCS`;
+
+        let npcResponse;
+        if (provider === 'claude') {
+          const systemMessage = messages.find(m => m.role === 'system');
+          const systemPrompt = systemMessage?.content || '';
+          const npcMessages = [
+            ...messages.filter(m => m.role !== 'system'),
+            { role: 'user', content: npcExtractionPrompt }
+          ];
+          npcResponse = await claude.chat(systemPrompt, npcMessages);
+        } else {
+          const npcMessages = [
+            ...messages,
+            { role: 'user', content: npcExtractionPrompt }
+          ];
+          npcResponse = await ollama.chat(npcMessages, session.model);
+        }
+
+        // Parse the NPC response
+        if (npcResponse && !npcResponse.includes('NO_NPCS')) {
+          const npcLines = npcResponse.split('\n').filter(line => line.startsWith('NPC:'));
+
+          for (const line of npcLines) {
+            // Parse the structured format
+            const parseField = (fieldName) => {
+              const match = line.match(new RegExp(`${fieldName}="([^"]+)"`));
+              return match ? match[1] : null;
+            };
+
+            const name = parseField('Name');
+            if (!name || name.toLowerCase() === 'unknown') continue;
+
+            const race = parseField('Race') || 'Human';
+            const gender = parseField('Gender');
+            const occupation = parseField('Occupation');
+            const location = parseField('Location');
+            const relationship = parseField('Relationship') || 'neutral';
+            const description = parseField('Description');
+
+            // Check if NPC already exists
+            const existing = await dbGet('SELECT id FROM npcs WHERE name = ?', [name]);
+            if (existing) {
+              // Update location if we have new info
+              if (location && location !== 'unknown') {
+                await dbRun(
+                  'UPDATE npcs SET current_location = ? WHERE id = ? AND (current_location IS NULL OR current_location = "")',
+                  [location, existing.id]
+                );
+              }
+              continue; // Skip creating duplicate
+            }
+
+            // Create the NPC
+            const result = await dbRun(`
+              INSERT INTO npcs (
+                name, race, gender, occupation, current_location,
+                relationship_to_party, campaign_availability,
+                distinguishing_marks, background_notes
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              name,
+              race !== 'unknown' ? race : 'Human',
+              gender !== 'unknown' ? gender : null,
+              occupation !== 'unknown' ? occupation : null,
+              location !== 'unknown' ? location : null,
+              relationship !== 'unknown' ? relationship : 'neutral',
+              'available',
+              description !== 'unknown' ? description : null,
+              `First encountered in session: ${session.title}`
+            ]);
+
+            extractedNpcs.push({ id: Number(result.lastInsertRowid), name, race, occupation });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Could not extract NPCs:', e);
+      // Non-fatal - continue without NPC extraction
+    }
+
     // Extract and save NPC names used in this session for future name tracking
     try {
       // Get current campaign config
@@ -1257,7 +1463,8 @@ ONLY include things that ACTUALLY happened. Be specific with names and details. 
       hpChange,
       analysis: rewardsAnalysis,
       daysElapsed,
-      newGameDate: dayToDate(newGameDate.day, newGameDate.year)
+      newGameDate: dayToDate(newGameDate.day, newGameDate.year),
+      npcsExtracted: extractedNpcs.length > 0 ? extractedNpcs : undefined
     });
   } catch (error) {
     console.error('Error ending DM session:', error);
@@ -1678,6 +1885,257 @@ router.delete('/character/:characterId/history', async (req, res) => {
     });
   } catch (error) {
     console.error('Error clearing session history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Extract NPCs from a past session (retroactive extraction)
+router.post('/:sessionId/extract-npcs', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const messages = JSON.parse(session.messages || '[]');
+    if (messages.length < 3) {
+      return res.json({ extracted: [], message: 'Session too short to extract NPCs' });
+    }
+
+    // Check which LLM provider is available
+    const { provider } = await getLLMProvider();
+    if (!provider) {
+      return res.status(503).json({ error: 'No LLM provider available' });
+    }
+
+    const npcExtractionPrompt = `List ALL named NPCs (non-player characters) who appeared in this session. For each NPC, provide their details in this EXACT format, one per line:
+
+NPC: Name="Full Name" Race="Race" Gender="Male/Female/Other" Occupation="Their role or job" Location="Where encountered" Relationship="ally/neutral/enemy/unknown" Description="One sentence physical or personality description"
+
+Rules:
+- Only include NPCs with actual names (not "the guard" or "a merchant")
+- Include NPCs who were just mentioned or referenced, not just those who spoke
+- Use "unknown" for any field you're not sure about
+- Do not include the player characters
+- Include ALL named characters, even minor ones
+
+If no named NPCs appeared, respond with: NO_NPCS`;
+
+    let npcResponse;
+    if (provider === 'claude') {
+      const systemMessage = messages.find(m => m.role === 'system');
+      const systemPrompt = systemMessage?.content || '';
+      const npcMessages = [
+        ...messages.filter(m => m.role !== 'system'),
+        { role: 'user', content: npcExtractionPrompt }
+      ];
+      npcResponse = await claude.chat(systemPrompt, npcMessages);
+    } else {
+      const npcMessages = [
+        ...messages,
+        { role: 'user', content: npcExtractionPrompt }
+      ];
+      npcResponse = await ollama.chat(npcMessages, session.model);
+    }
+
+    const extractedNpcs = [];
+
+    // Parse the NPC response
+    if (npcResponse && !npcResponse.includes('NO_NPCS')) {
+      const npcLines = npcResponse.split('\n').filter(line => line.startsWith('NPC:'));
+
+      for (const line of npcLines) {
+        // Parse the structured format
+        const parseField = (fieldName) => {
+          const match = line.match(new RegExp(`${fieldName}="([^"]+)"`));
+          return match ? match[1] : null;
+        };
+
+        const name = parseField('Name');
+        if (!name || name.toLowerCase() === 'unknown') continue;
+
+        const race = parseField('Race') || 'Human';
+        const gender = parseField('Gender');
+        const occupation = parseField('Occupation');
+        const location = parseField('Location');
+        const relationship = parseField('Relationship') || 'neutral';
+        const description = parseField('Description');
+
+        // Check if NPC already exists
+        const existing = await dbGet('SELECT id FROM npcs WHERE name = ?', [name]);
+        if (existing) {
+          // Update location if we have new info
+          if (location && location !== 'unknown') {
+            await dbRun(
+              'UPDATE npcs SET current_location = ? WHERE id = ? AND (current_location IS NULL OR current_location = "")',
+              [location, existing.id]
+            );
+          }
+          extractedNpcs.push({ id: existing.id, name, race, occupation, existed: true });
+          continue;
+        }
+
+        // Create the NPC
+        const result = await dbRun(`
+          INSERT INTO npcs (
+            name, race, gender, occupation, current_location,
+            relationship_to_party, campaign_availability,
+            distinguishing_marks, background_notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          name,
+          race !== 'unknown' ? race : 'Human',
+          gender !== 'unknown' ? gender : null,
+          occupation !== 'unknown' ? occupation : null,
+          location !== 'unknown' ? location : null,
+          relationship !== 'unknown' ? relationship : 'neutral',
+          'available',
+          description !== 'unknown' ? description : null,
+          `First encountered in session: ${session.title}`
+        ]);
+
+        extractedNpcs.push({ id: Number(result.lastInsertRowid), name, race, occupation, existed: false });
+      }
+    }
+
+    res.json({
+      success: true,
+      extracted: extractedNpcs,
+      newCount: extractedNpcs.filter(n => !n.existed).length,
+      existingCount: extractedNpcs.filter(n => n.existed).length
+    });
+  } catch (error) {
+    console.error('Error extracting NPCs from session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Extract NPCs from ALL past sessions for a character
+router.post('/character/:characterId/extract-all-npcs', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+
+    // Get all completed sessions for this character
+    const sessions = await dbAll(`
+      SELECT id, title FROM dm_sessions
+      WHERE character_id = ? AND status = 'completed'
+      ORDER BY created_at ASC
+    `, [characterId]);
+
+    if (sessions.length === 0) {
+      return res.json({ success: true, message: 'No completed sessions found', totalExtracted: 0 });
+    }
+
+    const allExtracted = [];
+
+    for (const session of sessions) {
+      try {
+        // Make internal call to extract NPCs
+        const fullSession = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [session.id]);
+        const messages = JSON.parse(fullSession.messages || '[]');
+
+        if (messages.length < 3) continue;
+
+        const { provider } = await getLLMProvider();
+        if (!provider) continue;
+
+        const npcExtractionPrompt = `List ALL named NPCs (non-player characters) who appeared in this session. For each NPC, provide their details in this EXACT format, one per line:
+
+NPC: Name="Full Name" Race="Race" Gender="Male/Female/Other" Occupation="Their role or job" Location="Where encountered" Relationship="ally/neutral/enemy/unknown" Description="One sentence physical or personality description"
+
+Rules:
+- Only include NPCs with actual names (not "the guard" or "a merchant")
+- Include NPCs who were just mentioned or referenced, not just those who spoke
+- Use "unknown" for any field you're not sure about
+- Do not include the player characters
+- Include ALL named characters, even minor ones
+
+If no named NPCs appeared, respond with: NO_NPCS`;
+
+        let npcResponse;
+        if (provider === 'claude') {
+          const systemMessage = messages.find(m => m.role === 'system');
+          const systemPrompt = systemMessage?.content || '';
+          const npcMessages = [
+            ...messages.filter(m => m.role !== 'system'),
+            { role: 'user', content: npcExtractionPrompt }
+          ];
+          npcResponse = await claude.chat(systemPrompt, npcMessages);
+        } else {
+          const npcMessages = [
+            ...messages,
+            { role: 'user', content: npcExtractionPrompt }
+          ];
+          npcResponse = await ollama.chat(npcMessages, fullSession.model);
+        }
+
+        if (npcResponse && !npcResponse.includes('NO_NPCS')) {
+          const npcLines = npcResponse.split('\n').filter(line => line.startsWith('NPC:'));
+
+          for (const line of npcLines) {
+            const parseField = (fieldName) => {
+              const match = line.match(new RegExp(`${fieldName}="([^"]+)"`));
+              return match ? match[1] : null;
+            };
+
+            const name = parseField('Name');
+            if (!name || name.toLowerCase() === 'unknown') continue;
+
+            const race = parseField('Race') || 'Human';
+            const gender = parseField('Gender');
+            const occupation = parseField('Occupation');
+            const location = parseField('Location');
+            const relationship = parseField('Relationship') || 'neutral';
+            const description = parseField('Description');
+
+            const existing = await dbGet('SELECT id FROM npcs WHERE name = ?', [name]);
+            if (existing) {
+              if (location && location !== 'unknown') {
+                await dbRun(
+                  'UPDATE npcs SET current_location = ? WHERE id = ? AND (current_location IS NULL OR current_location = "")',
+                  [location, existing.id]
+                );
+              }
+              continue; // Skip duplicates in the results
+            }
+
+            const result = await dbRun(`
+              INSERT INTO npcs (
+                name, race, gender, occupation, current_location,
+                relationship_to_party, campaign_availability,
+                distinguishing_marks, background_notes
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              name,
+              race !== 'unknown' ? race : 'Human',
+              gender !== 'unknown' ? gender : null,
+              occupation !== 'unknown' ? occupation : null,
+              location !== 'unknown' ? location : null,
+              relationship !== 'unknown' ? relationship : 'neutral',
+              'available',
+              description !== 'unknown' ? description : null,
+              `First encountered in session: ${fullSession.title}`
+            ]);
+
+            allExtracted.push({ id: Number(result.lastInsertRowid), name, race, occupation, fromSession: session.title });
+          }
+        }
+      } catch (e) {
+        console.error(`Error extracting NPCs from session ${session.id}:`, e);
+        // Continue with next session
+      }
+    }
+
+    res.json({
+      success: true,
+      sessionsProcessed: sessions.length,
+      totalExtracted: allExtracted.length,
+      npcs: allExtracted
+    });
+  } catch (error) {
+    console.error('Error extracting NPCs from all sessions:', error);
     res.status(500).json({ error: error.message });
   }
 });

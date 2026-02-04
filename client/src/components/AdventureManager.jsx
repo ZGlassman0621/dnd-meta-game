@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 const TIME_RATIOS = {
   realtime: { label: 'Real-Time', ratio: 1, description: '1 real hour = 1 in-game hour' },
   leisurely: { label: 'Leisurely', ratio: 4, description: '1 real hour = 4 in-game hours' },
-  normal: { label: 'Normal', ratio: 6, description: '1 real hour = 6 in-game hours' },
+  normal: { label: 'Normal', ratio: 8, description: '1 real hour = 8 in-game hours' },
   fast: { label: 'Fast', ratio: 12, description: '1 real hour = 12 in-game hours' },
   montage: { label: 'Montage', ratio: 24, description: '1 real hour = 1 in-game day' }
 }
@@ -19,19 +19,47 @@ function AdventureManager({ character, onAdventureStarted }) {
   const [loadingContext, setLoadingContext] = useState(true)
   const [timeAdvanceHours, setTimeAdvanceHours] = useState(1)
   const [advancingTime, setAdvancingTime] = useState(false)
-  const [selectedCompanions, setSelectedCompanions] = useState([])
+  const [oddsPreview, setOddsPreview] = useState(null)
+  const [loadingOdds, setLoadingOdds] = useState(false)
 
   // Load campaign context on mount
   useEffect(() => {
     loadCampaignContext()
   }, [character.id])
 
-  // Initialize selected companions when context loads (all selected by default)
-  useEffect(() => {
-    if (campaignContext?.companions) {
-      setSelectedCompanions(campaignContext.companions.map(c => c.id))
+  // Get assigned companion IDs for the selected adventure
+  const getAssignedCompanionIds = (option) => {
+    if (!campaignContext?.companions?.length || !option) return []
+
+    const recommended = option.recommended_participants
+    if (!recommended || recommended.length === 0 || recommended.includes('all')) {
+      // Default to all companions
+      return campaignContext.companions.map(c => c.id)
     }
-  }, [campaignContext?.companions])
+
+    // Match recommended names to companion IDs (case-insensitive first name match)
+    return campaignContext.companions
+      .filter(companion => {
+        const firstName = (companion.name || companion.nickname || '').split(' ')[0].toLowerCase()
+        return recommended.some(rec => rec.toLowerCase() === firstName)
+      })
+      .map(c => c.id)
+  }
+
+  // Get assigned companions as objects for display
+  const getAssignedCompanions = (option) => {
+    if (!campaignContext?.companions?.length || !option) return []
+
+    const recommended = option.recommended_participants
+    if (!recommended || recommended.length === 0 || recommended.includes('all')) {
+      return campaignContext.companions
+    }
+
+    return campaignContext.companions.filter(companion => {
+      const firstName = (companion.name || companion.nickname || '').split(' ')[0].toLowerCase()
+      return recommended.some(rec => rec.toLowerCase() === firstName)
+    })
+  }
 
   const loadCampaignContext = async () => {
     setLoadingContext(true)
@@ -44,6 +72,43 @@ function AdventureManager({ character, onAdventureStarted }) {
       console.error('Error loading campaign context:', err)
     }
     setLoadingContext(false)
+  }
+
+  // Fetch odds preview when adventure is selected
+  const fetchOddsPreview = async (option) => {
+    if (!option) {
+      setOddsPreview(null)
+      return
+    }
+
+    setLoadingOdds(true)
+    try {
+      const companionIds = getAssignedCompanionIds(option)
+      const response = await fetch('/api/adventure/preview-odds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          character_id: character.id,
+          risk_level: option.risk_level || 'medium',
+          activity_type: option.activity_type || 'combat',
+          participating_companions: companionIds
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setOddsPreview(data.odds)
+      }
+    } catch (err) {
+      console.error('Error fetching odds preview:', err)
+    }
+    setLoadingOdds(false)
+  }
+
+  // Handle option selection with odds fetch
+  const handleSelectOption = (option) => {
+    setSelectedOption(option)
+    fetchOddsPreview(option)
   }
 
   const changeTimeRatio = async (newRatio) => {
@@ -116,7 +181,7 @@ function AdventureManager({ character, onAdventureStarted }) {
           adventure: selectedOption,
           duration_hours: duration,
           risk_level: selectedOption.risk_level || 'medium',
-          participating_companions: selectedCompanions
+          participating_companions: getAssignedCompanionIds(selectedOption)
         })
       })
 
@@ -322,21 +387,37 @@ function AdventureManager({ character, onAdventureStarted }) {
             <div
               key={index}
               className={`adventure-option ${selectedOption === option ? 'selected' : ''}`}
-              onClick={() => setSelectedOption(option)}
+              onClick={() => handleSelectOption(option)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
                 <h4>{option.title}</h4>
                 <span className={`risk-badge risk-${option.risk_level || 'medium'}`}>{option.risk_level || 'medium'}</span>
               </div>
               <p style={{ color: '#bbb', marginBottom: '0.5rem' }}>{option.description}</p>
-              <div style={{ fontSize: '0.85rem', color: '#888' }}>
-                Type: {option.activity_type}
+              <div style={{ fontSize: '0.85rem', color: '#888', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <span>Type: {option.activity_type}</span>
+                {option.quest_relevance && option.quest_relevance !== 'side_quest' && (
+                  <span style={{
+                    color: option.quest_relevance === 'quest_advancing' ? '#2ecc71' : '#f39c12',
+                    fontWeight: 500
+                  }}>
+                    {option.quest_relevance === 'quest_advancing' ? '⭐ Quest Advancing' : '🔗 Quest Adjacent'}
+                  </span>
+                )}
               </div>
+              {campaignContext?.companions?.length > 0 && option.recommended_participants && (
+                <div style={{ fontSize: '0.8rem', color: '#9b59b6', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  Party: {option.recommended_participants.includes('all')
+                    ? 'Everyone'
+                    : option.recommended_participants.join(', ').replace(/, ([^,]*)$/, ' and $1')
+                  }
+                </div>
+              )}
             </div>
           ))}
 
-          {/* Companion Selection */}
-          {campaignContext?.companions?.length > 0 && (
+          {/* Assigned Party Members (read-only) */}
+          {campaignContext?.companions?.length > 0 && selectedOption && (
             <div style={{
               marginTop: '1.5rem',
               padding: '1rem',
@@ -344,53 +425,148 @@ function AdventureManager({ character, onAdventureStarted }) {
               border: '1px solid rgba(155, 89, 182, 0.3)',
               borderRadius: '6px'
             }}>
-              <h4 style={{ marginBottom: '0.75rem', color: '#9b59b6' }}>Party Members</h4>
-              <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.75rem' }}>
-                Select companions to bring on this adventure. Participating companions receive full XP; others receive 50%.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {campaignContext.companions.map(companion => (
-                  <label
+              <h4 style={{ marginBottom: '0.75rem', color: '#9b59b6' }}>Assigned Party</h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {getAssignedCompanions(selectedOption).map(companion => (
+                  <div
                     key={companion.id}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
-                      cursor: 'pointer',
-                      padding: '0.5rem',
-                      background: selectedCompanions.includes(companion.id)
-                        ? 'rgba(155, 89, 182, 0.2)'
-                        : 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '4px',
-                      transition: 'background 0.2s'
+                      gap: '0.4rem',
+                      padding: '0.4rem 0.75rem',
+                      background: 'rgba(155, 89, 182, 0.25)',
+                      border: '1px solid rgba(155, 89, 182, 0.5)',
+                      borderRadius: '4px'
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedCompanions.includes(companion.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedCompanions([...selectedCompanions, companion.id])
-                        } else {
-                          setSelectedCompanions(selectedCompanions.filter(id => id !== companion.id))
-                        }
-                      }}
-                      style={{ accentColor: '#9b59b6' }}
-                    />
-                    <span style={{ color: '#fff' }}>
+                    <span style={{ color: '#fff', fontWeight: 500 }}>
                       {companion.name?.split(' ')[0] || companion.nickname}
                     </span>
-                    {companion.class && companion.level && (
-                      <span style={{ color: '#888', fontSize: '0.85rem' }}>
-                        (Lvl {companion.level} {companion.class})
+                    {companion.class && (
+                      <span style={{ color: '#aaa', fontSize: '0.8rem' }}>
+                        {companion.class}
                       </span>
                     )}
-                  </label>
+                  </div>
                 ))}
+                {getAssignedCompanions(selectedOption).length === 0 && (
+                  <span style={{ color: '#888', fontStyle: 'italic' }}>Solo mission</span>
+                )}
               </div>
-              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
-                {selectedCompanions.length} of {campaignContext.companions.length} companions participating
-              </div>
+              {getAssignedCompanions(selectedOption).length < campaignContext.companions.length && (
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.75rem' }}>
+                  Companions not participating will receive 50% XP.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Odds Preview Display */}
+          {selectedOption && (
+            <div style={{
+              marginTop: '1.5rem',
+              padding: '1rem',
+              background: 'rgba(52, 152, 219, 0.1)',
+              border: '1px solid rgba(52, 152, 219, 0.3)',
+              borderRadius: '6px'
+            }}>
+              <h4 style={{ marginBottom: '0.75rem', color: '#3498db', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>Success Odds</span>
+                {loadingOdds && <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>calculating...</span>}
+              </h4>
+
+              {oddsPreview ? (
+                <>
+                  {/* Main odds display */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '1rem',
+                    marginBottom: '1rem'
+                  }}>
+                    <div style={{
+                      fontSize: '2.5rem',
+                      fontWeight: 'bold',
+                      color: oddsPreview.finalChance >= 70 ? '#2ecc71' :
+                             oddsPreview.finalChance >= 50 ? '#f39c12' : '#e74c3c'
+                    }}>
+                      {oddsPreview.finalChance}%
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#888' }}>
+                      chance of success
+                    </div>
+                  </div>
+
+                  {/* Breakdown */}
+                  <div style={{
+                    background: 'rgba(0, 0, 0, 0.2)',
+                    borderRadius: '4px',
+                    padding: '0.75rem'
+                  }}>
+                    {oddsPreview.breakdown?.map((item, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.4rem 0',
+                        borderBottom: idx < oddsPreview.breakdown.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none'
+                      }}>
+                        <div>
+                          <div style={{ color: '#fff', fontSize: '0.9rem' }}>{item.factor}</div>
+                          <div style={{ color: '#888', fontSize: '0.75rem' }}>{item.description}</div>
+                        </div>
+                        <div style={{
+                          color: item.value.startsWith('+') ? '#2ecc71' :
+                                 item.value.startsWith('-') ? '#e74c3c' : '#fff',
+                          fontWeight: 'bold',
+                          fontSize: '0.95rem'
+                        }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Synergy details expandable */}
+                  {oddsPreview.synergyDetails && (
+                    <details style={{ marginTop: '0.75rem' }}>
+                      <summary style={{ cursor: 'pointer', color: '#888', fontSize: '0.85rem' }}>
+                        View party synergy details
+                      </summary>
+                      <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '4px' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#aaa', marginBottom: '0.5rem' }}>
+                          Activity: {oddsPreview.synergyDetails.activity}
+                        </div>
+                        {oddsPreview.synergyDetails.breakdown?.filter(b => b.bonus || b.penalty).map((item, idx) => (
+                          <div key={idx} style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '0.8rem',
+                            padding: '0.2rem 0',
+                            color: item.bonus ? '#2ecc71' : item.penalty ? '#e74c3c' : '#888'
+                          }}>
+                            <span style={{ textTransform: 'capitalize' }}>
+                              {item.type.replace(/_/g, ' ')}: {item.role.replace(/_/g, ' ')}
+                            </span>
+                            <span>
+                              {item.bonus ? `+${item.bonus}%` : item.penalty ? `-${item.penalty}%` : ''}
+                            </span>
+                          </div>
+                        ))}
+                        <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                          Roles present: {oddsPreview.synergyDetails.rolesPresent?.join(', ') || 'none'}
+                        </div>
+                      </div>
+                    </details>
+                  )}
+                </>
+              ) : (
+                <div style={{ color: '#888', fontSize: '0.9rem', textAlign: 'center' }}>
+                  Select an adventure to see success odds
+                </div>
+              )}
             </div>
           )}
 

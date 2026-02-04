@@ -1,5 +1,23 @@
 import { useState, useEffect } from 'react'
 
+// Conversion rate: 1 real-world hour = 8 in-game hours
+// So 1 in-game hour = 7.5 real-world minutes
+const INGAME_HOUR_TO_REAL_MINUTES = 7.5
+
+const formatRealWorldTime = (inGameHours) => {
+  const realMinutes = inGameHours * INGAME_HOUR_TO_REAL_MINUTES
+  if (realMinutes < 60) {
+    const roundedMins = Math.round(realMinutes)
+    return `${roundedMins} minute${roundedMins !== 1 ? 's' : ''}`
+  }
+  const hours = Math.floor(realMinutes / 60)
+  const mins = Math.round(realMinutes % 60)
+  if (mins === 0) {
+    return `${hours} hour${hours !== 1 ? 's' : ''}`
+  }
+  return `${hours}h ${mins}m`
+}
+
 // Rest types matching server-side REST_TYPES
 const REST_TYPES = {
   short: {
@@ -39,7 +57,7 @@ function Downtime({ character, onCharacterUpdated }) {
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(checkStatus, 10000) // Check every 10 seconds
+    const interval = setInterval(checkStatus, 2000) // Check every 2 seconds
     return () => clearInterval(interval)
   }, [character.id])
 
@@ -439,7 +457,7 @@ function Downtime({ character, onCharacterUpdated }) {
                     <span className="rest-type-icon">{restType.icon}</span>
                     <div className="rest-type-info">
                       <h4>{restType.name}</h4>
-                      <p className="rest-type-duration">{restType.duration} hour{restType.duration !== 1 ? 's' : ''}</p>
+                      <p className="rest-type-duration">{restType.duration} hour{restType.duration !== 1 ? 's' : ''} <span style={{ opacity: 0.7, fontSize: '0.85em' }}>({formatRealWorldTime(restType.duration)} real)</span></p>
                       <p className="rest-type-desc">{restType.description}</p>
                       <p className="rest-type-benefits">{restType.benefits}</p>
                     </div>
@@ -506,6 +524,13 @@ function Downtime({ character, onCharacterUpdated }) {
                 <p>{selectedRestType.description}</p>
                 <p className="rest-benefits-preview">{selectedRestType.benefits}</p>
                 <p className="rest-duration-info">Duration: {selectedRestType.duration} hour{selectedRestType.duration !== 1 ? 's' : ''}</p>
+                <p className="real-world-time-info" style={{
+                  fontSize: '0.85rem',
+                  color: 'rgba(255,255,255,0.7)',
+                  marginTop: '0.25rem'
+                }}>
+                  🕐 Real-world time: <strong>{formatRealWorldTime(selectedRestType.duration)}</strong>
+                </p>
 
                 {/* Rest quality indicator */}
                 {restInfo && (
@@ -573,6 +598,17 @@ function Downtime({ character, onCharacterUpdated }) {
                       {hours}h
                     </button>
                   ))}
+                </div>
+                <div className="real-world-time" style={{
+                  fontSize: '0.85rem',
+                  color: 'rgba(255,255,255,0.7)',
+                  marginTop: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}>
+                  <span>🕐</span>
+                  <span>Real-world time: <strong>{formatRealWorldTime(duration)}</strong></span>
                 </div>
                 <small>
                   {selectedWorkType

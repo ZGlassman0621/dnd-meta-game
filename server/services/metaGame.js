@@ -14,7 +14,7 @@ import { dbAll, dbGet, dbRun } from '../database.js';
 export const TIME_RATIOS = {
   realtime: { label: 'Real-Time', ratio: 1, description: '1 real hour = 1 in-game hour' },
   leisurely: { label: 'Leisurely', ratio: 4, description: '1 real hour = 4 in-game hours' },
-  normal: { label: 'Normal', ratio: 6, description: '1 real hour = 6 in-game hours (default)' },
+  normal: { label: 'Normal', ratio: 8, description: '1 real hour = 8 in-game hours (default)' },
   fast: { label: 'Fast', ratio: 12, description: '1 real hour = 12 in-game hours' },
   montage: { label: 'Montage', ratio: 24, description: '1 real hour = 1 in-game day' }
 };

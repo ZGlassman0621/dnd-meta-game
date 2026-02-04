@@ -257,7 +257,7 @@ function LevelUpModal({ character, onLevelUp, onClose }) {
           Level Up!
         </h2>
         <p style={{ color: '#bbb', marginBottom: '1.5rem' }}>
-          {character.name} ({getClassDisplay()}) is advancing to total level {levelUpInfo.newLevel}!
+          {character.name} ({getClassDisplay()}) is advancing to Level {levelUpInfo.newLevel}!
         </p>
 
         {error && (

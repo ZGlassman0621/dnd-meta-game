@@ -684,16 +684,17 @@ function meetsMulticlassRequirements(abilityScores, targetClass) {
   return true
 }
 
-// Get all classes a character can multiclass into based on their ability scores
+// Get all classes a character can multiclass into (returns all classes except current ones)
+// Prerequisites are shown in UI but not enforced - player can choose any class
 function getAvailableMulticlassOptions(abilityScores, currentClasses = []) {
   const allClasses = Object.keys(MULTICLASS_REQUIREMENTS)
   const currentClassNames = currentClasses.map(c => c.class?.toLowerCase() || c.toLowerCase())
 
+  // Return all classes except the ones the character already has
+  // Requirements are displayed for reference but not enforced
   return allClasses.filter(className => {
     // Can't multiclass into a class you already have
-    if (currentClassNames.includes(className)) return false
-    // Must meet the requirements
-    return meetsMulticlassRequirements(abilityScores, className)
+    return !currentClassNames.includes(className)
   })
 }
 

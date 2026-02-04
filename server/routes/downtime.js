@@ -849,7 +849,11 @@ router.post('/start', async (req, res) => {
     }
 
     const now = new Date();
-    const endTime = new Date(now.getTime() + (actualDuration * 60 * 60 * 1000));
+    // Convert in-game hours to real-world time
+    // 1 real-world hour = 8 in-game hours, so 1 in-game hour = 7.5 real minutes
+    const realMinutesPerInGameHour = 7.5;
+    const realMilliseconds = actualDuration * realMinutesPerInGameHour * 60 * 1000;
+    const endTime = new Date(now.getTime() + realMilliseconds);
 
     const result = await dbRun(`
       INSERT INTO downtime (character_id, activity_type, work_type, rest_type, duration_hours, start_time, end_time, status)
@@ -866,12 +870,23 @@ router.post('/start', async (req, res) => {
       activityName = restTypeData.name;
     }
 
+    // Format real-world duration for message
+    const realMinutes = actualDuration * realMinutesPerInGameHour;
+    let realTimeStr;
+    if (realMinutes < 60) {
+      realTimeStr = `${Math.round(realMinutes)} minute${Math.round(realMinutes) !== 1 ? 's' : ''}`;
+    } else {
+      const hours = Math.floor(realMinutes / 60);
+      const mins = Math.round(realMinutes % 60);
+      realTimeStr = mins === 0 ? `${hours} hour${hours !== 1 ? 's' : ''}` : `${hours}h ${mins}m`;
+    }
+
     res.status(201).json({
       downtime: newDowntime,
       activity: activity,
       workOption: workOptionData,
       restType: restTypeData,
-      message: `Started ${activityName} for ${actualDuration} hour${actualDuration !== 1 ? 's' : ''}`
+      message: `Started ${activityName} for ${actualDuration} in-game hour${actualDuration !== 1 ? 's' : ''} (${realTimeStr} real time)`
     });
   } catch (error) {
     console.error('Error starting downtime:', error);

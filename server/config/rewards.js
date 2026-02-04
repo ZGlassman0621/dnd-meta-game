@@ -1,3 +1,5 @@
+import { calculatePartySynergy, calculateModifiedSuccessChance } from './partySynergy.js';
+
 // Time multipliers based on duration
 export function getTimeMultiplier(hours) {
   // TEST MODE: 0.033 hours (2 minutes) simulates 8-hour rewards
@@ -69,10 +71,81 @@ export function calculateGoldReward(level, riskLevel, timeMultiplier) {
   return { cp, sp, gp };
 }
 
-// Determine if adventure succeeds or fails
+// Determine if adventure succeeds or fails (basic version without party synergy)
 export function determineSuccess(riskLevel) {
   const failureChance = RISK_MULTIPLIERS[riskLevel].failure_chance;
   return Math.random() > failureChance;
+}
+
+/**
+ * Determine success with full odds calculation including party synergy
+ * Returns success result plus full odds breakdown for transparency
+ */
+export function determineSuccessWithOdds(riskLevel, partyMembers, activityType) {
+  const baseSuccessChance = 1 - RISK_MULTIPLIERS[riskLevel].failure_chance;
+
+  // Calculate party synergy bonus
+  const synergy = calculatePartySynergy(partyMembers, activityType);
+
+  // Apply synergy to success chance (cap at 95%, floor at 5%)
+  const modifiedChance = Math.min(0.95, Math.max(0.05, baseSuccessChance + synergy.bonusPercent));
+
+  // Roll for success
+  const roll = Math.random();
+  const success = roll < modifiedChance;
+
+  return {
+    success,
+    roll: Math.round(roll * 100),
+    odds: {
+      baseChance: Math.round(baseSuccessChance * 100),
+      riskLevel,
+      synergyBonus: synergy.bonus,
+      finalChance: Math.round(modifiedChance * 100),
+      breakdown: [
+        {
+          factor: 'Base Success Rate',
+          value: `${Math.round(baseSuccessChance * 100)}%`,
+          description: `${riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} risk adventure`
+        },
+        {
+          factor: 'Party Synergy',
+          value: `${synergy.bonus >= 0 ? '+' : ''}${synergy.bonus}%`,
+          description: synergy.summary
+        }
+      ],
+      synergyDetails: synergy
+    }
+  };
+}
+
+/**
+ * Get odds preview without rolling (for UI display before starting adventure)
+ */
+export function previewOdds(riskLevel, partyMembers, activityType) {
+  const baseSuccessChance = 1 - RISK_MULTIPLIERS[riskLevel].failure_chance;
+  const synergy = calculatePartySynergy(partyMembers, activityType);
+  const modifiedChance = Math.min(0.95, Math.max(0.05, baseSuccessChance + synergy.bonusPercent));
+
+  return {
+    baseChance: Math.round(baseSuccessChance * 100),
+    riskLevel,
+    synergyBonus: synergy.bonus,
+    finalChance: Math.round(modifiedChance * 100),
+    breakdown: [
+      {
+        factor: 'Base Success Rate',
+        value: `${Math.round(baseSuccessChance * 100)}%`,
+        description: `${riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} risk adventure`
+      },
+      {
+        factor: 'Party Synergy',
+        value: `${synergy.bonus >= 0 ? '+' : ''}${synergy.bonus}%`,
+        description: synergy.summary
+      }
+    ],
+    synergyDetails: synergy
+  };
 }
 
 // Generate failure consequences
@@ -122,6 +195,88 @@ export function generateConsequences(character, riskLevel) {
   }
 
   return consequences;
+}
+
+// Consequence categories for story threads
+export const CONSEQUENCE_CATEGORIES = {
+  new_enemy: {
+    name: 'New Enemy',
+    successChance: 0.15, // 15% chance on adventure
+    failureChance: 0.30, // 30% chance on failed adventure
+    description: 'Someone now knows about and opposes the party'
+  },
+  new_ally: {
+    name: 'New Ally',
+    successChance: 0.20,
+    failureChance: 0.05,
+    description: 'A potential new friend or contact'
+  },
+  intel: {
+    name: 'Intelligence',
+    successChance: 0.35,
+    failureChance: 0.15,
+    description: 'Valuable information discovered'
+  },
+  reputation: {
+    name: 'Reputation',
+    successChance: 0.25,
+    failureChance: 0.25,
+    description: 'How the party is perceived has changed'
+  },
+  resource: {
+    name: 'Resource',
+    successChance: 0.20,
+    failureChance: 0.05,
+    description: 'Access to new resources or opportunities'
+  }
+};
+
+/**
+ * Generate story consequences for an adventure
+ * These create story threads that persist and can affect future sessions
+ */
+export function generateStoryConsequences(adventure, success, questRelevance = 'side_quest') {
+  const storyConsequences = [];
+
+  // Higher chance of story consequences for quest-related adventures
+  const relevanceMultiplier = questRelevance === 'quest_advancing' ? 1.5 :
+                               questRelevance === 'quest_adjacent' ? 1.2 : 1.0;
+
+  for (const [category, config] of Object.entries(CONSEQUENCE_CATEGORIES)) {
+    const baseChance = success ? config.successChance : config.failureChance;
+    const adjustedChance = baseChance * relevanceMultiplier;
+
+    if (Math.random() < adjustedChance) {
+      storyConsequences.push({
+        category,
+        name: config.name,
+        description: config.description,
+        success,
+        // Flag if this consequence could resolve a quest (for quest-advancing adventures)
+        canResolveQuest: questRelevance === 'quest_advancing' &&
+                         success &&
+                         (category === 'intel' || category === 'new_ally'),
+        // Quest relevance flows through to the consequence
+        questRelevance
+      });
+    }
+  }
+
+  // Guarantee at least one story consequence for quest-advancing adventures
+  if (storyConsequences.length === 0 && questRelevance === 'quest_advancing') {
+    const guaranteedCategory = success ? 'intel' : 'new_enemy';
+    const config = CONSEQUENCE_CATEGORIES[guaranteedCategory];
+    storyConsequences.push({
+      category: guaranteedCategory,
+      name: config.name,
+      description: config.description,
+      success,
+      canResolveQuest: success && guaranteedCategory === 'intel',
+      questRelevance
+    });
+  }
+
+  return storyConsequences;
 }
 
 // Equipment loot tables by level range

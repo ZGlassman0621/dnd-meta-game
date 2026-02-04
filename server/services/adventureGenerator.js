@@ -145,113 +145,36 @@ Make the adventures interesting, varied, and thematically appropriate. Return ON
 }
 
 function generateFallbackAdventures(character, riskLevel) {
-  const { current_location, level } = character;
+  const { current_location } = character;
   const location = current_location || 'the area';
 
-  // Return risk-appropriate fallback adventures with variety
+  // All fallback adventures default to "all" participants
   const fallbacksByRisk = {
     low: [
-      {
-        title: 'Rest and Recuperation',
-        description: `Take time to rest at ${location}, tending to equipment, writing letters, or simply recovering strength. A safe and peaceful day.`,
-        activity_type: 'recovery',
-        estimated_game_hours: 8
-      },
-      {
-        title: 'Gather Local Rumors',
-        description: `Spend time in taverns and markets at ${location}, learning about the area's history and hearing the latest gossip from travelers.`,
-        activity_type: 'social',
-        estimated_game_hours: 6
-      },
-      {
-        title: 'Training Session',
-        description: `Practice combat forms, study spellwork, or hone skills in a safe environment at ${location}. Steady improvement without risk.`,
-        activity_type: 'training',
-        estimated_game_hours: 4
-      },
-      {
-        title: 'Craft and Repair',
-        description: `Spend time crafting useful items, repairing gear, or creating supplies at ${location}. Productive work with tangible results.`,
-        activity_type: 'crafting',
-        estimated_game_hours: 6
-      },
-      {
-        title: 'Work for Hire',
-        description: `Take on honest work at ${location} - helping merchants, assisting craftsmen, or performing services for coin.`,
-        activity_type: 'work',
-        estimated_game_hours: 8
-      }
+      { title: 'Rest and Recuperation', description: `Take time to rest at ${location}, tending to equipment, writing letters, or simply recovering strength.`, activity_type: 'recovery', estimated_game_hours: 8, recommended_participants: ['all'] },
+      { title: 'Gather Local Rumors', description: `Spend time in taverns and markets at ${location}, learning about the area's history and hearing the latest gossip.`, activity_type: 'social', estimated_game_hours: 6, recommended_participants: ['all'] },
+      { title: 'Training Session', description: `Practice combat forms, study spellwork, or hone skills in a safe environment at ${location}.`, activity_type: 'training', estimated_game_hours: 4, recommended_participants: ['all'] },
+      { title: 'Craft and Repair', description: `Spend time crafting useful items, repairing gear, or creating supplies at ${location}.`, activity_type: 'crafting', estimated_game_hours: 6, recommended_participants: ['all'] },
+      { title: 'Work for Hire', description: `Take on honest work at ${location} - helping merchants, assisting craftsmen, or performing services for coin.`, activity_type: 'work', estimated_game_hours: 8, recommended_participants: ['all'] }
     ],
     medium: [
-      {
-        title: 'Patrol the Perimeter',
-        description: `Scout the area surrounding ${location}, watching for signs of danger or unusual activity. Some risk of encounters.`,
-        activity_type: 'exploration',
-        estimated_game_hours: 8
-      },
-      {
-        title: 'Investigate Disturbances',
-        description: `Look into reports of strange occurrences near ${location}. Follow leads and uncover what's really going on.`,
-        activity_type: 'investigation',
-        estimated_game_hours: 6
-      },
-      {
-        title: 'Escort Duty',
-        description: `Help escort travelers or goods through dangerous territory near ${location}. Bandits are always a possibility.`,
-        activity_type: 'escort',
-        estimated_game_hours: 10
-      },
-      {
-        title: 'Hunting Expedition',
-        description: `Track game or gather rare materials in the wilds near ${location}. The prey isn't always what you expect.`,
-        activity_type: 'hunting',
-        estimated_game_hours: 8
-      },
-      {
-        title: 'Negotiate a Deal',
-        description: `Broker an agreement, settle a dispute, or make contacts with influential figures at ${location}.`,
-        activity_type: 'negotiation',
-        estimated_game_hours: 4
-      }
+      { title: 'Patrol the Perimeter', description: `Scout the area surrounding ${location}, watching for signs of danger or unusual activity.`, activity_type: 'exploration', estimated_game_hours: 8, recommended_participants: ['all'] },
+      { title: 'Investigate Disturbances', description: `Look into reports of strange occurrences near ${location}. Follow leads and uncover what's really going on.`, activity_type: 'investigation', estimated_game_hours: 6, recommended_participants: ['all'] },
+      { title: 'Escort Duty', description: `Help escort travelers or goods through dangerous territory near ${location}.`, activity_type: 'escort', estimated_game_hours: 10, recommended_participants: ['all'] },
+      { title: 'Hunting Expedition', description: `Track game or gather rare materials in the wilds near ${location}.`, activity_type: 'hunting', estimated_game_hours: 8, recommended_participants: ['all'] },
+      { title: 'Negotiate a Deal', description: `Broker an agreement, settle a dispute, or make contacts with influential figures at ${location}.`, activity_type: 'negotiation', estimated_game_hours: 4, recommended_participants: ['all'] }
     ],
     high: [
-      {
-        title: 'Hunt Dangerous Prey',
-        description: `Track and confront a dangerous creature that has been threatening the area around ${location}. Significant combat expected.`,
-        activity_type: 'monster_hunt',
-        estimated_game_hours: 12
-      },
-      {
-        title: 'Clear a Threat',
-        description: `Venture into dangerous territory near ${location} to eliminate a known threat. High risk, high reward.`,
-        activity_type: 'combat',
-        estimated_game_hours: 10
-      },
-      {
-        title: 'Explore the Ruins',
-        description: `Delve into dangerous ruins or caves near ${location}. Ancient treasures await, but so do ancient dangers.`,
-        activity_type: 'dungeon',
-        estimated_game_hours: 12
-      },
-      {
-        title: 'Infiltration Mission',
-        description: `Sneak into a guarded location near ${location} to gather intelligence or retrieve something valuable.`,
-        activity_type: 'heist',
-        estimated_game_hours: 8
-      },
-      {
-        title: 'Confront the Enemy',
-        description: `Face a known adversary who has been operating near ${location}. This confrontation has been a long time coming.`,
-        activity_type: 'confrontation',
-        estimated_game_hours: 6
-      }
+      { title: 'Hunt Dangerous Prey', description: `Track and confront a dangerous creature that has been threatening the area around ${location}.`, activity_type: 'monster_hunt', estimated_game_hours: 12, recommended_participants: ['all'] },
+      { title: 'Clear a Threat', description: `Venture into dangerous territory near ${location} to eliminate a known threat. High risk, high reward.`, activity_type: 'combat', estimated_game_hours: 10, recommended_participants: ['all'] },
+      { title: 'Explore the Ruins', description: `Delve into dangerous ruins or caves near ${location}. Ancient treasures await, but so do ancient dangers.`, activity_type: 'dungeon', estimated_game_hours: 12, recommended_participants: ['all'] },
+      { title: 'Infiltration Mission', description: `Sneak into a guarded location near ${location} to gather intelligence or retrieve something valuable.`, activity_type: 'heist', estimated_game_hours: 8, recommended_participants: ['all'] },
+      { title: 'Confront the Enemy', description: `Face a known adversary who has been operating near ${location}. This confrontation has been a long time coming.`, activity_type: 'confrontation', estimated_game_hours: 6, recommended_participants: ['all'] }
     ]
   };
 
-  // Randomly select one adventure from the appropriate risk level
   const options = fallbacksByRisk[riskLevel] || fallbacksByRisk.medium;
-  const randomIndex = Math.floor(Math.random() * options.length);
-  return [options[randomIndex]];
+  return [options[Math.floor(Math.random() * options.length)]];
 }
 
 /**
@@ -462,10 +385,29 @@ export async function generateAllRiskLevelAdventures(characterId) {
   const campaignConfig = JSON.parse(character.campaign_config || '{}');
   const usedNames = campaignConfig.usedNames || [];
 
-  // Build context strings (same as generateContextualAdventures)
+  // Build detailed companion info for smart party assignment
+  const companionDetails = companions.map(c => ({
+    name: c.name?.split(' ')[0] || c.nickname || 'Unknown',
+    fullName: c.name,
+    class: c.class || c.occupation || 'adventurer',
+    level: c.level || 1,
+    race: c.race,
+    personality: c.personality?.join(', ') || '',
+    motivation: c.motivation || '',
+    relationshipToParty: c.relationshipToParty || ''
+  }));
+
+  // Build context strings
   const companionInfo = companions.length > 0
-    ? `Companions: ${companions.map(c => c.name.split(' ')[0]).join(', ')}`
+    ? `Companions: ${companionDetails.map(c => `${c.name} (${c.class})`).join(', ')}`
     : 'Traveling alone';
+
+  // Build detailed companion list for party assignment
+  const companionListForAssignment = companions.length > 0
+    ? `\nPARTY MEMBERS (for participant assignment):
+- ${character.firstName || character.name.split(' ')[0]} (${character.class}) - THE PLAYER CHARACTER
+${companionDetails.map(c => `- ${c.name} (${c.class}${c.level ? ` Lvl ${c.level}` : ''})`).join('\n')}`
+    : '\nNo companions - solo adventurer.';
 
   const healthPercent = Math.round((character.currentHp / character.maxHp) * 100);
   const healthStatus = healthPercent < 30 ? 'severely wounded'
@@ -496,6 +438,7 @@ ${locationContext}
 QUEST: ${questContext}
 HEALTH: ${healthStatus}
 PARTY: ${companionInfo}
+${companionListForAssignment}
 
 CALENDAR: ${calendar.formatted}
 SEASON: ${seasonalContext}
@@ -534,55 +477,81 @@ Requirements:
 - FORBIDDEN LAST NAMES: Crane, Thorne, Blackwood, Darkhollow, Nightshade, Stormwind, Ravencrest
 ${usedNames.length > 0 ? `- NAMES ALREADY IN CAMPAIGN (never reuse): ${usedNames.join(', ')}` : ''}
 
-Return ONLY valid JSON:
-{
-  "adventures": [
-    {
-      "title": "Short evocative title",
-      "description": "2-3 sentences describing what the character will do and why it matters",
-      "activity_type": "training/social/recovery/crafting/work/investigation/exploration/escort/negotiation/hunting/combat/heist/monster_hunt/dungeon/confrontation",
-      "risk_level": "low",
-      "estimated_game_hours": 8
-    },
-    {
-      "title": "Title",
-      "description": "2-3 sentences",
-      "activity_type": "type",
-      "risk_level": "medium",
-      "estimated_game_hours": 8
-    },
-    {
-      "title": "Title",
-      "description": "2-3 sentences",
-      "activity_type": "type",
-      "risk_level": "high",
-      "estimated_game_hours": 8
-    }
-  ]
-}`;
+PARTY ASSIGNMENT:
+For "recommended_participants", use EXACT first names from the party list above, or "all" for everyone.
+- Class-specific training/rituals: only list companions of that class by first name
+- Combat/exploration/rescue: use "all"
+- The player character always participates (don't include them)
+
+QUEST RELEVANCE (IMPORTANT):
+Analyze how each adventure relates to the current quest "${questContext}":
+- "side_quest": Unrelated to the main quest, a separate opportunity
+- "quest_adjacent": Tangentially related - might provide useful context, contacts, or resources
+- "quest_advancing": DIRECTLY advances or resolves part of the main quest
+${questContext !== 'No active quest' ? `
+Look for connections to the quest:
+- Does this adventure involve the same location, enemies, or NPCs?
+- Could completing this advance the quest's goals?
+- Does it provide intel, allies, or resources for the quest?
+If unsure, default to "side_quest".` : 'No active quest - all adventures should be "side_quest".'}
+
+Return ONLY valid JSON (no comments, no trailing commas):
+{"adventures":[{"title":"string","description":"string","activity_type":"string","risk_level":"low","estimated_game_hours":8,"recommended_participants":["Name1","Name2"],"quest_relevance":"side_quest|quest_adjacent|quest_advancing"},{"title":"string","description":"string","activity_type":"string","risk_level":"medium","estimated_game_hours":8,"recommended_participants":["all"],"quest_relevance":"side_quest|quest_adjacent|quest_advancing"},{"title":"string","description":"string","activity_type":"string","risk_level":"high","estimated_game_hours":8,"recommended_participants":["all"],"quest_relevance":"side_quest|quest_adjacent|quest_advancing"}]}`;
 
   try {
     console.log('Generating adventures for all risk levels...');
     const responseText = await callLLM(prompt, 0.8);
 
-    let jsonMatch = responseText.match(/\{\s*"adventures"\s*:\s*\[[\s\S]*?\]\s*\}/);
+    console.log('Raw LLM response (first 500 chars):', responseText?.substring(0, 500));
 
-    if (!jsonMatch) {
-      jsonMatch = responseText.match(/\[[\s\S]*?\]/);
-      if (jsonMatch) {
-        const adventures = JSON.parse(jsonMatch[0]);
-        // Ensure risk levels are set
-        if (adventures.length >= 3) {
-          adventures[0].risk_level = adventures[0].risk_level || 'low';
-          adventures[1].risk_level = adventures[1].risk_level || 'medium';
-          adventures[2].risk_level = adventures[2].risk_level || 'high';
+    // Clean up common JSON issues from LLM responses
+    let cleanedResponse = (responseText || '')
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+      .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
+      .trim();
+
+    console.log('Cleaned response (first 500 chars):', cleanedResponse.substring(0, 500));
+
+    // Try multiple patterns to find JSON
+    let jsonStr = null;
+
+    // Pattern 1: Look for {"adventures": with flexible spacing
+    let match = cleanedResponse.match(/\{\s*"adventures"\s*:\s*\[/);
+    if (match) {
+      const startIdx = match.index;
+      // Find matching closing brace using brace counting
+      let braceCount = 0;
+      let endIdx = startIdx;
+      for (let i = startIdx; i < cleanedResponse.length; i++) {
+        if (cleanedResponse[i] === '{') braceCount++;
+        if (cleanedResponse[i] === '}') braceCount--;
+        if (braceCount === 0) {
+          endIdx = i + 1;
+          break;
         }
-        return adventures;
       }
-      throw new Error('No JSON found');
+      jsonStr = cleanedResponse.substring(startIdx, endIdx);
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Pattern 2: Try to find any JSON object with adventures array
+    if (!jsonStr) {
+      const startIdx = cleanedResponse.indexOf('{');
+      const endIdx = cleanedResponse.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx > startIdx) {
+        jsonStr = cleanedResponse.substring(startIdx, endIdx + 1);
+      }
+    }
+
+    if (!jsonStr) {
+      console.error('Could not find JSON in response:', cleanedResponse);
+      throw new Error('No JSON found in response');
+    }
+
+    console.log('Extracted JSON (first 300 chars):', jsonStr.substring(0, 300));
+
+    const parsed = JSON.parse(jsonStr);
     const adventures = parsed.adventures;
 
     // Ensure risk levels are set correctly
@@ -605,11 +574,18 @@ Return ONLY valid JSON:
   }
 }
 
-export async function generateAdventureNarrative(adventure, character, success, rewards, consequences) {
+export async function generateAdventureNarrative(adventure, character, success, rewards, consequences, partyMembers = []) {
   // Parse character data for more personalization
   const skills = JSON.parse(character.skills || '[]');
   const advantages = JSON.parse(character.advantages || '[]');
   const currentQuest = character.current_quest || 'no current quest';
+
+  // Build party description for narrative
+  const companions = partyMembers.filter(m => m.name !== (character.first_name || character.name?.split(' ')[0]));
+  const hasCompanions = companions.length > 0;
+  const partyDescription = hasCompanions
+    ? `traveling with ${companions.map(c => `${c.name} (${c.class})`).join(', ')}`
+    : 'adventuring alone';
 
   // Get campaign config for naming conventions
   const campaignConfig = JSON.parse(character.campaign_config || '{}');
@@ -638,33 +614,47 @@ ${usedNames.length > 0 ? `- NAMES ALREADY USED IN THIS CAMPAIGN (never reuse): $
 - Use unique, setting-appropriate names (Forgotten Realms style)
 - Prefer describing NPCs by role/title if a name isn't essential (e.g., "the caravan guard", "a local merchant")`;
 
-  const prompt = success
-    ? `Write a brief D&D adventure outcome in 2-3 sentences. ${character.name} (Level ${character.level} ${character.race} ${character.class}, ${gender}) successfully completed "${adventure.title}" in ${character.current_location}.
+  // Build party section for prompt
+  const partySection = hasCompanions
+    ? `\nPARTY MEMBERS (must include in narrative):
+${companions.map(c => `- ${c.name}: ${c.class}${c.level ? ` (Level ${c.level})` : ''}`).join('\n')}
 
-${pronounGuide}
+CRITICAL: The narrative MUST mention what the party members did. Each companion should contribute based on their class abilities. Do NOT focus only on ${character.name}.`
+    : '';
+
+  const prompt = success
+    ? `Write a brief D&D adventure outcome in 2-3 sentences. ${character.name} (Level ${character.level} ${character.race} ${character.class}, ${gender})${hasCompanions ? ' and their party' : ''} successfully completed "${adventure.title}" in ${character.current_location}.
+
+${pronounGuide}${partySection}
 ${namingRules}
 
 Focus on:
 - One specific event that happened (encounter, discovery, or challenge)
 - How it relates to their quest: ${currentQuest}
+${hasCompanions ? '- Show how party members contributed using their class abilities (e.g., a Cleric healing, a Rogue scouting, a Fighter holding the line)' : ''}
 - Keep it straightforward and clear
 - If mentioning any NPC, prefer role/title over names unless essential
 
-Example: "${character.name} tracked cultist activity to an abandoned mill outside ${character.current_location}. Inside, ${pronouns.subject} discovered ritual markings and intercepted correspondence revealing the cult's next gathering point. The locals were grateful for ${pronouns.possessive} warning."
+${hasCompanions
+  ? `Example: "${character.name} led the party to the gnoll encampment while ${companions[0]?.name || 'their companion'} scouted ahead. Working together, they overwhelmed the guards - ${companions[0]?.name || 'the scout'} disabling traps while ${character.name} drew enemy attention. The rescued prisoners thanked the whole party for their bravery."`
+  : `Example: "${character.name} tracked cultist activity to an abandoned mill outside ${character.current_location}. Inside, ${pronouns.subject} discovered ritual markings and intercepted correspondence revealing the cult's next gathering point. The locals were grateful for ${pronouns.possessive} warning."`}
 
 Write ONLY the narrative:`
-    : `Write a brief D&D failure outcome in 2-3 sentences. ${character.name} (Level ${character.level} ${character.race} ${character.class}, ${gender}) failed "${adventure.title}" in ${character.current_location}.
+    : `Write a brief D&D failure outcome in 2-3 sentences. ${character.name} (Level ${character.level} ${character.race} ${character.class}, ${gender})${hasCompanions ? ' and their party' : ''} failed "${adventure.title}" in ${character.current_location}.
 
-${pronounGuide}
+${pronounGuide}${partySection}
 ${namingRules}
 
 Focus on:
 - What went wrong (ambush, trap, misinformation, etc.)
 - The immediate consequence: ${consequences.map(c => c.description).join(', ')}
+${hasCompanions ? '- Show how the party tried to work together but was overwhelmed' : ''}
 - Keep it clear and direct
 - If mentioning any NPC, prefer role/title over names unless essential
 
-Example: "${character.name} walked into a cultist ambush while investigating the old mill. ${pronouns.subject.charAt(0).toUpperCase() + pronouns.subject.slice(1)} barely escaped with ${pronouns.possessive} life, taking serious injuries in the process. The cult now knows someone is hunting ${pronouns.object}."
+${hasCompanions
+  ? `Example: "The party walked into an ambush at the old mill. Despite ${companions[0]?.name || 'their companion'}'s quick reflexes and ${character.name}'s defensive efforts, they were outmatched and forced to retreat, carrying their wounded to safety."`
+  : `Example: "${character.name} walked into a cultist ambush while investigating the old mill. ${pronouns.subject.charAt(0).toUpperCase() + pronouns.subject.slice(1)} barely escaped with ${pronouns.possessive} life, taking serious injuries in the process. The cult now knows someone is hunting ${pronouns.object}."`}
 
 Write ONLY the narrative:`;
 
@@ -686,19 +676,39 @@ Write ONLY the narrative:`;
     // Fallback narrative with more flavor - use correct pronouns
     const subjectCap = pronouns.subject.charAt(0).toUpperCase() + pronouns.subject.slice(1);
 
+    // Build party phrase for fallback narratives
+    const partyPhrase = hasCompanions
+      ? `${character.name} and ${companions.length === 1 ? companions[0].name : 'the party'}`
+      : character.name;
+    const partyPronoun = hasCompanions ? 'they' : pronouns.subject;
+    const partyObject = hasCompanions ? 'them' : pronouns.object;
+    const partyPossessive = hasCompanions ? 'their' : pronouns.possessive;
+
     if (success) {
-      const actions = [
-        `${character.name} ventured through ${character.current_location} and encountered unexpected challenges. Through skill and determination, ${pronouns.subject} overcame the obstacles and emerged victorious, earning valuable experience and rewards.`,
-        `During ${pronouns.possessive} time in ${character.current_location}, ${character.name} discovered an opportunity for adventure. ${subjectCap} quick thinking and bold action led to success, impressing locals and filling ${pronouns.possessive} coin purse.`,
-        `${character.name} spent the day navigating the dangers of ${character.current_location}. When trouble found ${pronouns.object}, ${pronouns.subject} rose to the challenge and proved ${pronouns.possessive} worth as an adventurer.`
-      ];
+      const actions = hasCompanions
+        ? [
+            `${partyPhrase} ventured through ${character.current_location} and encountered unexpected challenges. Working together, ${partyPronoun} overcame the obstacles and emerged victorious, earning valuable experience and rewards.`,
+            `During ${partyPossessive} expedition in ${character.current_location}, ${partyPhrase} discovered an opportunity for adventure. Quick thinking and coordinated action led to success, impressing locals and filling ${partyPossessive} coin purses.`,
+            `${partyPhrase} spent the day navigating the dangers of ${character.current_location}. When trouble found ${partyObject}, ${partyPronoun} rose to the challenge together and proved ${partyPossessive} worth as adventurers.`
+          ]
+        : [
+            `${character.name} ventured through ${character.current_location} and encountered unexpected challenges. Through skill and determination, ${pronouns.subject} overcame the obstacles and emerged victorious, earning valuable experience and rewards.`,
+            `During ${pronouns.possessive} time in ${character.current_location}, ${character.name} discovered an opportunity for adventure. ${subjectCap} quick thinking and bold action led to success, impressing locals and filling ${pronouns.possessive} coin purse.`,
+            `${character.name} spent the day navigating the dangers of ${character.current_location}. When trouble found ${pronouns.object}, ${pronouns.subject} rose to the challenge and proved ${pronouns.possessive} worth as an adventurer.`
+          ];
       return actions[Math.floor(Math.random() * actions.length)];
     } else {
-      const failures = [
-        `${character.name}'s adventure in ${character.current_location} didn't go as planned. Despite ${pronouns.possessive} best efforts, things went awry, leaving ${pronouns.object} battered and wiser from the experience.`,
-        `Fortune did not favor ${character.name} this day. ${subjectCap} expedition through ${character.current_location} met with unforeseen complications, and ${pronouns.subject} was forced to retreat, licking ${pronouns.possessive} wounds.`,
-        `The challenges of ${character.current_location} proved too much for ${character.name} on this occasion. ${subjectCap} survived the ordeal, but paid a price for ${pronouns.possessive} ambition.`
-      ];
+      const failures = hasCompanions
+        ? [
+            `${partyPhrase}'s adventure in ${character.current_location} didn't go as planned. Despite ${partyPossessive} best efforts, things went awry, leaving ${partyObject} battered but wiser from the experience.`,
+            `Fortune did not favor ${partyPhrase} this day. ${partyPronoun.charAt(0).toUpperCase() + partyPronoun.slice(1)} expedition through ${character.current_location} met with unforeseen complications, and the party was forced to retreat.`,
+            `The challenges of ${character.current_location} proved too much for ${partyPhrase} on this occasion. ${partyPronoun.charAt(0).toUpperCase() + partyPronoun.slice(1)} survived the ordeal together, but paid a price for ${partyPossessive} ambition.`
+          ]
+        : [
+            `${character.name}'s adventure in ${character.current_location} didn't go as planned. Despite ${pronouns.possessive} best efforts, things went awry, leaving ${pronouns.object} battered and wiser from the experience.`,
+            `Fortune did not favor ${character.name} this day. ${subjectCap} expedition through ${character.current_location} met with unforeseen complications, and ${pronouns.subject} was forced to retreat, licking ${pronouns.possessive} wounds.`,
+            `The challenges of ${character.current_location} proved too much for ${character.name} on this occasion. ${subjectCap} survived the ordeal, but paid a price for ${pronouns.possessive} ambition.`
+          ];
       return failures[Math.floor(Math.random() * failures.length)];
     }
   }

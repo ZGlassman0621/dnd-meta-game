@@ -154,6 +154,26 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
     return classInfo?.subclasses || []
   }
 
+  // Get subclass features for a specific level
+  const getSubclassFeatures = (className, subclassName, level) => {
+    if (!subclassName) return []
+    const classKey = className.toLowerCase()
+    const classInfo = classesData[classKey]
+    const subclass = classInfo?.subclasses?.find(s => s.name === subclassName)
+    return subclass?.featuresByLevel?.[level] || []
+  }
+
+  // Get domain/subclass spells for a specific level
+  const getSubclassSpells = (className, subclassName, level) => {
+    if (!subclassName) return []
+    const classKey = className.toLowerCase()
+    const classInfo = classesData[classKey]
+    const subclass = classInfo?.subclasses?.find(s => s.name === subclassName)
+    // Look for domainSpells, expandedSpells, or similar
+    const spellList = subclass?.domainSpells || subclass?.expandedSpells || subclass?.patronSpells || {}
+    return spellList[level] || []
+  }
+
   const handleClassSelect = (classOption) => {
     setSelectedClassOption(classOption)
     setStep('choices')
@@ -338,30 +358,51 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
             <div className="class-section">
               <h3>Continue Current Class{existingClassOptions.length > 1 ? 'es' : ''}</h3>
               <div className="class-options">
-                {existingClassOptions.map((option, idx) => (
-                  <div
-                    key={idx}
-                    className="class-option existing"
-                    onClick={() => handleClassSelect(option)}
-                  >
-                    <div className="class-option-header">
-                      <span className="class-name">{option.class}</span>
-                      <span className="class-level">Level {option.currentLevel} → {option.newLevel}</span>
-                    </div>
-                    {option.subclass && (
-                      <span className="class-subclass">{option.subclass}</span>
-                    )}
-                    <div className="class-option-info">
-                      <span className="hp-gain">+{option.hpGain.average} HP avg</span>
-                      {option.newFeatures.length > 0 && (
-                        <span className="features-preview">
-                          New: {option.newFeatures.slice(0, 2).join(', ')}
-                          {option.newFeatures.length > 2 && '...'}
-                        </span>
+                {existingClassOptions.map((option, idx) => {
+                  // Get subclass features for preview
+                  const subclassFeatures = option.subclass
+                    ? getSubclassFeatures(option.class, option.subclass, option.newLevel)
+                    : []
+                  const subclassSpells = option.subclass
+                    ? getSubclassSpells(option.class, option.subclass, option.newLevel)
+                    : []
+
+                  const allFeatureNames = [
+                    ...option.newFeatures,
+                    ...subclassFeatures.map(f => f.name)
+                  ]
+
+                  return (
+                    <div
+                      key={idx}
+                      className="class-option existing"
+                      onClick={() => handleClassSelect(option)}
+                    >
+                      <div className="class-option-header">
+                        <span className="class-name">{option.class}</span>
+                        <span className="class-level">Level {option.currentLevel} → {option.newLevel}</span>
+                      </div>
+                      {option.subclass && (
+                        <span className="class-subclass">{option.subclass}</span>
                       )}
+                      <div className="class-option-info">
+                        <span className="hp-gain">+{option.hpGain.average} HP avg</span>
+                        {allFeatureNames.length > 0 && (
+                          <span className="features-preview">
+                            New: {allFeatureNames.slice(0, 2).join(', ')}
+                            {allFeatureNames.length > 2 && '...'}
+                          </span>
+                        )}
+                        {subclassSpells.length > 0 && (
+                          <span className="features-preview" style={{ color: '#2ecc71' }}>
+                            Spells: {subclassSpells.slice(0, 2).join(', ')}
+                            {subclassSpells.length > 2 && '...'}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -406,16 +447,86 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
             </div>
 
             {/* New Features */}
-            {activeNewFeatures.length > 0 && (
-              <section className="choice-section features-section">
-                <h3>New Features</h3>
-                <ul className="features-list">
-                  {activeNewFeatures.map((feature, idx) => (
-                    <li key={idx}>{feature}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            {(() => {
+              const subclass = selectedClassOption?.subclass || selectedSubclass
+              const newLevel = selectedClassOption?.newLevel
+              const className = selectedClassOption?.class
+
+              const subclassFeatures = subclass
+                ? getSubclassFeatures(className, subclass, newLevel)
+                : []
+              const subclassSpells = subclass
+                ? getSubclassSpells(className, subclass, newLevel)
+                : []
+
+              const hasAnyFeatures = activeNewFeatures.length > 0 || subclassFeatures.length > 0 || subclassSpells.length > 0
+
+              if (!hasAnyFeatures) return null
+
+              return (
+                <section className="choice-section features-section">
+                  <h3>New Features at Level {newLevel}</h3>
+
+                  {/* Base Class Features */}
+                  {activeNewFeatures.length > 0 && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <h4 style={{ color: '#60a5fa', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        {className} Features
+                      </h4>
+                      <ul className="features-list">
+                        {activeNewFeatures.map((feature, idx) => (
+                          <li key={idx}>{feature}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Subclass Features */}
+                  {subclassFeatures.length > 0 && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <h4 style={{ color: '#a78bfa', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        {subclass} Features
+                      </h4>
+                      <ul className="features-list" style={{ paddingLeft: '1.25rem' }}>
+                        {subclassFeatures.map((feature, idx) => (
+                          <li key={idx} style={{ marginBottom: '0.5rem' }}>
+                            <strong>{feature.name}</strong>
+                            {feature.description && (
+                              <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#aaa' }}>
+                                {feature.description.length > 200
+                                  ? feature.description.substring(0, 200) + '...'
+                                  : feature.description}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Subclass Spells (Domain Spells, etc.) */}
+                  {subclassSpells.length > 0 && (
+                    <div>
+                      <h4 style={{ color: '#2ecc71', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                        {subclass} Spells (Always Prepared)
+                      </h4>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {subclassSpells.map((spell, idx) => (
+                          <span key={idx} style={{
+                            background: 'rgba(46, 204, 113, 0.15)',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '4px',
+                            fontSize: '0.9rem'
+                          }}>
+                            {spell}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )
+            })()}
 
             {/* Proficiency Bonus Increase */}
             {levelUpInfo.proficiencyBonus.increased && (
@@ -682,16 +793,57 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                   )}
 
                   {/* New Features Summary */}
-                  {activeNewFeatures.length > 0 && (
-                    <div className="review-card">
-                      <h3>New Features</h3>
-                      <ul className="review-features-list">
-                        {activeNewFeatures.map((feature, idx) => (
-                          <li key={idx}>{feature}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {(() => {
+                    const subclass = selectedClassOption?.subclass || selectedSubclass
+                    const newLevel = selectedClassOption?.newLevel
+                    const className = selectedClassOption?.class
+
+                    const subclassFeatures = subclass
+                      ? getSubclassFeatures(className, subclass, newLevel)
+                      : []
+                    const subclassSpells = subclass
+                      ? getSubclassSpells(className, subclass, newLevel)
+                      : []
+
+                    const hasAnyFeatures = activeNewFeatures.length > 0 || subclassFeatures.length > 0 || subclassSpells.length > 0
+
+                    if (!hasAnyFeatures) return null
+
+                    return (
+                      <div className="review-card">
+                        <h3>New Features</h3>
+                        {activeNewFeatures.length > 0 && (
+                          <ul className="review-features-list">
+                            {activeNewFeatures.map((feature, idx) => (
+                              <li key={idx}>{feature}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {subclassFeatures.length > 0 && (
+                          <>
+                            <h4 style={{ color: '#a78bfa', margin: '0.75rem 0 0.5rem', fontSize: '0.9rem' }}>
+                              {subclass} Features
+                            </h4>
+                            <ul className="review-features-list">
+                              {subclassFeatures.map((feature, idx) => (
+                                <li key={idx}>{feature.name}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {subclassSpells.length > 0 && (
+                          <>
+                            <h4 style={{ color: '#2ecc71', margin: '0.75rem 0 0.5rem', fontSize: '0.9rem' }}>
+                              {subclass} Spells
+                            </h4>
+                            <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                              {subclassSpells.join(', ')}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Proficiency Bonus */}
                   {levelUpInfo.proficiencyBonus.increased && (
