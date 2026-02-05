@@ -857,7 +857,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             <strong>Hit Die:</strong> d{selectedClassData.hitDie} | <strong>Primary Ability:</strong> {selectedClassData.primaryAbility.map(a => a.toUpperCase()).join(' or ')}
           </p>
           <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
-            <strong>Skills:</strong> Choose {selectedClassData.skillChoices} from {selectedClassData.skillOptions.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace('_', ' ')).join(', ')}
+            <strong>Skills:</strong> Choose {selectedClassData.skillChoices} from {selectedClassData.skillOptions.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace(/_/g, ' ')).join(', ')}
           </p>
           <ul style={{ fontSize: '0.85rem', color: '#bbb', marginLeft: '1.25rem', marginTop: '0.5rem' }}>
             {selectedClassData.features.map((feature, idx) => (
@@ -879,7 +879,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             {selectedBackgroundData.description}
           </p>
           <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
-            <strong>Skill Proficiencies:</strong> {selectedBackgroundData.skillProficiencies.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace('_', ' ')).join(', ')}
+            <strong>Skill Proficiencies:</strong> {selectedBackgroundData.skillProficiencies.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace(/_/g, ' ')).join(', ')}
           </p>
           <p style={{ fontSize: '0.85rem', color: '#bbb' }}>
             <strong>Feature:</strong> {selectedBackgroundData.feature.description}
@@ -1021,14 +1021,14 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               Choose {selectedClassData.skillChoices} skills from the {selectedClassData.name} skill list.
               {selectedBackgroundData && selectedBackgroundData.skillProficiencies && (
                 <span style={{ display: 'block', marginTop: '0.5rem', color: '#2ecc71' }}>
-                  Your {selectedBackgroundData.name} background grants: {selectedBackgroundData.skillProficiencies.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace('_', ' ')).join(', ')}
+                  Your {selectedBackgroundData.name} background grants: {selectedBackgroundData.skillProficiencies.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')).join(', ')}
                 </span>
               )}
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
               {selectedClassData.skillOptions.map(skill => {
-                const skillName = skill.charAt(0).toUpperCase() + skill.slice(1).replace('_', ' ')
+                const skillName = skill.charAt(0).toUpperCase() + skill.slice(1).replace(/_/g, ' ')
                 const isSelected = formData.selected_skills.includes(skillName)
                 const isFromBackground = selectedBackgroundData?.skillProficiencies?.some(
                   s => s.toLowerCase() === skill.toLowerCase() || s.toLowerCase().replace('_', ' ') === skill.toLowerCase()
@@ -2175,7 +2175,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Skill Proficiencies</p>
               <p style={{ color: '#bbb', fontSize: '0.85rem' }}>
-                {[...formData.selected_skills, ...(selectedBackgroundData?.skillProficiencies?.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace('_', ' ')) || [])].join(', ')}
+                {[...formData.selected_skills, ...(selectedBackgroundData?.skillProficiencies?.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')) || [])].join(', ')}
               </p>
             </div>
           )}
@@ -2230,13 +2230,6 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.25rem' }}>Personality Traits</p>
               <p style={{ color: '#bbb', fontSize: '0.85rem' }}>{formData.personality_traits}</p>
-            </div>
-          )}
-
-          {formData.backstory && (
-            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.25rem' }}>Backstory</p>
-              <p style={{ color: '#bbb', fontSize: '0.85rem' }}>{formData.backstory}</p>
             </div>
           )}
 
