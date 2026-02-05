@@ -686,6 +686,20 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               </option>
             ))}
           </select>
+          {formData.subrace && (() => {
+            const subraceData = selectedRaceData.subraces.find(sr => sr.name === formData.subrace)
+            return subraceData?.description ? (
+              <p style={{
+                fontSize: '0.85rem',
+                color: '#bbb',
+                marginTop: '0.5rem',
+                fontStyle: 'italic',
+                lineHeight: '1.4'
+              }}>
+                {subraceData.description}
+              </p>
+            ) : null
+          })()}
         </div>
       )}
 
