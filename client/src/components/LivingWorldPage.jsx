@@ -571,7 +571,7 @@ const LivingWorldPage = ({ character }) => {
               <div style={{ marginBottom: '15px' }}>
                 <div style={styles.controlTitle}>Character's View</div>
                 {characterView ? (
-                  <div style={{ fontSize: '13px', color: '#5D4037' }}>
+                  <div style={{ fontSize: '13px', color: '#888' }}>
                     Visible factions: {characterView.factions?.length || 0}<br />
                     Known goals: {characterView.knownGoals?.length || 0}<br />
                     Visible events: {characterView.events?.length || 0}
@@ -617,7 +617,7 @@ const LivingWorldPage = ({ character }) => {
                     </div>
                     {(faction.goals || []).filter(g => g.status === 'active').slice(0, 2).map(goal => (
                       <div key={goal.id} style={{ marginTop: '6px', fontSize: '12px' }}>
-                        <span style={{ color: '#5D4037' }}>{goal.title}</span>
+                        <span style={{ color: '#888' }}>{goal.title}</span>
                         <div style={styles.progressBar}>
                           <div
                             style={{
@@ -686,14 +686,14 @@ const LivingWorldPage = ({ character }) => {
                 activeEffects.map(effect => (
                   <div key={effect.id} style={styles.effectCard}>
                     <div style={styles.listItemHeader}>
-                      <span style={{ fontWeight: 'bold', color: '#2C3E50' }}>
+                      <span style={{ fontWeight: 'bold', color: '#f5f5f5' }}>
                         {effect.effect_type}
                       </span>
-                      <span style={{ fontSize: '11px', color: '#5D4037' }}>
+                      <span style={{ fontSize: '11px', color: '#888' }}>
                         {effect.target_type}: {effect.target_id}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#5D4037', marginTop: '4px' }}>
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
                       {effect.description}
                     </div>
                     {effect.expires_at && (

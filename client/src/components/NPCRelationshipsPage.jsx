@@ -516,7 +516,7 @@ const NPCRelationshipsPage = ({ character }) => {
     }
     return (
       <div style={styles.trustMeter}>
-        <span style={{ fontSize: '12px', color: '#5D4037' }}>Trust:</span>
+        <span style={{ fontSize: '12px', color: '#888' }}>Trust:</span>
         <div style={styles.trustLevel}>{dots}</div>
         <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{trust}/10</span>
       </div>
@@ -666,7 +666,7 @@ const NPCRelationshipsPage = ({ character }) => {
                     <div style={styles.detailSection}>
                       <div style={styles.detailLabel}>Disposition</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#8B4513' }}>
+                        <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#f5f5f5' }}>
                           {selectedRelationship.disposition}
                         </span>
                         <span
@@ -823,7 +823,7 @@ const NPCRelationshipsPage = ({ character }) => {
                                 {debt.status || 'outstanding'}
                               </span>
                             </div>
-                            <div style={{ fontSize: '12px', color: '#5D4037', marginTop: '4px' }}>
+                            <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
                               {debt.type && <span style={{ textTransform: 'capitalize' }}>{debt.type}: </span>}
                               {debt.description}
                             </div>
