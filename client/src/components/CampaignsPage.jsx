@@ -1,249 +1,295 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 const styles = {
   container: {
-    padding: '20px',
+    padding: '1rem',
     maxWidth: '1400px',
-    margin: '0 auto',
+    margin: '0 auto'
   },
   header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px',
+    marginBottom: '1.5rem'
   },
   title: {
-    fontSize: '28px',
-    fontWeight: 'bold',
-    color: '#8B4513',
-    margin: 0,
+    fontSize: '1.8rem',
+    marginBottom: '0.5rem',
+    color: '#f5f5f5'
   },
-  explanation: {
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
-    border: '1px solid #DEB887',
-    borderRadius: '8px',
-    padding: '12px 16px',
-    marginBottom: '20px',
-    color: '#5D4037',
-    fontSize: '14px',
-    lineHeight: '1.5',
+  subtitle: {
+    color: '#888',
+    fontSize: '0.95rem'
   },
-  mainContent: {
+  grid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '20px',
+    gridTemplateColumns: '1fr 1.5fr',
+    gap: '1.5rem'
   },
   panel: {
-    backgroundColor: '#FFF8DC',
-    border: '2px solid #8B4513',
+    background: 'rgba(0, 0, 0, 0.3)',
     borderRadius: '8px',
-    padding: '15px',
-    minHeight: '500px',
+    padding: '1rem',
+    border: '1px solid rgba(255, 255, 255, 0.1)'
   },
   panelTitle: {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: '#8B4513',
-    marginBottom: '15px',
-    borderBottom: '1px solid #DEB887',
-    paddingBottom: '8px',
+    fontSize: '1.1rem',
+    marginBottom: '1rem',
+    color: '#f5f5f5',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    paddingBottom: '0.5rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
   },
   filterTabs: {
     display: 'flex',
-    gap: '10px',
-    marginBottom: '15px',
+    gap: '0.5rem',
+    marginBottom: '1rem',
+    flexWrap: 'wrap'
   },
   filterTab: {
-    padding: '8px 16px',
-    border: '1px solid #8B4513',
+    padding: '0.4rem 0.8rem',
     borderRadius: '4px',
+    border: 'none',
     cursor: 'pointer',
-    backgroundColor: '#FFF8DC',
-    color: '#8B4513',
-    fontSize: '14px',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
+    background: 'rgba(255, 255, 255, 0.1)',
+    color: '#888'
   },
   filterTabActive: {
-    backgroundColor: '#8B4513',
-    color: '#FFF8DC',
+    background: 'rgba(155, 89, 182, 0.3)',
+    color: '#9b59b6'
   },
   campaignList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
-    maxHeight: '350px',
-    overflowY: 'auto',
+    gap: '0.75rem',
+    maxHeight: '500px',
+    overflowY: 'auto'
   },
   campaignCard: {
-    padding: '12px',
-    border: '1px solid #DEB887',
+    background: 'rgba(255, 255, 255, 0.05)',
     borderRadius: '6px',
+    padding: '0.75rem',
     cursor: 'pointer',
-    backgroundColor: '#FFFEF0',
     transition: 'all 0.2s',
+    border: '1px solid transparent'
   },
   campaignCardSelected: {
-    backgroundColor: '#DEB887',
-    borderColor: '#8B4513',
+    border: '1px solid #9b59b6',
+    background: 'rgba(155, 89, 182, 0.1)'
   },
   campaignCardArchived: {
-    opacity: 0.7,
+    opacity: 0.6
   },
   campaignName: {
-    fontWeight: 'bold',
-    color: '#8B4513',
-    marginBottom: '4px',
+    fontSize: '0.95rem',
+    color: '#f5f5f5',
+    fontWeight: '500',
+    marginBottom: '0.25rem',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '0.5rem'
   },
   campaignMeta: {
-    fontSize: '12px',
-    color: '#5D4037',
+    display: 'flex',
+    gap: '0.5rem',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: '0.25rem'
   },
   badge: {
-    display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontSize: '11px',
-    fontWeight: 'bold',
+    padding: '0.2rem 0.5rem',
+    borderRadius: '4px',
+    fontSize: '0.7rem',
+    fontWeight: '500',
+    textTransform: 'uppercase'
+  },
+  statusBadge: {
+    active: { background: 'rgba(46, 204, 113, 0.3)', color: '#2ecc71' },
+    archived: { background: 'rgba(149, 165, 166, 0.3)', color: '#95a5a6' }
   },
   detailSection: {
-    marginBottom: '20px',
+    marginBottom: '1.5rem'
   },
-  detailLabel: {
-    fontWeight: 'bold',
-    color: '#8B4513',
-    marginBottom: '4px',
-    fontSize: '14px',
+  sectionTitle: {
+    fontSize: '0.9rem',
+    color: '#888',
+    marginBottom: '0.5rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
   },
-  detailValue: {
-    color: '#333',
-    marginBottom: '8px',
+  infoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '1rem',
+    marginBottom: '1rem'
+  },
+  infoItem: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    padding: '0.75rem',
+    borderRadius: '6px'
+  },
+  infoLabel: {
+    fontSize: '0.75rem',
+    color: '#888',
+    marginBottom: '0.25rem'
+  },
+  infoValue: {
+    fontSize: '1rem',
+    color: '#f5f5f5'
   },
   statsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '10px',
-    marginTop: '10px',
+    gap: '1rem',
+    marginTop: '1rem'
   },
   statBox: {
-    padding: '12px',
-    backgroundColor: '#F5F5DC',
-    borderRadius: '4px',
-    textAlign: 'center',
+    background: 'rgba(255, 255, 255, 0.05)',
+    padding: '1rem',
+    borderRadius: '6px',
+    textAlign: 'center'
   },
   statValue: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#8B4513',
+    fontSize: '1.5rem',
+    fontWeight: '600',
+    color: '#9b59b6'
   },
   statLabel: {
-    fontSize: '11px',
-    color: '#5D4037',
-  },
-  button: {
-    padding: '8px 16px',
-    backgroundColor: '#8B4513',
-    color: '#FFF8DC',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    marginRight: '8px',
-    marginTop: '8px',
-  },
-  buttonSecondary: {
-    backgroundColor: '#DEB887',
-    color: '#8B4513',
-  },
-  buttonDanger: {
-    backgroundColor: '#CD5C5C',
-    color: 'white',
-  },
-  buttonSuccess: {
-    backgroundColor: '#228B22',
-    color: 'white',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  label: {
-    fontWeight: 'bold',
-    color: '#8B4513',
-    fontSize: '14px',
-  },
-  input: {
-    padding: '8px',
-    border: '1px solid #DEB887',
-    borderRadius: '4px',
-    fontSize: '14px',
-  },
-  textarea: {
-    padding: '8px',
-    border: '1px solid #DEB887',
-    borderRadius: '4px',
-    fontSize: '14px',
-    minHeight: '80px',
-    resize: 'vertical',
-  },
-  select: {
-    padding: '8px',
-    border: '1px solid #DEB887',
-    borderRadius: '4px',
-    fontSize: '14px',
-    backgroundColor: 'white',
-  },
-  noData: {
-    textAlign: 'center',
+    fontSize: '0.75rem',
     color: '#888',
-    padding: '40px',
-    fontStyle: 'italic',
+    marginTop: '0.25rem'
+  },
+  description: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    padding: '1rem',
+    borderRadius: '6px',
+    fontSize: '0.9rem',
+    color: '#ccc',
+    lineHeight: '1.5',
+    fontStyle: 'italic'
   },
   characterList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
-    marginTop: '10px',
+    gap: '0.5rem',
+    marginTop: '0.75rem'
   },
   characterCard: {
-    padding: '10px',
-    border: '1px solid #DEB887',
-    borderRadius: '4px',
-    backgroundColor: '#FFFEF0',
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '6px',
+    padding: '0.75rem',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   characterInfo: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column'
   },
   characterName: {
-    fontWeight: 'bold',
-    color: '#654321',
+    fontSize: '0.9rem',
+    color: '#f5f5f5',
+    fontWeight: '500'
   },
   characterMeta: {
-    fontSize: '12px',
-    color: '#888',
+    fontSize: '0.8rem',
+    color: '#888'
   },
   assignSection: {
-    marginTop: '15px',
-    padding: '10px',
-    backgroundColor: '#F5F5DC',
+    marginTop: '1rem',
+    padding: '1rem',
+    background: 'rgba(155, 89, 182, 0.1)',
     borderRadius: '6px',
+    border: '1px solid rgba(155, 89, 182, 0.2)'
   },
+  actions: {
+    display: 'flex',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
+    marginTop: '1rem'
+  },
+  button: {
+    padding: '0.5rem 1rem',
+    borderRadius: '4px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s'
+  },
+  primaryButton: {
+    background: '#9b59b6',
+    color: '#fff'
+  },
+  secondaryButton: {
+    background: 'rgba(255, 255, 255, 0.1)',
+    color: '#fff',
+    border: '1px solid rgba(255, 255, 255, 0.2)'
+  },
+  successButton: {
+    background: '#2ecc71',
+    color: '#fff'
+  },
+  dangerButton: {
+    background: '#e74c3c',
+    color: '#fff'
+  },
+  emptyState: {
+    textAlign: 'center',
+    padding: '2rem',
+    color: '#888'
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    marginBottom: '1rem'
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem'
+  },
+  formRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1rem'
+  },
+  label: {
+    fontSize: '0.85rem',
+    color: '#888'
+  },
+  input: {
+    padding: '0.5rem 0.75rem',
+    borderRadius: '4px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(0, 0, 0, 0.3)',
+    color: '#f5f5f5',
+    fontSize: '0.9rem'
+  },
+  textarea: {
+    padding: '0.5rem 0.75rem',
+    borderRadius: '4px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(0, 0, 0, 0.3)',
+    color: '#f5f5f5',
+    fontSize: '0.9rem',
+    minHeight: '80px',
+    resize: 'vertical'
+  },
+  select: {
+    padding: '0.5rem 0.75rem',
+    borderRadius: '4px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(0, 0, 0, 0.3)',
+    color: '#f5f5f5',
+    fontSize: '0.9rem'
+  }
 };
 
-const toneOptions = ['heroic', 'dark', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical'];
+const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical'];
 
-const CampaignsPage = ({ characters, onCharacterUpdated }) => {
+const CampaignsPage = ({ character, allCharacters }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
@@ -256,10 +302,10 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
   const [newCampaign, setNewCampaign] = useState({
     name: '',
     description: '',
-    setting: '',
-    tone: 'heroic',
+    setting: 'Forgotten Realms',
+    tone: 'heroic fantasy',
     starting_location: '',
-    time_ratio: 1,
+    time_ratio: 'normal'
   });
 
   useEffect(() => {
@@ -320,7 +366,7 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
       const response = await fetch('/api/campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCampaign),
+        body: JSON.stringify(newCampaign)
       });
       if (response.ok) {
         const campaign = await response.json();
@@ -329,10 +375,10 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
         setNewCampaign({
           name: '',
           description: '',
-          setting: '',
-          tone: 'heroic',
+          setting: 'Forgotten Realms',
+          tone: 'heroic fantasy',
           starting_location: '',
-          time_ratio: 1,
+          time_ratio: 'normal'
         });
         setSelectedCampaign(campaign);
       }
@@ -345,7 +391,7 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
     if (!selectedCampaign) return;
     try {
       const response = await fetch(`/api/campaign/${selectedCampaign.id}/archive`, {
-        method: 'POST',
+        method: 'POST'
       });
       if (response.ok) {
         const updated = await response.json();
@@ -363,13 +409,12 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
       const response = await fetch(`/api/campaign/${selectedCampaign.id}/assign-character`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ character_id: selectedCharacterToAssign }),
+        body: JSON.stringify({ character_id: selectedCharacterToAssign })
       });
       if (response.ok) {
         loadCampaignCharacters(selectedCampaign.id);
         loadCampaignStats(selectedCampaign.id);
         setSelectedCharacterToAssign('');
-        if (onCharacterUpdated) onCharacterUpdated();
       }
     } catch (error) {
       console.error('Error assigning character:', error);
@@ -379,45 +424,42 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
   const handleRemoveCharacter = async (characterId) => {
     try {
       const response = await fetch(`/api/character/${characterId}/campaign`, {
-        method: 'DELETE',
+        method: 'DELETE'
       });
       if (response.ok) {
         loadCampaignCharacters(selectedCampaign.id);
         loadCampaignStats(selectedCampaign.id);
-        if (onCharacterUpdated) onCharacterUpdated();
       }
     } catch (error) {
       console.error('Error removing character:', error);
     }
   };
 
-  const unassignedCharacters = characters?.filter(
+  const unassignedCharacters = allCharacters?.filter(
     c => !c.campaign_id || c.campaign_id !== selectedCampaign?.id
   ) || [];
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>Campaign Management</h1>
-        <button
-          style={styles.button}
-          onClick={() => setShowNewCampaign(!showNewCampaign)}
-        >
-          {showNewCampaign ? 'Cancel' : '+ New Campaign'}
-        </button>
+        <h2 style={styles.title}>Campaigns</h2>
+        <p style={styles.subtitle}>
+          Organize your adventures into campaigns with their own world settings and timelines
+        </p>
       </div>
 
-      <div style={styles.explanation}>
-        Organize your adventures into campaigns. Each campaign has its own world setting, lore,
-        and timeline. Assign characters to campaigns to track their progress, manage shared party
-        resources, and keep multiple storylines organized. All world state, factions, and locations
-        are scoped to their campaign.
-      </div>
-
-      <div style={styles.mainContent}>
+      <div style={styles.grid}>
         {/* Left Panel - Campaign List */}
         <div style={styles.panel}>
-          <h2 style={styles.panelTitle}>Campaigns</h2>
+          <div style={styles.panelTitle}>
+            <span>Campaigns</span>
+            <button
+              style={{ ...styles.button, ...styles.primaryButton }}
+              onClick={() => setShowNewCampaign(!showNewCampaign)}
+            >
+              {showNewCampaign ? 'Cancel' : '+ New'}
+            </button>
+          </div>
 
           <div style={styles.filterTabs}>
             {['active', 'archived', 'all'].map(f => (
@@ -425,7 +467,7 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                 key={f}
                 style={{
                   ...styles.filterTab,
-                  ...(filter === f ? styles.filterTabActive : {}),
+                  ...(filter === f ? styles.filterTabActive : {})
                 }}
                 onClick={() => setFilter(f)}
               >
@@ -442,7 +484,7 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                   style={styles.input}
                   type="text"
                   value={newCampaign.name}
-                  onChange={e => setNewCampaign({...newCampaign, name: e.target.value})}
+                  onChange={e => setNewCampaign({ ...newCampaign, name: e.target.value })}
                   required
                   placeholder="The Dragon's Hoard"
                 />
@@ -453,63 +495,68 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                 <textarea
                   style={styles.textarea}
                   value={newCampaign.description}
-                  onChange={e => setNewCampaign({...newCampaign, description: e.target.value})}
+                  onChange={e => setNewCampaign({ ...newCampaign, description: e.target.value })}
                   placeholder="An epic adventure in a world of magic and mystery..."
                 />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Setting</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={newCampaign.setting}
-                  onChange={e => setNewCampaign({...newCampaign, setting: e.target.value})}
-                  placeholder="Forgotten Realms, Eberron, etc."
-                />
-              </div>
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Setting</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={newCampaign.setting}
+                    onChange={e => setNewCampaign({ ...newCampaign, setting: e.target.value })}
+                    placeholder="Forgotten Realms"
+                  />
+                </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Tone</label>
                   <select
                     style={styles.select}
                     value={newCampaign.tone}
-                    onChange={e => setNewCampaign({...newCampaign, tone: e.target.value})}
+                    onChange={e => setNewCampaign({ ...newCampaign, tone: e.target.value })}
                   >
                     {toneOptions.map(tone => (
                       <option key={tone} value={tone}>
-                        {tone.charAt(0).toUpperCase() + tone.slice(1)}
+                        {tone.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                       </option>
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Starting Location</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={newCampaign.starting_location}
+                    onChange={e => setNewCampaign({ ...newCampaign, starting_location: e.target.value })}
+                    placeholder="Waterdeep"
+                  />
+                </div>
 
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Time Ratio</label>
-                  <input
-                    style={styles.input}
-                    type="number"
+                  <select
+                    style={styles.select}
                     value={newCampaign.time_ratio}
-                    onChange={e => setNewCampaign({...newCampaign, time_ratio: parseInt(e.target.value) || 1})}
-                    min="1"
-                    max="10"
-                  />
+                    onChange={e => setNewCampaign({ ...newCampaign, time_ratio: e.target.value })}
+                  >
+                    <option value="realtime">Realtime (1:1)</option>
+                    <option value="leisurely">Leisurely (4:1)</option>
+                    <option value="normal">Normal (8:1)</option>
+                    <option value="fast">Fast (12:1)</option>
+                    <option value="montage">Montage (24:1)</option>
+                  </select>
                 </div>
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Starting Location</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={newCampaign.starting_location}
-                  onChange={e => setNewCampaign({...newCampaign, starting_location: e.target.value})}
-                  placeholder="Neverwinter, Waterdeep, etc."
-                />
-              </div>
-
-              <button type="submit" style={styles.button}>
+              <button type="submit" style={{ ...styles.button, ...styles.successButton }}>
                 Create Campaign
               </button>
             </form>
@@ -518,9 +565,9 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
           {!showNewCampaign && (
             <div style={styles.campaignList}>
               {loading ? (
-                <div style={styles.noData}>Loading campaigns...</div>
+                <div style={styles.emptyState}>Loading campaigns...</div>
               ) : filteredCampaigns.length === 0 ? (
-                <div style={styles.noData}>
+                <div style={styles.emptyState}>
                   No {filter !== 'all' ? filter : ''} campaigns found
                 </div>
               ) : (
@@ -530,25 +577,25 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                     style={{
                       ...styles.campaignCard,
                       ...(selectedCampaign?.id === campaign.id ? styles.campaignCardSelected : {}),
-                      ...(campaign.status === 'archived' ? styles.campaignCardArchived : {}),
+                      ...(campaign.status === 'archived' ? styles.campaignCardArchived : {})
                     }}
                     onClick={() => setSelectedCampaign(campaign)}
                   >
                     <div style={styles.campaignName}>
                       {campaign.name}
-                      <span
-                        style={{
-                          ...styles.badge,
-                          backgroundColor: campaign.status === 'active' ? '#228B22' : '#808080',
-                          color: 'white',
-                        }}
-                      >
-                        {campaign.status}
-                      </span>
                     </div>
                     <div style={styles.campaignMeta}>
-                      {campaign.setting && `${campaign.setting} • `}
-                      {campaign.tone && campaign.tone.charAt(0).toUpperCase() + campaign.tone.slice(1)}
+                      <span style={{
+                        ...styles.badge,
+                        ...styles.statusBadge[campaign.status]
+                      }}>
+                        {campaign.status}
+                      </span>
+                      {campaign.setting && (
+                        <span style={{ fontSize: '0.8rem', color: '#888' }}>
+                          {campaign.setting}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))
@@ -559,55 +606,54 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
 
         {/* Right Panel - Campaign Details */}
         <div style={styles.panel}>
-          <h2 style={styles.panelTitle}>Campaign Details</h2>
+          <h3 style={styles.panelTitle}>Campaign Details</h3>
 
           {!selectedCampaign ? (
-            <div style={styles.noData}>Select a campaign to view details</div>
+            <div style={styles.emptyState}>Select a campaign to view details</div>
           ) : (
             <>
               <div style={styles.detailSection}>
-                <div style={styles.detailLabel}>Name</div>
-                <div style={styles.detailValue}>
-                  <strong>{selectedCampaign.name}</strong>
-                  {selectedCampaign.status === 'archived' && (
-                    <span style={{ ...styles.badge, backgroundColor: '#808080', color: 'white', marginLeft: '8px' }}>
-                      Archived
-                    </span>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0, color: '#f5f5f5', fontSize: '1.25rem' }}>
+                    {selectedCampaign.name}
+                  </h3>
+                  <span style={{
+                    ...styles.badge,
+                    ...styles.statusBadge[selectedCampaign.status]
+                  }}>
+                    {selectedCampaign.status}
+                  </span>
                 </div>
+
+                {selectedCampaign.description && (
+                  <div style={styles.description}>
+                    {selectedCampaign.description}
+                  </div>
+                )}
               </div>
 
-              {selectedCampaign.description && (
-                <div style={styles.detailSection}>
-                  <div style={styles.detailLabel}>Description</div>
-                  <div style={styles.detailValue}>{selectedCampaign.description}</div>
+              <div style={styles.infoGrid}>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoLabel}>Setting</div>
+                  <div style={styles.infoValue}>{selectedCampaign.setting || 'Forgotten Realms'}</div>
                 </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                {selectedCampaign.setting && (
-                  <div style={styles.detailSection}>
-                    <div style={styles.detailLabel}>Setting</div>
-                    <div style={styles.detailValue}>{selectedCampaign.setting}</div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoLabel}>Tone</div>
+                  <div style={styles.infoValue}>
+                    {(selectedCampaign.tone || 'heroic fantasy').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                   </div>
-                )}
-                {selectedCampaign.tone && (
-                  <div style={styles.detailSection}>
-                    <div style={styles.detailLabel}>Tone</div>
-                    <div style={styles.detailValue}>
-                      {selectedCampaign.tone.charAt(0).toUpperCase() + selectedCampaign.tone.slice(1)}
-                    </div>
-                  </div>
-                )}
+                </div>
                 {selectedCampaign.starting_location && (
-                  <div style={styles.detailSection}>
-                    <div style={styles.detailLabel}>Starting Location</div>
-                    <div style={styles.detailValue}>{selectedCampaign.starting_location}</div>
+                  <div style={styles.infoItem}>
+                    <div style={styles.infoLabel}>Starting Location</div>
+                    <div style={styles.infoValue}>{selectedCampaign.starting_location}</div>
                   </div>
                 )}
-                <div style={styles.detailSection}>
-                  <div style={styles.detailLabel}>Time Ratio</div>
-                  <div style={styles.detailValue}>{selectedCampaign.time_ratio || 1}x</div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoLabel}>Time Ratio</div>
+                  <div style={styles.infoValue}>
+                    {selectedCampaign.time_ratio || 'normal'}
+                  </div>
                 </div>
               </div>
 
@@ -628,23 +674,14 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                 </div>
               )}
 
-              {selectedCampaign.status === 'active' && (
-                <button
-                  style={{ ...styles.button, ...styles.buttonDanger, marginTop: '15px' }}
-                  onClick={handleArchiveCampaign}
-                >
-                  Archive Campaign
-                </button>
-              )}
-
               {/* Characters Section */}
-              <div style={{ marginTop: '20px' }}>
-                <div style={styles.detailLabel}>
+              <div style={{ ...styles.detailSection, marginTop: '1.5rem' }}>
+                <div style={styles.sectionTitle}>
                   Characters ({campaignCharacters.length})
                 </div>
 
                 {campaignCharacters.length === 0 ? (
-                  <div style={{ ...styles.noData, padding: '20px' }}>
+                  <div style={{ ...styles.emptyState, padding: '1rem' }}>
                     No characters assigned to this campaign
                   </div>
                 ) : (
@@ -658,7 +695,7 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                           </span>
                         </div>
                         <button
-                          style={{ ...styles.button, ...styles.buttonSecondary, margin: 0, padding: '4px 8px', fontSize: '12px' }}
+                          style={{ ...styles.button, ...styles.secondaryButton, padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                           onClick={() => handleRemoveCharacter(char.id)}
                         >
                           Remove
@@ -670,8 +707,8 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
 
                 {selectedCampaign.status === 'active' && unassignedCharacters.length > 0 && (
                   <div style={styles.assignSection}>
-                    <div style={styles.detailLabel}>Assign Character</div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <div style={styles.sectionTitle}>Assign Character</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                       <select
                         style={{ ...styles.select, flex: 1 }}
                         value={selectedCharacterToAssign}
@@ -685,7 +722,7 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                         ))}
                       </select>
                       <button
-                        style={{ ...styles.button, ...styles.buttonSuccess, margin: 0 }}
+                        style={{ ...styles.button, ...styles.successButton }}
                         onClick={handleAssignCharacter}
                         disabled={!selectedCharacterToAssign}
                       >
@@ -695,6 +732,17 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
                   </div>
                 )}
               </div>
+
+              {selectedCampaign.status === 'active' && (
+                <div style={styles.actions}>
+                  <button
+                    style={{ ...styles.button, ...styles.dangerButton }}
+                    onClick={handleArchiveCampaign}
+                  >
+                    Archive Campaign
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
