@@ -15,6 +15,9 @@ function NPCGenerator({ onBack, character }) {
   const [extracting, setExtracting] = useState(false)
   const [extractionResult, setExtractionResult] = useState(null)
   const [showHidden, setShowHidden] = useState(false)
+  const [skipDeleteConfirm, setSkipDeleteConfirm] = useState(false)
+  const [selectedForDelete, setSelectedForDelete] = useState(new Set())
+  const [selectMode, setSelectMode] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -176,7 +179,7 @@ function NPCGenerator({ onBack, character }) {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this NPC?')) return
+    if (!skipDeleteConfirm && !confirm('Are you sure you want to delete this NPC?')) return
 
     try {
       const response = await fetch(`/api/npc/${id}`, { method: 'DELETE' })
@@ -185,10 +188,59 @@ function NPCGenerator({ onBack, character }) {
         if (selectedNpc?.id === id) {
           setSelectedNpc(null)
         }
+        setSelectedForDelete(prev => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
       }
     } catch (error) {
       console.error('Error deleting NPC:', error)
     }
+  }
+
+  const handleMassDelete = async () => {
+    if (selectedForDelete.size === 0) return
+
+    const count = selectedForDelete.size
+    if (!confirm(`Are you sure you want to delete ${count} NPC${count > 1 ? 's' : ''}? This cannot be undone.`)) return
+
+    try {
+      const deletePromises = Array.from(selectedForDelete).map(id =>
+        fetch(`/api/npc/${id}`, { method: 'DELETE' })
+      )
+      await Promise.all(deletePromises)
+
+      setNpcs(npcs.filter(n => !selectedForDelete.has(n.id)))
+      if (selectedNpc && selectedForDelete.has(selectedNpc.id)) {
+        setSelectedNpc(null)
+      }
+      setSelectedForDelete(new Set())
+      setSelectMode(false)
+    } catch (error) {
+      console.error('Error in mass delete:', error)
+    }
+  }
+
+  const toggleSelectForDelete = (id) => {
+    setSelectedForDelete(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const selectAllVisible = () => {
+    const visibleNpcs = npcs.filter(npc => showHidden || npc.campaign_availability !== 'hidden')
+    setSelectedForDelete(new Set(visibleNpcs.map(n => n.id)))
+  }
+
+  const deselectAll = () => {
+    setSelectedForDelete(new Set())
   }
 
   const handleToggleArchive = async (npc) => {
@@ -513,6 +565,42 @@ function NPCGenerator({ onBack, character }) {
             />
             Show Archived ({npcs.filter(n => n.campaign_availability === 'hidden').length})
           </label>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            fontSize: '0.85rem',
+            color: '#888',
+            cursor: 'pointer',
+            padding: '0.5rem 0.75rem',
+            background: skipDeleteConfirm ? 'rgba(231, 76, 60, 0.2)' : 'transparent',
+            border: skipDeleteConfirm ? '1px solid #e74c3c' : '1px solid transparent',
+            borderRadius: '4px'
+          }}>
+            <input
+              type="checkbox"
+              checked={skipDeleteConfirm}
+              onChange={(e) => setSkipDeleteConfirm(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Skip Delete Confirm
+          </label>
+          <button
+            className="button"
+            onClick={() => {
+              setSelectMode(!selectMode)
+              if (selectMode) {
+                setSelectedForDelete(new Set())
+              }
+            }}
+            style={{
+              background: selectMode ? 'rgba(231, 76, 60, 0.2)' : 'rgba(52, 152, 219, 0.2)',
+              border: selectMode ? '1px solid #e74c3c' : '1px solid #3498db',
+              color: selectMode ? '#e74c3c' : '#3498db'
+            }}
+          >
+            {selectMode ? 'Cancel Selection' : 'Select Multiple'}
+          </button>
           <button
             className="button"
             onClick={() => {
@@ -524,6 +612,44 @@ function NPCGenerator({ onBack, character }) {
             + Create NPC
           </button>
         </div>
+        {selectMode && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.75rem',
+            marginTop: '0.5rem',
+            background: 'rgba(231, 76, 60, 0.1)',
+            border: '1px solid rgba(231, 76, 60, 0.3)',
+            borderRadius: '6px'
+          }}>
+            <span style={{ color: '#e74c3c', fontWeight: '500' }}>
+              {selectedForDelete.size} selected
+            </span>
+            <button
+              className="button button-small"
+              onClick={selectAllVisible}
+              style={{ background: 'rgba(52, 152, 219, 0.2)', border: '1px solid #3498db', color: '#3498db' }}
+            >
+              Select All
+            </button>
+            <button
+              className="button button-small"
+              onClick={deselectAll}
+              style={{ background: 'rgba(149, 165, 166, 0.2)', border: '1px solid #95a5a6', color: '#95a5a6' }}
+            >
+              Deselect All
+            </button>
+            <button
+              className="button button-small button-danger"
+              onClick={handleMassDelete}
+              disabled={selectedForDelete.size === 0}
+              style={{ opacity: selectedForDelete.size === 0 ? 0.5 : 1 }}
+            >
+              Delete Selected ({selectedForDelete.size})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Extraction Result Banner */}
@@ -1243,8 +1369,29 @@ function NPCGenerator({ onBack, character }) {
             npcs
               .filter(npc => showHidden || npc.campaign_availability !== 'hidden')
               .map(npc => (
-              <div key={npc.id} className="npc-card" onClick={() => setSelectedNpc(selectedNpc?.id === npc.id ? null : npc)}>
+              <div key={npc.id} className="npc-card" onClick={() => {
+                if (selectMode) {
+                  toggleSelectForDelete(npc.id)
+                } else {
+                  setSelectedNpc(selectedNpc?.id === npc.id ? null : npc)
+                }
+              }}>
                 <div className="npc-card-header">
+                  {selectMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedForDelete.has(npc.id)}
+                      onChange={() => toggleSelectForDelete(npc.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        marginRight: '0.75rem',
+                        cursor: 'pointer',
+                        accentColor: '#e74c3c'
+                      }}
+                    />
+                  )}
                   {npc.avatar ? (
                     <img
                       src={npc.avatar}

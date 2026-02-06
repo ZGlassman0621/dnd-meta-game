@@ -215,17 +215,18 @@ function AdventureManager({ character, onAdventureStarted }) {
     <div className="container">
       {/* Campaign Context Header */}
       {campaignContext && (
-        <div style={{
-          background: 'rgba(46, 204, 113, 0.1)',
-          border: '1px solid rgba(46, 204, 113, 0.3)',
-          borderRadius: '8px',
-          padding: '1rem',
-          marginBottom: '1.5rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Campaign Date & Time</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#2ecc71' }}>
+        <>
+          <h2>Campaign Date & Time</h2>
+          <div style={{
+            background: 'rgba(0, 0, 0, 0.2)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#2ecc71' }}>
                 {calendar?.formatted || 'Unknown'}
               </div>
               <div style={{ fontSize: '0.9rem', color: '#f39c12', marginTop: '0.25rem' }}>
@@ -326,8 +327,9 @@ function AdventureManager({ character, onAdventureStarted }) {
                 <span style={{ color: '#f39c12' }}>{campaignContext.character.currentQuest}</span>
               </div>
             )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <h2>Start New Adventure</h2>

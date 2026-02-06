@@ -136,6 +136,26 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     ? JSON.parse(character.skills || '[]')
     : (character.skills || []);
 
+  // Parse feats - can be array of strings or array of objects with name/key
+  const featsRaw = typeof character.feats === 'string'
+    ? JSON.parse(character.feats || '[]')
+    : (character.feats || []);
+  const feats = featsRaw.map(f => typeof f === 'string' ? f : (f.name || f.key)).filter(Boolean);
+
+  // Parse known cantrips and spells
+  const knownCantrips = typeof character.known_cantrips === 'string'
+    ? JSON.parse(character.known_cantrips || '[]')
+    : (character.known_cantrips || []);
+
+  const knownSpells = typeof character.known_spells === 'string'
+    ? JSON.parse(character.known_spells || '[]')
+    : (character.known_spells || []);
+
+  // Parse prepared spells (for prepared casters like Clerics, Paladins, Wizards)
+  const preparedSpells = typeof character.prepared_spells === 'string'
+    ? JSON.parse(character.prepared_spells || '[]')
+    : (character.prepared_spells || []);
+
   const fullName = character.name;
   const firstName = character.first_name || character.name.split(' ')[0];
   const nickname = character.nickname || null;
@@ -158,6 +178,79 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     weaponStr = `${qualityPrefix}${w.name} (+${w.attackBonus} to hit, ${w.damage} ${w.damageType})`;
   }
 
+  // Build feats section with mechanical effects for DM awareness
+  let featsSection = '';
+  if (feats.length > 0) {
+    featsSection = `\n- Feats: ${feats.join(', ')}`;
+    // Add important mechanical notes for common feats
+    const featEffects = [];
+    feats.forEach(feat => {
+      const featLower = feat.toLowerCase().replace(/_/g, ' ');
+      if (featLower.includes('dungeon delver')) {
+        featEffects.push('Dungeon Delver: Advantage on Perception/Investigation to detect secret doors; advantage on saves vs traps; resistance to trap damage');
+      }
+      if (featLower.includes('alert')) {
+        featEffects.push('Alert: +5 initiative; cannot be surprised; hidden creatures do not gain advantage');
+      }
+      if (featLower.includes('observant')) {
+        featEffects.push('Observant: +5 passive Perception and Investigation; can read lips');
+      }
+      if (featLower.includes('lucky')) {
+        featEffects.push('Lucky: 3 luck points to reroll d20s per long rest');
+      }
+      if (featLower.includes('sentinel')) {
+        featEffects.push('Sentinel: Opportunity attacks reduce speed to 0; can attack when ally is attacked');
+      }
+      if (featLower.includes('sharpshooter')) {
+        featEffects.push('Sharpshooter: No disadvantage at long range; ignore cover; can take -5 to hit for +10 damage');
+      }
+      if (featLower.includes('great weapon master')) {
+        featEffects.push('Great Weapon Master: Bonus action attack on crit/kill; can take -5 to hit for +10 damage');
+      }
+      if (featLower.includes('polearm master')) {
+        featEffects.push('Polearm Master: Bonus action d4 attack; opportunity attacks when enemies enter reach');
+      }
+      if (featLower.includes('war caster')) {
+        featEffects.push('War Caster: Advantage on concentration saves; can cast spells as opportunity attacks');
+      }
+      if (featLower.includes('mobile')) {
+        featEffects.push('Mobile: +10 speed; no opportunity attacks from creatures you attack');
+      }
+      if (featLower.includes('resilient')) {
+        featEffects.push('Resilient: Proficiency in one saving throw');
+      }
+      if (featLower.includes('skulker')) {
+        featEffects.push('Skulker: Can hide when lightly obscured; missed ranged attacks do not reveal position');
+      }
+      if (featLower.includes('mage slayer')) {
+        featEffects.push('Mage Slayer: Reaction attack when adjacent creature casts spell; targets have disadvantage on concentration');
+      }
+      if (featLower.includes('savage attacker')) {
+        featEffects.push('Savage Attacker: Reroll melee weapon damage once per turn');
+      }
+    });
+    if (featEffects.length > 0) {
+      featsSection += `\n  FEAT EFFECTS (apply these in relevant situations):\n  ${featEffects.join('\n  ')}`;
+    }
+  }
+
+  // Build spellcasting section
+  let spellSection = '';
+  const hasSpells = knownCantrips.length > 0 || knownSpells.length > 0 || preparedSpells.length > 0;
+  if (hasSpells) {
+    const spellParts = [];
+    if (knownCantrips.length > 0) {
+      spellParts.push(`Cantrips: ${knownCantrips.join(', ')}`);
+    }
+    if (knownSpells.length > 0) {
+      spellParts.push(`Known Spells: ${knownSpells.join(', ')}`);
+    }
+    if (preparedSpells.length > 0) {
+      spellParts.push(`Prepared Spells: ${preparedSpells.join(', ')}`);
+    }
+    spellSection = `\n- Spellcasting: ${spellParts.join('; ')}`;
+  }
+
   return {
     text: `${label}:
 - Full Name: ${fullName}
@@ -171,7 +264,7 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
 - Armor Class: ${ac}
 - Weapon: ${weaponStr}
 - Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}
-- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}
+- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}
 - Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}
 - Current Location: ${character.current_location || 'Unknown'}
 - Current Quest: ${character.current_quest || 'None'}
@@ -1067,6 +1160,60 @@ RESPONSE FORMAT:
 - NEVER include meta-commentary, behind-the-scenes notes, or DM notes in your responses
 - NEVER write things like "(Note: ...)" or "(This scene establishes...)" - your response should be pure narrative
 - Keep all internal reasoning, scene goals, and structural notes INTERNAL - the player only sees the story
+
+BACKSTORY UTILIZATION - MINE THE PLAYER'S HISTORY FOR STORYTELLING GOLD:
+The player's backstory is a treasure trove of storytelling potential. Don't just acknowledge it - ACTIVELY WEAVE IT INTO THE CAMPAIGN.
+
+1. IDENTIFY KEY BACKSTORY ELEMENTS:
+   - Named characters (family, mentors, rivals, enemies, lovers, friends)
+   - Factions or organizations (guilds, temples, military units, criminal groups)
+   - Locations (hometown, places of trauma, places of joy, significant sites)
+   - Events (traumas, victories, promises made, debts owed, crimes committed)
+   - Relationships (who do they love? hate? owe? miss? fear seeing again?)
+   - Unfinished business (revenge to take, amends to make, mysteries unsolved)
+
+2. CREATE CONNECTIONS TO THE CURRENT STORY:
+   - An NPC they meet could know someone from their past
+   - A faction mentioned in their backstory could have influence in this region
+   - A location they visit could remind them of somewhere significant
+   - An enemy's method could mirror a past trauma
+   - A letter, rumor, or news could reference their hometown or family
+
+3. INTRODUCE BACKSTORY CHARACTERS:
+   - Bring people from their past INTO the story when dramatically appropriate
+   - A childhood friend appears unexpectedly - what has happened to them?
+   - A family member sends an urgent message
+   - An old rival is working for the antagonist
+   - Someone they wronged comes seeking closure (or revenge)
+   - A mentor reappears when they need guidance most
+
+4. TIMING REVELATIONS FOR MAXIMUM IMPACT:
+   - Don't use all backstory elements at once - pace them throughout the campaign
+   - Save major backstory NPCs for pivotal moments
+   - Use smaller references early to establish that their past MATTERS
+   - Let the player feel their history catching up to them gradually
+   - A passing mention in session 2 can become a major plot point in session 8
+
+5. EMOTIONAL CALLBACKS:
+   - Reference their stated personality traits in situations that test them
+   - Create scenarios that echo past experiences but with new choices available
+   - Let them confront old fears, old mistakes, or old relationships
+   - Give them opportunities to be who they claimed to be (or to grow beyond it)
+
+6. WHAT NOT TO DO:
+   - Don't contradict established backstory facts
+   - Don't diminish their backstory ("actually your mentor was secretly evil all along" - unless earned)
+   - Don't force backstory connections where they don't fit naturally
+   - Don't info-dump - weave details in organically
+   - Don't make every session about their past - balance with new adventures
+
+EXAMPLE: If backstory mentions "raised in a fishing village by my grandmother after my parents died at sea":
+- Coastal settings evoke memories
+- Meeting fishermen could prompt conversation about the trade
+- The grandmother could send word, or worse - fall ill
+- Someone could claim to have known their parents
+- A sea monster encounter carries extra emotional weight
+- The player might have strong opinions about maritime superstitions
 
 STORYTELLING ESSENTIALS:
 - Create a compelling antagonist with clear motivation early in the campaign

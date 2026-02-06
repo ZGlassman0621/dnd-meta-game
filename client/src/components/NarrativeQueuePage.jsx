@@ -408,6 +408,16 @@ export default function NarrativeQueuePage({ character }) {
     listContent: {
       flex: 1,
       overflowY: 'auto'
+    },
+    explanation: {
+      backgroundColor: 'rgba(230, 126, 34, 0.1)',
+      border: '1px solid rgba(230, 126, 34, 0.3)',
+      borderRadius: '8px',
+      padding: '12px 16px',
+      marginBottom: '15px',
+      color: '#bdc3c7',
+      fontSize: '13px',
+      lineHeight: '1.5',
     }
   };
 
@@ -432,6 +442,12 @@ export default function NarrativeQueuePage({ character }) {
       <div style={styles.listPanel}>
         <div style={styles.sectionTitle}>
           📬 Narrative Queue
+        </div>
+
+        <div style={styles.explanation}>
+          Story events waiting to be revealed. The DM AI uses this queue to deliver narrative
+          developments at the right moments - completed adventures, quest updates, companion
+          reactions, and world changes.
         </div>
 
         {/* Summary */}

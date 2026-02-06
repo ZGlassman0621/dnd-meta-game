@@ -1,6 +1,7 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import * as questService from '../services/questService.js';
+import * as backstoryParserService from '../services/backstoryParserService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import {
   PROFICIENCY_BONUS,
@@ -99,7 +100,12 @@ router.post('/', async (req, res) => {
       allies = null,
       enemies = null,
       backstory = null,
-      other_notes = null
+      other_notes = null,
+      known_cantrips = '[]',
+      known_spells = '[]',
+      feats = '[]',
+      languages = '[]',
+      tool_proficiencies = '[]'
     } = req.body;
 
     const sql = `
@@ -114,8 +120,9 @@ router.post('/', async (req, res) => {
         avatar, alignment, faith, lifestyle,
         hair_color, skin_color, eye_color, height, weight, age,
         personality_traits, ideals, bonds, flaws,
-        organizations, allies, enemies, backstory, other_notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        organizations, allies, enemies, backstory, other_notes,
+        known_cantrips, known_spells, feats, languages, tool_proficiencies
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await dbRun(sql, [
@@ -129,7 +136,8 @@ router.post('/', async (req, res) => {
       avatar, alignment, faith, lifestyle,
       hair_color, skin_color, eye_color, height, weight, age,
       personality_traits, ideals, bonds, flaws,
-      organizations, allies, enemies, backstory, other_notes
+      organizations, allies, enemies, backstory, other_notes,
+      known_cantrips, known_spells, feats, languages, tool_proficiencies
     ]);
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [result.lastInsertRowid]);
@@ -156,9 +164,9 @@ router.put('/:id', async (req, res) => {
       'hair_color', 'skin_color', 'eye_color', 'height', 'weight', 'age',
       'personality_traits', 'ideals', 'bonds', 'flaws',
       'organizations', 'allies', 'enemies', 'backstory', 'other_notes',
-      'known_cantrips', 'prepared_spells',
+      'known_cantrips', 'known_spells', 'prepared_spells', 'feats',
       'class_levels', 'hit_dice',
-      'campaign_config'
+      'campaign_config', 'languages', 'tool_proficiencies'
     ];
 
     for (const [key, value] of Object.entries(req.body)) {
@@ -1173,6 +1181,89 @@ Be concise but specific. Use names and details from the sessions. Only include t
   } catch (error) {
     console.error('Error generating campaign notes:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// PARSED BACKSTORY ROUTES
+// ============================================================
+
+// GET /api/character/:id/parsed-backstory - Get the parsed backstory
+router.get('/:id/parsed-backstory', async (req, res) => {
+  try {
+    const parsed = await backstoryParserService.getParsedBackstory(req.params.id);
+    res.json(parsed);
+  } catch (error) {
+    handleServerError(res, error, 'fetch parsed backstory');
+  }
+});
+
+// POST /api/character/:id/parsed-backstory/parse - Parse or re-parse the backstory
+router.post('/:id/parsed-backstory/parse', async (req, res) => {
+  try {
+    const { preserveManualEdits = false } = req.body;
+
+    let parsed;
+    if (preserveManualEdits) {
+      parsed = await backstoryParserService.reparseBackstory(req.params.id, true);
+    } else {
+      parsed = await backstoryParserService.parseBackstory(req.params.id);
+    }
+
+    res.json(parsed);
+  } catch (error) {
+    handleServerError(res, error, 'parse backstory');
+  }
+});
+
+// PUT /api/character/:id/parsed-backstory/:elementType/:elementId - Update a specific element
+router.put('/:id/parsed-backstory/:elementType/:elementId', async (req, res) => {
+  try {
+    const { elementType, elementId } = req.params;
+    const updates = req.body;
+
+    const parsed = await backstoryParserService.updateElement(
+      req.params.id,
+      elementType,
+      elementId,
+      updates
+    );
+    res.json(parsed);
+  } catch (error) {
+    handleServerError(res, error, 'update backstory element');
+  }
+});
+
+// POST /api/character/:id/parsed-backstory/:elementType - Add a new element
+router.post('/:id/parsed-backstory/:elementType', async (req, res) => {
+  try {
+    const { elementType } = req.params;
+    const element = req.body;
+
+    const parsed = await backstoryParserService.addElement(
+      req.params.id,
+      elementType,
+      element
+    );
+    res.json(parsed);
+  } catch (error) {
+    handleServerError(res, error, 'add backstory element');
+  }
+});
+
+// DELETE /api/character/:id/parsed-backstory/:elementType/:elementId - Remove an element
+router.delete('/:id/parsed-backstory/:elementType/:elementId', async (req, res) => {
+  try {
+    const { elementType, elementId } = req.params;
+
+    const parsed = await backstoryParserService.removeElement(
+      req.params.id,
+      elementType,
+      elementId
+    );
+    res.json(parsed);
+  } catch (error) {
+    handleServerError(res, error, 'remove backstory element');
   }
 });
 

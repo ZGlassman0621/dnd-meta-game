@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const styles = {
   container: {
-    padding: '20px',
+    padding: '1rem',
     maxWidth: '1400px',
     margin: '0 auto',
   },
@@ -10,123 +10,137 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '20px',
+    marginBottom: '1.5rem',
   },
   title: {
-    fontSize: '28px',
+    fontSize: '1.8rem',
     fontWeight: 'bold',
-    color: '#8B4513',
+    color: '#f5f5f5',
     margin: 0,
+  },
+  explanation: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    marginBottom: '1.5rem',
+    color: '#ccc',
+    fontSize: '0.9rem',
+    lineHeight: '1.5',
   },
   summaryCards: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '15px',
-    marginBottom: '20px',
+    gap: '1rem',
+    marginBottom: '1.5rem',
   },
   summaryCard: {
-    backgroundColor: '#FFF8DC',
-    border: '2px solid #8B4513',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '8px',
-    padding: '15px',
+    padding: '1rem',
     textAlign: 'center',
   },
   summaryValue: {
-    fontSize: '32px',
+    fontSize: '2rem',
     fontWeight: 'bold',
-    color: '#8B4513',
+    color: '#f5f5f5',
   },
   summaryLabel: {
-    fontSize: '14px',
-    color: '#666',
+    fontSize: '0.85rem',
+    color: '#888',
     marginTop: '4px',
   },
   mainContent: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: '20px',
+    gap: '1.5rem',
   },
   panel: {
-    backgroundColor: '#FFF8DC',
-    border: '2px solid #8B4513',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '8px',
-    padding: '15px',
+    padding: '1rem',
     minHeight: '400px',
   },
   panelTitle: {
-    fontSize: '18px',
+    fontSize: '1.1rem',
     fontWeight: 'bold',
-    color: '#8B4513',
-    marginBottom: '15px',
-    borderBottom: '1px solid #DEB887',
-    paddingBottom: '8px',
+    color: '#f5f5f5',
+    marginBottom: '1rem',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    paddingBottom: '0.5rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   controlSection: {
-    backgroundColor: '#F5F5DC',
-    padding: '15px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: '1rem',
     borderRadius: '8px',
-    marginBottom: '15px',
+    marginBottom: '1rem',
   },
   controlTitle: {
-    fontWeight: 'bold',
-    color: '#8B4513',
-    marginBottom: '10px',
-    fontSize: '14px',
+    fontWeight: '500',
+    color: '#f5f5f5',
+    marginBottom: '0.75rem',
+    fontSize: '0.9rem',
   },
   controlRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    marginBottom: '10px',
+    gap: '0.75rem',
+    marginBottom: '0.75rem',
   },
   button: {
-    padding: '8px 16px',
-    backgroundColor: '#8B4513',
-    color: '#FFF8DC',
+    padding: '0.5rem 1rem',
+    backgroundColor: '#3498db',
+    color: 'white',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
   },
   buttonSecondary: {
-    backgroundColor: '#DEB887',
-    color: '#8B4513',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#ccc',
   },
   buttonSuccess: {
-    backgroundColor: '#228B22',
+    backgroundColor: '#2ecc71',
     color: 'white',
   },
   buttonWarning: {
-    backgroundColor: '#FFA500',
+    backgroundColor: '#f39c12',
     color: 'white',
   },
   buttonDanger: {
-    backgroundColor: '#CD5C5C',
+    backgroundColor: '#e74c3c',
     color: 'white',
   },
   input: {
-    padding: '8px',
-    border: '1px solid #DEB887',
+    padding: '0.5rem',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
     borderRadius: '4px',
-    fontSize: '14px',
+    fontSize: '0.9rem',
     width: '80px',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    color: '#f5f5f5',
   },
   select: {
-    padding: '8px',
-    border: '1px solid #DEB887',
+    padding: '0.5rem',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
     borderRadius: '4px',
-    fontSize: '14px',
-    backgroundColor: 'white',
+    fontSize: '0.9rem',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    color: '#f5f5f5',
   },
   listItem: {
-    padding: '10px 12px',
-    border: '1px solid #DEB887',
+    padding: '0.75rem',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '4px',
-    marginBottom: '8px',
-    backgroundColor: '#FFFEF0',
+    marginBottom: '0.5rem',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   listItemHeader: {
     display: 'flex',
@@ -135,31 +149,31 @@ const styles = {
     marginBottom: '4px',
   },
   listItemTitle: {
-    fontWeight: 'bold',
-    color: '#8B4513',
+    fontWeight: '500',
+    color: '#f5f5f5',
   },
   listItemMeta: {
-    fontSize: '12px',
-    color: '#666',
+    fontSize: '0.8rem',
+    color: '#888',
   },
   badge: {
     display: 'inline-block',
     padding: '2px 8px',
     borderRadius: '12px',
-    fontSize: '11px',
+    fontSize: '0.7rem',
     fontWeight: 'bold',
     marginLeft: '8px',
   },
   progressBar: {
     height: '6px',
-    backgroundColor: '#E0E0E0',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: '3px',
     overflow: 'hidden',
     marginTop: '6px',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4169E1',
+    backgroundColor: '#3498db',
     transition: 'width 0.3s',
   },
   noData: {
@@ -169,53 +183,59 @@ const styles = {
     fontStyle: 'italic',
   },
   resultBox: {
-    backgroundColor: '#E8F5E9',
-    padding: '12px',
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    padding: '0.75rem',
     borderRadius: '6px',
-    marginTop: '10px',
-    fontSize: '13px',
+    marginTop: '0.75rem',
+    fontSize: '0.85rem',
+    color: '#ccc',
+    border: '1px solid rgba(46, 204, 113, 0.3)',
   },
   resultBoxWarning: {
-    backgroundColor: '#FFF3E0',
+    backgroundColor: 'rgba(243, 156, 18, 0.15)',
+    border: '1px solid rgba(243, 156, 18, 0.3)',
   },
   logEntry: {
-    padding: '8px',
-    borderLeft: '3px solid #4169E1',
-    marginBottom: '6px',
-    backgroundColor: '#FFFEF0',
-    fontSize: '12px',
+    padding: '0.5rem',
+    borderLeft: '3px solid #3498db',
+    marginBottom: '0.4rem',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    fontSize: '0.8rem',
+    color: '#ccc',
   },
   logEntrySuccess: {
-    borderLeftColor: '#228B22',
+    borderLeftColor: '#2ecc71',
   },
   logEntryWarning: {
-    borderLeftColor: '#FFA500',
+    borderLeftColor: '#f39c12',
   },
   tabs: {
     display: 'flex',
-    gap: '10px',
-    marginBottom: '15px',
+    gap: '0.5rem',
+    marginBottom: '1rem',
   },
   tab: {
-    padding: '8px 16px',
-    border: '1px solid #8B4513',
+    padding: '0.5rem 1rem',
+    border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    backgroundColor: '#FFF8DC',
-    color: '#8B4513',
-    fontSize: '13px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#ccc',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
   },
   tabActive: {
-    backgroundColor: '#8B4513',
-    color: '#FFF8DC',
+    backgroundColor: '#3498db',
+    color: 'white',
   },
   effectCard: {
-    padding: '8px 12px',
-    border: '1px solid #DEB887',
+    padding: '0.5rem 0.75rem',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '4px',
-    marginBottom: '6px',
-    backgroundColor: '#F0F8FF',
-    fontSize: '13px',
+    marginBottom: '0.4rem',
+    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+    fontSize: '0.85rem',
+    color: '#ccc',
   },
 };
 
@@ -360,6 +380,12 @@ const LivingWorldPage = ({ character }) => {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Living World Dashboard</h1>
+      </div>
+
+      <div style={styles.explanation}>
+        Watch your campaign world evolve over time. Factions pursue their own goals, world events
+        unfold, and your actions have lasting consequences. This dashboard shows the current state
+        of the world - active conflicts, ongoing schemes, and the ripple effects of past decisions.
       </div>
 
       {/* Summary Cards */}
@@ -545,7 +571,7 @@ const LivingWorldPage = ({ character }) => {
               <div style={{ marginBottom: '15px' }}>
                 <div style={styles.controlTitle}>Character's View</div>
                 {characterView ? (
-                  <div style={{ fontSize: '13px', color: '#666' }}>
+                  <div style={{ fontSize: '13px', color: '#5D4037' }}>
                     Visible factions: {characterView.factions?.length || 0}<br />
                     Known goals: {characterView.knownGoals?.length || 0}<br />
                     Visible events: {characterView.events?.length || 0}
@@ -591,7 +617,7 @@ const LivingWorldPage = ({ character }) => {
                     </div>
                     {(faction.goals || []).filter(g => g.status === 'active').slice(0, 2).map(goal => (
                       <div key={goal.id} style={{ marginTop: '6px', fontSize: '12px' }}>
-                        <span style={{ color: '#666' }}>{goal.title}</span>
+                        <span style={{ color: '#5D4037' }}>{goal.title}</span>
                         <div style={styles.progressBar}>
                           <div
                             style={{
@@ -663,11 +689,11 @@ const LivingWorldPage = ({ character }) => {
                       <span style={{ fontWeight: 'bold', color: '#2C3E50' }}>
                         {effect.effect_type}
                       </span>
-                      <span style={{ fontSize: '11px', color: '#666' }}>
+                      <span style={{ fontSize: '11px', color: '#5D4037' }}>
                         {effect.target_type}: {effect.target_id}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                    <div style={{ fontSize: '12px', color: '#5D4037', marginTop: '4px' }}>
                       {effect.description}
                     </div>
                     {effect.expires_at && (

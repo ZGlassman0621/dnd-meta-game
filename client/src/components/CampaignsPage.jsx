@@ -18,6 +18,16 @@ const styles = {
     color: '#8B4513',
     margin: 0,
   },
+  explanation: {
+    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    border: '1px solid #DEB887',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    color: '#5D4037',
+    fontSize: '14px',
+    lineHeight: '1.5',
+  },
   mainContent: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
@@ -88,7 +98,7 @@ const styles = {
   },
   campaignMeta: {
     fontSize: '12px',
-    color: '#666',
+    color: '#5D4037',
   },
   badge: {
     display: 'inline-block',
@@ -129,7 +139,7 @@ const styles = {
   },
   statLabel: {
     fontSize: '11px',
-    color: '#666',
+    color: '#5D4037',
   },
   button: {
     padding: '8px 16px',
@@ -395,6 +405,13 @@ const CampaignsPage = ({ characters, onCharacterUpdated }) => {
         >
           {showNewCampaign ? 'Cancel' : '+ New Campaign'}
         </button>
+      </div>
+
+      <div style={styles.explanation}>
+        Organize your adventures into campaigns. Each campaign has its own world setting, lore,
+        and timeline. Assign characters to campaigns to track their progress, manage shared party
+        resources, and keep multiple storylines organized. All world state, factions, and locations
+        are scoped to their campaign.
       </div>
 
       <div style={styles.mainContent}>

@@ -20,6 +20,7 @@ import CampaignsPage from './components/CampaignsPage'
 import QuestsPage from './components/QuestsPage'
 import LocationsPage from './components/LocationsPage'
 import CompanionBackstoryPage from './components/CompanionBackstoryPage'
+import BackstoryParserPage from './components/BackstoryParserPage'
 import NarrativeQueuePage from './components/NarrativeQueuePage'
 import GenerationControlsPage from './components/GenerationControlsPage'
 import NavigationMenu from './components/NavigationMenu'
@@ -236,6 +237,11 @@ function App() {
         />
       ) : activeView === 'showCompanions' && selectedCharacter ? (
         <CompanionsPage
+          character={selectedCharacter}
+          onCharacterUpdated={handleCharacterUpdated}
+        />
+      ) : activeView === 'showParsedBackstory' && selectedCharacter ? (
+        <BackstoryParserPage
           character={selectedCharacter}
           onCharacterUpdated={handleCharacterUpdated}
         />

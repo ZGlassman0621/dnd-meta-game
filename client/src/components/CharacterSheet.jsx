@@ -109,7 +109,8 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
   const capitalize = (str) => {
     if (!str) return str
-    return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    // Replace underscores with spaces, then capitalize each word
+    return str.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   }
 
   const getModifier = (score) => {
@@ -586,11 +587,39 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   const getRaceTraits = () => {
     if (!raceData) return []
     const traits = []
-    if (raceData.traits) traits.push(...raceData.traits)
-    if (raceData.abilities) traits.push(`Ability Bonuses: ${raceData.abilities}`)
-    if (raceData.speed) traits.push(`Speed: ${raceData.speed}`)
+
+    // Check if character has a subrace and get subrace-specific traits
+    let subraceData = null
+    if (character.subrace && raceData.subraces) {
+      subraceData = raceData.subraces.find(sr => sr.name === character.subrace)
+    }
+
+    // Use subrace traits if available, otherwise use race traits (but filter out generic "Choose..." prompts)
+    if (subraceData?.traits) {
+      traits.push(...subraceData.traits)
+    } else if (raceData.traits) {
+      // Filter out traits that are just instructions to choose a subrace
+      const filteredTraits = raceData.traits.filter(trait =>
+        !trait.toLowerCase().includes('choose') || !trait.toLowerCase().includes('human')
+      )
+      traits.push(...filteredTraits)
+    }
+
+    if (raceData.speed) traits.push(`Speed: ${raceData.speed} ft`)
     if (raceData.size) traits.push(`Size: ${raceData.size}`)
-    if (raceData.languages) traits.push(`Languages: ${raceData.languages.join(', ')}`)
+
+    // Use character's actual languages if available, otherwise fall back to race data
+    if (character.languages) {
+      const charLanguages = typeof character.languages === 'string'
+        ? JSON.parse(character.languages)
+        : character.languages
+      if (Array.isArray(charLanguages) && charLanguages.length > 0) {
+        traits.push(`Languages: ${charLanguages.join(', ')}`)
+      }
+    } else if (raceData.languages) {
+      traits.push(`Languages: ${raceData.languages.join(', ')}`)
+    }
+
     return traits
   }
 
@@ -925,8 +954,8 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             />
           )}
           <div>
-            <h1>{character.nickname || character.name}</h1>
-            {character.nickname && <p className="full-name">{character.name}</p>}
+            <h1>{character.name}</h1>
+            {character.nickname && <p className="nickname">"{character.nickname}"</p>}
             <p className="subtitle">
               Level {character.level} {capitalize(character.race)}{' '}
               {character.class_levels ? (
@@ -1281,7 +1310,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             {/* Race Traits */}
             {raceTraits.length > 0 && (
               <section className="sheet-section">
-                <h3>{capitalize(character.race)} Traits</h3>
+                <h3>{character.subrace ? character.subrace : capitalize(character.race)} Traits</h3>
                 <ul className="traits-list">
                   {raceTraits.map((trait, idx) => (
                     <li key={idx}>{trait}</li>

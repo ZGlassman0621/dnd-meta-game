@@ -171,7 +171,8 @@
     "spellcasting": {
       "ability": "cha",
       "spellsKnown": "Limited known",
-      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+      "spellsKnownByLevel": [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22]
     },
     "features": [
       "Spellcasting - You can cast bard spells using Charisma as your spellcasting ability",
@@ -1343,7 +1344,8 @@
     "spellcasting": {
       "ability": "wis",
       "spellsKnown": "Limited known",
-      "cantripsKnown": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "cantripsKnown": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "spellsKnownByLevel": [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11]
     },
     "features": [
       "Favored Enemy - You have significant experience studying, tracking, and hunting a certain type of enemy",
@@ -1677,7 +1679,8 @@
     "spellcasting": {
       "ability": "cha",
       "spellsKnown": "Limited known",
-      "cantripsKnown": [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+      "cantripsKnown": [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+      "spellsKnownByLevel": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15]
     },
     "features": [
       "Spellcasting - You can cast sorcerer spells using Charisma as your spellcasting ability",
@@ -1836,7 +1839,8 @@
     "spellcasting": {
       "ability": "cha",
       "spellsKnown": "Limited known",
-      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+      "cantripsKnown": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+      "spellsKnownByLevel": [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15]
     },
     "features": [
       "Otherworldly Patron - You have struck a bargain with an otherworldly being",

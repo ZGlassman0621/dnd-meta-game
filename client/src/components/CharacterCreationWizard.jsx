@@ -4,6 +4,8 @@ import backgroundsData from '../data/backgrounds.json'
 import classesData from '../data/classes.json'
 import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
+import spellsData from '../data/spells.json'
+import featsData from '../data/feats.json'
 
 function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
   // Check if we're in edit mode
@@ -84,7 +86,15 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         equipment_sub_selections: {},
         starting_gold: 0,
         manual_gold: '',
-        selected_skills: []
+        selected_skills: [],
+        selected_cantrips: [],
+        selected_spells: [],
+        selected_feat: '',
+        feat_ability_choice: null,
+        feat_choices: {}, // For feats with choices (e.g., Magic Initiate class selection)
+        ability_score_method: 'standard_array',
+        selected_languages: [],
+        selected_tool_proficiencies: []
       }
     }
 
@@ -236,7 +246,14 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           const normalizedSkill = skill.toLowerCase().replace(/_/g, ' ')
           return !normalizedBgSkills.includes(normalizedSkill)
         })
-      })()
+      })(),
+      selected_cantrips: [],
+      selected_spells: [],
+      selected_feat: '',
+      feat_ability_choice: null,
+      feat_choices: {},
+      // Use manual mode for edit since we're preserving existing scores
+      ability_score_method: 'manual'
     }
   }
 
@@ -326,6 +343,14 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
 
   // Check if all ability scores are assigned
   const allAbilitiesAssigned = () => {
+    if (formData.ability_score_method === 'manual') {
+      // For manual entry, check that all scores are valid numbers between 3 and 18
+      return ['str', 'dex', 'con', 'int', 'wis', 'cha'].every(ability => {
+        const score = formData[ability]
+        return score !== null && Number.isInteger(score) && score >= 3 && score <= 18
+      })
+    }
+    // For standard array, just check that all are assigned
     return ['str', 'dex', 'con', 'int', 'wis', 'cha'].every(ability => formData[ability] !== null)
   }
 
@@ -351,6 +376,18 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         Object.keys(subraceData.abilityScoreIncrease).forEach(ability => {
           bonuses[ability] = (bonuses[ability] || 0) + subraceData.abilityScoreIncrease[ability]
         })
+      }
+    }
+
+    // Add feat ability bonuses (for Variant Human)
+    if (formData.selected_feat && featsData[formData.selected_feat]?.abilityIncrease) {
+      const featIncrease = featsData[formData.selected_feat].abilityIncrease
+      if (featIncrease.ability) {
+        // Fixed ability increase
+        bonuses[featIncrease.ability] = (bonuses[featIncrease.ability] || 0) + featIncrease.amount
+      } else if (featIncrease.choice && formData.feat_ability_choice) {
+        // Chosen ability increase
+        bonuses[formData.feat_ability_choice] = (bonuses[formData.feat_ability_choice] || 0) + featIncrease.amount
       }
     }
 
@@ -382,6 +419,146 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
     return unpacked
   }
 
+  // Check feat prerequisites with detailed status
+  // Returns: { available: boolean, status: 'available'|'unavailable'|'restricted', prereqs: [] }
+  const checkFeatPrerequisitesDetailed = (featKey) => {
+    const feat = featsData[featKey]
+    if (!feat || !feat.prerequisites) {
+      return { available: true, status: 'available', prereqs: [] }
+    }
+
+    const prereq = feat.prerequisites.toLowerCase()
+    const originalPrereq = feat.prerequisites
+    const finalScores = calculateFinalAbilityScores()
+    const prereqResults = []
+
+    // Check ability score requirements (e.g., "Charisma 13 or higher")
+    const abilityCheck = prereq.match(/(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+(\d+)/i)
+    if (abilityCheck) {
+      const abilityMap = {
+        'strength': 'str', 'dexterity': 'dex', 'constitution': 'con',
+        'intelligence': 'int', 'wisdom': 'wis', 'charisma': 'cha'
+      }
+      const abilityNames = {
+        'str': 'Strength', 'dex': 'Dexterity', 'con': 'Constitution',
+        'int': 'Intelligence', 'wis': 'Wisdom', 'cha': 'Charisma'
+      }
+      const ability = abilityMap[abilityCheck[1].toLowerCase()]
+      const required = parseInt(abilityCheck[2])
+
+      // Check for "or" conditions (e.g., "Intelligence or Wisdom 13 or higher")
+      if (prereq.includes(' or ') && prereq.match(/intelligence or wisdom/i)) {
+        const met = finalScores.int >= required || finalScores.wis >= required
+        prereqResults.push({
+          type: 'ability',
+          requirement: `Intelligence or Wisdom ${required}+`,
+          met,
+          changeable: true, // Can adjust ability scores
+          current: `INT ${finalScores.int}, WIS ${finalScores.wis}`
+        })
+      } else if (ability) {
+        const met = finalScores[ability] >= required
+        prereqResults.push({
+          type: 'ability',
+          requirement: `${abilityNames[ability]} ${required}+`,
+          met,
+          changeable: true,
+          current: `${ability.toUpperCase()} ${finalScores[ability]}`
+        })
+      }
+    }
+
+    // Check armor proficiency requirements
+    const lightArmorClasses = ['barbarian', 'bard', 'cleric', 'druid', 'fighter', 'paladin', 'ranger', 'rogue', 'warlock']
+    const mediumArmorClasses = ['barbarian', 'cleric', 'druid', 'fighter', 'paladin', 'ranger']
+    const heavyArmorClasses = ['fighter', 'paladin']
+
+    if (prereq.includes('proficiency with light armor')) {
+      const met = lightArmorClasses.includes(formData.class?.toLowerCase())
+      prereqResults.push({
+        type: 'armor',
+        requirement: 'Light armor proficiency',
+        met,
+        changeable: false // Class-locked
+      })
+    }
+    if (prereq.includes('proficiency with medium armor')) {
+      const met = mediumArmorClasses.includes(formData.class?.toLowerCase())
+      prereqResults.push({
+        type: 'armor',
+        requirement: 'Medium armor proficiency',
+        met,
+        changeable: false
+      })
+    }
+    if (prereq.includes('proficiency with heavy armor')) {
+      const met = heavyArmorClasses.includes(formData.class?.toLowerCase())
+      prereqResults.push({
+        type: 'armor',
+        requirement: 'Heavy armor proficiency',
+        met,
+        changeable: false
+      })
+    }
+
+    // Check spellcasting requirements
+    if (prereq.includes('ability to cast at least one spell')) {
+      const spellcastingClasses = ['bard', 'cleric', 'druid', 'paladin', 'ranger', 'sorcerer', 'warlock', 'wizard']
+      const met = spellcastingClasses.includes(formData.class?.toLowerCase())
+      prereqResults.push({
+        type: 'spellcasting',
+        requirement: 'Spellcasting ability',
+        met,
+        changeable: false
+      })
+    }
+
+    // Determine overall status
+    const allMet = prereqResults.every(p => p.met)
+    const hasUnmetFixed = prereqResults.some(p => !p.met && !p.changeable)
+
+    let status = 'available'
+    if (!allMet) {
+      status = hasUnmetFixed ? 'restricted' : 'unavailable'
+    }
+
+    return { available: allMet, status, prereqs: prereqResults, originalPrereq }
+  }
+
+  // Simple boolean check for backward compatibility
+  const checkFeatPrerequisites = (featKey) => {
+    return checkFeatPrerequisitesDetailed(featKey).available
+  }
+
+  // Get categorized feats with detailed prerequisite info
+  const getCategorizedFeats = () => {
+    const available = []
+    const unavailable = []
+    const restricted = []
+
+    Object.keys(featsData).forEach(featKey => {
+      const result = checkFeatPrerequisitesDetailed(featKey)
+      const item = { key: featKey, ...result }
+
+      if (result.status === 'available') available.push(item)
+      else if (result.status === 'unavailable') unavailable.push(item)
+      else restricted.push(item)
+    })
+
+    return {
+      available: available.sort((a, b) => featsData[a.key].name.localeCompare(featsData[b.key].name)),
+      unavailable: unavailable.sort((a, b) => featsData[a.key].name.localeCompare(featsData[b.key].name)),
+      restricted: restricted.sort((a, b) => featsData[a.key].name.localeCompare(featsData[b.key].name))
+    }
+  }
+
+  // Get available feats (filtered by prerequisites) - for backward compatibility
+  const getAvailableFeats = () => {
+    return Object.keys(featsData)
+      .filter(featKey => checkFeatPrerequisites(featKey))
+      .sort((a, b) => featsData[a].name.localeCompare(featsData[b].name))
+  }
+
   const handleSubmit = async () => {
     const finalScores = calculateFinalAbilityScores()
 
@@ -408,11 +585,14 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
     // Compile starting equipment (raw, before unpacking packs)
     const rawEquipment = []
 
+    // Get class data - fallback to formData.class lookup if selectedClassData is somehow undefined
+    const classData = selectedClassData || (formData.class ? classesData[formData.class] : null)
+
     // Add class equipment (if equipment choice)
-    if (formData.equipment_choice === 'equipment' && selectedClassData?.startingEquipment) {
-      // Add given items
-      if (selectedClassData.startingEquipment.given) {
-        rawEquipment.push(...selectedClassData.startingEquipment.given)
+    if (formData.equipment_choice === 'equipment' && classData?.startingEquipment) {
+      // Add given items - these are always included for the class
+      if (classData.startingEquipment.given) {
+        rawEquipment.push(...classData.startingEquipment.given)
       }
       // Add chosen items - use sub-selections where available
       Object.entries(formData.equipment_selections).forEach(([idx, choice]) => {
@@ -436,6 +616,17 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           }
         }
       })
+
+      // If user made equipment_choice but has no selections and no given items,
+      // add a minimal default set so they're not left with nothing
+      if (rawEquipment.length === 0 && classData.startingEquipment.choices?.length > 0) {
+        // At minimum add the first option from each choice
+        classData.startingEquipment.choices.forEach((choice) => {
+          if (choice.from && choice.from.length > 0) {
+            rawEquipment.push(choice.from[0])
+          }
+        })
+      }
     }
 
     // Add background equipment (excluding gold pouches - we handle gold separately)
@@ -501,7 +692,31 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       backstory: formData.backstory || null,
       other_notes: formData.other_notes || null,
       current_location: formData.current_location,
-      current_quest: formData.current_quest
+      current_quest: formData.current_quest,
+      known_cantrips: JSON.stringify(formData.selected_cantrips || []),
+      known_spells: JSON.stringify(formData.selected_spells || []),
+      feats: formData.selected_feat ? JSON.stringify([{
+        key: formData.selected_feat,
+        name: featsData[formData.selected_feat]?.name || formData.selected_feat,
+        abilityChoice: formData.feat_ability_choice || null,
+        choices: Object.keys(formData.feat_choices || {}).length > 0 ? formData.feat_choices : null
+      }]) : '[]',
+      // Combine race languages, background language choices, and fixed background tool proficiencies
+      languages: JSON.stringify([
+        ...(selectedRaceData?.languages || []),
+        ...(formData.selected_languages || []).filter(l => l) // Filter out empty selections
+      ]),
+      tool_proficiencies: JSON.stringify([
+        // Fixed tool proficiencies from background
+        ...(selectedBackgroundData?.toolProficiencies || []).filter(t =>
+          !t.toLowerCase().includes('one type of') &&
+          !t.toLowerCase().includes('one from') &&
+          !t.toLowerCase().includes('two from') &&
+          !t.toLowerCase().includes(' or ')
+        ),
+        // User-selected tool proficiencies
+        ...(formData.selected_tool_proficiencies || []).filter(t => t)
+      ])
     }
 
     if (isEditMode) {
@@ -660,6 +875,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           onChange={(e) => {
             handleChange('race', e.target.value)
             handleChange('subrace', '') // Reset subrace when race changes
+            handleChange('selected_feat', '') // Reset feat when race changes (in case was Variant Human)
           }}
           required
         >
@@ -727,6 +943,8 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             handleChange('class', e.target.value)
             handleChange('subclass', '') // Reset subclass when class changes
             handleChange('selected_skills', []) // Reset skills when class changes
+            handleChange('selected_cantrips', []) // Reset cantrips when class changes
+            handleChange('selected_spells', []) // Reset spells when class changes
           }}
           required
         >
@@ -884,6 +1102,126 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           <p style={{ fontSize: '0.85rem', color: '#bbb' }}>
             <strong>Feature:</strong> {selectedBackgroundData.feature.description}
           </p>
+
+          {/* Language Selection */}
+          {typeof selectedBackgroundData.languages === 'number' && selectedBackgroundData.languages > 0 && (
+            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
+              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Choose {selectedBackgroundData.languages} Language{selectedBackgroundData.languages > 1 ? 's' : ''}
+              </p>
+              {[...Array(selectedBackgroundData.languages)].map((_, idx) => (
+                <div key={idx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                  <select
+                    value={formData.selected_languages[idx] || ''}
+                    onChange={(e) => {
+                      const newLangs = [...formData.selected_languages]
+                      newLangs[idx] = e.target.value
+                      handleChange('selected_languages', newLangs)
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Select language {idx + 1}...</option>
+                    <optgroup label="Standard Languages">
+                      {(equipmentData.languages?.standard || [])
+                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
+                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
+                        .map(lang => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Exotic Languages">
+                      {(equipmentData.languages?.exotic || [])
+                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
+                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
+                        .map(lang => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                    </optgroup>
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tool Proficiency Selection */}
+          {selectedBackgroundData.toolProficiencies && selectedBackgroundData.toolProficiencies.some(t =>
+            t.toLowerCase().includes('one type of') ||
+            t.toLowerCase().includes('one from') ||
+            t.toLowerCase().includes('two from') ||
+            t.toLowerCase().includes(' or ')
+          ) && (
+            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
+              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Choose Tool Proficiencies
+              </p>
+              {selectedBackgroundData.toolProficiencies.map((tool, idx) => {
+                // Check if this is a choice
+                const isArtisanChoice = tool.toLowerCase().includes('artisan')
+                const isGamingChoice = tool.toLowerCase().includes('gaming')
+                const isMusicalChoice = tool.toLowerCase().includes('musical')
+                const isComboChoice = tool.toLowerCase().includes(' or ')
+                const isTwoChoice = tool.toLowerCase().includes('two from')
+
+                if (!isArtisanChoice && !isGamingChoice && !isMusicalChoice && !isComboChoice && !isTwoChoice) {
+                  return (
+                    <p key={idx} style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.25rem' }}>
+                      • {tool}
+                    </p>
+                  )
+                }
+
+                // Build options based on type
+                let options = []
+                if (isArtisanChoice) {
+                  options = (equipmentData.tools?.artisansTools || []).map(t => t.name)
+                } else if (isGamingChoice) {
+                  options = (equipmentData.tools?.gamingSets || []).map(t => t.name)
+                } else if (isMusicalChoice) {
+                  options = equipmentData.musicalInstruments || []
+                } else if (isComboChoice || isTwoChoice) {
+                  // Combo like "gaming set or musical instrument"
+                  if (tool.toLowerCase().includes('gaming')) {
+                    options.push(...(equipmentData.tools?.gamingSets || []).map(t => t.name))
+                  }
+                  if (tool.toLowerCase().includes('musical')) {
+                    options.push(...(equipmentData.musicalInstruments || []))
+                  }
+                  if (tool.toLowerCase().includes('thieves')) {
+                    options.push("Thieves' Tools")
+                  }
+                }
+
+                const numChoices = isTwoChoice ? 2 : 1
+
+                return (
+                  <div key={idx}>
+                    <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>{tool}</p>
+                    {[...Array(numChoices)].map((_, choiceIdx) => (
+                      <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                        <select
+                          value={formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''}
+                          onChange={(e) => {
+                            const newTools = [...formData.selected_tool_proficiencies]
+                            newTools[idx * numChoices + choiceIdx] = e.target.value
+                            handleChange('selected_tool_proficiencies', newTools)
+                          }}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="">Select tool...</option>
+                          {options
+                            .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
+                              formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
+                            .map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -952,8 +1290,74 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
     return (
       <div>
         <h3>Ability Scores</h3>
+
+        {/* Method Toggle */}
+        <div style={{
+          display: 'flex',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+          padding: '0.5rem',
+          background: 'rgba(255, 255, 255, 0.05)',
+          borderRadius: '6px'
+        }}>
+          <button
+            type="button"
+            onClick={() => {
+              handleChange('ability_score_method', 'standard_array')
+              // Reset scores when switching methods
+              handleChange('str', null)
+              handleChange('dex', null)
+              handleChange('con', null)
+              handleChange('int', null)
+              handleChange('wis', null)
+              handleChange('cha', null)
+            }}
+            style={{
+              flex: 1,
+              padding: '0.75rem',
+              background: formData.ability_score_method === 'standard_array' ? 'rgba(52, 152, 219, 0.3)' : 'transparent',
+              border: formData.ability_score_method === 'standard_array' ? '2px solid #3498db' : '2px solid transparent',
+              borderRadius: '4px',
+              color: formData.ability_score_method === 'standard_array' ? '#3498db' : '#888',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: formData.ability_score_method === 'standard_array' ? 'bold' : 'normal'
+            }}
+          >
+            Standard Array
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleChange('ability_score_method', 'manual')
+              // Reset scores when switching methods
+              handleChange('str', null)
+              handleChange('dex', null)
+              handleChange('con', null)
+              handleChange('int', null)
+              handleChange('wis', null)
+              handleChange('cha', null)
+            }}
+            style={{
+              flex: 1,
+              padding: '0.75rem',
+              background: formData.ability_score_method === 'manual' ? 'rgba(155, 89, 182, 0.3)' : 'transparent',
+              border: formData.ability_score_method === 'manual' ? '2px solid #9b59b6' : '2px solid transparent',
+              borderRadius: '4px',
+              color: formData.ability_score_method === 'manual' ? '#9b59b6' : '#888',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: formData.ability_score_method === 'manual' ? 'bold' : 'normal'
+            }}
+          >
+            Manual / Rolled
+          </button>
+        </div>
+
         <p style={{ fontSize: '0.9rem', color: '#bbb', marginBottom: '1rem' }}>
-          Assign standard array values to each ability: 15, 14, 13, 12, 10, 8
+          {formData.ability_score_method === 'standard_array'
+            ? 'Assign standard array values to each ability: 15, 14, 13, 12, 10, 8'
+            : 'Enter your rolled or custom ability scores (3-18)'}
           {selectedClassData && (
             <>
               <span style={{ display: 'block', marginTop: '0.5rem', color: '#2ecc71' }}>
@@ -986,15 +1390,57 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                 }}>
                   {isPrimary && '⭐ '}{isDump && '✗ '}{ability}
                 </label>
-                <select
-                  value={baseScore || ''}
-                  onChange={(e) => handleChange(ability, e.target.value ? parseInt(e.target.value) : null)}
-                >
-                  <option value="">Select score</option>
-                  {availableScores.sort((a, b) => b - a).map(score => (
-                    <option key={score} value={score}>{score}</option>
-                  ))}
-                </select>
+                {formData.ability_score_method === 'standard_array' ? (
+                  <select
+                    value={baseScore || ''}
+                    onChange={(e) => handleChange(ability, e.target.value ? parseInt(e.target.value) : null)}
+                  >
+                    <option value="">Select score</option>
+                    {availableScores.sort((a, b) => b - a).map(score => (
+                      <option key={score} value={score}>{score}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    min="3"
+                    max="18"
+                    value={baseScore ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (val === '') {
+                        handleChange(ability, null)
+                      } else {
+                        const num = parseInt(val)
+                        if (!isNaN(num)) {
+                          // Allow any value while typing, clamp on blur
+                          handleChange(ability, num)
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Clamp value to 3-18 when user leaves the field
+                      const val = e.target.value
+                      if (val !== '') {
+                        const num = parseInt(val)
+                        if (!isNaN(num)) {
+                          handleChange(ability, Math.min(18, Math.max(3, num)))
+                        }
+                      }
+                    }}
+                    placeholder="3-18"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      color: '#fff',
+                      fontSize: '1rem',
+                      textAlign: 'center'
+                    }}
+                  />
+                )}
                 {bonus > 0 && baseScore !== null && (
                   <small style={{ color: '#2ecc71' }}>
                     +{bonus} racial = {finalScore} ({Math.floor((finalScore - 10) / 2) >= 0 ? '+' : ''}{Math.floor((finalScore - 10) / 2)})
@@ -1085,6 +1531,348 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           </div>
         )}
 
+        {/* Variant Human Feat Selection */}
+        {formData.subrace === 'Variant Human' && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '1rem',
+            background: 'rgba(241, 196, 15, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid rgba(241, 196, 15, 0.3)'
+          }}>
+            <h4 style={{ marginBottom: '0.5rem', color: '#f1c40f' }}>
+              Variant Human Feat
+            </h4>
+            <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '1rem' }}>
+              As a Variant Human, you gain one feat of your choice at 1st level.
+            </p>
+            {(() => {
+              const categorized = getCategorizedFeats()
+              return (
+                <select
+                  value={formData.selected_feat || ''}
+                  onChange={(e) => {
+                    handleChange('selected_feat', e.target.value)
+                    handleChange('feat_ability_choice', null) // Reset ability choice when feat changes
+                    handleChange('feat_choices', {}) // Reset feat choices when feat changes
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '4px',
+                    color: '#e4e4e4',
+                    fontSize: '0.9rem',
+                    marginBottom: '0.5rem'
+                  }}
+                >
+                  <option value="">Select a feat...</option>
+                  {categorized.available.length > 0 && (
+                    <optgroup label="Available" style={{ color: '#2ecc71' }}>
+                      {categorized.available.map(feat => (
+                        <option key={feat.key} value={feat.key}>{featsData[feat.key].name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {categorized.unavailable.length > 0 && (
+                    <optgroup label="Unavailable (Ability Scores)" style={{ color: '#f39c12' }}>
+                      {categorized.unavailable.map(feat => (
+                        <option key={feat.key} value={feat.key} disabled style={{ color: '#888' }}>
+                          {featsData[feat.key].name} - {feat.prereqs.filter(p => !p.met).map(p => p.requirement).join(', ')}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {categorized.restricted.length > 0 && (
+                    <optgroup label="Restricted (Class-Locked)" style={{ color: '#e74c3c' }}>
+                      {categorized.restricted.map(feat => (
+                        <option key={feat.key} value={feat.key} disabled style={{ color: '#666' }}>
+                          {featsData[feat.key].name} - {feat.prereqs.filter(p => !p.met).map(p => p.requirement).join(', ')}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              )
+            })()}
+            <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.5rem' }}>
+              <span style={{ color: '#2ecc71', marginRight: '1rem' }}>Available: {getCategorizedFeats().available.length}</span>
+              <span style={{ color: '#f39c12', marginRight: '1rem' }}>Unavailable: {getCategorizedFeats().unavailable.length}</span>
+              <span style={{ color: '#e74c3c' }}>Restricted: {getCategorizedFeats().restricted.length}</span>
+            </div>
+            {formData.selected_feat && featsData[formData.selected_feat] && (
+              <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                <p style={{ fontSize: '0.85rem', color: '#f1c40f', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  {featsData[formData.selected_feat].name}
+                </p>
+                <p style={{ fontSize: '0.8rem', color: '#bbb', marginBottom: '0.5rem' }}>
+                  {featsData[formData.selected_feat].description}
+                </p>
+                {featsData[formData.selected_feat].prerequisites && (
+                  <div style={{ fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+                    <strong style={{ color: '#bbb' }}>Prerequisites:</strong>
+                    {(() => {
+                      const detailed = checkFeatPrerequisitesDetailed(formData.selected_feat)
+                      return (
+                        <div style={{ marginTop: '0.25rem' }}>
+                          {detailed.prereqs.map((prereq, idx) => (
+                            <span
+                              key={idx}
+                              style={{
+                                display: 'inline-block',
+                                marginRight: '0.5rem',
+                                marginBottom: '0.25rem',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '3px',
+                                background: prereq.met ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)',
+                                border: `1px solid ${prereq.met ? '#2ecc71' : '#e74c3c'}`,
+                                color: prereq.met ? '#2ecc71' : '#e74c3c'
+                              }}
+                            >
+                              {prereq.met ? '✓' : '✗'} {prereq.requirement}
+                              {!prereq.met && prereq.current && (
+                                <span style={{ color: '#888', marginLeft: '0.25rem' }}>
+                                  (Current: {prereq.current})
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+                <ul style={{ fontSize: '0.8rem', color: '#ccc', marginLeft: '1rem', marginTop: '0.5rem' }}>
+                  {featsData[formData.selected_feat].benefits.map((benefit, idx) => (
+                    <li key={idx}>{benefit}</li>
+                  ))}
+                </ul>
+
+                {/* Feat Ability Score Increase */}
+                {featsData[formData.selected_feat].abilityIncrease && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(46, 204, 113, 0.1)', borderRadius: '4px', border: '1px solid rgba(46, 204, 113, 0.3)' }}>
+                    {featsData[formData.selected_feat].abilityIncrease.ability ? (
+                      // Fixed ability increase
+                      <p style={{ fontSize: '0.8rem', color: '#2ecc71' }}>
+                        <strong>Ability Increase:</strong> +{featsData[formData.selected_feat].abilityIncrease.amount} {featsData[formData.selected_feat].abilityIncrease.ability.toUpperCase()}
+                      </p>
+                    ) : featsData[formData.selected_feat].abilityIncrease.choice ? (
+                      // Choice of ability increase
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#2ecc71', display: 'block', marginBottom: '0.25rem' }}>
+                          <strong>Choose Ability Increase (+{featsData[formData.selected_feat].abilityIncrease.amount}):</strong>
+                        </label>
+                        <select
+                          value={formData.feat_ability_choice || ''}
+                          onChange={(e) => handleChange('feat_ability_choice', e.target.value || null)}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(46, 204, 113, 0.5)',
+                            borderRadius: '4px',
+                            color: '#e4e4e4',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          <option value="">Select ability...</option>
+                          {featsData[formData.selected_feat].abilityIncrease.choice.map(ability => (
+                            <option key={ability} value={ability}>{ability.toUpperCase()}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Feat Choices (e.g., Magic Initiate class, Elemental Adept damage type) */}
+                {featsData[formData.selected_feat].choices && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(155, 89, 182, 0.1)', borderRadius: '4px', border: '1px solid rgba(155, 89, 182, 0.3)' }}>
+                    {Object.entries(featsData[formData.selected_feat].choices).map(([choiceKey, options]) => {
+                      const labels = {
+                        class: 'Spellcasting Class',
+                        damageType: 'Damage Type'
+                      }
+                      const descriptions = {
+                        class: 'Choose a class to learn spells from',
+                        damageType: 'Choose a damage type for this feat'
+                      }
+                      return (
+                        <div key={choiceKey}>
+                          <label style={{ fontSize: '0.8rem', color: '#9b59b6', display: 'block', marginBottom: '0.25rem' }}>
+                            <strong>{labels[choiceKey] || choiceKey}:</strong>
+                            <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#888' }}>
+                              {descriptions[choiceKey] || ''}
+                            </span>
+                          </label>
+                          <select
+                            value={formData.feat_choices[choiceKey] || ''}
+                            onChange={(e) => handleChange('feat_choices', { ...formData.feat_choices, [choiceKey]: e.target.value || null })}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              border: '1px solid rgba(155, 89, 182, 0.5)',
+                              borderRadius: '4px',
+                              color: '#e4e4e4',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            <option value="">Select {labels[choiceKey]?.toLowerCase() || choiceKey}...</option>
+                            {options.map(option => (
+                              <option key={option} value={option}>
+                                {option.charAt(0).toUpperCase() + option.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cantrip Selection for Spellcasting Classes */}
+        {selectedClassData?.spellcasting && selectedClassData.spellcasting.cantripsKnown[0] > 0 && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '1rem',
+            background: 'rgba(155, 89, 182, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid rgba(155, 89, 182, 0.3)'
+          }}>
+            <h4 style={{ marginBottom: '0.5rem', color: '#9b59b6' }}>
+              Cantrips Known
+            </h4>
+            <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '1rem' }}>
+              Choose {selectedClassData.spellcasting.cantripsKnown[0]} cantrips from the {selectedClassData.name} spell list.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+              {(spellsData.cantrips[formData.class] || []).map(cantrip => {
+                const isSelected = formData.selected_cantrips.includes(cantrip.name)
+                const isDisabled = !isSelected && formData.selected_cantrips.length >= selectedClassData.spellcasting.cantripsKnown[0]
+
+                return (
+                  <button
+                    key={cantrip.name}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        handleChange('selected_cantrips', formData.selected_cantrips.filter(c => c !== cantrip.name))
+                      } else if (formData.selected_cantrips.length < selectedClassData.spellcasting.cantripsKnown[0]) {
+                        handleChange('selected_cantrips', [...formData.selected_cantrips, cantrip.name])
+                      }
+                    }}
+                    style={{
+                      padding: '0.5rem',
+                      background: isSelected ? 'rgba(155, 89, 182, 0.3)' : 'rgba(255, 255, 255, 0.05)',
+                      border: isSelected ? '2px solid #9b59b6' : '2px solid transparent',
+                      borderRadius: '4px',
+                      color: isSelected ? '#9b59b6' : (isDisabled ? '#666' : '#ccc'),
+                      cursor: isDisabled && !isSelected ? 'not-allowed' : 'pointer',
+                      fontSize: '0.85rem',
+                      textAlign: 'left'
+                    }}
+                    title={cantrip.description}
+                  >
+                    {isSelected ? '● ' : '○ '}
+                    {cantrip.name}
+                    <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>{cantrip.school}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem' }}>
+              Selected: {formData.selected_cantrips.length}/{selectedClassData.spellcasting.cantripsKnown[0]}
+            </p>
+          </div>
+        )}
+
+        {/* Spell Selection for "Limited Known" Spellcasters */}
+        {selectedClassData?.spellcasting?.spellsKnown === 'Limited known' &&
+         selectedClassData.spellcasting.spellsKnownByLevel &&
+         selectedClassData.spellcasting.spellsKnownByLevel[0] > 0 && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '1rem',
+            background: 'rgba(231, 76, 60, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid rgba(231, 76, 60, 0.3)'
+          }}>
+            <h4 style={{ marginBottom: '0.5rem', color: '#e74c3c' }}>
+              Spells Known
+            </h4>
+            <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '1rem' }}>
+              Choose {selectedClassData.spellcasting.spellsKnownByLevel[0]} 1st-level spells from the {selectedClassData.name} spell list.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+              {(spellsData.spells['1st'] || [])
+                .filter(spell => spell.classes.includes(formData.class))
+                .map(spell => {
+                  const isSelected = formData.selected_spells.includes(spell.name)
+                  const isDisabled = !isSelected && formData.selected_spells.length >= selectedClassData.spellcasting.spellsKnownByLevel[0]
+
+                  return (
+                    <button
+                      key={spell.name}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          handleChange('selected_spells', formData.selected_spells.filter(s => s !== spell.name))
+                        } else if (formData.selected_spells.length < selectedClassData.spellcasting.spellsKnownByLevel[0]) {
+                          handleChange('selected_spells', [...formData.selected_spells, spell.name])
+                        }
+                      }}
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        background: isSelected ? 'rgba(231, 76, 60, 0.3)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isSelected ? '2px solid #e74c3c' : '2px solid transparent',
+                        borderRadius: '4px',
+                        color: isSelected ? '#e74c3c' : (isDisabled ? '#666' : '#ccc'),
+                        cursor: isDisabled && !isSelected ? 'not-allowed' : 'pointer',
+                        fontSize: '0.85rem',
+                        textAlign: 'left'
+                      }}
+                      title={spell.description}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{isSelected ? '● ' : '○ '}{spell.name}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#888' }}>{spell.school}</span>
+                      </div>
+                      <span style={{ fontSize: '0.7rem', color: '#888', display: 'block', marginTop: '0.25rem' }}>
+                        {spell.castingTime} | {spell.range} | {spell.duration}
+                      </span>
+                    </button>
+                  )
+                })}
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem' }}>
+              Selected: {formData.selected_spells.length}/{selectedClassData.spellcasting.spellsKnownByLevel[0]}
+            </p>
+          </div>
+        )}
+
+        {/* Info box for prepared casters */}
+        {selectedClassData?.spellcasting?.spellsKnown === 'All prepared' &&
+         selectedClassData.spellcasting.cantripsKnown[0] > 0 && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '0.75rem',
+            background: 'rgba(52, 152, 219, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid rgba(52, 152, 219, 0.2)',
+            fontSize: '0.85rem',
+            color: '#888'
+          }}>
+            <strong style={{ color: '#3498db' }}>Note:</strong> As a {selectedClassData.name}, you prepare spells each day from the full {selectedClassData.name.toLowerCase()} spell list.
+            You don't need to choose specific spells at character creation (except cantrips, which are permanent).
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
           <button onClick={() => setStep(1)} className="button" style={{ flex: 1, background: '#95a5a6' }}>
             Back
@@ -1093,7 +1881,15 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             onClick={() => setStep(3)}
             className="button"
             style={{ flex: 1 }}
-            disabled={!allAbilitiesAssigned() || (selectedClassData && formData.selected_skills.length < selectedClassData.skillChoices)}
+            disabled={
+              !allAbilitiesAssigned() ||
+              (selectedClassData && formData.selected_skills.length < selectedClassData.skillChoices) ||
+              (formData.subrace === 'Variant Human' && !formData.selected_feat) ||
+              (formData.selected_feat && featsData[formData.selected_feat]?.abilityIncrease?.choice && !formData.feat_ability_choice) ||
+              (formData.selected_feat && featsData[formData.selected_feat]?.choices && Object.keys(featsData[formData.selected_feat].choices).some(key => !formData.feat_choices?.[key])) ||
+              (selectedClassData?.spellcasting?.cantripsKnown[0] > 0 && formData.selected_cantrips.length < selectedClassData.spellcasting.cantripsKnown[0]) ||
+              (selectedClassData?.spellcasting?.spellsKnown === 'Limited known' && selectedClassData?.spellcasting?.spellsKnownByLevel?.[0] > 0 && formData.selected_spells.length < selectedClassData.spellcasting.spellsKnownByLevel[0])
+            }
           >
             Next: Character Details
           </button>
@@ -2176,6 +2972,45 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Skill Proficiencies</p>
               <p style={{ color: '#bbb', fontSize: '0.85rem' }}>
                 {[...formData.selected_skills, ...(selectedBackgroundData?.skillProficiencies?.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')) || [])].join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Feat (Variant Human) */}
+          {formData.selected_feat && (
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Feat</p>
+              <p style={{ color: '#9b59b6', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                {featsData[formData.selected_feat]?.name || formData.selected_feat}
+              </p>
+              {featsData[formData.selected_feat]?.abilityIncrease && (
+                <p style={{ color: '#2ecc71', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  +{featsData[formData.selected_feat].abilityIncrease.amount} {
+                    featsData[formData.selected_feat].abilityIncrease.ability
+                      ? featsData[formData.selected_feat].abilityIncrease.ability.toUpperCase()
+                      : formData.feat_ability_choice?.toUpperCase() || '(choose ability)'
+                  }
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Cantrips */}
+          {formData.selected_cantrips?.length > 0 && (
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Cantrips</p>
+              <p style={{ color: '#3498db', fontSize: '0.85rem' }}>
+                {formData.selected_cantrips.map(c => c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' ')).join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Known Spells (for limited-known casters) */}
+          {formData.selected_spells?.length > 0 && (
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Known Spells</p>
+              <p style={{ color: '#e67e22', fontSize: '0.85rem' }}>
+                {formData.selected_spells.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')).join(', ')}
               </p>
             </div>
           )}

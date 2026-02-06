@@ -2,45 +2,46 @@ import { useState, useRef, useEffect } from 'react'
 
 const menuCategories = {
   character: {
-    label: '📜 Character',
+    label: 'Character',
     color: '#3498db',
     items: [
-      { key: 'showCharacterSheet', label: '📜 Character Sheet', icon: '📜' },
-      { key: 'showCompanions', label: '👥 Companions', icon: '👥' },
-      { key: 'showDowntime', label: '🛏️ Downtime', icon: '🛏️' },
-      { key: 'showSettings', label: '⚙️ Settings', icon: '⚙️' }
+      { key: 'showCharacterSheet', label: 'Character Sheet' },
+      { key: 'showCompanions', label: 'Companions' },
+      { key: 'showParsedBackstory', label: 'Backstory Parser' },
+      { key: 'showDowntime', label: 'Downtime' },
+      { key: 'showSettings', label: 'Settings' }
     ]
   },
   world: {
-    label: '🌍 World',
+    label: 'World',
     color: '#27ae60',
     items: [
-      { key: 'showFactions', label: '⚔️ Factions', icon: '⚔️' },
-      { key: 'showWorldEvents', label: '🌍 World Events', icon: '🌍' },
-      { key: 'showTravel', label: '🗺️ Travel', icon: '🗺️' },
-      { key: 'showLocations', label: '📍 Locations', icon: '📍' },
-      { key: 'showLivingWorld', label: '🌐 Living World', icon: '🌐' },
-      { key: 'showNPCGenerator', label: '👤 NPC Generator', icon: '👤' },
-      { key: 'showNPCRelationships', label: '🤝 Relationships', icon: '🤝' }
+      { key: 'showLocations', label: 'Locations' },
+      { key: 'showFactions', label: 'Factions' },
+      { key: 'showNPCGenerator', label: 'NPC Generator' },
+      { key: 'showNPCRelationships', label: 'NPC Relationships' },
+      { key: 'showTravel', label: 'Travel' },
+      { key: 'showWorldEvents', label: 'World Events' },
+      { key: 'showLivingWorld', label: 'Living World' }
     ]
   },
   story: {
-    label: '📚 Story',
+    label: 'Story',
     color: '#9b59b6',
     items: [
-      { key: 'showCampaigns', label: '📚 Campaigns', icon: '📚' },
-      { key: 'showQuests', label: '📋 Quests', icon: '📋' },
-      { key: 'showBackstories', label: '📖 Backstories', icon: '📖' },
-      { key: 'showNarrativeQueue', label: '📬 Narrative Queue', icon: '📬' }
+      { key: 'showCampaigns', label: 'Campaigns' },
+      { key: 'showQuests', label: 'Quests' },
+      { key: 'showBackstories', label: 'Companion Backstories' },
+      { key: 'showNarrativeQueue', label: 'Narrative Queue' }
     ]
   },
   play: {
-    label: '🎲 Play',
+    label: 'Play',
     color: '#e67e22',
     items: [
-      { key: 'showDMSession', label: '🎲 AI Dungeon Master', icon: '🎲' },
-      { key: 'showMetaGame', label: '📊 Campaign Stats', icon: '📊' },
-      { key: 'showGeneration', label: '✨ Generate Content', icon: '✨' }
+      { key: 'showDMSession', label: 'AI Dungeon Master' },
+      { key: 'showMetaGame', label: 'Campaign Stats' },
+      { key: 'showGeneration', label: 'Generate Content' }
     ]
   }
 }

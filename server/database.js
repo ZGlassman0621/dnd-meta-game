@@ -96,6 +96,11 @@ export async function initDatabase() {
     { col: 'campaign_notes', sql: "ALTER TABLE characters ADD COLUMN campaign_notes TEXT DEFAULT ''" },
     { col: 'equipment', sql: "ALTER TABLE characters ADD COLUMN equipment TEXT DEFAULT '{}'" },
     { col: 'campaign_config', sql: "ALTER TABLE characters ADD COLUMN campaign_config TEXT DEFAULT '{}'" },
+    { col: 'known_spells', sql: "ALTER TABLE characters ADD COLUMN known_spells TEXT DEFAULT '[]'" },
+    { col: 'feats', sql: "ALTER TABLE characters ADD COLUMN feats TEXT DEFAULT '[]'" },
+    { col: 'parsed_backstory', sql: "ALTER TABLE characters ADD COLUMN parsed_backstory TEXT" },
+    { col: 'languages', sql: "ALTER TABLE characters ADD COLUMN languages TEXT DEFAULT '[]'" },
+    { col: 'tool_proficiencies', sql: "ALTER TABLE characters ADD COLUMN tool_proficiencies TEXT DEFAULT '[]'" },
   ];
 
   for (const migration of characterMigrations) {

@@ -4,6 +4,7 @@ function AdventureHistory({ character }) {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+  const [sectionCollapsed, setSectionCollapsed] = useState(true)
 
   useEffect(() => {
     if (character) {
@@ -80,12 +81,23 @@ function AdventureHistory({ character }) {
 
   return (
     <div className="container">
-      <h2>Adventure History</h2>
-      <p style={{ color: '#bbb', marginBottom: '1rem', fontSize: '0.9rem' }}>
-        {history.length} adventure{history.length !== 1 ? 's' : ''} completed
-      </p>
+      <div
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+        onClick={() => setSectionCollapsed(!sectionCollapsed)}
+      >
+        <h2 style={{ margin: 0 }}>Adventure History</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ color: '#bbb', fontSize: '0.9rem' }}>
+            {history.length} adventure{history.length !== 1 ? 's' : ''}
+          </span>
+          <span style={{ color: '#888', fontSize: '0.8rem' }}>
+            {sectionCollapsed ? '▶' : '▼'}
+          </span>
+        </div>
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {!sectionCollapsed && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
         {history.map((adventure) => {
           const results = adventure.results ? JSON.parse(adventure.results) : null
           const isExpanded = expanded === adventure.id
@@ -173,7 +185,8 @@ function AdventureHistory({ character }) {
             </div>
           )
         })}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -231,26 +231,38 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
         />
       ) : (
         <>
-          <h2>Characters</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ margin: 0 }}>Characters</h2>
+            <button
+              className="button button-secondary"
+              onClick={() => {
+                onSelectCharacter(null)
+                handleShowForm(true)
+              }}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            >
+              + New Character
+            </button>
+          </div>
 
           {characters.length === 0 ? (
             <p style={{ color: '#bbb', marginBottom: '1rem' }}>No characters yet. Create one to get started!</p>
           ) : (
-            <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '0.5rem' }}>
               {characters.map(char => (
             <div
               key={char.id}
               className={`character-card ${selectedCharacter?.id === char.id ? 'selected' : ''}`}
               onClick={() => onSelectCharacter(char)}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 {char.avatar && (
                   <img
                     src={char.avatar}
                     alt={`${char.name} avatar`}
                     style={{
-                      width: '60px',
-                      height: '60px',
+                      width: '48px',
+                      height: '48px',
                       objectFit: 'cover',
                       borderRadius: '50%',
                       border: '2px solid #3498db'
@@ -266,371 +278,26 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
                       {char.name}
                     </p>
                   )}
-                  <p style={{ margin: '0.25rem 0 0 0' }}>Level {char.level} {capitalize(char.race)} {capitalize(char.class)}</p>
+                  <p style={{ margin: '0.25rem 0 0 0', color: '#bbb' }}>Level {char.level} {capitalize(char.race)} {capitalize(char.class)}</p>
                 </div>
-              </div>
-
-              {/* Primary Stats */}
-              <div className="stat-grid" style={{ marginBottom: '0.75rem' }}>
-                <div className="stat">
-                  <div className="stat-label">HP</div>
-                  <div className="stat-value" style={{ color: char.current_hp <= char.max_hp * 0.3 ? '#e74c3c' : '#2ecc71' }}>
-                    {char.current_hp}/{char.max_hp}
-                  </div>
-                </div>
-                <div className="stat">
-                  <div className="stat-label">AC</div>
-                  <div className="stat-value">{char.armor_class}</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-label">Speed</div>
-                  <div className="stat-value">{char.speed} ft</div>
-                </div>
-              </div>
-
-              {/* Secondary Stats */}
-              <div className="stat-grid" style={{ marginBottom: '0.75rem' }}>
-                <div className="stat">
-                  <div className="stat-label">XP</div>
-                  <div className="stat-value">
-                    {char.experience}/{char.experience_to_next_level}
-                    <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-                      ({Math.floor((char.experience / char.experience_to_next_level) * 100)}%)
-                    </div>
-                  </div>
-                </div>
-                <div className="stat">
-                  <div className="stat-label">Gold</div>
-                  <div className="stat-value">
-                    {char.gold_gp > 0 && `${char.gold_gp}g `}
-                    {char.gold_sp > 0 && `${char.gold_sp}s `}
-                    {char.gold_cp > 0 && `${char.gold_cp}c`}
-                    {char.gold_gp === 0 && char.gold_sp === 0 && char.gold_cp === 0 && '0c'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Ability Scores */}
-              {(() => {
-                try {
-                  const abilities = JSON.parse(char.ability_scores || '{}')
-                  const getModifier = (score) => {
-                    const mod = Math.floor((score - 10) / 2)
-                    return mod >= 0 ? `+${mod}` : mod.toString()
-                  }
-                  return (
-                    <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '4px' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.25rem' }}>Ability Scores</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.25rem', fontSize: '0.75rem' }}>
-                        {['str', 'dex', 'con', 'int', 'wis', 'cha'].map(ability => (
-                          <div key={ability} style={{ textAlign: 'center' }}>
-                            <div style={{ color: '#888', textTransform: 'uppercase' }}>{ability}</div>
-                            <div style={{ fontWeight: 'bold' }}>{abilities[ability]} <span style={{ color: '#3498db' }}>({getModifier(abilities[ability])})</span></div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                } catch {
-                  return null
-                }
-              })()}
-
-              {/* Skills */}
-              {(() => {
-                try {
-                  const skills = JSON.parse(char.skills || '[]')
-                  if (skills.length > 0) {
-                    return (
-                      <div style={{ marginBottom: '0.5rem', fontSize: '0.85rem', color: '#bbb' }}>
-                        <span style={{ color: '#888' }}>Skills:</span> {skills.join(', ')}
-                      </div>
-                    )
-                  }
-                } catch {}
-                return null
-              })()}
-
-              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#bbb' }}>
-                <div><span style={{ color: '#888' }}>Location:</span> {char.current_location || 'Unknown'}</div>
-                {char.current_quest && <div><span style={{ color: '#888' }}>Quest:</span> {char.current_quest}</div>}
-                {char.background && <div><span style={{ color: '#888' }}>Background:</span> {capitalize(char.background)}</div>}
-                {char.alignment && <div><span style={{ color: '#888' }}>Alignment:</span> {char.alignment}</div>}
-                {char.faith && <div><span style={{ color: '#888' }}>Faith:</span> {char.faith}</div>}
-                {char.lifestyle && <div><span style={{ color: '#888' }}>Lifestyle:</span> {capitalize(char.lifestyle)}</div>}
-                {char.gender && <div><span style={{ color: '#888' }}>Gender:</span> {capitalize(char.gender)}</div>}
-              </div>
-
-              {/* Subclass Features */}
-              {char.subclass && char.class && (() => {
-                const classKey = char.class.toLowerCase()
-                const classData = classesData[classKey]
-                if (!classData || !classData.subclasses) return null
-
-                const subclassData = classData.subclasses.find(sc => sc.name === char.subclass)
-                if (!subclassData || !subclassData.featuresByLevel) return null
-
-                // Get features up to current level
-                const activeFeatures = []
-                Object.entries(subclassData.featuresByLevel)
-                  .filter(([level]) => parseInt(level) <= char.level)
-                  .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                  .forEach(([level, features]) => {
-                    features.forEach(feature => {
-                      activeFeatures.push({ ...feature, level: parseInt(level) })
-                    })
-                  })
-
-                if (activeFeatures.length === 0) return null
-
-                // Get spell list
-                const spellListKey = subclassData.domainSpells ? 'domainSpells' :
-                                    subclassData.oathSpells ? 'oathSpells' :
-                                    subclassData.expandedSpells ? 'expandedSpells' :
-                                    subclassData.circleSpells ? 'circleSpells' :
-                                    subclassData.subclassSpells ? 'subclassSpells' :
-                                    subclassData.originSpells ? 'originSpells' : null
-                const spellList = spellListKey ? subclassData[spellListKey] : null
-                const activeSpells = spellList ? Object.entries(spellList)
-                  .filter(([level]) => parseInt(level) <= char.level)
-                  .sort(([a], [b]) => parseInt(a) - parseInt(b)) : []
-
-                return (
-                  <div style={{
-                    marginTop: '0.75rem',
-                    padding: '0.75rem',
-                    background: 'rgba(155, 89, 182, 0.1)',
-                    borderRadius: '6px',
-                    border: '1px solid rgba(155, 89, 182, 0.2)'
+                {canLevelUpStatus[char.id] && (
+                  <span style={{
+                    background: 'rgba(241, 196, 15, 0.2)',
+                    border: '1px solid #f1c40f',
+                    color: '#f1c40f',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold'
                   }}>
-                    <div style={{ fontSize: '0.8rem', color: '#9b59b6', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                      {char.subclass} Features
-                    </div>
-
-                    {/* Bonus Proficiencies */}
-                    {subclassData.bonusProficiencies && subclassData.bonusProficiencies.length > 0 && (
-                      <div style={{ fontSize: '0.75rem', color: '#bbb', marginBottom: '0.5rem' }}>
-                        <span style={{ color: '#888' }}>Proficiencies:</span> {subclassData.bonusProficiencies.join(', ')}
-                      </div>
-                    )}
-
-                    {/* Active Spells */}
-                    {activeSpells.length > 0 && (
-                      <div style={{ fontSize: '0.75rem', color: '#bbb', marginBottom: '0.5rem' }}>
-                        <span style={{ color: '#888' }}>Subclass Spells:</span>
-                        <div style={{ marginLeft: '0.5rem', marginTop: '0.25rem' }}>
-                          {activeSpells.map(([level, spells]) => (
-                            <div key={level}>
-                              <span style={{ color: '#9b59b6' }}>Lv{level}:</span> {spells.join(', ')}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Active Features */}
-                    <div style={{ fontSize: '0.75rem' }}>
-                      <span style={{ color: '#888' }}>Active Features:</span>
-                      <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, listStyle: 'disc' }}>
-                        {activeFeatures.map((feature, idx) => (
-                          <li key={idx} style={{ color: '#bbb', marginBottom: '0.25rem' }}>
-                            <span style={{ color: '#ccc', fontWeight: 'bold' }}>{feature.name}</span>
-                            <span style={{ color: '#666' }}> (Lv{feature.level})</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Inventory */}
-              {(() => {
-                try {
-                  const inventory = JSON.parse(char.inventory || '[]')
-                  const equipment = JSON.parse(char.equipment || '[]')
-                  const items = inventory.length > 0 ? inventory : equipment.map(e => typeof e === 'string' ? { name: e, quantity: 1 } : e)
-
-                  return (
-                    <details style={{
-                      marginTop: '0.75rem',
-                      padding: '0.75rem',
-                      background: 'rgba(241, 196, 15, 0.1)',
-                      borderRadius: '6px',
-                      border: '1px solid rgba(241, 196, 15, 0.2)'
-                    }}>
-                      <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#f1c40f', fontWeight: 'bold' }}>
-                        Inventory ({items.length} items)
-                      </summary>
-                      <div style={{ marginTop: '0.5rem' }}>
-                        {items.length === 0 ? (
-                          <p style={{ fontSize: '0.75rem', color: '#888', margin: 0 }}>No items in inventory</p>
-                        ) : (
-                          <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '0.75rem' }}>
-                            {items.map((item, idx) => (
-                              <li key={idx} style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                color: '#bbb',
-                                padding: '0.25rem 0',
-                                borderBottom: idx < items.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'
-                              }}>
-                                <span>
-                                  • {typeof item === 'string' ? item : item.name}
-                                  {item.quantity && item.quantity > 1 && ` (×${item.quantity})`}
-                                </span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    const newItems = items.filter((_, i) => i !== idx)
-                                    fetch(`/api/character/${char.id}`, {
-                                      method: 'PUT',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ inventory: JSON.stringify(newItems) })
-                                    })
-                                      .then(res => res.json())
-                                      .then(updated => onCharacterUpdated(updated))
-                                      .catch(err => console.error('Error removing item:', err))
-                                  }}
-                                  style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: '#e74c3c',
-                                    cursor: 'pointer',
-                                    fontSize: '0.7rem',
-                                    padding: '0.1rem 0.25rem'
-                                  }}
-                                  title="Remove item"
-                                >
-                                  ✕
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.25rem' }}>
-                          <input
-                            type="text"
-                            placeholder="Add item..."
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              e.stopPropagation()
-                              if (e.key === 'Enter' && e.target.value.trim()) {
-                                const newItems = [...items, { name: e.target.value.trim(), quantity: 1 }]
-                                fetch(`/api/character/${char.id}`, {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ inventory: JSON.stringify(newItems) })
-                                })
-                                  .then(res => res.json())
-                                  .then(updated => onCharacterUpdated(updated))
-                                  .catch(err => console.error('Error adding item:', err))
-                                e.target.value = ''
-                              }
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: '0.25rem 0.5rem',
-                              fontSize: '0.75rem',
-                              background: 'rgba(255,255,255,0.1)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              borderRadius: '4px',
-                              color: '#fff'
-                            }}
-                          />
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              const input = e.target.previousElementSibling
-                              if (input.value.trim()) {
-                                const newItems = [...items, { name: input.value.trim(), quantity: 1 }]
-                                fetch(`/api/character/${char.id}`, {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ inventory: JSON.stringify(newItems) })
-                                })
-                                  .then(res => res.json())
-                                  .then(updated => onCharacterUpdated(updated))
-                                  .catch(err => console.error('Error adding item:', err))
-                                input.value = ''
-                              }
-                            }}
-                            style={{
-                              background: '#2ecc71',
-                              border: 'none',
-                              color: 'white',
-                              borderRadius: '4px',
-                              padding: '0.25rem 0.5rem',
-                              cursor: 'pointer',
-                              fontSize: '0.7rem'
-                            }}
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                    </details>
-                  )
-                } catch (e) {
-                  console.error('Error parsing inventory:', e)
-                  return null
-                }
-              })()}
-
-              {/* Level Up Banner */}
-              {canLevelUpStatus[char.id] && (
-                <div className="level-up-banner">
-                  <p style={{ color: '#f1c40f', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                    Ready to Level Up!
-                  </p>
-                  <button
-                    className="button level-up-button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleLevelUp(char)
-                    }}
-                    style={{
-                      width: '100%',
-                      fontSize: '1rem',
-                      padding: '0.75rem'
-                    }}
-                  >
-                    Level Up to {char.level + 1}!
-                  </button>
-                </div>
-              )}
-
-              {char.current_hp < char.max_hp && (
-                <button
-                  className="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRest(char.id)
-                  }}
-                  disabled={resting}
-                  style={{
-                    marginTop: '0.5rem',
-                    width: '100%',
-                    background: char.current_hp <= char.max_hp * 0.3 ? '#e74c3c' : '#2ecc71',
-                    fontSize: '0.85rem',
-                    padding: '0.5rem'
-                  }}
-                >
-                  {resting ? 'Resting...' : `🛌 Rest (+${Math.floor((char.max_hp - char.current_hp) * 0.5)} HP)`}
-                </button>
-              )}
+                    Level Up!
+                  </span>
+                )}
+              </div>
             </div>
               ))}
             </div>
           )}
-
-          <button className="button" onClick={() => {
-            onSelectCharacter(null)
-            handleShowForm(true)
-          }}>
-            Create New Character
-          </button>
 
           {false && (
         <form onSubmit={handleSubmit} style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '1rem' }}>

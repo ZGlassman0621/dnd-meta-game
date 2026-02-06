@@ -126,7 +126,6 @@ input:focus, select:focus, textarea:focus {
 
 .character-card:hover {
   background: rgba(255, 255, 255, 0.12);
-  transform: translateX(4px);
 }
 
 .character-card.selected {
@@ -1637,14 +1636,15 @@ input:focus, select:focus, textarea:focus {
   font-size: 2rem;
 }
 
-.sheet-title .full-name {
+.sheet-title .nickname {
   margin: 0.25rem 0 0 0;
   color: #888;
   font-size: 1rem;
+  font-style: italic;
 }
 
 .sheet-title .subtitle {
-  margin: 0.5rem 0 0 0;
+  margin: 0.5rem 0 1rem 0;
   color: #bbb;
   font-size: 1.1rem;
 }
@@ -1781,8 +1781,14 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Experience */
+.sheet-section.experience {
+  text-align: center;
+}
+
 .xp-display {
   text-align: center;
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .xp-numbers {
@@ -1856,6 +1862,10 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Wealth */
+.sheet-section.wealth {
+  text-align: center;
+}
+
 .currency-grid {
   display: flex;
   justify-content: center;
@@ -1904,16 +1914,20 @@ input:focus, select:focus, textarea:focus {
 .detail-item {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .detail-label {
   color: #888;
+  flex-shrink: 0;
 }
 
 .detail-value {
   color: #fff;
+  text-align: right;
 }
 
 /* Status */
@@ -2132,13 +2146,11 @@ input:focus, select:focus, textarea:focus {
 }
 
 .subclass-section {
-  border: 1px solid rgba(155, 89, 182, 0.3);
-  background: rgba(155, 89, 182, 0.05);
+  background: transparent;
 }
 
 .subclass-section h3 {
   color: #9b59b6;
-  border-bottom-color: rgba(155, 89, 182, 0.3);
 }
 
 .subclass-section .feature-item {

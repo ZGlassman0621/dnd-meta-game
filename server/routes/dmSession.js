@@ -477,10 +477,15 @@ router.post('/start', async (req, res) => {
         }
       }
 
-      const claudeResult = await claude.startSession(systemPrompt, openingPrompt);
+      // Use Opus 4.5 for first campaign sessions (establishing the narrative arc)
+      // Use Sonnet for continuing sessions (regular gameplay)
+      const modelChoice = isContinuing ? 'sonnet' : 'opus';
+
+      const claudeResult = await claude.startSession(systemPrompt, openingPrompt, modelChoice);
       result = {
         systemPrompt,
         openingNarrative: claudeResult.response,
+        model: claudeResult.model,
         messages: claudeResult.messages
       };
     } else {
@@ -862,9 +867,10 @@ router.post('/:sessionId/message', async (req, res) => {
     let result;
     if (provider === 'claude') {
       // Use Claude - extract system prompt from messages
+      // Always use Sonnet for ongoing session actions (cost-effective for gameplay)
       const systemMessage = messages.find(m => m.role === 'system');
       const systemPrompt = systemMessage?.content || '';
-      const claudeResult = await claude.continueSession(systemPrompt, messages, action);
+      const claudeResult = await claude.continueSession(systemPrompt, messages, action, 'sonnet');
       result = {
         narrative: claudeResult.response,
         messages: claudeResult.messages

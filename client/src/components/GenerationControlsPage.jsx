@@ -446,6 +446,16 @@ export default function GenerationControlsPage({ character }) {
       color: '#bdc3c7',
       fontSize: '13px',
       lineHeight: '1.5'
+    },
+    explanation: {
+      backgroundColor: 'rgba(155, 89, 182, 0.1)',
+      border: '1px solid rgba(155, 89, 182, 0.3)',
+      borderRadius: '8px',
+      padding: '12px 16px',
+      marginBottom: '15px',
+      color: '#bdc3c7',
+      fontSize: '13px',
+      lineHeight: '1.5',
     }
   };
 
@@ -459,6 +469,10 @@ export default function GenerationControlsPage({ character }) {
       <div style={styles.navPanel}>
         <div style={styles.sectionTitle}>
           ✨ AI Generation
+        </div>
+        <div style={styles.explanation}>
+          Use AI to generate new content for your campaign - quests, locations, world events,
+          and companion backstories.
         </div>
         <button
           style={{ ...styles.navButton, ...(activeSection === 'quests' ? styles.navButtonActive : {}) }}

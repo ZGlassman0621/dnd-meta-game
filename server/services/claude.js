@@ -6,7 +6,19 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+const SONNET_MODEL = 'claude-sonnet-4-20250514';
+const OPUS_MODEL = 'claude-opus-4-5-20251101';
+const DEFAULT_MODEL = SONNET_MODEL;
+
+/**
+ * Get the model ID based on selection
+ * @param {string} modelChoice - 'opus', 'sonnet', or undefined for default
+ */
+function getModelId(modelChoice) {
+  if (modelChoice === 'opus') return OPUS_MODEL;
+  if (modelChoice === 'sonnet') return SONNET_MODEL;
+  return DEFAULT_MODEL;
+}
 
 /**
  * Check if Claude API is available (API key is set)
@@ -82,11 +94,17 @@ function cleanupResponse(text) {
 /**
  * Send a message to Claude and get a response
  * Includes retry logic for transient network errors
+ * @param {string} systemPrompt - The system prompt
+ * @param {Array} messages - Message history
+ * @param {number} maxRetries - Max retry attempts for network errors
+ * @param {string} modelChoice - 'opus', 'sonnet', or undefined for default
  */
-export async function chat(systemPrompt, messages, maxRetries = 3) {
+export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice = null) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY not set');
   }
+
+  const selectedModel = getModelId(modelChoice);
 
   // Convert messages to Claude format (separate system prompt)
   const claudeMessages = messages
@@ -107,7 +125,7 @@ export async function chat(systemPrompt, messages, maxRetries = 3) {
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: DEFAULT_MODEL,
+          model: selectedModel,
           max_tokens: 2000,
           system: systemPrompt,
           messages: claudeMessages
@@ -149,13 +167,20 @@ export async function chat(systemPrompt, messages, maxRetries = 3) {
 
 /**
  * Start a new DM session with Claude
+ * @param {string} systemPrompt - The DM system prompt
+ * @param {string} openingPrompt - The opening scene prompt
+ * @param {string} modelChoice - 'opus' for first campaign session, 'sonnet' for regular
  */
-export async function startSession(systemPrompt, openingPrompt) {
+export async function startSession(systemPrompt, openingPrompt, modelChoice = null) {
   const messages = [{ role: 'user', content: openingPrompt }];
-  const response = await chat(systemPrompt, messages);
+  const response = await chat(systemPrompt, messages, 3, modelChoice);
+
+  const selectedModel = getModelId(modelChoice);
+  console.log(`Starting DM session with model: ${selectedModel}`);
 
   return {
     response,
+    model: selectedModel,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: openingPrompt },
@@ -166,14 +191,18 @@ export async function startSession(systemPrompt, openingPrompt) {
 
 /**
  * Continue a session with Claude
+ * @param {string} systemPrompt - The DM system prompt
+ * @param {Array} messages - Message history
+ * @param {string} playerAction - The player's action
+ * @param {string} modelChoice - 'opus' or 'sonnet' (defaults to sonnet for continuations)
  */
-export async function continueSession(systemPrompt, messages, playerAction) {
+export async function continueSession(systemPrompt, messages, playerAction, modelChoice = 'sonnet') {
   const updatedMessages = [
     ...messages.filter(m => m.role !== 'system'),
     { role: 'user', content: playerAction }
   ];
 
-  const response = await chat(systemPrompt, updatedMessages);
+  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice);
 
   return {
     response,
@@ -187,8 +216,11 @@ export async function continueSession(systemPrompt, messages, playerAction) {
 
 /**
  * Generate a session summary with Claude
+ * @param {string} systemPrompt - The DM system prompt
+ * @param {Array} messages - Message history
+ * @param {string} modelChoice - 'opus' or 'sonnet' (defaults to sonnet for summaries)
  */
-export async function generateSessionSummary(systemPrompt, messages) {
+export async function generateSessionSummary(systemPrompt, messages, modelChoice = 'sonnet') {
   const summaryMessages = [
     ...messages.filter(m => m.role !== 'system'),
     {
@@ -204,7 +236,7 @@ Write in past tense as a narrative recap. Be specific about any timing or plans 
     }
   ];
 
-  return await chat(systemPrompt, summaryMessages);
+  return await chat(systemPrompt, summaryMessages, 3, modelChoice);
 }
 
 export default {

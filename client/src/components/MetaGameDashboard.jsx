@@ -187,6 +187,12 @@ function MetaGameDashboard({ character, onCharacterUpdated }) {
     <div style={styles.container}>
       <h2 style={styles.title}>Campaign Dashboard</h2>
 
+      <div style={styles.explanation}>
+        Track your campaign's timeline and manage character activities. Control how fast in-game
+        time passes, queue up downtime activities, and see AI-suggested actions based on your
+        current situation. The world keeps moving even when you're not actively playing.
+      </div>
+
       {/* Calendar & Time */}
       <div style={styles.section}>
         <div style={styles.sectionHeader}>
@@ -720,6 +726,16 @@ const styles = {
     border: 'none',
     borderRadius: '0.25rem',
     cursor: 'pointer'
+  },
+  explanation: {
+    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+    border: '1px solid rgba(52, 152, 219, 0.3)',
+    borderRadius: '0.5rem',
+    padding: '0.75rem 1rem',
+    marginBottom: '1rem',
+    color: '#5d6d7e',
+    fontSize: '0.9rem',
+    lineHeight: '1.5',
   }
 }
 

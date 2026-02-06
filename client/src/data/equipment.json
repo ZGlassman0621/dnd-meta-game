@@ -51,7 +51,7 @@
   "armor": {
     "light": [
       { "name": "Padded", "baseAC": 11, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": true, "cost": "5 gp", "costGp": 5, "weight": 8 },
-      { "name": "Leather", "baseAC": 11, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": false, "cost": "10 gp", "costGp": 10, "weight": 10 },
+      { "name": "Leather Armor", "baseAC": 11, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": false, "cost": "10 gp", "costGp": 10, "weight": 10 },
       { "name": "Studded Leather", "baseAC": 12, "armorType": "light", "maxDexBonus": null, "stealthDisadvantage": false, "cost": "45 gp", "costGp": 45, "weight": 13 }
     ],
     "medium": [
@@ -425,5 +425,27 @@
       "costMultiplier": 100,
       "note": "+2 to attack (weapons) or +1 AC (armor), non-magical"
     }
+  },
+  "languages": {
+    "standard": [
+      "Common",
+      "Dwarvish",
+      "Elvish",
+      "Giant",
+      "Gnomish",
+      "Goblin",
+      "Halfling",
+      "Orc"
+    ],
+    "exotic": [
+      "Abyssal",
+      "Celestial",
+      "Deep Speech",
+      "Draconic",
+      "Infernal",
+      "Primordial",
+      "Sylvan",
+      "Undercommon"
+    ]
   }
 }
