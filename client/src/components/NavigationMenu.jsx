@@ -30,6 +30,7 @@ const menuCategories = {
     color: '#9b59b6',
     items: [
       { key: 'showCampaigns', label: 'Campaigns' },
+      { key: 'showCampaignPlan', label: 'Campaign Plan' },
       { key: 'showQuests', label: 'Quests' },
       { key: 'showBackstories', label: 'Companion Backstories' },
       { key: 'showNarrativeQueue', label: 'Narrative Queue' }

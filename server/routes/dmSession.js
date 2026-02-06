@@ -11,6 +11,7 @@ import { dayToDate, advanceTime } from '../config/harptos.js';
 import { XP_THRESHOLDS } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted, onDMSessionEnded } from '../services/narrativeIntegration.js';
+import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
 
 const router = express.Router();
 
@@ -67,6 +68,43 @@ router.get('/models', async (req, res) => {
   try {
     const models = await ollama.listModels();
     res.json({ models });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug: View latest session data (for testing)
+router.get('/debug/latest-session', async (req, res) => {
+  try {
+    const session = await dbGet(`
+      SELECT id, character_id, title, model, status, created_at, messages, session_config
+      FROM dm_sessions
+      ORDER BY id DESC
+      LIMIT 1
+    `);
+
+    if (!session) {
+      return res.json({ message: 'No sessions found' });
+    }
+
+    const messages = JSON.parse(session.messages || '[]');
+    const config = JSON.parse(session.session_config || '{}');
+
+    res.json({
+      id: session.id,
+      title: session.title,
+      model: session.model,
+      status: session.status,
+      created_at: session.created_at,
+      openingNarrative: messages.find(m => m.role === 'assistant')?.content || null,
+      systemPromptPreview: messages.find(m => m.role === 'system')?.content?.substring(0, 500) + '...',
+      configSummary: {
+        campaignModule: config.campaignModule?.name || 'Custom',
+        startingLocation: config.startingLocation?.name || 'Unknown',
+        era: config.era?.id || 'default',
+        campaignLength: config.campaignLength
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -416,6 +454,16 @@ router.post('/start', async (req, res) => {
       console.error('Error fetching narrative queue:', e);
     }
 
+    // Get campaign plan summary if character has a campaign
+    let campaignPlanSummary = null;
+    if (character.campaign_id) {
+      try {
+        campaignPlanSummary = await getPlanSummaryForSession(character.campaign_id);
+      } catch (e) {
+        console.error('Error fetching campaign plan:', e);
+      }
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -434,7 +482,8 @@ router.post('/start', async (req, res) => {
       usedNames,
       storyThreadsContext,
       narrativeQueueContext,
-      narrativeQueueItemIds
+      narrativeQueueItemIds,
+      campaignPlanSummary
     };
 
     // Check which LLM provider is available (prefers Claude)

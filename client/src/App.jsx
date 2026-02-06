@@ -17,6 +17,7 @@ import TravelPage from './components/TravelPage'
 import NPCRelationshipsPage from './components/NPCRelationshipsPage'
 import LivingWorldPage from './components/LivingWorldPage'
 import CampaignsPage from './components/CampaignsPage'
+import CampaignPlanPage from './components/CampaignPlanPage'
 import QuestsPage from './components/QuestsPage'
 import LocationsPage from './components/LocationsPage'
 import CompanionBackstoryPage from './components/CompanionBackstoryPage'
@@ -279,6 +280,10 @@ function App() {
         <CampaignsPage
           character={selectedCharacter}
           allCharacters={characters}
+        />
+      ) : activeView === 'showCampaignPlan' && selectedCharacter ? (
+        <CampaignPlanPage
+          character={selectedCharacter}
         />
       ) : activeView === 'showQuests' && selectedCharacter ? (
         <QuestsPage

@@ -496,6 +496,20 @@ export async function initDatabase() {
     )
   `);
 
+  // Add campaign_plan column to campaigns table (migration)
+  const campaignCols = await db.execute("PRAGMA table_info(campaigns)");
+  const campaignColNames = campaignCols.rows.map(c => c.name);
+
+  if (!campaignColNames.includes('campaign_plan')) {
+    try {
+      await db.execute('ALTER TABLE campaigns ADD COLUMN campaign_plan TEXT');
+    } catch (e) {
+      if (!e.message.includes('duplicate column')) {
+        console.error('Migration error for campaign_plan:', e.message);
+      }
+    }
+  }
+
   // Add campaign_id to characters table (migration)
   const charColsForCampaign = await db.execute("PRAGMA table_info(characters)");
   const charColNamesForCampaign = charColsForCampaign.rows.map(c => c.name);

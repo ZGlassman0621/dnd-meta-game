@@ -1,5 +1,6 @@
 import express from 'express';
 import * as campaignService from '../services/campaignService.js';
+import * as campaignPlanService from '../services/campaignPlanService.js';
 
 const router = express.Router();
 
@@ -146,6 +147,86 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting campaign:', error);
     res.status(500).json({ error: 'Failed to delete campaign' });
+  }
+});
+
+// ============================================================
+// CAMPAIGN PLAN ENDPOINTS
+// ============================================================
+
+// GET /api/campaign/:id/plan - Get the campaign plan
+router.get('/:id/plan', async (req, res) => {
+  try {
+    const plan = await campaignPlanService.getCampaignPlan(req.params.id);
+    res.json(plan);
+  } catch (error) {
+    console.error('Error fetching campaign plan:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch campaign plan' });
+  }
+});
+
+// POST /api/campaign/:id/plan/generate - Generate a new campaign plan with Opus
+router.post('/:id/plan/generate', async (req, res) => {
+  try {
+    const { character_id } = req.body;
+
+    if (!character_id) {
+      return res.status(400).json({ error: 'character_id is required' });
+    }
+
+    const plan = await campaignPlanService.generateCampaignPlan(req.params.id, character_id);
+    res.json(plan);
+  } catch (error) {
+    console.error('Error generating campaign plan:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate campaign plan' });
+  }
+});
+
+// GET /api/campaign/:id/plan/summary - Get plan summary for DM session context
+router.get('/:id/plan/summary', async (req, res) => {
+  try {
+    const summary = await campaignPlanService.getPlanSummaryForSession(req.params.id);
+    res.json(summary);
+  } catch (error) {
+    console.error('Error fetching plan summary:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch plan summary' });
+  }
+});
+
+// PUT /api/campaign/:id/plan/:section - Update a section of the campaign plan
+router.put('/:id/plan/:section', async (req, res) => {
+  try {
+    const plan = await campaignPlanService.updatePlanSection(
+      req.params.id,
+      req.params.section,
+      req.body
+    );
+    res.json(plan);
+  } catch (error) {
+    console.error('Error updating plan section:', error);
+    res.status(500).json({ error: error.message || 'Failed to update plan section' });
+  }
+});
+
+// POST /api/campaign/:id/plan/world-event - Add a world event
+router.post('/:id/plan/world-event', async (req, res) => {
+  try {
+    const plan = await campaignPlanService.addWorldEvent(req.params.id, req.body);
+    res.json(plan);
+  } catch (error) {
+    console.error('Error adding world event:', error);
+    res.status(500).json({ error: error.message || 'Failed to add world event' });
+  }
+});
+
+// POST /api/campaign/:id/plan/npc - Add an NPC to the plan
+router.post('/:id/plan/npc', async (req, res) => {
+  try {
+    const plan = await campaignPlanService.addNPC(req.params.id, req.body);
+    res.json(plan);
+  } catch (error) {
+    console.error('Error adding NPC:', error);
+    res.status(500).json({ error: error.message || 'Failed to add NPC' });
   }
 });
 
