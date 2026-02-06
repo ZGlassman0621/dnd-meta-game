@@ -175,7 +175,11 @@ function App() {
               ? (llmStatus.provider === 'claude' ? '#a78bfa' : '#2ecc71')
               : '#e74c3c',
             marginTop: '0.5rem'
-          }}>
+          }}
+          title={llmStatus.provider === 'claude' && llmStatus.models
+            ? `Opus 4.5 for new campaigns, Sonnet 4 for gameplay`
+            : undefined}
+          >
             <span style={{ fontSize: '0.8rem' }}>
               {llmStatus.available
                 ? (llmStatus.provider === 'claude' ? '🟣' : '🟢')
@@ -183,7 +187,9 @@ function App() {
             </span>
             <span>
               {llmStatus.available
-                ? (llmStatus.provider === 'claude' ? 'Claude AI' : 'Ollama')
+                ? (llmStatus.provider === 'claude'
+                  ? (llmStatus.models ? 'Opus + Sonnet' : 'Claude AI')
+                  : 'Ollama')
                 : 'AI Offline'}
             </span>
           </div>

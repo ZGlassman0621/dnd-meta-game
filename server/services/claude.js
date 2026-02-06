@@ -58,6 +58,10 @@ export async function checkClaudeStatus() {
       return {
         available: true,
         model: DEFAULT_MODEL,
+        models: {
+          opus: OPUS_MODEL,
+          sonnet: SONNET_MODEL
+        },
         provider: 'Anthropic Claude'
       };
     } else {
