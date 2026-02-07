@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { STARTING_LOCATIONS } from '../data/forgottenRealms';
 
 const styles = {
   container: {
@@ -289,7 +290,15 @@ const styles = {
 
 const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical'];
 
-const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
+const PIPELINE_STEPS = [
+  { key: 'creating', label: 'Creating campaign' },
+  { key: 'assigning', label: 'Assigning character' },
+  { key: 'parsing', label: 'Analyzing backstory' },
+  { key: 'generating', label: 'Generating campaign world' },
+  { key: 'done', label: 'Your world is ready!' }
+];
+
+const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
@@ -298,6 +307,11 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
   const [loading, setLoading] = useState(true);
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [selectedCharacterToAssign, setSelectedCharacterToAssign] = useState('');
+  const [customLocation, setCustomLocation] = useState('');
+  const [backstoryLocation, setBackstoryLocation] = useState(null);
+  const [pipelineStep, setPipelineStep] = useState(null);
+  const [pipelineError, setPipelineError] = useState(null);
+  const [createdCampaign, setCreatedCampaign] = useState(null);
 
   const [newCampaign, setNewCampaign] = useState({
     name: '',
@@ -307,6 +321,40 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
     starting_location: '',
     time_ratio: 'normal'
   });
+
+  // Auto-select starting location from parsed backstory
+  useEffect(() => {
+    if (showNewCampaign && character?.parsed_backstory) {
+      try {
+        const parsed = typeof character.parsed_backstory === 'string'
+          ? JSON.parse(character.parsed_backstory)
+          : character.parsed_backstory;
+        const locations = parsed?.locations || [];
+        const homeLocation = locations.find(l =>
+          ['hometown', 'birthplace', 'current'].includes(l.type?.toLowerCase())
+        );
+        if (homeLocation) {
+          const match = STARTING_LOCATIONS.find(sl =>
+            sl.name.toLowerCase() === homeLocation.name?.toLowerCase() ||
+            homeLocation.name?.toLowerCase().includes(sl.name.toLowerCase()) ||
+            sl.name.toLowerCase().includes(homeLocation.name?.toLowerCase())
+          );
+          if (match) {
+            setNewCampaign(prev => ({ ...prev, starting_location: match.name }));
+            setBackstoryLocation({ name: homeLocation.name, matched: true });
+          } else {
+            setNewCampaign(prev => ({ ...prev, starting_location: 'custom' }));
+            setCustomLocation(homeLocation.name || '');
+            setBackstoryLocation({ name: homeLocation.name, matched: false });
+          }
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+    } else if (showNewCampaign) {
+      setBackstoryLocation(null);
+    }
+  }, [showNewCampaign, character]);
 
   useEffect(() => {
     loadCampaigns();
@@ -362,29 +410,89 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
 
   const handleCreateCampaign = async (e) => {
     e.preventDefault();
+
+    // Resolve starting location
+    const resolvedCampaign = {
+      ...newCampaign,
+      starting_location: newCampaign.starting_location === 'custom'
+        ? customLocation
+        : newCampaign.starting_location
+    };
+
+    setPipelineStep('creating');
+    setPipelineError(null);
+
     try {
-      const response = await fetch('/api/campaign', {
+      // Step 1: Create campaign
+      const createResponse = await fetch('/api/campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCampaign)
+        body: JSON.stringify(resolvedCampaign)
       });
-      if (response.ok) {
-        const campaign = await response.json();
-        setCampaigns([campaign, ...campaigns]);
-        setShowNewCampaign(false);
-        setNewCampaign({
-          name: '',
-          description: '',
-          setting: 'Forgotten Realms',
-          tone: 'heroic fantasy',
-          starting_location: '',
-          time_ratio: 'normal'
+      if (!createResponse.ok) throw new Error('Failed to create campaign');
+      const campaign = await createResponse.json();
+      setCreatedCampaign(campaign);
+      setCampaigns(prev => [campaign, ...prev]);
+
+      // Step 2: Assign character
+      if (character) {
+        setPipelineStep('assigning');
+        const assignResponse = await fetch(`/api/campaign/${campaign.id}/assign-character`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ character_id: character.id })
         });
-        setSelectedCampaign(campaign);
+        if (!assignResponse.ok) throw new Error('Failed to assign character');
+        onCharacterUpdated?.();
       }
+
+      // Step 3: Parse backstory (skip if no backstory or already parsed)
+      if (character?.backstory && !character?.parsed_backstory) {
+        setPipelineStep('parsing');
+        try {
+          await fetch(`/api/character/${character.id}/parsed-backstory/parse`, {
+            method: 'POST'
+          });
+        } catch (parseError) {
+          console.warn('Backstory parsing failed, continuing:', parseError);
+        }
+      }
+
+      // Step 4: Generate campaign plan
+      if (character) {
+        setPipelineStep('generating');
+        const genResponse = await fetch(`/api/campaign/${campaign.id}/plan/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ character_id: character.id })
+        });
+        if (!genResponse.ok) throw new Error('Failed to generate campaign plan');
+      }
+
+      setPipelineStep('done');
+      setSelectedCampaign(campaign);
+
     } catch (error) {
-      console.error('Error creating campaign:', error);
+      console.error('Pipeline error:', error);
+      setPipelineError(error.message);
     }
+  };
+
+  const resetPipeline = () => {
+    setPipelineStep(null);
+    setPipelineError(null);
+    setCreatedCampaign(null);
+    setShowNewCampaign(false);
+    setCustomLocation('');
+    setBackstoryLocation(null);
+    setNewCampaign({
+      name: '',
+      description: '',
+      setting: 'Forgotten Realms',
+      tone: 'heroic fantasy',
+      starting_location: '',
+      time_ratio: 'normal'
+    });
   };
 
   const handleArchiveCampaign = async () => {
@@ -478,7 +586,7 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
             ))}
           </div>
 
-          {showNewCampaign && (
+          {showNewCampaign && !pipelineStep && (
             <form style={styles.form} onSubmit={handleCreateCampaign}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>Campaign Name *</label>
@@ -532,14 +640,44 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
 
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Starting Location</label>
-                  <input
-                    style={styles.input}
-                    type="text"
+                  <label style={styles.label}>
+                    Starting Location
+                    {backstoryLocation && (
+                      <span style={{ color: '#9b59b6', marginLeft: '0.5rem', fontSize: '0.75rem' }}>
+                        (from backstory)
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    style={styles.select}
                     value={newCampaign.starting_location}
-                    onChange={e => setNewCampaign({ ...newCampaign, starting_location: e.target.value })}
-                    placeholder="Waterdeep"
-                  />
+                    onChange={e => {
+                      setNewCampaign({ ...newCampaign, starting_location: e.target.value });
+                      if (e.target.value !== 'custom') setCustomLocation('');
+                    }}
+                  >
+                    <option value="">Select a location...</option>
+                    <optgroup label="Major Cities">
+                      {STARTING_LOCATIONS.filter(l => l.type === 'city').map(loc => (
+                        <option key={loc.id} value={loc.name}>{loc.name} — {loc.region}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Regions">
+                      {STARTING_LOCATIONS.filter(l => l.type === 'region').map(loc => (
+                        <option key={loc.id} value={loc.name}>{loc.name} — {loc.region}</option>
+                      ))}
+                    </optgroup>
+                    <option value="custom">Custom Location...</option>
+                  </select>
+                  {newCampaign.starting_location === 'custom' && (
+                    <input
+                      style={{ ...styles.input, marginTop: '0.5rem' }}
+                      type="text"
+                      value={customLocation}
+                      onChange={e => setCustomLocation(e.target.value)}
+                      placeholder="Enter custom location name"
+                    />
+                  )}
                 </div>
 
                 <div style={styles.formGroup}>
@@ -564,7 +702,142 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
             </form>
           )}
 
-          {!showNewCampaign && (
+          {pipelineStep && (
+            <div style={{
+              padding: '1.5rem',
+              background: 'rgba(155, 89, 182, 0.05)',
+              borderRadius: '8px',
+              border: '1px solid rgba(155, 89, 182, 0.2)',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ marginBottom: '1rem', fontSize: '1rem', color: '#f5f5f5', fontWeight: '500' }}>
+                {pipelineStep === 'done' ? 'Campaign Ready!' : 'Setting up your campaign...'}
+              </div>
+
+              {PIPELINE_STEPS.map((step, i) => {
+                const stepIndex = PIPELINE_STEPS.findIndex(s => s.key === pipelineStep);
+                const thisIndex = i;
+                const isCompleted = thisIndex < stepIndex || pipelineStep === 'done';
+                const isCurrent = step.key === pipelineStep && pipelineStep !== 'done';
+                const isPending = thisIndex > stepIndex && pipelineStep !== 'done';
+
+                // Skip parsing step display if no backstory
+                if (step.key === 'parsing' && (!character?.backstory || character?.parsed_backstory)) {
+                  if (!isCurrent) return null;
+                }
+                // Skip assign/parse/generate if no character
+                if (!character && ['assigning', 'parsing', 'generating'].includes(step.key)) return null;
+
+                return (
+                  <div key={step.key} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    padding: '0.5rem 0',
+                    color: isCompleted ? '#2ecc71' : isCurrent ? '#f5f5f5' : '#555'
+                  }}>
+                    <span style={{ fontSize: '1rem', width: '1.5rem', textAlign: 'center' }}>
+                      {isCompleted ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'}
+                    </span>
+                    <span style={{ fontSize: '0.9rem' }}>{step.label}</span>
+                    {isCurrent && step.key === 'generating' && (
+                      <div style={{
+                        flex: 1,
+                        height: '4px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        borderRadius: '2px',
+                        overflow: 'hidden',
+                        marginLeft: '0.5rem'
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #9b59b6, #8e44ad)',
+                          borderRadius: '2px',
+                          animation: 'pipelineProgress 60s ease-out forwards',
+                          width: '0%'
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {pipelineError && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '0.75rem',
+                  background: 'rgba(231, 76, 60, 0.1)',
+                  border: '1px solid rgba(231, 76, 60, 0.3)',
+                  borderRadius: '6px',
+                  color: '#e74c3c',
+                  fontSize: '0.85rem'
+                }}>
+                  Error: {pipelineError}
+                  <button
+                    style={{ ...styles.button, ...styles.primaryButton, marginLeft: '1rem', padding: '0.3rem 0.75rem' }}
+                    onClick={() => {
+                      setPipelineError(null);
+                      if (createdCampaign) {
+                        setPipelineStep('generating');
+                        fetch(`/api/campaign/${createdCampaign.id}/plan/generate`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ character_id: character?.id })
+                        }).then(res => {
+                          if (!res.ok) throw new Error('Retry failed');
+                          setPipelineStep('done');
+                          setSelectedCampaign(createdCampaign);
+                        }).catch(err => setPipelineError(err.message));
+                      }
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {pipelineStep === 'done' && (
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                  <button
+                    style={{
+                      ...styles.button,
+                      background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
+                      color: '#fff',
+                      padding: '0.75rem 2rem',
+                      fontSize: '1rem',
+                      fontWeight: '600'
+                    }}
+                    onClick={() => {
+                      resetPipeline();
+                      onNavigateToPlay?.();
+                    }}
+                  >
+                    Play Now
+                  </button>
+                  <button
+                    style={{ ...styles.button, ...styles.secondaryButton }}
+                    onClick={resetPipeline}
+                  >
+                    Back to Campaigns
+                  </button>
+                </div>
+              )}
+
+              <style>{`
+                @keyframes pipelineProgress {
+                  0% { width: 0%; }
+                  10% { width: 15%; }
+                  30% { width: 35%; }
+                  50% { width: 55%; }
+                  70% { width: 70%; }
+                  90% { width: 85%; }
+                  100% { width: 95%; }
+                }
+              `}</style>
+            </div>
+          )}
+
+          {!showNewCampaign && !pipelineStep && (
             <div style={styles.campaignList}>
               {loading ? (
                 <div style={styles.emptyState}>Loading campaigns...</div>

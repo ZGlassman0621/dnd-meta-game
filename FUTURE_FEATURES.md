@@ -252,6 +252,67 @@ Just add manual [+] [-] buttons - simple, no AI changes needed, gives player con
 
 ---
 
+## ~~Backstory Parser~~ ✅ IMPLEMENTED
+
+**Priority:** High
+**Requested:** 2026-02-04
+**Implemented:** 2026-02-07
+
+**Implementation Notes:**
+- Full page at `client/src/components/BackstoryParserPage.jsx` + `server/services/backstoryParserService.js`
+- AI parses freeform backstory into structured elements: characters, locations, factions, events, story hooks
+- Player can edit/add/remove parsed elements; re-parse preserves manual edits
+- Parsed backstory feeds into campaign plan generation and starting location auto-detection
+- Nav entry: Character > Backstory Parser
+
+---
+
+## ~~Streamlined Campaign Creation~~ ✅ IMPLEMENTED
+
+**Priority:** High
+**Requested:** 2026-02-07
+**Implemented:** 2026-02-07
+
+**Implementation Notes:**
+- Campaign creation auto-pipeline: create → assign character → parse backstory → generate campaign plan
+- Starting location dropdown with 15 Forgotten Realms locations + custom option
+- Auto-detects starting location from parsed backstory
+- Progress UI with step indicators and animated progress bar
+- "Play Now" button on completion navigates to DM session
+- Play button on home screen when campaign plan is ready
+
+---
+
+## ~~Gameplay Tabs (Downtime + Stats during sessions)~~ ✅ IMPLEMENTED
+
+**Priority:** Medium
+**Requested:** 2026-02-07
+**Implemented:** 2026-02-07
+
+**Implementation Notes:**
+- Adventure / Downtime / Stats tabs during active DM sessions
+- Downtime and MetaGameDashboard components embedded as tabs without modification
+- Tabs reset to "Adventure" when new session starts
+
+---
+
+## Companion Level-Up UI
+
+**Priority:** Medium
+**Requested:** 2026-02-07
+
+### Problem
+Database schema already supports companion leveling (`companion_level`, `companion_class`, `companion_experience`, `progression_type`). Server API exists (`GET/POST /api/companion/:id/level-up-info` and `/level-up`). No client UI exists yet.
+
+### Planned Implementation
+- Create `CompanionLevelUpModal.jsx` modeled after `LevelUpPage.jsx`
+- For class_based companions: HP roll, ASI distribution, subclass selection (same as main character)
+- For npc_stats companions: simpler stat boost interface
+- Trigger from CompanionsPage when companion has enough XP
+- Handle entirely within CompanionsPage as a modal overlay
+
+---
+
 ## Other Ideas (Add as needed)
 
 <!-- Add future feature requests below this line -->

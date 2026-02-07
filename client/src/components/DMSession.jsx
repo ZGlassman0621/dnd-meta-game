@@ -9,6 +9,8 @@ import {
 import { CAMPAIGN_MODULES, getCampaignModule } from '../data/campaignModules';
 import { SEASON_ICONS } from '../data/harptos';
 import classesData from '../data/classes.json';
+import Downtime from './Downtime';
+import MetaGameDashboard from './MetaGameDashboard';
 
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'llama3.1:8b';
@@ -46,6 +48,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [selectedNpcIds, setSelectedNpcIds] = useState([]);
 
   const [activeSession, setActiveSession] = useState(null);
+  const [activeGameTab, setActiveGameTab] = useState('adventure');
   const [messages, setMessages] = useState([]);
   const [inputAction, setInputAction] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -567,6 +570,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setSessionEnded(false);
       setSessionRewards(null);
       setSessionRecap(null);
+      setActiveGameTab('adventure');
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
@@ -1541,6 +1545,51 @@ Examples:
           </div>
         </div>
 
+        {/* Gameplay Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '0',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          marginBottom: '0.5rem'
+        }}>
+          {[
+            { key: 'adventure', label: 'Adventure' },
+            { key: 'downtime', label: 'Downtime' },
+            { key: 'stats', label: 'Stats' }
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveGameTab(tab.key)}
+              style={{
+                padding: '0.6rem 1.25rem',
+                background: activeGameTab === tab.key ? 'rgba(155, 89, 182, 0.2)' : 'transparent',
+                border: 'none',
+                borderBottom: activeGameTab === tab.key ? '2px solid #9b59b6' : '2px solid transparent',
+                color: activeGameTab === tab.key ? '#9b59b6' : '#888',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: activeGameTab === tab.key ? '600' : '400',
+                transition: 'all 0.15s'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeGameTab === 'downtime' && (
+          <div style={{ padding: '1rem 0' }}>
+            <Downtime character={character} onCharacterUpdated={onCharacterUpdated} />
+          </div>
+        )}
+
+        {activeGameTab === 'stats' && (
+          <div style={{ padding: '1rem 0' }}>
+            <MetaGameDashboard character={character} onCharacterUpdated={onCharacterUpdated} />
+          </div>
+        )}
+
+        {activeGameTab === 'adventure' && <>
         {/* Quick Reference Panel (Overlay) */}
         {showQuickRef && (
           <div className="quick-ref-overlay" style={{
@@ -2876,6 +2925,7 @@ Examples:
             Send
           </button>
         </form>
+        </>}
       </div>
     );
   }

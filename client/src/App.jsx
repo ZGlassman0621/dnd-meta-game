@@ -36,6 +36,7 @@ function App() {
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
   const [llmStatus, setLlmStatus] = useState(null)
+  const [campaignPlanReady, setCampaignPlanReady] = useState(false)
 
   // Navigation helper
   const navigateTo = (view) => {
@@ -68,6 +69,18 @@ function App() {
       checkActiveAdventure()
       const interval = setInterval(checkActiveAdventure, 30000) // Check every 30 seconds
       return () => clearInterval(interval)
+    }
+  }, [selectedCharacter])
+
+  // Check if selected character has a campaign plan ready
+  useEffect(() => {
+    if (selectedCharacter?.campaign_id) {
+      fetch(`/api/campaign/${selectedCharacter.campaign_id}/plan`)
+        .then(res => res.json())
+        .then(data => setCampaignPlanReady(!!(data?.main_quest)))
+        .catch(() => setCampaignPlanReady(false))
+    } else {
+      setCampaignPlanReady(false)
     }
   }, [selectedCharacter])
 
@@ -281,6 +294,10 @@ function App() {
           character={selectedCharacter}
           allCharacters={characters}
           onCharacterUpdated={() => loadCharacters()}
+          onNavigateToPlay={() => {
+            loadCharacters()
+            navigateTo('showDMSession')
+          }}
         />
       ) : activeView === 'showCampaignPlan' && selectedCharacter ? (
         <CampaignPlanPage
@@ -349,6 +366,39 @@ function App() {
           </div>
         )}
       </div>
+
+          {selectedCharacter && !showCreationForm && campaignPlanReady && (
+            <div
+              onClick={() => navigateTo('showDMSession')}
+              style={{
+                marginTop: '2rem',
+                padding: '1.5rem 2rem',
+                background: 'linear-gradient(135deg, rgba(155, 89, 182, 0.3), rgba(142, 68, 173, 0.2))',
+                border: '1px solid rgba(155, 89, 182, 0.4)',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155, 89, 182, 0.5), rgba(142, 68, 173, 0.35))'
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(155, 89, 182, 0.3)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155, 89, 182, 0.3), rgba(142, 68, 173, 0.2))'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#f5f5f5', marginBottom: '0.25rem' }}>
+                Play
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#a78bfa' }}>
+                Continue your adventure with {selectedCharacter.name}
+              </div>
+            </div>
+          )}
 
           {selectedCharacter && !showCreationForm && (
             <div style={{ marginTop: '2rem' }}>

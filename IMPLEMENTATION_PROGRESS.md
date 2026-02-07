@@ -1,13 +1,13 @@
-# Narrative Systems Implementation Progress
+# D&D Meta Game - Implementation Progress
 
 **Started:** 2026-02-04
-**Goal:** Implement structured narrative systems (quests, locations, companion backstories, NPC relationships)
+**Status:** Active development
 
 ---
 
 ## Overview
 
-Building foundation-first: database tables → CRUD services → event system → AI generators → integration.
+Building a comprehensive AI-powered solo D&D campaign management system. Development follows a foundation-first approach: database tables → CRUD services → event system → AI generators → frontend UI → UX streamlining.
 
 ---
 
@@ -1983,3 +1983,223 @@ Date: 2026-02-04
 - **Travel Constants**: `GET /api/travel/constants` now returns correct data
 - **Frontend Build**: Successful (no compilation errors)
 - **Navigation**: All 18 features accessible via 4 dropdown menus
+
+---
+
+## Phase J: Campaign Plan System
+
+### Status: COMPLETE
+
+Date: 2026-02-07
+
+Implemented AI-powered campaign plan generation using Claude Opus 4.5, creating comprehensive living world plans from character backstories and campaign descriptions.
+
+### Services Created
+
+| Service | File | Status |
+|---------|------|--------|
+| Campaign Plan Service | `server/services/campaignPlanService.js` | **Done** (NEW) |
+
+### Campaign Plan API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/campaign/:id/plan` | GET | Get campaign plan |
+| `/api/campaign/:id/plan/generate` | POST | Generate plan with Opus 4.5 |
+
+### Campaign Plan Structure
+
+Generated plans include:
+- **main_quest** — Title, summary, hook, stakes, 3-act structure
+- **npcs** — Array of NPCs with descriptions, roles, motivations, from_backstory flag
+- **factions** — Array with goals, allegiances, relationship_to_party
+- **locations** — Array with descriptions and significance
+- **side_quests** — Array of supplementary quest hooks
+- **world_timeline** — Events independent of player action
+- **dm_notes** — Tone guidance, twists, backup hooks, session zero tips
+
+### Campaign Plan Viewer
+
+**File**: `client/src/components/CampaignPlanPage.jsx`
+
+- Displays all plan sections with collapsible accordions
+- **Spoiler system**: Reddit-style spoiler covers hide DM-sensitive content (NPC roles, faction allegiances, secrets)
+- Click to reveal individual spoilers
+- Red accent styling for spoiler-covered content
+- Progress bar with animated steps during generation
+
+### DM Session Integration
+
+- `getPlanSummaryForSession()` generates condensed plan context for AI DM prompts
+- Campaign context endpoint: `/api/dm-session/campaign-context/:characterId`
+- When campaign plan exists, DM session setup form is gated (shows only Content Preferences + Begin Adventure)
+- NPC selection hidden when campaign plan exists (plan NPCs used automatically)
+- "Campaign Plan Loaded" banner shows quest title in session setup
+
+### Files Created
+
+| File | Purpose | Date |
+|------|---------|------|
+| `server/services/campaignPlanService.js` | Opus 4.5 plan generation + plan summary for sessions | 2026-02-07 |
+| `client/src/components/CampaignPlanPage.jsx` | Campaign plan viewer with spoiler system | 2026-02-07 |
+
+### Files Modified
+
+| File | Changes | Date |
+|------|---------|------|
+| `server/routes/campaign.js` | Added plan GET/POST endpoints | 2026-02-07 |
+| `server/routes/dmSession.js` | Added campaign context endpoint, plan summary injection | 2026-02-07 |
+| `server/database.js` | Added `campaign_plan` column to campaigns table | 2026-02-07 |
+| `client/src/App.jsx` | Added CampaignPlanPage routing | 2026-02-07 |
+| `client/src/components/DMSession.jsx` | Gated setup form, hidden NPC selection, plan loaded banner | 2026-02-07 |
+
+---
+
+## Phase K: Backstory Parser
+
+### Status: COMPLETE
+
+Date: 2026-02-07
+
+Implemented AI-powered backstory parsing that extracts structured elements from freeform character backstories.
+
+### Services Created
+
+| Service | File | Status |
+|---------|------|--------|
+| Backstory Parser Service | `server/services/backstoryParserService.js` | **Done** (NEW) |
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/character/:id/parsed-backstory` | GET | Get parsed backstory |
+| `/api/character/:id/parsed-backstory/parse` | POST | Parse backstory with AI |
+| `/api/character/:id/parsed-backstory` | PUT | Update parsed elements |
+
+### Parsed Elements
+
+The parser extracts:
+- **Characters** — NPCs mentioned in backstory with roles and relationships
+- **Locations** — Places with types (hometown, birthplace, current, visited)
+- **Factions** — Organizations and groups
+- **Events** — Key events in the character's history
+- **Story Hooks** — Unresolved plot threads for DM use
+
+### Features
+
+- AI parses freeform backstory into structured JSON elements
+- Player can edit, add, and remove parsed elements
+- Re-parse preserves manual edits (merges with existing data)
+- Parsed backstory feeds into campaign plan generation
+- Parsed locations used for starting location auto-detection
+
+### Files Created
+
+| File | Purpose | Date |
+|------|---------|------|
+| `server/services/backstoryParserService.js` | AI backstory parsing service | 2026-02-07 |
+| `client/src/components/BackstoryParserPage.jsx` | Backstory parser UI with edit capabilities | 2026-02-07 |
+
+### Files Modified
+
+| File | Changes | Date |
+|------|---------|------|
+| `server/routes/character.js` | Added parsed backstory endpoints | 2026-02-07 |
+| `server/database.js` | Added `parsed_backstory` column to characters table | 2026-02-07 |
+| `client/src/App.jsx` | Added BackstoryParserPage routing | 2026-02-07 |
+| `client/src/components/NavigationMenu.jsx` | Added Backstory Parser to Character menu | 2026-02-07 |
+
+---
+
+## Phase L: Streamlined Gameplay Experience
+
+### Status: COMPLETE
+
+Date: 2026-02-07
+
+Major UX overhaul reducing manual steps from character creation to playing. Previous flow required 4+ manual steps; new flow: **Create Character → Create Campaign (auto-pipeline) → Play**.
+
+### L1: Starting Location Dropdown
+
+**File**: `client/src/components/CampaignsPage.jsx`
+
+- Replaced free-text starting location input with grouped `<select>` dropdown
+- Uses `STARTING_LOCATIONS` from `client/src/data/forgottenRealms.js` (15 locations)
+- **Major Cities**: Waterdeep, Baldur's Gate, Neverwinter, Luskan, Silverymoon, Mithral Hall, Candlekeep, Menzoberranzan, Calimport, Athkatla
+- **Regions**: Icewind Dale, Sword Coast Wilderness, Anauroch, Cormanthor, Chult
+- **Custom Location**: Text input fallback for homebrew settings
+- Auto-detects starting location from parsed backstory (matches hometown/birthplace/current against location list)
+- Shows "(from backstory)" indicator when auto-selected
+
+### L2: Auto-Pipeline on Campaign Creation
+
+**File**: `client/src/components/CampaignsPage.jsx`
+
+When creating a campaign, an automatic pipeline runs:
+
+| Step | Action | API |
+|------|--------|-----|
+| 1 | Create campaign | POST `/api/campaign` |
+| 2 | Assign character | POST `/api/campaign/:id/assign-character` |
+| 3 | Parse backstory | POST `/api/character/:id/parsed-backstory/parse` |
+| 4 | Generate campaign plan | POST `/api/campaign/:id/plan/generate` |
+| 5 | Done | "Play Now" button appears |
+
+- Progress UI with step indicators (checkmarks, spinner, pending dots)
+- Animated CSS progress bar during plan generation
+- Error handling with retry button
+- Backstory parsing skipped if no backstory or already parsed
+- Pipeline continues if parsing fails (plan generation handles missing parsed data)
+
+### L3: Play Button on Home Screen
+
+**File**: `client/src/App.jsx`
+
+- `campaignPlanReady` state checks if character's campaign has a plan with `main_quest`
+- Fetches `/api/campaign/:id/plan` when selected character changes
+- Prominent purple-gradient Play button appears between character grid and adventure history
+- One click to jump straight into DM session
+
+### L4: Gameplay Tabs (Adventure / Downtime / Stats)
+
+**File**: `client/src/components/DMSession.jsx`
+
+- Three-tab interface during active DM sessions
+- **Adventure** tab: Main gameplay (messages + input)
+- **Downtime** tab: Embedded `Downtime` component (self-contained)
+- **Stats** tab: Embedded `MetaGameDashboard` component (self-contained)
+- Tab bar with purple active indicator
+- Tabs reset to "Adventure" when new session starts
+- Players can switch between tabs without leaving their session
+
+### L5: Navigation Cleanup
+
+**File**: `client/src/components/NavigationMenu.jsx`
+
+Reorganized navigation menus:
+- **Character**: Sheet, Companions, Backstory Parser, Downtime, Settings
+- **World**: NPC Generator, NPC Relationships
+- **Story**: Campaigns, Campaign Plan, Quests, Companion Backstories
+- **Play**: AI DM, Stats, Generate
+
+Hidden pages (accessible via direct navigation, not shown in menus):
+- Locations, Factions, Travel, World Events, Living World, Narrative Queue
+
+### Files Modified
+
+| File | Changes | Date |
+|------|---------|------|
+| `client/src/components/CampaignsPage.jsx` | Starting location dropdown, auto-pipeline, progress UI, Play Now button | 2026-02-07 |
+| `client/src/App.jsx` | Play button, campaign plan readiness check, `onNavigateToPlay` prop | 2026-02-07 |
+| `client/src/components/DMSession.jsx` | Gameplay tabs (Adventure/Downtime/Stats), tab bar, conditional content | 2026-02-07 |
+| `client/src/components/NavigationMenu.jsx` | Reorganized menus, hidden redundant pages | 2026-02-07 |
+
+### Test Results
+
+- **Campaign Plan API**: All tests passing (plan retrieval, structure validation, null for new campaigns)
+- **Campaign Creation Pipeline**: Full pipeline tested (create → assign → parse → generate → cleanup)
+- **Backstory Parser API**: Parse endpoint verified
+- **Frontend Build**: 77 modules, 890ms, no errors
+- **Play Button**: Correctly shows/hides based on campaign plan readiness
+- **Overall**: 104/104 tests passing (100% pass rate)

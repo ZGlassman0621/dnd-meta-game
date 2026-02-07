@@ -1,130 +1,105 @@
 # Recent Improvements
 
-## Summary
-Fixed critical issues and added quality-of-life improvements based on real testing.
+## Latest: Streamlined Gameplay Experience (2026-02-07)
 
-## 1. Loading Indicators ✅
-**Problem**: 6-8 second LLM calls had no visual feedback - users thought it was broken.
+Major UX overhaul to reduce the number of manual steps from character creation to playing.
 
-**Solution**: Added themed loading indicator when generating adventures.
-- Shows "Consulting with the local guild..." message
-- Contextual subtitle: "Generating contextual adventures based on your quest"
-- Sword emoji for theme
+### Streamlined Campaign Creation Pipeline
+**Problem**: Creating a campaign required 4+ manual steps: create campaign, assign character, navigate to backstory parser, navigate to campaign plan page, generate plan.
 
-**Files Changed**:
-- [client/src/components/AdventureManager.jsx](client/src/components/AdventureManager.jsx:121-136)
+**Solution**: Campaign creation now runs an automatic pipeline:
+1. Creates the campaign
+2. Assigns the current character
+3. Parses backstory (if exists and not already parsed)
+4. Generates the full campaign plan via Opus 4.5
 
----
-
-## 2. Gold Validation ✅
-**Problem**: Gold could go negative when failure consequences applied percentage losses.
-
-**Solution**: Added `Math.max(0, ...)` floor to all gold calculations.
-```javascript
-updates.gold_cp = Math.max(0, Math.floor(updates.gold_cp * (1 - lossPercent)));
-updates.gold_sp = Math.max(0, Math.floor(updates.gold_sp * (1 - lossPercent)));
-updates.gold_gp = Math.max(0, Math.floor(updates.gold_gp * (1 - lossPercent)));
-```
+A progress UI shows each step with checkmarks, and a "Play Now" button appears on completion.
 
 **Files Changed**:
-- [server/routes/adventure.js](server/routes/adventure.js:178-184)
+- `client/src/components/CampaignsPage.jsx` — Pipeline logic, progress UI, Play Now button
 
----
+### Starting Location Dropdown
+**Problem**: Starting location was a free-text input. Players had to know/type Forgotten Realms locations.
 
-## 3. HP Regeneration System ✅
-**Problem**: Character stuck at 1 HP after multiple failures. No way to recover without manual database edits.
+**Solution**: Replaced with a grouped `<select>` dropdown using `STARTING_LOCATIONS` from `forgottenRealms.js`:
+- **Major Cities**: Waterdeep, Baldur's Gate, Neverwinter, Luskan, Silverymoon, Mithral Hall, Candlekeep, Menzoberranzan, Calimport, Athkatla
+- **Regions**: Icewind Dale, Sword Coast Wilderness, Anauroch, Cormanthor, Chult
+- **Custom Location**: Text input fallback for homebrew settings
 
-**Solution**: Implemented two-tier healing system:
-
-### Passive Healing (Successful Adventures)
-- Characters heal **10-25% of missing HP** on successful adventures
-- Shows as green "+X HP" in rewards screen
-- Applied automatically when claiming rewards
-
-### Active Healing (Rest Button)
-- New "Rest" button appears on character card when HP < max
-- Restores **50% of missing HP** (minimum 1 HP)
-- Button color:
-  - Red if HP ≤ 30% (critical)
-  - Green if HP > 30%
-- Shows exact heal amount: "🛌 Rest (+6 HP)"
+Auto-detects starting location from parsed backstory (hometown/birthplace/current).
 
 **Files Changed**:
-- [server/routes/adventure.js](server/routes/adventure.js:278-284) - Passive healing on success
-- [server/routes/adventure.js](server/routes/adventure.js:172-175) - Apply HP restoration
-- [server/routes/character.js](server/routes/character.js:129-154) - Rest endpoint
-- [client/src/components/CharacterManager.jsx](client/src/components/CharacterManager.jsx:33-51) - Rest handler
-- [client/src/components/CharacterManager.jsx](client/src/components/CharacterManager.jsx:200-218) - Rest button UI
-- [client/src/components/ActiveAdventure.jsx](client/src/components/ActiveAdventure.jsx:166-171) - Show HP restored in rewards
+- `client/src/components/CampaignsPage.jsx` — Dropdown, backstory auto-select
+
+### Play Button on Home Screen
+**Problem**: No quick way to jump into an active campaign from the home screen.
+
+**Solution**: A prominent purple-gradient "Play" button appears on the home screen when the selected character has a campaign plan ready. One click to start playing.
+
+**Files Changed**:
+- `client/src/App.jsx` — Campaign plan readiness check, Play button
+
+### Gameplay Tabs (Adventure / Downtime / Stats)
+**Problem**: Downtime and Campaign Stats were on separate pages, disconnected from active gameplay.
+
+**Solution**: During active DM sessions, a tab bar appears with three tabs:
+- **Adventure** — The main gameplay (messages + input)
+- **Downtime** — Embedded Downtime component for rest/work activities
+- **Stats** — Embedded MetaGameDashboard for campaign statistics
+
+Players can switch between tabs without leaving their session.
+
+**Files Changed**:
+- `client/src/components/DMSession.jsx` — Tab state, tab bar, conditional content rendering
 
 ---
 
-## Testing Results
+## Previous: Campaign Plan & DM Session Improvements (2026-02-07)
 
-### Before Improvements:
-- Character HP: 1/14 (stuck at minimum)
-- No way to heal without database manipulation
-- No feedback during LLM generation
-- Gold could theoretically go negative
+### Campaign Plan Generation
+- Opus 4.5 generates comprehensive living world plans with NPCs, factions, locations, timeline, quest arcs, side quests, and DM notes
+- Campaign description is prioritized over backstory as the #1 rule for plan generation
+- Progress bar with animated steps during generation
 
-### After Improvements:
-- HP Regeneration working:
-  - Successful adventures heal 10-25% of missing HP
-  - Rest button available, heals 50% of missing HP
-- Loading indicator shows during adventure generation
-- Gold floors at 0 (tested with multiple failures)
+### Spoiler System
+- Reddit-style spoiler covers hide DM-sensitive content in the campaign plan viewer
+- NPC roles, faction allegiances, and secrets are hidden by default
+- Click to reveal individual spoilers
 
----
+### DM Session Streamlining
+- Setup form gated when campaign plan exists (shows only Content Preferences + Begin Adventure)
+- NPC selection hidden when campaign plan exists (plan NPCs are used automatically)
+- Campaign Plan Loaded banner shows quest title in session setup
 
-## How to Test
+### Navigation Cleanup
+- Reorganized nav: Character (Sheet, Companions, Backstory Parser, Downtime, Settings), World (NPC Generator, NPC Relationships), Story (Campaigns, Campaign Plan, Quests, Companion Backstories), Play (AI DM, Stats, Generate)
+- Hidden redundant pages covered by Campaign Plan (Locations, Factions, Travel, World Events, Living World, Narrative Queue)
 
-1. **Start the app**: `npm run dev`
-
-2. **Test HP Healing**:
-   - Your character is currently at low HP
-   - Click the 🛌 Rest button on the character card
-   - HP should increase by ~50% of missing HP
-   - Complete a successful adventure to see passive healing
-
-3. **Test Loading Indicator**:
-   - Click "Generate Adventure Options"
-   - Should see "Consulting with the local guild..." message
-   - After 6-8 seconds, adventures appear
-
-4. **Test Gold Floor**:
-   - Run multiple high-risk adventures that fail
-   - Check character gold - should never be negative
+### Backstory Parser
+- AI parses freeform backstories into structured elements: characters, locations, factions, events, story hooks
+- Player can edit/add/remove parsed elements; re-parse preserves manual edits
+- Parsed backstory feeds into campaign plan generation
 
 ---
 
-## Additional Recommendations (Not Implemented)
+## Earlier Improvements
 
-### Level-Up System
-Your character earns XP but never levels up. Consider adding:
-- Auto level-up when `experience >= experience_to_next_level`
-- Increase stats (HP, abilities)
-- Reset XP to 0, increase threshold
-- Show level-up notification
+### Loading Indicators
+- Themed loading indicator during adventure generation
+- Shows contextual messages while AI generates content
 
-### Debuff System
-Debuffs are stored but never checked. Could add:
-- Check debuffs before adventure generation
-- Add debuff-specific adventures (cure poison, remove curse)
-- Apply debuff penalties to success rates
-- Auto-expire debuffs after duration
+### Gold Validation
+- Gold can no longer go negative from failure consequences
+- `Math.max(0, ...)` floor on all gold calculations
 
-### Equipment System
-Equipment is stored but unused. Could add:
-- Loot from adventures
-- Equipment slots (weapon, armor, accessories)
-- Stat bonuses from equipment
-- Equipment durability/damage from failures
+### HP Regeneration System
+- Passive healing (10-25% of missing HP) on successful adventures
+- Active healing via Rest button (50% of missing HP)
+- Critical HP indicator when health is low
 
----
+### Pronoun System
+- Rest narratives use character's actual gender pronouns (he/she/they)
 
-## Performance Notes
-
-- Adventure generation: ~6-8 seconds (using Llama 3.2 3B)
-- Narrative generation: ~4-6 seconds (using full Llama 3.2)
-- Rest operation: < 100ms (local database)
-- All LLM operations: 100% free (runs locally via Ollama)
+### Calendar Controls
+- Manual +/- buttons for date advancement during sessions
+- Long rest automatically advances calendar by 1 day
