@@ -1,6 +1,22 @@
 # Recent Improvements
 
-## Latest: Home Page Navigation Hub (2026-02-07)
+## Latest: Bundle Size Optimization (2026-02-07)
+
+Lazy-loaded 13 components with `React.lazy()` + `Suspense` to reduce the initial bundle.
+
+**Before:** 1,321 kB (320 kB gzipped) — all pages loaded upfront
+**After:** 971 kB (244 kB gzipped) — hidden/heavy pages loaded on demand
+
+- **DMSession** (101 kB) and **CampaignPlanPage** (27 kB) lazy-loaded behind routes
+- **11 hidden pages** (222 kB combined) lazy-loaded — only fetched if navigated to
+- `Suspense` fallback shows loading state while chunks download
+
+**Files Changed**:
+- `client/src/App.jsx` — Converted 13 imports to `React.lazy()`, added `Suspense` boundary
+
+---
+
+## Home Page Navigation Hub (2026-02-07)
 
 Redesigned the home page from a cluttered dashboard into a clean navigation hub.
 

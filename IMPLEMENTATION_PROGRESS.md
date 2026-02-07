@@ -2192,8 +2192,19 @@ Trimmed dropdown navigation to 3 menus (8 items, down from 4 menus / 14 items):
 - **Story**: Campaigns, Campaign Plan
 - **Play**: AI Dungeon Master
 
-Hidden pages (code exists, not shown in menus):
+Hidden pages (code exists, lazy-loaded, not shown in menus):
 - Locations, Factions, Travel, World Events, Living World, Narrative Queue, NPC Generator, NPC Relationships, Quests, Companion Backstories, Campaign Stats, Generate Content
+
+### L6: Bundle Size Optimization
+
+**File**: `client/src/App.jsx`
+
+Lazy-loaded 13 components with `React.lazy()` + `Suspense` to reduce the initial bundle:
+- **Main bundle**: 1,321 kB → 971 kB (26.5% reduction)
+- **Gzipped**: 320 kB → 244 kB (23.7% reduction)
+- DMSession (101 kB) and CampaignPlanPage (27 kB) lazy-loaded behind routes
+- 11 hidden pages (222 kB combined) split into separate chunks loaded on demand
+- `Suspense` boundary wraps all view routing with a loading fallback
 
 ### Files Modified
 
@@ -2209,6 +2220,6 @@ Hidden pages (code exists, not shown in menus):
 - **Campaign Plan API**: All tests passing (plan retrieval, structure validation, null for new campaigns)
 - **Campaign Creation Pipeline**: Full pipeline tested (create → assign → parse → generate → cleanup)
 - **Backstory Parser API**: Parse endpoint verified
-- **Frontend Build**: 77 modules, 890ms, no errors
+- **Frontend Build**: 78 modules, 971 kB main + 14 lazy chunks, no errors
 - **Play Button**: Correctly shows/hides based on campaign plan readiness
 - **Overall**: 104/104 tests passing (100% pass rate)

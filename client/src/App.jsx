@@ -1,30 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import CharacterManager from './components/CharacterManager'
 import AdventureManager from './components/AdventureManager'
 import ActiveAdventure from './components/ActiveAdventure'
 import AdventureHistory from './components/AdventureHistory'
 import CharacterSettings from './components/CharacterSettings'
 import CharacterSheet from './components/CharacterSheet'
-import DMSession from './components/DMSession'
-import NPCGenerator from './components/NPCGenerator'
 import Downtime from './components/Downtime'
 import LevelUpPage from './components/LevelUpPage'
 import MetaGameDashboard from './components/MetaGameDashboard'
 import CompanionsPage from './components/CompanionsPage'
-import FactionsPage from './components/FactionsPage'
-import WorldEventsPage from './components/WorldEventsPage'
-import TravelPage from './components/TravelPage'
-import NPCRelationshipsPage from './components/NPCRelationshipsPage'
-import LivingWorldPage from './components/LivingWorldPage'
 import CampaignsPage from './components/CampaignsPage'
-import CampaignPlanPage from './components/CampaignPlanPage'
-import QuestsPage from './components/QuestsPage'
-import LocationsPage from './components/LocationsPage'
-import CompanionBackstoryPage from './components/CompanionBackstoryPage'
 import BackstoryParserPage from './components/BackstoryParserPage'
-import NarrativeQueuePage from './components/NarrativeQueuePage'
-import GenerationControlsPage from './components/GenerationControlsPage'
 import NavigationMenu from './components/NavigationMenu'
+
+// Lazy-loaded pages (loaded on demand to reduce initial bundle)
+const DMSession = lazy(() => import('./components/DMSession'))
+const CampaignPlanPage = lazy(() => import('./components/CampaignPlanPage'))
+const NPCGenerator = lazy(() => import('./components/NPCGenerator'))
+const FactionsPage = lazy(() => import('./components/FactionsPage'))
+const WorldEventsPage = lazy(() => import('./components/WorldEventsPage'))
+const TravelPage = lazy(() => import('./components/TravelPage'))
+const NPCRelationshipsPage = lazy(() => import('./components/NPCRelationshipsPage'))
+const LivingWorldPage = lazy(() => import('./components/LivingWorldPage'))
+const QuestsPage = lazy(() => import('./components/QuestsPage'))
+const LocationsPage = lazy(() => import('./components/LocationsPage'))
+const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstoryPage'))
+const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
+const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
 
 function App() {
   const [characters, setCharacters] = useState([])
@@ -216,6 +218,7 @@ function App() {
         />
       </header>
 
+      <Suspense fallback={<div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>Loading...</div>}>
       {activeView === 'showNPCGenerator' ? (
         <NPCGenerator
           onBack={goHome}
@@ -456,6 +459,7 @@ function App() {
           )}
         </>
       )}
+      </Suspense>
     </div>
   )
 }
