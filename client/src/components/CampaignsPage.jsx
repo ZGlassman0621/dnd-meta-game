@@ -652,7 +652,7 @@ const CampaignsPage = ({ character, allCharacters }) => {
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>Time Ratio</div>
                   <div style={styles.infoValue}>
-                    {selectedCampaign.time_ratio || 'normal'}
+                    {(selectedCampaign.time_ratio || 'normal').charAt(0).toUpperCase() + (selectedCampaign.time_ratio || 'normal').slice(1)}
                   </div>
                 </div>
               </div>
@@ -691,7 +691,7 @@ const CampaignsPage = ({ character, allCharacters }) => {
                         <div style={styles.characterInfo}>
                           <span style={styles.characterName}>{char.name}</span>
                           <span style={styles.characterMeta}>
-                            Level {char.level} {char.race} {char.class}
+                            Level {char.level} {char.race} {char.class?.charAt(0).toUpperCase() + char.class?.slice(1)}
                           </span>
                         </div>
                         <button
@@ -717,7 +717,7 @@ const CampaignsPage = ({ character, allCharacters }) => {
                         <option value="">Select a character...</option>
                         {unassignedCharacters.map(char => (
                           <option key={char.id} value={char.id}>
-                            {char.name} (Level {char.level} {char.class})
+                            {char.name} (Level {char.level} {char.class?.charAt(0).toUpperCase() + char.class?.slice(1)})
                           </option>
                         ))}
                       </select>
