@@ -1,56 +1,56 @@
 # Recent Improvements
 
-## Latest: Streamlined Gameplay Experience (2026-02-07)
+## Latest: Home Page Navigation Hub (2026-02-07)
+
+Redesigned the home page from a cluttered dashboard into a clean navigation hub.
+
+### Home Page as Navigation Hub
+**Problem**: The home page was crowded with adventure generation, adventure history, and meta game components. Navigation required hunting through dropdown menus.
+
+**Solution**: Home page is now a clean hub with:
+- **Green Play button** right at the top — one click to jump into your campaign
+- **Character selector** for switching characters
+- **8 navigation cards** in a responsive grid, each with a color accent and description explaining what the feature does
+
+**Files Changed**:
+- `client/src/App.jsx` — Home page redesign, green Play button, navigation cards
+
+### Downtime & Stats Combined Page
+**Problem**: Adventure generation, adventure history, and meta game stats were separate from downtime activities.
+
+**Solution**: New combined "Downtime & Stats" page brings together all between-session activities:
+- Downtime activities (left) + Adventure system (right)
+- MetaGameDashboard (full width)
+- Adventure History (full width)
+
+**Files Changed**:
+- `client/src/App.jsx` — Combined Downtime & Stats view
+
+### Trimmed Navigation
+**Problem**: Dropdown menus had 14 items across 4 categories, many redundant with the streamlined flow.
+
+**Solution**: Navigation reduced to 3 menus with 8 items total:
+- **Character**: Character Sheet, Companions, Backstory Parser, Downtime & Stats, Settings
+- **Story**: Campaigns, Campaign Plan
+- **Play**: AI Dungeon Master
+
+**Files Changed**:
+- `client/src/components/NavigationMenu.jsx` — Removed World menu, trimmed all categories
+
+---
+
+## Streamlined Gameplay Experience (2026-02-07)
 
 Major UX overhaul to reduce the number of manual steps from character creation to playing.
 
 ### Streamlined Campaign Creation Pipeline
-**Problem**: Creating a campaign required 4+ manual steps: create campaign, assign character, navigate to backstory parser, navigate to campaign plan page, generate plan.
-
-**Solution**: Campaign creation now runs an automatic pipeline:
-1. Creates the campaign
-2. Assigns the current character
-3. Parses backstory (if exists and not already parsed)
-4. Generates the full campaign plan via Opus 4.5
-
-A progress UI shows each step with checkmarks, and a "Play Now" button appears on completion.
-
-**Files Changed**:
-- `client/src/components/CampaignsPage.jsx` — Pipeline logic, progress UI, Play Now button
+Campaign creation now runs an automatic pipeline: create campaign → assign character → parse backstory → generate campaign plan. A progress UI shows each step, and a "Play Now" button appears on completion.
 
 ### Starting Location Dropdown
-**Problem**: Starting location was a free-text input. Players had to know/type Forgotten Realms locations.
-
-**Solution**: Replaced with a grouped `<select>` dropdown using `STARTING_LOCATIONS` from `forgottenRealms.js`:
-- **Major Cities**: Waterdeep, Baldur's Gate, Neverwinter, Luskan, Silverymoon, Mithral Hall, Candlekeep, Menzoberranzan, Calimport, Athkatla
-- **Regions**: Icewind Dale, Sword Coast Wilderness, Anauroch, Cormanthor, Chult
-- **Custom Location**: Text input fallback for homebrew settings
-
-Auto-detects starting location from parsed backstory (hometown/birthplace/current).
-
-**Files Changed**:
-- `client/src/components/CampaignsPage.jsx` — Dropdown, backstory auto-select
-
-### Play Button on Home Screen
-**Problem**: No quick way to jump into an active campaign from the home screen.
-
-**Solution**: A prominent purple-gradient "Play" button appears on the home screen when the selected character has a campaign plan ready. One click to start playing.
-
-**Files Changed**:
-- `client/src/App.jsx` — Campaign plan readiness check, Play button
+Starting location is now a grouped dropdown with 15 Forgotten Realms locations (Major Cities + Regions) plus a custom option. Auto-detects from parsed backstory.
 
 ### Gameplay Tabs (Adventure / Downtime / Stats)
-**Problem**: Downtime and Campaign Stats were on separate pages, disconnected from active gameplay.
-
-**Solution**: During active DM sessions, a tab bar appears with three tabs:
-- **Adventure** — The main gameplay (messages + input)
-- **Downtime** — Embedded Downtime component for rest/work activities
-- **Stats** — Embedded MetaGameDashboard for campaign statistics
-
-Players can switch between tabs without leaving their session.
-
-**Files Changed**:
-- `client/src/components/DMSession.jsx` — Tab state, tab bar, conditional content rendering
+During active DM sessions, a tab bar provides Adventure, Downtime, and Stats tabs. Players can switch between tabs without leaving their session.
 
 ---
 

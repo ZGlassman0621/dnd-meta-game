@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 
 // Pages hidden from nav but code still exists for future reintegration / offline play:
-// World: showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld
-// Story: showNarrativeQueue
-// These are now covered by Campaign Plan or are internal AI plumbing.
+// Character: (Downtime is now its own combined page with meta game + adventure history)
+// World: showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld,
+//        showNPCGenerator, showNPCRelationships
+// Story: showNarrativeQueue, showQuests, showBackstories (covered by Campaign Plan)
+// Play: showMetaGame (embedded as DM Session tab), showGeneration (auto via campaign plan)
 
 const menuCategories = {
   character: {
@@ -13,16 +15,8 @@ const menuCategories = {
       { key: 'showCharacterSheet', label: 'Character Sheet' },
       { key: 'showCompanions', label: 'Companions' },
       { key: 'showParsedBackstory', label: 'Backstory Parser' },
-      { key: 'showDowntime', label: 'Downtime' },
+      { key: 'showDowntime', label: 'Downtime & Stats' },
       { key: 'showSettings', label: 'Settings' }
-    ]
-  },
-  world: {
-    label: 'World',
-    color: '#27ae60',
-    items: [
-      { key: 'showNPCGenerator', label: 'NPC Generator' },
-      { key: 'showNPCRelationships', label: 'NPC Relationships' }
     ]
   },
   story: {
@@ -30,18 +24,14 @@ const menuCategories = {
     color: '#9b59b6',
     items: [
       { key: 'showCampaigns', label: 'Campaigns' },
-      { key: 'showCampaignPlan', label: 'Campaign Plan' },
-      { key: 'showQuests', label: 'Quests' },
-      { key: 'showBackstories', label: 'Companion Backstories' }
+      { key: 'showCampaignPlan', label: 'Campaign Plan' }
     ]
   },
   play: {
     label: 'Play',
     color: '#e67e22',
     items: [
-      { key: 'showDMSession', label: 'AI Dungeon Master' },
-      { key: 'showMetaGame', label: 'Campaign Stats' },
-      { key: 'showGeneration', label: 'Generate Content' }
+      { key: 'showDMSession', label: 'AI Dungeon Master' }
     ]
   }
 }

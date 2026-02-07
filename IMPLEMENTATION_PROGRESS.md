@@ -2173,27 +2173,36 @@ When creating a campaign, an automatic pipeline runs:
 - Tabs reset to "Adventure" when new session starts
 - Players can switch between tabs without leaving their session
 
-### L5: Navigation Cleanup
+### L5: Home Page Navigation Hub
 
-**File**: `client/src/components/NavigationMenu.jsx`
+**Files**: `client/src/App.jsx`, `client/src/components/NavigationMenu.jsx`
 
-Reorganized navigation menus:
-- **Character**: Sheet, Companions, Backstory Parser, Downtime, Settings
-- **World**: NPC Generator, NPC Relationships
-- **Story**: Campaigns, Campaign Plan, Quests, Companion Backstories
-- **Play**: AI DM, Stats, Generate
+Redesigned home page from a cluttered dashboard into a clean navigation hub:
+- **Green Play button** at the top of the page (visible when campaign plan ready)
+- **Character selector** for switching characters
+- **8 navigation cards** in a responsive grid with color accents and descriptions
+- Removed adventure generation, adventure history, and meta game from home page
 
-Hidden pages (accessible via direct navigation, not shown in menus):
-- Locations, Factions, Travel, World Events, Living World, Narrative Queue
+Combined "Downtime & Stats" page brings together all between-session activities:
+- Downtime activities (left) + Adventure system (right)
+- MetaGameDashboard + Adventure History (full width below)
+
+Trimmed dropdown navigation to 3 menus (8 items, down from 4 menus / 14 items):
+- **Character**: Sheet, Companions, Backstory Parser, Downtime & Stats, Settings
+- **Story**: Campaigns, Campaign Plan
+- **Play**: AI Dungeon Master
+
+Hidden pages (code exists, not shown in menus):
+- Locations, Factions, Travel, World Events, Living World, Narrative Queue, NPC Generator, NPC Relationships, Quests, Companion Backstories, Campaign Stats, Generate Content
 
 ### Files Modified
 
 | File | Changes | Date |
 |------|---------|------|
 | `client/src/components/CampaignsPage.jsx` | Starting location dropdown, auto-pipeline, progress UI, Play Now button | 2026-02-07 |
-| `client/src/App.jsx` | Play button, campaign plan readiness check, `onNavigateToPlay` prop | 2026-02-07 |
+| `client/src/App.jsx` | Home page nav hub, green Play button, combined Downtime & Stats view, `onNavigateToPlay` prop | 2026-02-07 |
 | `client/src/components/DMSession.jsx` | Gameplay tabs (Adventure/Downtime/Stats), tab bar, conditional content | 2026-02-07 |
-| `client/src/components/NavigationMenu.jsx` | Reorganized menus, hidden redundant pages | 2026-02-07 |
+| `client/src/components/NavigationMenu.jsx` | Trimmed to 3 menus, added Downtime & Stats | 2026-02-07 |
 
 ### Test Results
 

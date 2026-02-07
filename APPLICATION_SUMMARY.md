@@ -1358,18 +1358,44 @@ Output includes:
 | AI Providers | Claude API, Ollama (local) |
 | Deployment | Works offline with Ollama only |
 
-### Frontend Navigation
+### Home Page — Navigation Hub
 
-The application uses a **dropdown-based navigation system** that organizes features into 4 logical categories:
+The home page serves as a central hub with:
+- **Green Play button** at the top (visible when campaign plan is ready) — one click to launch DM session
+- **Character selector** for switching between characters
+- **Navigation cards** in a responsive grid — each card has a color accent, label, and description explaining what the feature does
+
+Navigation cards:
+| Card | Description |
+|------|-------------|
+| Character Sheet | View stats, equipment, abilities, and level up |
+| Companions | Manage your companion characters and their stories |
+| Backstory Parser | AI-parse your backstory into structured elements |
+| Campaigns | Create campaigns with auto-generated world plans |
+| Campaign Plan | View your campaign world, NPCs, factions, and quests |
+| AI Dungeon Master | Play through your campaign with an AI DM |
+| Downtime & Stats | Rest, train, generate adventures, and track progress |
+| Settings | Configure character preferences and options |
+
+### Dropdown Navigation (Sub-pages)
+
+When on a sub-page, dropdown menus in the header provide quick navigation:
 
 | Category | Features |
 |----------|----------|
-| **Character** | Character Sheet, Companions, Backstory Parser, Downtime, Settings |
-| **World** | NPC Generator, NPC Relationships |
-| **Story** | Campaigns, Campaign Plan, Quests, Companion Backstories |
-| **Play** | AI Dungeon Master, Campaign Stats, Generate Content |
+| **Character** | Character Sheet, Companions, Backstory Parser, Downtime & Stats, Settings |
+| **Story** | Campaigns, Campaign Plan |
+| **Play** | AI Dungeon Master |
 
-**Hidden pages** (code exists for future reintegration / offline play): Locations, Factions, Travel, World Events, Living World, Narrative Queue — these are now covered by the Campaign Plan system.
+**Hidden pages** (code exists for future reintegration / offline play): Locations, Factions, Travel, World Events, Living World, Narrative Queue, NPC Generator, NPC Relationships, Quests, Companion Backstories, Campaign Stats, Generate Content — these are now covered by the Campaign Plan system, gameplay tabs, or the Downtime & Stats combined page.
+
+### Downtime & Stats Page
+
+A combined page bringing together all between-session activities:
+- **Downtime activities** (rest, work, train) — left column
+- **Adventure system** (generate/active adventures) — right column
+- **MetaGameDashboard** (campaign stats, time advancement) — full width
+- **Adventure History** (past adventure log) — full width
 
 ### Gameplay Tabs
 

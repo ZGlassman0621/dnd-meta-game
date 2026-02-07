@@ -246,10 +246,38 @@ function App() {
           onCharacterUpdated={handleCharacterUpdated}
         />
       ) : activeView === 'showDowntime' && selectedCharacter ? (
-        <Downtime
-          character={selectedCharacter}
-          onCharacterUpdated={handleCharacterUpdated}
-        />
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+            <div>
+              <Downtime
+                character={selectedCharacter}
+                onCharacterUpdated={handleCharacterUpdated}
+              />
+            </div>
+            <div>
+              {activeAdventure && activeAdventure.status !== 'none' ? (
+                <ActiveAdventure
+                  adventure={activeAdventure}
+                  character={selectedCharacter}
+                  onAdventureClaimed={handleAdventureClaimed}
+                  onAdventureComplete={checkActiveAdventure}
+                />
+              ) : (
+                <AdventureManager
+                  character={selectedCharacter}
+                  onAdventureStarted={handleAdventureStarted}
+                />
+              )}
+            </div>
+          </div>
+          <MetaGameDashboard
+            character={selectedCharacter}
+            onCharacterUpdated={() => loadCharacters()}
+          />
+          <div style={{ marginTop: '1.5rem' }}>
+            <AdventureHistory character={selectedCharacter} />
+          </div>
+        </div>
       ) : activeView === 'showMetaGame' && selectedCharacter ? (
         <MetaGameDashboard
           character={selectedCharacter}
@@ -330,8 +358,39 @@ function App() {
         />
       ) : (
         <>
-          <div className={showCreationForm ? '' : 'grid-2'}>
-        <div>
+          {selectedCharacter && !showCreationForm && campaignPlanReady && (
+            <div
+              onClick={() => navigateTo('showDMSession')}
+              style={{
+                marginBottom: '1.5rem',
+                padding: '1.25rem 2rem',
+                background: 'linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.2))',
+                border: '1px solid rgba(46, 204, 113, 0.4)',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(46, 204, 113, 0.5), rgba(39, 174, 96, 0.35))'
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(46, 204, 113, 0.3)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.2))'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#f5f5f5', marginBottom: '0.25rem' }}>
+                Play
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#6ee7b7' }}>
+                Continue your adventure with {selectedCharacter.name}
+              </div>
+            </div>
+          )}
+
           <CharacterManager
             characters={characters}
             selectedCharacter={selectedCharacter}
@@ -342,67 +401,57 @@ function App() {
             editCharacterInWizard={editCharacterInWizard}
             onClearEditCharacter={() => setEditCharacterInWizard(null)}
           />
-        </div>
-
-        {!showCreationForm && (
-          <div>
-            {selectedCharacter && (
-              <>
-                {activeAdventure && activeAdventure.status !== 'none' ? (
-                  <ActiveAdventure
-                    adventure={activeAdventure}
-                    character={selectedCharacter}
-                    onAdventureClaimed={handleAdventureClaimed}
-                    onAdventureComplete={checkActiveAdventure}
-                  />
-                ) : (
-                  <AdventureManager
-                    character={selectedCharacter}
-                    onAdventureStarted={handleAdventureStarted}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-          {selectedCharacter && !showCreationForm && campaignPlanReady && (
-            <div
-              onClick={() => navigateTo('showDMSession')}
-              style={{
-                marginTop: '2rem',
-                padding: '1.5rem 2rem',
-                background: 'linear-gradient(135deg, rgba(155, 89, 182, 0.3), rgba(142, 68, 173, 0.2))',
-                border: '1px solid rgba(155, 89, 182, 0.4)',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155, 89, 182, 0.5), rgba(142, 68, 173, 0.35))'
-                e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(155, 89, 182, 0.3)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155, 89, 182, 0.3), rgba(142, 68, 173, 0.2))'
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
-            >
-              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#f5f5f5', marginBottom: '0.25rem' }}>
-                Play
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#a78bfa' }}>
-                Continue your adventure with {selectedCharacter.name}
-              </div>
-            </div>
-          )}
 
           {selectedCharacter && !showCreationForm && (
-            <div style={{ marginTop: '2rem' }}>
-              <AdventureHistory character={selectedCharacter} />
+            <div style={{
+              marginTop: '2rem',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: '1rem'
+            }}>
+              {[
+                { key: 'showCharacterSheet', label: 'Character Sheet', desc: 'View stats, equipment, abilities, and level up', color: '#3498db' },
+                { key: 'showCompanions', label: 'Companions', desc: 'Manage your companion characters and their stories', color: '#1abc9c' },
+                { key: 'showParsedBackstory', label: 'Backstory Parser', desc: 'AI-parse your backstory into structured elements', color: '#e67e22' },
+                { key: 'showCampaigns', label: 'Campaigns', desc: 'Create campaigns with auto-generated world plans', color: '#9b59b6' },
+                { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
+                { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
+                { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
+                { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
+              ].map(card => (
+                <div
+                  key={card.key}
+                  onClick={() => navigateTo(card.key)}
+                  style={{
+                    padding: '1.25rem',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: `1px solid ${card.color}44`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    borderLeft: `3px solid ${card.color}`
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = `${card.color}1a`
+                    e.currentTarget.style.borderColor = `${card.color}88`
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = `0 4px 12px ${card.color}22`
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                    e.currentTarget.style.borderColor = `${card.color}44`
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = 'none'
+                  }}
+                >
+                  <div style={{ fontSize: '1rem', fontWeight: '600', color: card.color, marginBottom: '0.4rem' }}>
+                    {card.label}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#999', lineHeight: '1.3' }}>
+                    {card.desc}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </>
