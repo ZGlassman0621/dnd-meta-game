@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 
+// Pages hidden from nav but code still exists for future reintegration / offline play:
+// World: showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld
+// Story: showNarrativeQueue
+// These are now covered by Campaign Plan or are internal AI plumbing.
+
 const menuCategories = {
   character: {
     label: 'Character',
@@ -16,13 +21,8 @@ const menuCategories = {
     label: 'World',
     color: '#27ae60',
     items: [
-      { key: 'showLocations', label: 'Locations' },
-      { key: 'showFactions', label: 'Factions' },
       { key: 'showNPCGenerator', label: 'NPC Generator' },
-      { key: 'showNPCRelationships', label: 'NPC Relationships' },
-      { key: 'showTravel', label: 'Travel' },
-      { key: 'showWorldEvents', label: 'World Events' },
-      { key: 'showLivingWorld', label: 'Living World' }
+      { key: 'showNPCRelationships', label: 'NPC Relationships' }
     ]
   },
   story: {
@@ -32,8 +32,7 @@ const menuCategories = {
       { key: 'showCampaigns', label: 'Campaigns' },
       { key: 'showCampaignPlan', label: 'Campaign Plan' },
       { key: 'showQuests', label: 'Quests' },
-      { key: 'showBackstories', label: 'Companion Backstories' },
-      { key: 'showNarrativeQueue', label: 'Narrative Queue' }
+      { key: 'showBackstories', label: 'Companion Backstories' }
     ]
   },
   play: {

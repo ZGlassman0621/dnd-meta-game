@@ -280,6 +280,7 @@ function App() {
         <CampaignsPage
           character={selectedCharacter}
           allCharacters={characters}
+          onCharacterUpdated={() => loadCharacters()}
         />
       ) : activeView === 'showCampaignPlan' && selectedCharacter ? (
         <CampaignPlanPage

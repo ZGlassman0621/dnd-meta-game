@@ -1,5 +1,63 @@
 import { useState, useEffect } from 'react';
 
+function Spoiler({ label, children }) {
+  const [revealed, setRevealed] = useState(false);
+
+  if (!children) return null;
+
+  return revealed ? (
+    <div style={{
+      position: 'relative',
+      borderLeft: '2px solid rgba(231, 76, 60, 0.4)',
+      paddingLeft: '0.75rem',
+      marginTop: '0.5rem'
+    }}>
+      <button
+        onClick={() => setRevealed(false)}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: '#e74c3c',
+          fontSize: '0.75rem',
+          cursor: 'pointer',
+          padding: 0,
+          marginBottom: '0.25rem',
+          opacity: 0.7
+        }}
+      >
+        Hide {label}
+      </button>
+      {children}
+    </div>
+  ) : (
+    <button
+      onClick={() => setRevealed(true)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.4rem',
+        background: 'rgba(231, 76, 60, 0.15)',
+        border: '1px solid rgba(231, 76, 60, 0.3)',
+        borderRadius: '4px',
+        color: '#e74c3c',
+        fontSize: '0.8rem',
+        cursor: 'pointer',
+        padding: '0.3rem 0.6rem',
+        marginTop: '0.5rem',
+        transition: 'all 0.2s'
+      }}
+      onMouseEnter={e => {
+        e.target.style.background = 'rgba(231, 76, 60, 0.25)';
+      }}
+      onMouseLeave={e => {
+        e.target.style.background = 'rgba(231, 76, 60, 0.15)';
+      }}
+    >
+      <span style={{ fontSize: '0.9rem' }}>&#128065;</span> Reveal {label}
+    </button>
+  );
+}
+
 const styles = {
   container: {
     padding: '1rem',
@@ -209,12 +267,26 @@ const TABS = [
   { key: 'dm_notes', label: 'DM Notes' }
 ];
 
+const GENERATION_STEPS = [
+  { label: 'Connecting to Opus 4.5...', duration: 3000 },
+  { label: 'Analyzing character backstory...', duration: 5000 },
+  { label: 'Building world state & politics...', duration: 8000 },
+  { label: 'Creating main quest arc...', duration: 10000 },
+  { label: 'Generating NPCs & factions...', duration: 8000 },
+  { label: 'Designing locations & side quests...', duration: 8000 },
+  { label: 'Building world timeline...', duration: 6000 },
+  { label: 'Finalizing campaign plan...', duration: 12000 }
+];
+
 export default function CampaignPlanPage({ character }) {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [error, setError] = useState(null);
+  const [genStep, setGenStep] = useState(0);
+  const [genProgress, setGenProgress] = useState(0);
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   useEffect(() => {
     if (character?.campaign_id) {
@@ -223,6 +295,43 @@ export default function CampaignPlanPage({ character }) {
       setLoading(false);
     }
   }, [character]);
+
+  // Animated progress during generation
+  useEffect(() => {
+    if (!generating) {
+      setGenStep(0);
+      setGenProgress(0);
+      return;
+    }
+
+    let totalElapsed = 0;
+    const interval = setInterval(() => {
+      totalElapsed += 200;
+
+      // Find which step we're on based on cumulative duration
+      let cumulative = 0;
+      let currentStep = 0;
+      for (let i = 0; i < GENERATION_STEPS.length; i++) {
+        cumulative += GENERATION_STEPS[i].duration;
+        if (totalElapsed < cumulative) {
+          currentStep = i;
+          break;
+        }
+        if (i === GENERATION_STEPS.length - 1) {
+          currentStep = i;
+        }
+      }
+
+      setGenStep(currentStep);
+
+      // Overall progress (cap at 95% until actual completion)
+      const totalDuration = GENERATION_STEPS.reduce((sum, s) => sum + s.duration, 0);
+      const pct = Math.min(95, Math.round((totalElapsed / totalDuration) * 95));
+      setGenProgress(pct);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [generating]);
 
   const loadPlan = async () => {
     try {
@@ -304,18 +413,48 @@ export default function CampaignPlanPage({ character }) {
             <p style={{ color: '#e74c3c', marginBottom: '1rem' }}>{error}</p>
           )}
 
-          <button
-            style={styles.generateButton}
-            onClick={generatePlan}
-            disabled={generating}
-          >
-            {generating ? 'Generating with Opus...' : 'Generate Campaign Plan'}
-          </button>
+          {!generating && (
+            <button
+              style={styles.generateButton}
+              onClick={generatePlan}
+            >
+              Generate Campaign Plan
+            </button>
+          )}
 
           {generating && (
-            <p style={{ ...styles.textSmall, marginTop: '1rem' }}>
-              This may take a minute - Opus is crafting your world...
-            </p>
+            <div style={{ marginTop: '1rem', maxWidth: '500px', margin: '1rem auto 0' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '0.5rem',
+                alignItems: 'center'
+              }}>
+                <span style={{ color: '#f5f5f5', fontSize: '0.9rem' }}>
+                  {GENERATION_STEPS[genStep]?.label}
+                </span>
+                <span style={{ color: '#9b59b6', fontSize: '0.85rem', fontWeight: '500' }}>
+                  {genProgress}%
+                </span>
+              </div>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '4px',
+                height: '8px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  background: 'linear-gradient(90deg, #9b59b6, #8e44ad)',
+                  height: '100%',
+                  borderRadius: '4px',
+                  width: `${genProgress}%`,
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              <p style={{ ...styles.textSmall, marginTop: '0.75rem' }}>
+                Opus 4.5 is crafting your living world...
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -326,7 +465,9 @@ export default function CampaignPlanPage({ character }) {
     <div>
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={styles.sectionTitle}>{plan.main_quest?.title || 'Campaign'}</h2>
-        <p style={styles.textMuted}>{plan.main_quest?.summary}</p>
+        <Spoiler label="Plot Summary">
+          <p style={styles.textMuted}>{plan.main_quest?.summary}</p>
+        </Spoiler>
       </div>
 
       {plan.themes?.length > 0 && (
@@ -346,20 +487,22 @@ export default function CampaignPlanPage({ character }) {
         </div>
       )}
 
-      <div style={styles.worldStateGrid}>
-        <div style={styles.infoBox}>
-          <h4 style={{ color: '#f5f5f5', marginBottom: '0.5rem' }}>World State</h4>
-          <p style={styles.textSmall}>{plan.world_state?.political_situation}</p>
+      <Spoiler label="World Overview">
+        <div style={styles.worldStateGrid}>
+          <div style={styles.infoBox}>
+            <h4 style={{ color: '#f5f5f5', marginBottom: '0.5rem' }}>World State</h4>
+            <p style={styles.textSmall}>{plan.world_state?.political_situation}</p>
+          </div>
+          <div style={styles.infoBox}>
+            <h4 style={{ color: '#f5f5f5', marginBottom: '0.5rem' }}>Major Threats</h4>
+            <ul style={{ ...styles.list, ...styles.textSmall }}>
+              {plan.world_state?.major_threats?.map((threat, idx) => (
+                <li key={idx}>{threat}</li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <div style={styles.infoBox}>
-          <h4 style={{ color: '#f5f5f5', marginBottom: '0.5rem' }}>Major Threats</h4>
-          <ul style={{ ...styles.list, ...styles.textSmall }}>
-            {plan.world_state?.major_threats?.map((threat, idx) => (
-              <li key={idx}>{threat}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      </Spoiler>
 
       <div style={{ marginTop: '1rem', ...styles.textSmall }}>
         <p>Generated: {new Date(plan.generated_at).toLocaleString()}</p>
@@ -374,48 +517,65 @@ export default function CampaignPlanPage({ character }) {
     <div>
       <h2 style={styles.sectionTitle}>{plan.main_quest?.title}</h2>
 
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h4 style={{ color: '#f5f5f5', marginBottom: '0.5rem' }}>Summary</h4>
-        <p style={styles.textMuted}>{plan.main_quest?.summary}</p>
-      </div>
+      <Spoiler label="Summary">
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={styles.textMuted}>{plan.main_quest?.summary}</p>
+        </div>
+      </Spoiler>
 
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h4 style={{ color: '#f5f5f5', marginBottom: '0.5rem' }}>How It Begins</h4>
-        <p style={styles.textMuted}>{plan.main_quest?.hook}</p>
-      </div>
+      <Spoiler label="How It Begins">
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={styles.textMuted}>{plan.main_quest?.hook}</p>
+        </div>
+      </Spoiler>
 
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h4 style={{ color: '#e74c3c', marginBottom: '0.5rem' }}>Stakes</h4>
-        <p style={styles.textMuted}>{plan.main_quest?.stakes}</p>
-      </div>
+      <Spoiler label="Stakes">
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h4 style={{ color: '#e74c3c', marginBottom: '0.5rem' }}>Stakes</h4>
+          <p style={styles.textMuted}>{plan.main_quest?.stakes}</p>
+        </div>
+      </Spoiler>
 
-      <h3 style={{ ...styles.sectionTitle, fontSize: '1.1rem' }}>Story Acts</h3>
+      <h3 style={{ ...styles.sectionTitle, fontSize: '1.1rem', marginTop: '1.5rem' }}>Story Acts</h3>
       {plan.main_quest?.acts?.map((act, idx) => (
         <div key={idx} style={styles.actCard}>
           <div style={styles.actTitle}>Act {act.act_number}: {act.title}</div>
-          <p style={styles.textMuted}>{act.summary}</p>
+          <Spoiler label={`Act ${act.act_number} Details`}>
+            <p style={styles.textMuted}>{act.summary}</p>
 
-          {act.key_locations?.length > 0 && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <span style={styles.textSmall}>Locations: </span>
-              {act.key_locations.map((loc, i) => (
-                <span key={i} style={{ ...styles.badge, background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', marginRight: '0.25rem' }}>
-                  {loc}
-                </span>
-              ))}
-            </div>
-          )}
+            {act.key_locations?.length > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={styles.textSmall}>Locations: </span>
+                {act.key_locations.map((loc, i) => (
+                  <span key={i} style={{ ...styles.badge, background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', marginRight: '0.25rem' }}>
+                    {loc}
+                  </span>
+                ))}
+              </div>
+            )}
 
-          {act.key_npcs?.length > 0 && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <span style={styles.textSmall}>NPCs: </span>
-              {act.key_npcs.map((npc, i) => (
-                <span key={i} style={{ ...styles.badge, background: 'rgba(46, 204, 113, 0.2)', color: '#2ecc71', marginRight: '0.25rem' }}>
-                  {npc}
-                </span>
-              ))}
-            </div>
-          )}
+            {act.key_npcs?.length > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={styles.textSmall}>NPCs: </span>
+                {act.key_npcs.map((npc, i) => (
+                  <span key={i} style={{ ...styles.badge, background: 'rgba(46, 204, 113, 0.2)', color: '#2ecc71', marginRight: '0.25rem' }}>
+                    {npc}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {act.potential_outcomes?.length > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={styles.textSmall}>Potential Outcomes: </span>
+                <ul style={{ ...styles.list, ...styles.textSmall }}>
+                  {act.potential_outcomes.map((outcome, i) => (
+                    <li key={i}>{outcome}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Spoiler>
         </div>
       ))}
     </div>
@@ -481,29 +641,34 @@ export default function CampaignPlanPage({ character }) {
         {plan.world_timeline?.events?.map((event, idx) => (
           <div key={event.id || idx} style={styles.eventCard}>
             <div style={styles.eventDot} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-              <span style={{ color: '#f5f5f5', fontWeight: '500' }}>{event.title}</span>
-              <span style={{
-                ...styles.badge,
-                background: event.visibility === 'secret' ? 'rgba(231, 76, 60, 0.2)' :
-                           event.visibility === 'rumored' ? 'rgba(241, 196, 15, 0.2)' :
-                           'rgba(46, 204, 113, 0.2)',
-                color: event.visibility === 'secret' ? '#e74c3c' :
-                       event.visibility === 'rumored' ? '#f1c40f' :
-                       '#2ecc71'
-              }}>
-                {event.visibility}
-              </span>
+            <div style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+              World Event {idx + 1}
             </div>
-            <div style={{ ...styles.textSmall, marginBottom: '0.5rem' }}>
-              Timing: {event.timing}
-            </div>
-            <p style={styles.textMuted}>{event.description}</p>
-            {event.consequences_if_ignored && (
-              <p style={{ ...styles.textSmall, color: '#e74c3c', marginTop: '0.5rem' }}>
-                If ignored: {event.consequences_if_ignored}
-              </p>
-            )}
+            <Spoiler label={`Event ${idx + 1}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#f5f5f5', fontWeight: '500' }}>{event.title}</span>
+                <span style={{
+                  ...styles.badge,
+                  background: event.visibility === 'secret' ? 'rgba(231, 76, 60, 0.2)' :
+                             event.visibility === 'rumored' ? 'rgba(241, 196, 15, 0.2)' :
+                             'rgba(46, 204, 113, 0.2)',
+                  color: event.visibility === 'secret' ? '#e74c3c' :
+                         event.visibility === 'rumored' ? '#f1c40f' :
+                         '#2ecc71'
+                }}>
+                  {event.visibility}
+                </span>
+              </div>
+              <div style={{ ...styles.textSmall, marginBottom: '0.5rem' }}>
+                Timing: {event.timing}
+              </div>
+              <p style={styles.textMuted}>{event.description}</p>
+              {event.consequences_if_ignored && (
+                <p style={{ ...styles.textSmall, color: '#e74c3c', marginTop: '0.5rem' }}>
+                  If ignored: {event.consequences_if_ignored}
+                </p>
+              )}
+            </Spoiler>
           </div>
         ))}
       </div>
@@ -528,12 +693,6 @@ export default function CampaignPlanPage({ character }) {
           >
             <div style={styles.npcName}>
               {npc.name}
-              <span style={{
-                ...styles.badge,
-                ...(styles.roleBadge[npc.role] || styles.roleBadge.neutral)
-              }}>
-                {npc.role}
-              </span>
               {npc.from_backstory && (
                 <span style={{ ...styles.badge, background: 'rgba(46, 204, 113, 0.3)', color: '#2ecc71' }}>
                   Backstory
@@ -541,26 +700,37 @@ export default function CampaignPlanPage({ character }) {
               )}
             </div>
             <p style={styles.textMuted}>{npc.description}</p>
-            <div style={{ marginTop: '0.5rem' }}>
-              <span style={styles.textSmall}>Motivation: </span>
-              <span style={{ ...styles.textSmall, color: '#bbb' }}>{npc.motivation}</span>
-            </div>
             {npc.location && (
               <div style={{ marginTop: '0.25rem' }}>
                 <span style={styles.textSmall}>Location: </span>
                 <span style={{ ...styles.textSmall, color: '#3498db' }}>{npc.location}</span>
               </div>
             )}
-            {npc.secrets?.length > 0 && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <span style={{ ...styles.textSmall, color: '#e74c3c' }}>Secrets: </span>
-                <ul style={{ ...styles.list, ...styles.textSmall, color: '#e74c3c' }}>
-                  {npc.secrets.map((secret, i) => (
-                    <li key={i}>{secret}</li>
-                  ))}
-                </ul>
+            <Spoiler label="Role & Secrets">
+              <div style={{ marginTop: '0.25rem' }}>
+                <span style={styles.textSmall}>Role: </span>
+                <span style={{
+                  ...styles.badge,
+                  ...(styles.roleBadge[npc.role] || styles.roleBadge.neutral)
+                }}>
+                  {npc.role}
+                </span>
               </div>
-            )}
+              <div style={{ marginTop: '0.25rem' }}>
+                <span style={styles.textSmall}>Motivation: </span>
+                <span style={{ ...styles.textSmall, color: '#bbb' }}>{npc.motivation}</span>
+              </div>
+              {npc.secrets?.length > 0 && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <span style={{ ...styles.textSmall, color: '#e74c3c' }}>Secrets: </span>
+                  <ul style={{ ...styles.list, ...styles.textSmall, color: '#e74c3c' }}>
+                    {npc.secrets.map((secret, i) => (
+                      <li key={i}>{secret}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Spoiler>
           </div>
         ))}
       </div>
@@ -592,12 +762,20 @@ export default function CampaignPlanPage({ character }) {
               <span style={styles.textSmall}>Found at: </span>
               <span style={{ ...styles.textSmall, color: '#3498db' }}>{companion.recruitment_location}</span>
             </div>
-            {companion.personal_quest_hook && (
-              <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(155, 89, 182, 0.1)', borderRadius: '4px' }}>
-                <span style={{ ...styles.textSmall, color: '#9b59b6' }}>Personal Quest: </span>
-                <span style={styles.textSmall}>{companion.personal_quest_hook}</span>
-              </div>
-            )}
+            <Spoiler label="Personal Quest">
+              {companion.connection_to_main_quest && (
+                <div style={{ marginTop: '0.25rem' }}>
+                  <span style={styles.textSmall}>Main Quest Connection: </span>
+                  <span style={{ ...styles.textSmall, color: '#9b59b6' }}>{companion.connection_to_main_quest}</span>
+                </div>
+              )}
+              {companion.personal_quest_hook && (
+                <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(155, 89, 182, 0.1)', borderRadius: '4px' }}>
+                  <span style={{ ...styles.textSmall, color: '#9b59b6' }}>Personal Quest: </span>
+                  <span style={styles.textSmall}>{companion.personal_quest_hook}</span>
+                </div>
+              )}
+            </Spoiler>
           </div>
         ))}
       </div>
@@ -620,19 +798,20 @@ export default function CampaignPlanPage({ character }) {
             <div style={{ ...styles.textSmall, marginBottom: '0.5rem' }}>{location.region}</div>
             <p style={styles.textMuted}>{location.description}</p>
 
-            {location.importance_to_plot && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <span style={{ ...styles.textSmall, color: '#9b59b6' }}>Plot importance: </span>
-                <span style={styles.textSmall}>{location.importance_to_plot}</span>
-              </div>
-            )}
-
-            {location.dangers?.length > 0 && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <span style={{ ...styles.textSmall, color: '#e74c3c' }}>Dangers: </span>
-                <span style={styles.textSmall}>{location.dangers.join(', ')}</span>
-              </div>
-            )}
+            <Spoiler label="Plot Details">
+              {location.importance_to_plot && (
+                <div style={{ marginTop: '0.25rem' }}>
+                  <span style={{ ...styles.textSmall, color: '#9b59b6' }}>Plot importance: </span>
+                  <span style={styles.textSmall}>{location.importance_to_plot}</span>
+                </div>
+              )}
+              {location.dangers?.length > 0 && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <span style={{ ...styles.textSmall, color: '#e74c3c' }}>Dangers: </span>
+                  <span style={styles.textSmall}>{location.dangers.join(', ')}</span>
+                </div>
+              )}
+            </Spoiler>
           </div>
         ))}
       </div>
@@ -647,10 +826,15 @@ export default function CampaignPlanPage({ character }) {
         <div key={faction.id || idx} style={styles.factionCard}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
             <span style={{ color: '#f5f5f5', fontWeight: '500', fontSize: '1.05rem' }}>{faction.name}</span>
-            <div style={{ display: 'flex', gap: '0.25rem' }}>
-              <span style={{ ...styles.badge, background: 'rgba(149, 165, 166, 0.2)', color: '#95a5a6' }}>
-                {faction.type}
-              </span>
+            <span style={{ ...styles.badge, background: 'rgba(149, 165, 166, 0.2)', color: '#95a5a6' }}>
+              {faction.type}
+            </span>
+          </div>
+          <p style={styles.textMuted}>{faction.description}</p>
+
+          <Spoiler label="Allegiance & Goals">
+            <div style={{ marginBottom: '0.5rem' }}>
+              <span style={styles.textSmall}>Relationship: </span>
               <span style={{
                 ...styles.badge,
                 background: faction.relationship_to_party === 'ally' ? 'rgba(46, 204, 113, 0.2)' :
@@ -663,26 +847,24 @@ export default function CampaignPlanPage({ character }) {
                 {faction.relationship_to_party}
               </span>
             </div>
-          </div>
-          <p style={styles.textMuted}>{faction.description}</p>
+            {faction.goals?.length > 0 && (
+              <div style={{ marginTop: '0.25rem' }}>
+                <span style={styles.textSmall}>Goals: </span>
+                <ul style={{ ...styles.list, ...styles.textSmall }}>
+                  {faction.goals.map((goal, i) => (
+                    <li key={i}>{goal}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          {faction.goals?.length > 0 && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <span style={styles.textSmall}>Goals: </span>
-              <ul style={{ ...styles.list, ...styles.textSmall }}>
-                {faction.goals.map((goal, i) => (
-                  <li key={i}>{goal}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {faction.key_members?.length > 0 && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <span style={styles.textSmall}>Key Members: </span>
-              <span style={styles.textSmall}>{faction.key_members.join(', ')}</span>
-            </div>
-          )}
+            {faction.key_members?.length > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={styles.textSmall}>Key Members: </span>
+                <span style={styles.textSmall}>{faction.key_members.join(', ')}</span>
+              </div>
+            )}
+          </Spoiler>
         </div>
       ))}
     </div>
@@ -715,10 +897,12 @@ export default function CampaignPlanPage({ character }) {
           </div>
 
           {quest.connection_to_main_quest && (
-            <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(155, 89, 182, 0.1)', borderRadius: '4px' }}>
-              <span style={{ ...styles.textSmall, color: '#9b59b6' }}>Main Quest Connection: </span>
-              <span style={styles.textSmall}>{quest.connection_to_main_quest}</span>
-            </div>
+            <Spoiler label="Quest Connection">
+              <div style={{ padding: '0.5rem', background: 'rgba(155, 89, 182, 0.1)', borderRadius: '4px' }}>
+                <span style={{ ...styles.textSmall, color: '#9b59b6' }}>Main Quest Connection: </span>
+                <span style={styles.textSmall}>{quest.connection_to_main_quest}</span>
+              </div>
+            </Spoiler>
           )}
         </div>
       ))}
@@ -728,6 +912,9 @@ export default function CampaignPlanPage({ character }) {
   const renderDMNotes = () => (
     <div>
       <h2 style={styles.sectionTitle}>DM Notes</h2>
+      <p style={{ ...styles.textSmall, marginBottom: '1rem', fontStyle: 'italic', color: '#e74c3c' }}>
+        This entire section contains spoilers. Reveal carefully.
+      </p>
 
       {plan.dm_notes?.tone_guidance && (
         <div style={{ marginBottom: '1.5rem' }}>
@@ -748,25 +935,29 @@ export default function CampaignPlanPage({ character }) {
       )}
 
       {plan.dm_notes?.potential_twists?.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h4 style={{ color: '#e74c3c', marginBottom: '0.5rem' }}>Potential Twists</h4>
-          <ul style={{ ...styles.list, ...styles.textMuted }}>
-            {plan.dm_notes.potential_twists.map((twist, idx) => (
-              <li key={idx}>{twist}</li>
-            ))}
-          </ul>
-        </div>
+        <Spoiler label="Potential Twists">
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h4 style={{ color: '#e74c3c', marginBottom: '0.5rem' }}>Potential Twists</h4>
+            <ul style={{ ...styles.list, ...styles.textMuted }}>
+              {plan.dm_notes.potential_twists.map((twist, idx) => (
+                <li key={idx}>{twist}</li>
+              ))}
+            </ul>
+          </div>
+        </Spoiler>
       )}
 
       {plan.dm_notes?.backup_hooks?.length > 0 && (
-        <div>
-          <h4 style={{ color: '#f1c40f', marginBottom: '0.5rem' }}>Backup Hooks</h4>
-          <ul style={{ ...styles.list, ...styles.textMuted }}>
-            {plan.dm_notes.backup_hooks.map((hook, idx) => (
-              <li key={idx}>{hook}</li>
-            ))}
-          </ul>
-        </div>
+        <Spoiler label="Backup Hooks">
+          <div>
+            <h4 style={{ color: '#f1c40f', marginBottom: '0.5rem' }}>Backup Hooks</h4>
+            <ul style={{ ...styles.list, ...styles.textMuted }}>
+              {plan.dm_notes.backup_hooks.map((hook, idx) => (
+                <li key={idx}>{hook}</li>
+              ))}
+            </ul>
+          </div>
+        </Spoiler>
       )}
     </div>
   );
@@ -789,12 +980,111 @@ export default function CampaignPlanPage({ character }) {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Campaign Plan</h1>
-        <p style={styles.subtitle}>
-          {plan.main_quest?.title || 'Your adventure awaits'}
-        </p>
+      <div style={{ ...styles.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={styles.title}>Campaign Plan</h1>
+          <p style={styles.subtitle}>
+            {plan.main_quest?.title || 'Your adventure awaits'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          {!confirmRegen && !generating && (
+            <button
+              onClick={() => setConfirmRegen(true)}
+              style={{
+                background: 'rgba(231, 76, 60, 0.15)',
+                border: '1px solid rgba(231, 76, 60, 0.3)',
+                borderRadius: '6px',
+                color: '#e74c3c',
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Regenerate Plan
+            </button>
+          )}
+          {confirmRegen && !generating && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>Replace current plan?</span>
+              <button
+                onClick={() => { setConfirmRegen(false); generatePlan(); }}
+                style={{
+                  background: '#e74c3c',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: '#fff',
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Yes, Regenerate
+              </button>
+              <button
+                onClick={() => setConfirmRegen(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '4px',
+                  color: '#888',
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {generating && (
+        <div style={{
+          background: 'rgba(155, 89, 182, 0.1)',
+          border: '1px solid rgba(155, 89, 182, 0.3)',
+          borderRadius: '8px',
+          padding: '1rem 1.5rem',
+          marginBottom: '1rem'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+            <span style={{ color: '#f5f5f5', fontSize: '0.9rem' }}>
+              {GENERATION_STEPS[genStep]?.label}
+            </span>
+            <span style={{ color: '#9b59b6', fontSize: '0.85rem', fontWeight: '500' }}>
+              {genProgress}%
+            </span>
+          </div>
+          <div style={{ background: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+            <div style={{
+              background: 'linear-gradient(90deg, #9b59b6, #8e44ad)',
+              height: '100%',
+              borderRadius: '4px',
+              width: `${genProgress}%`,
+              transition: 'width 0.3s ease'
+            }} />
+          </div>
+          <p style={{ ...styles.textSmall, marginTop: '0.5rem' }}>
+            Opus 4.5 is crafting your living world...
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          background: 'rgba(231, 76, 60, 0.1)',
+          border: '1px solid rgba(231, 76, 60, 0.3)',
+          borderRadius: '8px',
+          padding: '0.75rem 1rem',
+          marginBottom: '1rem',
+          color: '#e74c3c',
+          fontSize: '0.9rem'
+        }}>
+          {error}
+        </div>
+      )}
 
       <div style={styles.tabs}>
         {TABS.map(tab => (

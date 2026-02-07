@@ -9,6 +9,7 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
+import { writeFileSync } from 'fs';
 
 /**
  * Generate a comprehensive campaign plan using Opus
@@ -34,7 +35,7 @@ export async function generateCampaignPlan(campaignId, characterId) {
 
   // Get any existing companions
   const companions = await dbAll(
-    'SELECT * FROM companions WHERE character_id = ? AND status = ?',
+    'SELECT * FROM companions WHERE recruited_by_character_id = ? AND status = ?',
     [characterId, 'active']
   );
 
@@ -50,7 +51,9 @@ export async function generateCampaignPlan(campaignId, characterId) {
     buildSystemPrompt(),
     [{ role: 'user', content: prompt }],
     3,
-    'opus' // Use Opus 4.5 for campaign planning
+    'opus',  // Use Opus 4.5 for campaign planning
+    16000,   // Campaign plans are large - need high token budget
+    true     // Raw response - don't run cleanup on JSON
   );
 
   const plan = parseAIResponse(response);
@@ -181,16 +184,25 @@ export async function addNPC(campaignId, npc) {
 function buildSystemPrompt() {
   return `You are a master Dungeon Master and world-builder for Dungeons & Dragons campaigns. You are creating a comprehensive campaign plan for the Forgotten Realms setting, specifically in the year 1350 DR (the Time of Troubles is still 8 years away).
 
+THE MOST IMPORTANT RULE: The CAMPAIGN DESCRIPTION provided by the user defines the main quest's tone, premise, and central conflict. The main quest MUST directly fulfill the vision described in the campaign description. The character's backstory is secondary - backstory characters should be woven INTO the campaign description's vision as supporting elements, personal connections, and emotional stakes. Do NOT replace the campaign's central premise with a storyline derived purely from the backstory.
+
 Your goal is to create a LIVING WORLD that:
-1. Feels real and dynamic - events happen regardless of player actions
-2. Integrates the player's backstory characters as important NPCs
-3. Has political intrigue, faction conflicts, and world-changing events
-4. Provides a main quest arc but allows for player agency
-5. Includes NPCs with their own motivations and agendas
+1. Fulfills the campaign description's vision as its PRIMARY narrative
+2. Feels real and dynamic - events happen regardless of player actions
+3. Weaves the player's backstory characters into the campaign as important NPCs
+4. Has political intrigue, faction conflicts, and world-changing events
+5. Provides a main quest arc but allows for player agency
+6. Includes NPCs with their own motivations and agendas
 
-CRITICAL: You must use the characters, mentors, and NPCs from the player's backstory. Do NOT invent generic NPCs (like "Brother Aldous" or "Old Man Jenkins") when backstory characters exist.
+CRITICAL: You must use the characters, mentors, and NPCs from the player's backstory. Do NOT invent generic NPCs (like "Brother Aldous" or "Old Man Jenkins") when backstory characters exist. But their roles must serve the CAMPAIGN DESCRIPTION's vision, not replace it.
 
-Return ONLY valid JSON, no explanation or markdown code fences.`;
+IMPORTANT FORMATTING RULES:
+- Return ONLY valid JSON, no explanation or markdown code fences.
+- Be CONCISE. Each description field should be 1-3 sentences max.
+- NPC descriptions: 1-2 sentences for appearance/personality.
+- Motivations, secrets, summaries: 1-2 sentences each.
+- Act summaries: 2-3 sentences max.
+- Keep the total response compact. Quality over quantity.`;
 }
 
 // ============================================================
@@ -206,13 +218,19 @@ function buildPlanningPrompt(campaign, character, parsedBackstory, companions) {
 
   return `Create a comprehensive campaign plan for a D&D 5e campaign in the Forgotten Realms.
 
-CAMPAIGN SETTINGS:
-- Name: ${campaign.name}
-- Description: ${campaign.description || 'A new adventure in Faerun'}
-- Setting: ${campaign.setting || 'Forgotten Realms'}
-- Year: 1350 DR (Dale Reckoning)
-- Tone: ${campaign.tone || 'heroic fantasy'}
-- Starting Location: ${campaign.starting_location || 'To be determined based on character backstory'}
+=== CAMPAIGN VISION (THIS IS THE #1 PRIORITY) ===
+The following campaign description defines the MAIN QUEST's tone, premise, and central narrative. Everything you generate must serve this vision:
+
+"${campaign.description || 'A new adventure in Faerun'}"
+
+Campaign Name: ${campaign.name}
+Setting: ${campaign.setting || 'Forgotten Realms'}
+Year: 1350 DR (Dale Reckoning)
+Tone: ${campaign.tone || 'heroic fantasy'}
+Starting Location: ${campaign.starting_location || 'To be determined based on character backstory'}
+
+The main quest title, summary, hook, stakes, and acts MUST directly reflect the campaign vision above. The character's backstory elements should be woven into this vision as personal stakes and emotional connections - NOT replace it with their own storyline.
+=== END CAMPAIGN VISION ===
 
 PRIMARY CHARACTER:
 - Name: ${character.name}
@@ -392,12 +410,16 @@ Generate a campaign plan with this EXACT JSON structure:
 }
 
 IMPORTANT RULES:
-1. MUST use NPCs from the character's backstory - they should appear in the npcs array with from_backstory: true
-2. The hook for the main quest should connect to the character's personal history
-3. World events should feel consequential - not everything revolves around the player
-4. Include at least 5 world timeline events that happen independently
-5. Factions should have their own agendas that create opportunities and complications
-6. Potential companions should have their own stories, not just be sidekicks`;
+1. The MAIN QUEST must directly fulfill the CAMPAIGN VISION above - it is the #1 priority. Do NOT generate a main quest based solely on the backstory if the campaign description tells a different story.
+2. MUST use NPCs from the character's backstory - they should appear in the npcs array with from_backstory: true. Their roles should serve the campaign vision.
+3. The hook for the main quest should connect to the character's personal history while serving the campaign vision
+4. World events should feel consequential - not everything revolves around the player
+5. Include at least 5 world timeline events that happen independently
+6. Factions should have their own agendas that create opportunities and complications
+7. Potential companions should have their own stories, not just be sidekicks
+8. BE CONCISE - keep descriptions to 1-3 sentences. Keep secrets to short phrases. The entire JSON must fit within 12000 tokens.
+9. Limit to 6-8 NPCs, 3-4 companions, 5-6 locations, 3-4 factions, 4-5 side quests
+10. 3 acts maximum for the main quest`;
 }
 
 // ============================================================
@@ -405,6 +427,19 @@ IMPORTANT RULES:
 // ============================================================
 
 function parseAIResponse(response) {
+  // Debug: write raw response to file for inspection
+  try {
+    writeFileSync('./debug_campaign_plan_raw.txt', response || '(empty)');
+    console.log('Raw campaign plan response written to ./debug_campaign_plan_raw.txt');
+    console.log('Response type:', typeof response, 'Length:', response?.length);
+  } catch (e) {
+    console.error('Could not write debug file:', e.message);
+  }
+
+  if (!response || typeof response !== 'string') {
+    throw new Error(`Invalid response from AI: got ${typeof response}`);
+  }
+
   let jsonStr = response;
 
   // Handle markdown code blocks
@@ -413,11 +448,15 @@ function parseAIResponse(response) {
     jsonStr = jsonMatch[1];
   }
 
-  // Find JSON object
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
+  // Find JSON object - match from first { to last }
+  const firstBrace = jsonStr.indexOf('{');
+  const lastBrace = jsonStr.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
   }
+
+  // Fix common AI JSON issues: trailing commas before } or ]
+  jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
 
   try {
     const parsed = JSON.parse(jsonStr);
@@ -450,8 +489,14 @@ function parseAIResponse(response) {
       dm_notes: parsed.dm_notes || {}
     };
   } catch (error) {
-    console.error('Failed to parse campaign plan response:', error);
-    console.error('Response was:', response.substring(0, 500));
+    console.error('Failed to parse campaign plan response:', error.message);
+    console.error('Response length:', response.length);
+    console.error('Response start:', response.substring(0, 300));
+    console.error('Response end:', response.substring(response.length - 300));
+    // Also write the cleaned jsonStr for debugging
+    try {
+      writeFileSync('./debug_campaign_plan_cleaned.txt', jsonStr);
+    } catch (e) { /* ignore */ }
     throw new Error('Failed to parse AI-generated campaign plan');
   }
 }

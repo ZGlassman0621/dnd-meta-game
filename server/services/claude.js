@@ -102,8 +102,10 @@ function cleanupResponse(text) {
  * @param {Array} messages - Message history
  * @param {number} maxRetries - Max retry attempts for network errors
  * @param {string} modelChoice - 'opus', 'sonnet', or undefined for default
+ * @param {number} maxTokens - Max tokens for response (default 2000)
+ * @param {boolean} rawResponse - If true, skip cleanup (for JSON responses)
  */
-export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice = null) {
+export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice = null, maxTokens = 2000, rawResponse = false) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY not set');
   }
@@ -130,7 +132,7 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         },
         body: JSON.stringify({
           model: selectedModel,
-          max_tokens: 2000,
+          max_tokens: maxTokens,
           system: systemPrompt,
           messages: claudeMessages
         })
@@ -144,7 +146,12 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       const data = await response.json();
       const content = data.content?.[0]?.text || '';
 
-      return cleanupResponse(content);
+      // Log response metadata for debugging
+      if (rawResponse) {
+        console.log(`Claude API response - model: ${data.model}, stop_reason: ${data.stop_reason}, content_length: ${content.length}, usage: input=${data.usage?.input_tokens} output=${data.usage?.output_tokens}`);
+      }
+
+      return rawResponse ? content : cleanupResponse(content);
     } catch (error) {
       lastError = error;
 

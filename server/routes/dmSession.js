@@ -172,10 +172,31 @@ router.get('/history/:characterId', async (req, res) => {
 // Get campaign continuity info - last session's config and recent summaries
 router.get('/campaign-context/:characterId', async (req, res) => {
   try {
-    // Get the character's persistent campaign config
+    // Get the character's persistent campaign config and campaign_id
     const character = await dbGet(`
-      SELECT campaign_config FROM characters WHERE id = ?
+      SELECT campaign_config, campaign_id FROM characters WHERE id = ?
     `, [req.params.characterId]);
+
+    // Check if character has a campaign plan
+    let campaignPlanInfo = null;
+    if (character?.campaign_id) {
+      const campaign = await dbGet(
+        'SELECT id, name, description, campaign_plan FROM campaigns WHERE id = ?',
+        [character.campaign_id]
+      );
+      if (campaign?.campaign_plan) {
+        try {
+          const plan = JSON.parse(campaign.campaign_plan);
+          campaignPlanInfo = {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            campaignDescription: campaign.description,
+            questTitle: plan.main_quest?.title,
+            themes: plan.themes || []
+          };
+        } catch (e) { /* invalid JSON, ignore */ }
+      }
+    }
 
     let campaignConfig = {};
     try {
@@ -198,7 +219,8 @@ router.get('/campaign-context/:characterId', async (req, res) => {
       // Return campaign config even without previous sessions
       return res.json({
         hasPreviousSessions: false,
-        campaignConfig
+        campaignConfig,
+        campaignPlan: campaignPlanInfo
       });
     }
 
@@ -241,6 +263,7 @@ router.get('/campaign-context/:characterId', async (req, res) => {
       },
       // Character's persistent campaign config (takes priority over session config)
       campaignConfig,
+      campaignPlan: campaignPlanInfo,
       recentSummaries: recentSessions.map(s => ({
         id: s.id,
         title: s.title,

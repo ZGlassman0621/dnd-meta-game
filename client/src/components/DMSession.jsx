@@ -3045,8 +3045,8 @@ Examples:
               </button>
             )}
 
-            {/* Campaign Summary - shown when continuing an existing campaign */}
-            {continueCampaign && campaignContext?.hasPreviousSessions && (
+            {/* Campaign Summary - shown when continuing an existing campaign (without campaign plan) */}
+            {continueCampaign && campaignContext?.hasPreviousSessions && !campaignContext?.campaignPlan && (
               <div className="campaign-summary" style={{
                 background: 'rgba(139, 92, 246, 0.1)',
                 border: '1px solid rgba(139, 92, 246, 0.3)',
@@ -3234,8 +3234,47 @@ Examples:
               </div>
             )}
 
-            {/* Campaign Module Selection - hide when continuing existing campaign */}
-            {!(continueCampaign && campaignContext?.hasPreviousSessions) && (
+            {/* Campaign Plan Quick Start - when a campaign plan exists, skip full config */}
+            {campaignContext?.campaignPlan && (
+              <div style={{
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                borderRadius: '8px',
+                background: 'rgba(155, 89, 182, 0.1)',
+                border: '1px solid rgba(155, 89, 182, 0.3)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🗺️</span>
+                  <div>
+                    <h4 style={{ margin: 0, color: '#a78bfa' }}>Campaign Plan Loaded</h4>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem', color: '#f5f5f5' }}>
+                      {campaignContext.campaignPlan.questTitle || campaignContext.campaignPlan.campaignName}
+                    </p>
+                  </div>
+                </div>
+                {campaignContext.campaignPlan.themes?.length > 0 && (
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                    {campaignContext.campaignPlan.themes.map((theme, i) => (
+                      <span key={i} style={{
+                        background: 'rgba(155, 89, 182, 0.2)',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        color: '#a78bfa'
+                      }}>
+                        {theme}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p style={{ margin: '0.75rem 0 0', fontSize: '0.8rem', opacity: 0.6 }}>
+                  World, NPCs, factions, and quest arc will be loaded from your campaign plan.
+                </p>
+              </div>
+            )}
+
+            {/* Campaign Module Selection - hide when continuing existing campaign or when campaign plan exists */}
+            {!(continueCampaign && campaignContext?.hasPreviousSessions) && !campaignContext?.campaignPlan && (
             <>
             <div className="form-group">
               <label>Campaign Type</label>
@@ -3421,7 +3460,7 @@ Examples:
               </div>
             </div>
 
-            {availableNpcs.length > 0 && (
+            {availableNpcs.length > 0 && !campaignContext?.campaignPlan && (
               <div className="form-group">
                 <label>Include Custom NPCs (Optional)</label>
                 <small style={{ display: 'block', marginBottom: '0.5rem', color: '#888' }}>
@@ -3465,7 +3504,7 @@ Examples:
             <button
               className="start-adventure-btn"
               onClick={startSession}
-              disabled={isLoading || (selectedModule === 'custom' && !continueCampaign && (!startingLocation || !era || !arrivalHook || (arrivalHook === 'custom' && !customArrivalHook.trim())))}
+              disabled={isLoading || (selectedModule === 'custom' && !continueCampaign && !campaignContext?.campaignPlan && (!startingLocation || !era || !arrivalHook || (arrivalHook === 'custom' && !customArrivalHook.trim())))}
             >
               {isLoading ? 'Starting Adventure...' : 'Begin Adventure'}
             </button>

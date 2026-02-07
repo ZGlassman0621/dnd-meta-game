@@ -289,7 +289,7 @@ const styles = {
 
 const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical'];
 
-const CampaignsPage = ({ character, allCharacters }) => {
+const CampaignsPage = ({ character, allCharacters, onCharacterUpdated }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
@@ -415,6 +415,7 @@ const CampaignsPage = ({ character, allCharacters }) => {
         loadCampaignCharacters(selectedCampaign.id);
         loadCampaignStats(selectedCampaign.id);
         setSelectedCharacterToAssign('');
+        onCharacterUpdated?.();
       }
     } catch (error) {
       console.error('Error assigning character:', error);
@@ -429,6 +430,7 @@ const CampaignsPage = ({ character, allCharacters }) => {
       if (response.ok) {
         loadCampaignCharacters(selectedCampaign.id);
         loadCampaignStats(selectedCampaign.id);
+        onCharacterUpdated?.();
       }
     } catch (error) {
       console.error('Error removing character:', error);
