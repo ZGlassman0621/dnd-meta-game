@@ -9,7 +9,6 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
-import { writeFileSync } from 'fs';
 
 /**
  * Generate a comprehensive campaign plan using Opus
@@ -427,15 +426,6 @@ IMPORTANT RULES:
 // ============================================================
 
 function parseAIResponse(response) {
-  // Debug: write raw response to file for inspection
-  try {
-    writeFileSync('./debug_campaign_plan_raw.txt', response || '(empty)');
-    console.log('Raw campaign plan response written to ./debug_campaign_plan_raw.txt');
-    console.log('Response type:', typeof response, 'Length:', response?.length);
-  } catch (e) {
-    console.error('Could not write debug file:', e.message);
-  }
-
   if (!response || typeof response !== 'string') {
     throw new Error(`Invalid response from AI: got ${typeof response}`);
   }
@@ -493,10 +483,6 @@ function parseAIResponse(response) {
     console.error('Response length:', response.length);
     console.error('Response start:', response.substring(0, 300));
     console.error('Response end:', response.substring(response.length - 300));
-    // Also write the cleaned jsonStr for debugging
-    try {
-      writeFileSync('./debug_campaign_plan_cleaned.txt', jsonStr);
-    } catch (e) { /* ignore */ }
     throw new Error('Failed to parse AI-generated campaign plan');
   }
 }

@@ -85,9 +85,42 @@ export async function archiveCampaign(id) {
 }
 
 /**
- * Hard delete a campaign (use with caution)
+ * Hard delete a campaign and all related records (use with caution)
+ * Cleans up foreign key references in the correct order to avoid constraint violations.
  */
 export async function deleteCampaign(id) {
+  // 1. Unassign characters (don't delete them, just remove campaign link)
+  await dbRun('UPDATE characters SET campaign_id = NULL, current_location_id = NULL WHERE campaign_id = ?', [id]);
+
+  // 2. Clear location references in non-campaign tables
+  const locationIds = (await dbAll('SELECT id FROM locations WHERE campaign_id = ?', [id])).map(r => r.id);
+  if (locationIds.length > 0) {
+    const placeholders = locationIds.map(() => '?').join(',');
+    await dbRun(`UPDATE adventures SET location_id = NULL WHERE location_id IN (${placeholders})`, locationIds);
+    await dbRun(`UPDATE npc_relationships SET first_met_location_id = NULL WHERE first_met_location_id IN (${placeholders})`, locationIds);
+  }
+
+  // 3. Delete narrative queue items
+  await dbRun('DELETE FROM narrative_queue WHERE campaign_id = ?', [id]);
+
+  // 4. Delete journeys (journey_encounters cascade via ON DELETE CASCADE)
+  await dbRun('DELETE FROM journeys WHERE campaign_id = ?', [id]);
+
+  // 5. Clear self-references in world_events, then delete (event_effects cascade)
+  await dbRun('UPDATE world_events SET triggered_by_event_id = NULL WHERE campaign_id = ?', [id]);
+  await dbRun('DELETE FROM world_events WHERE campaign_id = ?', [id]);
+
+  // 6. Delete factions (faction_goals, faction_standings cascade via ON DELETE CASCADE)
+  await dbRun('DELETE FROM factions WHERE campaign_id = ?', [id]);
+
+  // 7. Delete quests (quest_requirements cascade via ON DELETE CASCADE)
+  await dbRun('DELETE FROM quests WHERE campaign_id = ?', [id]);
+
+  // 8. Clear self-references in locations, then delete
+  await dbRun('UPDATE locations SET parent_location_id = NULL WHERE campaign_id = ?', [id]);
+  await dbRun('DELETE FROM locations WHERE campaign_id = ?', [id]);
+
+  // 9. Finally delete the campaign
   const result = await dbRun('DELETE FROM campaigns WHERE id = ?', [id]);
   return result.changes > 0;
 }
