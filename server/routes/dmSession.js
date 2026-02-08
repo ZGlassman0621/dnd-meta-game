@@ -708,6 +708,8 @@ function parseNpcJoinMarker(narrative) {
 }
 
 // Helper: Detect if player is initiating a downtime activity
+// Uses word boundaries (\b) to prevent false positives from substring matches
+// (e.g., "nearest" matching "rest", "make my way" matching crafting)
 function detectDowntime(playerAction) {
   if (!playerAction) return null;
 
@@ -715,39 +717,46 @@ function detectDowntime(playerAction) {
 
   // Training patterns
   const trainingPatterns = [
-    /(?:we |i )?(?:train|practice|drill|exercise|spar|workout)\s*(?:for\s+)?(\d+)?\s*(?:hours?|hrs?)?/i,
-    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+(?:to\s+)?)?(?:training|practicing|drilling|exercising|sparring)/i,
-    /(?:hone|improve|work on)\s+(?:my|our)?\s*(?:skills?|abilities?|combat|martial|fighting)/i
+    /(?:^|\b)(?:we |i )(?:train|practice|drill|exercise|spar|workout)\b/i,
+    /\b(?:spend|take)\s+\d+\s*(?:hours?|hrs?)\s+(?:training|practicing|drilling|exercising|sparring)\b/i,
+    /\b(?:hone|improve|work on)\s+(?:my|our)\s*(?:skills?|abilities?|combat|martial|fighting)\b/i
   ];
 
-  // Rest patterns
+  // Rest patterns - require clear intent to rest/sleep/camp
   const restPatterns = [
-    /(?:we |i )?(?:take a |take )?(?:short|long)\s+rest/i,
-    /(?:we |i )?(?:rest|sleep|recuperate|recover)\s*(?:for\s+)?(\d+)?\s*(?:hours?|hrs?)?/i,
-    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+)?(?:resting|sleeping|recovering)/i,
-    /(?:get some |catch some )?(?:rest|sleep|shut-eye)/i,
-    /(?:camp|make camp|set up camp)/i
+    /\b(?:take a |take )?(?:short|long)\s+rest\b/i,
+    /(?:^|\b)(?:we |i )(?:rest|sleep|recuperate|recover)\b/i,
+    /\b(?:spend|take)\s+\d+\s*(?:hours?|hrs?)\s+(?:resting|sleeping|recovering)\b/i,
+    /\b(?:get some |catch some )(?:rest|sleep|shut-eye)\b/i,
+    /(?:^|\b)(?:we |i )(?:camp|make camp|set up camp)\b/i,
+    /\blet'?s\s+(?:camp|rest|sleep|make camp|set up camp)\b/i,
+    /\btake\s+(?:first|second|third|last)\s+watch\b/i,
+    /\b(?:set up|take|keep|stand)\s+watch\b/i,
+    /\b(?:through|for|during)\s+the\s+night\b/i,
+    /\bbed down\b|\bturn in\s+for\s+the\s+night\b/i,
+    /\bcall it a (?:night|day)\b/i
   ];
 
   // Study/research patterns
   const studyPatterns = [
-    /(?:we |i )?(?:study|research|read|learn|investigate)\s*(?:for\s+)?(\d+)?\s*(?:hours?|hrs?)?/i,
-    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+)?(?:studying|researching|reading|learning)/i,
-    /(?:pore over|examine|analyze)\s+(?:books?|tomes?|scrolls?|texts?|documents?)/i
+    /(?:^|\b)(?:we |i )(?:study|research)\b/i,
+    /\b(?:spend|take)\s+\d+\s*(?:hours?|hrs?)\s+(?:studying|researching|reading|learning)\b/i,
+    /\b(?:pore over|examine|analyze)\s+(?:books?|tomes?|scrolls?|texts?|documents?)\b/i
   ];
 
-  // Crafting patterns
+  // Crafting patterns - require clear crafting intent, not "make" in general usage
   const craftingPatterns = [
-    /(?:we |i )?(?:craft|create|make|forge|brew|enchant)\s/i,
-    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?(?:\s+)?(?:crafting|forging|brewing|creating)/i,
-    /(?:work on|tinker with)\s+(?:equipment|gear|items?|potions?)/i
+    /(?:^|\b)(?:we |i )(?:craft|forge|brew|enchant)\b/i,
+    /(?:^|\b)(?:we |i )(?:create|make)\s+(?:a |an |some |the )?(?:potion|sword|armor|shield|weapon|item|tool|scroll|ring|amulet|wand|staff|bow|arrow)/i,
+    /\b(?:spend|take)\s+\d+\s*(?:hours?|hrs?)\s+(?:crafting|forging|brewing|creating)\b/i,
+    /\b(?:work on|tinker with)\s+(?:equipment|gear|items?|potions?)\b/i
   ];
 
   // Work/earn gold patterns
   const workPatterns = [
-    /(?:we |i )?(?:work|earn|make money|find work|look for work)/i,
-    /(?:spend|take)\s*(\d+)?\s*(?:hours?|hrs?)?\s*(?:working|earning)/i,
-    /(?:do some |find )?(?:odd jobs|manual labor|honest work)/i
+    /(?:^|\b)(?:we |i )(?:look for work|find work|earn money|earn gold)\b/i,
+    /\b(?:spend|take)\s+\d+\s*(?:hours?|hrs?)\s+(?:working|earning)\b/i,
+    /\b(?:do some |find )?(?:odd jobs|manual labor|honest work)\b/i
   ];
 
   // Extract duration if mentioned
@@ -764,8 +773,8 @@ function detectDowntime(playerAction) {
   for (const pattern of restPatterns) {
     if (pattern.test(action)) {
       // Determine short vs long rest
-      const isLongRest = /long\s+rest|sleep|8\s*hours?|overnight|camp/i.test(action);
-      const isShortRest = /short\s+rest/i.test(action);
+      const isLongRest = /\blong\s+rest\b|\bsleep\b|\b8\s*hours?\b|\bovernight\b|\bcamp\b|\bwatch\b|\bthrough the night\b|\bfor the night\b|\bturn in\b|\bbed down\b|\bcall it a night\b/i.test(action);
+      const isShortRest = /\bshort\s+rest\b/i.test(action);
       return {
         type: 'rest',
         restType: isShortRest ? 'short' : (isLongRest ? 'long' : null),
@@ -1099,6 +1108,34 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
     });
   } catch (error) {
     console.error('Error adjusting game date:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Inject a system notification into the session (e.g., after manual downtime)
+router.post('/:sessionId/inject-context', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    const session = await dbGet('SELECT messages FROM dm_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const messages = JSON.parse(session.messages || '[]');
+    // Inject as a user message with a [SYSTEM NOTE] prefix so the AI treats it as context
+    messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS, just incorporate it into your awareness]: ${message}` });
+
+    await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(messages), sessionId]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error injecting context:', error);
     res.status(500).json({ error: error.message });
   }
 });

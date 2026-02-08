@@ -499,6 +499,8 @@ export async function getPlanSummaryForSession(campaignId) {
   return {
     main_quest_title: plan.main_quest?.title,
     main_quest_summary: plan.main_quest?.summary,
+    main_quest_hook: plan.main_quest?.hook,
+    main_quest_stakes: plan.main_quest?.stakes,
     current_act: plan.main_quest?.acts?.[0],
     world_state: plan.world_state,
     active_npcs: plan.npcs?.filter(n => n.from_backstory).map(n => ({
@@ -507,12 +509,25 @@ export async function getPlanSummaryForSession(campaignId) {
       motivation: n.motivation,
       location: n.location
     })),
+    all_npcs: plan.npcs?.filter(n => !n.from_backstory).map(n => ({
+      name: n.name,
+      role: n.role,
+      location: n.location
+    })),
     upcoming_events: plan.world_timeline?.events?.slice(0, 3).map(e => ({
       title: e.title,
       timing: e.timing,
       visibility: e.visibility
     })),
-    themes: plan.themes
+    themes: plan.themes,
+    dm_notes: plan.dm_notes ? {
+      tone: plan.dm_notes.tone_guidance,
+      twists: plan.dm_notes.planned_twists?.slice(0, 3)
+    } : null,
+    side_quests: plan.side_quests?.slice(0, 3).map(q => ({
+      title: q.title,
+      description: q.description
+    }))
   };
 }
 

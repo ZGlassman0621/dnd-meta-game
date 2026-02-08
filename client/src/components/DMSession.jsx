@@ -1579,7 +1579,33 @@ Examples:
 
         {activeGameTab === 'downtime' && (
           <div style={{ padding: '1rem 0' }}>
-            <Downtime character={character} onCharacterUpdated={onCharacterUpdated} />
+            <Downtime character={character} onCharacterUpdated={(updatedChar) => {
+              // Inject downtime context into the AI session so it knows what happened
+              if (activeSession && updatedChar) {
+                const hpDiff = updatedChar.current_hp - character.current_hp;
+                const goldDiff = (updatedChar.gold || 0) - (character.gold || 0);
+                const parts = [];
+                if (hpDiff > 0) parts.push(`recovered ${hpDiff} HP (now ${updatedChar.current_hp}/${updatedChar.max_hp})`);
+                if (goldDiff > 0) parts.push(`earned ${goldDiff} gold`);
+                if (goldDiff < 0) parts.push(`spent ${Math.abs(goldDiff)} gold`);
+
+                if (parts.length > 0) {
+                  const contextMsg = `The party completed a downtime activity. ${updatedChar.name} ${parts.join(' and ')}.`;
+                  fetch(`/api/dm-session/${activeSession.id}/inject-context`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: contextMsg })
+                  }).catch(e => console.error('Failed to inject downtime context:', e));
+
+                  // Also show it in the chat visually
+                  setMessages(prev => [...prev, {
+                    type: 'narrative',
+                    content: `*${contextMsg}*`
+                  }]);
+                }
+              }
+              onCharacterUpdated && onCharacterUpdated(updatedChar);
+            }} />
           </div>
         )}
 

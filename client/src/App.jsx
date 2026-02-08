@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense, Component } from 'react'
 import CharacterManager from './components/CharacterManager'
 import AdventureManager from './components/AdventureManager'
 import ActiveAdventure from './components/ActiveAdventure'
@@ -28,6 +28,33 @@ const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstor
 const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
 const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
 
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', color: '#e74c3c', textAlign: 'center' }}>
+          <h3>Something went wrong loading this page</h3>
+          <p style={{ color: '#999', fontSize: '0.9rem' }}>{this.state.error?.message}</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Try Again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function App() {
   const [characters, setCharacters] = useState([])
   const [selectedCharacter, setSelectedCharacter] = useState(null)
@@ -39,16 +66,19 @@ function App() {
   const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
   const [llmStatus, setLlmStatus] = useState(null)
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
+  const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
 
   // Navigation helper
   const navigateTo = (view) => {
     setActiveView(view)
     setShowLevelUp(false)
+    window.scrollTo(0, 0)
   }
 
   const goHome = () => {
     setActiveView(null)
     setShowLevelUp(false)
+    window.scrollTo(0, 0)
   }
 
   useEffect(() => {
@@ -74,15 +104,20 @@ function App() {
     }
   }, [selectedCharacter])
 
-  // Check if selected character has a campaign plan ready
+  // Check if selected character has a campaign plan ready + has past sessions
   useEffect(() => {
     if (selectedCharacter?.campaign_id) {
       fetch(`/api/campaign/${selectedCharacter.campaign_id}/plan`)
         .then(res => res.json())
         .then(data => setCampaignPlanReady(!!(data?.main_quest)))
         .catch(() => setCampaignPlanReady(false))
+      fetch(`/api/dm-session/history/${selectedCharacter.id}`)
+        .then(res => res.json())
+        .then(data => setHasStartedAdventure((data?.sessions?.length || 0) > 0))
+        .catch(() => setHasStartedAdventure(false))
     } else {
       setCampaignPlanReady(false)
+      setHasStartedAdventure(false)
     }
   }, [selectedCharacter])
 
@@ -218,6 +253,7 @@ function App() {
         />
       </header>
 
+      <ErrorBoundary>
       <Suspense fallback={<div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>Loading...</div>}>
       {activeView === 'showNPCGenerator' ? (
         <NPCGenerator
@@ -389,7 +425,9 @@ function App() {
                 Play
               </div>
               <div style={{ fontSize: '0.85rem', color: '#6ee7b7' }}>
-                Continue your adventure with {selectedCharacter.name}
+                {hasStartedAdventure
+                  ? `Continue your adventure with ${selectedCharacter.name}`
+                  : `Start your adventure with ${selectedCharacter.name}!`}
               </div>
             </div>
           )}
@@ -460,6 +498,7 @@ function App() {
         </>
       )}
       </Suspense>
+      </ErrorBoundary>
     </div>
   )
 }
