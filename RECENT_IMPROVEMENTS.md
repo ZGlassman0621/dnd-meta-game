@@ -1,6 +1,45 @@
 # Recent Improvements
 
-## Latest: Bundle Size Optimization (2026-02-07)
+## Latest: Architecture Refactor & Living World Enhancements (2026-02-07)
+
+Major backend refactoring and living world behavior improvements.
+
+### Module Splitting
+Split `ollama.js` (1715 lines) into 3 focused modules:
+- **`llmClient.js`** (~90 lines) — Raw Ollama API client (chat, status, models)
+- **`dmPromptBuilder.js`** (~1300 lines) — DM system prompt construction and all formatters
+- **`ollama.js`** (~300 lines) — Session orchestration only (start/continue/summarize)
+- Backward-compatible re-exports so no consumer files needed import changes
+
+Split `dmSession.js` route (2362 lines) into route + service:
+- **`dmSessionService.js`** (~500 lines) — Business logic (analysis, rewards, NPC extraction, notes, event emission)
+- **`dmSession.js`** (~1700 lines) — Thin route handlers that delegate to service
+
+### DM Session Event Bus Integration
+DM sessions now emit gameplay events at session end, connecting freeform AI gameplay to the structured quest/companion systems:
+- `NPC_INTERACTION` — For each NPC extracted from the session transcript
+- `LOCATION_VISITED` — For locations found in extracted campaign notes
+- `ITEM_OBTAINED` — For items gained per inventory analysis
+- `DM_SESSION_ENDED` — Triggers companion backstory thread activation checks
+
+### Living World Emergent Behavior
+Faction tick processing enhanced from deterministic progress bars to emergent behavior:
+- **Faction interference**: Hostile factions slow each other; allied factions boost each other
+- **Wider variance**: Progress varies 0.5x-1.5x per tick (was 0.8x-1.2x)
+- **Random disruptions**: 8% chance/day of setbacks (lose 10-30% progress)
+- **Random breakthroughs**: 5% chance/day of bonus progress (50-100% extra)
+- **Rival reactions**: At 50%+ milestones, hostile factions have 40% chance of spawning counter-events
+- **Power shifts**: Completing major/catastrophic goals increases faction power level
+
+**Files Created**:
+- `server/services/llmClient.js`, `server/services/dmPromptBuilder.js`, `server/services/dmSessionService.js`
+
+**Files Modified**:
+- `server/services/ollama.js`, `server/routes/dmSession.js`, `server/services/factionService.js`, `server/services/livingWorldService.js`
+
+---
+
+## Bundle Size Optimization (2026-02-07)
 
 Lazy-loaded 13 components with `React.lazy()` + `Suspense` to reduce the initial bundle.
 

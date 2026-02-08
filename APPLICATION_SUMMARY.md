@@ -160,7 +160,7 @@ The plan feeds into gameplay sessions through a multi-step pipeline:
 - **Reward claiming**: Rewards from sessions can be claimed separately
 
 #### AI DM Prompt System
-The system prompt (~600+ lines in `server/services/ollama.js`) enforces D&D 5e rules:
+The system prompt (~600+ lines in `server/services/dmPromptBuilder.js`) enforces D&D 5e rules:
 
 **Absolute Rules (enforced at top AND bottom of prompt)**:
 - **ONE QUESTION RULE**: When an NPC asks the player a question, the AI MUST stop narrating and wait for the player's response. No continuing the story past the question.
@@ -610,7 +610,16 @@ Game Action → Event Emitted → Listeners Triggered → Consequences Applied
 | `item_obtained` | Get new item | Check quest requirements |
 | `game_time_advanced` | Time passes | Check expirations, trigger events |
 | `dm_session_started` | DM session begins | Load narrative context |
-| `dm_session_ended` | DM session ends | Process outcomes |
+| `dm_session_ended` | DM session ends | Process outcomes, check companion triggers |
+
+#### DM Session Event Emission
+When a DM session ends, the session-end handler emits gameplay events based on the AI's analysis of the session:
+- **NPC interactions** — For each NPC extracted from the session transcript
+- **Location visits** — For locations mentioned in extracted campaign notes
+- **Items obtained** — For items gained per the inventory analysis
+- **Session ended** — Triggers companion trigger checker for backstory thread activations
+
+This connects the freeform AI DM gameplay to the structured quest/companion systems.
 
 #### Narrative Queue
 A queue of story events waiting to be delivered to the player during DM sessions:
@@ -1335,7 +1344,11 @@ The GenerationControlsPage provides a centralized interface for triggering AI co
 #### Tick Processing
 The living world advances automatically when game time passes:
 
-- **Faction Goal Advancement**: Goals progress based on faction power level and urgency
+- **Faction Goal Advancement**: Goals progress based on faction power level, urgency, and inter-faction dynamics
+- **Faction Interference**: Hostile factions slow each other's goals; allied factions boost each other
+- **Random Disruptions**: 8% chance per goal per day of setbacks (lose 10-30% progress)
+- **Random Breakthroughs**: 5% chance per goal per day of bonus progress (50-100% extra)
+- **Wider Variance**: Progress varies 0.5x to 1.5x per tick (not deterministic)
 - **World Event Progression**: Events advance through stages
 - **Effect Expiration**: Temporary effects expire when their duration ends
 - **Deadline Enforcement**: Time-sensitive events resolve when deadlines pass
@@ -1349,6 +1362,18 @@ World events are automatically created when faction goals reach milestones:
 | 50% progress | Faction gains momentum | At least rumored |
 | 75% progress | Faction nears goal | At least rumored |
 | 100% complete | Goal achieved | Public if major stakes |
+
+#### Rival Faction Reactions
+When a faction reaches 50%+ on a goal, rival factions may react:
+- Hostile/enemy/rival factions have a 40% chance of spawning counter-events
+- Counter-events create opposing operations with their own stages and player intervention options
+- Creates emergent faction-vs-faction conflict without scripting
+
+#### Power Shifts on Goal Completion
+When a faction completes a goal, their power level increases based on stakes:
+- **Major stakes**: +1 power level
+- **Catastrophic stakes**: +2 power level
+- Power shifts create event effects tracked in the world state
 
 #### AI Content Generation
 Generate dynamic content for the living world:
@@ -1703,12 +1728,12 @@ This is a **solo D&D campaign manager** with a **two-stage AI pipeline**:
 12. **Build NPC relationships** with tracked rumors, promises, and debts
 
 ### Architecture
-The system seamlessly integrates structured meta-game mechanics (adventures, downtime, rewards) with freeform AI-powered narrative sessions. An **event-driven narrative system** connects all game actions to consequences, automatically checking quest progress, activating companion storylines, and queuing story events for delivery during DM sessions.
+The system seamlessly integrates structured meta-game mechanics (adventures, downtime, rewards) with freeform AI-powered narrative sessions. An **event-driven narrative system** connects all game actions to consequences, automatically checking quest progress, activating companion storylines, and queuing story events for delivery during DM sessions. DM sessions emit gameplay events at session end (NPC interactions, location visits, item gains), connecting freeform AI gameplay to the structured quest and companion systems.
 
-**Living World Systems** enable factions to pursue goals over time and world events to unfold and affect locations, creating a dynamic game world that evolves even when the player isn't actively engaged. Tick processing advances faction goals and world events based on game time passage, automatically spawning new events when factions reach significant milestones.
+**Living World Systems** enable factions to pursue goals over time and world events to unfold and affect locations, creating a dynamic game world that evolves even when the player isn't actively engaged. Tick processing advances faction goals with emergent behavior: hostile factions interfere with each other's progress, allied factions provide boosts, and random disruptions/breakthroughs add unpredictability. Rival factions spawn counter-events when opponents reach significant milestones, and completing goals shifts faction power levels.
 
 **Campaign Plan System** uses Opus 4.5 to generate comprehensive world plans (main quest with 3-act structure, 6-8 NPCs, factions, locations, side quests, DM notes). The plan is condensed via `getPlanSummaryForSession()` and injected into Sonnet's system prompt, ensuring the AI DM follows the established story rather than improvising a new one. The `campaignFoundationPrompt` is conditional — it tells Sonnet to use the plan when one exists, or create its own story framework when playing without a plan.
 
-**AI DM Prompt Engineering**: The ~600-line system prompt uses primacy/recency reinforcement — critical rules appear both at the beginning (ABSOLUTE RULES) and end (FINAL REMINDER) of the prompt, since LLMs attend most strongly to the start and end of their context. Rules cover combat mechanics, NPC question pausing, narrative consistency, and D&D 5e mechanics.
+**AI DM Prompt Engineering**: The ~600-line system prompt (`server/services/dmPromptBuilder.js`) uses primacy/recency reinforcement — critical rules appear both at the beginning (ABSOLUTE RULES) and end (FINAL REMINDER) of the prompt, since LLMs attend most strongly to the start and end of their context. Rules cover combat mechanics, NPC question pausing, narrative consistency, and D&D 5e mechanics. Session orchestration (start/continue/summarize) lives in `server/services/ollama.js`, with the raw LLM client in `server/services/llmClient.js`.
 
 AI generators (Claude primary, Ollama fallback) create quests, locations, and companion backstories on demand, ensuring fresh content while maintaining narrative coherence across the campaign.

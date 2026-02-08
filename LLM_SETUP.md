@@ -38,6 +38,21 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 └──────────────────────────────────────────────────┘
 ```
 
+### Server Module Structure
+
+The AI DM backend is split into focused modules:
+
+| Module | File | Purpose |
+|--------|------|---------|
+| **LLM Client** | `server/services/llmClient.js` | Raw Ollama API calls (chat, status, list models) |
+| **Prompt Builder** | `server/services/dmPromptBuilder.js` | ~600-line DM system prompt + all formatters (character info, companions, campaign plan, etc.) |
+| **Session Orchestrator** | `server/services/ollama.js` | Session lifecycle (start, continue, summarize) — imports from the above two |
+| **Session Service** | `server/services/dmSessionService.js` | Session business logic (rewards, notes extraction, NPC extraction, event emission) |
+| **Campaign Plan** | `server/services/campaignPlanService.js` | Opus 4.5 campaign plan generation |
+| **Backstory Parser** | `server/services/backstoryParserService.js` | AI backstory parsing into structured elements |
+
+All AI generators (quests, locations, companions, living world) use `llmClient.js` for LLM calls with Claude primary and Ollama fallback.
+
 ## Claude API Setup (Primary)
 
 ### 1. Get an API Key

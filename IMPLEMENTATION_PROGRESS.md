@@ -485,7 +485,7 @@ Exposed all backend narrative systems through REST APIs and integrated with exis
 
 Added narrative queue context to DM session AI prompts:
 - `server/routes/dmSession.js` - Fetches narrative queue on session start
-- `server/services/ollama.js` - Includes `narrativeQueueContext` in system prompt
+- `server/services/dmPromptBuilder.js` - Includes `narrativeQueueContext` in system prompt
 - Items automatically marked as delivered after session creation
 
 ### Character-Campaign Association (`/api/character/:id/campaign`)
@@ -520,7 +520,7 @@ Added narrative queue context to DM session AI prompts:
 | `server/routes/companion.js` | Added backstory endpoints | 2026-02-04 |
 | `server/routes/character.js` | Added campaign + quest tracking endpoints | 2026-02-04 |
 | `server/routes/dmSession.js` | Added narrative queue context integration | 2026-02-04 |
-| `server/services/ollama.js` | Added narrativeQueueContext to system prompt | 2026-02-04 |
+| `server/services/ollama.js` (now `dmPromptBuilder.js`) | Added narrativeQueueContext to system prompt | 2026-02-04 |
 | `server/services/narrativeQueueService.js` | Added getDeliveredItems function | 2026-02-04 |
 
 ---
@@ -2223,3 +2223,100 @@ Lazy-loaded 13 components with `React.lazy()` + `Suspense` to reduce the initial
 - **Frontend Build**: 78 modules, 971 kB main + 14 lazy chunks, no errors
 - **Play Button**: Correctly shows/hides based on campaign plan readiness
 - **Overall**: 104/104 tests passing (100% pass rate)
+
+---
+
+## Phase M: Architecture Refactor & Living World Enhancements
+
+### Status: COMPLETE
+
+Date: 2026-02-07
+
+Backend architecture refactoring (module splits) and living world emergent behavior enhancements. Based on an AI architectural review that identified 6 issues — 4 addressed here, 2 deferred to FUTURE_FEATURES.md.
+
+### M1: Split ollama.js (1715 lines → 3 modules)
+
+Separated concerns into focused modules with backward-compatible re-exports:
+
+| New File | Purpose | ~Lines |
+|----------|---------|--------|
+| `server/services/llmClient.js` | Raw Ollama API client (chat, status, models) | 90 |
+| `server/services/dmPromptBuilder.js` | DM system prompt + all formatters | 1300 |
+| `server/services/ollama.js` (slimmed) | Session orchestration (start/continue/summarize) | 300 |
+
+**Re-export strategy**: `ollama.js` re-exports from `llmClient.js` and `dmPromptBuilder.js`, so all 7 consumer files work without import changes.
+
+### M2: Split dmSession.js Route (2362 lines → route + service)
+
+Extracted business logic from the monolithic route handler:
+
+| New File | Purpose | ~Lines |
+|----------|---------|--------|
+| `server/services/dmSessionService.js` | Session business logic + event emission | 500 |
+
+**Extracted to service**:
+- Detection helpers: `parseNpcJoinMarker()`, `detectDowntime()`, `detectRecruitment()`
+- Analysis: `buildAnalysisPrompt()`, `parseAnalysisResponse()`, `calculateSessionRewards()`, `calculateHPChange()`, `calculateGameTimeAdvance()`
+- Campaign notes: `buildNotesExtractionPrompt()`, `appendCampaignNotes()`
+- NPC extraction: `buildNpcExtractionPrompt()`, `saveExtractedNpcs()`
+- Name tracking: `extractAndTrackUsedNames()`
+- Event emission: `emitSessionEvents()`, `emitSessionEndedEvent()`
+
+### M3: DM Session Event Bus Integration
+
+Connected DM sessions to the event bus — `onDMSessionEnded()` was defined in `narrativeIntegration.js` but never called.
+
+**Events emitted at session end**:
+
+| Event | Source | Listeners |
+|-------|--------|-----------|
+| `NPC_INTERACTION` | Each NPC extracted from session | Quest progress checker |
+| `LOCATION_VISITED` | Locations from extracted notes | Quest progress checker |
+| `ITEM_OBTAINED` | Items from inventory analysis | Quest progress checker |
+| `DM_SESSION_ENDED` | Session end handler | Companion trigger checker |
+
+### M4: Living World Emergent Behavior
+
+Enhanced faction tick processing from deterministic to emergent:
+
+**Faction Interference** (`factionService.js`):
+- Hostile/enemy/rival factions reduce each other's progress by `power_level * 0.3`
+- Allied/friendly factions boost each other by `power_level * 0.15`
+- Uses `faction_relationships` JSON column (already existed)
+
+**Wider Variance & Random Events** (`factionService.js`):
+- Variance: 0.5x-1.5x (was 0.8x-1.2x)
+- 8% chance/day per goal: setback (lose 10-30% progress)
+- 5% chance/day per goal: breakthrough (gain 50-100% bonus)
+
+**Rival Reactions** (`livingWorldService.js`):
+- At milestones >= 50%, hostile rivals have 40% chance to spawn counter-events
+- Counter-events: "[Rival] Moves Against [Faction]" with stages and player options
+
+**Power Shifts** (`livingWorldService.js`):
+- Goal completion with `major` stakes: +1 power level
+- Goal completion with `catastrophic` stakes: +2 power level
+- Event effects track the power change
+
+### Files Created
+
+| File | Purpose | Date |
+|------|---------|------|
+| `server/services/llmClient.js` | Ollama API client (chat, status, models) | 2026-02-07 |
+| `server/services/dmPromptBuilder.js` | DM system prompt + all formatters | 2026-02-07 |
+| `server/services/dmSessionService.js` | Session business logic + event emission | 2026-02-07 |
+
+### Files Modified
+
+| File | Changes | Date |
+|------|---------|------|
+| `server/services/ollama.js` | Removed ~1400 lines, imports from llmClient + dmPromptBuilder, re-exports | 2026-02-07 |
+| `server/routes/dmSession.js` | Moved ~600 lines of business logic to service, added event emission | 2026-02-07 |
+| `server/services/factionService.js` | Added faction interference, wider variance, random disruptions/breakthroughs | 2026-02-07 |
+| `server/services/livingWorldService.js` | Added rival reactions on milestones, power shifts on completion | 2026-02-07 |
+| `FUTURE_FEATURES.md` | Added Database Migration System + Frontend Component Decomposition entries | 2026-02-07 |
+
+### Test Results
+
+- **Client Build**: Successful (78 modules, no import errors)
+- **Server Startup**: All imports resolved, database initialized, narrative systems initialized
