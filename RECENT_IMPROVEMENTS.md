@@ -1,6 +1,20 @@
 # Recent Improvements
 
-## Latest: World State Snapshot for DM Sessions (2026-02-08)
+## Latest: Auto-Apply Inventory Changes (2026-02-08)
+
+Inventory changes (items consumed, gained, gold spent) detected by the AI at session end are now **auto-applied** instead of requiring a manual "Apply Changes" click. An "Undo" button appears after auto-apply to revert if the AI got it wrong.
+
+- Auto-apply runs immediately after session end analysis completes
+- Pre-apply inventory/gold snapshot saved for undo
+- Undo restores via `PUT /api/character/:id` (existing endpoint, no new server code)
+- Fallback: if auto-apply fails, manual "Apply Changes" button still appears
+
+**Files Modified**:
+- `client/src/components/DMSession.jsx` — Auto-apply in `endSession()`, `undoInventoryChanges()`, undo UI
+
+---
+
+## World State Snapshot for DM Sessions (2026-02-08)
 
 The AI DM now has awareness of the current dynamic world state when starting a session. Previously, the DM only saw the static campaign plan and accumulated campaign notes — faction standings, world events, NPC relationships, and discovered locations were invisible to the AI.
 

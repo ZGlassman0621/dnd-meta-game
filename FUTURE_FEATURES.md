@@ -4,43 +4,21 @@ This file tracks feature ideas and enhancements for future implementation.
 
 ---
 
-## Inventory Management During/After Sessions
+## ~~Inventory Management During/After Sessions~~ ✅ IMPLEMENTED
 
 **Priority:** High
 **Requested:** 2026-01-28
+**Implemented:** 2026-02-08
 
-### Problem
-During DM sessions, characters consume items (rations, potions, ammunition) and spend gold, but this isn't reflected in their inventory after the session ends.
-
-### Example
-- Started session with 10 travel rations, consumed 3 during the adventure
-- Spent 3 gold, 5 silver during roleplay
-- Inventory and gold should update to reflect this
-
-### Possible Solutions
-
-#### Option A: Session Wrap-Up Tally
-During the "End Session" flow, analyze the conversation to identify:
-- Items consumed (rations eaten, potions used, torches burned)
-- Gold/currency spent (purchases, bribes, donations)
-- Items gained (loot, gifts, found items)
-
-Present a summary for player confirmation before applying changes.
-
-#### Option B: Manual Inventory Adjustment
-Add buttons/UI in the DM session to manually:
-- Mark items as "used" (decrements quantity)
-- Log gold spent
-- Add items to inventory
-
-#### Option C: AI-Assisted Tracking
-Have the AI DM track resource usage during the session and include it in the session state. At wrap-up, automatically suggest inventory changes.
-
-### Implementation Notes
-- Need to parse inventory JSON structure
-- Handle items with quantities vs unique items
-- Gold is already tracked as `gold_gp`, `gold_sp`, `gold_cp` on character
-- Could add a "session_resources" tracking table
+**Implementation Notes:**
+- AI analyzes session transcript at end and detects items consumed, items gained, and gold spent
+- Analysis prompt in `dmSessionService.js` provides current inventory + gold to the AI for comparison
+- Inventory changes **auto-applied** at session end (no manual confirmation needed)
+- Server-side safety: consumed items validated against actual inventory (can't remove what doesn't exist), gold floor at 0
+- **Undo button** shown after auto-apply — restores pre-session inventory/gold via `PUT /api/character/:id`
+- Fallback: if auto-apply fails silently, manual "Apply Changes" button appears
+- Backend: `POST /api/dm-session/:sessionId/apply-inventory` handles consumed/gained/goldSpent
+- Frontend: `DMSession.jsx` — `endSession()` auto-applies, `undoInventoryChanges()` reverts
 
 ---
 
@@ -296,20 +274,17 @@ Just add manual [+] [-] buttons - simple, no AI changes needed, gives player con
 
 ---
 
-## Companion Level-Up UI
+## ~~Companion Level-Up UI~~ ✅ IMPLEMENTED
 
 **Priority:** Medium
 **Requested:** 2026-02-07
+**Implemented:** Already existed in `CompanionSheet.jsx`
 
-### Problem
-Database schema already supports companion leveling (`companion_level`, `companion_class`, `companion_experience`, `progression_type`). Server API exists (`GET/POST /api/companion/:id/level-up-info` and `/level-up`). No client UI exists yet.
-
-### Planned Implementation
-- Create `CompanionLevelUpModal.jsx` modeled after `LevelUpPage.jsx`
-- For class_based companions: HP roll, ASI distribution, subclass selection (same as main character)
-- For npc_stats companions: simpler stat boost interface
-- Trigger from CompanionsPage when companion has enough XP
-- Handle entirely within CompanionsPage as a modal overlay
+**Implementation Notes:**
+- `CompanionLevelUpModal` component in `client/src/components/CompanionSheet.jsx` (line 521)
+- HP roll vs average choice with hit die and CON modifier
+- ASI distribution and subclass selection when applicable
+- Backend: `GET /api/companion/:id/level-up-info` + `POST /api/companion/:id/level-up`
 
 ---
 

@@ -61,6 +61,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [hpChange, setHpChange] = useState(0);
   const [inventoryChanges, setInventoryChanges] = useState(null);
   const [inventoryApplied, setInventoryApplied] = useState(false);
+  const [preInventorySnapshot, setPreInventorySnapshot] = useState(null);
   const [extractedNpcs, setExtractedNpcs] = useState([]);
 
   const [sessionHistory, setSessionHistory] = useState([]);
@@ -823,8 +824,8 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setSessionRewards(data.rewards);
       setHpChange(data.hpChange || 0);
       setShowEndOptions(false);
-      setInventoryChanges(data.analysis?.inventoryChanges || null);
-      setInventoryApplied(false);
+      const changes = data.analysis?.inventoryChanges || null;
+      setInventoryChanges(changes);
       setExtractedNpcs(data.npcsExtracted || []);
 
       // Update game date if returned
@@ -842,6 +843,40 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         type: 'summary',
         content: summaryContent
       }]);
+
+      // Auto-apply inventory changes if any
+      const hasChanges = changes && (changes.consumed?.length > 0 || changes.gained?.length > 0 ||
+        (changes.goldSpent && (changes.goldSpent.gp > 0 || changes.goldSpent.sp > 0 || changes.goldSpent.cp > 0)));
+      if (hasChanges) {
+        setPreInventorySnapshot({
+          inventory: character.inventory,
+          gold_gp: character.gold_gp,
+          gold_sp: character.gold_sp,
+          gold_cp: character.gold_cp
+        });
+        try {
+          const applyRes = await fetch(`/api/dm-session/${activeSession.id}/apply-inventory`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(changes)
+          });
+          const applyData = await applyRes.json();
+          if (applyData.success) {
+            setInventoryApplied(true);
+            if (onCharacterUpdated && applyData.newInventory) {
+              onCharacterUpdated({
+                ...character,
+                inventory: JSON.stringify(applyData.newInventory),
+                gold_gp: applyData.newGold?.gp ?? character.gold_gp,
+                gold_sp: applyData.newGold?.sp ?? character.gold_sp,
+                gold_cp: applyData.newGold?.cp ?? character.gold_cp
+              });
+            }
+          }
+        } catch (applyErr) {
+          console.error('Auto-apply inventory failed:', applyErr);
+        }
+      }
 
     } catch (err) {
       setError(err.message);
@@ -920,6 +955,35 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     } catch (err) {
       console.error('Error applying inventory:', err);
       setError('Failed to apply inventory changes');
+    }
+  };
+
+  const undoInventoryChanges = async () => {
+    if (!preInventorySnapshot) return;
+    try {
+      const response = await fetch(`/api/character/${character.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inventory: preInventorySnapshot.inventory,
+          gold_gp: preInventorySnapshot.gold_gp,
+          gold_sp: preInventorySnapshot.gold_sp,
+          gold_cp: preInventorySnapshot.gold_cp
+        })
+      });
+      if (response.ok) {
+        onCharacterUpdated({
+          ...character,
+          inventory: preInventorySnapshot.inventory,
+          gold_gp: preInventorySnapshot.gold_gp,
+          gold_sp: preInventorySnapshot.gold_sp,
+          gold_cp: preInventorySnapshot.gold_cp
+        });
+        setInventoryApplied(false);
+        setPreInventorySnapshot(null);
+      }
+    } catch (err) {
+      console.error('Undo inventory failed:', err);
     }
   };
 
@@ -1372,7 +1436,8 @@ Examples:
               border: '1px solid rgba(139, 92, 246, 0.3)'
             }}>
               <h4 style={{ margin: '0 0 0.75rem 0', color: '#a78bfa' }}>
-                📦 Inventory Changes {inventoryApplied && <span style={{ color: '#10b981' }}>✓ Applied</span>}
+                📦 Inventory Changes {inventoryApplied && <span style={{ color: '#10b981' }}>✓ Auto-applied</span>}
+                {!inventoryApplied && !preInventorySnapshot && <span style={{ color: '#f59e0b' }}> ↩ Undone</span>}
               </h4>
 
               {inventoryChanges.consumed?.length > 0 && (
@@ -1402,7 +1467,23 @@ Examples:
                 </div>
               )}
 
-              {!inventoryApplied && (
+              {inventoryApplied ? (
+                <button
+                  onClick={undoInventoryChanges}
+                  style={{
+                    marginTop: '0.5rem',
+                    padding: '0.5rem 1rem',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    borderRadius: '4px',
+                    color: '#fca5a5',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  Undo Changes
+                </button>
+              ) : !preInventorySnapshot ? (
                 <button
                   onClick={applyInventoryChanges}
                   style={{
@@ -1418,7 +1499,7 @@ Examples:
                 >
                   Apply Changes
                 </button>
-              )}
+              ) : null}
             </div>
           )}
 
