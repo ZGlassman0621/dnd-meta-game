@@ -64,7 +64,8 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 }
 
 /**
- * Check faction goal results and spawn world events for significant milestones
+ * Check faction goal results and spawn world events for significant milestones.
+ * Also checks for rival faction reactions at milestones >= 50%.
  */
 async function checkAndSpawnFactionEvents(campaignId, factionResults) {
   const spawnedEvents = [];
@@ -86,10 +87,16 @@ async function checkAndSpawnFactionEvents(campaignId, factionResults) {
         if (event) {
           spawnedEvents.push(event);
         }
+
+        // Check for rival faction reactions at milestones >= 50%
+        if (milestone >= 50) {
+          const rivalEvents = await checkRivalReactions(campaignId, goal, milestone);
+          spawnedEvents.push(...rivalEvents);
+        }
       }
     }
 
-    // If goal completed, spawn completion event
+    // If goal completed, spawn completion event with power shift
     if (result.completed) {
       const goal = await factionService.getFactionGoalById(result.goal_id);
       const event = await spawnGoalCompletionEvent(campaignId, goal);
@@ -234,15 +241,23 @@ async function spawnGoalCompletionEvent(campaignId, goal) {
   try {
     const event = await worldEventService.createWorldEvent(eventData);
 
-    // Create effects based on goal stakes
-    if (goal.stakes_level === 'major' || goal.stakes_level === 'catastrophic') {
+    // Create effects and power shift based on goal stakes
+    const powerBoost = goal.stakes_level === 'catastrophic' ? 2
+                     : goal.stakes_level === 'major' ? 1
+                     : 0;
+
+    if (powerBoost > 0) {
+      const newPower = Math.min(10, (faction.power_level || 5) + powerBoost);
+      await dbRun('UPDATE factions SET power_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [newPower, faction.id]);
+
       await worldEventService.createEventEffect({
         event_id: event.id,
         effect_type: 'faction_power_change',
-        description: `${faction.name} has increased their influence`,
+        description: `${faction.name} has increased their influence (power ${faction.power_level || 5} → ${newPower})`,
         target_type: 'faction',
         target_id: faction.id,
-        parameters: { power_change: 1 },
+        parameters: { power_change: powerBoost, new_power: newPower },
         duration: 30
       });
     }
@@ -252,12 +267,78 @@ async function spawnGoalCompletionEvent(campaignId, goal) {
       title: event.title,
       triggered_by: 'faction_goal_completion',
       goal_id: goal.id,
-      faction_id: faction.id
+      faction_id: faction.id,
+      power_shift: powerBoost > 0 ? { faction: faction.name, boost: powerBoost } : undefined
     };
   } catch (error) {
     console.error('Failed to spawn goal completion event:', error);
     return null;
   }
+}
+
+/**
+ * Check if rival factions react to a goal reaching a significant milestone
+ */
+async function checkRivalReactions(campaignId, goal, milestone) {
+  const rivalEvents = [];
+  const triggerFaction = await factionService.getFactionById(goal.faction_id);
+  if (!triggerFaction) return rivalEvents;
+
+  const allFactions = await factionService.getActiveFactions(campaignId);
+
+  for (const rival of allFactions) {
+    if (rival.id === triggerFaction.id) continue;
+
+    // Check the rival's relationship toward the triggering faction
+    const relationship = String(rival.faction_relationships?.[triggerFaction.id] || 'neutral').toLowerCase();
+
+    if (relationship === 'hostile' || relationship === 'enemy' || relationship === 'rival') {
+      // 40% chance rival spawns a counter-event
+      if (Math.random() < 0.4) {
+        try {
+          const counterEvent = await worldEventService.createWorldEvent({
+            campaign_id: campaignId,
+            title: `${rival.name} Moves Against ${triggerFaction.name}`,
+            description: `The ${rival.name} has launched counter-operations to oppose the ${triggerFaction.name}'s progress on "${goal.title}". Tensions between the two factions are escalating.`,
+            event_type: 'political',
+            scope: rival.scope || triggerFaction.scope,
+            affected_factions: [rival.id, triggerFaction.id],
+            triggered_by_faction_id: rival.id,
+            visibility: milestone >= 75 ? 'public' : 'rumored',
+            stages: ['Mobilizing', 'Active Opposition', 'Outcome'],
+            stage_descriptions: [
+              `${rival.name} begins mobilizing resources`,
+              'Open opposition and counter-moves escalate',
+              'The conflict between the factions reaches a resolution'
+            ],
+            player_intervention_options: [
+              `Support ${rival.name}`,
+              `Support ${triggerFaction.name}`,
+              'Mediate between them',
+              'Stay out of it'
+            ],
+            expected_duration_days: 5,
+            status: 'active'
+          });
+
+          if (counterEvent) {
+            rivalEvents.push({
+              event_id: counterEvent.id,
+              title: counterEvent.title,
+              triggered_by: 'rival_reaction',
+              rival_faction: rival.name,
+              target_faction: triggerFaction.name,
+              goal_id: goal.id
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to spawn rival reaction for ${rival.name}:`, error);
+        }
+      }
+    }
+  }
+
+  return rivalEvents;
 }
 
 /**

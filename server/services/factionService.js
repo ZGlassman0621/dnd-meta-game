@@ -558,10 +558,20 @@ export async function getGoalsForTick(campaignId) {
 
 /**
  * Process faction goals tick (called periodically to advance faction activities)
+ *
+ * Includes faction-to-faction interference based on relationships,
+ * wider variance for unpredictability, and random disruptions/opportunities.
  */
 export async function processFactionTick(campaignId, gameDaysPassed = 1) {
   const goals = await getGoalsForTick(campaignId);
   const results = [];
+
+  // Pre-load all factions for interference calculations
+  const allFactions = await getActiveFactions(campaignId);
+  const factionMap = {};
+  for (const f of allFactions) {
+    factionMap[f.id] = f;
+  }
 
   for (const goal of goals) {
     // Base progress per day based on faction power and goal urgency
@@ -576,22 +586,65 @@ export async function processFactionTick(campaignId, gameDaysPassed = 1) {
     };
     baseProgress *= (urgencyModifiers[goal.urgency] || 1.0);
 
-    // Apply some randomness
-    const variance = Math.random() * 0.4 + 0.8; // 0.8 to 1.2
-    const progressGain = Math.floor(baseProgress * variance * gameDaysPassed);
+    // Wider variance for unpredictability: 0.5 to 1.5 (was 0.8 to 1.2)
+    const variance = Math.random() * 1.0 + 0.5;
+    let progressGain = Math.floor(baseProgress * variance * gameDaysPassed);
+
+    // Faction-to-faction interference based on relationships
+    const thisFaction = factionMap[goal.faction_id];
+    if (thisFaction) {
+      let interference = 0;
+      for (const otherGoal of goals) {
+        if (otherGoal.faction_id === goal.faction_id) continue;
+        const otherFaction = factionMap[otherGoal.faction_id];
+        if (!otherFaction) continue;
+
+        // Check relationship from this faction toward the other
+        const relationship = String(thisFaction.faction_relationships?.[otherFaction.id] || 'neutral').toLowerCase();
+
+        if (relationship === 'hostile' || relationship === 'enemy' || relationship === 'rival') {
+          // Hostile factions with active goals slow each other down
+          interference += Math.floor((otherFaction.power_level || 5) * 0.3);
+        } else if (relationship === 'allied' || relationship === 'friendly' || relationship === 'ally') {
+          // Allied factions with active goals boost each other
+          interference -= Math.floor((otherFaction.power_level || 5) * 0.15);
+        }
+      }
+      progressGain = Math.max(1, progressGain - interference);
+    }
+
+    // Random disruption: 8% chance per goal per day
+    let tickEvent = null;
+    if (Math.random() < 0.08 * gameDaysPassed) {
+      const setback = Math.floor(baseProgress * (Math.random() * 0.2 + 0.1));
+      progressGain = Math.max(0, progressGain - setback);
+      tickEvent = { type: 'setback', amount: setback };
+    }
+    // Random opportunity: 5% chance per goal per day (only if no setback)
+    else if (Math.random() < 0.05 * gameDaysPassed) {
+      const bonus = Math.floor(baseProgress * (Math.random() * 0.5 + 0.5));
+      progressGain += bonus;
+      tickEvent = { type: 'breakthrough', amount: bonus };
+    }
 
     if (progressGain > 0) {
       const updated = await advanceGoalProgress(goal.id, progressGain);
-      await recordGoalTick(goal.id, `Advanced ${progressGain} progress on day tick`);
+      const tickNote = tickEvent
+        ? `Advanced ${progressGain} progress (${tickEvent.type}: ${tickEvent.amount})`
+        : `Advanced ${progressGain} progress on day tick`;
+      await recordGoalTick(goal.id, tickNote);
 
-      results.push({
+      const result = {
         goal_id: goal.id,
+        faction_id: goal.faction_id,
         faction_name: goal.faction_name,
         title: goal.title,
         progress_gained: progressGain,
         new_progress: updated.progress,
         completed: updated.status === 'completed'
-      });
+      };
+      if (tickEvent) result.event = tickEvent;
+      results.push(result);
     }
   }
 

@@ -313,6 +313,45 @@ Database schema already supports companion leveling (`companion_level`, `compani
 
 ---
 
+## Database Migration System
+
+**Priority:** Medium
+**Identified:** 2026-02-07
+
+### Problem
+`server/database.js` is 1309 lines of `CREATE TABLE IF NOT EXISTS` statements with conditional `ALTER TABLE` additions scattered throughout. Every schema change requires adding another conditional alter that runs on every startup, and there's no way to track which changes have been applied.
+
+### Planned Implementation
+- Replace monolithic `database.js` with numbered migration files (e.g., `001_initial_schema.js`, `002_add_campaign_notes.js`)
+- Track applied migrations in a `_migrations` table
+- Each migration runs once, is idempotent, and includes both `up()` and `down()` functions
+- Startup checks which migrations have run and applies any new ones in order
+- Makes schema history explicit and reviewable
+
+---
+
+## Frontend Component Decomposition
+
+**Priority:** Low
+**Identified:** 2026-02-07
+
+### Problem
+Several frontend components have grown very large:
+- `DMSession.jsx` (~3500 lines)
+- `CharacterCreationWizard.jsx` (~3100 lines)
+- `CharacterSheet.jsx` (~2700 lines)
+- `PartyBuilder.jsx` (~2600 lines)
+
+These files are difficult to navigate and maintain.
+
+### Planned Approach
+- Extract sub-components incrementally when modifying sections
+- Pull out logical sections (e.g., combat panel, inventory panel, spell management) into separate files
+- Keep parent component as orchestrator that passes props down
+- Low priority because refactoring carries risk of regressions with no feature benefit
+
+---
+
 ## Other Ideas (Add as needed)
 
 <!-- Add future feature requests below this line -->
