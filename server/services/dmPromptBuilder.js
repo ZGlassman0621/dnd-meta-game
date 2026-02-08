@@ -663,6 +663,143 @@ CRITICAL RULES FOR USING THIS PLAN:
 }
 
 /**
+ * Map faction standing label to NPC behavior hint
+ */
+function getStandingBehavior(label) {
+  const behaviors = {
+    exalted: 'Go out of their way to help, offer resources freely',
+    revered: 'Very helpful, share sensitive information',
+    honored: 'Cooperative, willing to assist',
+    friendly: 'Helpful but with limits',
+    neutral: 'Indifferent',
+    unfriendly: 'Wary, may overcharge or withhold info',
+    hostile: 'Actively obstructive, may report you to leadership',
+    hated: 'Will work against you, may set traps or ambushes',
+    enemy: 'Hostile on sight, will attack or attempt capture'
+  };
+  return behaviors[label] || 'Indifferent';
+}
+
+/**
+ * Map numeric trust level to readable label
+ */
+function getTrustLabel(trust) {
+  if (trust >= 76) return 'Absolute';
+  if (trust >= 51) return 'High';
+  if (trust >= 26) return 'Moderate';
+  if (trust >= 1) return 'Low';
+  return 'None';
+}
+
+/**
+ * Format compressed world state snapshot for DM context
+ * Includes: faction standings, active world events, NPC relationships,
+ * known faction goals, and discovered locations.
+ */
+function formatWorldStateSnapshot(worldState) {
+  if (!worldState) return '';
+
+  const sections = [];
+
+  // 1. Faction Standings (skip neutrals unless member)
+  const meaningfulStandings = (worldState.factionStandings || [])
+    .filter(s => s.standing !== 0 || s.is_member);
+  if (meaningfulStandings.length > 0) {
+    const lines = meaningfulStandings.slice(0, 6).map(s => {
+      const label = (s.standing_label || 'neutral').toUpperCase();
+      const memberNote = s.is_member ? ', Member' : '';
+      const behavior = getStandingBehavior(s.standing_label || 'neutral');
+      return `- ${s.faction_name}: ${label} (${s.standing > 0 ? '+' : ''}${s.standing})${memberNote} - ${behavior}`;
+    });
+    sections.push('FACTION STANDINGS:\n' + lines.join('\n'));
+  }
+
+  // 2. Active World Events (with stage info)
+  const events = worldState.visibleEvents || [];
+  if (events.length > 0) {
+    const lines = events.slice(0, 5).map(e => {
+      const totalStages = e.stages?.length || 0;
+      const stageNum = (e.current_stage || 0) + 1;
+      const stageInfo = totalStages > 0 ? ` - Stage ${stageNum}/${totalStages}` : '';
+      const stageDesc = e.stage_descriptions?.[e.current_stage];
+      const descSuffix = stageDesc ? ': ' + stageDesc.substring(0, 80) : '';
+      return `- "${e.title}" (${e.event_type}, ${e.scope})${stageInfo}${descSuffix}`;
+    });
+    sections.push('WORLD EVENTS IN PROGRESS:\n' + lines.join('\n'));
+  }
+
+  // 3. NPC Relationships (most narrative-critical section)
+  const npcs = (worldState.npcRelationships || []).filter(r => {
+    const hasPendingPromises = r.promises_made?.some(p => p.status === 'pending');
+    const hasOutstandingDebts = r.debts_owed?.some(d => d.status === 'outstanding');
+    const hasSecrets = r.discovered_secrets?.length > 0;
+    return r.disposition !== 0 || hasPendingPromises || hasOutstandingDebts || hasSecrets;
+  });
+  if (npcs.length > 0) {
+    const lines = npcs.slice(0, 8).map(r => {
+      const occupation = r.npc_occupation ? ` (${r.npc_occupation})` : '';
+      const location = r.npc_location ? ` at ${r.npc_location}` : '';
+      const parts = [`- ${r.npc_name}${occupation}${location}: ${(r.disposition_label || 'neutral').toUpperCase()}, Trust: ${getTrustLabel(r.trust_level || 0)}`];
+
+      // Pending promises only
+      const pendingPromises = (r.promises_made || []).filter(p => p.status === 'pending');
+      pendingPromises.slice(0, 2).forEach(p => {
+        const text = typeof p === 'string' ? p : (p.promise || p.text || '');
+        if (text) parts.push(`  Promise: ${text.substring(0, 100)}`);
+      });
+
+      // Outstanding debts only
+      const outstandingDebts = (r.debts_owed || []).filter(d => d.status === 'outstanding');
+      outstandingDebts.slice(0, 2).forEach(d => {
+        const direction = d.direction === 'player_owes_npc' ? 'You owe them' : 'They owe you';
+        const desc = typeof d === 'string' ? d : (d.description || d.type || '');
+        if (desc) parts.push(`  Debt: ${direction} - ${desc.substring(0, 80)}`);
+      });
+
+      // Discovered secrets (max 1)
+      (r.discovered_secrets || []).slice(0, 1).forEach(s => {
+        const text = typeof s === 'string' ? s : (s.secret || s.text || '');
+        if (text) parts.push(`  Secret known: ${text.substring(0, 100)}`);
+      });
+
+      return parts.join('\n');
+    });
+    sections.push('NPC RELATIONSHIPS:\n' + lines.join('\n'));
+  }
+
+  // 4. Known Faction Goals
+  const goals = worldState.knownFactionGoals || [];
+  if (goals.length > 0) {
+    const lines = goals.slice(0, 4).map(g => {
+      const urgency = g.urgency && g.urgency !== 'normal' ? `, ${g.urgency}` : '';
+      return `- ${g.faction_name}: "${g.title}" (${g.progress_percent}% complete${urgency})`;
+    });
+    sections.push('KNOWN FACTION ACTIVITIES:\n' + lines.join('\n'));
+  }
+
+  // 5. Discovered Locations
+  const locations = worldState.discoveredLocations || [];
+  if (locations.length > 0) {
+    const lines = locations.slice(0, 8).map(l => {
+      const homeBase = l.discovery_status === 'home_base' ? ' [HOME BASE]' : '';
+      const state = l.current_state ? `: ${l.current_state}` : '';
+      return `- ${l.name} (${l.location_type})${state}${homeBase}`;
+    });
+    sections.push('KNOWN LOCATIONS:\n' + lines.join('\n'));
+  }
+
+  if (sections.length === 0) return '';
+
+  return `\n\n=== CURRENT WORLD STATE ===
+Use this to inform NPC behavior and reference ongoing events naturally.
+Do NOT info-dump this to the player. Weave it organically into narrative and dialogue.
+
+${sections.join('\n\n')}
+
+=== END WORLD STATE ===`;
+}
+
+/**
  * Generate the system prompt for the DM
  */
 export function createDMSystemPrompt(character, sessionContext, secondCharacter = null) {
@@ -824,7 +961,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}
 
 CONTENT PREFERENCES:${formatContentPreferences(contentPrefs, isPublishedModule)}
 

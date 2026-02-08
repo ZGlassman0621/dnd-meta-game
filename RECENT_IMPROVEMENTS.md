@@ -1,6 +1,31 @@
 # Recent Improvements
 
-## Latest: Architecture Refactor & Living World Enhancements (2026-02-07)
+## Latest: World State Snapshot for DM Sessions (2026-02-08)
+
+The AI DM now has awareness of the current dynamic world state when starting a session. Previously, the DM only saw the static campaign plan and accumulated campaign notes — faction standings, world events, NPC relationships, and discovered locations were invisible to the AI.
+
+### How It Works
+At session start, 5 parallel service queries gather the living world state:
+- **Faction standings** — character's reputation with each faction (skip neutrals unless member, 6 max)
+- **Active world events** — events in progress with current stage descriptions (5 max)
+- **NPC relationships** — disposition, trust, pending promises, outstanding debts, known secrets (8 max)
+- **Known faction goals** — faction activities the character has discovered (4 max)
+- **Discovered locations** — places the character has visited/explored (8 max)
+
+This data is compressed into a `=== CURRENT WORLD STATE ===` section in the system prompt (~250-500 tokens), placed between the campaign plan and story threads. The AI is instructed to weave this organically into narrative and dialogue — not info-dump it.
+
+### Graceful Degradation
+- Wrapped in try/catch — if any queries fail, the session starts normally without world state
+- Only runs when the character has a campaign (`character.campaign_id`)
+- Empty world state produces no prompt section (empty string)
+
+**Files Modified**:
+- `server/services/dmPromptBuilder.js` — Added `formatWorldStateSnapshot()`, `getStandingBehavior()`, `getTrustLabel()`
+- `server/routes/dmSession.js` — Added 5 service imports, Promise.all data gathering in POST /start, `worldState` in sessionConfig
+
+---
+
+## Architecture Refactor & Living World Enhancements (2026-02-07)
 
 Major backend refactoring and living world behavior improvements.
 

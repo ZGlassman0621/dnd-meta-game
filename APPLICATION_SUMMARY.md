@@ -213,11 +213,12 @@ Auto-classifies as short/long rest and detects duration from text.
 
 #### Context Awareness
 - **Campaign plan injection**: Full Opus-generated world plan fed into system prompt
+- **World state snapshot**: Living world data (faction standings, world events, NPC relationships, faction goals, discovered locations) gathered via 5 parallel service queries and compressed into the system prompt at session start
 - **Campaign context endpoint**: `/api/dm-session/campaign-context/:characterId` returns plan summary + character state
 - **Story thread awareness**: AI knows about active plot threads
 - **Pending narratives**: Downtime and adventure events inform DM behavior
-- **NPC relationships**: AI aware of character relationships
-- **Location-aware**: Sessions consider current location
+- **NPC relationships**: AI aware of character relationships with promises, debts, and secrets
+- **Location-aware**: Sessions consider current location and discovered locations
 - **Previous session continuity**: Session summaries carry context between sessions
 
 ---
@@ -1734,6 +1735,6 @@ The system seamlessly integrates structured meta-game mechanics (adventures, dow
 
 **Campaign Plan System** uses Opus 4.5 to generate comprehensive world plans (main quest with 3-act structure, 6-8 NPCs, factions, locations, side quests, DM notes). The plan is condensed via `getPlanSummaryForSession()` and injected into Sonnet's system prompt, ensuring the AI DM follows the established story rather than improvising a new one. The `campaignFoundationPrompt` is conditional — it tells Sonnet to use the plan when one exists, or create its own story framework when playing without a plan.
 
-**AI DM Prompt Engineering**: The ~600-line system prompt (`server/services/dmPromptBuilder.js`) uses primacy/recency reinforcement — critical rules appear both at the beginning (ABSOLUTE RULES) and end (FINAL REMINDER) of the prompt, since LLMs attend most strongly to the start and end of their context. Rules cover combat mechanics, NPC question pausing, narrative consistency, and D&D 5e mechanics. Session orchestration (start/continue/summarize) lives in `server/services/ollama.js`, with the raw LLM client in `server/services/llmClient.js`.
+**AI DM Prompt Engineering**: The ~600-line system prompt (`server/services/dmPromptBuilder.js`) uses primacy/recency reinforcement — critical rules appear both at the beginning (ABSOLUTE RULES) and end (FINAL REMINDER) of the prompt, since LLMs attend most strongly to the start and end of their context. Rules cover combat mechanics, NPC question pausing, narrative consistency, and D&D 5e mechanics. A **world state snapshot** (`formatWorldStateSnapshot()`) is injected between the campaign plan and story threads, providing the AI DM with current faction standings, active world events, NPC relationships (with promises/debts/secrets), known faction goals, and discovered locations — all compressed with hard caps (6+5+8+4+8 max entries) and string truncation to stay within ~250-500 tokens. Session orchestration (start/continue/summarize) lives in `server/services/ollama.js`, with the raw LLM client in `server/services/llmClient.js`.
 
 AI generators (Claude primary, Ollama fallback) create quests, locations, and companion backstories on demand, ensuring fresh content while maintaining narrative coherence across the campaign.

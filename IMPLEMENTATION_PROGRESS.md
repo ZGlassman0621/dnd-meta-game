@@ -2320,3 +2320,50 @@ Enhanced faction tick processing from deterministic to emergent:
 
 - **Client Build**: Successful (78 modules, no import errors)
 - **Server Startup**: All imports resolved, database initialized, narrative systems initialized
+
+---
+
+## Phase N: World State Snapshot for DM Sessions
+
+### Status: COMPLETE
+
+Date: 2026-02-08
+
+Inject dynamic living world state into the AI DM's system prompt at session start. The AI DM now sees faction standings, active world events, NPC relationships (with promises/debts/secrets), known faction goals, and discovered locations — enabling it to reference ongoing events, adjust NPC behavior based on faction standing, and follow up on promises/debts naturally.
+
+### Implementation
+
+**`formatWorldStateSnapshot(worldState)`** in `dmPromptBuilder.js`:
+
+Compresses 5 data sources into a `=== CURRENT WORLD STATE ===` prompt section (~250-500 tokens):
+
+| Section | Hard Cap | Data Source | Filtering |
+|---------|----------|-------------|-----------|
+| Faction Standings | 6 | `getCharacterWorldView()` | Skip neutrals unless member |
+| World Events | 5 | `getEventsVisibleToCharacter()` | All visible (public + discovered) |
+| NPC Relationships | 8 | `getCharacterRelationshipsWithNpcs()` | Skip neutral with no promises/debts/secrets |
+| Known Faction Goals | 4 | `getCharacterWorldView()` | Character-scoped (discovered goals only) |
+| Discovered Locations | 8 | `getDiscoveredLocations()` | visited/familiar/home_base only |
+
+**Helper functions**:
+- `getStandingBehavior(label)` — maps standing labels (exalted→enemy) to NPC behavior hints
+- `getTrustLabel(trust)` — maps numeric trust (-100 to +100) to None/Low/Moderate/High/Absolute
+
+**Data gathering** in `dmSession.js` POST `/start`:
+- 5 service calls via `Promise.all` (no added serial latency)
+- Wrapped in try/catch — session starts normally if queries fail
+- Gated behind `character.campaign_id` (skipped for characters without campaigns)
+
+**Prompt placement**: After `formatCampaignPlan()`, before story threads context — broadest context to most specific.
+
+### Files Modified
+
+| File | Changes | Date |
+|------|---------|------|
+| `server/services/dmPromptBuilder.js` | Added `formatWorldStateSnapshot()`, `getStandingBehavior()`, `getTrustLabel()`, wired into `createDMSystemPrompt()` | 2026-02-08 |
+| `server/routes/dmSession.js` | Added 5 service imports, Promise.all world state gathering, `worldState` in sessionConfig | 2026-02-08 |
+
+### Test Results
+
+- **Client Build**: Successful (no import errors)
+- **Server Startup**: All imports resolved, both modified modules load correctly

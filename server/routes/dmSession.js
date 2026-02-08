@@ -7,6 +7,11 @@ import { XP_THRESHOLDS } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted } from '../services/narrativeIntegration.js';
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
+import { getCharacterWorldView } from '../services/livingWorldService.js';
+import { getActiveFactions } from '../services/factionService.js';
+import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
+import { getDiscoveredLocations } from '../services/locationService.js';
+import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
@@ -491,6 +496,31 @@ router.post('/start', async (req, res) => {
       }
     }
 
+    // Gather living world state for DM context (all queries in parallel)
+    let worldState = null;
+    if (character.campaign_id) {
+      try {
+        const [characterWorldView, npcRelationships, discoveredLocations, activeFactions, visibleEvents] = await Promise.all([
+          getCharacterWorldView(characterId),
+          getCharacterRelationshipsWithNpcs(characterId),
+          getDiscoveredLocations(character.campaign_id),
+          getActiveFactions(character.campaign_id),
+          getEventsVisibleToCharacter(characterId)
+        ]);
+
+        worldState = {
+          factionStandings: characterWorldView?.faction_standings || [],
+          knownFactionGoals: characterWorldView?.known_faction_goals || [],
+          visibleEvents: visibleEvents || [],
+          npcRelationships: npcRelationships || [],
+          discoveredLocations: discoveredLocations || [],
+          activeFactions: activeFactions || []
+        };
+      } catch (e) {
+        console.error('Error gathering world state for session:', e);
+      }
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -510,6 +540,7 @@ router.post('/start', async (req, res) => {
       storyThreadsContext,
       narrativeQueueContext,
       narrativeQueueItemIds,
+      worldState,
       campaignPlanSummary
     };
 
