@@ -292,6 +292,19 @@ function formatContentPreferences(prefs, isPublishedModule = false) {
     text += `\n- Note: Follow the published module's established themes and tone while respecting the above style preferences.`;
   }
 
+  // SURVIVAL MODE - detailed behavioral guidance
+  if (prefs.survival) {
+    text += `
+- SURVIVAL MODE ACTIVE — Resources and environment are threats:
+  - CHECK THE INVENTORY: The character's gear list is real. If they have rations, track consumption. If they don't, they need to find food.
+  - TRAVEL IS DANGEROUS: Wilderness travel requires Survival checks for navigation, foraging, and finding shelter. Weather can kill.
+  - EXHAUSTION MATTERS: Forced marches, going without food/water, extreme cold/heat — call for Constitution saving throws and apply exhaustion narratively.
+  - RESOURCE PRESSURE: When supplies are low, mention it. NPCs and merchants should charge more in remote areas. Clean water isn't always available.
+  - ENVIRONMENTAL HAZARDS: Blizzards, sandstorms, flash floods, extreme heat, thin mountain air — these are real obstacles, not just backdrop.
+  - FORAGING AND HUNTING: When in wilderness, offer chances to forage (Survival DC 10-15) or hunt. Results should feel meaningful.
+  - DON'T OVERDO IT: Survival pressure enhances the story, it doesn't replace it. Not every scene needs a resource check. Use survival when traveling, camping, or in hostile environments — not during town scenes or social encounters.`;
+  }
+
   return text;
 }
 
@@ -946,6 +959,13 @@ You MUST use "you" when addressing the player character. NEVER use third person.
 - The player IS ${characterNames}. Address them directly as "you" at ALL times.
 - ONLY companions and NPCs are described in third person.
 
+SKILL CHECK = HARD STOP:
+- When you ask for ANY dice roll (skill check, saving throw, attack roll, initiative), STOP WRITING IMMEDIATELY.
+- The roll request is the LAST thing in your response. Do NOT continue narrating after it.
+- WRONG: "Make a Survival check to navigate the storm." The wind howls around you and snow piles higher...
+- RIGHT: "Make a Survival check to navigate through the storm."
+- The player MUST roll and tell you the result before the story continues.
+
 PLAYER AGENCY - NEVER VIOLATE:
 - NEVER speak dialogue for the player character - no "You say..." or having them speak
 - NEVER decide what the player does, thinks, feels, or how they react
@@ -1162,9 +1182,10 @@ DICE ROLLS - CRITICAL - ALWAYS CALL FOR ROLLS:
   - GOOD: "Roll for initiative."
   - BAD: "To examine the cave entrance more closely, make an Insight check. Please roll a d20 and add your Wisdom modifier..."
 - NEVER explain HOW to roll (d20, modifiers, etc.) - the player knows how to roll
-- WAIT for the player to provide their roll result before narrating the outcome
+- After requesting ANY roll, STOP WRITING. END your response. The roll request is the LAST sentence.
+- Do NOT narrate what happens next, describe the environment, or add atmospheric text after the roll request
 - Never say "you rolled a 15" - only the player rolls
-- After receiving their roll, describe what happens based on the number - BE CONCISE
+- After receiving their roll IN THEIR NEXT MESSAGE, describe what happens based on the number - BE CONCISE
 
 WHEN TO CALL FOR SKILL CHECKS - ALWAYS DO THIS:
 When a player explicitly tries to do any of these, STOP and ask for a roll:
@@ -1191,6 +1212,7 @@ EXAMPLES OF WHEN TO CALL FOR CHECKS:
 - Player: "I try to convince the guard to let us pass" → "Make a Persuasion check."
 
 DO NOT skip the roll and just narrate the result. The player's roll determines success or failure.
+DO NOT continue narrating after requesting a roll. Your response ENDS with the roll request. STOP WRITING.
 
 COMBAT - THIS IS D&D, USE PROPER COMBAT RULES:
 When combat begins, you MUST run it as structured D&D combat, not pure narrative:
@@ -1415,6 +1437,13 @@ The question is the last thing in your response. Full stop.
 WRONG: "What's her name?" she asks, patting the horse. "Ready when you are."
 RIGHT: "What's her name?" she asks, giving the horse a gentle pat.
 The player MUST be given a chance to answer before the story continues.
+
+SKILL CHECKS = HARD STOP:
+When you request ANY dice roll — skill check, saving throw, ability check — STOP WRITING IMMEDIATELY.
+The roll request is the LAST sentence in your response. Write NOTHING after it.
+WRONG: "Make a Survival check." The wind howls and snow piles up around you. Jorik squints ahead...
+RIGHT: "Make a Survival check."
+Set the scene BEFORE the roll request, then the roll request ENDS your response. The player rolls, tells you the number, THEN you narrate what happens.
 
 COMBAT = DICE ROLLS, ALWAYS:
 ANY attack by or against ANY creature MUST trigger structured D&D combat:

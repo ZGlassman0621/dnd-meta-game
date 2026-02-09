@@ -275,6 +275,12 @@ export const CONTENT_PREFERENCES = [
     name: 'Roleplay Heavy',
     description: 'Focus on social encounters, character development, and narrative.',
     defaultEnabled: true
+  },
+  {
+    id: 'survival',
+    name: 'Survival',
+    description: 'Resources matter. Track rations, weather hazards, and exhaustion during travel and wilderness.',
+    defaultEnabled: false
   }
 ];
 
