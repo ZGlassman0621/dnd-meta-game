@@ -1,0 +1,72 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (for building)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm run install-all
+
+      - name: Build client
+        run: npm run build
+
+      - name: Download portable Node.js for distribution
+        shell: pwsh
+        run: |
+          # Get the exact Node.js version we're running
+          $nodeVersion = node -v
+          $url = "https://nodejs.org/dist/$nodeVersion/node-$nodeVersion-win-x64.zip"
+          Write-Host "Downloading Node.js $nodeVersion portable..."
+          Invoke-WebRequest -Uri $url -OutFile node-portable.zip
+          Expand-Archive -Path node-portable.zip -DestinationPath node-extract
+          Rename-Item "node-extract/node-$nodeVersion-win-x64" "node-extract/node"
+
+      - name: Assemble distribution
+        shell: pwsh
+        run: |
+          $dist = "dist/DnD-Meta-Game"
+          New-Item -ItemType Directory -Path $dist -Force
+
+          # Server code
+          Copy-Item -Path "server" -Destination "$dist/server" -Recurse
+
+          # Built client (only dist, not source)
+          New-Item -ItemType Directory -Path "$dist/client" -Force
+          Copy-Item -Path "client/dist" -Destination "$dist/client/dist" -Recurse
+
+          # Node modules (Windows-compiled native binaries)
+          Copy-Item -Path "node_modules" -Destination "$dist/node_modules" -Recurse
+
+          # Portable Node.js runtime
+          Copy-Item -Path "node-extract/node" -Destination "$dist/node" -Recurse
+
+          # Config files
+          Copy-Item -Path "package.json" -Destination "$dist/"
+          Copy-Item -Path ".env.example" -Destination "$dist/"
+          Copy-Item -Path "start-windows.bat" -Destination "$dist/Start DnD Meta Game.bat"
+
+          # Empty directories the app needs
+          New-Item -ItemType Directory -Path "$dist/uploads" -Force
+
+          # Show what we built
+          Write-Host "Distribution contents:"
+          Get-ChildItem $dist | Format-Table Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DnD-Meta-Game-Windows
+          path: dist/DnD-Meta-Game/
+          retention-days: 30
