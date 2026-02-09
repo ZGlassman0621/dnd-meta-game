@@ -45,7 +45,7 @@ The AI DM backend is split into focused modules:
 | Module | File | Purpose |
 |--------|------|---------|
 | **LLM Client** | `server/services/llmClient.js` | Raw Ollama API calls (chat, status, list models) |
-| **Prompt Builder** | `server/services/dmPromptBuilder.js` | ~600-line DM system prompt + all formatters (character info, companions, campaign plan, world state snapshot, etc.) |
+| **Prompt Builder** | `server/services/dmPromptBuilder.js` | ~600-line DM system prompt + all formatters (character info, companions, campaign plan, world state snapshot, content preferences including survival mode, skill check hard-stop rules, starting location enforcement) |
 | **Session Orchestrator** | `server/services/ollama.js` | Session lifecycle (start, continue, summarize) — imports from the above two |
 | **Session Service** | `server/services/dmSessionService.js` | Session business logic (rewards, notes extraction, NPC extraction, event emission) |
 | **Campaign Plan** | `server/services/campaignPlanService.js` | Opus 4.5 campaign plan generation |

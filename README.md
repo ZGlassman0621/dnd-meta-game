@@ -32,7 +32,7 @@ When you create a campaign, the system automatically:
 - **AI DM Sessions** — Play through your campaign with an AI Dungeon Master that uses your campaign plan as context
 - **Campaign Continuity** — Sessions build on previous adventures with persistent world state
 - **Gameplay Tabs** — Switch between Adventure, Downtime, and Stats tabs during active sessions
-- **Content Preferences** — Control mature themes, combat detail, romance, and other content toggles
+- **Content Preferences** — Control mature themes, combat detail, romance, survival mode, and other content toggles
 - **Play Button** — Quick-launch into your adventure from the home screen
 
 ### World Building
@@ -47,7 +47,7 @@ When you create a campaign, the system automatically:
 
 - **Frontend:** React + Vite
 - **Backend:** Node.js + Express
-- **Database:** SQLite (with optional Turso cloud migration)
+- **Database:** SQLite (local file, with optional Turso cloud sync)
 - **AI:** Claude API (Opus 4.5 for campaign generation, Sonnet 4 for sessions) with Ollama fallback for offline play
 
 ## Setup
@@ -80,6 +80,14 @@ When you create a campaign, the system automatically:
 | `npm run build` | Build the client for production |
 | `npm run start` | Start the production server |
 | `npm run offline` | Build and start in offline/production mode |
+
+## Windows Distribution
+
+A portable Windows build is available via GitHub Actions — no Node.js installation required.
+
+1. Go to the repo's **Actions** tab → **Build Windows Release** → **Run workflow**
+2. Download the `DnD-Meta-Game-Windows` artifact from the completed run
+3. Unzip, add a `.env` file with `ANTHROPIC_API_KEY=your-key`, double-click `Start DnD Meta Game.bat`
 
 ## Documentation
 

@@ -1,6 +1,51 @@
 # Recent Improvements
 
-## Latest: Auto-Apply Inventory Changes (2026-02-08)
+## Latest: Skill Check Hard-Stop, Survival Mode, Starting Location Enforcement (2026-02-09)
+
+### Skill Check Hard-Stop
+The AI DM now **stops writing immediately** after requesting any dice roll (skill check, saving throw, attack roll). Previously it would ask for a roll and then continue narrating without waiting for the result.
+
+- Primacy/recency reinforcement: rule appears in ABSOLUTE RULES (top), DICE ROLLS (middle), and FINAL REMINDER (bottom) of the system prompt
+- Explicit WRONG/RIGHT examples teach the AI the exact behavior
+
+### Survival Content Preference
+New "Survival" toggle in content preferences. When enabled, the AI DM tracks rations, weather hazards, exhaustion, and resource pressure during travel and wilderness scenes.
+
+- AI checks character inventory for supplies and narratively pressures when low
+- Travel requires Survival checks for navigation, foraging, shelter
+- Environmental hazards (blizzards, extreme heat, thin air) become real obstacles
+- Doesn't overdo it — survival pressure during travel/camping, not during town scenes
+
+### Starting Location Enforcement
+The AI DM now begins the first session **physically in** the chosen starting location, instead of skipping ahead to Act 1 events.
+
+- Explicit rule: "The FIRST session MUST begin physically IN [location]"
+- Act 1 guidance softened from "THIS is where the story should start" to "build toward this act's events from there"
+
+### Campaign Tone: Survival Option
+Added "Survival" to the campaign tone dropdown on the Campaigns page alongside existing options.
+
+### Bug Fix: Campaign Assignment Not Refreshing
+After assigning a character to a campaign, `selectedCharacter` wasn't updating with the new `campaign_id`. Campaign Plan page showed "No campaign assigned" until page refresh. Fixed `loadCharacters()` to refresh `selectedCharacter` with latest server data.
+
+### Local SQLite Fallback
+Database now falls back to a local `file:local.db` SQLite file when Turso cloud database is not configured. Previously the server crashed with `URL_INVALID` if `TURSO_DATABASE_URL` was not set.
+
+### Windows Portable Build
+GitHub Actions workflow builds a portable Windows distribution with embedded Node.js runtime. Unzip, double-click `Start DnD Meta Game.bat`, open browser to localhost:3000.
+
+**Files Modified**:
+- `server/services/dmPromptBuilder.js` — Skill check hard-stop (3 locations), survival mode prompt, starting location enforcement
+- `client/src/data/forgottenRealms.js` — Survival content preference toggle
+- `client/src/components/CampaignsPage.jsx` — Survival tone option
+- `client/src/App.jsx` — selectedCharacter refresh in loadCharacters()
+- `server/database.js` — Local SQLite fallback when Turso not configured
+- `.github/workflows/build-windows.yml` — Windows portable build workflow
+- `start-windows.bat` — Windows launcher script
+
+---
+
+## Auto-Apply Inventory Changes (2026-02-08)
 
 Inventory changes (items consumed, gained, gold spent) detected by the AI at session end are now **auto-applied** instead of requiring a manual "Apply Changes" click. An "Undo" button appears after auto-apply to revert if the AI got it wrong.
 

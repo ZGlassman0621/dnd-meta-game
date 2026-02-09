@@ -154,7 +154,7 @@ The plan feeds into gameplay sessions through a multi-step pipeline:
 - **Session properties**:
   - Title and setting description
   - Tone customization (heroic, dark, comedic, etc.)
-  - Content preferences (violence level, romance, language)
+  - Content preferences (violence level, romance, language, survival mode)
   - Model selection
 - **Session states**: active, paused, completed
 - **Reward claiming**: Rewards from sessions can be claimed separately
@@ -162,10 +162,12 @@ The plan feeds into gameplay sessions through a multi-step pipeline:
 #### AI DM Prompt System
 The system prompt (~600+ lines in `server/services/dmPromptBuilder.js`) enforces D&D 5e rules:
 
-**Absolute Rules (enforced at top AND bottom of prompt)**:
+**Absolute Rules (enforced at top AND bottom of prompt via primacy/recency reinforcement)**:
 - **ONE QUESTION RULE**: When an NPC asks the player a question, the AI MUST stop narrating and wait for the player's response. No continuing the story past the question.
+- **SKILL CHECK = HARD STOP**: When the AI requests any dice roll (skill check, saving throw, attack roll), it MUST stop writing immediately. The roll request is the last sentence — no narrating outcomes before the player rolls.
 - **COMBAT = DICE ROLLS**: Any attack triggers full combat mechanics — initiative, attack rolls, damage rolls, turn order. Even attacks on friendly NPCs or civilians.
 - **NPC LOGIC**: NPCs must behave geographically and logically consistently. No contradictory travel, impossible distances, or broken cause-and-effect.
+- **STARTING LOCATION**: First session must begin physically in the player's chosen starting location, not skip ahead to Act 1 events.
 
 **Combat Mechanics**:
 1. Player declares attack → AI says "Roll for initiative" and STOPS
@@ -472,7 +474,7 @@ Each class has 5-6 unique work options with different pay rates and benefits:
 #### Campaign Properties
 - Name and description
 - Setting (e.g., Forgotten Realms, Eberron, homebrew)
-- Tone (heroic fantasy, dark, comedic, gritty, whimsical, mysterious, epic)
+- Tone (heroic fantasy, dark fantasy, comedic, gritty, whimsical, mysterious, epic, survival)
 - Starting location (dropdown with auto-select or custom)
 - Time ratio configuration (realtime, leisurely, normal, fast, montage)
 - Status tracking (active, archived)
@@ -1081,7 +1083,7 @@ The CampaignsPage provides a comprehensive interface for managing campaigns:
 - New campaign form:
   - Name and description
   - Setting input (defaults to Forgotten Realms)
-  - Tone selection dropdown (Heroic Fantasy, Dark Fantasy, Comedic, etc.)
+  - Tone selection dropdown (Heroic Fantasy, Dark Fantasy, Comedic, Survival, etc.)
   - Starting location dropdown grouped by Major Cities / Regions + Custom option
   - Auto-select from parsed backstory with "(from backstory)" indicator
   - Time ratio selection (Realtime, Leisurely, Normal, Fast, Montage)
