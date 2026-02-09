@@ -1,5 +1,9 @@
 @echo off
 title D&D Meta Game
+
+REM Ensure working directory is where this bat file lives
+cd /d "%~dp0"
+
 echo.
 echo  ============================================
 echo    D^&D Meta Game - AI Dungeon Master
