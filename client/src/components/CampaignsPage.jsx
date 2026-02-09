@@ -288,7 +288,7 @@ const styles = {
   }
 };
 
-const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical'];
+const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical', 'survival'];
 
 const PIPELINE_STEPS = [
   { key: 'creating', label: 'Creating campaign' },

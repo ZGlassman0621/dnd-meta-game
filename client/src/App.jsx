@@ -128,6 +128,10 @@ function App() {
       setCharacters(data)
       if (data.length > 0 && !selectedCharacter) {
         setSelectedCharacter(data[0])
+      } else if (selectedCharacter) {
+        // Refresh selectedCharacter with latest data (e.g. after campaign assignment)
+        const updated = data.find(c => c.id === selectedCharacter.id)
+        if (updated) setSelectedCharacter(updated)
       }
     } catch (error) {
       console.error('Error loading characters:', error)

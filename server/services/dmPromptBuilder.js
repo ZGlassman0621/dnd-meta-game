@@ -619,7 +619,7 @@ function formatCampaignPlan(planSummary) {
     const act = planSummary.current_act;
     sections.push(`CURRENT ACT (Act 1): ${act.title || 'The Beginning'}
 ${act.summary || act.description || ''}
-THIS is where the story should start. Use the details above to ground the opening scene.`);
+Use this act to guide the opening story arc. IMPORTANT: The opening scene must take place at the character's STARTING LOCATION (see WORLD SETTING above) — build toward this act's events from there, do not skip ahead.`);
   }
 
   if (planSummary.world_state) {
@@ -879,7 +879,8 @@ ADAPTING THE CAMPAIGN:
     }
 
     worldSettingSection = `WORLD SETTING - THE FORGOTTEN REALMS:
-${location ? `- Starting Location: ${location.name} - ${location.description}${location.region ? ` (${location.region})` : ''}` : ''}
+${location ? `- Starting Location: ${location.name} - ${location.description}${location.region ? ` (${location.region})` : ''}
+- STARTING LOCATION RULE: The FIRST session MUST begin physically IN ${location.name}. The opening scene takes place in this location — not traveling away from it, not days after leaving it. The player chose this starting location; respect that choice.` : ''}
 ${era ? `- Era: ${era.years}
 - Historical Context: ${era.loreContext}` : ''}
 ${hook ? `- How the character${isTwoPlayer ? 's' : ''} arrived: ${hook.name} - ${hook.description}` : ''}
