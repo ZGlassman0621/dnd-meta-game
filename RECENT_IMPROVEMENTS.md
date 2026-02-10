@@ -1,12 +1,24 @@
 # Recent Improvements
 
-## Latest: In-Session Stats, Inventory Panel, Combat Tracker & Claude Model Updates (2026-02-09)
+## Latest: Opus for All Generation, Sonnet for Sessions Only (2026-02-10)
+
+### AI Model Architecture Overhaul
+Claude Opus now handles **all world-building and content generation**, not just campaign plans. Claude Sonnet is reserved exclusively for interactive DM sessions:
+- **Opus** (`claude-opus-4-6`): Campaign plans, backstory parsing, NPC generation, quest generation, companion backstories, location generation, living world events, adventure generation
+- **Sonnet** (`claude-sonnet-4-5`): DM sessions only (real-time narration, combat, dialogue)
+- **Ollama**: Offline fallback for all tasks
+- First session opening uses Opus (establishing the narrative arc from campaign plan), continuing sessions use Sonnet
+- 6 generators updated: backstoryParserService, questGenerator, companionBackstoryGenerator, locationGenerator, livingWorldGenerator, adventureGenerator
+- **PDF parser removed**: `pdfParser.js` and `pdf-parse` dependency deleted (unused functionality)
+
+---
+
+## In-Session Stats, Inventory Panel, Combat Tracker & Claude Model Updates (2026-02-09)
 
 ### Claude Model Auto-Updating
 Both Claude models now use alias IDs (no date suffix) so they automatically resolve to the latest available version:
 - **Opus**: `claude-opus-4-6` (was `claude-opus-4-5-20251101`)
 - **Sonnet**: `claude-sonnet-4-5` (was `claude-sonnet-4-20250514`)
-- **PDF Parser**: Updated from `claude-3-5-sonnet-20241022` to `claude-sonnet-4-5`
 - All UI text updated to version-agnostic labels ("Claude Opus" instead of "Opus 4.5")
 
 ### Enhanced Stats Bar

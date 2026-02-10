@@ -8,10 +8,8 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 
 | Model | Purpose | When Used |
 |-------|---------|-----------|
-| **Claude Opus** (`claude-opus-4-6`) | Campaign plan generation | Creating comprehensive living world plans (NPCs, factions, locations, quest arcs, timeline) |
-| **Claude Sonnet** (`claude-sonnet-4-5`) | AI Dungeon Master sessions | Real-time interactive gameplay, session narration, combat, dialogue |
-| **Claude Sonnet** (`claude-sonnet-4-5`) | Backstory parsing | Analyzing freeform backstories into structured elements |
-| **Claude Sonnet** (`claude-sonnet-4-5`) | Content generation | NPC generation, companion backstories, quest generation, location generation |
+| **Claude Opus** (`claude-opus-4-6`) | World building & generation | Campaign plans, backstory parsing, NPC/quest/location/companion generation, living world events, adventure generation, first session opening |
+| **Claude Sonnet** (`claude-sonnet-4-5`) | AI Dungeon Master sessions | Continuing session gameplay, narration, combat, dialogue |
 | **Ollama (Llama 3.1:8b)** | Offline fallback | All of the above when no internet/API key available |
 
 > **Note:** Both Claude models use alias IDs (no date suffix) so they automatically resolve to the latest available version when Anthropic releases updates.
@@ -31,7 +29,7 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 │  │  Claude API      │  │  Ollama (Fallback)   │  │
 │  │  ┌────────────┐  │  │  ┌────────────────┐  │  │
 │  │  │ Opus       │  │  │  │ Llama 3.1 8B   │  │  │
-│  │  │ (campaigns)│  │  │  │ (all tasks)    │  │  │
+│  │  │ (building) │  │  │  │ (all tasks)    │  │  │
 │  │  ├────────────┤  │  │  └────────────────┘  │  │
 │  │  │ Sonnet     │  │  │                      │  │
 │  │  │ (sessions) │  │  │  localhost:11434      │  │
@@ -51,9 +49,9 @@ The AI DM backend is split into focused modules:
 | **Session Orchestrator** | `server/services/ollama.js` | Session lifecycle (start, continue, summarize) — imports from the above two |
 | **Session Service** | `server/services/dmSessionService.js` | Session business logic (rewards, notes extraction, NPC extraction, event emission) |
 | **Campaign Plan** | `server/services/campaignPlanService.js` | Claude Opus campaign plan generation |
-| **Backstory Parser** | `server/services/backstoryParserService.js` | AI backstory parsing into structured elements |
+| **Backstory Parser** | `server/services/backstoryParserService.js` | Claude Opus backstory parsing into structured elements |
 
-All AI generators (quests, locations, companions, living world) use `llmClient.js` for LLM calls with Claude primary and Ollama fallback.
+All AI generators (quests, locations, companions, living world, adventures) use Claude Opus for generation with Ollama as offline fallback. Only DM sessions use Claude Sonnet.
 
 ## Claude API Setup (Primary)
 
@@ -74,9 +72,10 @@ Start the server and check the AI status indicator in the app header:
 - **Red dot + "AI Offline"** = No AI provider available
 
 ### Cost Considerations
-- **Claude Opus** is used only for campaign plan generation (infrequent, ~1 call per campaign)
-- **Claude Sonnet** handles all other tasks (sessions, parsing, generation) at lower cost
-- Typical session: ~$0.05-0.15 depending on conversation length
+- **Claude Opus** handles all world-building and content generation (campaign plans, backstory parsing, NPC/quest/location/companion generation)
+- **Claude Sonnet** handles only DM sessions (real-time interactive gameplay) at lower cost
+- Typical DM session: ~$0.05-0.15 depending on conversation length
+- Generation tasks (backstory parsing, quest creation, etc.) use Opus for higher quality output
 
 ---
 
@@ -118,7 +117,7 @@ The server checks providers on startup and per-request:
 2. **Check Ollama** — If Claude is unavailable, check `localhost:11434`
 3. **Status endpoint** — `GET /api/dm-session/llm-status` returns provider info
 
-When Claude is available, Claude Opus is used for campaign plan generation and Claude Sonnet for everything else. When only Ollama is available, Llama 3.1 handles all tasks.
+When Claude is available, Claude Opus handles all world-building and content generation while Claude Sonnet runs interactive DM sessions. When only Ollama is available, Llama 3.1 handles all tasks.
 
 ---
 

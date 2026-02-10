@@ -4,7 +4,6 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { parseCharacterSheet, getXPToNextLevel } from '../services/pdfParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -16,21 +15,6 @@ const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'avatars');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-
-// Configure multer for PDF uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are allowed'));
-    }
-  }
-});
 
 // Configure multer for avatar uploads
 const avatarUpload = multer({
@@ -54,40 +38,6 @@ const avatarUpload = multer({
       console.log('Rejected file with mimetype:', file.mimetype);
       cb(new Error(`File type not allowed: ${file.mimetype}. Only JPG, PNG, WebP, and GIF images are allowed.`));
     }
-  }
-});
-
-// Upload and parse character sheet
-router.post('/', upload.single('characterSheet'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    // Parse the PDF
-    const characterData = await parseCharacterSheet(req.file.buffer);
-
-    // Calculate XP to next level if not provided
-    if (!characterData.experience_to_next_level) {
-      characterData.experience_to_next_level = getXPToNextLevel(
-        characterData.level,
-        characterData.experience || 0
-      );
-    }
-
-    // Add default location and quest (user will update these)
-    characterData.current_location = characterData.current_location || 'Unknown Location';
-    characterData.current_quest = characterData.current_quest || '';
-
-    res.json({
-      success: true,
-      data: characterData
-    });
-  } catch (error) {
-    console.error('Error uploading character sheet:', error);
-    res.status(500).json({
-      error: error.message || 'Failed to parse character sheet'
-    });
   }
 });
 

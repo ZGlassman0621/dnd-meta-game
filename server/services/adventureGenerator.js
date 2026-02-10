@@ -16,7 +16,8 @@ async function callLLM(prompt, temperature = 0.8) {
       console.log('Using Claude for adventure generation...');
       const response = await claudeChat(
         'You are a D&D adventure generator. Return ONLY valid JSON, no other text.',
-        [{ role: 'user', content: prompt }]
+        [{ role: 'user', content: prompt }],
+        3, 'opus'
       );
       return response;
     } catch (error) {

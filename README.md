@@ -48,7 +48,7 @@ When you create a campaign, the system automatically:
 - **Frontend:** React + Vite
 - **Backend:** Node.js + Express
 - **Database:** SQLite (local file, with optional Turso cloud sync)
-- **AI:** Claude API (Claude Opus for campaign generation, Claude Sonnet for sessions — auto-updating aliases) with Ollama fallback for offline play
+- **AI:** Claude API (Claude Opus for all world building/generation, Claude Sonnet for DM sessions — auto-updating aliases) with Ollama fallback for offline play
 
 ## Setup
 

@@ -302,7 +302,8 @@ async function generateWithAI(prompt) {
     try {
       const response = await claudeChat(
         'You are a D&D quest designer. Return ONLY valid JSON, no explanation or markdown.',
-        [{ role: 'user', content: prompt }]
+        [{ role: 'user', content: prompt }],
+        3, 'opus'
       );
       return response;
     } catch (error) {
