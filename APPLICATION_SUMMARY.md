@@ -236,8 +236,9 @@ Auto-classifies as short/long rest and detects duration from text.
 - **Buy/sell transactions**: Inventory depletes on purchase, merchant gold limits sales, restock regenerates from loot tables
 
 #### DMG Magic Items & Rarity System
-- **~130 iconic D&D 5e items** across 5 rarity tiers: common, uncommon, rare, very rare, legendary
+- **~165 D&D 5e items** (DMG + Xanathar's Guide) across 5 rarity tiers: common, uncommon, rare, very rare, legendary
 - **Item categories**: Magic weapons, armor, wondrous items, rings, wands/rods/staves, scrolls, potions, gems
+- **XGtE common items (~37)**: Fun, flavorful items like Cloak of Billowing, Clockwork Amulet, Hat of Wizardry, Wand of Smiles, Pipe of Smoke Monsters, Veteran's Cane, and more
 - **13 cursed items** with disguise system — appear as desirable items until identified (e.g., Bag of Devouring appears as Bag of Holding)
 - **Prosperity-based magic caps**: Each shop tier limits how many high-rarity items can appear (poor: max 1 uncommon; aristocratic: up to 1 legendary + 2 very rare + 4 rare)
 - **Character level gating**: Uncommon 3+, rare 5+, very rare 9+, legendary 13+

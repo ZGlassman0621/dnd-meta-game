@@ -188,6 +188,8 @@ const MAGIC_ITEMS = [
   // ========================================
   // Common
   { name: 'Moon-Touched Sword', price_gp: 100, price_sp: 0, price_cp: 0, category: 'weapon', description: 'Glows with faint moonlight in darkness; counts as magical for overcoming resistances', rarity: 'common' },
+  { name: 'Walloping Ammunition', price_gp: 25, price_sp: 0, price_cp: 0, category: 'weapon', description: 'On hit, target must succeed DC 10 STR save or be knocked prone', rarity: 'common' },
+  { name: 'Unbreakable Arrow', price_gp: 15, price_sp: 0, price_cp: 0, category: 'weapon', description: 'Cannot be broken except within an antimagic field', rarity: 'common' },
   // Uncommon
   { name: '+1 Weapon (any)', price_gp: 1000, price_sp: 0, price_cp: 0, category: 'weapon', description: '+1 to attack and damage rolls', rarity: 'uncommon' },
   { name: 'Javelin of Lightning', price_gp: 1500, price_sp: 0, price_cp: 0, category: 'weapon', description: 'Speak command word and throw — transforms into a bolt of lightning (4d6 damage, 120ft line, DEX save)', rarity: 'uncommon' },
@@ -222,6 +224,11 @@ const MAGIC_ITEMS = [
   // ========================================
   // MAGIC ARMOR & SHIELDS
   // ========================================
+  // Common (XGtE)
+  { name: 'Armor of Gleaming', price_gp: 75, price_sp: 0, price_cp: 0, category: 'armor', description: 'This armor never gets dirty; always appears polished and gleaming', rarity: 'common' },
+  { name: 'Cast-Off Armor', price_gp: 75, price_sp: 0, price_cp: 0, category: 'armor', description: 'You can doff this armor as an action instead of the normal time', rarity: 'common' },
+  { name: 'Smoldering Armor', price_gp: 75, price_sp: 0, price_cp: 0, category: 'armor', description: 'Wisps of harmless, odorless smoke rise from this armor while worn', rarity: 'common' },
+  { name: 'Shield of Expression', price_gp: 50, price_sp: 0, price_cp: 0, category: 'shield', description: 'Front of this shield is shaped like a face; as a bonus action, alter the face\'s expression', rarity: 'common' },
   // Uncommon
   { name: '+1 Armor (any)', price_gp: 1500, price_sp: 0, price_cp: 0, category: 'armor', description: '+1 AC on top of armor base', rarity: 'uncommon' },
   { name: '+1 Shield', price_gp: 1500, price_sp: 0, price_cp: 0, category: 'shield', description: '+1 AC on top of shield bonus', rarity: 'uncommon' },
@@ -256,6 +263,39 @@ const MAGIC_ITEMS = [
   { name: 'Enduring Spellbook', price_gp: 100, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Cannot be damaged by fire or submersion; pages never tear', rarity: 'common' },
   { name: 'Staff of Adornment', price_gp: 75, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Place small object on tip and it hovers 1 inch above, orbiting slowly', rarity: 'common' },
   { name: 'Staff of Flowers', price_gp: 75, price_sp: 0, price_cp: 0, category: 'wondrous', description: '10 charges; use action to cause a flower to sprout from soil or the staff itself', rarity: 'common' },
+  // Common — Xanathar's Guide to Everything
+  { name: 'Cloak of Billowing', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'As a bonus action, cause this cloak to billow dramatically', rarity: 'common' },
+  { name: 'Clockwork Amulet', price_gp: 150, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Once per day, forgo rolling a d20 and instead treat the roll as a 10', rarity: 'common' },
+  { name: 'Clothes of Mending', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'This outfit magically mends itself — tears and stains disappear after 1 hour', rarity: 'common' },
+  { name: 'Dark Shard Amulet', price_gp: 100, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Warlock spellcasting focus; once per day, attempt to cast a warlock cantrip you don\'t know (DC 10 Arcana)', rarity: 'common' },
+  { name: 'Dread Helm', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'This fearsome steel helm makes your eyes glow red while worn', rarity: 'common' },
+  { name: 'Ear Horn of Hearing', price_gp: 25, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'While held to your ear, suppresses the effects of the deafened condition', rarity: 'common' },
+  { name: 'Ersatz Eye', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Implanted in an empty eye socket, functions like a real eye and can\'t be removed against your will', rarity: 'common' },
+  { name: 'Hat of Vermin', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '3 charges; pull a bat, frog, or rat from this hat — it is a real creature that vanishes after 1 hour', rarity: 'common' },
+  { name: 'Hat of Wizardry', price_gp: 100, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Wizard spellcasting focus; once per day, attempt to cast a wizard cantrip you don\'t know (DC 10 Arcana)', rarity: 'common' },
+  { name: 'Heward\'s Handy Spice Pouch', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '10 charges; reach in and pull out a pinch of any seasoning — regains 1d6+4 charges at dawn', rarity: 'common' },
+  { name: 'Horn of Silent Alarm', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '4 charges; blow the horn — only one creature of your choice within 600ft hears it; regains 1d4 at dawn', rarity: 'common' },
+  { name: 'Instrument of Illusions', price_gp: 75, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'While playing this instrument, create harmless illusory visual effects within 5ft of it', rarity: 'common' },
+  { name: 'Instrument of Scribing', price_gp: 75, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'While playing, write a magical message of up to 6 words on any surface within 30ft; lasts 24 hours', rarity: 'common' },
+  { name: 'Lock of Trickery', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'This lock imposes disadvantage on ability checks made to pick it; a knock spell has no effect on it', rarity: 'common' },
+  { name: 'Mystery Key', price_gp: 15, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Has a 5% chance of unlocking any lock into which it is inserted; the key then disappears', rarity: 'common' },
+  { name: 'Orb of Direction', price_gp: 25, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Hold the orb and use an action to determine which direction is north', rarity: 'common' },
+  { name: 'Orb of Time', price_gp: 25, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Hold the orb and use an action to determine whether it is morning, afternoon, evening, or nighttime', rarity: 'common' },
+  { name: 'Perfume of Bewitching', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Apply to gain advantage on Charisma checks against humanoids within 5ft for 1 hour (one use)', rarity: 'common' },
+  { name: 'Pipe of Smoke Monsters', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Exhale smoke that takes the form of a single creature of your choice — harmless and purely visual', rarity: 'common' },
+  { name: 'Pole of Angling', price_gp: 25, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'While holding this pole, speak a command word to transform it into a fishing pole with line and hook', rarity: 'common' },
+  { name: 'Pole of Collapsing', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'This 10-foot pole can collapse into a 1-foot rod; speak command word to extend or collapse', rarity: 'common' },
+  { name: 'Rope of Mending', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'You can cut this 50-foot rope into pieces and reattach them; the pieces knit back together', rarity: 'common' },
+  { name: 'Staff of Birdcalls', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '10 charges; use action to create the sound of a bird call; regains 1d6+4 charges at dawn', rarity: 'common' },
+  { name: 'Talking Doll', price_gp: 75, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Record up to 6 short phrases; the doll speaks them when specific conditions you choose are met', rarity: 'common' },
+  { name: 'Veteran\'s Cane', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Speak a command word to transform this walking cane into a longsword (or back); one transformation per day', rarity: 'common' },
+  { name: 'Wand of Conducting', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '3 charges; wave this wand to create orchestral music heard by all within 60ft; regains at dawn', rarity: 'common' },
+  { name: 'Wand of Pyrotechnics', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '7 charges; create a burst of harmless multicolored light at a point within 60ft; regains 1d6+1 at dawn', rarity: 'common' },
+  { name: 'Wand of Scowls', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '3 charges; target a humanoid within 30ft — DC 10 CHA save or they scowl for 1 minute; regains at dawn', rarity: 'common' },
+  { name: 'Wand of Smiles', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: '3 charges; target a humanoid within 30ft — DC 10 CHA save or they smile for 1 minute; regains at dawn', rarity: 'common' },
+  { name: 'Boots of False Tracks', price_gp: 50, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'While wearing, you can choose to leave tracks like those of another humanoid of your size', rarity: 'common' },
+  { name: 'Bead of Nourishment', price_gp: 10, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'This spongy, flavorless bead dissolves on your tongue and provides nourishment for one day', rarity: 'common' },
+  { name: 'Bead of Refreshment', price_gp: 10, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Drop this bead into up to a pint of liquid to purify it into fresh, clean drinking water', rarity: 'common' },
   // Uncommon
   { name: 'Bag of Holding', price_gp: 500, price_sp: 0, price_cp: 0, category: 'wondrous', description: 'Interior is 64 cubic feet; holds up to 500 lbs but always weighs 15 lbs', rarity: 'uncommon' },
   { name: 'Cloak of Protection', price_gp: 500, price_sp: 0, price_cp: 0, category: 'wondrous', description: '+1 to AC and all saving throws (requires attunement)', rarity: 'uncommon' },

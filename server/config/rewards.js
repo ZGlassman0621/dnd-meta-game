@@ -284,7 +284,9 @@ const EQUIPMENT_BY_LEVEL = {
   1: [
     'Potion of Healing', 'Driftglobe', 'Moon-Touched Sword',
     'Cloak of Many Fashions', 'Candle of the Deep', 'Enduring Spellbook',
-    'Ruby of the War Mage', 'Tankard of Sobriety'
+    'Ruby of the War Mage', 'Tankard of Sobriety', 'Clockwork Amulet',
+    'Hat of Wizardry', 'Cloak of Billowing', 'Walloping Ammunition',
+    'Veteran\'s Cane', 'Pole of Collapsing', 'Horn of Silent Alarm'
   ],
   5: [
     'Potion of Greater Healing', 'Bag of Holding', 'Cloak of Protection',

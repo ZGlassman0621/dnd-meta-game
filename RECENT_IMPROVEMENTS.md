@@ -2,12 +2,12 @@
 
 ## Latest: DMG Magic Items & 5-Tier Rarity System (2026-02-09)
 
-### ~130 D&D 5e DMG Magic Items
-Added iconic Dungeon Master's Guide magic items across all 5 rarity tiers: common, uncommon, rare, very rare, and legendary. Items span every category:
+### ~165 D&D 5e Magic Items (DMG + XGtE)
+Added iconic magic items from the Dungeon Master's Guide and Xanathar's Guide to Everything across all 5 rarity tiers: common, uncommon, rare, very rare, and legendary. Items span every category:
 
-- **Magic Weapons (~25)**: Moon-Touched Sword, Javelin of Lightning, Flame Tongue, Sun Blade, Dragon Slayer, Dancing Sword, Vorpal Sword, Holy Avenger, and more
-- **Magic Armor (~13)**: Mithral Armor, Adamantine Armor, +2/+3 Armor and Shields, Elven Chain, Animated Shield, Armor of Invulnerability
-- **Wondrous Items (~50)**: Bag of Holding, Gauntlets of Ogre Power, Winged Boots, Cloak of Displacement, Portable Hole, Carpet of Flying, Staff of the Magi, Ring of Three Wishes
+- **Magic Weapons (~27)**: Moon-Touched Sword, Walloping Ammunition, Unbreakable Arrow (XGtE common), Javelin of Lightning, Flame Tongue, Sun Blade, Dragon Slayer, Dancing Sword, Vorpal Sword, Holy Avenger, and more
+- **Magic Armor (~17)**: Armor of Gleaming, Cast-Off Armor, Smoldering Armor, Shield of Expression (XGtE common), Mithral Armor, Adamantine Armor, +2/+3 Armor and Shields, Elven Chain, Animated Shield, Armor of Invulnerability
+- **Wondrous Items (~80)**: Bag of Holding, Gauntlets of Ogre Power, Winged Boots, Cloak of Displacement, Portable Hole, Carpet of Flying, Staff of the Magi, Ring of Three Wishes, plus ~30 XGtE common items (Cloak of Billowing, Clockwork Amulet, Hat of Wizardry, Wand of Smiles, Veteran's Cane, Pipe of Smoke Monsters, and more)
 - **Rings (~8)**: Ring of Protection, Ring of Spell Storing, Ring of Evasion, Ring of Regeneration, Ring of Telekinesis, Ring of Invisibility
 - **Wands/Rods/Staves (~10)**: Wand of Magic Missiles, Wand of Fireballs, Rod of Lordly Might, Staff of Power, Staff of the Magi
 - **Scrolls (~6)**: Spell Scrolls from Level 1 through Level 9
