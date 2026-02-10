@@ -229,11 +229,19 @@ export async function ensureItemAtMerchant(campaignId, merchantName, itemName, i
 
   const newItem = known
     ? {
-      ...known,
+      name: known.cursed ? known.appears_as : known.name,
       price_gp: Math.round(known.price_gp * config.priceMultiplier * 100) / 100,
       price_sp: Math.round((known.price_sp || 0) * config.priceMultiplier),
       price_cp: Math.round((known.price_cp || 0) * config.priceMultiplier),
+      category: known.category,
+      description: known.description || '',
       quantity: 1,
+      rarity: known.rarity,
+      ...(known.cursed ? {
+        cursed: true,
+        true_name: known.name,
+        curse_description: known.curse_description
+      } : {})
     }
     : buildCustomItem({ name: itemName, price_gp: 0, category: itemCategory || 'adventuring_gear' });
 

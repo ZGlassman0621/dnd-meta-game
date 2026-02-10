@@ -279,12 +279,33 @@ export function generateStoryConsequences(adventure, success, questRelevance = '
   return storyConsequences;
 }
 
-// Equipment loot tables by level range
+// Equipment loot tables by level range — items match names in merchantLootTables.js
 const EQUIPMENT_BY_LEVEL = {
-  1: ['Potion of Healing', 'Torch', 'Rope (50ft)', 'Rations (1 day)', 'Leather Armor'],
-  5: ['Potion of Greater Healing', '+1 Weapon', 'Ring of Protection', 'Cloak of Elvenkind', 'Bag of Holding'],
-  10: ['Potion of Superior Healing', '+2 Weapon', 'Belt of Giant Strength', 'Boots of Speed', 'Amulet of Health'],
-  15: ['Potion of Supreme Healing', '+3 Weapon', 'Ring of Spell Storing', 'Cloak of Displacement', 'Headband of Intellect']
+  1: [
+    'Potion of Healing', 'Driftglobe', 'Moon-Touched Sword',
+    'Cloak of Many Fashions', 'Candle of the Deep', 'Enduring Spellbook',
+    'Ruby of the War Mage', 'Tankard of Sobriety'
+  ],
+  5: [
+    'Potion of Greater Healing', 'Bag of Holding', 'Cloak of Protection',
+    'Boots of Elvenkind', 'Gauntlets of Ogre Power', 'Winged Boots',
+    'Javelin of Lightning', 'Weapon of Warning', 'Wand of Magic Missiles',
+    'Goggles of Night', 'Pearl of Power', 'Headband of Intellect',
+    'Hat of Disguise', 'Immovable Rod', 'Stone of Good Luck'
+  ],
+  10: [
+    'Potion of Superior Healing', 'Flame Tongue', 'Sun Blade',
+    'Cloak of Displacement', 'Boots of Speed', 'Amulet of Health',
+    'Ring of Spell Storing', 'Necklace of Fireballs', 'Wand of Fireballs',
+    'Belt of Giant Strength (Hill)', '+2 Armor (any)', 'Ring of Evasion',
+    'Dragon Slayer', 'Portable Hole', 'Wings of Flying'
+  ],
+  15: [
+    'Potion of Speed', 'Dancing Sword', 'Scimitar of Speed',
+    '+3 Armor (any)', 'Animated Shield', 'Carpet of Flying',
+    'Ring of Regeneration', 'Staff of Power', 'Robe of Stars',
+    'Manual of Bodily Health', 'Cloak of Arachnida', 'Oathbow'
+  ]
 };
 
 // Generate random loot (20% chance on successful high-risk adventures)

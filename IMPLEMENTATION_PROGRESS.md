@@ -2367,3 +2367,118 @@ Compresses 5 data sources into a `=== CURRENT WORLD STATE ===` prompt section (~
 
 - **Client Build**: Successful (no import errors)
 - **Server Startup**: All imports resolved, both modified modules load correctly
+
+---
+
+## Phase O: DMG Magic Items & 5-Tier Rarity System
+
+### Status: COMPLETE
+
+Date: 2026-02-09
+
+Added ~130 iconic D&D 5e Dungeon Master's Guide magic items across 5 rarity tiers with smart distribution based on shop type, settlement prosperity, and character level. Includes 13 cursed items with a disguise system, prosperity-based magic item caps, and expanded session-end loot tables.
+
+### Rarity System
+
+**5-Tier Rarity**: `RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, very_rare: 3, legendary: 4 }`
+
+| Rarity | Level Gate | Weight | Color |
+|--------|-----------|--------|-------|
+| Common | 1+ | 6x | — |
+| Uncommon | 3+ | 3x | `#a78bfa` purple |
+| Rare | 5+ | 1x | `#60a5fa` blue |
+| Very Rare | 9+ | 0.5x | `#c084fc` violet |
+| Legendary | 13+ | 0.25x | `#ff8c00` orange |
+
+### Prosperity-Based Magic Caps
+
+`PROSPERITY_CONFIG` updated with `magicCaps` and `cursedChance` per tier:
+
+| Tier | Magic Caps | Cursed Chance | Gold Purse |
+|------|-----------|---------------|------------|
+| Poor | uncommon:1 | 15% | 50gp |
+| Modest | uncommon:3, rare:1 | 8% | 200gp |
+| Comfortable | rare:2 | 5% | 500gp |
+| Wealthy | rare:3, very_rare:1 | 3% | 1200gp |
+| Aristocratic | rare:4, very_rare:2, legendary:1 | 2% | 2500gp |
+
+### Magic Items Added (~130 total)
+
+| Category | Count | Examples |
+|----------|-------|---------|
+| Magic Weapons | ~25 | Moon-Touched Sword, Flame Tongue, Sun Blade, Vorpal Sword, Holy Avenger |
+| Magic Armor | ~13 | Mithral Armor, Adamantine Armor, +2/+3 Armor, Animated Shield |
+| Wondrous Items | ~50 | Bag of Holding, Gauntlets of Ogre Power, Cloak of Displacement, Staff of the Magi |
+| Rings | ~8 | Ring of Protection, Ring of Spell Storing, Ring of Invisibility |
+| Wands/Rods/Staves | ~10 | Wand of Magic Missiles, Rod of Lordly Might, Staff of Power |
+| Scrolls | ~6 | Spell Scroll Level 1 through Level 9 |
+| Potions | ~19 new | Potion of Heroism, Potion of Speed, Oil of Sharpness |
+| Gems | 6 new | Diamond, Black Opal, Jacinth (1000gp), Flawless Diamond (5000gp) |
+
+### Cursed Items (13)
+
+Items with `cursed: true`, `appears_as`, and `curse_description` fields:
+- Bag of Devouring → appears as Bag of Holding
+- Berserker Axe → appears as +1 Greataxe
+- Sword of Vengeance → appears as +1 Longsword
+- Armor of Vulnerability → appears as Armor of Resistance
+- Shield of Missile Attraction → appears as +2 Shield
+- Cloak of Poisonousness → appears as Cloak of Protection
+- Necklace of Strangulation → appears as Necklace of Adaptation
+- Dust of Sneezing and Choking → appears as Dust of Disappearance
+- Scarab of Death → appears as Scarab of Protection
+- Medallion of Thought Projection → appears as Medallion of Thoughts
+- Ring of Clumsiness → appears as Ring of Free Action
+- Deck of Illusions → appears as Deck of Many Things
+- Potion of Poison → appears as Potion of Healing
+
+### Blacksmith Magic Pool
+
+Created derived pool: `MAGIC_WEAPONS_ARMOR = MAGIC_ITEMS.filter(i => ['weapon', 'armor', 'shield'].includes(i.category) && !i.cursed)`
+
+Added to blacksmith merchant type: `['weapons', 'armor', 'ammunition', 'magic_weapons_armor']`
+
+Result: village blacksmith (poor) gets nothing magical; city blacksmith (wealthy) might stock 1 rare magic weapon.
+
+### generateInventory() Rewrite
+
+1. Separate cursed items from main pool before selection
+2. Select items with weighted random (existing logic)
+3. Enforce `magicCaps` — count all uncommon+ items by rarity, remove excess
+4. Cursed injection: roll `cursedChance`, if hit, **replace** an existing same-rarity item with a cursed fake (maintains cap integrity)
+5. Cursed items use `appears_as` as display name in shop UI
+
+### AI Cursed Item Awareness
+
+Inventory injection in `dmSession.js` annotates cursed items:
+```
+- Bag of Holding (250gp) [CURSED: actually Bag of Devouring — items placed inside are destroyed]
+```
+
+System message includes conditional cursed instructions: "If an item is marked [CURSED], do NOT reveal it is cursed. The curse reveals itself only when used or identified with Identify/Detect Magic."
+
+### Session-End Loot Tables
+
+`EQUIPMENT_BY_LEVEL` in `rewards.js` expanded from 5 items per tier to 8-15 items:
+- Level 1: 8 common items (Driftglobe, Moon-Touched Sword, etc.)
+- Level 5: 15 uncommon items (Bag of Holding, Gauntlets of Ogre Power, etc.)
+- Level 10: 15 rare items (Flame Tongue, Sun Blade, Cloak of Displacement, etc.)
+- Level 15: 12 very rare items (Dancing Sword, Scimitar of Speed, Staff of Power, etc.)
+
+### Files Modified
+
+| File | Changes | Date |
+|------|---------|------|
+| `server/data/merchantLootTables.js` | 5-tier rarity, ~130 magic items, cursed items, prosperity caps, blacksmith pool, generateInventory rewrite | 2026-02-09 |
+| `server/routes/dmSession.js` | Cursed item `[CURSED]` annotations in AI inventory injection, conditional cursed instructions | 2026-02-09 |
+| `server/config/rewards.js` | Expanded EQUIPMENT_BY_LEVEL to 8-15 items per tier with DMG magic items | 2026-02-09 |
+| `server/services/merchantService.js` | Carry cursed/true_name/curse_description fields through ensureItemAtMerchant | 2026-02-09 |
+| `client/src/components/DMSession.jsx` | Very rare (#c084fc) and legendary (#ff8c00) rarity colors in shop UI | 2026-02-09 |
+
+### Test Results
+
+- **Inventory Generation Tests**: 14 tests, all passing
+- **Cap Enforcement**: Zero cap violations across 600 test runs (100 runs × 6 scenarios)
+- **Cursed Item Distribution**: Cursed items appear at expected rates per prosperity tier
+- **Level Gating**: Verified uncommon/rare/very_rare/legendary items respect level thresholds
+- **Blacksmith Pool**: Confirmed blacksmiths only stock weapons/armor magic items

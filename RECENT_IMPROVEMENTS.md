@@ -1,6 +1,82 @@
 # Recent Improvements
 
-## Latest: Persistent Merchant Inventory System (2026-02-09)
+## Latest: DMG Magic Items & 5-Tier Rarity System (2026-02-09)
+
+### ~130 D&D 5e DMG Magic Items
+Added iconic Dungeon Master's Guide magic items across all 5 rarity tiers: common, uncommon, rare, very rare, and legendary. Items span every category:
+
+- **Magic Weapons (~25)**: Moon-Touched Sword, Javelin of Lightning, Flame Tongue, Sun Blade, Dragon Slayer, Dancing Sword, Vorpal Sword, Holy Avenger, and more
+- **Magic Armor (~13)**: Mithral Armor, Adamantine Armor, +2/+3 Armor and Shields, Elven Chain, Animated Shield, Armor of Invulnerability
+- **Wondrous Items (~50)**: Bag of Holding, Gauntlets of Ogre Power, Winged Boots, Cloak of Displacement, Portable Hole, Carpet of Flying, Staff of the Magi, Ring of Three Wishes
+- **Rings (~8)**: Ring of Protection, Ring of Spell Storing, Ring of Evasion, Ring of Regeneration, Ring of Telekinesis, Ring of Invisibility
+- **Wands/Rods/Staves (~10)**: Wand of Magic Missiles, Wand of Fireballs, Rod of Lordly Might, Staff of Power, Staff of the Magi
+- **Scrolls (~6)**: Spell Scrolls from Level 1 through Level 9
+- **Higher-Tier Potions (~19)**: Potion of Heroism, Potion of Invisibility/Speed/Flying, Oil of Sharpness, Potion of Longevity
+- **Higher-Tier Gems (6)**: Diamond, Black Opal, Jacinth (1000gp), Flawless Diamond, Star Sapphire, Black Star Sapphire (5000gp)
+
+### 13 Cursed Items with Disguise System
+Cursed items masquerade as desirable items until identified:
+
+| Cursed Item | Appears As | Effect |
+|-------------|-----------|--------|
+| Bag of Devouring | Bag of Holding | Items placed inside are destroyed |
+| Berserker Axe | +1 Greataxe | Wielder must attack nearest creature |
+| Sword of Vengeance | +1 Longsword | Cannot willingly let go, compelled to fight |
+| Armor of Vulnerability | Armor of Resistance | Vulnerability to one damage type |
+| Shield of Missile Attraction | +2 Shield | Attracts ranged attacks |
+| Cloak of Poisonousness | Cloak of Protection | Instant death poison on donning |
+| Necklace of Strangulation | Necklace of Adaptation | Constricts and strangles wearer |
+| Potion of Poison | Potion of Healing | Deals poison damage instead of healing |
+| And 5 more... | | |
+
+- Shop UI shows the **disguised name** — players see "Bag of Holding", not "Bag of Devouring"
+- AI DM sees `[CURSED: actually Bag of Devouring — items placed inside are destroyed]` in inventory injection
+- AI is instructed NOT to reveal curses until the player uses Identify or Detect Magic
+
+### Prosperity-Based Magic Caps
+Each prosperity tier limits how many high-rarity magic items a shop can stock:
+
+| Prosperity | Max Uncommon | Max Rare | Max Very Rare | Max Legendary | Cursed Chance |
+|------------|-------------|----------|---------------|---------------|---------------|
+| Poor | 1 | — | — | — | 15% |
+| Modest | 3 | 1 | — | — | 8% |
+| Comfortable | — | 2 | — | — | 5% |
+| Wealthy | — | 3 | 1 | — | 3% |
+| Aristocratic | — | 4 | 2 | 1 | 2% |
+
+Village magic shops (poor) get at most 1 uncommon magic item with a 15% chance it's a cursed fake. City magic shops (aristocratic) can stock up to 1 legendary + 2 very rare + 4 rare items.
+
+### Character Level Gating
+- **Uncommon**: Level 3+
+- **Rare**: Level 5+
+- **Very Rare**: Level 9+
+- **Legendary**: Level 13+
+
+### Weighted Rarity Selection
+Items are selected with rarity-based weights: common (6x), uncommon (3x), rare (1x), very rare (0.5x), legendary (0.25x). Higher-rarity items are naturally scarce.
+
+### Blacksmith Magic Weapons
+Blacksmiths now draw from a `MAGIC_WEAPONS_ARMOR` pool (non-cursed weapons and armor from the magic items list). A village blacksmith (poor) gets nothing magical; a city blacksmith (wealthy) might stock 1 rare magic weapon.
+
+### Rarity Colors in Shop UI
+- Uncommon: purple (`#a78bfa`)
+- Rare: blue (`#60a5fa`)
+- Very Rare: bright violet (`#c084fc`)
+- Legendary: orange/gold (`#ff8c00`)
+
+### Session-End Loot Tables Expanded
+`EQUIPMENT_BY_LEVEL` expanded from 5 items per tier to 8-15 items per tier using DMG magic item names. Level 1 gets common items, level 5 gets uncommon, level 10 gets rare, level 15 gets very rare.
+
+**Files Modified**:
+- `server/data/merchantLootTables.js` — 5-tier rarity, ~130 magic items, cursed items, prosperity caps, blacksmith pool, generateInventory rewrite
+- `server/routes/dmSession.js` — Cursed item annotations in AI inventory injection
+- `server/config/rewards.js` — Expanded session-end loot tables
+- `server/services/merchantService.js` — Carry cursed item fields through ensureItemAtMerchant
+- `client/src/components/DMSession.jsx` — Very rare/legendary rarity colors in shop UI
+
+---
+
+## Persistent Merchant Inventory System (2026-02-09)
 
 ### Persistent Merchant Inventories
 Merchants now have **persistent, loot-table-generated inventories** stored in the database. Previously, merchant inventories were AI-generated on every visit — slow, expensive, and inconsistent. Now inventories are instant, consistent, and persist across sessions.

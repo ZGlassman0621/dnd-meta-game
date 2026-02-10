@@ -3350,7 +3350,12 @@ Examples:
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 500, fontSize: '0.9rem', color: '#ddd' }}>{item.name}</div>
                                 <div style={{ fontSize: '0.75rem', color: '#888' }}>
-                                  {item.description} {item.rarity !== 'common' && <span style={{ color: item.rarity === 'rare' ? '#60a5fa' : '#a78bfa' }}>({item.rarity})</span>}
+                                  {item.description} {item.rarity !== 'common' && <span style={{
+                                    color: item.rarity === 'legendary' ? '#ff8c00' :
+                                           item.rarity === 'very_rare' ? '#c084fc' :
+                                           item.rarity === 'rare' ? '#60a5fa' :
+                                           '#a78bfa'
+                                  }}>({item.rarity === 'very_rare' ? 'very rare' : item.rarity})</span>}
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

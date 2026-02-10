@@ -223,6 +223,30 @@ Auto-classifies as short/long rest and detects duration from text.
 - **Location-aware**: Sessions consider current location and discovered locations
 - **Previous session continuity**: Session summaries carry context between sessions
 
+#### Merchant Shopping System
+- **Persistent inventories**: Merchants have loot-table-generated inventories stored in the database (not AI-generated per visit)
+- **Merchant types**: General store, blacksmith, magic shop, alchemist, jeweler, leatherworker, tailor, scribe, temple
+- **Prosperity scaling**: Poor/modest/comfortable/wealthy/aristocratic tiers affect item selection, pricing, quantities, and merchant gold
+- **Campaign plan merchants**: Generated scaled by location size (city: 5-8, town: 3-4, village: 1-2)
+- **Ad-hoc merchants**: Auto-created when AI emits `[MERCHANT_SHOP]` for an unknown merchant name
+- **AI-inventory sync**: When AI detects a merchant, real inventory is injected into conversation so AI references actual items
+- **Browse Wares button**: Shows shop UI with real inventory when merchant detected, clears on non-merchant responses
+- **Merchant referrals** (`[MERCHANT_REFER]`): AI redirects to another merchant; system guarantees the item exists there
+- **Custom items** (`[ADD_ITEM]`): AI adds narrative items with quality tiers (standard 1x, fine 1.5x, superior 2x, masterwork 3x)
+- **Buy/sell transactions**: Inventory depletes on purchase, merchant gold limits sales, restock regenerates from loot tables
+
+#### DMG Magic Items & Rarity System
+- **~130 iconic D&D 5e items** across 5 rarity tiers: common, uncommon, rare, very rare, legendary
+- **Item categories**: Magic weapons, armor, wondrous items, rings, wands/rods/staves, scrolls, potions, gems
+- **13 cursed items** with disguise system — appear as desirable items until identified (e.g., Bag of Devouring appears as Bag of Holding)
+- **Prosperity-based magic caps**: Each shop tier limits how many high-rarity items can appear (poor: max 1 uncommon; aristocratic: up to 1 legendary + 2 very rare + 4 rare)
+- **Character level gating**: Uncommon 3+, rare 5+, very rare 9+, legendary 13+
+- **Weighted selection**: Common 6x, uncommon 3x, rare 1x, very rare 0.5x, legendary 0.25x
+- **Cursed item injection**: Prosperity-based chance (2-15%) to replace a real item with a cursed fake
+- **AI curse awareness**: Cursed items annotated with `[CURSED: actually X — description]` in AI inventory injection; AI instructed not to reveal until Identify/Detect Magic
+- **Blacksmith magic pool**: Derived `MAGIC_WEAPONS_ARMOR` pool gives blacksmiths access to magic weapons/armor (gated by prosperity + level)
+- **Rarity colors in shop UI**: Uncommon purple, rare blue, very rare bright violet, legendary orange/gold
+
 ---
 
 ### 3. Meta Adventure System
@@ -248,7 +272,7 @@ Auto-classifies as short/long rest and detects duration from text.
 - **Rewards system**:
   - Experience points (scaled by risk and duration)
   - Gold rewards (scaling with level and risk)
-  - Loot generation (20% chance on high-risk)
+  - Loot generation (20% chance on high-risk, 8-15 DMG magic items per level tier)
   - HP restoration on success
 - **Consequences on failure**:
   - HP loss
@@ -1565,6 +1589,9 @@ The API uses a standardized error response utility (`server/utils/errorHandler.j
 - **location_connections**: Travel routes between locations
 - **companion_backstories**: Rich backstory data for companions
 - **narrative_queue**: Story events awaiting delivery to DM sessions
+
+**Merchant System Tables**:
+- **merchant_inventories**: Persistent merchant inventories (campaign_id, name, type, inventory JSON, gold_gp)
 
 **Expansion System Tables**:
 - **factions**: Organizations with identity, power, resources, values
