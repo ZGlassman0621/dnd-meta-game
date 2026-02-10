@@ -208,6 +208,36 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Discard an item from inventory
+router.post('/:id/discard-item', async (req, res) => {
+  try {
+    const { itemName } = req.body;
+    if (!itemName) return res.status(400).json({ error: 'itemName is required' });
+
+    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+
+    let inventory = JSON.parse(character.inventory || '[]');
+    const idx = inventory.findIndex(i => (i.name || i).toLowerCase() === itemName.toLowerCase());
+
+    if (idx === -1) return res.status(404).json({ error: 'Item not found in inventory' });
+
+    if (inventory[idx].quantity > 1) {
+      inventory[idx].quantity -= 1;
+    } else {
+      inventory.splice(idx, 1);
+    }
+
+    await dbRun('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(inventory), req.params.id]);
+
+    const updated = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+    res.json(updated);
+  } catch (error) {
+    handleServerError(res, error, 'discard item');
+  }
+});
+
 // Rest to restore HP (and spell slots on long rest)
 router.post('/rest/:id', async (req, res) => {
   try {

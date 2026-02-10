@@ -15,7 +15,7 @@ import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
-  detectMerchantRefer, detectAddItem, detectLootDrop,
+  detectMerchantRefer, detectAddItem, detectLootDrop, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -608,7 +608,7 @@ router.post('/start', async (req, res) => {
         }
       }
 
-      // Use Opus 4.5 for first campaign sessions (establishing the narrative arc)
+      // Use Opus for first campaign sessions (establishing the narrative arc)
       // Use Sonnet for continuing sessions (regular gameplay)
       const modelChoice = isContinuing ? 'sonnet' : 'opus';
 
@@ -882,6 +882,8 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
 
     // Handle ADD_ITEM markers — add custom items to current merchant's inventory
     const addItems = detectAddItem(result.narrative);
@@ -1003,16 +1005,122 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
 
+    // Handle COMBAT_START marker — roll initiative for all combatants
+    const combatStartData = detectCombatStart(result.narrative);
+    let combatStart = null;
+    if (combatStartData.detected) {
+      try {
+        const character = await dbGet('SELECT id, name, nickname, ability_scores FROM characters WHERE id = ?', [session.character_id]);
+        const charAbilities = typeof character.ability_scores === 'string'
+          ? JSON.parse(character.ability_scores || '{}')
+          : (character.ability_scores || {});
+        const playerDexMod = Math.floor(((charAbilities.dexterity || 10) - 10) / 2);
+
+        const rollD20 = () => Math.floor(Math.random() * 20) + 1;
+        const turnOrder = [];
+
+        // Player initiative
+        const playerRoll = rollD20();
+        turnOrder.push({
+          name: character.nickname || character.name || 'Player',
+          type: 'player',
+          roll: playerRoll,
+          modifier: playerDexMod,
+          initiative: playerRoll + playerDexMod
+        });
+
+        // Companion initiatives
+        const activeCompanions = await dbAll(
+          'SELECT name, companion_ability_scores FROM companions WHERE character_id = ? AND is_active = 1',
+          [session.character_id]
+        );
+        for (const comp of activeCompanions) {
+          const compAbilities = typeof comp.companion_ability_scores === 'string'
+            ? JSON.parse(comp.companion_ability_scores || '{}')
+            : (comp.companion_ability_scores || {});
+          const compDexMod = Math.floor(((compAbilities.dexterity || 10) - 10) / 2);
+          const compRoll = rollD20();
+          turnOrder.push({
+            name: comp.name,
+            type: 'companion',
+            roll: compRoll,
+            modifier: compDexMod,
+            initiative: compRoll + compDexMod
+          });
+        }
+
+        // Enemy initiatives
+        for (const enemy of combatStartData.enemies) {
+          const enemyDexMod = estimateEnemyDexMod(enemy);
+          const enemyRoll = rollD20();
+          turnOrder.push({
+            name: enemy,
+            type: 'enemy',
+            roll: enemyRoll,
+            modifier: enemyDexMod,
+            initiative: enemyRoll + enemyDexMod
+          });
+        }
+
+        // Sort by initiative descending, break ties by modifier, then random
+        turnOrder.sort((a, b) => {
+          if (b.initiative !== a.initiative) return b.initiative - a.initiative;
+          if (b.modifier !== a.modifier) return b.modifier - a.modifier;
+          return Math.random() - 0.5;
+        });
+
+        combatStart = { turnOrder, currentTurn: 0, round: 1 };
+
+        // Inject initiative results into conversation so AI uses the turn order
+        const orderStr = turnOrder.map(c => `${c.name} (${c.initiative})`).join(', ');
+        result.messages.push({
+          role: 'user',
+          content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Initiative has been rolled. Turn order: ${orderStr}. Use this order for all combat turns. The first combatant to act is ${turnOrder[0].name}.`
+        });
+        await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+      } catch (e) {
+        console.error('Error rolling initiative:', e);
+      }
+    }
+
+    // Handle COMBAT_END marker
+    const combatEnd = detectCombatEnd(result.narrative);
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
       recruitment: recruitmentData,
       downtime: downtimeDetected,
       merchantShop: merchantShop,
-      lootDrops: lootDropResults.length > 0 ? lootDropResults : undefined
+      lootDrops: lootDropResults.length > 0 ? lootDropResults : undefined,
+      combatStart: combatStart || undefined,
+      combatEnd: combatEnd || undefined
     });
   } catch (error) {
     console.error('Error in DM session message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Item rarity lookup — returns rarity/category for a list of item names
+router.post('/item-rarity-lookup', async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'items must be an array' });
+
+    const results = {};
+    for (const name of items) {
+      const found = lookupItemByName(name);
+      if (found) {
+        results[name.toLowerCase()] = {
+          rarity: found.rarity || 'common',
+          category: found.category || 'misc'
+        };
+      }
+    }
+    res.json({ items: results });
+  } catch (error) {
+    console.error('Error in item rarity lookup:', error);
     res.status(500).json({ error: error.message });
   }
 });

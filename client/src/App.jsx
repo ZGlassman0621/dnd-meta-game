@@ -232,7 +232,7 @@ function App() {
             marginTop: '0.5rem'
           }}
           title={llmStatus.provider === 'claude' && llmStatus.models
-            ? `Opus 4.5 for new campaigns, Sonnet 4 for gameplay`
+            ? `Opus for new campaigns, Sonnet for gameplay`
             : undefined}
           >
             <span style={{ fontSize: '0.8rem' }}>

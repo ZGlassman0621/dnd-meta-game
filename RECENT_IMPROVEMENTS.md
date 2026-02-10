@@ -1,6 +1,50 @@
 # Recent Improvements
 
-## Latest: Expanded Loot Systems (2026-02-09)
+## Latest: In-Session Stats, Inventory Panel, Combat Tracker & Claude Model Updates (2026-02-09)
+
+### Claude Model Auto-Updating
+Both Claude models now use alias IDs (no date suffix) so they automatically resolve to the latest available version:
+- **Opus**: `claude-opus-4-6` (was `claude-opus-4-5-20251101`)
+- **Sonnet**: `claude-sonnet-4-5` (was `claude-sonnet-4-20250514`)
+- **PDF Parser**: Updated from `claude-3-5-sonnet-20241022` to `claude-sonnet-4-5`
+- All UI text updated to version-agnostic labels ("Claude Opus" instead of "Opus 4.5")
+
+### Enhanced Stats Bar
+The session info bar now displays HP, AC, and Gold at a glance alongside game date and spell slots:
+- **HP**: Color-coded (green >50%, yellow 25-50%, red <25%) with current/max display
+- **AC**: Armor class with blue accent
+- **Gold**: Current gold pieces with gold accent
+
+### Racial Traits in Character Panel
+The Abilities tab in the Quick Reference panel now shows racial traits:
+- Automatically looks up race/subrace from `races.json`
+- Traits displayed as cards with teal accent, separating name from description
+- Subraces use their own complete trait arrays
+
+### In-Session Inventory Panel
+New slide-in overlay panel (green accent, `#10b981`) accessible via "Inventory" button in session header:
+- **Rarity colors**: Items color-coded by D&D rarity (common/uncommon/rare/very rare/legendary)
+- **Filter tabs**: All, Weapons, Armor, Misc
+- **Session tracking**: Items gained during the current session highlighted with "NEW" badge
+- **Discard**: Remove items from inventory with one click
+- **Gold display**: gp/sp/cp breakdown
+- Server endpoint `POST /api/dm-session/item-rarity-lookup` for batch rarity resolution
+- Server endpoint `POST /api/character/:id/discard-item` for inventory management
+
+### Initiative & Combat Tracker
+Automatic initiative rolling and visual combat tracking:
+- **Markers**: AI DM emits `[COMBAT_START: Enemies="..."]` when combat begins, `[COMBAT_END]` when it ends
+- **Server-side initiative**: d20 + DEX modifier for player, companions (from ability scores), and enemies (heuristic estimation)
+- **Turn order injection**: Initiative results injected into AI conversation so it follows the established order
+- **Visual tracker**: Inline bar above messages showing round counter and combatant chips:
+  - Player (blue), Companions (purple), Enemies (red)
+  - Active turn highlighted with gold border
+  - "Next Turn" and "End Combat" controls
+- **3-point prompt reinforcement**: ABSOLUTE RULES + COMBAT section + FINAL REMINDER
+- Markers stripped from displayed narrative
+- Tests: 26 tests passing in `tests/combat-tracker.test.js`
+
+## Expanded Loot Systems (2026-02-09)
 
 ### Broadened Session-End Loot
 Loot generation is no longer restricted to high-risk adventures only. All risk levels now have a chance to drop items from the level-appropriate DMG item tables:
@@ -137,7 +181,7 @@ Merchants now have **persistent, loot-table-generated inventories** stored in th
 - **Weighted selection**: Common items appear 6x more often than rare
 
 ### Campaign Plan Merchant Generation
-Campaign plan generation (Opus 4.5) now creates merchants scaled by location size:
+Campaign plan generation (Claude Opus) now creates merchants scaled by location size:
 - **City**: 5-8 merchants (diverse types)
 - **Town**: 3-4 merchants (common types)
 - **Village**: 1-2 merchants (general store, maybe blacksmith)
@@ -388,7 +432,7 @@ During active DM sessions, a tab bar provides Adventure, Downtime, and Stats tab
 ## Previous: Campaign Plan & DM Session Improvements (2026-02-07)
 
 ### Campaign Plan Generation
-- Opus 4.5 generates comprehensive living world plans with NPCs, factions, locations, timeline, quest arcs, side quests, and DM notes
+- Claude Opus generates comprehensive living world plans with NPCs, factions, locations, timeline, quest arcs, side quests, and DM notes
 - Campaign description is prioritized over backstory as the #1 rule for plan generation
 - Progress bar with animated steps during generation
 

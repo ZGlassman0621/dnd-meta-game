@@ -6,8 +6,9 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const SONNET_MODEL = 'claude-sonnet-4-20250514';
-const OPUS_MODEL = 'claude-opus-4-5-20251101';
+// Use alias form (no date suffix) so these automatically resolve to the latest version
+const SONNET_MODEL = 'claude-sonnet-4-5';
+const OPUS_MODEL = 'claude-opus-4-6';
 const DEFAULT_MODEL = SONNET_MODEL;
 
 /**

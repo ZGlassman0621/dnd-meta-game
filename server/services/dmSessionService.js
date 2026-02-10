@@ -173,6 +173,60 @@ export function detectLootDrop(narrative) {
 }
 
 /**
+ * Detect [COMBAT_START: Enemies="Enemy 1, Enemy 2"] marker in narrative.
+ * Returns { detected: true, enemies: ['Enemy 1', 'Enemy 2'] } or { detected: false }
+ */
+export function detectCombatStart(narrative) {
+  if (!narrative) return { detected: false };
+  const regex = /\[COMBAT_START:\s*([^\]]+)\]/i;
+  const match = regex.exec(narrative);
+  if (!match) return { detected: false };
+
+  const markerContent = match[1];
+  const pairRegex = /(\w+)="([^"]+)"/g;
+  let pairMatch;
+  let enemies = [];
+  while ((pairMatch = pairRegex.exec(markerContent)) !== null) {
+    if (pairMatch[1].toLowerCase() === 'enemies') {
+      enemies = pairMatch[2].split(',').map(e => e.trim()).filter(Boolean);
+    }
+  }
+
+  return { detected: true, enemies };
+}
+
+/**
+ * Detect [COMBAT_END] marker in narrative.
+ */
+export function detectCombatEnd(narrative) {
+  if (!narrative) return false;
+  return /\[COMBAT_END\]/i.test(narrative);
+}
+
+/**
+ * Heuristic DEX modifier estimation for enemy types.
+ * Used for initiative rolling when we don't have full stat blocks.
+ */
+export function estimateEnemyDexMod(enemyName) {
+  const name = (enemyName || '').toLowerCase();
+
+  // High DEX creatures
+  if (/rogue|assassin|thief|shadow|panther|displacer|phase|sprite|pixie|imp|quickling/.test(name)) return 4;
+  if (/wolf|worg|dire wolf|cat|leopard|jaguar|snake|viper|cobra/.test(name)) return 3;
+  if (/goblin|kobold|skeleton|ghoul|scout|spy|drow|elf|ranger|monk/.test(name)) return 2;
+
+  // Average DEX creatures
+  if (/bandit|guard|thug|cultist|soldier|warrior|knight|zombie|orc|gnoll|hobgoblin|bugbear|lizardfolk/.test(name)) return 1;
+
+  // Low DEX creatures
+  if (/ogre|giant|troll|minotaur|golem|elemental|treant|ent/.test(name)) return -1;
+  if (/dragon turtle|tarrasque|purple worm/.test(name)) return -2;
+
+  // Default: slightly above average
+  return 1;
+}
+
+/**
  * Detect if player is initiating a downtime activity
  */
 export function detectDowntime(playerAction) {

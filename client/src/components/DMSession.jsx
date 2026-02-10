@@ -9,8 +9,11 @@ import {
 import { CAMPAIGN_MODULES, getCampaignModule } from '../data/campaignModules';
 import { SEASON_ICONS } from '../data/harptos';
 import classesData from '../data/classes.json';
+import racesData from '../data/races.json';
 import Downtime from './Downtime';
 import MetaGameDashboard from './MetaGameDashboard';
+import InventoryPanel from './InventoryPanel';
+import CombatTracker from './CombatTracker';
 
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'llama3.1:8b';
@@ -133,6 +136,13 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Downtime detection state
   const [pendingDowntime, setPendingDowntime] = useState(null);
   const [downtimeLoading, setDowntimeLoading] = useState(false);
+
+  // Inventory panel state
+  const [showInventory, setShowInventory] = useState(false);
+  const [itemsGainedThisSession, setItemsGainedThisSession] = useState([]);
+
+  // Combat tracker state
+  const [combatState, setCombatState] = useState(null);
 
   // Merchant shop state
   const [pendingMerchantShop, setPendingMerchantShop] = useState(null);
@@ -649,6 +659,16 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         setPendingDowntime(data.downtime);
       }
 
+      // Track loot drops gained this session
+      if (data.lootDrops?.length > 0) {
+        setItemsGainedThisSession(prev => [...prev, ...data.lootDrops.map(d => d.item)]);
+        // Refresh character to pick up inventory changes
+        if (onCharacterUpdated) {
+          const updatedChar = await fetch(`/api/character/${character.id}`).then(r => r.json());
+          onCharacterUpdated(updatedChar);
+        }
+      }
+
       // Check for merchant shop detection
       if (data.merchantShop?.detected) {
         setPendingMerchantShop(data.merchantShop);
@@ -658,12 +678,47 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         setLastMerchantContext(null);
       }
 
+      // Handle combat start/end
+      if (data.combatStart?.turnOrder) {
+        setCombatState(data.combatStart);
+      }
+      if (data.combatEnd) {
+        setCombatState(null);
+      }
+
     } catch (err) {
       setError(err.message);
       // Remove the action on error
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const advanceTurn = () => {
+    setCombatState(prev => {
+      if (!prev) return null;
+      const nextTurn = (prev.currentTurn + 1) % prev.turnOrder.length;
+      const nextRound = nextTurn === 0 ? prev.round + 1 : prev.round;
+      return { ...prev, currentTurn: nextTurn, round: nextRound };
+    });
+  };
+
+  const endCombat = () => setCombatState(null);
+
+  const discardItem = async (itemName) => {
+    try {
+      const response = await fetch(`/api/character/${character.id}/discard-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemName })
+      });
+      if (response.ok) {
+        const updatedChar = await response.json();
+        if (onCharacterUpdated) onCharacterUpdated(updatedChar);
+      }
+    } catch (err) {
+      console.error('Failed to discard item:', err);
     }
   };
 
@@ -1808,7 +1863,7 @@ Examples:
           <h2>{activeSession.title || 'Adventure in Progress'}</h2>
           <div className="session-controls" style={{ display: 'flex', gap: '0.5rem' }}>
             <button
-              onClick={() => { setShowQuickRef(!showQuickRef); setShowCompanionsRef(false); }}
+              onClick={() => { setShowQuickRef(!showQuickRef); setShowCompanionsRef(false); setShowInventory(false); }}
               style={{
                 background: showQuickRef ? 'rgba(59, 130, 246, 0.4)' : 'rgba(59, 130, 246, 0.2)',
                 border: '1px solid rgba(59, 130, 246, 0.4)',
@@ -1824,7 +1879,7 @@ Examples:
             </button>
             {companions.length > 0 && (
               <button
-                onClick={() => { setShowCompanionsRef(!showCompanionsRef); setShowQuickRef(false); }}
+                onClick={() => { setShowCompanionsRef(!showCompanionsRef); setShowQuickRef(false); setShowInventory(false); }}
                 style={{
                   background: showCompanionsRef ? 'rgba(155, 89, 182, 0.4)' : 'rgba(155, 89, 182, 0.2)',
                   border: '1px solid rgba(155, 89, 182, 0.4)',
@@ -1853,6 +1908,21 @@ Examples:
               title="View campaign notes and session history"
             >
               Notes
+            </button>
+            <button
+              onClick={() => { setShowInventory(!showInventory); setShowQuickRef(false); setShowCompanionsRef(false); }}
+              style={{
+                background: showInventory ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.2)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#10b981',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+              title="View inventory"
+            >
+              Inventory
             </button>
             <button className="end-session-btn" onClick={() => setShowEndOptions(true)} disabled={isLoading}>
               End Adventure
@@ -2446,6 +2516,68 @@ Examples:
                       );
                     })()}
                   </div>
+
+                  {/* Racial Traits */}
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <h4 style={{ color: '#14b8a6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(20, 184, 166, 0.3)', paddingBottom: '0.25rem' }}>
+                      Racial Traits ({character.subrace || character.race || 'Unknown'})
+                    </h4>
+                    {(() => {
+                      const raceName = character.race?.toLowerCase();
+                      const raceInfo = racesData[raceName];
+
+                      if (!raceInfo) {
+                        return (
+                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                            Race info not found
+                          </p>
+                        );
+                      }
+
+                      // If character has a subrace, use subrace traits (they contain full trait lists)
+                      let traits = raceInfo.traits || [];
+                      if (character.subrace && raceInfo.subraces) {
+                        const subrace = raceInfo.subraces.find(
+                          sr => sr.name.toLowerCase() === character.subrace?.toLowerCase()
+                        );
+                        if (subrace?.traits) {
+                          traits = subrace.traits;
+                        }
+                      }
+
+                      if (traits.length === 0) {
+                        return (
+                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                            No racial traits available
+                          </p>
+                        );
+                      }
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {traits.map((trait, idx) => {
+                            const [name, ...descParts] = trait.split(' - ');
+                            const description = descParts.join(' - ').trim();
+                            return (
+                              <div key={idx} style={{
+                                padding: '0.5rem',
+                                background: 'rgba(20, 184, 166, 0.1)',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem'
+                              }}>
+                                <div style={{ fontWeight: 'bold', color: '#5eead4' }}>{name.trim()}</div>
+                                {description && (
+                                  <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                                    {description.length > 150 ? description.substring(0, 150) + '...' : description}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
             </div>
@@ -2757,7 +2889,18 @@ Examples:
           </div>
         )}
 
-        {/* Game Date and Spell Slots Bar */}
+        {/* Inventory Panel (Overlay) */}
+        {showInventory && (
+          <InventoryPanel
+            character={character}
+            itemsGainedThisSession={itemsGainedThisSession}
+            onDiscard={discardItem}
+            onClose={() => setShowInventory(false)}
+            onRefreshCharacter={onCharacterUpdated}
+          />
+        )}
+
+        {/* Game Date and Stats Bar */}
         <div className="session-info-bar" style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -2770,6 +2913,28 @@ Examples:
           flexWrap: 'wrap',
           gap: '0.5rem'
         }}>
+          {/* Quick Stats: HP, AC, Gold */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title={`HP: ${character.current_hp}/${character.max_hp}`}>
+              <span style={{ color: '#888' }}>HP:</span>
+              <span style={{
+                color: character.current_hp <= character.max_hp * 0.25 ? '#ef4444' :
+                       character.current_hp <= character.max_hp * 0.5 ? '#f59e0b' : '#10b981',
+                fontWeight: 'bold'
+              }}>
+                {character.current_hp}/{character.max_hp}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title="Armor Class">
+              <span style={{ color: '#888' }}>AC:</span>
+              <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{character.armor_class || 10}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title="Gold">
+              <span style={{ color: '#888' }}>Gold:</span>
+              <span style={{ color: '#d4af37', fontWeight: 'bold' }}>{character.gold_gp || 0}gp</span>
+            </div>
+          </div>
+
           {/* Game Date Display with Controls */}
           {gameDate && (
             <div className="game-date" style={{
@@ -3481,6 +3646,15 @@ Examples:
               )}
             </div>
           </div>
+        )}
+
+        {/* Combat Tracker (inline, above messages) */}
+        {combatState && (
+          <CombatTracker
+            combatState={combatState}
+            onAdvanceTurn={advanceTurn}
+            onEndCombat={endCombat}
+          />
         )}
 
         <div className="dm-messages">

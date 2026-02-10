@@ -1,7 +1,7 @@
 /**
  * Campaign Plan Service
  *
- * Generates comprehensive campaign plans using Claude Opus 4.5.
+ * Generates comprehensive campaign plans using Claude Opus.
  * Creates living worlds with independent events, backstory integration,
  * and long-term narrative arcs set in Faerun circa 1350 DR.
  */
@@ -51,7 +51,7 @@ export async function generateCampaignPlan(campaignId, characterId) {
     buildSystemPrompt(),
     [{ role: 'user', content: prompt }],
     3,
-    'opus',  // Use Opus 4.5 for campaign planning
+    'opus',  // Use Opus for campaign planning (highest quality)
     16000,   // Campaign plans are large - need high token budget
     true     // Raw response - don't run cleanup on JSON
   );

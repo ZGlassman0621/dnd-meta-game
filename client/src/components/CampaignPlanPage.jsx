@@ -269,7 +269,7 @@ const TABS = [
 ];
 
 const GENERATION_STEPS = [
-  { label: 'Connecting to Opus 4.5...', duration: 3000 },
+  { label: 'Connecting to Claude Opus...', duration: 3000 },
   { label: 'Analyzing character backstory...', duration: 5000 },
   { label: 'Building world state & politics...', duration: 8000 },
   { label: 'Creating main quest arc...', duration: 10000 },
@@ -400,14 +400,14 @@ export default function CampaignPlanPage({ character }) {
       <div style={styles.container}>
         <div style={styles.header}>
           <h1 style={styles.title}>Campaign Plan</h1>
-          <p style={styles.subtitle}>Generate a comprehensive campaign plan using Claude Opus 4.5</p>
+          <p style={styles.subtitle}>Generate a comprehensive campaign plan using Claude Opus</p>
         </div>
 
         <div style={styles.generateSection}>
           <h3 style={{ marginBottom: '0.5rem', color: '#f5f5f5' }}>No Campaign Plan Yet</h3>
           <p style={{ ...styles.textMuted, marginBottom: '1rem' }}>
             Generate a living world campaign with your character's backstory woven into the narrative.
-            This uses Claude Opus 4.5 for high-quality world building.
+            This uses Claude Opus for high-quality world building.
           </p>
 
           {error && (
@@ -453,7 +453,7 @@ export default function CampaignPlanPage({ character }) {
                 }} />
               </div>
               <p style={{ ...styles.textSmall, marginTop: '0.75rem' }}>
-                Opus 4.5 is crafting your living world...
+                Claude Opus is crafting your living world...
               </p>
             </div>
           )}
@@ -1116,7 +1116,7 @@ export default function CampaignPlanPage({ character }) {
             }} />
           </div>
           <p style={{ ...styles.textSmall, marginTop: '0.5rem' }}>
-            Opus 4.5 is crafting your living world...
+            Claude Opus is crafting your living world...
           </p>
         </div>
       )}

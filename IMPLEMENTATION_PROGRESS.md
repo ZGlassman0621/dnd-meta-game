@@ -1992,7 +1992,7 @@ Date: 2026-02-04
 
 Date: 2026-02-07
 
-Implemented AI-powered campaign plan generation using Claude Opus 4.5, creating comprehensive living world plans from character backstories and campaign descriptions.
+Implemented AI-powered campaign plan generation using Claude Opus, creating comprehensive living world plans from character backstories and campaign descriptions.
 
 ### Services Created
 
@@ -2005,7 +2005,7 @@ Implemented AI-powered campaign plan generation using Claude Opus 4.5, creating 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/campaign/:id/plan` | GET | Get campaign plan |
-| `/api/campaign/:id/plan/generate` | POST | Generate plan with Opus 4.5 |
+| `/api/campaign/:id/plan/generate` | POST | Generate plan with Claude Opus |
 
 ### Campaign Plan Structure
 
@@ -2040,7 +2040,7 @@ Generated plans include:
 
 | File | Purpose | Date |
 |------|---------|------|
-| `server/services/campaignPlanService.js` | Opus 4.5 plan generation + plan summary for sessions | 2026-02-07 |
+| `server/services/campaignPlanService.js` | Claude Opus plan generation + plan summary for sessions | 2026-02-07 |
 | `client/src/components/CampaignPlanPage.jsx` | Campaign plan viewer with spoiler system | 2026-02-07 |
 
 ### Files Modified

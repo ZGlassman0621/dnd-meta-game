@@ -8,11 +8,13 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 
 | Model | Purpose | When Used |
 |-------|---------|-----------|
-| **Claude Opus 4.5** | Campaign plan generation | Creating comprehensive living world plans (NPCs, factions, locations, quest arcs, timeline) |
-| **Claude Sonnet 4** | AI Dungeon Master sessions | Real-time interactive gameplay, session narration, combat, dialogue |
-| **Claude Sonnet 4** | Backstory parsing | Analyzing freeform backstories into structured elements |
-| **Claude Sonnet 4** | Content generation | NPC generation, companion backstories, quest generation, location generation |
-| **Ollama (Llama 3.2)** | Offline fallback | All of the above when no internet/API key available |
+| **Claude Opus** (`claude-opus-4-6`) | Campaign plan generation | Creating comprehensive living world plans (NPCs, factions, locations, quest arcs, timeline) |
+| **Claude Sonnet** (`claude-sonnet-4-5`) | AI Dungeon Master sessions | Real-time interactive gameplay, session narration, combat, dialogue |
+| **Claude Sonnet** (`claude-sonnet-4-5`) | Backstory parsing | Analyzing freeform backstories into structured elements |
+| **Claude Sonnet** (`claude-sonnet-4-5`) | Content generation | NPC generation, companion backstories, quest generation, location generation |
+| **Ollama (Llama 3.1:8b)** | Offline fallback | All of the above when no internet/API key available |
+
+> **Note:** Both Claude models use alias IDs (no date suffix) so they automatically resolve to the latest available version when Anthropic releases updates.
 
 ## Architecture
 
@@ -28,10 +30,10 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 │  ┌─────────────────┐  ┌──────────────────────┐  │
 │  │  Claude API      │  │  Ollama (Fallback)   │  │
 │  │  ┌────────────┐  │  │  ┌────────────────┐  │  │
-│  │  │ Opus 4.5   │  │  │  │ Llama 3.2 3B   │  │  │
+│  │  │ Opus       │  │  │  │ Llama 3.1 8B   │  │  │
 │  │  │ (campaigns)│  │  │  │ (all tasks)    │  │  │
 │  │  ├────────────┤  │  │  └────────────────┘  │  │
-│  │  │ Sonnet 4   │  │  │                      │  │
+│  │  │ Sonnet     │  │  │                      │  │
 │  │  │ (sessions) │  │  │  localhost:11434      │  │
 │  │  └────────────┘  │  └──────────────────────┘  │
 │  └─────────────────┘                             │
@@ -48,7 +50,7 @@ The AI DM backend is split into focused modules:
 | **Prompt Builder** | `server/services/dmPromptBuilder.js` | ~600-line DM system prompt + all formatters (character info, companions, campaign plan, world state snapshot, content preferences including survival mode, skill check hard-stop rules, starting location enforcement) |
 | **Session Orchestrator** | `server/services/ollama.js` | Session lifecycle (start, continue, summarize) — imports from the above two |
 | **Session Service** | `server/services/dmSessionService.js` | Session business logic (rewards, notes extraction, NPC extraction, event emission) |
-| **Campaign Plan** | `server/services/campaignPlanService.js` | Opus 4.5 campaign plan generation |
+| **Campaign Plan** | `server/services/campaignPlanService.js` | Claude Opus campaign plan generation |
 | **Backstory Parser** | `server/services/backstoryParserService.js` | AI backstory parsing into structured elements |
 
 All AI generators (quests, locations, companions, living world) use `llmClient.js` for LLM calls with Claude primary and Ollama fallback.
@@ -72,8 +74,8 @@ Start the server and check the AI status indicator in the app header:
 - **Red dot + "AI Offline"** = No AI provider available
 
 ### Cost Considerations
-- **Opus 4.5** is used only for campaign plan generation (infrequent, ~1 call per campaign)
-- **Sonnet 4** handles all other tasks (sessions, parsing, generation) at lower cost
+- **Claude Opus** is used only for campaign plan generation (infrequent, ~1 call per campaign)
+- **Claude Sonnet** handles all other tasks (sessions, parsing, generation) at lower cost
 - Typical session: ~$0.05-0.15 depending on conversation length
 
 ---
@@ -89,7 +91,7 @@ brew install ollama
 brew services start ollama
 
 # Pull the model
-ollama pull llama3.2:3b
+ollama pull llama3.1:8b
 ```
 
 ### Configuration
@@ -98,8 +100,8 @@ No `.env` changes needed. The app automatically connects to Ollama at `http://lo
 ### Model Information
 | Property | Value |
 |----------|-------|
-| Model | Llama 3.2 3B |
-| Size | ~2.0 GB |
+| Model | Llama 3.1 8B |
+| Size | ~4.9 GB |
 | Speed | 6-8 seconds per generation |
 | Quality | Good for creative D&D content |
 
@@ -116,7 +118,7 @@ The server checks providers on startup and per-request:
 2. **Check Ollama** — If Claude is unavailable, check `localhost:11434`
 3. **Status endpoint** — `GET /api/dm-session/llm-status` returns provider info
 
-When Claude is available, Opus 4.5 is used for campaign plan generation and Sonnet 4 for everything else. When only Ollama is available, Llama 3.2 handles all tasks.
+When Claude is available, Claude Opus is used for campaign plan generation and Claude Sonnet for everything else. When only Ollama is available, Llama 3.1 handles all tasks.
 
 ---
 
@@ -132,7 +134,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-sonnet-4-20250514","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}'
+  -d '{"model":"claude-sonnet-4-5","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}'
 ```
 
 ### Ollama Issues
@@ -147,7 +149,7 @@ brew services restart ollama
 ollama list
 
 # Test directly
-ollama run llama3.2:3b "Write a D&D adventure hook"
+ollama run llama3.1:8b "Write a D&D adventure hook"
 ```
 
 ### Server Logs

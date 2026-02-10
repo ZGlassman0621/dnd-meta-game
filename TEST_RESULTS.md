@@ -1,4 +1,74 @@
-# DMG Magic Items — Test Results
+# Test Results
+
+## Combat Tracker Tests (2026-02-10)
+
+**File:** `tests/combat-tracker.test.js`
+**Run:** `node tests/combat-tracker.test.js`
+
+### detectCombatStart (12 tests)
+- Detects combat start marker
+- Parses 3 enemies from comma-separated list
+- Correctly identifies first and last enemies by name
+- Works with single enemy
+- Returns false when no marker present
+- Handles null input gracefully
+- Handles empty string gracefully
+- Case-insensitive detection (lowercase markers)
+- Parses enemies case-insensitively
+
+### detectCombatEnd (6 tests)
+- Detects combat end marker in narrative text
+- Detects bare [COMBAT_END] marker
+- Case-insensitive detection
+- Returns false when no marker present
+- Handles null input
+- Handles empty string
+
+### estimateEnemyDexMod (8 tests)
+- Goblins get +2 DEX
+- Wolves get +3 DEX
+- Ogres get -1 DEX
+- Bandits get +1 DEX
+- Rogues/Assassins get +4 DEX
+- Unknown creatures default to +1
+- Empty string defaults to +1
+- Null defaults to +1
+
+**Result: 26 passed, 0 failed**
+
+---
+
+## Loot Systems Tests (2026-02-10)
+
+**File:** `tests/loot-systems.test.js`
+**Run:** `node tests/loot-systems.test.js`
+
+### Test 1: Broadened Session-End Loot
+- High risk loot rate: ~25% (expected 25%) PASS
+- Medium risk loot rate: ~10% (expected 10%) PASS
+- Low risk loot rate: ~5% (expected 5%) PASS
+- getLootTableForLevel returns correct tiers PASS
+- EQUIPMENT_BY_LEVEL has correct content PASS
+
+### Test 2: Travel Encounter Loot
+- Combat encounter loot rate: ~30% (expected 30%) PASS
+- Discovery encounter loot rate: ~40% (expected 40%) PASS
+- Weather encounter loot rate: 0% (expected 0%) PASS
+- Failed combat loot rate: 0% (expected 0%) PASS
+- Encounter gold generation correct PASS
+- Encounter gold scales with level PASS
+
+### Test 3: [LOOT_DROP] Marker Detection
+- LOOT_DROP marker detection works correctly PASS
+
+### Test 4: Quest Completion Rewards (Structural)
+- Quest reward structure is valid PASS
+
+**Result: All 4 test suites passed**
+
+---
+
+## DMG Magic Items — Test Results
 
 Date: 2026-02-10
 

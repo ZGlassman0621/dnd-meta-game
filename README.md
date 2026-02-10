@@ -11,7 +11,7 @@ Create Character → Write Backstory (optional) → Create Campaign → Auto-Pip
 When you create a campaign, the system automatically:
 1. Assigns your character
 2. Parses your backstory (if you have one)
-3. Generates a full living world campaign plan with Opus 4.5
+3. Generates a full living world campaign plan with Claude Opus
 4. Presents a "Play Now" button to jump straight into adventure
 
 ## Features
@@ -25,7 +25,7 @@ When you create a campaign, the system automatically:
 ### Campaign System
 - **Streamlined Campaign Creation** — Starting location dropdown with 15 Forgotten Realms locations, auto-detects location from parsed backstory
 - **Auto-Pipeline** — Campaign creation automatically assigns character, parses backstory, and generates the full campaign plan in one flow
-- **Campaign Plan Generation** — Opus 4.5 generates comprehensive living world plans including main quest arcs, NPCs, factions, locations, world timeline events, side quests, and DM notes — all woven around your character's backstory
+- **Campaign Plan Generation** — Claude Opus generates comprehensive living world plans including main quest arcs, NPCs, factions, locations, world timeline events, side quests, and DM notes — all woven around your character's backstory
 - **Spoiler System** — Campaign plan viewer hides DM-sensitive content (NPC roles, faction allegiances, secrets) behind toggleable spoiler covers
 
 ### AI Dungeon Master
@@ -48,7 +48,7 @@ When you create a campaign, the system automatically:
 - **Frontend:** React + Vite
 - **Backend:** Node.js + Express
 - **Database:** SQLite (local file, with optional Turso cloud sync)
-- **AI:** Claude API (Opus 4.5 for campaign generation, Sonnet 4 for sessions) with Ollama fallback for offline play
+- **AI:** Claude API (Claude Opus for campaign generation, Claude Sonnet for sessions — auto-updating aliases) with Ollama fallback for offline play
 
 ## Setup
 
