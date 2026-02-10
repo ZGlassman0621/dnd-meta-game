@@ -9,6 +9,7 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
+import { createMerchantsFromPlan } from './merchantService.js';
 
 /**
  * Generate a comprehensive campaign plan using Opus
@@ -62,6 +63,13 @@ export async function generateCampaignPlan(campaignId, characterId) {
     'UPDATE campaigns SET campaign_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [JSON.stringify(plan), campaignId]
   );
+
+  // Create persistent merchant inventory entries from the plan
+  try {
+    await createMerchantsFromPlan(campaignId, plan);
+  } catch (e) {
+    console.error('Error creating merchants from plan:', e.message);
+  }
 
   return plan;
 }
@@ -371,6 +379,18 @@ Generate a campaign plan with this EXACT JSON structure:
     }
   ],
 
+  "merchants": [
+    {
+      "id": "unique_id",
+      "name": "Merchant name (a named character)",
+      "type": "general|blacksmith|alchemist|magic|jeweler|tanner|tailor",
+      "location": "Which plan location they operate in",
+      "specialty": "What they're known for (e.g., 'exotic weapons from Calimshan')",
+      "personality": "Brief personality (1 sentence)",
+      "prosperity_level": "poor|modest|comfortable|wealthy|aristocratic"
+    }
+  ],
+
   "factions": [
     {
       "id": "unique_id",
@@ -418,7 +438,15 @@ IMPORTANT RULES:
 7. Potential companions should have their own stories, not just be sidekicks
 8. BE CONCISE - keep descriptions to 1-3 sentences. Keep secrets to short phrases. The entire JSON must fit within 12000 tokens.
 9. Limit to 6-8 NPCs, 3-4 companions, 5-6 locations, 3-4 factions, 4-5 side quests
-10. 3 acts maximum for the main quest`;
+10. 3 acts maximum for the main quest
+11. Generate merchants scaled by settlement size. For each location in the plan:
+    - City: 5-8 merchants (diverse types — blacksmith, alchemist, magic shop, jeweler, tailor, general stores, etc.)
+    - Town: 3-4 merchants (common types — general, blacksmith, alchemist, maybe one specialty)
+    - Village: 1-2 merchants (general store, maybe a blacksmith)
+    - Also include 1-2 traveling merchants not tied to a specific location
+    - Prosperity should match the settlement's wealth (poor village = poor merchants, wealthy city district = wealthy shops)
+    - Each merchant type should fit their location naturally
+    - Skip dungeon/wilderness/landmark locations (no merchants there unless it makes narrative sense)`;
 }
 
 // ============================================================
@@ -473,6 +501,7 @@ function parseAIResponse(response) {
       npcs: ensureIds(parsed.npcs),
       potential_companions: ensureIds(parsed.potential_companions),
       locations: ensureIds(parsed.locations),
+      merchants: ensureIds(parsed.merchants),
       factions: ensureIds(parsed.factions),
       side_quests: ensureIds(parsed.side_quests),
       themes: parsed.themes || [],
@@ -518,6 +547,12 @@ export async function getPlanSummaryForSession(campaignId) {
       title: e.title,
       timing: e.timing,
       visibility: e.visibility
+    })),
+    merchants: plan.merchants?.map(m => ({
+      name: m.name,
+      type: m.type,
+      location: m.location,
+      personality: m.personality
     })),
     themes: plan.themes,
     dm_notes: plan.dm_notes ? {

@@ -58,6 +58,93 @@ export function parseNpcJoinMarker(narrative) {
 }
 
 /**
+ * Detect merchant shop marker in AI narrative
+ */
+export function detectMerchantShop(narrative) {
+  if (!narrative) return null;
+  const markerMatch = narrative.match(/\[MERCHANT_SHOP:\s*([^\]]+)\]/i);
+  if (!markerMatch) return null;
+
+  const markerContent = markerMatch[1];
+  const data = {};
+  const pairRegex = /(\w+)="([^"]+)"/g;
+  let match;
+  while ((match = pairRegex.exec(markerContent)) !== null) {
+    data[match[1].toLowerCase()] = match[2];
+  }
+  if (!data.merchant) return null;
+
+  return {
+    detected: true,
+    merchantName: data.merchant,
+    merchantType: data.type || 'general',
+    location: data.location || 'Unknown shop'
+  };
+}
+
+/**
+ * Detect merchant referral marker in AI narrative.
+ * [MERCHANT_REFER: From="Current Merchant" To="Other Merchant" Item="item description"]
+ */
+export function detectMerchantRefer(narrative) {
+  if (!narrative) return null;
+  const markerMatch = narrative.match(/\[MERCHANT_REFER:\s*([^\]]+)\]/i);
+  if (!markerMatch) return null;
+
+  const markerContent = markerMatch[1];
+  const data = {};
+  const pairRegex = /(\w+)="([^"]+)"/g;
+  let match;
+  while ((match = pairRegex.exec(markerContent)) !== null) {
+    data[match[1].toLowerCase()] = match[2];
+  }
+  if (!data.to || !data.item) return null;
+
+  return {
+    fromMerchant: data.from || null,
+    toMerchant: data.to,
+    item: data.item
+  };
+}
+
+/**
+ * Detect ADD_ITEM markers in AI narrative.
+ * [ADD_ITEM: Name="item name" Price_GP=X Quality="standard|fine|superior|masterwork" Category="category"]
+ */
+export function detectAddItem(narrative) {
+  if (!narrative) return [];
+  const markers = [];
+  const regex = /\[ADD_ITEM:\s*([^\]]+)\]/gi;
+  let markerMatch;
+  while ((markerMatch = regex.exec(narrative)) !== null) {
+    const markerContent = markerMatch[1];
+    const data = {};
+    const pairRegex = /(\w+)="([^"]+)"/g;
+    let match;
+    while ((match = pairRegex.exec(markerContent)) !== null) {
+      data[match[1].toLowerCase()] = match[2];
+    }
+    // Also parse non-quoted numeric values like Price_GP=15
+    const numRegex = /(\w+)=(\d+(?:\.\d+)?)/g;
+    while ((match = numRegex.exec(markerContent)) !== null) {
+      const key = match[1].toLowerCase();
+      if (!data[key]) data[key] = match[2];
+    }
+
+    if (data.name) {
+      markers.push({
+        name: data.name,
+        price_gp: parseFloat(data.price_gp) || 0,
+        quality: data.quality || 'standard',
+        category: data.category || 'adventuring_gear',
+        description: data.description || ''
+      });
+    }
+  }
+  return markers;
+}
+
+/**
  * Detect if player is initiating a downtime activity
  */
 export function detectDowntime(playerAction) {

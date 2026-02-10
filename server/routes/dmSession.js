@@ -12,8 +12,10 @@ import { getActiveFactions } from '../services/factionService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
+import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
 import {
-  parseNpcJoinMarker, detectDowntime, detectRecruitment,
+  parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
+  detectMerchantRefer, detectAddItem,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -25,24 +27,40 @@ import {
 const router = express.Router();
 
 // Helper to determine which LLM provider to use
-async function getLLMProvider() {
-  // Try Claude first if API key is configured
+async function getLLMProvider(preference = 'auto') {
+  // If user explicitly requested a specific provider, try that first
+  if (preference === 'ollama') {
+    const ollamaStatus = await ollama.checkOllamaStatus();
+    if (ollamaStatus.available) {
+      return { provider: 'ollama', status: ollamaStatus };
+    }
+    return { provider: null, status: { available: false, error: 'Ollama is not running. Start Ollama to use local AI.' } };
+  }
+
+  if (preference === 'claude') {
+    if (claude.isClaudeAvailable()) {
+      const status = await claude.checkClaudeStatus();
+      if (status.available) {
+        return { provider: 'claude', status };
+      }
+    }
+    return { provider: null, status: { available: false, error: 'Claude API not available. Check your ANTHROPIC_API_KEY.' } };
+  }
+
+  // Auto mode: try Claude first, then Ollama fallback
   if (claude.isClaudeAvailable()) {
     const status = await claude.checkClaudeStatus();
     if (status.available) {
       return { provider: 'claude', status };
     }
-    // Claude key is set but not working (no internet, etc.) - try Ollama as fallback
     console.log('Claude unavailable, checking Ollama fallback...');
   }
 
-  // Try Ollama as fallback (or primary if no Claude key)
   const ollamaStatus = await ollama.checkOllamaStatus();
   if (ollamaStatus.available) {
     return { provider: 'ollama', status: ollamaStatus };
   }
 
-  // Neither provider available
   const claudeConfigured = claude.isClaudeAvailable();
   const errorMsg = claudeConfigured
     ? 'Claude API unavailable (no internet?) and Ollama not running. Start Ollama for offline mode.'
@@ -54,8 +72,8 @@ async function getLLMProvider() {
 // Check LLM status (prefers Claude, falls back to Ollama)
 router.get('/llm-status', async (req, res) => {
   try {
-    const { provider, status } = await getLLMProvider();
-    // Spread status first, then provider - ensures our provider value isn't overwritten
+    const preference = req.query.preference || 'auto';
+    const { provider, status } = await getLLMProvider(preference);
     res.json({ ...status, provider });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -190,20 +208,23 @@ router.get('/campaign-context/:characterId', async (req, res) => {
     let campaignPlanInfo = null;
     if (character?.campaign_id) {
       const campaign = await dbGet(
-        'SELECT id, name, description, campaign_plan FROM campaigns WHERE id = ?',
+        'SELECT id, name, description, campaign_plan, starting_location FROM campaigns WHERE id = ?',
         [character.campaign_id]
       );
-      if (campaign?.campaign_plan) {
-        try {
-          const plan = JSON.parse(campaign.campaign_plan);
-          campaignPlanInfo = {
-            campaignId: campaign.id,
-            campaignName: campaign.name,
-            campaignDescription: campaign.description,
-            questTitle: plan.main_quest?.title,
-            themes: plan.themes || []
-          };
-        } catch (e) { /* invalid JSON, ignore */ }
+      if (campaign) {
+        campaignPlanInfo = {
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          campaignDescription: campaign.description,
+          startingLocation: campaign.starting_location || null
+        };
+        if (campaign.campaign_plan) {
+          try {
+            const plan = JSON.parse(campaign.campaign_plan);
+            campaignPlanInfo.questTitle = plan.main_quest?.title;
+            campaignPlanInfo.themes = plan.themes || [];
+          } catch (e) { /* invalid JSON, ignore */ }
+        }
       }
     }
 
@@ -315,6 +336,7 @@ router.post('/start', async (req, res) => {
       campaignLength,
       customNpcs,
       model,
+      providerPreference,  // 'auto' | 'claude' | 'ollama'
       continueCampaign,  // If true, pull config from last session
       previousSessionSummaries  // Array of summaries to include in context
     } = req.body;
@@ -544,8 +566,8 @@ router.post('/start', async (req, res) => {
       campaignPlanSummary
     };
 
-    // Check which LLM provider is available (prefers Claude)
-    const { provider, status: llmStatus } = await getLLMProvider();
+    // Check which LLM provider is available (respects user preference)
+    const { provider, status: llmStatus } = await getLLMProvider(providerPreference);
     if (!provider) {
       return res.status(503).json({
         error: 'No LLM provider available',
@@ -615,7 +637,8 @@ router.post('/start', async (req, res) => {
 
     // Get character's current in-game date for session tracking
     // Prioritize the selected era's year - the player explicitly chose this era for the session
-    const gameStartDay = character.game_day || 1;
+    // Randomize the starting day for new campaigns (not always 1 Hammer)
+    const gameStartDay = character.game_day || (Math.floor(Math.random() * 365) + 1);
     let gameStartYear = 1492; // Default fallback
 
     if (era && era.years) {
@@ -713,7 +736,7 @@ router.post('/start', async (req, res) => {
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { action } = req.body;
+    const { action, providerPreference } = req.body;
 
     if (!action || !action.trim()) {
       return res.status(400).json({ error: 'Action is required' });
@@ -731,8 +754,8 @@ router.post('/:sessionId/message', async (req, res) => {
 
     const messages = JSON.parse(session.messages || '[]');
 
-    // Check which LLM provider is available
-    const { provider } = await getLLMProvider();
+    // Check which LLM provider is available (respects user preference)
+    const { provider } = await getLLMProvider(providerPreference);
     if (!provider) {
       return res.status(503).json({ error: 'No LLM provider available' });
     }
@@ -848,14 +871,309 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
 
+    // Check for merchant shop in the response
+    const merchantShop = detectMerchantShop(result.narrative);
+
+    // Strip all merchant markers from displayed narrative
+    let cleanNarrative = result.narrative;
+    cleanNarrative = cleanNarrative.replace(/\[MERCHANT_SHOP:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
+
+    // Handle ADD_ITEM markers — add custom items to current merchant's inventory
+    const addItems = detectAddItem(result.narrative);
+    let currentMerchantId = null;
+    if (addItems.length > 0 || merchantShop) {
+      try {
+        const character = await dbGet('SELECT campaign_id, level FROM characters WHERE id = ?', [session.character_id]);
+        if (character?.campaign_id) {
+          // Find the current merchant (from MERCHANT_SHOP marker or most recent context)
+          const merchantName = merchantShop?.merchantName;
+          if (merchantName) {
+            let dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
+            if (!dbMerchant) {
+              dbMerchant = await createMerchantOnTheFly(
+                character.campaign_id, merchantName,
+                merchantShop.merchantType, merchantShop.location, character.level || 1
+              );
+            }
+            currentMerchantId = dbMerchant.id;
+
+            // Process ADD_ITEM markers for this merchant
+            for (const item of addItems) {
+              try {
+                await addItemToMerchant(dbMerchant.id, item);
+              } catch (e) {
+                console.error('Error adding item to merchant:', e);
+              }
+            }
+
+            // Re-fetch inventory after any additions
+            if (addItems.length > 0) {
+              dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
+            }
+
+            // Inject actual inventory into conversation so AI knows what items are available
+            const itemList = dbMerchant.inventory
+              .map(i => `- ${i.name} (${i.price_gp}gp${i.quantity > 1 ? `, qty: ${i.quantity}` : ''}${i.quality ? ` [${i.quality}]` : ''})`)
+              .join('\n');
+            const inventoryContext = `[SYSTEM: ${merchantName}'s actual inventory — ONLY reference these items when the player asks what's available:\n${itemList}\nMerchant gold: ${dbMerchant.gold_gp}gp. Do NOT invent items not on this list. The shop UI shows this inventory to the player. If an item isn't here, suggest an alternative or refer to another merchant with [MERCHANT_REFER]. You can add fitting custom items with [ADD_ITEM].]`;
+            result.messages.push({ role: 'user', content: inventoryContext });
+            await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+          }
+        }
+      } catch (e) {
+        console.error('Error processing merchant markers:', e);
+      }
+    }
+
+    // Handle MERCHANT_REFER — ensure the referenced item exists at the other merchant
+    const merchantRefer = detectMerchantRefer(result.narrative);
+    if (merchantRefer) {
+      try {
+        const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [session.character_id]);
+        if (character?.campaign_id) {
+          await ensureItemAtMerchant(character.campaign_id, merchantRefer.toMerchant, merchantRefer.item);
+        }
+      } catch (e) {
+        console.error('Error ensuring item at referred merchant:', e);
+      }
+    }
+
     res.json({
-      narrative: result.narrative,
+      narrative: cleanNarrative,
       messageCount: result.messages.length,
       recruitment: recruitmentData,
-      downtime: downtimeDetected
+      downtime: downtimeDetected,
+      merchantShop: merchantShop
     });
   } catch (error) {
     console.error('Error in DM session message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get merchant inventory (DB lookup from persistent loot-table-generated stock)
+router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { merchantName, merchantType, location, playerItems } = req.body;
+
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [session.character_id]);
+    if (!character?.campaign_id) {
+      return res.status(404).json({ error: 'No campaign found for this character' });
+    }
+
+    let dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
+
+    // Auto-create merchant if not in DB (ad-hoc merchant discovered during gameplay)
+    if (!dbMerchant) {
+      const charData = await dbGet('SELECT level FROM characters WHERE id = ?', [session.character_id]);
+      dbMerchant = await createMerchantOnTheFly(
+        character.campaign_id,
+        merchantName,
+        merchantType || 'general',
+        location || null,
+        charData?.level || 1
+      );
+    }
+
+    const buybackItems = generateBuybackPrices(playerItems || []);
+
+    res.json({
+      inventory: dbMerchant.inventory,
+      buybackItems,
+      merchantName: dbMerchant.merchant_name,
+      merchantType: dbMerchant.merchant_type,
+      merchantId: dbMerchant.id,
+      personality: dbMerchant.personality,
+      merchantGold: dbMerchant.gold_gp
+    });
+  } catch (error) {
+    console.error('Error loading merchant inventory:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List all merchants for the session's campaign
+router.get('/:sessionId/merchants', async (req, res) => {
+  try {
+    const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [session.character_id]);
+    if (!character?.campaign_id) return res.json({ merchants: [] });
+
+    const merchants = await getMerchantsByCampaign(character.campaign_id);
+    res.json({ merchants });
+  } catch (error) {
+    console.error('Error listing merchants:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Restock a merchant's inventory from loot tables
+router.post('/:sessionId/restock-merchant', async (req, res) => {
+  try {
+    const { merchantId } = req.body;
+    const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const character = await dbGet('SELECT level FROM characters WHERE id = ?', [session.character_id]);
+    const result = await restockMerchant(merchantId, character?.level || 1);
+    res.json({ success: true, inventory: result.inventory, gold_gp: result.gold_gp });
+  } catch (error) {
+    console.error('Error restocking merchant:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Process merchant transaction
+router.post('/:sessionId/merchant-transaction', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { merchantName, merchantId, bought, sold } = req.body;
+
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+
+    let inventory = JSON.parse(character.inventory || '[]');
+    const changes = [];
+
+    // Calculate totals in copper
+    let totalSpentCp = 0;
+    let totalEarnedCp = 0;
+
+    // Process bought items
+    for (const item of (bought || [])) {
+      const costCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
+      totalSpentCp += costCp;
+
+      const existing = inventory.find(i => i.name.toLowerCase() === item.name.toLowerCase());
+      if (existing) {
+        existing.quantity = (existing.quantity || 1) + item.quantity;
+      } else {
+        inventory.push({ name: item.name, quantity: item.quantity });
+      }
+      changes.push(`Bought ${item.quantity}x ${item.name}`);
+    }
+
+    // Process sold items
+    for (const item of (sold || [])) {
+      const earnCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
+      totalEarnedCp += earnCp;
+
+      const idx = inventory.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
+      if (idx !== -1) {
+        const invItem = inventory[idx];
+        if (invItem.quantity && invItem.quantity > item.quantity) {
+          invItem.quantity -= item.quantity;
+        } else {
+          inventory.splice(idx, 1);
+        }
+      }
+      changes.push(`Sold ${item.quantity}x ${item.name}`);
+    }
+
+    // Calculate net gold change
+    let playerCp = (character.gold_gp || 0) * 100 + (character.gold_sp || 0) * 10 + (character.gold_cp || 0);
+    const netCostCp = totalSpentCp - totalEarnedCp;
+
+    if (netCostCp > playerCp) {
+      return res.status(400).json({ error: 'Not enough gold for this transaction' });
+    }
+
+    playerCp -= netCostCp;
+    const newGp = Math.floor(playerCp / 100);
+    const remainCp = playerCp % 100;
+    const newSp = Math.floor(remainCp / 10);
+    const newCp = remainCp % 10;
+
+    // Update character
+    await dbRun(`
+      UPDATE characters
+      SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [JSON.stringify(inventory), newGp, newSp, newCp, character.id]);
+
+    // Reputation: look up merchant NPC and adjust disposition
+    let reputationChange = null;
+    try {
+      const merchantNpc = await dbGet(
+        'SELECT id, name FROM npcs WHERE name LIKE ? LIMIT 1',
+        [`%${merchantName}%`]
+      );
+      if (merchantNpc) {
+        const { adjustDisposition } = await import('../services/npcRelationshipService.js');
+        const change = Math.min(10, Math.max(2, Math.floor(totalSpentCp / 1000) + 2));
+        await adjustDisposition(session.character_id, merchantNpc.id, change, `Traded with ${merchantName}`);
+        reputationChange = { npcName: merchantNpc.name, change };
+      }
+    } catch (repErr) {
+      console.warn('Reputation update failed:', repErr.message);
+    }
+
+    // Update the merchant's persistent inventory
+    if (merchantId) {
+      try {
+        const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
+        if (merchant) {
+          let merchInv = JSON.parse(merchant.inventory || '[]');
+
+          // Remove bought items from merchant stock
+          for (const item of (bought || [])) {
+            const idx = merchInv.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
+            if (idx !== -1) {
+              merchInv[idx].quantity = (merchInv[idx].quantity || 1) - item.quantity;
+              if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
+            }
+          }
+
+          // Add sold items to merchant stock (at full price for resale)
+          for (const item of (sold || [])) {
+            const existing = merchInv.find(i => i.name.toLowerCase() === item.name.toLowerCase());
+            if (existing) {
+              existing.quantity = (existing.quantity || 1) + item.quantity;
+            } else {
+              merchInv.push({
+                name: item.name,
+                price_gp: (item.price_gp || 0) * 2,
+                price_sp: (item.price_sp || 0) * 2,
+                price_cp: (item.price_cp || 0) * 2,
+                category: 'misc',
+                description: 'Acquired from adventurer',
+                quantity: item.quantity,
+                rarity: 'common'
+              });
+            }
+          }
+
+          // Update merchant gold (they pay for buybacks, receive from sales)
+          const newMerchGold = (merchant.gold_gp || 0) - Math.floor(totalEarnedCp / 100) + Math.floor(totalSpentCp / 100);
+          await updateMerchantAfterTransaction(merchantId, merchInv, newMerchGold);
+        }
+      } catch (merchErr) {
+        console.warn('Merchant inventory update failed:', merchErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      changes,
+      newInventory: inventory,
+      newGold: { gp: newGp, sp: newSp, cp: newCp },
+      totalSpent: { gp: Math.floor(totalSpentCp / 100), sp: Math.floor((totalSpentCp % 100) / 10), cp: totalSpentCp % 10 },
+      totalEarned: { gp: Math.floor(totalEarnedCp / 100), sp: Math.floor((totalEarnedCp % 100) / 10), cp: totalEarnedCp % 10 },
+      reputationChange
+    });
+  } catch (error) {
+    console.error('Error processing merchant transaction:', error);
     res.status(500).json({ error: error.message });
   }
 });

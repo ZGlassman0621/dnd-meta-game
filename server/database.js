@@ -1287,6 +1287,33 @@ export async function initDatabase() {
     }
   }
 
+  // Merchant inventories table - persistent shop inventories generated from loot tables
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS merchant_inventories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      merchant_name TEXT NOT NULL,
+      merchant_type TEXT NOT NULL,
+      location TEXT,
+      specialty TEXT,
+      personality TEXT,
+      prosperity TEXT DEFAULT 'comfortable',
+      inventory TEXT DEFAULT '[]',
+      gold_gp INTEGER DEFAULT 500,
+      last_restocked TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    )
+  `);
+
+  try {
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_merchant_inv_campaign ON merchant_inventories(campaign_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_merchant_inv_name ON merchant_inventories(merchant_name)');
+  } catch (e) {
+    // Indexes might already exist
+  }
+
   console.log('Database initialized successfully (Turso cloud)');
 }
 

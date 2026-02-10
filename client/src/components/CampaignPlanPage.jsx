@@ -262,6 +262,7 @@ const TABS = [
   { key: 'npcs', label: 'NPCs' },
   { key: 'companions', label: 'Companions' },
   { key: 'locations', label: 'Locations' },
+  { key: 'merchants', label: 'Merchants' },
   { key: 'factions', label: 'Factions' },
   { key: 'side_quests', label: 'Side Quests' },
   { key: 'dm_notes', label: 'DM Notes' }
@@ -818,6 +819,53 @@ export default function CampaignPlanPage({ character }) {
     </div>
   );
 
+  const renderMerchants = () => (
+    <div>
+      <h2 style={styles.sectionTitle}>Merchants</h2>
+      <p style={{ ...styles.textMuted, marginBottom: '1rem' }}>
+        Shopkeepers and traders in your campaign world. Their inventories are generated from loot tables based on type and prosperity.
+      </p>
+
+      <div style={styles.locationGrid}>
+        {plan.merchants?.map((merchant, idx) => (
+          <div key={merchant.id || idx} style={styles.locationCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+              <span style={{ color: '#f5f5f5', fontWeight: '500' }}>{merchant.name}</span>
+              <span style={{ ...styles.badge, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' }}>
+                {merchant.type}
+              </span>
+            </div>
+            <div style={{ ...styles.textSmall, marginBottom: '0.25rem' }}>
+              <span style={{ color: '#3498db' }}>{merchant.location}</span>
+            </div>
+            {merchant.specialty && (
+              <div style={{ ...styles.textSmall, marginBottom: '0.25rem' }}>
+                <span style={{ color: '#888' }}>Specialty: </span>
+                <span style={{ color: '#bbb' }}>{merchant.specialty}</span>
+              </div>
+            )}
+            {merchant.personality && (
+              <div style={{ ...styles.textSmall, fontStyle: 'italic', color: '#a78bfa', marginBottom: '0.5rem' }}>
+                "{merchant.personality}"
+              </div>
+            )}
+            <span style={{
+              ...styles.badge,
+              background: 'rgba(245, 158, 11, 0.15)',
+              color: '#f59e0b',
+              fontSize: '0.7rem'
+            }}>
+              {merchant.prosperity_level || 'comfortable'}
+            </span>
+          </div>
+        ))}
+        {(!plan.merchants || plan.merchants.length === 0) && (
+          <p style={styles.textMuted}>No merchants defined in the campaign plan. Regenerate the plan to add merchants.</p>
+        )}
+      </div>
+    </div>
+  );
+
   const renderFactions = () => (
     <div>
       <h2 style={styles.sectionTitle}>Factions</h2>
@@ -971,6 +1019,7 @@ export default function CampaignPlanPage({ character }) {
       case 'npcs': return renderNPCs();
       case 'companions': return renderCompanions();
       case 'locations': return renderLocations();
+      case 'merchants': return renderMerchants();
       case 'factions': return renderFactions();
       case 'side_quests': return renderSideQuests();
       case 'dm_notes': return renderDMNotes();

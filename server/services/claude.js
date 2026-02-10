@@ -38,45 +38,17 @@ export async function checkClaudeStatus() {
     };
   }
 
-  // Try a minimal API call to verify the key works
-  try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: DEFAULT_MODEL,
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Hi' }]
-      })
-    });
-
-    if (response.ok) {
-      return {
-        available: true,
-        model: DEFAULT_MODEL,
-        models: {
-          opus: OPUS_MODEL,
-          sonnet: SONNET_MODEL
-        },
-        provider: 'Anthropic Claude'
-      };
-    } else {
-      const error = await response.json();
-      return {
-        available: false,
-        error: error.error?.message || 'Claude API error'
-      };
-    }
-  } catch (error) {
-    return {
-      available: false,
-      error: `Cannot connect to Claude API: ${error.message}`
-    };
-  }
+  // API key is configured — report available without making a live API call.
+  // Actual API errors (invalid key, rate limit) will surface when the session starts.
+  return {
+    available: true,
+    model: DEFAULT_MODEL,
+    models: {
+      opus: OPUS_MODEL,
+      sonnet: SONNET_MODEL
+    },
+    provider: 'Anthropic Claude'
+  };
 }
 
 /**

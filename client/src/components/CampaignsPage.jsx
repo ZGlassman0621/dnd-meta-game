@@ -340,7 +340,7 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
             sl.name.toLowerCase().includes(homeLocation.name?.toLowerCase())
           );
           if (match) {
-            setNewCampaign(prev => ({ ...prev, starting_location: match.name }));
+            setNewCampaign(prev => ({ ...prev, starting_location: match.id }));
             setBackstoryLocation({ name: homeLocation.name, matched: true });
           } else {
             setNewCampaign(prev => ({ ...prev, starting_location: 'custom' }));
@@ -411,12 +411,15 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
   const handleCreateCampaign = async (e) => {
     e.preventDefault();
 
-    // Resolve starting location
+    // Resolve starting location — dropdown stores ID, but DB stores the display name
+    // so campaign plan generation can use it directly in prompts
+    const locId = newCampaign.starting_location;
+    const locMatch = STARTING_LOCATIONS.find(l => l.id === locId);
     const resolvedCampaign = {
       ...newCampaign,
-      starting_location: newCampaign.starting_location === 'custom'
+      starting_location: locId === 'custom'
         ? customLocation
-        : newCampaign.starting_location
+        : (locMatch ? locMatch.name : locId)
     };
 
     setPipelineStep('creating');
@@ -659,12 +662,12 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                     <option value="">Select a location...</option>
                     <optgroup label="Major Cities">
                       {STARTING_LOCATIONS.filter(l => l.type === 'city').map(loc => (
-                        <option key={loc.id} value={loc.name}>{loc.name} — {loc.region}</option>
+                        <option key={loc.id} value={loc.id}>{loc.name} — {loc.region}</option>
                       ))}
                     </optgroup>
                     <optgroup label="Regions">
                       {STARTING_LOCATIONS.filter(l => l.type === 'region').map(loc => (
-                        <option key={loc.id} value={loc.name}>{loc.name} — {loc.region}</option>
+                        <option key={loc.id} value={loc.id}>{loc.name} — {loc.region}</option>
                       ))}
                     </optgroup>
                     <option value="custom">Custom Location...</option>

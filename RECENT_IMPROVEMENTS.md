@@ -1,6 +1,72 @@
 # Recent Improvements
 
-## Latest: Skill Check Hard-Stop, Survival Mode, Starting Location Enforcement (2026-02-09)
+## Latest: Persistent Merchant Inventory System (2026-02-09)
+
+### Persistent Merchant Inventories
+Merchants now have **persistent, loot-table-generated inventories** stored in the database. Previously, merchant inventories were AI-generated on every visit — slow, expensive, and inconsistent. Now inventories are instant, consistent, and persist across sessions.
+
+- **Loot tables**: Item pools sourced from D&D 5e PHB (weapons, armor, adventuring gear, potions, magic items, gems, leather goods, clothing)
+- **Prosperity scaling**: Poor/modest/comfortable/wealthy/aristocratic tiers affect item selection, pricing, quantities, and merchant gold
+- **Character level gating**: Rare items only at level 5+, uncommon at level 3+
+- **Weighted selection**: Common items appear 6x more often than rare
+
+### Campaign Plan Merchant Generation
+Campaign plan generation (Opus 4.5) now creates merchants scaled by location size:
+- **City**: 5-8 merchants (diverse types)
+- **Town**: 3-4 merchants (common types)
+- **Village**: 1-2 merchants (general store, maybe blacksmith)
+- **Traveling**: 1-2 wandering merchants
+
+### Ad-Hoc Merchant Creation
+When the AI introduces a merchant not in the campaign plan, the system auto-creates them with a loot-table-generated inventory. No 404 errors — seamless experience.
+
+### AI-Inventory Synchronization
+When the AI emits `[MERCHANT_SHOP]`, the server injects the merchant's **real inventory** into the conversation as a `[SYSTEM]` message. The AI can only reference items actually in stock — no more narrative/inventory mismatches.
+
+### Merchant Referrals (`[MERCHANT_REFER]`)
+When a player asks for an item not in stock, the AI can redirect them to another campaign merchant. The system **guarantees** that item will exist at the referred merchant's inventory.
+
+### Custom Item Addition (`[ADD_ITEM]`)
+The AI can add custom narrative items to a merchant's inventory with proper pricing and quality tiers:
+- **Standard** (1x price) — normal quality
+- **Fine** (1.5x price) — well-crafted
+- **Superior** (2x price) — exceptional
+- **Masterwork** (3x price) — the finest available
+
+Items added this way persist in the database and show up in the shop UI.
+
+### Browse Wares Button
+- Only appears when AI has detected a merchant (via `[MERCHANT_SHOP]` marker)
+- Clears on non-merchant AI responses and session transitions
+- Reflects the current merchant being talked to
+
+### Provider Toggle
+Manual switch between Claude/Ollama/Auto mid-session with a recheck button. `checkClaudeStatus()` simplified to env var check (no more live API calls that could false-fail).
+
+### Merchant Transaction System
+- Buy items: merchant inventory depletes, player inventory grows, gold transfers
+- Sell items: limited by merchant's gold purse, items added to merchant stock at resale price
+- Restock: regenerate inventory from loot tables (50% old stock persists)
+- NPC reputation increases with merchant after purchases
+
+**Files Created**:
+- `server/data/merchantLootTables.js` — Item pools, prosperity config, inventory generation, quality tiers, item lookup/similarity
+- `server/services/merchantService.js` — Merchant CRUD, restock, on-the-fly creation, item addition, cross-merchant referrals
+
+**Files Modified**:
+- `server/database.js` — `merchant_inventories` table
+- `server/routes/dmSession.js` — Merchant endpoints, inventory injection, marker handling, provider toggle
+- `server/services/dmPromptBuilder.js` — Merchant shopping instructions (3-point reinforcement), referral/add-item markers
+- `server/services/dmSessionService.js` — Marker detection for `MERCHANT_SHOP`, `MERCHANT_REFER`, `ADD_ITEM`
+- `server/services/campaignPlanService.js` — Merchant section in plan schema, location-scaled generation
+- `server/services/claude.js` — Simplified `checkClaudeStatus()` to env var check
+- `client/src/components/DMSession.jsx` — Shop UI, Browse Wares button, provider toggle, merchant state lifecycle
+- `client/src/components/CampaignPlanPage.jsx` — Merchants tab in plan viewer
+- `client/src/components/CampaignsPage.jsx` — Campaigns page theme updates
+
+---
+
+## Skill Check Hard-Stop, Survival Mode, Starting Location Enforcement (2026-02-09)
 
 ### Skill Check Hard-Stop
 The AI DM now **stops writing immediately** after requesting any dice roll (skill check, saving throw, attack roll). Previously it would ask for a roll and then continue narrating without waiting for the result.

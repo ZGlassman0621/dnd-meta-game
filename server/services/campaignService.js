@@ -136,8 +136,9 @@ export async function getCampaignCharacters(campaignId) {
  * Assign a character to a campaign
  */
 export async function assignCharacterToCampaign(characterId, campaignId) {
+  // Clear campaign_config when switching campaigns so stale settings don't persist
   await dbRun(`
-    UPDATE characters SET campaign_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    UPDATE characters SET campaign_id = ?, campaign_config = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `, [campaignId, characterId]);
   return dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
 }

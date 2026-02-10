@@ -17,6 +17,7 @@ const DEFAULT_MODEL = 'llama3.1:8b';
 
 export default function DMSession({ character, allCharacters, onBack, onCharacterUpdated }) {
   const [llmStatus, setLlmStatus] = useState(null);
+  const [providerPreference, setProviderPreference] = useState('auto'); // 'auto' | 'claude' | 'ollama'
 
   // Campaign module selection
   const [selectedModule, setSelectedModule] = useState('custom');
@@ -133,6 +134,19 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [pendingDowntime, setPendingDowntime] = useState(null);
   const [downtimeLoading, setDowntimeLoading] = useState(false);
 
+  // Merchant shop state
+  const [pendingMerchantShop, setPendingMerchantShop] = useState(null);
+  const [merchantInventory, setMerchantInventory] = useState([]);
+  const [buybackItems, setBuybackItems] = useState([]);
+  const [merchantLoading, setMerchantLoading] = useState(false);
+  const [shopCart, setShopCart] = useState({ buying: [], selling: [] });
+  const [shopOpen, setShopOpen] = useState(false);
+  const [lastMerchantContext, setLastMerchantContext] = useState(null);
+  const [transactionProcessing, setTransactionProcessing] = useState(false);
+  const [merchantDbId, setMerchantDbId] = useState(null);
+  const [merchantPersonality, setMerchantPersonality] = useState(null);
+  const [merchantGold, setMerchantGold] = useState(null);
+
   const messagesEndRef = useRef(null);
 
   // Check LLM status on mount
@@ -176,7 +190,16 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         if (cfg.campaignModule && cfg.campaignModule !== 'custom') {
           setSelectedModule(cfg.campaignModule);
         }
-        if (cfg.startingLocation) {
+        if (data.campaignPlan?.startingLocation) {
+          // Campaign's starting_location is the source of truth (resolve name or ID to STARTING_LOCATIONS ID)
+          const campLoc = data.campaignPlan.startingLocation;
+          const match = STARTING_LOCATIONS.find(loc =>
+            loc.id === campLoc || loc.name.toLowerCase() === campLoc.toLowerCase()
+          );
+          if (match) {
+            setStartingLocation(match.id);
+          }
+        } else if (cfg.startingLocation) {
           setStartingLocation(cfg.startingLocation);
         }
         if (cfg.era) {
@@ -297,9 +320,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const checkLLMStatus = async () => {
+  const checkLLMStatus = async (pref) => {
     try {
-      const response = await fetch('/api/dm-session/llm-status');
+      const p = pref || providerPreference;
+      const response = await fetch(`/api/dm-session/llm-status?preference=${p}`);
       const data = await response.json();
       setLlmStatus(data);
     } catch (err) {
@@ -535,6 +559,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           campaignLength,
           customNpcs: selectedNpcs,
           model: DEFAULT_MODEL,
+          providerPreference,
           // Campaign continuity
           continueCampaign: continueCampaign && campaignContext?.hasPreviousSessions,
           previousSessionSummaries: continueCampaign && campaignContext?.recentSummaries
@@ -572,6 +597,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setSessionRewards(null);
       setSessionRecap(null);
       setActiveGameTab('adventure');
+      setLastMerchantContext(null);
+      setMerchantDbId(null);
+      setMerchantPersonality(null);
+      setMerchantGold(null);
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
@@ -599,7 +628,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       const response = await fetch(`/api/dm-session/${activeSession.id}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, providerPreference })
       });
 
       const data = await response.json();
@@ -618,6 +647,15 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       // Check for downtime detection
       if (data.downtime) {
         setPendingDowntime(data.downtime);
+      }
+
+      // Check for merchant shop detection
+      if (data.merchantShop?.detected) {
+        setPendingMerchantShop(data.merchantShop);
+        setLastMerchantContext(data.merchantShop);
+      } else {
+        // Clear stale merchant context when AI response has no merchant interaction
+        setLastMerchantContext(null);
       }
 
     } catch (err) {
@@ -766,6 +804,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
+      setLastMerchantContext(null);
+      setMerchantDbId(null);
+      setMerchantPersonality(null);
+      setMerchantGold(null);
       onBack && onBack();
 
     } catch (err) {
@@ -797,6 +839,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
+      setLastMerchantContext(null);
+      setMerchantDbId(null);
+      setMerchantPersonality(null);
+      setMerchantGold(null);
 
     } catch (err) {
       setError(err.message);
@@ -920,6 +966,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
+      setLastMerchantContext(null);
+      setMerchantDbId(null);
+      setMerchantPersonality(null);
+      setMerchantGold(null);
       fetchSessionHistory();
       fetchCampaignContext(); // Refresh campaign context to show updated session recap
 
@@ -927,6 +977,190 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ============================================================
+  // MERCHANT SHOP FUNCTIONS
+  // ============================================================
+
+  const playerInventory = (() => {
+    try {
+      const inv = typeof character.inventory === 'string'
+        ? JSON.parse(character.inventory || '[]')
+        : (character.inventory || []);
+      return inv;
+    } catch { return []; }
+  })();
+
+  const playerTotalCp = (character.gold_gp || 0) * 100 + (character.gold_sp || 0) * 10 + (character.gold_cp || 0);
+
+  const calculateBuyTotal = () => {
+    let total = 0;
+    for (const item of shopCart.buying) {
+      total += ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
+    }
+    return total;
+  };
+
+  const calculateSellTotal = () => {
+    let total = 0;
+    for (const item of shopCart.selling) {
+      total += ((item.sell_price_gp || 0) * 100 + (item.sell_price_sp || 0) * 10 + (item.sell_price_cp || 0)) * item.quantity;
+    }
+    return total;
+  };
+
+  const netCostCp = calculateBuyTotal() - calculateSellTotal();
+  const sellTotalCp = calculateSellTotal();
+  const merchantCanAfford = merchantGold === null || sellTotalCp <= merchantGold * 100;
+  const canAfford = netCostCp <= playerTotalCp && merchantCanAfford;
+  const goldAfterCp = playerTotalCp - netCostCp;
+
+  const formatCopper = (cp) => {
+    const gp = Math.floor(cp / 100);
+    const sp = Math.floor((cp % 100) / 10);
+    const rem = cp % 10;
+    const parts = [];
+    if (gp > 0) parts.push(`${gp} gp`);
+    if (sp > 0) parts.push(`${sp} sp`);
+    if (rem > 0) parts.push(`${rem} cp`);
+    return parts.length > 0 ? parts.join(', ') : '0 gp';
+  };
+
+  const openMerchantShop = async (merchantData) => {
+    const ctx = merchantData || lastMerchantContext || pendingMerchantShop;
+    if (!ctx) return;
+    setMerchantLoading(true);
+    setShopOpen(true);
+    setPendingMerchantShop(null);
+    setShopCart({ buying: [], selling: [] });
+
+    try {
+      const response = await fetch(`/api/dm-session/${activeSession.id}/generate-merchant-inventory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantName: ctx.merchantName,
+          merchantType: ctx.merchantType,
+          location: ctx.location,
+          characterLevel: character.level || 1,
+          characterGold: { gp: character.gold_gp || 0, sp: character.gold_sp || 0, cp: character.gold_cp || 0 },
+          playerItems: playerInventory
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('Merchant inventory error:', data.error);
+        setShopOpen(false);
+        return;
+      }
+      setMerchantInventory(data.inventory || []);
+      setBuybackItems(data.buybackItems || []);
+      setMerchantDbId(data.merchantId || null);
+      setMerchantPersonality(data.personality || null);
+      setMerchantGold(data.merchantGold ?? null);
+      // Update context with DB data
+      if (data.merchantName) {
+        const updatedCtx = { ...ctx, merchantName: data.merchantName, merchantType: data.merchantType || ctx.merchantType };
+        setLastMerchantContext(updatedCtx);
+      }
+    } catch (err) {
+      console.error('Failed to load merchant inventory:', err);
+      setShopOpen(false);
+    } finally {
+      setMerchantLoading(false);
+    }
+  };
+
+  const addToBuyCart = (item) => {
+    setShopCart(prev => {
+      const existing = prev.buying.find(i => i.name === item.name);
+      if (existing) {
+        const merchItem = merchantInventory.find(m => m.name === item.name);
+        if (existing.quantity >= (merchItem?.quantity || 1)) return prev;
+        return { ...prev, buying: prev.buying.map(i => i.name === item.name ? { ...i, quantity: i.quantity + 1 } : i) };
+      }
+      return { ...prev, buying: [...prev.buying, { ...item, quantity: 1 }] };
+    });
+  };
+
+  const removeFromBuyCart = (itemName) => {
+    setShopCart(prev => {
+      const existing = prev.buying.find(i => i.name === itemName);
+      if (!existing) return prev;
+      if (existing.quantity <= 1) return { ...prev, buying: prev.buying.filter(i => i.name !== itemName) };
+      return { ...prev, buying: prev.buying.map(i => i.name === itemName ? { ...i, quantity: i.quantity - 1 } : i) };
+    });
+  };
+
+  const addToSellCart = (item) => {
+    setShopCart(prev => {
+      const existing = prev.selling.find(i => i.name === item.name);
+      const playerItem = playerInventory.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+      const maxQty = playerItem?.quantity || 1;
+      if (existing) {
+        if (existing.quantity >= maxQty) return prev;
+        return { ...prev, selling: prev.selling.map(i => i.name === item.name ? { ...i, quantity: i.quantity + 1 } : i) };
+      }
+      return { ...prev, selling: [...prev.selling, { ...item, quantity: 1 }] };
+    });
+  };
+
+  const removeFromSellCart = (itemName) => {
+    setShopCart(prev => {
+      const existing = prev.selling.find(i => i.name === itemName);
+      if (!existing) return prev;
+      if (existing.quantity <= 1) return { ...prev, selling: prev.selling.filter(i => i.name !== itemName) };
+      return { ...prev, selling: prev.selling.map(i => i.name === itemName ? { ...i, quantity: i.quantity - 1 } : i) };
+    });
+  };
+
+  const confirmTransaction = async () => {
+    if (!canAfford || transactionProcessing) return;
+    setTransactionProcessing(true);
+    try {
+      const response = await fetch(`/api/dm-session/${activeSession.id}/merchant-transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantName: lastMerchantContext?.merchantName || 'Merchant',
+          merchantId: merchantDbId,
+          bought: shopCart.buying.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.price_gp, price_sp: i.price_sp, price_cp: i.price_cp })),
+          sold: shopCart.selling.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.sell_price_gp, price_sp: i.sell_price_sp, price_cp: i.sell_price_cp }))
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      onCharacterUpdated({
+        ...character,
+        inventory: JSON.stringify(data.newInventory),
+        gold_gp: data.newGold.gp,
+        gold_sp: data.newGold.sp,
+        gold_cp: data.newGold.cp
+      });
+
+      // Inject transaction context into session
+      const boughtStr = shopCart.buying.map(i => `${i.quantity}x ${i.name}`).join(', ');
+      const soldStr = shopCart.selling.map(i => `${i.quantity}x ${i.name}`).join(', ');
+      const contextMsg = `[Transaction with ${lastMerchantContext?.merchantName || 'merchant'}: ${boughtStr ? `Bought ${boughtStr}` : ''}${boughtStr && soldStr ? '. ' : ''}${soldStr ? `Sold ${soldStr}` : ''}. Net: ${netCostCp > 0 ? `spent ${formatCopper(netCostCp)}` : `earned ${formatCopper(-netCostCp)}`}]`;
+
+      try {
+        await fetch(`/api/dm-session/${activeSession.id}/inject-context`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: contextMsg })
+        });
+      } catch (e) { console.warn('Context injection failed:', e); }
+
+      setMessages(prev => [...prev, { type: 'narrative', content: `*${contextMsg}*` }]);
+      setShopOpen(false);
+      setShopCart({ buying: [], selling: [] });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTransactionProcessing(false);
     }
   };
 
@@ -2985,6 +3219,265 @@ Examples:
           </div>
         )}
 
+        {/* Merchant Shop Detection Prompt */}
+        {pendingMerchantShop && (
+          <div style={{
+            position: 'fixed', bottom: '100px', left: '50%', transform: 'translateX(-50%)',
+            background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
+            border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '12px', padding: '1rem 1.5rem',
+            display: 'flex', alignItems: 'center', gap: '1rem', zIndex: 1001,
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', maxWidth: '500px'
+          }}>
+            <span style={{ fontSize: '1.5rem' }}>🏪</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 'bold', color: '#f59e0b' }}>{pendingMerchantShop.merchantName}</div>
+              <div style={{ fontSize: '0.85rem', color: '#aaa' }}>Open shop to browse wares and trade?</div>
+            </div>
+            <button onClick={() => openMerchantShop(pendingMerchantShop)} style={{
+              padding: '0.5rem 1rem', borderRadius: '8px', border: 'none',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#000',
+              fontWeight: 'bold', cursor: 'pointer'
+            }}>Open Shop</button>
+            <button onClick={() => setPendingMerchantShop(null)} style={{
+              padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
+              background: 'transparent', color: '#888', cursor: 'pointer'
+            }}>Dismiss</button>
+          </div>
+        )}
+
+        {/* Merchant Shop Modal */}
+        {shopOpen && (
+          <div className="modal-overlay" onClick={() => { setShopOpen(false); setShopCart({ buying: [], selling: [] }); }} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1002,
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.99) 0%, rgba(20, 20, 30, 0.99) 100%)',
+              borderRadius: '12px', padding: '1.5rem', maxWidth: '850px', width: '95%', maxHeight: '85vh',
+              overflow: 'auto', border: '1px solid rgba(245, 158, 11, 0.4)',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.7)'
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <div>
+                  <h2 style={{ margin: 0, color: '#f59e0b', fontSize: '1.3rem' }}>
+                    🏪 {lastMerchantContext?.merchantName || 'Merchant'}
+                  </h2>
+                  <div style={{ color: '#888', fontSize: '0.85rem' }}>
+                    {lastMerchantContext?.merchantType} — {lastMerchantContext?.location}
+                  </div>
+                  {merchantPersonality && (
+                    <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.25rem' }}>
+                      "{merchantPersonality}"
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {merchantDbId && (
+                    <button onClick={async () => {
+                      setMerchantLoading(true);
+                      try {
+                        const resp = await fetch(`/api/dm-session/${activeSession.id}/restock-merchant`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ merchantId: merchantDbId })
+                        });
+                        const data = await resp.json();
+                        setMerchantInventory(data.inventory || []);
+                        setMerchantGold(data.gold_gp);
+                        setShopCart({ buying: [], selling: [] });
+                      } catch (err) {
+                        console.error('Restock failed:', err);
+                      } finally {
+                        setMerchantLoading(false);
+                      }
+                    }} disabled={merchantLoading} style={{
+                      background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.4)',
+                      borderRadius: '6px', color: '#3b82f6', padding: '0.35rem 0.6rem',
+                      fontSize: '0.75rem', cursor: 'pointer'
+                    }}>
+                      Restock
+                    </button>
+                  )}
+                  <button onClick={() => { setShopOpen(false); setShopCart({ buying: [], selling: [] }); }} style={{
+                    background: 'transparent', border: 'none', color: '#888', fontSize: '1.5rem', cursor: 'pointer'
+                  }}>✕</button>
+                </div>
+              </div>
+
+              {/* Gold bar */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem',
+                background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px', marginBottom: '1rem',
+                border: '1px solid rgba(245, 158, 11, 0.2)', flexWrap: 'wrap', gap: '0.25rem'
+              }}>
+                <span style={{ color: '#f59e0b' }}>Your Gold: {formatCopper(playerTotalCp)}</span>
+                {merchantGold !== null && (
+                  <span style={{ color: '#888', fontSize: '0.85rem' }}>
+                    Merchant's Purse: {merchantGold} gp
+                  </span>
+                )}
+                <span style={{ color: canAfford ? '#10b981' : '#ef4444' }}>
+                  After: {formatCopper(Math.max(0, goldAfterCp))}
+                  {netCostCp !== 0 && <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                    ({netCostCp > 0 ? `-${formatCopper(netCostCp)}` : `+${formatCopper(-netCostCp)}`})
+                  </span>}
+                </span>
+              </div>
+
+              {merchantLoading ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+                  Loading merchant inventory...
+                </div>
+              ) : (
+                <>
+                  {/* Two-column layout */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                    {/* BUY column */}
+                    <div>
+                      <h3 style={{ color: '#10b981', margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Buy</h3>
+                      <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                        {merchantInventory.map((item, idx) => {
+                          const inCart = shopCart.buying.find(c => c.name === item.name);
+                          const remaining = item.quantity - (inCart?.quantity || 0);
+                          return (
+                            <div key={idx} style={{
+                              display: 'flex', alignItems: 'center', gap: '0.5rem',
+                              padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem',
+                              background: inCart ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.03)',
+                              border: inCart ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid transparent'
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 500, fontSize: '0.9rem', color: '#ddd' }}>{item.name}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                                  {item.description} {item.rarity !== 'common' && <span style={{ color: item.rarity === 'rare' ? '#60a5fa' : '#a78bfa' }}>({item.rarity})</span>}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                <div style={{ color: '#f59e0b', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                                  {item.price_gp > 0 && `${item.price_gp}gp`}{item.price_sp > 0 && ` ${item.price_sp}sp`}{item.price_cp > 0 && ` ${item.price_cp}cp`}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: '#666' }}>×{remaining} left</div>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <button onClick={() => addToBuyCart(item)} disabled={remaining <= 0} style={{
+                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
+                                  background: remaining > 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.05)',
+                                  color: remaining > 0 ? '#10b981' : '#555', cursor: remaining > 0 ? 'pointer' : 'default',
+                                  fontSize: '0.9rem', fontWeight: 'bold'
+                                }}>+</button>
+                                {inCart && <button onClick={() => removeFromBuyCart(item.name)} style={{
+                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
+                                  background: 'rgba(239, 68, 68, 0.3)', color: '#ef4444', cursor: 'pointer',
+                                  fontSize: '0.9rem', fontWeight: 'bold'
+                                }}>-</button>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {merchantInventory.length === 0 && (
+                          <div style={{ color: '#666', textAlign: 'center', padding: '1rem' }}>No items available</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* SELL column */}
+                    <div>
+                      <h3 style={{ color: '#ef4444', margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Sell</h3>
+                      <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                        {playerInventory.map((item, idx) => {
+                          const buyback = buybackItems.find(b => b.name.toLowerCase() === item.name.toLowerCase());
+                          const sellPrice = buyback ? buyback.sell_price_gp : 0;
+                          const inCart = shopCart.selling.find(c => c.name.toLowerCase() === item.name.toLowerCase());
+                          const remaining = (item.quantity || 1) - (inCart?.quantity || 0);
+                          if (!buyback || sellPrice <= 0) return null;
+                          return (
+                            <div key={idx} style={{
+                              display: 'flex', alignItems: 'center', gap: '0.5rem',
+                              padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem',
+                              background: inCart ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
+                              border: inCart ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid transparent'
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 500, fontSize: '0.9rem', color: '#ddd' }}>{item.name}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#888' }}>Qty: {item.quantity || 1}</div>
+                              </div>
+                              <div style={{ color: '#f59e0b', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                                {sellPrice > 0 && `${sellPrice}gp`}{buyback?.sell_price_sp > 0 && ` ${buyback.sell_price_sp}sp`}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <button onClick={() => addToSellCart({ name: item.name, sell_price_gp: buyback?.sell_price_gp || 0, sell_price_sp: buyback?.sell_price_sp || 0, sell_price_cp: buyback?.sell_price_cp || 0 })} disabled={remaining <= 0} style={{
+                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
+                                  background: remaining > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.05)',
+                                  color: remaining > 0 ? '#ef4444' : '#555', cursor: remaining > 0 ? 'pointer' : 'default',
+                                  fontSize: '0.9rem', fontWeight: 'bold'
+                                }}>+</button>
+                                {inCart && <button onClick={() => removeFromSellCart(item.name)} style={{
+                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
+                                  background: 'rgba(255,255,255,0.1)', color: '#888', cursor: 'pointer',
+                                  fontSize: '0.9rem', fontWeight: 'bold'
+                                }}>-</button>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {playerInventory.length === 0 && (
+                          <div style={{ color: '#666', textAlign: 'center', padding: '1rem' }}>No items to sell</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cart summary */}
+                  {(shopCart.buying.length > 0 || shopCart.selling.length > 0) && (
+                    <div style={{
+                      background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '1rem',
+                      border: '1px solid rgba(255,255,255,0.1)', marginBottom: '1rem'
+                    }}>
+                      <h4 style={{ margin: '0 0 0.5rem 0', color: '#f59e0b', fontSize: '0.95rem' }}>Transaction</h4>
+                      {shopCart.buying.length > 0 && (
+                        <div style={{ color: '#10b981', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                          Buying: {shopCart.buying.map(i => `${i.quantity}x ${i.name}`).join(', ')} = {formatCopper(calculateBuyTotal())}
+                        </div>
+                      )}
+                      {shopCart.selling.length > 0 && (
+                        <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                          Selling: {shopCart.selling.map(i => `${i.quantity}x ${i.name}`).join(', ')} = +{formatCopper(calculateSellTotal())}
+                        </div>
+                      )}
+                      <div style={{ color: netCostCp > 0 ? '#f59e0b' : '#10b981', fontWeight: 'bold', marginTop: '0.5rem' }}>
+                        Net: {netCostCp > 0 ? `-${formatCopper(netCostCp)}` : netCostCp < 0 ? `+${formatCopper(-netCostCp)}` : '0 gp'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      onClick={confirmTransaction}
+                      disabled={transactionProcessing || (shopCart.buying.length === 0 && shopCart.selling.length === 0) || !canAfford}
+                      style={{
+                        flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none',
+                        background: canAfford && (shopCart.buying.length > 0 || shopCart.selling.length > 0)
+                          ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                          : 'rgba(255,255,255,0.1)',
+                        color: canAfford ? '#000' : '#555', fontWeight: 'bold', cursor: canAfford ? 'pointer' : 'default'
+                      }}
+                    >
+                      {transactionProcessing ? 'Processing...' : !merchantCanAfford ? "Merchant Can't Afford" : !canAfford ? 'Not Enough Gold' : 'Confirm Transaction'}
+                    </button>
+                    <button onClick={() => { setShopOpen(false); setShopCart({ buying: [], selling: [] }); }} style={{
+                      padding: '0.75rem 1.25rem', borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.2)', background: 'transparent',
+                      color: '#888', cursor: 'pointer'
+                    }}>Cancel</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="dm-messages">
           {messages.map((msg, idx) => (
             <div key={idx} className={`dm-message ${msg.type}`}>
@@ -3010,6 +3503,24 @@ Examples:
         </div>
 
         {error && <div className="dm-error">{error}</div>}
+
+        {/* Browse Wares button - only shows when AI has detected a merchant in the current interaction */}
+        {!shopOpen && !pendingMerchantShop && lastMerchantContext && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem', paddingRight: '0.25rem' }}>
+            <button
+              onClick={() => openMerchantShop(lastMerchantContext)}
+              disabled={merchantLoading}
+              style={{
+                padding: '0.35rem 0.75rem', borderRadius: '6px',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b',
+                fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+              }}
+            >
+              🏪 Browse Wares ({lastMerchantContext.merchantName})
+            </button>
+          </div>
+        )}
 
         <form onSubmit={sendAction} className="dm-input-form">
           <textarea
@@ -3087,6 +3598,37 @@ Examples:
                 <strong>AI Provider:</strong> {llmStatus.provider === 'claude' ? 'Claude (Anthropic)' : 'Ollama (Local)'}
                 {llmStatus.model && <span style={{ opacity: 0.7 }}> • {llmStatus.model}</span>}
               </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.3rem' }}>
+                <button
+                  onClick={() => {
+                    const next = providerPreference === 'auto'
+                      ? 'ollama'
+                      : providerPreference === 'ollama'
+                        ? 'claude'
+                        : 'auto';
+                    setProviderPreference(next);
+                    checkLLMStatus(next);
+                  }}
+                  style={{
+                    padding: '0.2rem 0.5rem', borderRadius: '4px',
+                    border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)',
+                    color: '#ccc', fontSize: '0.75rem', cursor: 'pointer'
+                  }}
+                >
+                  {providerPreference === 'auto' ? 'Auto' : providerPreference === 'claude' ? 'Claude' : 'Ollama'}
+                </button>
+                <button
+                  onClick={() => checkLLMStatus()}
+                  title="Recheck provider availability"
+                  style={{
+                    padding: '0.2rem 0.4rem', borderRadius: '4px',
+                    border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)',
+                    color: '#ccc', fontSize: '0.75rem', cursor: 'pointer'
+                  }}
+                >
+                  ↻
+                </button>
+              </div>
             </div>
 
             {/* Campaign Continuity - Show if there are previous sessions */}
