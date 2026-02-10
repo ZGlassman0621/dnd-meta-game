@@ -145,6 +145,34 @@ export function detectAddItem(narrative) {
 }
 
 /**
+ * Detect LOOT_DROP markers in AI narrative.
+ * [LOOT_DROP: Item="item name" Source="where it came from"]
+ * Can appear multiple times in one response.
+ */
+export function detectLootDrop(narrative) {
+  if (!narrative) return [];
+  const drops = [];
+  const regex = /\[LOOT_DROP:\s*([^\]]+)\]/gi;
+  let markerMatch;
+  while ((markerMatch = regex.exec(narrative)) !== null) {
+    const markerContent = markerMatch[1];
+    const data = {};
+    const pairRegex = /(\w+)="([^"]+)"/g;
+    let match;
+    while ((match = pairRegex.exec(markerContent)) !== null) {
+      data[match[1].toLowerCase()] = match[2];
+    }
+    if (data.item) {
+      drops.push({
+        item: data.item,
+        source: data.source || 'found'
+      });
+    }
+  }
+  return drops;
+}
+
+/**
  * Detect if player is initiating a downtime activity
  */
 export function detectDowntime(playerAction) {

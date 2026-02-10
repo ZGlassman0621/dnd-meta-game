@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { generateEncounterLoot } from '../config/rewards.js';
 
 /**
  * Travel Service - Journey mechanics, encounters, and resource management
@@ -272,7 +273,7 @@ export async function getPendingEncounters(journeyId) {
 }
 
 /**
- * Resolve an encounter
+ * Resolve an encounter (with automatic loot generation)
  */
 export async function resolveEncounter(id, data) {
   const {
@@ -284,8 +285,27 @@ export async function resolveEncounter(id, data) {
     items_gained = [],
     items_lost = [],
     time_lost_hours = 0,
-    created_story_thread_id = null
+    created_story_thread_id = null,
+    character_level = 1
   } = data;
+
+  // Auto-generate loot if none was explicitly provided and encounter was successful
+  let finalItemsGained = [...items_gained];
+  let finalGoldChange = gold_change;
+
+  if (items_gained.length === 0 && outcome !== 'failure' && outcome !== 'fled') {
+    const encounter = await getEncounterById(id);
+    if (encounter) {
+      const loot = generateEncounterLoot(encounter.encounter_type, character_level, outcome);
+      if (loot.item) {
+        finalItemsGained.push(loot.item);
+      }
+      const lootGoldCp = (loot.gold.gp * 100) + (loot.gold.sp * 10) + loot.gold.cp;
+      if (lootGoldCp > 0) {
+        finalGoldChange += lootGoldCp;
+      }
+    }
+  }
 
   await dbRun(`
     UPDATE journey_encounters SET
@@ -301,8 +321,8 @@ export async function resolveEncounter(id, data) {
       created_story_thread_id = ?
     WHERE id = ?
   `, [
-    approach, outcome, outcome_description, hp_change, gold_change,
-    JSON.stringify(items_gained), JSON.stringify(items_lost),
+    approach, outcome, outcome_description, hp_change, finalGoldChange,
+    JSON.stringify(finalItemsGained), JSON.stringify(items_lost),
     time_lost_hours, created_story_thread_id, id
   ]);
 

@@ -234,6 +234,13 @@ Auto-classifies as short/long rest and detects duration from text.
 - **Merchant referrals** (`[MERCHANT_REFER]`): AI redirects to another merchant; system guarantees the item exists there
 - **Custom items** (`[ADD_ITEM]`): AI adds narrative items with quality tiers (standard 1x, fine 1.5x, superior 2x, masterwork 3x)
 - **Buy/sell transactions**: Inventory depletes on purchase, merchant gold limits sales, restock regenerates from loot tables
+- **Loot drops** (`[LOOT_DROP]`): AI emits marker when player finds treasure, loots enemies, or receives item rewards — items auto-added to character inventory
+
+#### Expanded Loot Systems
+- **Session-end loot**: All risk levels can now drop items (high 25%, medium 10%, low 5%) — not just high-risk adventures
+- **Travel encounter loot**: Auto-generated when resolving encounters — combat (30%), discovery (40%), obstacle (10%), etc.
+- **DM session loot drops**: AI DM emits `[LOOT_DROP]` markers for combat rewards, hidden treasure, and NPC gifts — items added to real inventory
+- **Quest completion rewards**: Quest-defined rewards (gold, XP, items) auto-applied when quest completes — items are narratively tied to the quest
 
 #### DMG Magic Items & Rarity System
 - **~165 D&D 5e items** (DMG + Xanathar's Guide) across 5 rarity tiers: common, uncommon, rare, very rare, legendary
@@ -273,7 +280,7 @@ Auto-classifies as short/long rest and detects duration from text.
 - **Rewards system**:
   - Experience points (scaled by risk and duration)
   - Gold rewards (scaling with level and risk)
-  - Loot generation (20% chance on high-risk, 8-15 DMG magic items per level tier)
+  - Loot generation (high 25%, medium 10%, low 5% — level-appropriate DMG items)
   - HP restoration on success
 - **Consequences on failure**:
   - HP loss

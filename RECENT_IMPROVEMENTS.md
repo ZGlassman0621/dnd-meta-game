@@ -1,6 +1,56 @@
 # Recent Improvements
 
-## Latest: DMG Magic Items & 5-Tier Rarity System (2026-02-09)
+## Latest: Expanded Loot Systems (2026-02-09)
+
+### Broadened Session-End Loot
+Loot generation is no longer restricted to high-risk adventures only. All risk levels now have a chance to drop items from the level-appropriate DMG item tables:
+- **High risk**: 25% chance (up from 20%)
+- **Medium risk**: 10% chance (new)
+- **Low risk**: 5% chance (new)
+
+### Travel Encounter Loot Generation
+Travel encounters now auto-generate loot when resolved successfully. Each encounter type has a different drop rate:
+- **Discovery**: 40% — found something interesting
+- **Combat**: 30% — enemy dropped something
+- **Omen**: 20% — found a mysterious trinket
+- **Creature**: 15% — harvestable materials
+- **Obstacle**: 10% — found something behind it
+- **Travelers**: 5% — small trade or gift
+- **Weather/Merchant**: 0% — no loot
+
+Gold rewards also scale with character level and encounter type (combat enemies carry coin, discoveries reveal caches).
+
+### DM Session Loot Drops (`[LOOT_DROP]` Marker)
+The AI DM can now award items during freeform sessions by emitting a structured marker:
+```
+[LOOT_DROP: Item="Potion of Healing" Source="bandit leader's belt pouch"]
+```
+- Items are auto-added to the player's real character inventory
+- Marker is stripped from displayed narrative (player sees pure story)
+- AI is instructed to use sparingly — 1-2 items per significant combat or discovery
+- Works for combat loot, hidden treasure, NPC gifts — NOT merchant purchases
+- System confirms the item in loot tables when possible
+- 3-point reinforcement in DM prompt (ABSOLUTE RULES + mid-prompt + FINAL REMINDER)
+
+### Quest Completion Rewards
+Quest-defined rewards now auto-apply when quests complete:
+- Gold is added to the character's purse
+- XP is added to the character's experience
+- Items from the quest's reward definition are added to inventory
+- Rewards are narratively tied to the quest (defined by the AI quest generator)
+- No random items — everything comes from the quest's own reward field
+
+**Files Modified**:
+- `server/config/rewards.js` — Broadened `generateLoot()`, exported `EQUIPMENT_BY_LEVEL`/`getLootTableForLevel`, added `generateEncounterLoot()`
+- `server/services/travelService.js` — `resolveEncounter()` now auto-generates loot
+- `server/services/dmPromptBuilder.js` — `[LOOT_DROP]` instructions with 3-point reinforcement
+- `server/services/dmSessionService.js` — Added `detectLootDrop()` parser
+- `server/routes/dmSession.js` — Handle `[LOOT_DROP]` markers, add items to inventory, inject system context
+- `server/services/questService.js` — `completeQuest()` now auto-applies rewards via `applyQuestRewards()`
+
+---
+
+## DMG Magic Items & 5-Tier Rarity System (2026-02-09)
 
 ### ~165 D&D 5e Magic Items (DMG + XGtE)
 Added iconic magic items from the Dungeon Master's Guide and Xanathar's Guide to Everything across all 5 rarity tiers: common, uncommon, rare, very rare, and legendary. Items span every category:

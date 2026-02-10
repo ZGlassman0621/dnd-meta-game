@@ -15,7 +15,7 @@ import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
-  detectMerchantRefer, detectAddItem,
+  detectMerchantRefer, detectAddItem, detectLootDrop,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -23,6 +23,8 @@ import {
   extractAndTrackUsedNames,
   emitSessionEvents, emitSessionEndedEvent
 } from '../services/dmSessionService.js';
+import { lookupItemByName } from '../data/merchantLootTables.js';
+import { getLootTableForLevel } from '../config/rewards.js';
 
 const router = express.Router();
 
@@ -874,11 +876,12 @@ router.post('/:sessionId/message', async (req, res) => {
     // Check for merchant shop in the response
     const merchantShop = detectMerchantShop(result.narrative);
 
-    // Strip all merchant markers from displayed narrative
+    // Strip all system markers from displayed narrative
     let cleanNarrative = result.narrative;
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_SHOP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
 
     // Handle ADD_ITEM markers — add custom items to current merchant's inventory
     const addItems = detectAddItem(result.narrative);
@@ -950,12 +953,63 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
 
+    // Handle LOOT_DROP markers — validate items and add to character inventory
+    const lootDrops = detectLootDrop(result.narrative);
+    let lootDropResults = [];
+    if (lootDrops.length > 0) {
+      try {
+        const character = await dbGet('SELECT id, level, inventory FROM characters WHERE id = ?', [session.character_id]);
+        if (character) {
+          let inventory = JSON.parse(character.inventory || '[]');
+
+          for (const drop of lootDrops) {
+            // Try to find the item in our loot tables
+            const knownItem = lookupItemByName(drop.item);
+            const lootTable = getLootTableForLevel(character.level);
+            const isInLootTable = lootTable.includes(drop.item);
+
+            // Accept the item if it's known in our system OR in the level-appropriate loot table
+            const itemName = knownItem ? knownItem.name : drop.item;
+
+            // Add to character inventory
+            const existing = inventory.find(i => i.name.toLowerCase() === itemName.toLowerCase());
+            if (existing) {
+              existing.quantity = (existing.quantity || 1) + 1;
+            } else {
+              inventory.push({ name: itemName, quantity: 1 });
+            }
+
+            lootDropResults.push({
+              item: itemName,
+              source: drop.source,
+              known: !!knownItem || isInLootTable
+            });
+          }
+
+          // Save updated inventory
+          await dbRun('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [JSON.stringify(inventory), character.id]);
+
+          // Inject system context so AI knows the item was added
+          const itemNames = lootDropResults.map(d => d.item).join(', ');
+          result.messages.push({
+            role: 'user',
+            content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The following items have been added to the player's inventory: ${itemNames}. The player's character sheet now reflects these items.`
+          });
+          await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+        }
+      } catch (e) {
+        console.error('Error processing loot drops:', e);
+      }
+    }
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
       recruitment: recruitmentData,
       downtime: downtimeDetected,
-      merchantShop: merchantShop
+      merchantShop: merchantShop,
+      lootDrops: lootDropResults.length > 0 ? lootDropResults : undefined
     });
   } catch (error) {
     console.error('Error in DM session message:', error);

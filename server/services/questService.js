@@ -201,9 +201,13 @@ export async function advanceQuestStage(id) {
 }
 
 /**
- * Complete a quest
+ * Complete a quest and auto-apply its defined rewards to the character
  */
 export async function completeQuest(id) {
+  // Get quest before completing to access rewards and character_id
+  const quest = await getQuestById(id);
+  if (!quest) return null;
+
   await dbRun(`
     UPDATE quests SET
       status = 'completed',
@@ -212,7 +216,75 @@ export async function completeQuest(id) {
     WHERE id = ?
   `, [id]);
 
+  // Auto-apply quest rewards to the character
+  if (quest.character_id && quest.rewards) {
+    try {
+      await applyQuestRewards(quest.character_id, quest.rewards, quest.title);
+    } catch (e) {
+      console.error(`Error applying quest rewards for "${quest.title}":`, e);
+    }
+  }
+
   return getQuestById(id);
+}
+
+/**
+ * Apply quest-defined rewards to a character
+ * Rewards are narratively tied to the quest (defined by the AI quest generator)
+ */
+async function applyQuestRewards(characterId, rewards, questTitle) {
+  const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
+  if (!character) return;
+
+  const updates = [];
+  const params = [];
+
+  // Apply gold reward
+  if (rewards.gold && rewards.gold > 0) {
+    const newGp = (character.gold_gp || 0) + rewards.gold;
+    updates.push('gold_gp = ?');
+    params.push(newGp);
+  }
+
+  // Apply XP reward
+  if (rewards.xp && rewards.xp > 0) {
+    const newXP = (character.experience || 0) + rewards.xp;
+    updates.push('experience = ?');
+    params.push(newXP);
+  }
+
+  // Apply item rewards
+  if (rewards.items && rewards.items.length > 0) {
+    let inventory = [];
+    try {
+      inventory = JSON.parse(character.inventory || '[]');
+    } catch (e) {
+      inventory = [];
+    }
+
+    for (const itemName of rewards.items) {
+      if (!itemName || typeof itemName !== 'string') continue;
+      const existing = inventory.find(i => i.name.toLowerCase() === itemName.toLowerCase());
+      if (existing) {
+        existing.quantity = (existing.quantity || 1) + 1;
+      } else {
+        inventory.push({ name: itemName, quantity: 1 });
+      }
+    }
+
+    updates.push('inventory = ?');
+    params.push(JSON.stringify(inventory));
+  }
+
+  if (updates.length > 0) {
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(characterId);
+    await dbRun(
+      `UPDATE characters SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+    console.log(`Quest rewards applied for "${questTitle}": ${JSON.stringify(rewards)}`);
+  }
 }
 
 /**

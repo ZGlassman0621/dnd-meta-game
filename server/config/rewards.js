@@ -280,7 +280,7 @@ export function generateStoryConsequences(adventure, success, questRelevance = '
 }
 
 // Equipment loot tables by level range — items match names in merchantLootTables.js
-const EQUIPMENT_BY_LEVEL = {
+export const EQUIPMENT_BY_LEVEL = {
   1: [
     'Potion of Healing', 'Driftglobe', 'Moon-Touched Sword',
     'Cloak of Many Fashions', 'Candle of the Deep', 'Enduring Spellbook',
@@ -310,10 +310,17 @@ const EQUIPMENT_BY_LEVEL = {
   ]
 };
 
-// Generate random loot (20% chance on successful high-risk adventures)
+// Loot drop chances by risk level
+const LOOT_CHANCES = {
+  high: 0.25,    // 25% chance
+  medium: 0.10,  // 10% chance
+  low: 0.05      // 5% chance
+};
+
+// Generate random loot based on risk level
 export function generateLoot(level, riskLevel) {
-  // Only high-risk adventures drop loot, and only 20% of the time
-  if (riskLevel !== 'high' || Math.random() > 0.2) {
+  const chance = LOOT_CHANCES[riskLevel] || 0;
+  if (Math.random() > chance) {
     return null;
   }
 
@@ -326,4 +333,73 @@ export function generateLoot(level, riskLevel) {
   // Pick a random item
   const item = lootTable[Math.floor(Math.random() * lootTable.length)];
   return item;
+}
+
+/**
+ * Get the appropriate loot table for a character level
+ */
+export function getLootTableForLevel(level) {
+  if (level >= 15) return EQUIPMENT_BY_LEVEL[15];
+  if (level >= 10) return EQUIPMENT_BY_LEVEL[10];
+  if (level >= 5) return EQUIPMENT_BY_LEVEL[5];
+  return EQUIPMENT_BY_LEVEL[1];
+}
+
+// Encounter loot chances by encounter type
+const ENCOUNTER_LOOT_CHANCES = {
+  combat: 0.30,     // 30% — won a fight, enemy dropped something
+  creature: 0.15,   // 15% — harvestable materials
+  discovery: 0.40,  // 40% — found something interesting
+  obstacle: 0.10,   // 10% — cleared a blocked path, found something behind it
+  travelers: 0.05,  // 5% — traded or gifted something
+  omen: 0.20,       // 20% — found a mysterious trinket
+  weather: 0,       // 0% — weather doesn't drop loot
+  merchant: 0       // 0% — handled by merchant system
+};
+
+// Gold reward ranges by encounter type (in copper pieces)
+const ENCOUNTER_GOLD = {
+  combat: { min: 10, max: 100 },    // Enemies carry coin
+  creature: { min: 0, max: 50 },     // Sellable parts
+  discovery: { min: 20, max: 200 },  // Hidden cache
+  travelers: { min: 5, max: 30 },    // Small gift/trade
+  obstacle: { min: 0, max: 80 },     // Stashed behind obstacle
+  omen: { min: 0, max: 0 },
+  weather: { min: 0, max: 0 },
+  merchant: { min: 0, max: 0 }
+};
+
+/**
+ * Generate loot for a travel encounter
+ * Returns { item: string|null, gold: { cp, sp, gp } }
+ */
+export function generateEncounterLoot(encounterType, characterLevel, outcome = 'success') {
+  // Failed encounters give nothing
+  if (outcome === 'failure' || outcome === 'fled') {
+    return { item: null, gold: { cp: 0, sp: 0, gp: 0 } };
+  }
+
+  let item = null;
+  const lootChance = ENCOUNTER_LOOT_CHANCES[encounterType] || 0;
+
+  if (lootChance > 0 && Math.random() < lootChance) {
+    const lootTable = getLootTableForLevel(characterLevel);
+    item = lootTable[Math.floor(Math.random() * lootTable.length)];
+  }
+
+  // Gold from encounter (scaled by level)
+  const goldRange = ENCOUNTER_GOLD[encounterType] || { min: 0, max: 0 };
+  let goldCp = 0;
+  if (goldRange.max > 0) {
+    const levelMultiplier = Math.max(1, Math.floor(characterLevel / 3));
+    const baseGold = goldRange.min + Math.floor(Math.random() * (goldRange.max - goldRange.min + 1));
+    goldCp = baseGold * levelMultiplier;
+  }
+
+  const gp = Math.floor(goldCp / 100);
+  const remaining = goldCp % 100;
+  const sp = Math.floor(remaining / 10);
+  const cp = remaining % 10;
+
+  return { item, gold: { cp, sp, gp } };
 }
