@@ -327,3 +327,66 @@ Note: 5 tests in "Player Autonomy Enforcement" were updated to match the new pri
 
 ### Summary
 All 145+ tests pass. Server modules load cleanly. Client builds without errors. DM prompt generates correctly with all explicit examples removed and principle-based rules in place.
+
+---
+
+## Integration Tests (2026-02-11)
+
+**File:** `tests/integration.test.js`
+**Run:** `node tests/integration.test.js`
+
+Real Express server on port 3001, real database (Turso cloud), real HTTP requests with fetch. All test data prefixed `TEST_` and cleaned up automatically.
+
+### Group 1: Character CRUD & Inventory (37 assertions)
+- POST /api/character — Create with full fields (equipment, languages, feats, tools, cantrips, spells): 201
+- GET /api/character/:id — All JSON fields parse correctly (ability_scores, equipment, inventory, languages, feats, tool_proficiencies, cantrips, spells)
+- PUT /api/character/:id — Updates HP/gold/location, preserves unchanged fields
+- POST /:id/discard-item — Decrements quantity (qty 2 → 1)
+- POST /:id/discard-item — Removes item entirely (qty 1 → gone)
+- POST /:id/discard-item — Returns 404 for missing item
+- POST /rest/:id — Long rest restores full HP, resets spell_slots_used to {}
+
+### Group 2: Campaign Management (12 assertions)
+- POST /api/campaign — Creates campaign with 201
+- GET /api/campaign/:id — Returns correct fields
+- POST /:id/assign-character — Links character to campaign
+- GET /character/:id/campaign — Returns campaign object with correct id and name
+- GET /campaign/:id/characters — Character appears in campaign roster
+
+### Group 3: DM Session Infrastructure (17 assertions)
+- GET /campaign-context/:characterId — hasPreviousSessions=false, campaign plan present with correct name/location
+- POST /item-rarity-lookup — Potion of Healing=common, Flame Tongue=rare, Bag of Holding=uncommon
+- POST /item-rarity-lookup — Unknown items return undefined
+- GET /llm-status — Has available (boolean) and provider fields
+- pickSeasonalStartDay() direct tests:
+  - Winter keywords: 20/20 results in range [1-61, 336-365]
+  - Summer keywords: result in [153-243]
+  - Spring keywords: result in [62-152]
+  - Autumn keywords: result in [244-335]
+  - No keywords: valid day [1-365]
+  - Null input: valid day [1-365]
+  - Location "Icewind Dale": maps to winter range
+
+### Group 4: Merchant System (16 assertions)
+- Seeded DM session directly in DB (no AI call needed)
+- POST /generate-merchant-inventory — Creates blacksmith with inventory array, merchantId, gold
+- GET /merchants — Test merchant appears in list
+- POST /generate-merchant-inventory (same name) — Returns same merchantId (idempotent)
+- POST /merchant-transaction (buy) — Success, gold decreases, item appears in character inventory (DB verified)
+- POST /merchant-transaction (insufficient gold) — Returns 400 "Not enough gold"
+
+### Group 5: Side Panel Data Round-Trip (7 assertions)
+- Equipment JSON {armor, mainHand, offHand} survives create→GET
+- Languages array survives create→GET
+- Feats array survives create→GET
+- Tool proficiencies survive create→GET
+- Cantrips and known_spells survive create→GET
+
+### Group 6: Edge Cases (3 assertions)
+- GET /api/character/99999 — Returns 404 with error
+- GET /api/health — Returns 200 with status "ok"
+
+### Cleanup
+- All TEST_ records deleted (merchant_inventories, dm_sessions, characters, campaigns)
+
+**Result: 111 passed, 0 failed**

@@ -2399,4 +2399,5 @@ If no named NPCs appeared, respond with: NO_NPCS`;
   }
 });
 
+export { pickSeasonalStartDay };
 export default router;
