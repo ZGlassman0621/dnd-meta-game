@@ -10,6 +10,7 @@ import { CAMPAIGN_MODULES, getCampaignModule } from '../data/campaignModules';
 import { SEASON_ICONS } from '../data/harptos';
 import classesData from '../data/classes.json';
 import racesData from '../data/races.json';
+import spellsData from '../data/spells.json';
 import Downtime from './Downtime';
 import MetaGameDashboard from './MetaGameDashboard';
 import InventoryPanel from './InventoryPanel';
@@ -88,6 +89,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Quick reference panel state (view character info without leaving game)
   const [showQuickRef, setShowQuickRef] = useState(false);
   const [quickRefTab, setQuickRefTab] = useState('equipment'); // 'equipment', 'spells', 'abilities'
+  const [expandedSpell, setExpandedSpell] = useState(null);
 
   // Companions quick reference panel state
   const [showCompanionsRef, setShowCompanionsRef] = useState(false);
@@ -477,6 +479,23 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       console.error('Rest error:', err);
       setError('Failed to complete rest: ' + err.message);
     }
+  };
+
+  // Look up full spell details from spells.json
+  const getSpellDetails = (spellName) => {
+    if (!spellName) return null;
+    const lower = spellName.toLowerCase();
+    // Check cantrips first
+    for (const className of Object.keys(spellsData.cantrips || {})) {
+      const cantrip = spellsData.cantrips[className]?.find(s => s.name.toLowerCase() === lower);
+      if (cantrip) return { ...cantrip, level: 'Cantrip' };
+    }
+    // Check leveled spells
+    for (const level of Object.keys(spellsData.spells || {})) {
+      const spell = spellsData.spells[level]?.find(s => s.name.toLowerCase() === lower);
+      if (spell) return { ...spell, spellLevel: level };
+    }
+    return null;
   };
 
   const adjustGameDate = async (daysToAdd) => {
@@ -2114,118 +2133,122 @@ Examples:
               {/* Equipment Tab */}
               {quickRefTab === 'equipment' && (
                 <div className="quick-ref-equipment">
-                  {/* Weapons */}
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#ef4444', marginBottom: '0.5rem', borderBottom: '1px solid rgba(239, 68, 68, 0.3)', paddingBottom: '0.25rem' }}>
-                      Weapons
-                    </h4>
-                    {(() => {
-                      const inventory = typeof character.inventory === 'string'
-                        ? JSON.parse(character.inventory || '[]')
-                        : (character.inventory || []);
-                      const weapons = inventory.filter(item =>
-                        item.type === 'weapon' || item.damage || item.category?.includes('weapon')
+                  {(() => {
+                    const equipment = typeof character.equipment === 'string'
+                      ? JSON.parse(character.equipment || '{}')
+                      : (character.equipment || {});
+
+                    const ARMOR_DISPLAY_NAMES = {
+                      'leather': 'Leather Armor', 'padded': 'Padded Armor',
+                      'studded': 'Studded Leather Armor', 'studded leather': 'Studded Leather Armor',
+                      'hide': 'Hide Armor', 'scale': 'Scale Mail', 'scale mail': 'Scale Mail',
+                      'half plate': 'Half Plate Armor', 'ring mail': 'Ring Mail',
+                      'chain mail': 'Chain Mail', 'chain shirt': 'Chain Shirt',
+                      'splint': 'Splint Armor', 'plate': 'Plate Armor',
+                      'breastplate': 'Breastplate'
+                    };
+                    const getDisplayName = (name) => ARMOR_DISPLAY_NAMES[(name || '').toLowerCase()] || name;
+
+                    const QUALITY_COLORS = {
+                      'Fine': '#60a5fa', 'Superior': '#a78bfa', 'Masterwork': '#fbbf24'
+                    };
+
+                    const renderQuality = (item) => {
+                      if (!item?.quality || item.quality === 'Standard' || item.quality === 'standard') return null;
+                      const label = item.quality.charAt(0).toUpperCase() + item.quality.slice(1);
+                      return (
+                        <span style={{ color: QUALITY_COLORS[label] || '#888', fontSize: '0.75rem', fontStyle: 'italic' }}>
+                          {label}
+                        </span>
                       );
-                      return weapons.length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {weapons.map((weapon, idx) => (
-                            <div key={idx} style={{
-                              padding: '0.5rem',
-                              background: 'rgba(239, 68, 68, 0.1)',
-                              borderRadius: '4px',
-                              fontSize: '0.9rem'
-                            }}>
-                              <div style={{ fontWeight: 'bold' }}>{weapon.name}</div>
-                              {weapon.damage && (
+                    };
+
+                    return (
+                      <>
+                        {/* Main Hand Weapon */}
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <h4 style={{ color: '#ef4444', marginBottom: '0.5rem', borderBottom: '1px solid rgba(239, 68, 68, 0.3)', paddingBottom: '0.25rem' }}>
+                            Main Hand
+                          </h4>
+                          {equipment.mainHand ? (
+                            <div style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', fontSize: '0.9rem' }}>
+                              <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{getDisplayName(equipment.mainHand.name || equipment.mainHand)}</span>
+                                {renderQuality(equipment.mainHand)}
+                              </div>
+                              {equipment.mainHand.damage && (
                                 <div style={{ color: '#f87171', fontSize: '0.85rem' }}>
-                                  Damage: {weapon.damage} {weapon.damageType || ''}
+                                  Damage: {equipment.mainHand.damage} {equipment.mainHand.damageType || ''}
                                 </div>
                               )}
-                              {weapon.properties && (
+                              {equipment.mainHand.properties && (
                                 <div style={{ color: '#888', fontSize: '0.8rem' }}>
-                                  {Array.isArray(weapon.properties) ? weapon.properties.join(', ') : weapon.properties}
+                                  {Array.isArray(equipment.mainHand.properties) ? equipment.mainHand.properties.join(', ') : equipment.mainHand.properties}
+                                </div>
+                              )}
+                              {equipment.mainHand.magical && (
+                                <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                  {equipment.mainHand.magical}
                                 </div>
                               )}
                             </div>
-                          ))}
+                          ) : (
+                            <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>No weapon equipped</p>
+                          )}
                         </div>
-                      ) : (
-                        <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>No weapons equipped</p>
-                      );
-                    })()}
-                  </div>
 
-                  {/* Armor */}
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
-                      Armor & AC
-                    </h4>
-                    <div style={{
-                      padding: '0.5rem',
-                      background: 'rgba(59, 130, 246, 0.1)',
-                      borderRadius: '4px'
-                    }}>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#60a5fa' }}>
-                        AC: {character.armor_class || 10}
-                      </div>
-                      {(() => {
-                        const inventory = typeof character.inventory === 'string'
-                          ? JSON.parse(character.inventory || '[]')
-                          : (character.inventory || []);
-                        const armor = inventory.filter(item =>
-                          item.type === 'armor' || item.armorClass || item.category?.includes('armor')
-                        );
-                        return armor.map((item, idx) => (
-                          <div key={idx} style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
-                            {item.name} {item.armorClass ? `(AC ${item.armorClass})` : ''}
+                        {/* Off Hand */}
+                        {equipment.offHand && (
+                          <div style={{ marginBottom: '1.5rem' }}>
+                            <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
+                              Off Hand
+                            </h4>
+                            <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px', fontSize: '0.9rem' }}>
+                              <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{getDisplayName(equipment.offHand.name || equipment.offHand)}</span>
+                                {renderQuality(equipment.offHand)}
+                              </div>
+                              {equipment.offHand.acBonus && (
+                                <div style={{ color: '#60a5fa', fontSize: '0.85rem' }}>+{equipment.offHand.acBonus} AC</div>
+                              )}
+                              {equipment.offHand.damage && (
+                                <div style={{ color: '#f87171', fontSize: '0.85rem' }}>
+                                  Damage: {equipment.offHand.damage} {equipment.offHand.damageType || ''}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
+                        )}
 
-                  {/* Other Items */}
-                  <div>
-                    <h4 style={{ color: '#a78bfa', marginBottom: '0.5rem', borderBottom: '1px solid rgba(167, 139, 250, 0.3)', paddingBottom: '0.25rem' }}>
-                      Inventory
-                    </h4>
-                    {(() => {
-                      const inventory = typeof character.inventory === 'string'
-                        ? JSON.parse(character.inventory || '[]')
-                        : (character.inventory || []);
-                      const otherItems = inventory.filter(item =>
-                        item.type !== 'weapon' && item.type !== 'armor' && !item.damage && !item.armorClass
-                      );
-                      return otherItems.length > 0 ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {otherItems.map((item, idx) => (
-                            <span key={idx} style={{
-                              padding: '0.25rem 0.5rem',
-                              background: 'rgba(167, 139, 250, 0.1)',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem'
-                            }}>
-                              {item.name || item} {item.quantity > 1 ? `(×${item.quantity})` : ''}
-                            </span>
-                          ))}
+                        {/* Armor & AC */}
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
+                            Armor & AC
+                          </h4>
+                          <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px' }}>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#60a5fa' }}>
+                              AC: {character.armor_class || 10}
+                            </div>
+                            {equipment.armor ? (
+                              <div style={{ fontSize: '0.85rem', color: '#ccc', marginTop: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{getDisplayName(equipment.armor.name || equipment.armor)}</span>
+                                {renderQuality(equipment.armor)}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                                No armor equipped
+                              </div>
+                            )}
+                            {equipment.armor?.magical && (
+                              <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.25rem' }}>
+                                {equipment.armor.magical}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>No other items</p>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Gold */}
-                  <div style={{ marginTop: '1.5rem', padding: '0.75rem', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '4px' }}>
-                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>Gold: </span>
-                    <span>{character.gold_gp || 0} gp</span>
-                    {(character.gold_sp > 0 || character.gold_cp > 0) && (
-                      <span style={{ color: '#888' }}>
-                        {character.gold_sp > 0 && `, ${character.gold_sp} sp`}
-                        {character.gold_cp > 0 && `, ${character.gold_cp} cp`}
-                      </span>
-                    )}
-                  </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -2242,9 +2265,40 @@ Examples:
                       ? JSON.parse(character.prepared_spells || '[]')
                       : (character.prepared_spells || []);
 
+                    // Add domain/subclass always-prepared spells
+                    const charClass = character.class?.toLowerCase();
+                    const classInfo = classesData[charClass];
+                    if (character.subclass && classInfo?.subclasses) {
+                      const subclass = classInfo.subclasses.find(
+                        sc => sc.name.toLowerCase() === character.subclass?.toLowerCase()
+                      );
+                      const spellListKey = subclass?.domainSpells ? 'domainSpells' :
+                        subclass?.oathSpells ? 'oathSpells' :
+                        subclass?.expandedSpells ? 'expandedSpells' :
+                        subclass?.circleSpells ? 'circleSpells' : null;
+
+                      if (spellListKey && subclass[spellListKey]) {
+                        Object.entries(subclass[spellListKey]).forEach(([classLevel, spellNames]) => {
+                          if (parseInt(classLevel) <= character.level) {
+                            spellNames.forEach(spellName => {
+                              const alreadyPrepared = preparedSpells.some(s => {
+                                const name = typeof s === 'string' ? s : s.name;
+                                return name.toLowerCase() === spellName.toLowerCase();
+                              });
+                              if (!alreadyPrepared) {
+                                const details = getSpellDetails(spellName);
+                                const spellLevel = details?.spellLevel
+                                  ? parseInt(details.spellLevel.replace(/\D/g, ''))
+                                  : parseInt(classLevel) <= 1 ? 1 : Math.ceil(parseInt(classLevel) / 2);
+                                preparedSpells.push({ name: spellName, level: spellLevel, alwaysPrepared: true });
+                              }
+                            });
+                          }
+                        });
+                      }
+                    }
+
                     if (cantrips.length === 0 && preparedSpells.length === 0) {
-                      // Check if this is a non-spellcasting class
-                      const charClass = character.class?.toLowerCase();
                       const nonCasters = ['barbarian', 'fighter', 'monk', 'rogue'];
                       if (nonCasters.includes(charClass)) {
                         return (
@@ -2263,13 +2317,11 @@ Examples:
                     // Group spells by level
                     const spellsByLevel = { 0: [] };
 
-                    // Add cantrips (level 0)
                     cantrips.forEach(cantrip => {
                       const spell = typeof cantrip === 'string' ? { name: cantrip } : cantrip;
                       spellsByLevel[0].push({ ...spell, level: 0 });
                     });
 
-                    // Add prepared spells
                     preparedSpells.forEach(spell => {
                       const spellObj = typeof spell === 'string' ? { name: spell, level: 1 } : spell;
                       const level = spellObj.level || 1;
@@ -2277,7 +2329,6 @@ Examples:
                       spellsByLevel[level].push(spellObj);
                     });
 
-                    // Remove empty level 0 if no cantrips
                     if (spellsByLevel[0].length === 0) delete spellsByLevel[0];
 
                     return Object.entries(spellsByLevel)
@@ -2298,36 +2349,60 @@ Examples:
                             )}
                           </h4>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {levelSpells.map((spell, idx) => (
-                              <div key={idx} style={{
-                                padding: '0.5rem',
-                                background: level === '0' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem'
-                              }}>
-                                <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span>{spell.name}</span>
-                                  {spell.damage && (
-                                    <span style={{ color: '#ef4444', fontSize: '0.8rem' }}>{spell.damage}</span>
+                            {levelSpells.map((spell, idx) => {
+                              const details = getSpellDetails(spell.name);
+                              const spellKey = `${level}-${idx}`;
+                              const isExpanded = expandedSpell === spellKey;
+                              return (
+                                <div key={idx}
+                                  onClick={() => setExpandedSpell(isExpanded ? null : spellKey)}
+                                  style={{
+                                    padding: '0.5rem',
+                                    background: level === '0' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                                    borderRadius: '4px',
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    border: isExpanded ? `1px solid ${level === '0' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(139, 92, 246, 0.4)'}` : '1px solid transparent',
+                                    transition: 'border-color 0.2s'
+                                  }}
+                                >
+                                  <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>
+                                      {spell.name}
+                                      {spell.alwaysPrepared && (
+                                        <span style={{ fontSize: '0.7rem', color: '#fbbf24', marginLeft: '0.5rem' }}>(Domain)</span>
+                                      )}
+                                    </span>
+                                    <span style={{ color: '#888', fontSize: '0.75rem' }}>{isExpanded ? '▼' : '▸'}</span>
+                                  </div>
+                                  {!isExpanded && (details?.school || spell.school) && (
+                                    <div style={{ color: '#888', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                      {details?.school || spell.school}
+                                    </div>
+                                  )}
+                                  {isExpanded && (
+                                    <div style={{ marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem' }}>
+                                      {(details?.school || spell.school) && (
+                                        <div style={{ color: '#888', fontSize: '0.8rem', fontStyle: 'italic', marginBottom: '0.25rem' }}>
+                                          {details?.school || spell.school}
+                                        </div>
+                                      )}
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                                        <span><strong style={{ color: '#60a5fa' }}>Cast:</strong> {details?.castingTime || spell.castingTime || '—'}</span>
+                                        <span><strong style={{ color: '#60a5fa' }}>Range:</strong> {details?.range || spell.range || 'Self'}</span>
+                                        <span><strong style={{ color: '#60a5fa' }}>Duration:</strong> {details?.duration || spell.duration || '—'}</span>
+                                        {(details?.components || spell.components) && (
+                                          <span><strong style={{ color: '#60a5fa' }}>Comp:</strong> {details?.components || spell.components}</span>
+                                        )}
+                                      </div>
+                                      <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem', lineHeight: '1.4' }}>
+                                        {details?.description || spell.description || 'No description available.'}
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
-                                {spell.school && (
-                                  <div style={{ color: '#888', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                                    {spell.school}
-                                  </div>
-                                )}
-                                {spell.castingTime && (
-                                  <div style={{ color: '#888', fontSize: '0.8rem' }}>
-                                    Cast: {spell.castingTime} | Range: {spell.range || 'Self'}
-                                  </div>
-                                )}
-                                {spell.description && (
-                                  <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                    {spell.description.length > 100 ? spell.description.substring(0, 100) + '...' : spell.description}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ));
@@ -2395,6 +2470,13 @@ Examples:
                     {(() => {
                       const features = [];
 
+                      // Generic subclass-choice features that should show the actual chosen subclass
+                      const GENERIC_SUBCLASS_FEATURES = [
+                        'Divine Domain', 'Martial Archetype', 'Roguish Archetype', 'Monastic Tradition',
+                        'Sorcerous Origin', 'Otherworldly Patron', 'Arcane Tradition', 'Primal Path',
+                        'Ranger Archetype', 'Sacred Oath', 'Bardic College', 'Druid Circle'
+                      ];
+
                       // Get base class features
                       const charClass = character.class?.toLowerCase();
                       const classInfo = classesData[charClass];
@@ -2403,7 +2485,13 @@ Examples:
                         classInfo.features.forEach(f => {
                           if (typeof f === 'string') {
                             const [name, ...descParts] = f.split(' - ');
-                            features.push({ name: name.trim(), description: descParts.join(' - ').trim() });
+                            const trimmedName = name.trim();
+                            // Replace generic subclass text with actual chosen subclass
+                            if (GENERIC_SUBCLASS_FEATURES.includes(trimmedName) && character.subclass) {
+                              features.push({ name: character.subclass, description: `Your chosen ${trimmedName.toLowerCase()}.` });
+                            } else {
+                              features.push({ name: trimmedName, description: descParts.join(' - ').trim() });
+                            }
                           } else {
                             features.push(f);
                           }
@@ -2548,7 +2636,7 @@ Examples:
                     })()}
                   </div>
 
-                  {/* Racial Traits */}
+                  {/* Racial Traits (filtered — no choice-based placeholders) */}
                   <div style={{ marginTop: '1.5rem' }}>
                     <h4 style={{ color: '#14b8a6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(20, 184, 166, 0.3)', paddingBottom: '0.25rem' }}>
                       Racial Traits ({character.subrace || character.race || 'Unknown'})
@@ -2565,7 +2653,6 @@ Examples:
                         );
                       }
 
-                      // If character has a subrace, use subrace traits (they contain full trait lists)
                       let traits = raceInfo.traits || [];
                       if (character.subrace && raceInfo.subraces) {
                         const subrace = raceInfo.subraces.find(
@@ -2576,17 +2663,24 @@ Examples:
                         }
                       }
 
-                      if (traits.length === 0) {
+                      // Filter out choice-based placeholder traits
+                      const CHOICE_PREFIXES = ['Extra Language', 'Feat', 'Skills', 'Ability Score Increase', 'Versatile'];
+                      const filteredTraits = traits.filter(trait => {
+                        const traitName = trait.split(' - ')[0].trim();
+                        return !CHOICE_PREFIXES.some(prefix => traitName.startsWith(prefix));
+                      });
+
+                      if (filteredTraits.length === 0) {
                         return (
                           <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            No racial traits available
+                            No racial traits
                           </p>
                         );
                       }
 
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {traits.map((trait, idx) => {
+                          {filteredTraits.map((trait, idx) => {
                             const [name, ...descParts] = trait.split(' - ');
                             const description = descParts.join(' - ').trim();
                             return (
@@ -2609,6 +2703,98 @@ Examples:
                       );
                     })()}
                   </div>
+
+                  {/* Languages */}
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <h4 style={{ color: '#06b6d4', marginBottom: '0.5rem', borderBottom: '1px solid rgba(6, 182, 212, 0.3)', paddingBottom: '0.25rem' }}>
+                      Languages
+                    </h4>
+                    {(() => {
+                      const charLangs = typeof character.languages === 'string'
+                        ? (() => { try { return JSON.parse(character.languages || '[]'); } catch { return character.languages.split(',').map(l => l.trim()).filter(Boolean); } })()
+                        : (character.languages || []);
+                      const raceLangs = racesData[character.race?.toLowerCase()]?.languages || [];
+                      const allLangs = [...new Set([...raceLangs, ...charLangs])].filter(l =>
+                        !l.toLowerCase().includes('extra language') && !l.toLowerCase().includes('of your choice') && !l.toLowerCase().includes('one extra')
+                      );
+
+                      if (allLangs.length === 0) {
+                        return <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>No languages recorded</p>;
+                      }
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {allLangs.map((lang, idx) => (
+                            <span key={idx} style={{
+                              padding: '0.25rem 0.5rem',
+                              background: 'rgba(6, 182, 212, 0.1)',
+                              borderRadius: '4px',
+                              fontSize: '0.85rem'
+                            }}>{lang}</span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Feats */}
+                  {(() => {
+                    const feats = typeof character.feats === 'string'
+                      ? (() => { try { return JSON.parse(character.feats || '[]'); } catch { return []; } })()
+                      : (character.feats || []);
+                    if (feats.length === 0) return null;
+                    return (
+                      <div style={{ marginTop: '1.5rem' }}>
+                        <h4 style={{ color: '#f97316', marginBottom: '0.5rem', borderBottom: '1px solid rgba(249, 115, 22, 0.3)', paddingBottom: '0.25rem' }}>
+                          Feats
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {feats.map((feat, idx) => {
+                            const featObj = typeof feat === 'string' ? { name: feat } : feat;
+                            return (
+                              <div key={idx} style={{
+                                padding: '0.5rem',
+                                background: 'rgba(249, 115, 22, 0.1)',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem'
+                              }}>
+                                <div style={{ fontWeight: 'bold', color: '#fb923c' }}>{featObj.name}</div>
+                                {featObj.description && (
+                                  <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                                    {featObj.description}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Tool Proficiencies */}
+                  {(() => {
+                    const tools = typeof character.tool_proficiencies === 'string'
+                      ? (() => { try { return JSON.parse(character.tool_proficiencies || '[]'); } catch { return []; } })()
+                      : (character.tool_proficiencies || []);
+                    if (tools.length === 0) return null;
+                    return (
+                      <div style={{ marginTop: '1.5rem' }}>
+                        <h4 style={{ color: '#84cc16', marginBottom: '0.5rem', borderBottom: '1px solid rgba(132, 204, 22, 0.3)', paddingBottom: '0.25rem' }}>
+                          Tool Proficiencies
+                        </h4>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {tools.map((tool, idx) => (
+                            <span key={idx} style={{
+                              padding: '0.25rem 0.5rem',
+                              background: 'rgba(132, 204, 22, 0.1)',
+                              borderRadius: '4px',
+                              fontSize: '0.85rem'
+                            }}>{typeof tool === 'string' ? tool : tool.name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -2974,20 +3160,6 @@ Examples:
               gap: '0.5rem',
               color: '#d4af37'
             }}>
-              <button
-                onClick={() => adjustGameDate(-1)}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #d4af37',
-                  borderRadius: '3px',
-                  color: '#d4af37',
-                  cursor: 'pointer',
-                  padding: '0 0.35rem',
-                  fontSize: '0.8rem',
-                  lineHeight: '1.2'
-                }}
-                title="Go back one day"
-              >−</button>
               <span>{SEASON_ICONS[gameDate.season] || '📅'}</span>
               <span>{gameDate.displayDate}</span>
               {gameDate.isFestival && (
@@ -2995,20 +3167,6 @@ Examples:
                   (Festival!)
                 </span>
               )}
-              <button
-                onClick={() => adjustGameDate(1)}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #d4af37',
-                  borderRadius: '3px',
-                  color: '#d4af37',
-                  cursor: 'pointer',
-                  padding: '0 0.35rem',
-                  fontSize: '0.8rem',
-                  lineHeight: '1.2'
-                }}
-                title="Advance one day"
-              >+</button>
             </div>
           )}
 

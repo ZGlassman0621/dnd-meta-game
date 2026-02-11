@@ -173,17 +173,17 @@ console.log('\n=== Test 4: Player Autonomy Enforcement (Strengthened) ===\n');
   assert(prompt.includes('"you tell"'), 'Absolute rules: forbids "you tell"');
   assert(prompt.includes('extended speeches'), 'Absolute rules: forbids extended speeches');
 
-  // PLAYER AUTONOMY section - extended speech example
-  assert(prompt.includes('More than suit me'), 'Player autonomy: includes the extended speech WRONG example');
-  assert(prompt.includes('After weeks on the road'), 'Player autonomy: full extended speech example present');
-  assert(prompt.includes('Mother Aelwin looks at you expectantly'), 'Player autonomy: includes RIGHT alternative');
-  assert(prompt.includes('short replies, long speeches, inner thoughts, gestures'), 'Player autonomy: covers all forms of player speech');
+  // PLAYER AUTONOMY section - principle-based rules (no WRONG/RIGHT examples)
+  assert(prompt.includes('NEVER write the player speaking in any form'), 'Player autonomy: forbids all forms of player speech');
+  assert(prompt.includes('NEVER write implied decisions'), 'Player autonomy: forbids implied decisions');
+  assert(prompt.includes('describe the NPC waiting and END your message'), 'Player autonomy: instructs to end and let player speak');
+  assert(prompt.includes('short replies, long speeches, inner thoughts'), 'Player autonomy: covers all forms of player speech');
 
   // FINAL REMINDER section
   const finalReminderPos = prompt.indexOf('FINAL REMINDER');
   const afterFinal = prompt.substring(finalReminderPos);
   assert(afterFinal.includes('NEVER generate player dialogue'), 'Final reminder: never generate dialogue');
-  assert(afterFinal.includes('not extended speeches'), 'Final reminder: mentions extended speeches');
+  assert(afterFinal.includes('no implied speech or decisions'), 'Final reminder: mentions implied speech');
   assert(afterFinal.includes('Zero exceptions'), 'Final reminder: zero exceptions');
 }
 

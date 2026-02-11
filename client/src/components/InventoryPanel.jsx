@@ -54,13 +54,22 @@ export default function InventoryPanel({ character, itemsGainedThisSession, onDi
   };
 
   const getItemCategory = (item) => {
+    // Exclude non-weapon items that might match weapon heuristics
+    const NON_WEAPON_ITEMS = [
+      'signet', 'insignia', 'holy symbol', 'druidic focus', 'arcane focus',
+      'component pouch', 'emblem', 'amulet', 'reliquary', 'totem',
+      'ring', 'badge', 'seal', 'medallion', 'vestments', 'banner', 'symbol'
+    ];
+    const lower = (item.name || '').toLowerCase();
+    const isNonWeapon = NON_WEAPON_ITEMS.some(nw => lower.includes(nw));
+
     // Check item properties first
-    if (item.type === 'weapon' || item.damage || item.category?.includes('weapon')) return 'weapons';
+    if (!isNonWeapon && (item.type === 'weapon' || item.damage || item.category?.includes('weapon'))) return 'weapons';
     if (item.type === 'armor' || item.category?.includes('armor') || item.ac) return 'armor';
     // Check rarity data category
-    const key = (item.name || '').toLowerCase();
+    const key = lower;
     const rd = rarityData[key];
-    if (rd?.category === 'weapon' || rd?.category === 'weapons') return 'weapons';
+    if (!isNonWeapon && (rd?.category === 'weapon' || rd?.category === 'weapons')) return 'weapons';
     if (rd?.category === 'armor') return 'armor';
     return 'misc';
   };

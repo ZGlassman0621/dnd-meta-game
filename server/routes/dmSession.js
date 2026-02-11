@@ -29,6 +29,55 @@ import { getLootTableForLevel } from '../config/rewards.js';
 
 const router = express.Router();
 
+/**
+ * Pick a starting day based on campaign description keywords.
+ * Returns a day-of-year (1-365) in the matching season, or random if no match.
+ * Harptos calendar seasons:
+ *   Winter: days 1-61 (Hammer, Midwinter, Alturiak) + 336-365 (Nightal)
+ *   Spring: days 62-152 (Ches, Tarsakh, Greengrass, Mirtul)
+ *   Summer: days 153-243 (Kythorn, Flamerule, Midsummer, Eleasis)
+ *   Autumn: days 244-335 (Eleint, Highharvestide, Marpenoth, Uktar, Feast of the Moon)
+ */
+function pickSeasonalStartDay(campaignDescription, startingLocationName) {
+  const text = `${campaignDescription || ''} ${startingLocationName || ''}`.toLowerCase();
+
+  const SEASON_RANGES = {
+    winter: [[1, 61], [336, 365]],
+    spring: [[62, 152]],
+    summer: [[153, 243]],
+    autumn: [[244, 335]]
+  };
+
+  const SEASON_KEYWORDS = {
+    winter: ['winter', 'cold', 'frost', 'ice', 'snow', 'frozen', 'blizzard', 'icewind', 'dead of winter', 'deepwinter', 'frigid', 'chill'],
+    summer: ['summer', 'heat', 'hot', 'scorching', 'desert', 'arid', 'swelter', 'blazing sun'],
+    spring: ['spring', 'thaw', 'bloom', 'renewal', 'planting', 'melting'],
+    autumn: ['autumn', 'fall', 'harvest', 'leaves', 'rotting', 'fading']
+  };
+
+  let matchedSeason = null;
+  for (const [season, keywords] of Object.entries(SEASON_KEYWORDS)) {
+    if (keywords.some(kw => text.includes(kw))) {
+      matchedSeason = season;
+      break;
+    }
+  }
+
+  if (!matchedSeason) {
+    return Math.floor(Math.random() * 365) + 1;
+  }
+
+  // Pick a random day within the matched season's ranges
+  const ranges = SEASON_RANGES[matchedSeason];
+  const possibleDays = [];
+  for (const [start, end] of ranges) {
+    for (let d = start; d <= end; d++) {
+      possibleDays.push(d);
+    }
+  }
+  return possibleDays[Math.floor(Math.random() * possibleDays.length)];
+}
+
 // Helper to determine which LLM provider to use
 async function getLLMProvider(preference = 'auto') {
   // If user explicitly requested a specific provider, try that first
@@ -641,13 +690,23 @@ router.post('/start', async (req, res) => {
 
     // Get character's current in-game date for session tracking
     // Prioritize the selected era's year - the player explicitly chose this era for the session
-    // For first-ever sessions, randomize the starting day (characters default to game_day=1 which
-    // would always start on 1 Hammer without this check)
+    // For first-ever sessions, pick a narrative-appropriate starting day based on campaign description
     const priorSessions = await dbGet('SELECT COUNT(*) as count FROM dm_sessions WHERE character_id = ?', [characterId]);
     const isFirstSession = !priorSessions || priorSessions.count === 0;
-    const gameStartDay = (isFirstSession || !character.game_day)
-      ? (Math.floor(Math.random() * 365) + 1)
-      : character.game_day;
+    let gameStartDay;
+    if (isFirstSession || !character.game_day) {
+      // Pick season-appropriate start day based on campaign description keywords
+      let campaignDesc = '';
+      let campLocationName = '';
+      if (character.campaign_id) {
+        const camp = await dbGet('SELECT description, starting_location FROM campaigns WHERE id = ?', [character.campaign_id]);
+        campaignDesc = camp?.description || '';
+        campLocationName = camp?.starting_location || '';
+      }
+      gameStartDay = pickSeasonalStartDay(campaignDesc, campLocationName);
+    } else {
+      gameStartDay = character.game_day;
+    }
     let gameStartYear = 1492; // Default fallback
 
     if (era && era.years) {

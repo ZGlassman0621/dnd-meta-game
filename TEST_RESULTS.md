@@ -277,3 +277,53 @@ Poor (caps: uncommon<=1):
 ## Summary
 All core functionality working. Item pools, rarity tiers, level gating,
 prosperity scaling, weighted selection, cursed items, and buyback all verified.
+
+---
+
+## Session Changes Test Run (2026-02-11)
+
+Changes tested: Character Side Panel rewrite (Equipment/Abilities/Spells tabs), seasonal campaign start date, date UI cleanup, InventoryPanel weapon categorization fix, DM prompt observation check rule, narrative self-consistency rule, and full DM prompt example removal (principle-based rewrite).
+
+### Moral Diversity Tests
+**Run:** `node tests/moral-diversity.test.js`
+**Result: 64 passed, 0 failed**
+
+### Combat Tracker Tests
+**Run:** `node tests/combat-tracker.test.js`
+**Result: 26 passed, 0 failed**
+
+### Loot Systems Tests
+**Run:** `node tests/loot-systems.test.js`
+**Result: All 4 test suites passed**
+
+### Character Memory Tests
+**Run:** `node tests/character-memory.test.js`
+**Result: 55 passed, 0 failed**
+
+Note: 5 tests in "Player Autonomy Enforcement" were updated to match the new principle-based prompt wording (explicit WRONG/RIGHT examples were removed from the DM prompt per user request).
+
+### DM Prompt — Example Removal Verification
+**Method:** Node.js content verification of generated prompt
+- Prompt generates successfully (45,199 chars)
+- Contains ABSOLUTE RULES section: PASS
+- Contains FINAL REMINDER section: PASS
+- Zero instances of "WRONG:": PASS
+- Zero instances of "RIGHT:": PASS
+- Zero instances of "- BAD:": PASS
+- Zero instances of "- GOOD:": PASS
+- Zero instances of "BAD EXAMPLE": PASS
+- Zero character name examples (Durnan, Mother Aelwin, Orin Pagebinder, Henrik, Jorik, Sister Margaret, Sister Meren, Garrick Thornwood, Rivelious): PASS
+- All system marker syntax preserved (MERCHANT_SHOP, LOOT_DROP, COMBAT_START, NPC_WANTS_TO_JOIN, ADD_ITEM, MERCHANT_REFER): PASS
+
+### Server Module Loading
+- dmPromptBuilder.js: OK
+- dmSessionService.js: OK
+- merchantLootTables.js: OK
+- merchantService.js: OK
+
+### Client Build
+**Run:** `npx vite build`
+**Result:** Built successfully in 1.03s, 80 modules transformed, all chunks generated
+
+### Summary
+All 145+ tests pass. Server modules load cleanly. Client builds without errors. DM prompt generates correctly with all explicit examples removed and principle-based rules in place.
