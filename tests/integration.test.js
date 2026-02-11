@@ -614,7 +614,85 @@ async function testSidePanelData() {
     'Known spells round-trip (3 entries, includes Shield of Faith)');
 }
 
-// ===== GROUP 6: Edge Cases =====
+// ===== GROUP 6: Player Journal =====
+
+async function testJournalEndpoint() {
+  console.log('\n  -- Player Journal (basic) --');
+  const { status, body } = await api('GET', `/api/character/${testCharId}/journal`);
+
+  assert(status === 200, `GET /api/character/${testCharId}/journal returns 200`);
+  assert(typeof body === 'object', 'Response is an object');
+
+  // NPCs section
+  assert(body.npcs && Array.isArray(body.npcs.met), 'npcs.met is an array');
+  assert(typeof body.npcs.unknownCount === 'number', 'npcs.unknownCount is a number');
+
+  // Locations section
+  assert(body.locations && Array.isArray(body.locations.visited), 'locations.visited is an array');
+  assert(Array.isArray(body.locations.rumored), 'locations.rumored is an array');
+  assert(typeof body.locations.unknownCount === 'number', 'locations.unknownCount is a number');
+
+  // Factions section
+  assert(Array.isArray(body.factions), 'factions is an array');
+
+  // Quests section
+  assert(body.quests && Array.isArray(body.quests.active), 'quests.active is an array');
+  assert(Array.isArray(body.quests.completed), 'quests.completed is an array');
+
+  // Events section
+  assert(Array.isArray(body.events), 'events is an array');
+
+  // Notes section
+  assert(typeof body.notes === 'string', 'notes is a string');
+}
+
+async function testJournalNotFound() {
+  console.log('\n  -- Player Journal (not found) --');
+  const { status, body } = await api('GET', '/api/character/99999/journal');
+
+  assert(status === 404, 'Returns 404 for nonexistent character');
+  assert(body.error && body.error.includes('not found'), 'Error mentions not found');
+}
+
+async function testJournalNoCampaign() {
+  console.log('\n  -- Player Journal (no campaign) --');
+  // Create a character without a campaign
+  const { body: newChar } = await api('POST', '/api/character', {
+    name: 'TEST_NoCampaignChar',
+    first_name: 'TEST',
+    class: 'Fighter',
+    race: 'Dwarf',
+    level: 1,
+    current_hp: 12,
+    max_hp: 12,
+    armor_class: 16,
+    speed: 25,
+    current_location: 'Neverwinter',
+    current_quest: null,
+    experience_to_next_level: 300,
+    gold_gp: 10, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 8 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    backstory: '',
+    gender: 'male',
+    alignment: 'Neutral'
+  });
+
+  const { status, body } = await api('GET', `/api/character/${newChar.id}/journal`);
+
+  assert(status === 200, 'Returns 200 even without campaign');
+  assert(body.npcs.met.length === 0, 'No NPCs met without campaign');
+  assert(body.npcs.unknownCount === 0, 'Unknown NPC count is 0 without campaign plan');
+  assert(body.locations.visited.length === 0, 'No locations without campaign');
+  assert(body.factions.length === 0, 'No factions without campaign');
+
+  // Cleanup
+  await dbRun('DELETE FROM characters WHERE id = ?', [newChar.id]);
+}
+
+// ===== GROUP 7: Edge Cases =====
 
 async function testNonexistentCharacter() {
   console.log('\n  -- Nonexistent Character --');
@@ -673,7 +751,12 @@ async function runTests() {
     console.log('\n=== Group 5: Side Panel Data Round-Trip ===');
     await testSidePanelData();
 
-    console.log('\n=== Group 6: Edge Cases ===');
+    console.log('\n=== Group 6: Player Journal ===');
+    await testJournalEndpoint();
+    await testJournalNotFound();
+    await testJournalNoCampaign();
+
+    console.log('\n=== Group 7: Edge Cases ===');
     await testNonexistentCharacter();
     await testHealthCheck();
 

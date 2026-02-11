@@ -415,11 +415,16 @@ Changes tested: Removed 9 content preference toggles, extracted 5 components fro
 
 ### Integration Tests
 **Run:** `node tests/integration.test.js`
-**Result: 111 passed, 0 failed**
+**Result: 130 passed, 0 failed**
+
+New Group 6 — Player Journal (19 assertions):
+- GET /:id/journal — Returns 200 with correct shape (npcs.met, npcs.unknownCount, locations.visited/rumored/unknownCount, factions, quests.active/completed, events, notes)
+- GET /99999/journal — Returns 404 for nonexistent character
+- GET /:id/journal (no campaign) — Returns 200 with empty arrays and 0 counts
 
 ### Client Build
 **Run:** `npx vite build`
 **Result:** Built successfully
 
 ### Summary
-All 256+ tests pass across 5 suites. DMSession.jsx reduced from 4583 to ~2395 lines via component extraction. Content preferences cleanly removed from all 7 files. Player Journal endpoint aggregates from 5 existing services with no new database tables.
+All 275+ tests pass across 5 suites. DMSession.jsx reduced from 4583 to ~2395 lines via component extraction. Content preferences cleanly removed from all 7 files. Player Journal endpoint tested with 19 integration assertions covering happy path, 404, and no-campaign edge case.
