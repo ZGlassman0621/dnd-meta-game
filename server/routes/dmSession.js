@@ -26,6 +26,7 @@ import {
 } from '../services/dmSessionService.js';
 import { lookupItemByName } from '../data/merchantLootTables.js';
 import { getLootTableForLevel } from '../config/rewards.js';
+import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 
 const router = express.Router();
 
@@ -443,6 +444,7 @@ router.post('/start', async (req, res) => {
              c.armor_class, c.speed as companion_speed, c.subrace as companion_subrace, c.background as companion_background,
              n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
              n.stat_block, n.cr, n.ac, n.hp, n.speed, n.ability_scores as npc_ability_scores,
+             n.skills as npc_skills, c.skill_proficiencies,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice, n.mannerism,
              n.motivation, n.background_notes, n.relationship_to_party
       FROM companions c
@@ -800,7 +802,7 @@ router.post('/start', async (req, res) => {
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { action, providerPreference } = req.body;
+    const { action, providerPreference, activeConditions } = req.body;
 
     if (!action || !action.trim()) {
       return res.status(400).json({ error: 'Action is required' });
@@ -817,6 +819,14 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     const messages = JSON.parse(session.messages || '[]');
+
+    // Inject active conditions as context if any are present
+    if (activeConditions) {
+      const conditionNote = formatConditionsForAI(activeConditions.player, activeConditions.companions);
+      if (conditionNote) {
+        messages.push({ role: 'user', content: conditionNote });
+      }
+    }
 
     // Check which LLM provider is available (respects user preference)
     const { provider } = await getLLMProvider(providerPreference);
@@ -949,6 +959,8 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[CONDITION_ADD:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[CONDITION_REMOVE:[^\]]+\]\s*/gi, '').trim();
 
     // Handle ADD_ITEM markers — add custom items to current merchant's inventory
     const addItems = detectAddItem(result.narrative);
@@ -1151,6 +1163,10 @@ router.post('/:sessionId/message', async (req, res) => {
     // Handle COMBAT_END marker
     const combatEnd = detectCombatEnd(result.narrative);
 
+    // Detect condition changes from AI response
+    const conditionChanges = detectConditionChanges(result.narrative);
+    const hasConditionChanges = conditionChanges.applied.length > 0 || conditionChanges.removed.length > 0;
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
@@ -1159,7 +1175,8 @@ router.post('/:sessionId/message', async (req, res) => {
       merchantShop: merchantShop,
       lootDrops: lootDropResults.length > 0 ? lootDropResults : undefined,
       combatStart: combatStart || undefined,
-      combatEnd: combatEnd || undefined
+      combatEnd: combatEnd || undefined,
+      conditionChanges: hasConditionChanges ? conditionChanges : undefined
     });
   } catch (error) {
     console.error('Error in DM session message:', error);
@@ -1483,6 +1500,69 @@ router.post('/:sessionId/inject-context', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error injecting context:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate a context-aware rest narrative using AI
+router.post('/:sessionId/rest-narrative', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { restType, characterName, mechanicalResult } = req.body;
+
+    if (!restType || !characterName) {
+      return res.status(400).json({ error: 'restType and characterName are required' });
+    }
+
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const messages = JSON.parse(session.messages || '[]');
+
+    // Get the last 10 non-system messages for context
+    const recentMessages = messages
+      .filter(m => m.role !== 'system')
+      .slice(-10);
+
+    const restPrompt = `You are a D&D dungeon master. ${characterName} takes a ${restType} rest. Write a brief atmospheric rest description (2-3 sentences) based on the current location and recent events. Do NOT include any dialogue for ${characterName} — only describe the scene, atmosphere, and the passage of time. Do NOT include mechanical effects (HP restored, spell slots, etc.) — those are handled separately. Keep it immersive and contextual.${mechanicalResult ? `\n\nMechanical result (for your awareness only, do NOT repeat this): ${mechanicalResult}` : ''}`;
+
+    // Try to get AI narrative
+    const { provider } = await getLLMProvider();
+    let narrative = null;
+
+    if (provider === 'claude') {
+      try {
+        const result = await claude.chat(restPrompt, recentMessages, 1, 'sonnet', 200);
+        narrative = result;
+      } catch (err) {
+        console.error('Rest narrative AI error (Claude):', err.message);
+      }
+    } else if (provider === 'ollama') {
+      try {
+        const ollamaMessages = [
+          { role: 'system', content: restPrompt },
+          ...recentMessages,
+          { role: 'user', content: `*${characterName} takes a ${restType} rest*` }
+        ];
+        const result = await ollama.continueSession(ollamaMessages, `*${characterName} takes a ${restType} rest*`, session.model);
+        narrative = result?.narrative;
+      } catch (err) {
+        console.error('Rest narrative AI error (Ollama):', err.message);
+      }
+    }
+
+    // Append rest messages to session history so AI remembers the rest happened
+    if (narrative) {
+      messages.push({ role: 'user', content: `*Takes a ${restType} rest*` });
+      messages.push({ role: 'assistant', content: narrative });
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(messages), sessionId]);
+    }
+
+    res.json({ narrative });
+  } catch (error) {
+    console.error('Error generating rest narrative:', error);
     res.status(500).json({ error: error.message });
   }
 });

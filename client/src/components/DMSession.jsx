@@ -16,6 +16,8 @@ import SessionRewards from './SessionRewards';
 import CampaignNotesPanel from './CampaignNotesPanel';
 import QuickReferencePanel from './QuickReferencePanel';
 import CompanionsPanel from './CompanionsPanel';
+import ConditionPanel from './ConditionPanel';
+import { CONDITIONS, getConditionsToClear, reduceExhaustion } from '../data/conditions';
 
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'llama3.1:8b';
@@ -105,6 +107,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
   // Combat tracker state
   const [combatState, setCombatState] = useState(null);
+
+  // Condition tracking state
+  const [playerConditions, setPlayerConditions] = useState([]);
+  const [companionConditions, setCompanionConditions] = useState({});
+  const [showConditionPanel, setShowConditionPanel] = useState(false);
 
   // Merchant shop state
   const [pendingMerchantShop, setPendingMerchantShop] = useState(null);
@@ -409,28 +416,74 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         if (restType === 'long' && activeSession?.id) {
           adjustGameDate(1);
         }
-        // Get pronouns based on character gender
-        const g = character.gender?.toLowerCase();
-        const pronouns = (g === 'male' || g === 'm')
-          ? { subject: 'he', possessive: 'his' }
-          : (g === 'female' || g === 'f')
-            ? { subject: 'she', possessive: 'her' }
-            : { subject: 'they', possessive: 'their' };
-        // Show rest message in the narrative
-        const charName = character.nickname || character.name;
-        const restMessage = restType === 'long'
-          ? `*${charName} settles in for a long rest, finding what comfort ${pronouns.subject} can. Hours pass as ${pronouns.subject} sleeps deeply, recovering ${pronouns.possessive} strength.*`
-          : `*${charName} takes a short rest, catching ${pronouns.possessive} breath and tending to minor wounds.*`;
+        // Auto-clear conditions on rest
+        if (restType === 'long') {
+          setPlayerConditions(prev => {
+            const cleared = getConditionsToClear('long_rest', prev);
+            const remaining = prev.filter(c => !cleared.includes(c));
+            return reduceExhaustion(remaining);
+          });
+          setCompanionConditions(prev => {
+            const updated = {};
+            for (const [name, conds] of Object.entries(prev)) {
+              const cleared = getConditionsToClear('long_rest', conds);
+              const remaining = conds.filter(c => !cleared.includes(c));
+              updated[name] = reduceExhaustion(remaining);
+            }
+            return updated;
+          });
+        }
+        // Show mechanical result immediately
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: `${restMessage}\n\n${data.message}`
+          content: `*${data.message}*`
         }]);
+
+        // Async: request AI-generated rest narrative
+        if (activeSession?.id) {
+          const charName = character.nickname || character.name;
+          try {
+            const narrativeRes = await fetch(`/api/dm-session/${activeSession.id}/rest-narrative`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ restType, characterName: charName, mechanicalResult: data.message })
+            });
+            const narrativeData = await narrativeRes.json();
+            if (narrativeData.narrative) {
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: narrativeData.narrative
+              }]);
+            }
+          } catch (narrativeErr) {
+            // Fallback: mechanical result already shown, no need for error
+            console.log('Rest narrative unavailable:', narrativeErr.message);
+          }
+        }
       } else {
         setError(data.error || 'Failed to rest');
       }
     } catch (err) {
       console.error('Rest error:', err);
       setError('Failed to complete rest: ' + err.message);
+    }
+  };
+
+  const toggleCondition = (condKey, target = 'player', companionName = null) => {
+    if (target === 'player') {
+      setPlayerConditions(prev =>
+        prev.includes(condKey)
+          ? prev.filter(c => c !== condKey)
+          : [...prev, condKey]
+      );
+    } else {
+      setCompanionConditions(prev => {
+        const current = prev[companionName] || [];
+        const updated = current.includes(condKey)
+          ? current.filter(c => c !== condKey)
+          : [...current, condKey];
+        return { ...prev, [companionName]: updated };
+      });
     }
   };
 
@@ -594,7 +647,14 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       const response = await fetch(`/api/dm-session/${activeSession.id}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, providerPreference })
+        body: JSON.stringify({
+          action,
+          providerPreference,
+          activeConditions: {
+            player: playerConditions,
+            companions: companionConditions
+          }
+        })
       });
 
       const data = await response.json();
@@ -640,6 +700,49 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
       if (data.combatEnd) {
         setCombatState(null);
+        // Auto-clear combat-end conditions
+        setPlayerConditions(prev => prev.filter(c => {
+          const cond = CONDITIONS[c];
+          return !cond?.autoClear?.includes('combat_end');
+        }));
+        setCompanionConditions(prev => {
+          const updated = {};
+          for (const [name, conds] of Object.entries(prev)) {
+            updated[name] = conds.filter(c => {
+              const cond = CONDITIONS[c];
+              return !cond?.autoClear?.includes('combat_end');
+            });
+          }
+          return updated;
+        });
+      }
+
+      // Handle AI-driven condition changes
+      if (data.conditionChanges) {
+        if (data.conditionChanges.applied?.length > 0) {
+          for (const { target, condition } of data.conditionChanges.applied) {
+            if (target.toLowerCase() === 'player') {
+              setPlayerConditions(prev => prev.includes(condition) ? prev : [...prev, condition]);
+            } else {
+              setCompanionConditions(prev => {
+                const current = prev[target] || [];
+                return { ...prev, [target]: current.includes(condition) ? current : [...current, condition] };
+              });
+            }
+          }
+        }
+        if (data.conditionChanges.removed?.length > 0) {
+          for (const { target, condition } of data.conditionChanges.removed) {
+            if (target.toLowerCase() === 'player') {
+              setPlayerConditions(prev => prev.filter(c => c !== condition));
+            } else {
+              setCompanionConditions(prev => ({
+                ...prev,
+                [target]: (prev[target] || []).filter(c => c !== condition)
+              }));
+            }
+          }
+        }
       }
 
     } catch (err) {
@@ -1386,7 +1489,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           <h2>{activeSession.title || 'Adventure in Progress'}</h2>
           <div className="session-controls" style={{ display: 'flex', gap: '0.5rem' }}>
             <button
-              onClick={() => { setShowQuickRef(!showQuickRef); setShowCompanionsRef(false); setShowInventory(false); }}
+              onClick={() => { setShowQuickRef(!showQuickRef); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); }}
               style={{
                 background: showQuickRef ? 'rgba(59, 130, 246, 0.4)' : 'rgba(59, 130, 246, 0.2)',
                 border: '1px solid rgba(59, 130, 246, 0.4)',
@@ -1402,7 +1505,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             </button>
             {companions.length > 0 && (
               <button
-                onClick={() => { setShowCompanionsRef(!showCompanionsRef); setShowQuickRef(false); setShowInventory(false); }}
+                onClick={() => { setShowCompanionsRef(!showCompanionsRef); setShowQuickRef(false); setShowInventory(false); setShowConditionPanel(false); }}
                 style={{
                   background: showCompanionsRef ? 'rgba(155, 89, 182, 0.4)' : 'rgba(155, 89, 182, 0.2)',
                   border: '1px solid rgba(155, 89, 182, 0.4)',
@@ -1433,7 +1536,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               Notes
             </button>
             <button
-              onClick={() => { setShowInventory(!showInventory); setShowQuickRef(false); setShowCompanionsRef(false); }}
+              onClick={() => { setShowInventory(!showInventory); setShowQuickRef(false); setShowCompanionsRef(false); setShowConditionPanel(false); }}
               style={{
                 background: showInventory ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.2)',
                 border: '1px solid rgba(16, 185, 129, 0.4)',
@@ -1446,6 +1549,41 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               title="View inventory"
             >
               Inventory
+            </button>
+            <button
+              onClick={() => { setShowConditionPanel(!showConditionPanel); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); }}
+              style={{
+                background: showConditionPanel ? 'rgba(249, 115, 22, 0.4)' : 'rgba(249, 115, 22, 0.2)',
+                border: '1px solid rgba(249, 115, 22, 0.4)',
+                color: '#f97316',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                position: 'relative'
+              }}
+              title="Track conditions and status effects"
+            >
+              Conditions
+              {playerConditions.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-6px',
+                  right: '-6px',
+                  background: '#f97316',
+                  color: '#000',
+                  borderRadius: '50%',
+                  width: '18px',
+                  height: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.7rem',
+                  fontWeight: 'bold'
+                }}>
+                  {playerConditions.length}
+                </span>
+              )}
             </button>
             <button className="end-session-btn" onClick={() => setShowEndOptions(true)} disabled={isLoading}>
               End Adventure
@@ -1552,6 +1690,17 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           />
         )}
 
+        {/* Condition Panel (Overlay) */}
+        {showConditionPanel && (
+          <ConditionPanel
+            playerConditions={playerConditions}
+            companionConditions={companionConditions}
+            companions={companions}
+            onToggleCondition={toggleCondition}
+            onClose={() => setShowConditionPanel(false)}
+          />
+        )}
+
         {/* Game Date and Stats Bar */}
         <div className="session-info-bar" style={{
           display: 'flex',
@@ -1585,6 +1734,35 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               <span style={{ color: '#888' }}>Gold:</span>
               <span style={{ color: '#d4af37', fontWeight: 'bold' }}>{character.gold_gp || 0}gp</span>
             </div>
+            {/* Active Condition Chips */}
+            {playerConditions.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.5rem' }}>
+                <span style={{ color: '#888' }}>|</span>
+                {playerConditions.map(condKey => {
+                  const cond = CONDITIONS[condKey];
+                  if (!cond) return null;
+                  return (
+                    <span
+                      key={condKey}
+                      onClick={() => toggleCondition(condKey, 'player')}
+                      title={`${cond.name}: ${cond.description} (click to remove)`}
+                      style={{
+                        background: `${cond.color}33`,
+                        color: cond.color,
+                        border: `1px solid ${cond.color}55`,
+                        padding: '0.1rem 0.4rem',
+                        borderRadius: '3px',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {cond.name}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Game Date Display with Controls */}

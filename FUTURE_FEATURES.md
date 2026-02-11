@@ -4,25 +4,6 @@ This file tracks feature ideas and enhancements for future implementation.
 
 ---
 
-## Context-Aware Rest Narratives
-
-**Priority:** Medium
-**Requested:** 2026-01-28
-
-### Problem
-The rest button generates a generic hardcoded message regardless of what's happening in the story. It would be more immersive if the AI generated an appropriate rest description based on the current narrative context.
-
-### Desired Behavior
-The AI should generate contextual rest narratives:
-- In a tavern: *"Riv retires to the room upstairs, the sounds of the common room fading as he drifts off..."*
-- Camping outdoors: *"With Mira keeping first watch, Riv wraps himself in his bedroll beneath the stars..."*
-- After a battle: *"Exhausted from the fight, Riv finds a sheltered corner and sleeps the sleep of the weary..."*
-
-### Implementation Approach
-Instead of hardcoded text, send a request to the AI with current session context. Adds an AI call (latency, cost) — could be optional. Should still show the mechanical result ("Restored 15 HP and all spell slots").
-
----
-
 ## Database Migration System
 
 **Priority:** Medium
@@ -63,28 +44,6 @@ The database has `known_spells`, `prepared_spells`, `known_cantrips`, `spell_slo
 
 ---
 
-## Condition & Status Effect Tracking
-
-**Priority:** Medium
-**Identified:** 2026-02-09
-
-### Problem
-D&D 5e has 15 conditions (blinded, charmed, deafened, frightened, grappled, etc.). The database has `debuffs` and `injuries` fields but there's no UI to apply or track conditions during active gameplay.
-
-### Desired Behavior
-- Quick-apply buttons for common conditions during session
-- Conditions visible in the Quick Stats Panel
-- AI DM aware of active conditions and references them narratively
-- Conditions auto-clear on appropriate triggers
-- Companion conditions tracked separately
-
-### Files to Modify
-- `client/src/components/DMSession.jsx` — Condition toggle UI
-- `server/services/dmPromptBuilder.js` — Inject active conditions into prompt
-- Potentially a new `client/src/data/conditions.js` data file
-
----
-
 ## Faction-Driven Quest Generation
 
 **Priority:** Medium
@@ -103,27 +62,6 @@ Factions have goals with progress tracking, but quests are generated independent
 - `server/services/livingWorldService.js` — Add quest generation triggers to tick processing
 - `server/services/questGenerator.js` — Add faction-aware quest generation prompts
 - `server/services/questService.js` — Link quest completion to faction standings
-
----
-
-## Companion Behind-the-Scenes Skill Checks
-
-**Priority:** Medium
-**Identified:** 2026-02-09
-
-### Problem
-When the player rolls a skill check, companions don't independently contribute. In tabletop D&D, each party member rolls — and sometimes a companion succeeds where the player fails.
-
-### Desired Behavior
-- When the player attempts a skill check, companions also roll behind the scenes
-- If the player fails but a companion succeeds, the AI narrates it with flavor
-- Not every check involves companions — only when relevant
-
-### Implementation Approach
-Primarily a **prompt engineering** feature — instruct the AI DM on companion skill check behavior. Include companion skill modifiers in the companion context block. The AI handles the rolls and narration — no server-side dice rolling needed.
-
-### Files to Modify
-- `server/services/dmPromptBuilder.js` — Add companion skill check instructions to the prompt
 
 ---
 
@@ -212,6 +150,9 @@ The following features were previously tracked here and have been built:
 - **Content Preference Cleanup** (2026-02-11) — Removed 9 redundant content pref toggles (romance, horror, etc.); campaign tone handled by Opus plan
 - **Frontend Component Decomposition** (2026-02-11) — Extracted 5 components from DMSession.jsx (SessionSetup, SessionRewards, CampaignNotesPanel, QuickReferencePanel, CompanionsPanel); reduced from 4583 to 2395 lines
 - **Player Journal** (2026-02-11) — Player Knowledge Tracker showing NPCs met, locations visited, faction standings, quests, and world events; aggregates existing session data
+- **Companion Skill Checks** (2026-02-11) — Companion skill modifiers + passive Perception in DM prompt; AI narrates companion skill attempts when player fails
+- **Context-Aware Rest Narratives** (2026-02-11) — AI generates atmospheric rest descriptions based on current session context; mechanical results show immediately
+- **Condition & Status Effect Tracking** (2026-02-11) — 15 D&D 5e conditions + exhaustion 1-6; slide-in panel, info bar chips, AI markers, auto-clear on rest/combat end
 
 ---
 

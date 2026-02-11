@@ -692,7 +692,57 @@ async function testJournalNoCampaign() {
   await dbRun('DELETE FROM characters WHERE id = ?', [newChar.id]);
 }
 
-// ===== GROUP 7: Edge Cases =====
+// ===== GROUP 7: Rest Narrative & Conditions =====
+
+async function testRestNarrativeEndpoint() {
+  console.log('\n  -- Rest Narrative Endpoint --');
+  const { status, body } = await api('POST', `/api/dm-session/${testSessionId}/rest-narrative`, {
+    restType: 'long',
+    characterName: 'TEST_RestChar',
+    mechanicalResult: 'Restored 10 HP and all spell slots.'
+  });
+
+  assert(status === 200, 'Returns 200');
+  assert('narrative' in body, 'Response has narrative field');
+  // narrative may be null if no AI key is configured — that's fine
+}
+
+async function testRestNarrativeNotFound() {
+  console.log('\n  -- Rest Narrative 404 --');
+  const { status, body } = await api('POST', `/api/dm-session/99999/rest-narrative`, {
+    restType: 'long',
+    characterName: 'Nobody'
+  });
+
+  assert(status === 404, 'Returns 404 for nonexistent session');
+  assert(body.error === 'Session not found', 'Error message matches');
+}
+
+async function testRestNarrativeBadRequest() {
+  console.log('\n  -- Rest Narrative Bad Request --');
+  const { status, body } = await api('POST', `/api/dm-session/${testSessionId}/rest-narrative`, {});
+
+  assert(status === 400, 'Returns 400 for missing required fields');
+  assert(body.error.includes('required'), 'Error mentions required fields');
+}
+
+async function testMessageWithConditions() {
+  console.log('\n  -- Message With Active Conditions --');
+  // This tests that sending activeConditions doesn't break the message endpoint
+  // (actual AI response will fail without API key, but the endpoint should handle it gracefully)
+  const { status } = await api('POST', `/api/dm-session/${testSessionId}/message`, {
+    action: 'I look around the room.',
+    activeConditions: {
+      player: ['poisoned', 'frightened'],
+      companions: { 'Elara': ['charmed'] }
+    }
+  });
+
+  // 503 if no LLM available, 200 if available — both are acceptable
+  assert(status === 200 || status === 503, `Returns 200 or 503 (got ${status})`);
+}
+
+// ===== GROUP 8: Edge Cases =====
 
 async function testNonexistentCharacter() {
   console.log('\n  -- Nonexistent Character --');
@@ -756,7 +806,13 @@ async function runTests() {
     await testJournalNotFound();
     await testJournalNoCampaign();
 
-    console.log('\n=== Group 7: Edge Cases ===');
+    console.log('\n=== Group 7: Rest Narrative & Conditions ===');
+    await testRestNarrativeEndpoint();
+    await testRestNarrativeNotFound();
+    await testRestNarrativeBadRequest();
+    await testMessageWithConditions();
+
+    console.log('\n=== Group 8: Edge Cases ===');
     await testNonexistentCharacter();
     await testHealthCheck();
 

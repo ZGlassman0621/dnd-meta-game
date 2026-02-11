@@ -428,3 +428,50 @@ New Group 6 — Player Journal (19 assertions):
 
 ### Summary
 All 275+ tests pass across 5 suites. DMSession.jsx reduced from 4583 to ~2395 lines via component extraction. Content preferences cleanly removed from all 7 files. Player Journal endpoint tested with 19 integration assertions covering happy path, 404, and no-campaign edge case.
+
+## Companion Skill Checks + Rest Narratives + Condition Tracking (2026-02-11)
+
+### Companion Skill Checks Tests (NEW)
+**File:** `tests/companion-skill-checks.test.js`
+**Run:** `node tests/companion-skill-checks.test.js`
+
+- SKILL_ABILITY_MAP: 18 skills mapped to correct abilities (27 assertions)
+- computeSkillModifiers: level/ability combos, negative mods, edge cases (12 assertions)
+- Proficiency bonus scaling: levels 1-20 correct (10 assertions)
+- computePassivePerception: with/without proficiency, low WIS, case-insensitive (5 assertions)
+
+**Result: 59 passed, 0 failed**
+
+### Condition Tracking Tests (NEW)
+**File:** `tests/condition-tracking.test.js`
+**Run:** `node tests/condition-tracking.test.js`
+
+- CONDITION_NAMES: all 20 (14 base + 6 exhaustion) present (17 assertions)
+- detectConditionChanges: ADD, REMOVE, multiple, mixed, null/empty, case-insensitive, exhaustion (19 assertions)
+- formatConditionsForAI: player, companion, mixed, empty/null states, exhaustion formatting (10 assertions)
+
+**Result: 56 passed, 0 failed**
+
+### Integration Tests
+**Run:** `node tests/integration.test.js`
+
+New Group 7: Rest Narrative & Conditions (7 assertions)
+- POST /:sessionId/rest-narrative returns 200 with narrative field
+- 404 for nonexistent session
+- 400 for missing required fields
+- POST /:sessionId/message accepts activeConditions without breaking
+
+**Result: 137 passed, 0 failed**
+
+### Other Test Suites (unchanged)
+- Moral Diversity: **64 passed, 0 failed**
+- Combat Tracker: **26 passed, 0 failed**
+- Loot Systems: **All 4 suites passed**
+- Character Memory: **55 passed, 0 failed**
+
+### Client Build
+**Run:** `npx vite build`
+**Result:** Built successfully in 916ms, 88 modules transformed
+
+### Summary
+All 397+ tests pass across 7 suites. Three new features: companion skill modifiers in DM prompt, AI-generated rest narratives, condition tracking with auto-clear and AI markers.

@@ -301,6 +301,37 @@ These are pre-defined characters the user created. You MUST respect their establ
 ${npcDescriptions.join('\n\n')}`;
 }
 
+// Map each D&D 5e skill to its governing ability score
+const SKILL_ABILITY_MAP = {
+  'Acrobatics': 'dex', 'Animal Handling': 'wis', 'Arcana': 'int',
+  'Athletics': 'str', 'Deception': 'cha', 'History': 'int',
+  'Insight': 'wis', 'Intimidation': 'cha', 'Investigation': 'int',
+  'Medicine': 'wis', 'Nature': 'int', 'Perception': 'wis',
+  'Performance': 'cha', 'Persuasion': 'cha', 'Religion': 'int',
+  'Sleight of Hand': 'dex', 'Stealth': 'dex', 'Survival': 'wis'
+};
+
+function computeSkillModifiers(abilityScores, skillNames, level) {
+  const profBonus = Math.floor(((level || 1) - 1) / 4) + 2;
+  const modifiers = [];
+  for (const skill of skillNames) {
+    const ability = SKILL_ABILITY_MAP[skill];
+    if (!ability) continue;
+    const score = abilityScores[ability] || 10;
+    const abilityMod = Math.floor((score - 10) / 2);
+    const total = abilityMod + profBonus;
+    modifiers.push(`${skill} ${total >= 0 ? '+' : ''}${total}`);
+  }
+  return modifiers;
+}
+
+function computePassivePerception(abilityScores, skillNames, level) {
+  const profBonus = Math.floor(((level || 1) - 1) / 4) + 2;
+  const wisMod = Math.floor(((abilityScores.wis || 10) - 10) / 2);
+  const hasProficiency = skillNames.some(s => s.toLowerCase() === 'perception');
+  return 10 + wisMod + (hasProficiency ? profBonus : 0);
+}
+
 /**
  * Format active companions for the system prompt
  */
@@ -350,14 +381,30 @@ function formatCompanions(companions) {
       // Ignore equipment parsing errors
     }
 
-    // Parse skills
+    // Parse skills and compute modifiers
     let skillsLine = '';
+    let passivePerceptionLine = '';
     try {
-      const skills = companion.npc_skills
+      const npcSkills = companion.npc_skills
         ? (typeof companion.npc_skills === 'string' ? JSON.parse(companion.npc_skills) : companion.npc_skills)
         : [];
-      if (skills.length > 0) {
-        skillsLine = `  Skills: ${skills.join(', ')}`;
+      const companionSkills = companion.skill_proficiencies
+        ? (typeof companion.skill_proficiencies === 'string' ? JSON.parse(companion.skill_proficiencies) : companion.skill_proficiencies)
+        : [];
+      const allSkills = [...new Set([...npcSkills, ...companionSkills])];
+
+      if (allSkills.length > 0 && isClassBased) {
+        const abilityScores = companion.companion_ability_scores
+          ? (typeof companion.companion_ability_scores === 'string' ? JSON.parse(companion.companion_ability_scores) : companion.companion_ability_scores)
+          : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+        const modifiers = computeSkillModifiers(abilityScores, allSkills, companion.companion_level);
+        if (modifiers.length > 0) {
+          skillsLine = `  Skills: ${modifiers.join(', ')}`;
+        }
+        const passivePerception = computePassivePerception(abilityScores, allSkills, companion.companion_level);
+        passivePerceptionLine = `  Passive Perception: ${passivePerception}`;
+      } else if (allSkills.length > 0) {
+        skillsLine = `  Skills: ${allSkills.join(', ')}`;
       }
     } catch (e) {
       // Ignore
@@ -407,6 +454,7 @@ function formatCompanions(companions) {
       companion.armor_class ? `  AC: ${companion.armor_class}, Speed: ${companion.companion_speed || companion.speed || 30} ft.` : null,
       equipmentLine || null,
       skillsLine || null,
+      passivePerceptionLine || null,
       languagesNote,
       limitationsLine || null,
       companion.personality_trait_1 ? `  Personality: ${companion.personality_trait_1}${companion.personality_trait_2 ? '. ' + companion.personality_trait_2 : ''}` : null,
@@ -463,6 +511,18 @@ PARTY LOCATION TRACKING - CRITICAL:
 - Companions who stayed together know what each other experienced
 - A companion returning from an errand knows only what happened at THEIR location, not what the player did while apart
 - When reuniting, companions should react appropriately to the TIME elapsed and WHAT they know
+
+COMPANION SKILL CHECKS:
+When you call for a skill check from the player, consider if present companions should also attempt it:
+- Check each companion's skill modifiers listed below
+- If a companion is proficient in the relevant skill AND is present, they attempt it too
+- You decide the companion's result narratively (no need to state numbers)
+- If the player FAILS but a companion SUCCEEDS, narrate the companion stepping in with personality-appropriate flavor
+- If BOTH fail, narrate the shared failure
+- If the player SUCCEEDS, the companion's attempt is usually unnecessary — skip it
+- NOT every check involves companions — only when relevant and the companion is present
+- Social checks (Persuasion, Deception, Intimidation) usually only involve the speaker
+- Companions with high passive Perception may notice things the player misses
 
 ${companionDescriptions.join('\n\n')}`;
 }
@@ -1033,6 +1093,16 @@ DM GUIDELINES:
 ${isTwoPlayer ? `9. Give both characters opportunities to shine based on their unique abilities
 10. When players submit joint actions, describe how the characters work together` : ''}
 
+CONDITION TRACKING:
+The system tracks active conditions (blinded, charmed, frightened, poisoned, etc.) on the player and companions.
+When conditions are active, they appear as system notes in the conversation.
+- ALWAYS respect condition mechanics: blinded = disadvantage on attacks, poisoned = disadvantage on ability checks, etc.
+- Reference conditions narratively (pale and stumbling if poisoned, trembling if frightened, squinting if blinded)
+- When a condition ends narratively, emit: [CONDITION_REMOVE: Target="Player" Condition="poisoned"]
+- When applying a condition, emit: [CONDITION_ADD: Target="Player" Condition="frightened"]
+- For companions, use their name as Target: [CONDITION_ADD: Target="Elara" Condition="charmed"]
+- Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion_1 through exhaustion_6
+
 CONVERSATION FLOW:
 - SHORT RESPONSES ARE GOOD. You do not need to fill space. 1-3 sentences is often perfect.
 - Quick NPC responses to questions can be a single line of dialogue
@@ -1513,6 +1583,10 @@ This adds the item to the player's real inventory. Use for combat loot, hidden t
 
 COMBAT: Emit [COMBAT_START: Enemies="enemy1, enemy2"] when combat begins. System rolls initiative and injects turn order. Emit [COMBAT_END] when combat ends.
 
+COMPANION SKILL CHECKS: When calling for skill checks, consider if present companions with matching proficiencies also attempt it. If the player fails but a companion succeeds, narrate the companion stepping in.
+
+CONDITIONS: Respect active condition mechanics. Emit [CONDITION_ADD: Target="name" Condition="condition"] and [CONDITION_REMOVE: Target="name" Condition="condition"] markers when conditions change.
+
 NPC MORAL DIVERSITY: Not every NPC is kind or helpful. Most people are self-interested. Merchants overcharge, officials stall, strangers are suspicious. Allies can be rude, greedy, or morally gray. Help should cost something. Play NPC alignments from the campaign plan faithfully.
 
 PLAYER OBSERVATION = CALL FOR A CHECK:
@@ -1528,4 +1602,5 @@ OTHER CRITICAL RULES:
 - NEVER generate player dialogue — no quoting them, no "you say/reply/ask", no implied speech or decisions like nodding, agreeing, or thanking. Describe the world, then STOP and let the player speak for themselves. Zero exceptions.`;
 }
 
+export { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception };
 export default { createDMSystemPrompt };
