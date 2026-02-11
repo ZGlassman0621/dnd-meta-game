@@ -27,6 +27,7 @@ const LocationsPage = lazy(() => import('./components/LocationsPage'))
 const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstoryPage'))
 const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
 const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
+const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -374,6 +375,11 @@ function App() {
         <CampaignPlanPage
           character={selectedCharacter}
         />
+      ) : activeView === 'showPlayerJournal' && selectedCharacter ? (
+        <PlayerJournalPage
+          character={selectedCharacter}
+          onBack={() => navigateTo('home')}
+        />
       ) : activeView === 'showQuests' && selectedCharacter ? (
         <QuestsPage
           character={selectedCharacter}
@@ -460,6 +466,7 @@ function App() {
                 { key: 'showParsedBackstory', label: 'Backstory Parser', desc: 'AI-parse your backstory into structured elements', color: '#e67e22' },
                 { key: 'showCampaigns', label: 'Campaigns', desc: 'Create campaigns with auto-generated world plans', color: '#9b59b6' },
                 { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
+                { key: 'showPlayerJournal', label: 'Player Journal', desc: 'NPCs met, places visited, faction standings, and quests', color: '#10b981' },
                 { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
                 { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
                 { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },

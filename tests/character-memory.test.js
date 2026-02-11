@@ -81,7 +81,7 @@ console.log('\n=== Test 2: Character Memory Formatting in DM Prompt ===\n');
     startingLocation: { name: 'Bryn Shander' },
     era: null,
     customConcepts: '',
-    contentPreferences: {},
+
     companions: [],
     customNpcs: [],
     previousSummaries: [],
@@ -151,7 +151,7 @@ console.log('\n=== Test 4: Player Autonomy Enforcement (Strengthened) ===\n');
     startingLocation: { name: 'Waterdeep' },
     era: null,
     customConcepts: '',
-    contentPreferences: {},
+
     companions: [],
     customNpcs: [],
     previousSummaries: [],
@@ -197,7 +197,7 @@ console.log('\n=== Test 5: DM Guideline — Character Observation ===\n');
     startingLocation: { name: 'Neverwinter' },
     era: null,
     customConcepts: '',
-    contentPreferences: {},
+
     companions: [],
     customNpcs: [],
     previousSummaries: [],

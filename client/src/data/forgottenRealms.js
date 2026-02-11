@@ -227,63 +227,6 @@ export const ARRIVAL_HOOKS = [
   }
 ];
 
-export const CONTENT_PREFERENCES = [
-  {
-    id: 'romance',
-    name: 'Romance',
-    description: 'Include opportunities for romantic subplots and relationships with NPCs.',
-    defaultEnabled: false
-  },
-  {
-    id: 'morally-grey',
-    name: 'Morally Grey Choices',
-    description: 'Present ethical dilemmas where right and wrong aren\'t always clear.',
-    defaultEnabled: true
-  },
-  {
-    id: 'horror',
-    name: 'Horror Elements',
-    description: 'Include darker themes, suspense, and frightening encounters.',
-    defaultEnabled: false
-  },
-  {
-    id: 'family-friendly',
-    name: 'Family Friendly',
-    description: 'Keep content appropriate for all ages - no graphic violence or mature themes.',
-    defaultEnabled: false
-  },
-  {
-    id: 'political-intrigue',
-    name: 'Political Intrigue',
-    description: 'Weave in plots involving nobles, factions, and power struggles.',
-    defaultEnabled: true
-  },
-  {
-    id: 'exploration',
-    name: 'Exploration Focus',
-    description: 'Emphasize discovering new places, ancient ruins, and hidden secrets.',
-    defaultEnabled: true
-  },
-  {
-    id: 'combat-heavy',
-    name: 'Combat Heavy',
-    description: 'Include frequent combat encounters and tactical challenges.',
-    defaultEnabled: false
-  },
-  {
-    id: 'roleplay-heavy',
-    name: 'Roleplay Heavy',
-    description: 'Focus on social encounters, character development, and narrative.',
-    defaultEnabled: true
-  },
-  {
-    id: 'survival',
-    name: 'Survival',
-    description: 'Resources matter. Track rations, weather hazards, and exhaustion during travel and wilderness.',
-    defaultEnabled: false
-  }
-];
-
 export const CAMPAIGN_LENGTHS = [
   {
     id: 'one-shot',

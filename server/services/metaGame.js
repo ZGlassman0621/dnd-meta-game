@@ -357,7 +357,6 @@ export async function aggregateCampaignContext(characterId) {
       era: campaignConfig.era,
       arrivalHook: campaignConfig.arrivalHook,
       customConcepts: campaignConfig.customConcepts,
-      contentPreferences: campaignConfig.contentPreferences,
       campaignModule: campaignConfig.campaignModule,
       usedNames: campaignConfig.usedNames || []
     },

@@ -2,6 +2,10 @@ import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import * as questService from '../services/questService.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
+import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
+import { getCampaignLocations } from '../services/locationService.js';
+import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
+import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import {
   PROFICIENCY_BONUS,
@@ -1295,6 +1299,146 @@ router.delete('/:id/parsed-backstory/:elementType/:elementId', async (req, res) 
     res.json(parsed);
   } catch (error) {
     handleServerError(res, error, 'remove backstory element');
+  }
+});
+
+// Get player journal - aggregates discovered world knowledge
+router.get('/:id/journal', async (req, res) => {
+  try {
+    const character = await dbGet(
+      'SELECT id, name, campaign_id, campaign_notes FROM characters WHERE id = ?',
+      [req.params.id]
+    );
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    const campaignId = character.campaign_id;
+
+    // Fetch all data sources in parallel
+    const [relationships, allLocations, standings, visibleGoals, quests, visibleEvents] = await Promise.all([
+      getCharacterRelationshipsWithNpcs(character.id).catch(() => []),
+      campaignId ? getCampaignLocations(campaignId).catch(() => []) : [],
+      getCharacterStandings(character.id).catch(() => []),
+      getGoalsVisibleToCharacter(character.id).catch(() => []),
+      questService.getCharacterQuests(character.id).catch(() => []),
+      getEventsVisibleToCharacter(character.id).catch(() => [])
+    ]);
+
+    // Get campaign plan for unknown counts
+    let campaignPlan = null;
+    if (campaignId) {
+      const campaign = await dbGet('SELECT campaign_plan FROM campaigns WHERE id = ?', [campaignId]);
+      if (campaign?.campaign_plan) {
+        try {
+          campaignPlan = typeof campaign.campaign_plan === 'string'
+            ? JSON.parse(campaign.campaign_plan)
+            : campaign.campaign_plan;
+        } catch (e) { /* ignore parse errors */ }
+      }
+    }
+
+    // NPCs: met (have relationships) vs total in campaign plan
+    const metNpcs = relationships.map(r => ({
+      name: r.npc_name,
+      race: r.npc_race,
+      occupation: r.npc_occupation,
+      location: r.npc_location,
+      avatar: r.npc_avatar,
+      disposition: r.disposition_label,
+      timesMet: r.times_met,
+      knownFacts: r.player_known_facts || [],
+      discoveredSecrets: r.discovered_secrets || [],
+      promises: r.promises_made || [],
+      debts: r.debts_owed || []
+    }));
+    const totalPlanNpcs = campaignPlan?.npcs?.length || 0;
+
+    // Locations: group by discovery status
+    const discoveredLocations = allLocations.filter(l => l.discovery_status !== 'unknown');
+    const locations = {
+      visited: allLocations.filter(l => ['visited', 'familiar', 'home_base'].includes(l.discovery_status)).map(l => ({
+        name: l.name,
+        type: l.location_type,
+        region: l.region,
+        description: l.description,
+        status: l.discovery_status,
+        timesVisited: l.times_visited,
+        services: l.services || [],
+        tags: l.tags || []
+      })),
+      rumored: allLocations.filter(l => l.discovery_status === 'rumored').map(l => ({
+        name: l.name,
+        type: l.location_type,
+        region: l.region
+      })),
+      unknownCount: allLocations.filter(l => l.discovery_status === 'unknown').length
+    };
+
+    // Factions
+    const factions = standings.map(s => ({
+      name: s.faction_name,
+      symbol: s.symbol,
+      standing: s.standing,
+      standingLabel: s.standing_label,
+      isMember: s.is_member,
+      rank: s.rank,
+      knownMembers: s.known_members || [],
+      knownGoals: s.known_goals || [],
+      knownSecrets: s.known_secrets || [],
+      goals: visibleGoals.filter(g => g.faction_id === s.faction_id).map(g => ({
+        title: g.title,
+        description: g.description,
+        progress: g.progress,
+        progressMax: g.progress_max,
+        status: g.status,
+        visibility: g.visibility
+      }))
+    }));
+
+    // Quests
+    const activeQuests = quests.filter(q => q.status === 'active').map(q => ({
+      title: q.title,
+      premise: q.premise,
+      type: q.quest_type,
+      priority: q.priority,
+      currentStage: q.current_stage,
+      stages: q.stages || [],
+      timeSensitive: q.time_sensitive,
+      rewards: q.rewards
+    }));
+    const completedQuests = quests.filter(q => q.status === 'completed').map(q => ({
+      title: q.title,
+      premise: q.premise,
+      type: q.quest_type,
+      completedAt: q.completed_at
+    }));
+
+    // World Events
+    const events = visibleEvents.map(e => ({
+      title: e.title,
+      description: e.description,
+      type: e.event_type,
+      scope: e.scope,
+      status: e.status,
+      visibility: e.visibility,
+      affectedLocations: e.affected_locations || [],
+      affectedFactions: e.affected_factions || []
+    }));
+
+    // Parse campaign_notes into sections
+    const notes = character.campaign_notes || '';
+
+    res.json({
+      npcs: { met: metNpcs, unknownCount: Math.max(0, totalPlanNpcs - metNpcs.length) },
+      locations,
+      factions,
+      quests: { active: activeQuests, completed: completedQuests },
+      events,
+      notes
+    });
+  } catch (error) {
+    handleServerError(res, error, 'get player journal');
   }
 });
 

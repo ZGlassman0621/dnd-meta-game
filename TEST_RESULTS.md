@@ -390,3 +390,36 @@ Real Express server on port 3001, real database (Turso cloud), real HTTP request
 - All TEST_ records deleted (merchant_inventories, dm_sessions, characters, campaigns)
 
 **Result: 111 passed, 0 failed**
+
+---
+
+## Content Pref Cleanup + Component Decomposition + Player Journal (2026-02-11)
+
+Changes tested: Removed 9 content preference toggles, extracted 5 components from DMSession.jsx (SessionSetup, SessionRewards, CampaignNotesPanel, QuickReferencePanel, CompanionsPanel), added Player Journal page with journal API endpoint.
+
+### Character Memory Tests
+**Run:** `node tests/character-memory.test.js`
+**Result: 55 passed, 0 failed**
+
+### Moral Diversity Tests
+**Run:** `node tests/moral-diversity.test.js`
+**Result: 64 passed, 0 failed**
+
+### Combat Tracker Tests
+**Run:** `node tests/combat-tracker.test.js`
+**Result: 26 passed, 0 failed**
+
+### Loot Systems Tests
+**Run:** `node tests/loot-systems.test.js`
+**Result: All 4 test suites passed**
+
+### Integration Tests
+**Run:** `node tests/integration.test.js`
+**Result: 111 passed, 0 failed**
+
+### Client Build
+**Run:** `npx vite build`
+**Result:** Built successfully
+
+### Summary
+All 256+ tests pass across 5 suites. DMSession.jsx reduced from 4583 to ~2395 lines via component extraction. Content preferences cleanly removed from all 7 files. Player Journal endpoint aggregates from 5 existing services with no new database tables.

@@ -39,26 +39,6 @@ Instead of hardcoded text, send a request to the AI with current session context
 
 ---
 
-## Frontend Component Decomposition
-
-**Priority:** Low
-**Identified:** 2026-02-07
-
-### Problem
-Several frontend components have grown very large:
-- `DMSession.jsx` (~4300 lines)
-- `CharacterCreationWizard.jsx` (~3100 lines)
-- `CharacterSheet.jsx` (~2700 lines)
-- `PartyBuilder.jsx` (~2600 lines)
-
-### Planned Approach
-- Extract sub-components incrementally when modifying sections
-- Pull out logical sections (e.g., combat panel, inventory panel, spell management) into separate files
-- Keep parent component as orchestrator that passes props down
-- Low priority because refactoring carries risk of regressions with no feature benefit
-
----
-
 ## Spell Management & Companion Spell Slots
 
 **Priority:** High
@@ -102,27 +82,6 @@ D&D 5e has 15 conditions (blinded, charmed, deafened, frightened, grappled, etc.
 - `client/src/components/DMSession.jsx` — Condition toggle UI
 - `server/services/dmPromptBuilder.js` — Inject active conditions into prompt
 - Potentially a new `client/src/data/conditions.js` data file
-
----
-
-## Player Knowledge Tracker (Fog of War for Information)
-
-**Priority:** Medium
-**Identified:** 2026-02-09
-
-### Problem
-The Campaign Plan contains rich world data (NPC secrets, faction goals, hidden locations, plot twists) that the AI DM knows but the player hasn't discovered yet. There's no structured way to track what the player has actually learned vs. what remains hidden.
-
-### Desired Behavior
-- A "Player Journal" or "Known World" view showing only discovered information
-- Tracks: NPCs met, locations visited, faction allegiances learned, plot points revealed
-- Automatically populated from DM session events
-- Could show "??? Unknown" placeholders for undiscovered elements
-
-### Files to Modify
-- New `client/src/components/PlayerJournalPage.jsx` component
-- `server/database.js` — Add `player_knowledge` table or discovery flags
-- `client/src/components/NavigationMenu.jsx` — Add Journal to Story menu
 
 ---
 
@@ -233,21 +192,6 @@ Characters have an `avatar` field and players can upload images, but there's no 
 
 ---
 
-## Content Preference Cleanup
-
-**Priority:** Low
-**Identified:** 2026-02-09
-
-### Note
-The 9 content preference toggles in `client/src/data/forgottenRealms.js` were part of the old UI where campaigns were manually configured. With Opus generating campaign plans, these toggles may no longer be needed — the campaign description and tone settings in `CampaignsPage.jsx` handle content direction. These can be removed in a future cleanup pass.
-
-### Files to Modify
-- `client/src/data/forgottenRealms.js` — Remove `CONTENT_PREFERENCES` array
-- `server/services/dmPromptBuilder.js` — Remove `formatContentPreferences()` and its injection
-- Any UI that references content preference toggles
-
----
-
 ## Already Implemented
 
 The following features were previously tracked here and have been built:
@@ -265,6 +209,9 @@ The following features were previously tracked here and have been built:
 - **Initiative & Combat Tracker** (2026-02-09) — COMBAT_START/END markers, initiative rolling, turn order bar
 - **Persistent Merchant Inventories** (2026-02-10) — Loot tables, referrals, custom items, cursed items, DMG magic items
 - **Opus for All Generation** (2026-02-10) — All 6 generators + campaign plan use Opus; Sonnet for DM sessions only
+- **Content Preference Cleanup** (2026-02-11) — Removed 9 redundant content pref toggles (romance, horror, etc.); campaign tone handled by Opus plan
+- **Frontend Component Decomposition** (2026-02-11) — Extracted 5 components from DMSession.jsx (SessionSetup, SessionRewards, CampaignNotesPanel, QuickReferencePanel, CompanionsPanel); reduced from 4583 to 2395 lines
+- **Player Journal** (2026-02-11) — Player Knowledge Tracker showing NPCs met, locations visited, faction standings, quests, and world events; aggregates existing session data
 
 ---
 

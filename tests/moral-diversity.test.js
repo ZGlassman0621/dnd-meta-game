@@ -55,7 +55,7 @@ console.log('\n=== Test 1: DM System Prompt — NPC Moral Diversity ===\n');
     startingLocation: { name: 'Waterdeep' },
     era: null,
     customConcepts: '',
-    contentPreferences: {},
+
     companions: [],
     customNpcs: [],
     previousSummaries: [],
@@ -125,7 +125,7 @@ console.log('\n=== Test 2: DM System Prompt — Companion Personality & Independ
     startingLocation: { name: 'Baldur\'s Gate' },
     era: null,
     customConcepts: '',
-    contentPreferences: {},
+
     companions: [mockCompanion],
     customNpcs: [],
     previousSummaries: [],

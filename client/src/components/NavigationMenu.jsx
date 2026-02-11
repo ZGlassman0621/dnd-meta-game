@@ -24,7 +24,8 @@ const menuCategories = {
     color: '#9b59b6',
     items: [
       { key: 'showCampaigns', label: 'Campaigns' },
-      { key: 'showCampaignPlan', label: 'Campaign Plan' }
+      { key: 'showCampaignPlan', label: 'Campaign Plan' },
+      { key: 'showPlayerJournal', label: 'Player Journal' }
     ]
   },
   play: {

@@ -339,7 +339,6 @@ router.get('/campaign-context/:characterId', async (req, res) => {
         era: sessionConfig.era,
         startingLocation: sessionConfig.startingLocation,
         campaignLength: sessionConfig.campaignLength,
-        contentPreferences: sessionConfig.contentPreferences,
         customConcepts: sessionConfig.customConcepts,
         campaignModule: sessionConfig.campaignModule
       },
@@ -384,7 +383,6 @@ router.post('/start', async (req, res) => {
       era,
       arrivalHook,
       customConcepts,
-      contentPreferences,
       campaignLength,
       customNpcs,
       model,
@@ -602,7 +600,6 @@ router.post('/start', async (req, res) => {
       era,
       arrivalHook,
       customConcepts,
-      contentPreferences,
       campaignLength,
       customNpcs,
       companions,
@@ -755,8 +752,7 @@ router.post('/start', async (req, res) => {
       startingLocation: startingLocation?.id || '',
       era: era?.id || '',
       arrivalHook: arrivalHook || null,  // Store the full hook object { id, name, description }
-      campaignLength: campaignLength || 'ongoing-saga',
-      contentPreferences: contentPreferences || {}
+      campaignLength: campaignLength || 'ongoing-saga'
     };
 
     await dbRun(`

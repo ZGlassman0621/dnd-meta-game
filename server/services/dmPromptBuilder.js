@@ -250,65 +250,6 @@ ${character.backstory ? `- Backstory: ${character.backstory}` : ''}`,
 }
 
 /**
- * Build content preferences string for the system prompt
- */
-function formatContentPreferences(prefs, isPublishedModule = false) {
-  if (!prefs) return '';
-
-  const enabled = [];
-  const disabled = [];
-
-  // STYLE PREFERENCES - Apply to ALL campaigns (player comfort/DM style)
-  if (prefs.romance) enabled.push('romantic subplots');
-  if (prefs['family-friendly']) enabled.push('family-friendly content');
-  if (prefs['combat-heavy']) enabled.push('frequent combat encounters');
-  if (prefs['roleplay-heavy']) enabled.push('deep roleplay and character moments');
-
-  // THEME PREFERENCES - Only apply to custom adventures
-  if (!isPublishedModule) {
-    if (prefs['morally-grey']) enabled.push('morally ambiguous situations');
-    if (prefs.horror) enabled.push('horror and dark themes');
-    if (prefs['political-intrigue']) enabled.push('political intrigue');
-    if (prefs.exploration) enabled.push('exploration and discovery');
-  }
-
-  // Things to avoid - apply universally for player comfort
-  if (!prefs.romance) disabled.push('romantic content');
-  if (prefs['family-friendly']) disabled.push('graphic violence or mature themes');
-
-  if (!isPublishedModule && !prefs.horror) {
-    disabled.push('horror elements');
-  }
-
-  let text = '';
-  if (enabled.length > 0) {
-    text += `\n- Include: ${enabled.join(', ')}`;
-  }
-  if (disabled.length > 0) {
-    text += `\n- Avoid: ${disabled.join(', ')}`;
-  }
-
-  if (isPublishedModule && text) {
-    text += `\n- Note: Follow the published module's established themes and tone while respecting the above style preferences.`;
-  }
-
-  // SURVIVAL MODE - detailed behavioral guidance
-  if (prefs.survival) {
-    text += `
-- SURVIVAL MODE ACTIVE — Resources and environment are threats:
-  - CHECK THE INVENTORY: The character's gear list is real. If they have rations, track consumption. If they don't, they need to find food.
-  - TRAVEL IS DANGEROUS: Wilderness travel requires Survival checks for navigation, foraging, and finding shelter. Weather can kill.
-  - EXHAUSTION MATTERS: Forced marches, going without food/water, extreme cold/heat — call for Constitution saving throws and apply exhaustion narratively.
-  - RESOURCE PRESSURE: When supplies are low, mention it. NPCs and merchants should charge more in remote areas. Clean water isn't always available.
-  - ENVIRONMENTAL HAZARDS: Blizzards, sandstorms, flash floods, extreme heat, thin mountain air — these are real obstacles, not just backdrop.
-  - FORAGING AND HUNTING: When in wilderness, offer chances to forage (Survival DC 10-15) or hunt. Results should feel meaningful.
-  - DON'T OVERDO IT: Survival pressure enhances the story, it doesn't replace it. Not every scene needs a resource check. Use survival when traveling, camping, or in hostile environments — not during town scenes or social encounters.`;
-  }
-
-  return text;
-}
-
-/**
  * Format custom NPC data for the system prompt
  */
 function formatCustomNpcs(npcs) {
@@ -879,7 +820,6 @@ export function createDMSystemPrompt(character, sessionContext, secondCharacter 
   const era = sessionContext.era;
   const hook = sessionContext.arrivalHook;
   const customConcepts = sessionContext.customConcepts;
-  const contentPrefs = sessionContext.contentPreferences;
   const campaignLength = sessionContext.campaignLength;
   const customNpcs = sessionContext.customNpcs;
 
@@ -1061,8 +1001,6 @@ ${char2 ? '\n' + char2.text : ''}
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
 ${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}
-
-CONTENT PREFERENCES:${formatContentPreferences(contentPrefs, isPublishedModule)}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"
