@@ -1007,14 +1007,15 @@ router.get('/:id/quests/summary', async (req, res) => {
 // Get campaign notes for a character
 router.get('/:id/campaign-notes', async (req, res) => {
   try {
-    const character = await dbGet('SELECT id, name, campaign_notes FROM characters WHERE id = ?', [req.params.id]);
+    const character = await dbGet('SELECT id, name, campaign_notes, character_memories FROM characters WHERE id = ?', [req.params.id]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
     res.json({
       characterId: character.id,
       characterName: character.name,
-      notes: character.campaign_notes || ''
+      notes: character.campaign_notes || '',
+      characterMemories: character.character_memories || ''
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

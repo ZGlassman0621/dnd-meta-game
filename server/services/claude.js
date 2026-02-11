@@ -124,6 +124,11 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         console.log(`Claude API response - model: ${data.model}, stop_reason: ${data.stop_reason}, content_length: ${content.length}, usage: input=${data.usage?.input_tokens} output=${data.usage?.output_tokens}`);
       }
 
+      // Warn if response was truncated — markers at the end may have been lost
+      if (data.stop_reason === 'max_tokens') {
+        console.warn(`⚠️ Claude response TRUNCATED (hit max_tokens=${maxTokens}). Output: ${data.usage?.output_tokens} tokens. System markers at end of response may be lost.`);
+      }
+
       return rawResponse ? content : cleanupResponse(content);
     } catch (error) {
       lastError = error;
@@ -157,7 +162,7 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
  */
 export async function startSession(systemPrompt, openingPrompt, modelChoice = null) {
   const messages = [{ role: 'user', content: openingPrompt }];
-  const response = await chat(systemPrompt, messages, 3, modelChoice);
+  const response = await chat(systemPrompt, messages, 3, modelChoice, 4000);
 
   const selectedModel = getModelId(modelChoice);
   console.log(`Starting DM session with model: ${selectedModel}`);
@@ -186,7 +191,7 @@ export async function continueSession(systemPrompt, messages, playerAction, mode
     { role: 'user', content: playerAction }
   ];
 
-  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice);
+  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 4000);
 
   return {
     response,

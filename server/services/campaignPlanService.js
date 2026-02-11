@@ -341,9 +341,10 @@ Generate a campaign plan with this EXACT JSON structure:
       "id": "unique_id",
       "name": "NPC name",
       "role": "ally|enemy|neutral|patron|rival|mentor",
+      "alignment": "lawful_good|neutral_good|chaotic_good|lawful_neutral|true_neutral|chaotic_neutral|lawful_evil|neutral_evil|chaotic_evil",
       "from_backstory": true,
       "description": "Physical description and personality",
-      "motivation": "What drives this NPC",
+      "motivation": "What drives this NPC — selfish, altruistic, pragmatic, fearful, ambitious, etc.",
       "secrets": ["Things they're hiding"],
       "location": "Where they can typically be found",
       "faction_affiliations": ["Factions they belong to"],
@@ -357,8 +358,9 @@ Generate a campaign plan with this EXACT JSON structure:
       "name": "Companion name",
       "race": "Race",
       "class": "Class suggestion",
-      "personality": "Brief personality description",
-      "motivation": "Why they would join the party",
+      "alignment": "Their actual moral alignment — NOT always good. Companions should span the alignment spectrum.",
+      "personality": "Brief personality WITH FLAWS — include what makes them difficult, not just what makes them likeable",
+      "motivation": "Why they would join — can be selfish (payment, protection, revenge, escape) not just altruistic",
       "connection_to_main_quest": "How they tie into the story",
       "recruitment_location": "Where they can be found",
       "personal_quest_hook": "Potential personal storyline"
@@ -386,7 +388,7 @@ Generate a campaign plan with this EXACT JSON structure:
       "type": "general|blacksmith|alchemist|magic|jeweler|tanner|tailor",
       "location": "Which plan location they operate in",
       "specialty": "What they're known for (e.g., 'exotic weapons from Calimshan')",
-      "personality": "Brief personality (1 sentence)",
+      "personality": "Brief personality — include moral disposition, not just demeanor (e.g., 'shrewd and stingy, known to shortchange distracted buyers' NOT just 'friendly shopkeeper')",
       "prosperity_level": "poor|modest|comfortable|wealthy|aristocratic"
     }
   ],
@@ -435,10 +437,21 @@ IMPORTANT RULES:
 4. World events should feel consequential - not everything revolves around the player
 5. Include at least 5 world timeline events that happen independently
 6. Factions should have their own agendas that create opportunities and complications
-7. Potential companions should have their own stories, not just be sidekicks
+7. Potential companions should have their own stories, not just be sidekicks. Companions should SPAN ALIGNMENTS — not all good. A rogue companion might be chaotic neutral (in it for the gold). A cleric companion might be lawful neutral (cares about doctrine, not the player's feelings). Include companions who will DISAGREE with the player and have moral friction. Give each companion real flaws: cowardice, greed, arrogance, distrust, impulsiveness, zealotry. Their motivations for joining can be selfish — payment, revenge, protection, escape — not just "believes in the cause."
 8. BE CONCISE - keep descriptions to 1-3 sentences. Keep secrets to short phrases. The entire JSON must fit within 12000 tokens.
 9. Limit to 6-8 NPCs, 3-4 companions, 5-6 locations, 3-4 factions, 4-5 side quests
 10. 3 acts maximum for the main quest
+12. NPC MORAL DIVERSITY — CRITICAL:
+    - DO NOT make every NPC good-natured, selfless, or heroic. The world should feel REAL, not idealized.
+    - Most people are NEUTRAL — they care about themselves, their families, their livelihoods. They help when it's convenient, not out of altruism.
+    - An ally can still be greedy, cowardly, prejudiced, or self-serving. Being an "ally" means shared interests, not shared morals.
+    - A patron can be manipulative, exploitative, or willing to sacrifice the player for their goals.
+    - A mentor can be flawed — bitter, secretive, morally compromised, or holding the player to unfair standards.
+    - Neutral NPCs should have a range: indifferent, suspicious, opportunistic, weary, resentful, territorial.
+    - Even kind NPCs should have limits — they won't risk their family for a stranger, they charge fair prices not charity prices, they have biases.
+    - Aim for alignment spread: at most 2-3 good-aligned NPCs out of 6-8. The rest should be neutral or evil.
+    - Merchants care about profit. Guards care about order (and bribes). Innkeepers care about not having their furniture smashed. Officials care about power.
+    - Evil doesn't mean mustache-twirling. Lawful evil means ruthlessly self-interested within the rules. Neutral evil means willing to betray when it benefits them. These are common, realistic people.
 11. Generate merchants scaled by settlement size. For each location in the plan:
     - City: 5-8 merchants (diverse types — blacksmith, alchemist, magic shop, jeweler, tailor, general stores, etc.)
     - Town: 3-4 merchants (common types — general, blacksmith, alchemist, maybe one specialty)

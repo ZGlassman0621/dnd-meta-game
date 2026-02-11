@@ -664,6 +664,136 @@ export async function appendCampaignNotes(characterId, existingNotes, newNotes, 
 }
 
 // ============================================================
+// CHARACTER MEMORY EXTRACTION
+// ============================================================
+
+/**
+ * Build the extraction prompt for character personality memories.
+ * Includes existing memories so the AI can deduplicate and update evolving states.
+ */
+export function buildMemoryExtractionPrompt(existingMemories) {
+  const existingSection = existingMemories && existingMemories.trim().length > 0
+    ? `\nALREADY KNOWN (do NOT repeat these — only extract NEW observations or UPDATES to existing ones):\n${existingMemories}\n`
+    : '';
+
+  return `Analyze this session for CHARACTER PERSONALITY observations — things that reveal who this character IS as a person. Not what happened to them, but who they ARE.
+
+Extract ONLY observations about the player character's:
+- Personal preferences (food, drink, habits, comfort items, things they enjoy or dislike)
+- Emotional tendencies (what makes them angry, sad, happy, nostalgic, uncomfortable)
+- Moral compass and values (what they refuse to do, what they champion)
+- Fears, phobias, or discomforts
+- Relationship patterns (trusting, suspicious, loyal, distant)
+- Cultural or religious practices they follow
+- Attitudes toward specific topics (magic, authority, wealth, violence, specific races/groups)
+- Things from their past they've revealed through conversation or inner monologue
+- Current preparedness or state (gear adequacy, health concerns, readiness for environments)
+${existingSection}
+Rules:
+- ONLY include things the PLAYER CHARACTER demonstrated through their own dialogue, inner thoughts, or chosen actions
+- Do NOT include things the DM narrated happening TO them
+- Each observation should be a concise single line
+- Focus on PERSONALITY, PREFERENCES, and CURRENT STATE — not plot events
+- If an existing memory has CHANGED this session (e.g., they bought proper gear, resolved a fear, changed an opinion), list it under UPDATED
+- If nothing new was revealed about the character's personality, respond with exactly: NO_NEW_MEMORIES
+- Maximum 5 new observations per session
+
+Format your response with these two sections (omit a section if empty):
+
+NEW:
+- [new observation]
+- [new observation]
+
+UPDATED:
+- OLD: [copy the existing memory text exactly] → NEW: [the updated version]`;
+}
+
+/**
+ * Parse extraction response and update character memories.
+ * Handles both NEW additions and UPDATED replacements for evolving states.
+ * Soft cap at 3KB — never trims existing memories, just stops adding when full.
+ */
+export async function updateCharacterMemories(characterId, existingMemories, extractionResponse) {
+  const existing = (existingMemories || '').trim();
+  let updated = existing;
+
+  // Parse UPDATED section — replace existing memories with new versions
+  const updatedSection = extractionResponse.match(/UPDATED:\s*\n([\s\S]*?)(?=\n(?:NEW:|$)|\s*$)/i);
+  if (updatedSection) {
+    const updateLines = updatedSection[1].split('\n').filter(l => l.trim().startsWith('- OLD:'));
+    for (const line of updateLines) {
+      const match = line.match(/- OLD:\s*(.+?)\s*→\s*NEW:\s*(.+)/i);
+      if (match) {
+        const oldText = match[1].trim();
+        const newText = match[2].trim();
+        // Find and replace the old memory line (fuzzy: check if existing contains a line similar to oldText)
+        const existingLines = updated.split('\n');
+        let replaced = false;
+        for (let i = 0; i < existingLines.length; i++) {
+          const cleanLine = existingLines[i].replace(/^- /, '').trim();
+          if (cleanLine && oldText.includes(cleanLine.substring(0, 20)) || cleanLine.includes(oldText.substring(0, 20))) {
+            existingLines[i] = `- ${newText}`;
+            replaced = true;
+            break;
+          }
+        }
+        if (replaced) {
+          updated = existingLines.join('\n');
+        }
+      }
+    }
+  }
+
+  // Parse NEW section — append new memories
+  const newSection = extractionResponse.match(/NEW:\s*\n([\s\S]*?)(?=\n(?:UPDATED:|$)|\s*$)/i);
+  if (newSection) {
+    const newLines = newSection[1].split('\n')
+      .map(l => l.trim())
+      .filter(l => l.startsWith('- ') && l.length > 4);
+
+    if (newLines.length > 0) {
+      const additions = newLines.join('\n');
+      if (updated.length > 0) {
+        updated += '\n' + additions;
+      } else {
+        updated = additions;
+      }
+    }
+  }
+
+  // Soft cap: if over 3KB, don't save additions (but updates are always saved)
+  if (updated.length > 3000 && updated.length > existing.length + 50) {
+    console.log(`Character memories for ${characterId} at ${updated.length} chars, near cap — keeping updates only`);
+    // Still save updates to existing memories, just don't add new ones
+    // Re-parse with only the UPDATED section applied
+    let updatesOnly = existing;
+    if (updatedSection) {
+      const updateLines = updatedSection[1].split('\n').filter(l => l.trim().startsWith('- OLD:'));
+      for (const line of updateLines) {
+        const match = line.match(/- OLD:\s*(.+?)\s*→\s*NEW:\s*(.+)/i);
+        if (match) {
+          const oldText = match[1].trim();
+          const newText = match[2].trim();
+          const existingLines = updatesOnly.split('\n');
+          for (let i = 0; i < existingLines.length; i++) {
+            const cleanLine = existingLines[i].replace(/^- /, '').trim();
+            if (cleanLine && (oldText.includes(cleanLine.substring(0, 20)) || cleanLine.includes(oldText.substring(0, 20)))) {
+              existingLines[i] = `- ${newText}`;
+              break;
+            }
+          }
+          updatesOnly = existingLines.join('\n');
+        }
+      }
+    }
+    updated = updatesOnly;
+  }
+
+  await dbRun('UPDATE characters SET character_memories = ? WHERE id = ?', [updated, characterId]);
+  return updated;
+}
+
+// ============================================================
 // NPC EXTRACTION
 // ============================================================
 

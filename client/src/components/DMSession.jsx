@@ -83,6 +83,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [notesGenerating, setNotesGenerating] = useState(false);
   const [notesTab, setNotesTab] = useState('history'); // 'history', 'memory', 'mynotes'
   const [myNotes, setMyNotes] = useState(''); // Just the editable My Notes section
+  const [characterMemories, setCharacterMemories] = useState(''); // AI-observed personality traits
 
   // Quick reference panel state (view character info without leaving game)
   const [showQuickRef, setShowQuickRef] = useState(false);
@@ -275,6 +276,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       const response = await fetch(`/api/character/${character.id}/campaign-notes`);
       const data = await response.json();
       setCampaignNotes(data.notes || '');
+      setCharacterMemories(data.characterMemories || '');
     } catch (err) {
       console.error('Error fetching campaign notes:', err);
     } finally {
@@ -1559,6 +1561,35 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                   minHeight: '200px'
                 }}>
                   {aiNotes || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>No AI memory yet. Complete a session or click "Regenerate" above.</span>}
+                </div>
+              )}
+
+              {/* Character Personality Memories */}
+              {characterMemories && characterMemories.trim().length > 0 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h3 style={{
+                    color: '#f59e0b',
+                    fontSize: '0.95rem',
+                    marginBottom: '0.75rem',
+                    borderTop: '1px solid rgba(255,255,255,0.1)',
+                    paddingTop: '1rem'
+                  }}>
+                    Character Personality
+                  </h3>
+                  <p style={{ marginBottom: '0.75rem', opacity: 0.7, fontSize: '0.85rem' }}>
+                    Personality traits the AI has observed during your adventures. These persist permanently and evolve as your character grows.
+                  </p>
+                  <div style={{
+                    padding: '1rem',
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    lineHeight: '1.6',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {characterMemories}
+                  </div>
                 </div>
               )}
             </>

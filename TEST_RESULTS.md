@@ -1,5 +1,79 @@
 # Test Results
 
+## Moral Diversity & Start Date Tests (2026-02-10)
+
+**File:** `tests/moral-diversity.test.js`
+**Run:** `node tests/moral-diversity.test.js`
+
+### Test 1: DM System Prompt — NPC Moral Diversity (10 tests)
+- Contains NPC MORAL DIVERSITY section header
+- Instructs against defaulting to friendly NPCs
+- Includes merchant overcharging example
+- Includes guard bribe example
+- NPCs should want something in return
+- Allies can disagree morally
+- Lists petty human flaws
+- References campaign plan alignments
+- Real Stakes extends beyond villains to whole world
+- FINAL REMINDER includes moral diversity reinforcement
+
+### Test 2: DM System Prompt — Companion Personality & Independence (20 tests)
+- Contains companion independence section
+- States companions are not yes-men
+- Instructs to check alignment/ideals/flaws
+- Companions should disagree with player
+- Disagreement is not disloyalty
+- Lists 6 companion emotions: fear, doubt, ambition, resentment, frustration, moral conflict
+- Lawful good objects to theft
+- Chaotic neutral acts impulsively
+- Evil companions suggest questionable solutions
+- Good companions insist on helping
+- Inter-companion conflict
+- Companion name, alignment, personality, and flaws appear in prompt
+
+### Test 3: Campaign Plan Service — NPC Alignment & Moral Diversity Rules (13 tests)
+- NPC schema includes full 9-alignment field
+- NPC motivation field asks for diverse moral drivers
+- Contains NPC moral diversity rule section
+- Limits good-aligned NPCs (2-3 of 6-8)
+- Evil is realistic, not cartoonish
+- Explains lawful evil as realistic
+- Companion schema requires non-default alignment
+- Companion personality asks for flaws
+- Companion motivation can be selfish
+- Rule 7 requires alignment span and companion flaws
+- Merchant personality asks for moral disposition
+
+### Test 4: Companion Backstory Generator — Moral Complexity (10 tests)
+- Fixed "MASTER/ALLY" to "traveling companion, NOT their master"
+- Old "MASTER/ALLY" framing removed
+- Personal goal allows selfish motivations
+- Secrets can be morally compromising
+- Contains moral complexity section
+- Companion is not a loyal sidekick, has own moral compass
+- Backstory should create friction
+- Real behavioral flaws required
+- Value-based loyalty example
+
+### Test 5: Session Start Date Randomization Fix (5 tests)
+- Checks for prior sessions before picking start day
+- Uses isFirstSession flag
+- First session OR no game_day triggers randomization
+- Randomizes to day 1-365 for new characters
+- Old fallback pattern (game_day || random) is removed
+
+### Test 6: Moral Diversity Prompt Reinforcement — Primacy/Recency (6 tests)
+- NPC MORAL DIVERSITY section exists in prompt body
+- REAL STAKES section exists in prompt body
+- FINAL REMINDER section exists
+- Moral diversity reinforcement appears after FINAL REMINDER (recency)
+- NPC MORAL DIVERSITY body section appears before FINAL REMINDER (primacy)
+- Moral diversity mentioned 2+ times (primacy + recency pattern)
+
+**Result: 64 passed, 0 failed**
+
+---
+
 ## Combat Tracker Tests (2026-02-10)
 
 **File:** `tests/combat-tracker.test.js`

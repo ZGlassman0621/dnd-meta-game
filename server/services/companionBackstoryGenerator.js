@@ -63,7 +63,7 @@ COMPANION:
 - Personality: ${companion.personality_trait_1 || ''} ${companion.personality_trait_2 || ''}
 - Motivation: ${companion.motivation || 'Unknown'}
 
-THEIR MASTER/ALLY:
+THE PLAYER CHARACTER (their traveling companion, NOT their master):
 - Name: ${character.name}
 - Class: ${character.class}
 - Background: ${character.background || 'Unknown'}
@@ -75,9 +75,16 @@ CAMPAIGN:
 Generate a compelling backstory with:
 1. An origin story (where they came from)
 2. A formative event (what shaped them)
-3. A personal goal (what they want to achieve)
+3. A personal goal (what they want to achieve — can be selfish: wealth, revenge, escape, power, proving themselves)
 4. 2-3 unresolved threads (past conflicts/relationships that could resurface)
-5. 1-2 secrets (things they haven't told the player)
+5. 1-2 secrets (things they haven't told the player — can be morally compromising)
+
+MORAL COMPLEXITY — CRITICAL:
+- This companion is NOT a loyal sidekick. They are an independent person with their own moral compass.
+- Their personality and flaws should create FRICTION and interesting dynamics, not just support the player.
+- Give them REAL flaws that affect behavior: cowardice, greed, prejudice, impulsiveness, distrust, jealousy, zealotry, bitterness, or selfishness.
+- Their loyalty triggers should reflect their VALUES — a mercenary's loyalty drops if underpaid, a lawful companion's loyalty drops if the player breaks laws.
+- Secrets should include morally questionable choices they've made, not just sad backstory.
 
 THREAD TYPES: family, enemy, debt, romance, mystery, vengeance, redemption, lost_item, forgotten_past
 

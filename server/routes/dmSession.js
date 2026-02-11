@@ -20,6 +20,7 @@ import {
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
   buildNpcExtractionPrompt, saveExtractedNpcs,
+  buildMemoryExtractionPrompt, updateCharacterMemories,
   extractAndTrackUsedNames,
   emitSessionEvents, emitSessionEndedEvent
 } from '../services/dmSessionService.js';
@@ -560,6 +561,7 @@ router.post('/start', async (req, res) => {
       continueCampaign: continueCampaign || false,
       previousSessionSummaries: previousSessionSummaries || [],
       campaignNotes: character.campaign_notes || '',
+      characterMemories: character.character_memories || '',
       usedNames,
       storyThreadsContext,
       narrativeQueueContext,
@@ -639,8 +641,13 @@ router.post('/start', async (req, res) => {
 
     // Get character's current in-game date for session tracking
     // Prioritize the selected era's year - the player explicitly chose this era for the session
-    // Randomize the starting day for new campaigns (not always 1 Hammer)
-    const gameStartDay = character.game_day || (Math.floor(Math.random() * 365) + 1);
+    // For first-ever sessions, randomize the starting day (characters default to game_day=1 which
+    // would always start on 1 Hammer without this check)
+    const priorSessions = await dbGet('SELECT COUNT(*) as count FROM dm_sessions WHERE character_id = ?', [characterId]);
+    const isFirstSession = !priorSessions || priorSessions.count === 0;
+    const gameStartDay = (isFirstSession || !character.game_day)
+      ? (Math.floor(Math.random() * 365) + 1)
+      : character.game_day;
     let gameStartYear = 1492; // Default fallback
 
     if (era && era.years) {
@@ -875,6 +882,9 @@ router.post('/:sessionId/message', async (req, res) => {
 
     // Check for merchant shop in the response
     const merchantShop = detectMerchantShop(result.narrative);
+    if (merchantShop) {
+      console.log(`🏪 MERCHANT_SHOP detected: "${merchantShop.merchantName}" (${merchantShop.merchantType}) at ${merchantShop.location}`);
+    }
 
     // Strip all system markers from displayed narrative
     let cleanNarrative = result.narrative;
@@ -1584,6 +1594,40 @@ router.post('/:sessionId/end', async (req, res) => {
       }
     } catch (e) {
       console.error('Could not extract NPCs:', e);
+    }
+
+    // Extract character personality memories
+    try {
+      const { provider: memProvider } = await getLLMProvider();
+      if (memProvider && playerActionCount > 0) {
+        const memoryPrompt = buildMemoryExtractionPrompt(character.character_memories || '');
+        let memoryResponse;
+        if (memProvider === 'claude') {
+          const systemMessage = messages.find(m => m.role === 'system');
+          const systemPrompt = systemMessage?.content || '';
+          memoryResponse = await claude.chat(systemPrompt, [
+            ...messages.filter(m => m.role !== 'system'),
+            { role: 'user', content: memoryPrompt }
+          ]);
+        } else {
+          memoryResponse = await ollama.chat([
+            ...messages,
+            { role: 'user', content: memoryPrompt }
+          ], session.model);
+        }
+
+        const trimmedMemory = memoryResponse.trim();
+        if (trimmedMemory && !trimmedMemory.includes('NO_NEW_MEMORIES') && trimmedMemory.length > 10) {
+          await updateCharacterMemories(
+            session.character_id,
+            character.character_memories || '',
+            trimmedMemory
+          );
+          console.log('📝 Character memories extracted and saved');
+        }
+      }
+    } catch (e) {
+      console.error('Could not extract character memories:', e);
     }
 
     // Track used NPC names

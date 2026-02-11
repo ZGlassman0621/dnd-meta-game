@@ -102,6 +102,7 @@ export async function initDatabase() {
     { col: 'parsed_backstory', sql: "ALTER TABLE characters ADD COLUMN parsed_backstory TEXT" },
     { col: 'languages', sql: "ALTER TABLE characters ADD COLUMN languages TEXT DEFAULT '[]'" },
     { col: 'tool_proficiencies', sql: "ALTER TABLE characters ADD COLUMN tool_proficiencies TEXT DEFAULT '[]'" },
+    { col: 'character_memories', sql: "ALTER TABLE characters ADD COLUMN character_memories TEXT DEFAULT ''" },
   ];
 
   for (const migration of characterMigrations) {
