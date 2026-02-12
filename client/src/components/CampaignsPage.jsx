@@ -313,6 +313,8 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
   const [pipelineError, setPipelineError] = useState(null);
   const [createdCampaign, setCreatedCampaign] = useState(null);
 
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
   const [newCampaign, setNewCampaign] = useState({
     name: '',
     description: '',
@@ -546,6 +548,23 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
     } catch (error) {
       console.error('Error removing character:', error);
     }
+  };
+
+  const handleDeleteCampaign = async () => {
+    if (!confirmDelete) return;
+    try {
+      const response = await fetch(`/api/campaign/${confirmDelete.id}`, { method: 'DELETE' });
+      if (response.ok) {
+        setCampaigns(campaigns.filter(c => c.id !== confirmDelete.id));
+        if (selectedCampaign?.id === confirmDelete.id) {
+          setSelectedCampaign(null);
+        }
+        onCharacterUpdated?.();
+      }
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
+    }
+    setConfirmDelete(null);
   };
 
   const unassignedCharacters = allCharacters?.filter(
@@ -1011,20 +1030,81 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 )}
               </div>
 
-              {selectedCampaign.status === 'active' && (
-                <div style={styles.actions}>
+              <div style={styles.actions}>
+                {selectedCampaign.status === 'active' && (
                   <button
                     style={{ ...styles.button, ...styles.dangerButton }}
                     onClick={handleArchiveCampaign}
                   >
                     Archive Campaign
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  style={{
+                    ...styles.button,
+                    background: 'transparent',
+                    color: '#e74c3c',
+                    border: '1px solid rgba(231, 76, 60, 0.4)',
+                    fontSize: '0.8rem'
+                  }}
+                  onClick={() => setConfirmDelete(selectedCampaign)}
+                >
+                  Delete Campaign
+                </button>
+              </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000
+        }} onClick={() => setConfirmDelete(null)}>
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.99) 0%, rgba(40, 30, 35, 0.99) 100%)',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            maxWidth: '400px',
+            width: '90%',
+            border: '1px solid rgba(231, 76, 60, 0.3)',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 0.75rem', color: '#e74c3c', fontSize: '1.1rem' }}>
+              Delete Campaign?
+            </h3>
+            <p style={{ color: '#ccc', fontSize: '0.9rem', lineHeight: '1.5', margin: '0 0 1rem' }}>
+              This will permanently delete <strong style={{ color: '#f5f5f5' }}>{confirmDelete.name}</strong> and
+              all associated locations, quests, factions, merchants, and world data. Characters will be unassigned
+              but not deleted.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button
+                style={{ ...styles.button, ...styles.secondaryButton }}
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ ...styles.button, ...styles.dangerButton }}
+                onClick={handleDeleteCampaign}
+              >
+                Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

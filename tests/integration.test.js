@@ -32,6 +32,7 @@ import worldEventRoutes from '../server/routes/worldEvent.js';
 import travelRoutes from '../server/routes/travel.js';
 import npcRelationshipRoutes from '../server/routes/npcRelationship.js';
 import livingWorldRoutes from '../server/routes/livingWorld.js';
+import dmModeRoutes from '../server/routes/dmMode.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -42,6 +43,7 @@ let testCharId;
 let testCampaignId;
 let testSessionId;
 let testMerchantId;
+let testDmModePartyId;
 
 let passed = 0;
 let failed = 0;
@@ -106,6 +108,7 @@ async function startServer() {
   app.use('/api/travel', travelRoutes);
   app.use('/api/npc-relationship', npcRelationshipRoutes);
   app.use('/api/living-world', livingWorldRoutes);
+  app.use('/api/dm-mode', dmModeRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
@@ -140,6 +143,10 @@ async function cleanup() {
     }
     if (testCampaignId) {
       await dbRun('DELETE FROM campaigns WHERE id = ?', [testCampaignId]);
+    }
+    if (testDmModePartyId) {
+      await dbRun('DELETE FROM dm_sessions WHERE dm_mode_party_id = ?', [testDmModePartyId]);
+      await dbRun('DELETE FROM dm_mode_parties WHERE id = ?', [testDmModePartyId]);
     }
     console.log('  Cleanup complete.');
   } catch (err) {
@@ -760,6 +767,100 @@ async function testHealthCheck() {
   assert(body.status === 'ok', 'Status is ok');
 }
 
+// ===== GROUP 9: DM Mode (Party CRUD, Session Lifecycle) =====
+
+async function testDmModeListPartiesEmpty() {
+  console.log('\n  -- DM Mode: List parties (empty) --');
+  const { status, body } = await api('GET', '/api/dm-mode/parties');
+  assert(status === 200, `GET /api/dm-mode/parties returns 200 (got ${status})`);
+  assert(Array.isArray(body), 'Returns an array');
+}
+
+async function testDmModeCreatePartyDirect() {
+  console.log('\n  -- DM Mode: Create party directly (seed) --');
+  // Seed a party directly in DB since we don't want to call Opus in tests
+  const partyData = JSON.stringify([
+    { name: 'TEST_Thorn', race: 'Half-Orc', class: 'Fighter', subclass: 'Champion', level: 3, alignment: 'Lawful Good', ability_scores: { str: 16, dex: 12, con: 14, int: 10, wis: 13, cha: 8 }, max_hp: 28, current_hp: 28, armor_class: 16, speed: 30, skill_proficiencies: ['Athletics', 'Intimidation'], equipment: { mainHand: { name: 'Greataxe', damage: '1d12', damageType: 'slashing' }, offHand: null, armor: { name: 'Chain Mail', baseAC: 16, type: 'heavy' } }, inventory: ['Rope'], gold_gp: 50, known_cantrips: [], known_spells: [], spell_slots: {}, spell_slots_used: {}, personality_traits: 'Honorable', ideals: 'Justice', bonds: 'His village', flaws: 'Stubborn', motivation: 'Protect the weak', fear: 'Failure', secret: 'Killed a man', quirk: 'Hums', speaking_style: 'Terse', combat_style: 'Aggressive', social_style: 'Leader', moral_tendencies: 'Good', party_relationships: {}, color: '#60a5fa' },
+    { name: 'TEST_Elara', race: 'Wood Elf', class: 'Rogue', subclass: 'Thief', level: 3, alignment: 'Chaotic Neutral', ability_scores: { str: 8, dex: 18, con: 12, int: 14, wis: 10, cha: 13 }, max_hp: 21, current_hp: 21, armor_class: 15, speed: 35, skill_proficiencies: ['Stealth', 'Perception'], equipment: { mainHand: { name: 'Shortsword', damage: '1d6', damageType: 'piercing' }, offHand: null, armor: { name: 'Leather', baseAC: 11, type: 'light' } }, inventory: ['Lockpicks'], gold_gp: 120, known_cantrips: [], known_spells: [], spell_slots: {}, spell_slots_used: {}, personality_traits: 'Sarcastic', ideals: 'Freedom', bonds: 'A stolen amulet', flaws: 'Greedy', motivation: 'Profit', fear: 'Commitment', secret: 'Betrayed a friend', quirk: 'Fidgets', speaking_style: 'Chatty', combat_style: 'Sneaky', social_style: 'Deflects', moral_tendencies: 'Selfish', party_relationships: {}, color: '#c084fc' },
+    { name: 'TEST_Dorn', race: 'Hill Dwarf', class: 'Cleric', subclass: 'Life', level: 3, alignment: 'Neutral Good', ability_scores: { str: 14, dex: 10, con: 16, int: 12, wis: 17, cha: 11 }, max_hp: 27, current_hp: 27, armor_class: 18, speed: 25, skill_proficiencies: ['Medicine', 'Religion'], equipment: { mainHand: { name: 'Warhammer', damage: '1d8', damageType: 'bludgeoning' }, offHand: { name: 'Shield', ac_bonus: 2 }, armor: { name: 'Chain Mail', baseAC: 16, type: 'heavy' } }, inventory: ['Holy Symbol'], gold_gp: 30, known_cantrips: ['Sacred Flame'], known_spells: ['Cure Wounds', 'Bless'], spell_slots: { '1': 4, '2': 2 }, spell_slots_used: {}, personality_traits: 'Devout', ideals: 'Compassion', bonds: 'His temple', flaws: 'Judgmental', motivation: 'Serve his god', fear: 'Heresy', secret: 'Lost his faith once', quirk: 'Prays before meals', speaking_style: 'Measured', combat_style: 'Defensive', social_style: 'Mediator', moral_tendencies: 'Principled', party_relationships: {}, color: '#10b981' },
+    { name: 'TEST_Pip', race: 'Halfling', class: 'Wizard', subclass: 'Evocation', level: 3, alignment: 'Chaotic Good', ability_scores: { str: 8, dex: 14, con: 12, int: 18, wis: 10, cha: 13 }, max_hp: 18, current_hp: 18, armor_class: 12, speed: 25, skill_proficiencies: ['Arcana', 'Investigation'], equipment: { mainHand: { name: 'Quarterstaff', damage: '1d6', damageType: 'bludgeoning' }, offHand: null, armor: null }, inventory: ['Spellbook'], gold_gp: 60, known_cantrips: ['Fire Bolt', 'Prestidigitation'], known_spells: ['Magic Missile', 'Shield', 'Fireball'], spell_slots: { '1': 4, '2': 2 }, spell_slots_used: {}, personality_traits: 'Curious', ideals: 'Knowledge', bonds: 'His mentor', flaws: 'Impulsive', motivation: 'Discovery', fear: 'The unknown', secret: 'Stole a spellbook', quirk: 'Talks to himself', speaking_style: 'Chatty and awkward', combat_style: 'Reckless caster', social_style: 'Awkward', moral_tendencies: 'Good but reckless', party_relationships: {}, color: '#f59e0b' }
+  ]);
+  const tensions = JSON.stringify(['Thorn and Elara disagree on stealing', 'Dorn lost faith once']);
+
+  const result = await dbRun(
+    `INSERT INTO dm_mode_parties (name, setting, tone, level, party_data, party_dynamics, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+    ['TEST_Party', 'Forgotten Realms', 'heroic fantasy', 3, partyData, tensions]
+  );
+  testDmModePartyId = Number(result.lastInsertRowid);
+  assert(testDmModePartyId > 0, `Party created with id ${testDmModePartyId}`);
+}
+
+async function testDmModeGetParty() {
+  console.log('\n  -- DM Mode: Get party --');
+  const { status, body } = await api('GET', `/api/dm-mode/party/${testDmModePartyId}`);
+  assert(status === 200, `GET /api/dm-mode/party/:id returns 200 (got ${status})`);
+  assert(body.name === 'TEST_Party', `Party name is TEST_Party (got ${body.name})`);
+  assert(body.characters.length === 4, `Has 4 characters (got ${body.characters.length})`);
+  assert(body.characters[0].name === 'TEST_Thorn', `First character is TEST_Thorn`);
+}
+
+async function testDmModeListPartiesNonEmpty() {
+  console.log('\n  -- DM Mode: List parties (non-empty) --');
+  const { status, body } = await api('GET', '/api/dm-mode/parties');
+  assert(status === 200, `Returns 200`);
+  const testParty = body.find(p => p.id === testDmModePartyId);
+  assert(testParty !== undefined, `Test party appears in list`);
+  assert(testParty.characters.length === 4, `Has 4 characters in list`);
+}
+
+async function testDmModeNoActiveSession() {
+  console.log('\n  -- DM Mode: No active session --');
+  const { status, body } = await api('GET', `/api/dm-mode/active/${testDmModePartyId}`);
+  assert(status === 200, `Returns 200`);
+  assert(body === null, `No active session (got ${JSON.stringify(body)})`);
+}
+
+async function testDmModeSessionHistory() {
+  console.log('\n  -- DM Mode: Session history (empty) --');
+  const { status, body } = await api('GET', `/api/dm-mode/history/${testDmModePartyId}`);
+  assert(status === 200, `Returns 200`);
+  assert(Array.isArray(body), `Returns array`);
+}
+
+async function testDmModeUpdateHpRequiresSession() {
+  console.log('\n  -- DM Mode: Update HP without session --');
+  const { status } = await api('POST', '/api/dm-mode/999999/update-hp', { characterName: 'Test', newHp: 10 });
+  assert(status === 404, `Returns 404 for nonexistent session (got ${status})`);
+}
+
+async function testDmModeRetireParty() {
+  console.log('\n  -- DM Mode: Retire party --');
+  // Create a second party to retire (don't retire the main test party yet)
+  const result = await dbRun(
+    `INSERT INTO dm_mode_parties (name, setting, tone, level, party_data, party_dynamics, status)
+     VALUES (?, ?, ?, ?, '[]', '[]', 'active')`,
+    ['TEST_RetireMe', 'Forgotten Realms', 'heroic', 1]
+  );
+  const retireId = Number(result.lastInsertRowid);
+  const { status, body } = await api('DELETE', `/api/dm-mode/party/${retireId}`);
+  assert(status === 200, `DELETE returns 200 (got ${status})`);
+  assert(body.success === true, `Returns success`);
+
+  // Verify it's retired
+  const check = await dbGet('SELECT status FROM dm_mode_parties WHERE id = ?', [retireId]);
+  assert(check.status === 'retired', `Status changed to retired`);
+
+  // Cleanup
+  await dbRun('DELETE FROM dm_mode_parties WHERE id = ?', [retireId]);
+}
+
+async function testDmModeGetPartyNotFound() {
+  console.log('\n  -- DM Mode: Get party not found --');
+  const { status } = await api('GET', '/api/dm-mode/party/999999');
+  assert(status === 404, `Returns 404 (got ${status})`);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -815,6 +916,17 @@ async function runTests() {
     console.log('\n=== Group 8: Edge Cases ===');
     await testNonexistentCharacter();
     await testHealthCheck();
+
+    console.log('\n=== Group 9: DM Mode (Party CRUD) ===');
+    await testDmModeListPartiesEmpty();
+    await testDmModeCreatePartyDirect();
+    await testDmModeGetParty();
+    await testDmModeListPartiesNonEmpty();
+    await testDmModeNoActiveSession();
+    await testDmModeSessionHistory();
+    await testDmModeUpdateHpRequiresSession();
+    await testDmModeRetireParty();
+    await testDmModeGetPartyNotFound();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

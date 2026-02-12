@@ -217,6 +217,8 @@ export async function initDatabase() {
     { col: 'game_start_year', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_start_year INTEGER' },
     { col: 'game_end_day', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_end_day INTEGER' },
     { col: 'game_end_year', sql: 'ALTER TABLE dm_sessions ADD COLUMN game_end_year INTEGER' },
+    { col: 'session_type', sql: "ALTER TABLE dm_sessions ADD COLUMN session_type TEXT DEFAULT 'player'" },
+    { col: 'dm_mode_party_id', sql: 'ALTER TABLE dm_sessions ADD COLUMN dm_mode_party_id INTEGER' },
   ];
 
   for (const migration of dmMigrations) {
@@ -1314,6 +1316,22 @@ export async function initDatabase() {
   } catch (e) {
     // Indexes might already exist
   }
+
+  // DM Mode parties table - AI-controlled player character parties for user-as-DM mode
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS dm_mode_parties (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      setting TEXT DEFAULT 'Forgotten Realms',
+      tone TEXT DEFAULT 'heroic fantasy',
+      level INTEGER DEFAULT 1,
+      party_data TEXT NOT NULL,
+      party_dynamics TEXT,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
   console.log('Database initialized successfully (Turso cloud)');
 }

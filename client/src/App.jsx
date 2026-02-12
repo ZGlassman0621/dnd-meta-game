@@ -28,6 +28,7 @@ const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstor
 const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
 const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
 const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
+const DMMode = lazy(() => import('./components/DMMode'))
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -260,7 +261,9 @@ function App() {
 
       <ErrorBoundary>
       <Suspense fallback={<div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>Loading...</div>}>
-      {activeView === 'showNPCGenerator' ? (
+      {activeView === 'showDMMode' ? (
+        <DMMode onBack={goHome} />
+      ) : activeView === 'showNPCGenerator' ? (
         <NPCGenerator
           onBack={goHome}
           character={selectedCharacter}
@@ -468,6 +471,7 @@ function App() {
                 { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
                 { key: 'showPlayerJournal', label: 'Player Journal', desc: 'NPCs met, places visited, faction standings, and quests', color: '#10b981' },
                 { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
+                { key: 'showDMMode', label: 'DM Mode', desc: 'You DM for 4 AI player characters', color: '#e67e22' },
                 { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
                 { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
               ].map(card => (

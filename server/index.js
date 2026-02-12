@@ -22,6 +22,7 @@ import worldEventRoutes from './routes/worldEvent.js';
 import travelRoutes from './routes/travel.js';
 import npcRelationshipRoutes from './routes/npcRelationship.js';
 import livingWorldRoutes from './routes/livingWorld.js';
+import dmModeRoutes from './routes/dmMode.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +69,7 @@ app.use('/api/world-event', worldEventRoutes);
 app.use('/api/travel', travelRoutes);
 app.use('/api/npc-relationship', npcRelationshipRoutes);
 app.use('/api/living-world', livingWorldRoutes);
+app.use('/api/dm-mode', dmModeRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });

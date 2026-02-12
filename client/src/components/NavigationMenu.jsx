@@ -32,7 +32,8 @@ const menuCategories = {
     label: 'Play',
     color: '#e67e22',
     items: [
-      { key: 'showDMSession', label: 'AI Dungeon Master' }
+      { key: 'showDMSession', label: 'AI Dungeon Master' },
+      { key: 'showDMMode', label: 'DM Mode' }
     ]
   }
 }
@@ -99,7 +100,7 @@ function DropdownMenu({ category, isOpen, onToggle, activeView, onNavigate, hasC
         }}>
           {items.map(item => {
             // Skip character-dependent items if no character selected
-            if (!hasCharacter && item.key !== 'showNPCGenerator') {
+            if (!hasCharacter && item.key !== 'showNPCGenerator' && item.key !== 'showDMMode') {
               return null
             }
 

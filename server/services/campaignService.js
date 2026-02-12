@@ -100,27 +100,30 @@ export async function deleteCampaign(id) {
     await dbRun(`UPDATE npc_relationships SET first_met_location_id = NULL WHERE first_met_location_id IN (${placeholders})`, locationIds);
   }
 
-  // 3. Delete narrative queue items
+  // 3. Delete merchant inventories
+  await dbRun('DELETE FROM merchant_inventories WHERE campaign_id = ?', [id]);
+
+  // 4. Delete narrative queue items
   await dbRun('DELETE FROM narrative_queue WHERE campaign_id = ?', [id]);
 
-  // 4. Delete journeys (journey_encounters cascade via ON DELETE CASCADE)
+  // 5. Delete journeys (journey_encounters cascade via ON DELETE CASCADE)
   await dbRun('DELETE FROM journeys WHERE campaign_id = ?', [id]);
 
-  // 5. Clear self-references in world_events, then delete (event_effects cascade)
+  // 6. Clear self-references in world_events, then delete (event_effects cascade)
   await dbRun('UPDATE world_events SET triggered_by_event_id = NULL WHERE campaign_id = ?', [id]);
   await dbRun('DELETE FROM world_events WHERE campaign_id = ?', [id]);
 
-  // 6. Delete factions (faction_goals, faction_standings cascade via ON DELETE CASCADE)
+  // 7. Delete factions (faction_goals, faction_standings cascade via ON DELETE CASCADE)
   await dbRun('DELETE FROM factions WHERE campaign_id = ?', [id]);
 
-  // 7. Delete quests (quest_requirements cascade via ON DELETE CASCADE)
+  // 8. Delete quests (quest_requirements cascade via ON DELETE CASCADE)
   await dbRun('DELETE FROM quests WHERE campaign_id = ?', [id]);
 
-  // 8. Clear self-references in locations, then delete
+  // 9. Clear self-references in locations, then delete
   await dbRun('UPDATE locations SET parent_location_id = NULL WHERE campaign_id = ?', [id]);
   await dbRun('DELETE FROM locations WHERE campaign_id = ?', [id]);
 
-  // 9. Finally delete the campaign
+  // 10. Finally delete the campaign
   const result = await dbRun('DELETE FROM campaigns WHERE id = ?', [id]);
   return result.changes > 0;
 }
