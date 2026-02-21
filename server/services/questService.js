@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { safeParse } from '../utils/safeParse.js';
 
 /**
  * Quest Service - CRUD operations for quests and quest requirements
@@ -66,11 +67,11 @@ export async function createQuest(data) {
 export async function getQuestById(id) {
   const quest = await dbGet('SELECT * FROM quests WHERE id = ?', [id]);
   if (quest) {
-    quest.antagonist = quest.antagonist ? JSON.parse(quest.antagonist) : null;
-    quest.stages = JSON.parse(quest.stages || '[]');
-    quest.completion_criteria = quest.completion_criteria ? JSON.parse(quest.completion_criteria) : null;
-    quest.rewards = JSON.parse(quest.rewards || '{}');
-    quest.world_state_changes = JSON.parse(quest.world_state_changes || '[]');
+    quest.antagonist = quest.antagonist ? safeParse(quest.antagonist, null) : null;
+    quest.stages = safeParse(quest.stages, []);
+    quest.completion_criteria = quest.completion_criteria ? safeParse(quest.completion_criteria, null) : null;
+    quest.rewards = safeParse(quest.rewards, {});
+    quest.world_state_changes = safeParse(quest.world_state_changes, []);
     quest.time_sensitive = Boolean(quest.time_sensitive);
   }
   return quest;
@@ -188,8 +189,8 @@ export async function advanceQuestStage(id) {
 
   const newStage = quest.current_stage + 1;
 
-  if (newStage >= quest.stages.length) {
-    // Quest complete
+  if (!Array.isArray(quest.stages) || quest.stages.length === 0 || newStage >= quest.stages.length) {
+    // Quest complete (no stages defined or passed final stage)
     return completeQuest(id);
   }
 
@@ -222,6 +223,8 @@ export async function completeQuest(id) {
       await applyQuestRewards(quest.character_id, quest.rewards, quest.title);
     } catch (e) {
       console.error(`Error applying quest rewards for "${quest.title}":`, e);
+      // Re-throw so callers know rewards failed — quest is still marked completed
+      throw new Error(`Quest completed but reward application failed: ${e.message}`);
     }
   }
 
@@ -239,15 +242,15 @@ async function applyQuestRewards(characterId, rewards, questTitle) {
   const updates = [];
   const params = [];
 
-  // Apply gold reward
-  if (rewards.gold && rewards.gold > 0) {
+  // Apply gold reward (validate it's a positive number)
+  if (rewards.gold && typeof rewards.gold === 'number' && rewards.gold > 0 && Number.isFinite(rewards.gold)) {
     const newGp = (character.gold_gp || 0) + rewards.gold;
     updates.push('gold_gp = ?');
     params.push(newGp);
   }
 
-  // Apply XP reward
-  if (rewards.xp && rewards.xp > 0) {
+  // Apply XP reward (validate it's a positive number)
+  if (rewards.xp && typeof rewards.xp === 'number' && rewards.xp > 0 && Number.isFinite(rewards.xp)) {
     const newXP = (character.experience || 0) + rewards.xp;
     updates.push('experience = ?');
     params.push(newXP);
@@ -369,7 +372,7 @@ export async function createQuestRequirements(requirements) {
 export async function getQuestRequirementById(id) {
   const req = await dbGet('SELECT * FROM quest_requirements WHERE id = ?', [id]);
   if (req) {
-    req.params = JSON.parse(req.params || '{}');
+    req.params = safeParse(req.params, {});
     req.is_optional = Boolean(req.is_optional);
   }
   return req;
@@ -385,7 +388,7 @@ export async function getQuestRequirements(questId) {
   );
   return reqs.map(req => ({
     ...req,
-    params: JSON.parse(req.params || '{}'),
+    params: safeParse(req.params, {}),
     is_optional: Boolean(req.is_optional)
   }));
 }
@@ -400,7 +403,7 @@ export async function getStageRequirements(questId, stageIndex) {
   );
   return reqs.map(req => ({
     ...req,
-    params: JSON.parse(req.params || '{}'),
+    params: safeParse(req.params, {}),
     is_optional: Boolean(req.is_optional)
   }));
 }
@@ -416,7 +419,7 @@ export async function getIncompleteStageRequirements(questId, stageIndex) {
   `, [questId, stageIndex]);
   return reqs.map(req => ({
     ...req,
-    params: JSON.parse(req.params || '{}'),
+    params: safeParse(req.params, {}),
     is_optional: Boolean(req.is_optional)
   }));
 }
@@ -489,11 +492,11 @@ export async function isStageComplete(questId, stageIndex) {
 function parseQuestJson(quest) {
   return {
     ...quest,
-    antagonist: quest.antagonist ? JSON.parse(quest.antagonist) : null,
-    stages: JSON.parse(quest.stages || '[]'),
-    completion_criteria: quest.completion_criteria ? JSON.parse(quest.completion_criteria) : null,
-    rewards: JSON.parse(quest.rewards || '{}'),
-    world_state_changes: JSON.parse(quest.world_state_changes || '[]'),
+    antagonist: quest.antagonist ? safeParse(quest.antagonist, null) : null,
+    stages: safeParse(quest.stages, []),
+    completion_criteria: quest.completion_criteria ? safeParse(quest.completion_criteria, null) : null,
+    rewards: safeParse(quest.rewards, {}),
+    world_state_changes: safeParse(quest.world_state_changes, []),
     time_sensitive: Boolean(quest.time_sensitive)
   };
 }

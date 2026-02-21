@@ -15,6 +15,7 @@ import {
 import { advanceGameTime, TIME_RATIOS } from '../services/metaGame.js';
 import { createThreadsFromAdventure } from '../services/storyThreads.js';
 import { onAdventureComplete, onStoryThreadCreated } from '../services/narrativeIntegration.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -49,8 +50,7 @@ router.post('/options', async (req, res) => {
 
     res.json({ options, risk_level, contextual: !!use_context });
   } catch (error) {
-    console.error('Error generating adventure options:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate adventure options');
   }
 });
 
@@ -96,8 +96,7 @@ router.post('/preview-odds', async (req, res) => {
       partyMembers: partyMembers.map(m => ({ name: m.name, class: m.class }))
     });
   } catch (error) {
-    console.error('Error previewing odds:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'preview odds');
   }
 });
 
@@ -165,8 +164,7 @@ router.post('/start', async (req, res) => {
     const newAdventure = await dbGet('SELECT * FROM adventures WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json(newAdventure);
   } catch (error) {
-    console.error('Error starting adventure:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'start adventure');
   }
 });
 
@@ -224,8 +222,7 @@ router.get('/status/:character_id', async (req, res) => {
       results
     });
   } catch (error) {
-    console.error('Error checking adventure status:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'check adventure status');
   }
 });
 
@@ -410,8 +407,7 @@ router.post('/claim/:adventure_id', async (req, res) => {
       companionXp: companionXpResults
     });
   } catch (error) {
-    console.error('Error claiming adventure:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'claim adventure');
   }
 });
 
@@ -435,8 +431,7 @@ router.delete('/cancel/:character_id', async (req, res) => {
 
     res.json({ message: 'Adventure cancelled successfully' });
   } catch (error) {
-    console.error('Error cancelling adventure:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'cancel adventure');
   }
 });
 
@@ -450,7 +445,7 @@ router.get('/history/:character_id', async (req, res) => {
 
     res.json(adventures);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch adventure history');
   }
 });
 
@@ -467,8 +462,7 @@ router.delete('/clear-history/:character_id', async (req, res) => {
       deleted_count: result.changes
     });
   } catch (error) {
-    console.error('Error clearing adventure history:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'clear adventure history');
   }
 });
 

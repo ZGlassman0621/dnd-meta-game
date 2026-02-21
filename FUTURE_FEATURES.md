@@ -20,30 +20,6 @@ This file tracks feature ideas and enhancements for future implementation.
 
 ---
 
-## Spell Management & Companion Spell Slots
-
-**Priority:** High
-**Identified:** 2026-02-09
-
-### Problem
-The database has `known_spells`, `prepared_spells`, `known_cantrips`, `spell_slots`, and `spell_slots_used` columns, but there's no UI to manage spells during gameplay. Additionally, companions who are spellcasters have their own spell slots that need to be tracked independently.
-
-### Desired Behavior
-- View known spells organized by level
-- Prepare spells (for prepared casters like Clerics/Paladins/Wizards)
-- Track spell slot usage (mark slots as used, restore on rest)
-- Each companion spellcaster tracks their own spell slots separately
-- The AI DM manages companion spellcasting narratively
-
-### Files to Modify
-- `client/src/components/DMSession.jsx` — Spell management UI
-- `server/routes/character.js` — Persist cantrips/spells on level-up
-- `server/database.js` — Add spell columns to companions if missing
-- `server/services/dmPromptBuilder.js` — Inject companion spell slot status into prompt
-- `server/routes/dmSession.js` — Handle companion spell usage markers
-
----
-
 ## Faction-Driven Quest Generation
 
 **Priority:** Medium
@@ -62,26 +38,6 @@ Factions have goals with progress tracking, but quests are generated independent
 - `server/services/livingWorldService.js` — Add quest generation triggers to tick processing
 - `server/services/questGenerator.js` — Add faction-aware quest generation prompts
 - `server/services/questService.js` — Link quest completion to faction standings
-
----
-
-## Companion Management During Sessions
-
-**Priority:** High
-**Identified:** 2026-02-09
-
-### Problem
-Companions exist in the system (backstory, stats, recruitment, leveling) but there's no way to view or manage active companions during a DM session without leaving the session.
-
-### Desired Behavior
-- A "Party" panel accessible during DM sessions showing active companions
-- Compact companion cards with HP, key abilities, equipment
-- Quick actions: view full companion sheet, equip/unequip items
-- Updates in real-time as companions take damage, cast spells, etc.
-
-### Files to Modify
-- `client/src/components/DMSession.jsx` — Add party panel
-- Potentially extract to `client/src/components/PartyPanel.jsx`
 
 ---
 
@@ -134,6 +90,7 @@ Characters have an `avatar` field and players can upload images, but there's no 
 
 The following features were previously tracked here and have been built:
 
+- **Full Spell Management System** (2026-02-21) — 284 spells (1st-9th level, all classes), spell slot display with use/restore, prepared spell UI (Cleric/Druid/Paladin/Wizard/Artificer), known spell UI (Bard/Ranger/Sorcerer/Warlock), level-up spell selection step with optional swap
 - **Inventory Management During/After Sessions** (2026-02-08) — Auto-detect items consumed/gained at session end with undo
 - **Downtime Integration** (2026-01-29) — Pending downtime narratives injected into DM session context
 - **Rest Button Pronoun Fix** (2026-01-29) — Uses character gender for he/she/they pronouns
@@ -153,6 +110,7 @@ The following features were previously tracked here and have been built:
 - **Companion Skill Checks** (2026-02-11) — Companion skill modifiers + passive Perception in DM prompt; AI narrates companion skill attempts when player fails
 - **Context-Aware Rest Narratives** (2026-02-11) — AI generates atmospheric rest descriptions based on current session context; mechanical results show immediately
 - **Condition & Status Effect Tracking** (2026-02-11) — 15 D&D 5e conditions + exhaustion 1-6; slide-in panel, info bar chips, AI markers, auto-clear on rest/combat end
+- **Companion Management During Sessions** (2026-02-11) — CompanionsPanel extracted from DMSession; compact companion cards with HP, abilities, equipment accessible during gameplay
 
 ---
 

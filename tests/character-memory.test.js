@@ -219,9 +219,9 @@ console.log('\n=== Test 5: DM Guideline — Character Observation ===\n');
 console.log('\n=== Test 6: Database Migration ===\n');
 
 {
-  const dbSource = readSource('server/database.js');
+  const dbSource = readSource('server/migrations/001_initial_schema.js');
   assert(dbSource.includes("character_memories"), 'Database has character_memories migration');
-  assert(dbSource.includes("ALTER TABLE characters ADD COLUMN character_memories TEXT DEFAULT ''"), 'Migration SQL is correct');
+  assert(dbSource.includes("character_memories TEXT DEFAULT ''"), 'Migration SQL is correct');
 }
 
 // ===== 7. SESSION END EXTRACTION CALL =====

@@ -1,5 +1,6 @@
 import express from 'express';
 import * as worldEventService from '../services/worldEventService.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -13,8 +14,7 @@ router.get('/campaign/:campaignId', async (req, res) => {
     const events = await worldEventService.getCampaignEvents(req.params.campaignId);
     res.json(events);
   } catch (error) {
-    console.error('Error fetching campaign events:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    handleServerError(res, error, 'fetch campaign events');
   }
 });
 
@@ -24,8 +24,7 @@ router.get('/campaign/:campaignId/active', async (req, res) => {
     const events = await worldEventService.getActiveEvents(req.params.campaignId);
     res.json(events);
   } catch (error) {
-    console.error('Error fetching active events:', error);
-    res.status(500).json({ error: 'Failed to fetch active events' });
+    handleServerError(res, error, 'fetch active events');
   }
 });
 
@@ -38,8 +37,7 @@ router.get('/campaign/:campaignId/type/:eventType', async (req, res) => {
     );
     res.json(events);
   } catch (error) {
-    console.error('Error fetching events by type:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    handleServerError(res, error, 'fetch events by type');
   }
 });
 
@@ -49,8 +47,7 @@ router.get('/location/:locationId', async (req, res) => {
     const events = await worldEventService.getEventsAffectingLocation(req.params.locationId);
     res.json(events);
   } catch (error) {
-    console.error('Error fetching events for location:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    handleServerError(res, error, 'fetch events for location');
   }
 });
 
@@ -60,8 +57,7 @@ router.get('/faction/:factionId', async (req, res) => {
     const events = await worldEventService.getEventsAffectingFaction(req.params.factionId);
     res.json(events);
   } catch (error) {
-    console.error('Error fetching events for faction:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    handleServerError(res, error, 'fetch events for faction');
   }
 });
 
@@ -71,8 +67,7 @@ router.get('/character/:characterId', async (req, res) => {
     const events = await worldEventService.getEventsVisibleToCharacter(req.params.characterId);
     res.json(events);
   } catch (error) {
-    console.error('Error fetching events for character:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    handleServerError(res, error, 'fetch events for character');
   }
 });
 
@@ -85,8 +80,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(event);
   } catch (error) {
-    console.error('Error fetching event:', error);
-    res.status(500).json({ error: 'Failed to fetch event' });
+    handleServerError(res, error, 'fetch event');
   }
 });
 
@@ -102,8 +96,7 @@ router.post('/', async (req, res) => {
     const event = await worldEventService.createWorldEvent(req.body);
     res.status(201).json(event);
   } catch (error) {
-    console.error('Error creating event:', error);
-    res.status(500).json({ error: 'Failed to create event' });
+    handleServerError(res, error, 'create event');
   }
 });
 
@@ -116,8 +109,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(event);
   } catch (error) {
-    console.error('Error updating event:', error);
-    res.status(500).json({ error: 'Failed to update event' });
+    handleServerError(res, error, 'update event');
   }
 });
 
@@ -130,8 +122,7 @@ router.post('/:id/advance-stage', async (req, res) => {
     }
     res.json(event);
   } catch (error) {
-    console.error('Error advancing event stage:', error);
-    res.status(500).json({ error: 'Failed to advance event stage' });
+    handleServerError(res, error, 'advance event stage');
   }
 });
 
@@ -154,8 +145,7 @@ router.post('/:id/resolve', async (req, res) => {
     }
     res.json(event);
   } catch (error) {
-    console.error('Error resolving event:', error);
-    res.status(500).json({ error: 'Failed to resolve event' });
+    handleServerError(res, error, 'resolve event');
   }
 });
 
@@ -169,8 +159,7 @@ router.post('/:id/cancel', async (req, res) => {
     }
     res.json(event);
   } catch (error) {
-    console.error('Error cancelling event:', error);
-    res.status(500).json({ error: 'Failed to cancel event' });
+    handleServerError(res, error, 'cancel event');
   }
 });
 
@@ -189,8 +178,7 @@ router.post('/:id/discover', async (req, res) => {
     }
     res.json(event);
   } catch (error) {
-    console.error('Error discovering event:', error);
-    res.status(500).json({ error: 'Failed to discover event' });
+    handleServerError(res, error, 'discover event');
   }
 });
 
@@ -203,8 +191,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting event:', error);
-    res.status(500).json({ error: 'Failed to delete event' });
+    handleServerError(res, error, 'delete event');
   }
 });
 
@@ -218,8 +205,7 @@ router.get('/:eventId/effects', async (req, res) => {
     const effects = await worldEventService.getEventEffects(req.params.eventId);
     res.json(effects);
   } catch (error) {
-    console.error('Error fetching event effects:', error);
-    res.status(500).json({ error: 'Failed to fetch effects' });
+    handleServerError(res, error, 'fetch event effects');
   }
 });
 
@@ -232,8 +218,7 @@ router.get('/effects/target/:targetType/:targetId', async (req, res) => {
     );
     res.json(effects);
   } catch (error) {
-    console.error('Error fetching effects for target:', error);
-    res.status(500).json({ error: 'Failed to fetch effects' });
+    handleServerError(res, error, 'fetch effects for target');
   }
 });
 
@@ -243,8 +228,7 @@ router.get('/effects/campaign/:campaignId', async (req, res) => {
     const effects = await worldEventService.getActiveEffectsForCampaign(req.params.campaignId);
     res.json(effects);
   } catch (error) {
-    console.error('Error fetching effects for campaign:', error);
-    res.status(500).json({ error: 'Failed to fetch effects' });
+    handleServerError(res, error, 'fetch effects for campaign');
   }
 });
 
@@ -263,8 +247,7 @@ router.post('/:eventId/effects', async (req, res) => {
     });
     res.status(201).json(effect);
   } catch (error) {
-    console.error('Error creating effect:', error);
-    res.status(500).json({ error: 'Failed to create effect' });
+    handleServerError(res, error, 'create effect');
   }
 });
 
@@ -277,8 +260,7 @@ router.get('/effect/:id', async (req, res) => {
     }
     res.json(effect);
   } catch (error) {
-    console.error('Error fetching effect:', error);
-    res.status(500).json({ error: 'Failed to fetch effect' });
+    handleServerError(res, error, 'fetch effect');
   }
 });
 
@@ -291,8 +273,7 @@ router.put('/effect/:id', async (req, res) => {
     }
     res.json(effect);
   } catch (error) {
-    console.error('Error updating effect:', error);
-    res.status(500).json({ error: 'Failed to update effect' });
+    handleServerError(res, error, 'update effect');
   }
 });
 
@@ -306,8 +287,7 @@ router.post('/effect/:id/reverse', async (req, res) => {
     }
     res.json(effect);
   } catch (error) {
-    console.error('Error reversing effect:', error);
-    res.status(500).json({ error: 'Failed to reverse effect' });
+    handleServerError(res, error, 'reverse effect');
   }
 });
 
@@ -320,8 +300,7 @@ router.delete('/effect/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting effect:', error);
-    res.status(500).json({ error: 'Failed to delete effect' });
+    handleServerError(res, error, 'delete effect');
   }
 });
 
@@ -339,8 +318,7 @@ router.post('/tick/:campaignId', async (req, res) => {
     );
     res.json({ success: true, results });
   } catch (error) {
-    console.error('Error processing event tick:', error);
-    res.status(500).json({ error: 'Failed to process event tick' });
+    handleServerError(res, error, 'process event tick');
   }
 });
 

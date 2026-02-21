@@ -1,11 +1,312 @@
 # Recent Improvements
 
-## Latest: Opus for All Generation, Sonnet for Sessions Only (2026-02-10)
+## Latest: Full Spell Management System (2026-02-21)
+
+Complete D&D 5e spell system with 284 spells across all levels, spell slot tracking, prepared/known spell management, and level-up spell selection.
+
+### Phase 1: Spell Data (284 Spells, All Classes, Levels 1-9)
+Split the monolithic `spells.json` into per-level files under `client/src/data/spells/`:
+- `cantrips.json` — Cantrips organized by class (13 classes)
+- `spells-1st.json` through `spells-9th.json` — 284 leveled spells with name, school, casting time, range, duration, components, classes, description, damage/healing/ritual where applicable
+- `index.js` — Barrel file re-exporting the same `{ cantrips, spells }` shape
+- All 4 component imports updated (CharacterSheet, CharacterCreationWizard, QuickReferencePanel, PartyBuilder)
+
+### Phase 2: Spell Slot Display
+Added spell slot tracker to CharacterSheet Spells tab:
+- Fetches from existing `GET /api/character/spell-slots/:id` endpoint
+- One row per spell level with filled/empty circles showing available vs used slots
+- Use/restore buttons per level with optimistic UI updates
+- Warlock "Pact Magic Slots" displayed separately
+
+### Phase 3: Prepared Spell Management (Cleric, Druid, Paladin, Wizard, Artificer)
+Inline spell preparation UI in CharacterSheet:
+- Max prepared calculation per class: Cleric/Druid/Wizard = ability mod + level, Paladin/Artificer = ability mod + floor(level/2)
+- Subclass spells shown as "always prepared" (don't count toward limit, not removable)
+- Prepare panel with level filter tabs, search field, checkbox toggles
+- Wizard spellbook mode: prepares only from `known_spells` (spellbook contents)
+- Save/cancel with `PUT /api/character/:id`
+
+### Phase 4: Known Spell Management (Bard, Ranger, Sorcerer, Warlock)
+Known spell tracking UI in CharacterSheet:
+- Known spells list grouped by level with forget button
+- Max known from `SPELLS_KNOWN` progression tables
+- Learn New Spell panel with level filter and search
+- Wizard "Add to Spellbook" button for scroll/found spell additions
+
+### Phase 5: Level-Up Spell Integration
+New "Spells" step in the level-up flow (between Choices and Review):
+- **Known casters** (Bard, Sorcerer, Warlock, Ranger): Pick new spells from class list, optionally swap 1 known spell
+- **Wizard**: Add 2 spells to spellbook from any castable level
+- **New cantrips**: Select from class cantrip list when cantrips known increases
+- **Prepared casters** (Cleric, Druid, Paladin): Skip step (change spells on long rest)
+- Progress bar dynamically shows 3 or 4 steps based on class
+- Review step shows spell selections summary
+- Backend persists `newCantrips`, `newSpells`, and `swapSpell` to character record
+
+### Files Created
+- `client/src/data/spells/cantrips.json` — Cantrips by class
+- `client/src/data/spells/spells-1st.json` through `spells-9th.json` — 9 spell level files
+- `client/src/data/spells/index.js` — Barrel file
+
+### Files Modified
+- `client/src/components/CharacterSheet.jsx` — Spell slots, prepared spells, known spells UI
+- `client/src/components/LevelUpPage.jsx` — Spell selection step, cantrip/spell pickers, swap UI
+- `client/src/components/CharacterCreationWizard.jsx` — Import update
+- `client/src/components/QuickReferencePanel.jsx` — Import update
+- `client/src/components/PartyBuilder.jsx` — Import update
+- `client/src/data/classes.json` — Fixed Wizard ("Spellbook") and Artificer ("All prepared") spellsKnown
+- `server/routes/character.js` — Level-up endpoint persists newCantrips, newSpells, swapSpell
+- `client/src/index.css` — Spell option hover style
+
+---
+
+## Defensive Hardening — All Systems A+ (2026-02-20)
+
+Cross-system audit identified 6 patterns of latent bugs across 11+ services. All fixed in a single pass:
+
+### 1. safeParse() Utility — 60 crash vectors eliminated
+- Created `server/utils/safeParse.js` — wraps JSON.parse with try/catch, returns fallback on failure
+- Deployed across: questService, factionService, worldEventService, travelService, livingWorldService, dmSession routes, character routes, companion routes
+- Every `JSON.parse()` in the read path now fails gracefully instead of crashing the server
+
+### 2. Falsy-Zero Bug Fix (|| → ??)
+- `power_level || 5` treats `power_level=0` as falsy, silently defaulting to 5
+- Fixed in factionService (3 occurrences) and livingWorldService (2 occurrences) using `??`
+
+### 3. Risk Level & Level Bounds Validation (rewards.js)
+- Level clamped to `[1, 20]` range in `getBaseGoldReward()` and `getBaseXPReward()`
+- All reward/success functions fall back to `RISK_MULTIPLIERS.medium` on unknown risk levels
+- Prevents crashes on invalid enum values from corrupted session data
+
+### 4. Silent Failure Propagation
+- `completeQuest()`: Quest reward errors now re-throw with descriptive message
+- `processLivingWorldTick()`: Total-failure catch now re-throws instead of returning empty results
+- `applyQuestRewards()`: Added `Number.isFinite()` validation on gold and XP values
+
+### 5. Null Guards in Tick Loops
+- `processFactionTick()`: Added `if (!factionMap[goal.faction_id]) continue` — prevents crash when faction deleted between initial fetch and goal processing
+- `advanceQuestStage()`: Added `!Array.isArray(quest.stages)` guard before checking stage bounds
+
+### 6. Numeric Edge Case Guards
+- `calculateTravelTime()`, `calculateRationsNeeded()`, `estimateTravelCost()`: Guard against negative, NaN, and Infinity inputs
+- DM session `daysToAdd`: Added `Number.isFinite()` check alongside type check
+
+**Test results: 650+ assertions across 9 suites, 0 failures.**
+
+---
+
+## A+ System Upgrades (2026-02-20)
+
+Following a deep audit that brought 5 systems to A grade, 8 additional improvements bring them all to A+:
+
+### 1. Transaction Wrapping for Import Pipeline (A → A+)
+The entire campaign import now runs inside a single SQLite write transaction:
+- All DB inserts (campaign, character, sessions, companions, quests) wrapped in `db.transaction('write')`
+- Automatic `tx.rollback()` on any failure — no partial imports left in the database
+- Non-critical enrichment (merchants, relational records) runs post-commit in `createPostImportRecords()`
+- Partial enrichment failures logged but don't fail the import
+
+### 2. Merchant Conflict Propagation as 409 (A → A+)
+Merchant transaction conflicts are no longer silently swallowed:
+- Removed try/catch that previously `console.warn`'d and continued on merchant update failure
+- Merchant inventory update must succeed before returning 200 to the client
+- Conflict errors (optimistic locking failure) return **HTTP 409** with descriptive message
+- Prevents asymmetric state where character inventory is committed but merchant inventory is stale
+
+### 3. Shared parseMarkerPairs Export (A → A+)
+Eliminated code duplication between marker detection and condition detection:
+- `parseMarkerPairs()` in dmSessionService.js changed from local function to `export function`
+- `conditions.js` now imports the shared parser instead of maintaining a duplicate `parseConditionPairs`
+- Single source of truth for all key="value" pair parsing across the codebase
+
+### 4. Defensive Plan Mutations (A → A+)
+All plan mutation functions now have try/catch + input validation:
+- `updatePlanSection()`: Try/catch on JSON.parse, descriptive error on corrupted plan data
+- `addWorldEvent()`: Requires `event.title`, ensures `world_timeline.events` is array before push
+- `addNPC()`: Requires `npc.name`, ensures `plan.npcs` is array before push
+- Array guards prevent `TypeError: Cannot read properties of undefined (reading 'push')`
+
+### 5. Section Allowlist for Plan Updates (A → A+)
+`updatePlanSection()` now validates against a strict allowlist of 13 permitted sections:
+- Allowed: `main_quest`, `side_quests`, `npcs`, `locations`, `factions`, `merchants`, `themes`, `world_timeline`, `world_state`, `dm_notes`, `potential_companions`, `session_continuity`, `npc_relationship_system`
+- Rejects any attempt to overwrite metadata fields (`id`, `name`, `campaign_id`, etc.)
+- Returns 400 with `Invalid plan section` error for disallowed keys
+
+### 6. Inventory Version Locking (A → A+)
+Full optimistic locking on merchant inventories with an `inventory_version` counter:
+- New `inventory_version INTEGER DEFAULT 0` column on `merchant_inventories`
+- `updateMerchantAfterTransaction()` checks both `gold_gp` AND `inventory_version` in WHERE clause
+- All 4 inventory-modifying functions increment version: `updateMerchantAfterTransaction`, `restockMerchant`, `addItemToMerchant`, `ensureItemAtMerchant`
+- Prevents silent overwrites from concurrent browser tabs or rapid API calls
+
+### 7. Comprehensive Marker Detection Test Suite (NEW)
+128-assertion test suite covering all marker parsing:
+- `parseMarkerPairs` core: double/single/no quotes, spaces around `=`, empty values, mixed formats
+- All 7 detection functions: standard format, flexible quoting, missing fields, null/empty input
+- Condition markers: reversed field order, flexible formatting
+- Detection/stripping consistency: every detected marker is also stripped from displayed narrative
+
+### 8. Deeper Relational Record Population (A → A+)
+Imported campaign plans now create richer database records:
+- **Factions**: 14 columns (was 7) — adds alignment, scope, goals, leader, headquarters, resources, power_level
+- **Locations**: 14 columns (was 7) — adds type, region, description, tags, environment, population, government, notable_features
+- **NPCs**: 17 columns (was 10) — adds occupation, personality, goals, secrets, physical_description, voice_description, backstory
+
+### Files Changed
+- `server/services/campaignImportService.js` — Transaction wrapping, post-import enrichment, deeper column mapping
+- `server/services/merchantService.js` — `inventory_version` in all 4 update functions
+- `server/services/campaignPlanService.js` — Section allowlist, defensive mutations with try/catch + validation
+- `server/services/dmSessionService.js` — `parseMarkerPairs` exported
+- `server/data/conditions.js` — Uses shared import instead of duplicate parser
+- `server/routes/dmSession.js` — Merchant conflict propagation as 409, passes `inventory_version` to update
+- `server/database.js` — `inventory_version` column migration
+- `tests/marker-detection.test.js` — NEW: 128 assertions across 10 test groups
+
+### Tests
+- **650+ assertions across 9 test suites, all passing**:
+  - Marker Detection: 128/128
+  - Campaign Import: 125/125
+  - Integration: 137/137
+  - Moral Diversity: 64/64
+  - Companion Skill Checks: 59/59
+  - Condition Tracking: 56/56
+  - Character Memory: 55/55
+  - Combat Tracker: 26/26
+  - Loot Systems: 4/4 suites
+
+---
+
+## System Audit Improvements (2026-02-20)
+
+Deep audit of all backend systems identified 5 areas rated below A. All upgraded to A grade:
+
+### 1. Campaign Import — Relational Record Creation (B → A)
+Imported campaign plans now populate the living world database tables, not just store the plan JSON:
+- **Factions**: Created from `plan.factions` with alignment, scope, goals
+- **Locations**: Created from `plan.locations` with type, region, tags
+- **NPCs**: Created from `plan.npcs` (skips duplicates already created as companions)
+- **Quests**: Side quests and main quest created from plan, linked to character
+- Errors per-record are caught and logged without failing the whole import
+
+### 2. Merchant Transactions — Optimistic Locking (B+ → A)
+Concurrent merchant transactions can no longer silently overwrite each other:
+- `updateMerchantAfterTransaction()` accepts optional `expectedGold` parameter
+- Uses `WHERE gold_gp = ?` clause to detect concurrent modifications
+- Throws conflict error if another transaction modified the merchant's gold between read and write
+- Backward compatible: existing callers without `expectedGold` work unchanged
+
+### 3. Campaign Plan Retrieval — Structure Validation (B+ → A)
+`getCampaignPlan()` now defensively handles malformed stored plans:
+- Try/catch around JSON.parse — returns null instead of crashing on corrupt data
+- Ensures critical arrays exist (`npcs`, `locations`, `factions`, `side_quests`, `merchants`, `themes`)
+- Ensures critical objects exist (`world_timeline`, `world_state`, `dm_notes`)
+- Prevents downstream crashes from missing plan structure
+
+### 4. DM Session Markers — Robust Parsing (B+ → A)
+All 8 AI marker detection functions now use a shared `parseMarkerPairs()` helper:
+- **Spaces around `=`**: `Key = "value"` now works (previously required `Key="value"`)
+- **Single quotes**: `Key='value'` now works alongside double quotes
+- **Unquoted values**: `Key=bareword` now works for simple values
+- **Empty quoted values**: `Key=""` parsed as empty string instead of failing silently
+- **Warning logs**: When a marker bracket pattern matches but required fields are missing, logs a `[Marker]` warning for debugging
+- **Condition markers**: `CONDITION_ADD`/`CONDITION_REMOVE` now accept fields in any order (previously required `Target` before `Condition`)
+
+### 5. NPC Routes — Already Complete (Incomplete → A)
+Audit revealed the NPC routes already have full CRUD: 9 endpoints covering create, read, update, delete, list, search, and campaign-filtered queries. No changes needed.
+
+### Tests
+- **326 assertions across 3 suites, all passing** (before A+ upgrades)
+
+---
+
+## Character-Optional Import & Plan Protection (2026-02-20)
+
+### Character Section Now Optional
+Campaign imports no longer require a character section. You can import just the campaign + plan, then build a fresh character through the app's character creation wizard and assign them via the campaign details panel:
+
+- **Import flow**: Paste JSON with `campaign` + `campaign_plan` only — no `character` section needed
+- **Character assignment**: Use the existing "Assign Character" dropdown on the campaign details panel
+- **Plan protection**: Imported plans (marked `imported: true`) are protected from being overwritten by the campaign plan generation pipeline — assigning a character won't trigger re-generation
+- **UI guidance**: Import result shows contextual message when no character is included, directing users to create and assign one
+
+### Files Changed
+- `server/services/campaignImportService.js` — Character optional in validation, early return when no character
+- `server/services/campaignPlanService.js` — Guard in `generateCampaignPlan` skips generation for imported plans
+- `client/src/components/CampaignsPage.jsx` — Conditional import result UI for null characterId
+
+### Tests
+- 125 assertions across 21 test cases (all pass, up from 114/20)
+- New: campaign-only import (no character), updated Test 8 from validation-fail to success
+
+---
+
+## Enhanced Campaign Import — Custom Plan Sections & Normalizer (2026-02-20)
+
+### Extended Plan Support for Imported Campaigns
+The DM prompt now surfaces rich custom sections from imported campaign plans, making externally-played campaigns feel native:
+
+- **DM Directives**: `never_reveal`, `always_follow`, `narrative_principles` rendered as binding rules in the DM prompt (primacy position)
+- **NPC Voice Guides**: Speech patterns, surface behavior, and gated depth levels included inline with NPC listings
+- **NPC Secrets**: DM-ONLY secrets shown for each NPC so the DM controls information flow
+- **Campaign Metadata**: Year, season, tone, status, active party surfaced as campaign context with timeline enforcement
+- **Relationship System**: NPC relationship levels and gating mechanics included when present
+- **Session Continuity**: Current state, recent events, unresolved threads placed at prompt end (recency position)
+- **Timeline Enforcement**: Campaign year from metadata triggers anachronism prevention rules
+
+### Plan Normalizer
+Imported plans are now normalized before storage to prevent crashes and handle schema variations:
+
+- **Field name mapping**: `main_story`→`main_quest`, `characters`→`npcs`, `timeline`→`world_timeline`, `shops`→`merchants`, etc.
+- **Required structure creation**: Missing arrays (`npcs`, `locations`, `merchants`, `factions`, `side_quests`, `themes`) and objects (`world_state`, `world_timeline`, `dm_notes`) auto-created
+- **Events array wrapping**: Plain `[events]` auto-wrapped in `{description, events}` structure
+- **Normalization runs before validation**: Alternative field names pass validation correctly
+
+### Bug Fix
+- Fixed `getPlanSummaryForSession` reading `planned_twists` instead of `potential_twists` — DM twists were always null
+
+### Files Changed
+- `server/services/campaignPlanService.js` — Extended `getPlanSummaryForSession` with custom sections, detailed NPCs, bug fix
+- `server/services/dmPromptBuilder.js` — Enhanced `formatCampaignPlan` with DM directives, voice guides, metadata, relationship system, session continuity, timeline enforcement
+- `server/services/campaignImportService.js` — Added `normalizePlan()` with field mapping and structure creation
+- `server/routes/campaign.js` — Pre-validation normalization
+
+### Tests
+- 125 assertions across 21 test cases (all pass, up from 73/15)
+- New: normalizer (missing arrays, field mapping, events wrapping), custom section preservation, plan summary extended fields, campaign-only import
+
+---
+
+## Campaign Import Feature (2026-02-20)
+
+### Campaign Import from JSON
+Import complete campaigns played externally (e.g., with Claude AI chatbot) into the app so the AI DM can continue them:
+
+- **New endpoint**: `POST /api/campaign/import` accepts a single JSON payload with all campaign data
+- **What gets imported**: Campaign metadata, campaign plan, character (full stat block, optional), session history, and companions
+- **What gets created**: Campaign record, character record (auto-assigned to campaign), completed session records, NPC + companion records, merchant inventories from plan
+- **Validation**: Required fields checked (campaign name, character name/class/race), optional sections gracefully handled with sane defaults
+- **UI**: "Import" button on Campaigns page with JSON textarea, client-side validation, and pipeline progress display
+- **Sonnet upgraded**: DM sessions now use `claude-sonnet-4-6` (was `claude-sonnet-4-5`)
+
+### Files Changed
+- `server/services/campaignImportService.js` — New: validation + orchestrated DB writes
+- `server/routes/campaign.js` — New `POST /import` route
+- `server/index.js` — Increased JSON body size limit to 2MB
+- `client/src/components/CampaignsPage.jsx` — Import button, JSON textarea, pipeline progress
+- `server/services/claude.js` — Sonnet model updated to `claude-sonnet-4-6`
+
+### Tests
+- 73 assertions across 15 test cases (all pass)
+- Covers: minimal/full imports, plan storage, character data integrity, session history, companion creation, validation errors, default values
+
+---
+
+## Opus for All Generation, Sonnet for Sessions Only (2026-02-10)
 
 ### AI Model Architecture Overhaul
 Claude Opus now handles **all world-building and content generation**, not just campaign plans. Claude Sonnet is reserved exclusively for interactive DM sessions:
 - **Opus** (`claude-opus-4-6`): Campaign plans, backstory parsing, NPC generation, quest generation, companion backstories, location generation, living world events, adventure generation
-- **Sonnet** (`claude-sonnet-4-5`): DM sessions only (real-time narration, combat, dialogue)
+- **Sonnet** (`claude-sonnet-4-6`): DM sessions only (real-time narration, combat, dialogue)
 - **Ollama**: Offline fallback for all tasks
 - First session opening uses Opus (establishing the narrative arc from campaign plan), continuing sessions use Sonnet
 - 6 generators updated: backstoryParserService, questGenerator, companionBackstoryGenerator, locationGenerator, livingWorldGenerator, adventureGenerator
@@ -18,7 +319,7 @@ Claude Opus now handles **all world-building and content generation**, not just 
 ### Claude Model Auto-Updating
 Both Claude models now use alias IDs (no date suffix) so they automatically resolve to the latest available version:
 - **Opus**: `claude-opus-4-6` (was `claude-opus-4-5-20251101`)
-- **Sonnet**: `claude-sonnet-4-5` (was `claude-sonnet-4-20250514`)
+- **Sonnet**: `claude-sonnet-4-6` (was `claude-sonnet-4-20250514`)
 - All UI text updated to version-agnostic labels ("Claude Opus" instead of "Opus 4.5")
 
 ### Enhanced Stats Bar

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
+import spellsData from '../data/spells/index.js'
 
 const ALL_CLASSES = [
   'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter',
@@ -42,6 +43,14 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   })
   const [selectedSubclass, setSelectedSubclass] = useState('')
 
+  // Spell selection state (for spells step)
+  const [selectedNewCantrips, setSelectedNewCantrips] = useState([])
+  const [selectedNewSpells, setSelectedNewSpells] = useState([])
+  const [swapSpell, setSwapSpell] = useState(null) // { old: string, new: string }
+  const [showSwapPanel, setShowSwapPanel] = useState(false)
+  const [spellFilterLevel, setSpellFilterLevel] = useState('all')
+  const [spellSearchText, setSpellSearchText] = useState('')
+
   useEffect(() => {
     fetchLevelUpInfo()
   }, [character.id])
@@ -53,6 +62,12 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
       setSelectedSubclass('')
       setAsiPoints(2)
       setAsiDistribution({ str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 })
+      setSelectedNewCantrips([])
+      setSelectedNewSpells([])
+      setSwapSpell(null)
+      setShowSwapPanel(false)
+      setSpellFilterLevel('all')
+      setSpellSearchText('')
     }
   }, [selectedClassOption])
 
@@ -174,9 +189,97 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
     return spellList[level] || []
   }
 
+  // Determine if this class needs the spells step
+  const needsSpellsStep = () => {
+    if (!selectedClassOption) return false
+    const choices = selectedClassOption.choices || {}
+    return choices.newCantrips > 0 || choices.newSpellsKnown > 0
+  }
+
+  // Check if this class is a "known" caster (picks specific spells at level-up)
+  const isKnownCaster = (className) => {
+    const key = className?.toLowerCase()
+    return ['bard', 'ranger', 'sorcerer', 'warlock'].includes(key)
+  }
+
+  // Check if this class is a Wizard (adds spells to spellbook)
+  const isWizard = (className) => className?.toLowerCase() === 'wizard'
+
+  // Get available cantrips for a class
+  const getAvailableCantrips = (className) => {
+    const key = className?.toLowerCase()
+    const classCantrips = spellsData.cantrips[key] || []
+    const existingCantrips = JSON.parse(character.known_cantrips || '[]')
+    return classCantrips.filter(c => !existingCantrips.includes(c.name) && !selectedNewCantrips.includes(c.name))
+  }
+
+  // Get available spells for a class at specific levels
+  const getAvailableSpells = (className) => {
+    const key = className?.toLowerCase()
+    const existingSpells = JSON.parse(character.known_spells || '[]')
+    const swappedOut = swapSpell?.old
+    const available = []
+
+    // Determine max spell level this class can cast at its new level
+    const classInfo = classesData[key]
+    const spellcasting = classInfo?.spellcasting
+    if (!spellcasting) return []
+
+    const newClassLevel = selectedClassOption?.newLevel || 1
+
+    // Get max spell level from slot progression
+    let maxSpellLevel = 0
+    const slotsByLevel = spellcasting.spellSlotsByLevel
+    if (slotsByLevel) {
+      const slotsAtLevel = slotsByLevel[newClassLevel]
+      if (slotsAtLevel) {
+        for (let i = slotsAtLevel.length - 1; i >= 0; i--) {
+          if (slotsAtLevel[i] > 0) {
+            maxSpellLevel = i + 1
+            break
+          }
+        }
+      }
+    }
+
+    // Warlock pact magic: slot level = ceil(classLevel / 2), max 5
+    if (key === 'warlock') {
+      maxSpellLevel = Math.min(5, Math.ceil(newClassLevel / 2))
+    }
+
+    const levelLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th']
+    for (let i = 0; i < maxSpellLevel; i++) {
+      const levelKey = levelLabels[i]
+      const levelSpells = spellsData.spells[levelKey] || []
+      const classSpells = levelSpells.filter(s => s.classes.includes(key))
+      classSpells.forEach(spell => {
+        const isKnown = existingSpells.includes(spell.name) && spell.name !== swappedOut
+        const isSelected = selectedNewSpells.includes(spell.name)
+        if (!isKnown && !isSelected) {
+          available.push({ ...spell, level: levelKey })
+        }
+      })
+    }
+
+    return available
+  }
+
+  // Get the character's current known spells for swap purposes
+  const getCurrentKnownSpells = () => {
+    return JSON.parse(character.known_spells || '[]')
+  }
+
   const handleClassSelect = (classOption) => {
     setSelectedClassOption(classOption)
     setStep('choices')
+  }
+
+  const handleProceedFromChoices = () => {
+    if (needsSpellsStep()) {
+      setStep('spells')
+    } else {
+      setStep('review')
+    }
   }
 
   const handleProceedToReview = () => {
@@ -185,6 +288,10 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
   const handleBackToChoices = () => {
     setStep('choices')
+  }
+
+  const handleBackToSpells = () => {
+    setStep('spells')
   }
 
   const handleBackToClassSelection = () => {
@@ -251,6 +358,22 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
       if (activeChoices.needsSubclass && selectedSubclass) {
         body.subclass = selectedSubclass
+      }
+
+      // Spell selections
+      if (selectedNewCantrips.length > 0) {
+        body.newCantrips = selectedNewCantrips
+      }
+      if (selectedNewSpells.length > 0) {
+        body.newSpells = selectedNewSpells
+      }
+      if (swapSpell && swapSpell.old && swapSpell.new) {
+        body.swapSpell = swapSpell
+        // Include the swap-in spell in newSpells if not already there
+        if (!body.newSpells) body.newSpells = []
+        if (!body.newSpells.includes(swapSpell.new)) {
+          body.newSpells.push(swapSpell.new)
+        }
       }
 
       const response = await fetch(`/api/character/level-up/${character.id}`, {
@@ -330,11 +453,16 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
           <div className={`progress-step ${step === 'class-selection' ? 'active' : ''} ${step !== 'class-selection' ? 'completed' : ''}`}>
             1. Class
           </div>
-          <div className={`progress-step ${step === 'choices' ? 'active' : ''} ${step === 'review' ? 'completed' : ''}`}>
+          <div className={`progress-step ${step === 'choices' ? 'active' : ''} ${['spells', 'review'].includes(step) ? 'completed' : ''}`}>
             2. Choices
           </div>
+          {needsSpellsStep() && (
+            <div className={`progress-step ${step === 'spells' ? 'active' : ''} ${step === 'review' ? 'completed' : ''}`}>
+              3. Spells
+            </div>
+          )}
           <div className={`progress-step ${step === 'review' ? 'active' : ''}`}>
-            3. Review
+            {needsSpellsStep() ? '4' : '3'}. Review
           </div>
         </div>
       </div>
@@ -657,24 +785,23 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               </section>
             )}
 
-            {/* Cantrips notification */}
-            {activeChoices.newCantrips > 0 && (
+            {/* Spells preview (details on next step) */}
+            {(activeChoices.newCantrips > 0 || activeChoices.newSpellsKnown > 0) && (
               <section className="choice-section notification-section">
-                <h3>New Cantrips Available</h3>
-                <p>
-                  You can learn {activeChoices.newCantrips} new cantrip{activeChoices.newCantrips > 1 ? 's' : ''}.
-                  (Cantrip selection available on your character sheet)
-                </p>
-              </section>
-            )}
-
-            {/* Spells notification */}
-            {activeChoices.newSpellsKnown > 0 && (
-              <section className="choice-section notification-section">
-                <h3>New Spells Available</h3>
-                <p>
-                  You can learn {activeChoices.newSpellsKnown} new spell{activeChoices.newSpellsKnown > 1 ? 's' : ''}.
-                  (Spell selection available on your character sheet)
+                <h3>Spells</h3>
+                <p style={{ color: '#aaa', fontSize: '0.9rem' }}>
+                  {activeChoices.newCantrips > 0 && (
+                    <span>{activeChoices.newCantrips} new cantrip{activeChoices.newCantrips > 1 ? 's' : ''}</span>
+                  )}
+                  {activeChoices.newCantrips > 0 && activeChoices.newSpellsKnown > 0 && ' and '}
+                  {activeChoices.newSpellsKnown > 0 && (
+                    <span>
+                      {isWizard(selectedClassOption.class)
+                        ? `${activeChoices.newSpellsKnown} new spell${activeChoices.newSpellsKnown > 1 ? 's' : ''} for your spellbook`
+                        : `${activeChoices.newSpellsKnown} new spell${activeChoices.newSpellsKnown > 1 ? 's' : ''} to learn`}
+                    </span>
+                  )}
+                  {' — you\'ll choose on the next step.'}
                 </p>
               </section>
             )}
@@ -683,11 +810,316 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
             <div className="step-actions">
               <button
                 className="button"
-                onClick={handleProceedToReview}
+                onClick={handleProceedFromChoices}
                 disabled={
                   (activeChoices.needsASI && asiPoints > 0) ||
                   (activeChoices.needsSubclass && !selectedSubclass) ||
                   (hpChoice === 'roll' && hpRoll === null)
+                }
+              >
+                {needsSpellsStep() ? 'Choose Spells →' : 'Review Level Up →'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Spells (conditional) */}
+        {step === 'spells' && selectedClassOption && (
+          <div className="level-up-step">
+            <button className="back-link" onClick={handleBackToChoices}>
+              ← Back to choices
+            </button>
+
+            <h2>
+              {isWizard(selectedClassOption.class)
+                ? 'Add Spells to Spellbook'
+                : 'Learn New Spells'}
+            </h2>
+            <p className="step-description">
+              {isWizard(selectedClassOption.class)
+                ? `Through study, you add ${activeChoices.newSpellsKnown || 2} new spells to your spellbook.`
+                : isKnownCaster(selectedClassOption.class)
+                  ? 'Choose which spells to learn as you grow in power.'
+                  : 'Select new spells for your repertoire.'}
+            </p>
+
+            {/* New Cantrips */}
+            {activeChoices.newCantrips > 0 && (
+              <section className="choice-section" style={{ marginBottom: '1.5rem' }}>
+                <h3>New Cantrips ({selectedNewCantrips.length}/{activeChoices.newCantrips})</h3>
+                <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                  Choose {activeChoices.newCantrips} new cantrip{activeChoices.newCantrips > 1 ? 's' : ''} to learn permanently.
+                </p>
+
+                {/* Selected cantrips */}
+                {selectedNewCantrips.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    {selectedNewCantrips.map(name => (
+                      <span key={name} style={{
+                        background: 'rgba(96, 165, 250, 0.2)',
+                        border: '1px solid rgba(96, 165, 250, 0.4)',
+                        padding: '0.3rem 0.75rem',
+                        borderRadius: '4px',
+                        fontSize: '0.9rem',
+                        cursor: 'pointer'
+                      }} onClick={() => setSelectedNewCantrips(prev => prev.filter(c => c !== name))}>
+                        {name} ✕
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Available cantrips */}
+                {selectedNewCantrips.length < activeChoices.newCantrips && (
+                  <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem' }}>
+                    {getAvailableCantrips(selectedClassOption.class).map(cantrip => (
+                      <div key={cantrip.name} style={{
+                        padding: '0.4rem 0.6rem',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        fontSize: '0.9rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                      className="spell-option-row"
+                      onClick={() => setSelectedNewCantrips(prev => [...prev, cantrip.name])}>
+                        <span>{cantrip.name}</span>
+                        <span style={{ color: '#888', fontSize: '0.8rem' }}>{cantrip.school}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* New Spells */}
+            {activeChoices.newSpellsKnown > 0 && (
+              <section className="choice-section" style={{ marginBottom: '1.5rem' }}>
+                <h3>
+                  {isWizard(selectedClassOption.class) ? 'New Spellbook Spells' : 'New Spells Known'}
+                  {' '}({selectedNewSpells.length}/{activeChoices.newSpellsKnown})
+                </h3>
+                <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                  {isWizard(selectedClassOption.class)
+                    ? `Add ${activeChoices.newSpellsKnown} spells to your spellbook from any Wizard spell level you can cast.`
+                    : `Choose ${activeChoices.newSpellsKnown} new spell${activeChoices.newSpellsKnown > 1 ? 's' : ''} from the ${selectedClassOption.class} spell list.`}
+                </p>
+
+                {/* Selected spells */}
+                {selectedNewSpells.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    {selectedNewSpells.map(name => (
+                      <span key={name} style={{
+                        background: 'rgba(168, 85, 247, 0.2)',
+                        border: '1px solid rgba(168, 85, 247, 0.4)',
+                        padding: '0.3rem 0.75rem',
+                        borderRadius: '4px',
+                        fontSize: '0.9rem',
+                        cursor: 'pointer'
+                      }} onClick={() => setSelectedNewSpells(prev => prev.filter(s => s !== name))}>
+                        {name} ✕
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Filters */}
+                {selectedNewSpells.length < activeChoices.newSpellsKnown && (
+                  <>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      {['all', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'].map(lvl => {
+                        const available = getAvailableSpells(selectedClassOption.class)
+                        const count = lvl === 'all' ? available.length : available.filter(s => s.level === lvl).length
+                        if (lvl !== 'all' && count === 0) return null
+                        return (
+                          <button key={lvl} onClick={() => setSpellFilterLevel(lvl)} style={{
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '4px',
+                            border: spellFilterLevel === lvl ? '1px solid #a855f7' : '1px solid #555',
+                            background: spellFilterLevel === lvl ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+                            color: spellFilterLevel === lvl ? '#a855f7' : '#ccc',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem'
+                          }}>
+                            {lvl === 'all' ? 'All' : lvl} ({count})
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search spells..."
+                      value={spellSearchText}
+                      onChange={(e) => setSpellSearchText(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.4rem 0.6rem',
+                        borderRadius: '4px',
+                        border: '1px solid #555',
+                        background: '#1a1a2e',
+                        color: '#eee',
+                        fontSize: '0.9rem',
+                        marginBottom: '0.5rem',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+
+                    {/* Available spells list */}
+                    <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem' }}>
+                      {(() => {
+                        let spells = getAvailableSpells(selectedClassOption.class)
+                        if (spellFilterLevel !== 'all') {
+                          spells = spells.filter(s => s.level === spellFilterLevel)
+                        }
+                        if (spellSearchText) {
+                          const search = spellSearchText.toLowerCase()
+                          spells = spells.filter(s => s.name.toLowerCase().includes(search))
+                        }
+                        if (spells.length === 0) {
+                          return <p style={{ color: '#666', textAlign: 'center', margin: '0.5rem 0', fontSize: '0.85rem' }}>No spells available</p>
+                        }
+                        return spells.map(spell => (
+                          <div key={spell.name} style={{
+                            padding: '0.4rem 0.6rem',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            fontSize: '0.9rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                          className="spell-option-row"
+                          onClick={() => setSelectedNewSpells(prev => [...prev, spell.name])}>
+                            <span>{spell.name}</span>
+                            <span style={{ color: '#888', fontSize: '0.8rem' }}>{spell.level} {spell.school}</span>
+                          </div>
+                        ))
+                      })()}
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
+
+            {/* Spell Swap (Bard, Sorcerer, Warlock, Ranger) */}
+            {isKnownCaster(selectedClassOption.class) && getCurrentKnownSpells().length > 0 && (
+              <section className="choice-section" style={{ marginBottom: '1.5rem' }}>
+                <h3>Swap a Known Spell (Optional)</h3>
+                <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                  You may replace one spell you know with a different spell from the {selectedClassOption.class} spell list.
+                </p>
+
+                {swapSpell && swapSpell.new ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span style={{
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '4px',
+                      fontSize: '0.9rem',
+                      textDecoration: 'line-through'
+                    }}>{swapSpell.old}</span>
+                    <span style={{ color: '#888' }}>→</span>
+                    <span style={{
+                      background: 'rgba(34, 197, 94, 0.2)',
+                      border: '1px solid rgba(34, 197, 94, 0.4)',
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '4px',
+                      fontSize: '0.9rem'
+                    }}>{swapSpell.new}</span>
+                    <button onClick={() => { setSwapSpell(null); setShowSwapPanel(false) }} style={{
+                      background: 'transparent',
+                      border: '1px solid #555',
+                      color: '#aaa',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem'
+                    }}>Cancel Swap</button>
+                  </div>
+                ) : showSwapPanel ? (
+                  <div>
+                    <p style={{ color: '#ccc', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Select a spell to replace:</p>
+                    <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem', marginBottom: '0.75rem' }}>
+                      {getCurrentKnownSpells().map(spellName => (
+                        <div key={spellName}
+                          className="spell-option-row"
+                          style={{
+                            padding: '0.4rem 0.6rem',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            fontSize: '0.9rem'
+                          }}
+                          onClick={() => {
+                            // Set swap old, now need to pick new
+                            setSwapSpell({ old: spellName, new: null })
+                          }}>
+                          {spellName}
+                        </div>
+                      ))}
+                    </div>
+
+                    {swapSpell?.old && !swapSpell?.new && (
+                      <>
+                        <p style={{ color: '#ccc', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                          Replacing <strong style={{ color: '#ef4444' }}>{swapSpell.old}</strong> — choose a replacement:
+                        </p>
+                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem' }}>
+                          {getAvailableSpells(selectedClassOption.class).filter(s => s.name !== swapSpell.old).map(spell => (
+                            <div key={spell.name}
+                              className="spell-option-row"
+                              style={{
+                                padding: '0.4rem 0.6rem',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem',
+                                display: 'flex',
+                                justifyContent: 'space-between'
+                              }}
+                              onClick={() => setSwapSpell({ old: swapSpell.old, new: spell.name })}>
+                              <span>{spell.name}</span>
+                              <span style={{ color: '#888', fontSize: '0.8rem' }}>{spell.level} {spell.school}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    <button onClick={() => { setShowSwapPanel(false); setSwapSpell(null) }} style={{
+                      marginTop: '0.5rem',
+                      background: 'transparent',
+                      border: '1px solid #555',
+                      color: '#aaa',
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem'
+                    }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowSwapPanel(true)} style={{
+                    background: 'rgba(168, 85, 247, 0.15)',
+                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                    color: '#a855f7',
+                    padding: '0.4rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}>Swap a Spell</button>
+                )}
+              </section>
+            )}
+
+            {/* Continue to Review */}
+            <div className="step-actions">
+              <button
+                className="button"
+                onClick={handleProceedToReview}
+                disabled={
+                  (activeChoices.newCantrips > 0 && selectedNewCantrips.length < activeChoices.newCantrips) ||
+                  (activeChoices.newSpellsKnown > 0 && selectedNewSpells.length < activeChoices.newSpellsKnown) ||
+                  (swapSpell && !swapSpell.new)
                 }
               >
                 Review Level Up →
@@ -696,11 +1128,11 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
           </div>
         )}
 
-        {/* Step 3: Review */}
+        {/* Step 4: Review */}
         {step === 'review' && selectedClassOption && (
           <div className="level-up-step">
-            <button className="back-link" onClick={handleBackToChoices}>
-              ← Back to choices
+            <button className="back-link" onClick={needsSpellsStep() ? handleBackToSpells : handleBackToChoices}>
+              ← Back to {needsSpellsStep() ? 'spells' : 'choices'}
             </button>
 
             <h2>Review Your Level Up</h2>
@@ -845,6 +1277,45 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                     )
                   })()}
 
+                  {/* Spells Summary */}
+                  {(selectedNewCantrips.length > 0 || selectedNewSpells.length > 0 || swapSpell) && (
+                    <div className="review-card">
+                      <h3>Spells</h3>
+                      {selectedNewCantrips.length > 0 && (
+                        <>
+                          <h4 style={{ color: '#60a5fa', margin: '0.5rem 0 0.25rem', fontSize: '0.9rem' }}>
+                            New Cantrips
+                          </h4>
+                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                            {selectedNewCantrips.join(', ')}
+                          </p>
+                        </>
+                      )}
+                      {selectedNewSpells.length > 0 && (
+                        <>
+                          <h4 style={{ color: '#a855f7', margin: '0.75rem 0 0.25rem', fontSize: '0.9rem' }}>
+                            {isWizard(selectedClassOption.class) ? 'Spellbook Additions' : 'New Spells Known'}
+                          </h4>
+                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                            {selectedNewSpells.join(', ')}
+                          </p>
+                        </>
+                      )}
+                      {swapSpell && swapSpell.old && swapSpell.new && (
+                        <>
+                          <h4 style={{ color: '#f59e0b', margin: '0.75rem 0 0.25rem', fontSize: '0.9rem' }}>
+                            Spell Swap
+                          </h4>
+                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                            <span style={{ textDecoration: 'line-through', color: '#ef4444' }}>{swapSpell.old}</span>
+                            {' → '}
+                            <span style={{ color: '#22c55e' }}>{swapSpell.new}</span>
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {/* Proficiency Bonus */}
                   {levelUpInfo.proficiencyBonus.increased && (
                     <div className="review-card">
@@ -865,7 +1336,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
             <div className="step-actions final">
               <button
                 className="button button-secondary"
-                onClick={handleBackToChoices}
+                onClick={needsSpellsStep() ? handleBackToSpells : handleBackToChoices}
                 disabled={submitting}
               >
                 ← Go Back

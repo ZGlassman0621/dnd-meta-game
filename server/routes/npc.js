@@ -1,5 +1,6 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -9,8 +10,7 @@ router.get('/', async (req, res) => {
     const npcs = await dbAll('SELECT * FROM npcs ORDER BY created_at DESC');
     res.json(npcs);
   } catch (error) {
-    console.error('Error fetching NPCs:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch NPCs');
   }
 });
 
@@ -23,8 +23,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(npc);
   } catch (error) {
-    console.error('Error fetching NPC:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch NPC');
   }
 });
 
@@ -134,8 +133,7 @@ router.post('/', async (req, res) => {
     const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json(newNpc);
   } catch (error) {
-    console.error('Error creating NPC:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'create NPC');
   }
 });
 
@@ -251,8 +249,7 @@ router.put('/:id', async (req, res) => {
     const updatedNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
     res.json(updatedNpc);
   } catch (error) {
-    console.error('Error updating NPC:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'update NPC');
   }
 });
 
@@ -267,8 +264,7 @@ router.delete('/:id', async (req, res) => {
     await dbRun('DELETE FROM npcs WHERE id = ?', [req.params.id]);
     res.json({ message: 'NPC deleted successfully' });
   } catch (error) {
-    console.error('Error deleting NPC:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'delete NPC');
   }
 });
 
@@ -282,8 +278,7 @@ router.get('/available/campaign', async (req, res) => {
     `);
     res.json(npcs);
   } catch (error) {
-    console.error('Error fetching available NPCs:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch available NPCs');
   }
 });
 
@@ -298,8 +293,7 @@ router.get('/search/:query', async (req, res) => {
     `, [query, query, query, query]);
     res.json(npcs);
   } catch (error) {
-    console.error('Error searching NPCs:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'search NPCs');
   }
 });
 
@@ -391,8 +385,7 @@ router.post('/from-session', async (req, res) => {
     const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json({ npc: newNpc, existed: false });
   } catch (error) {
-    console.error('Error saving AI-generated NPC:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'save AI-generated NPC');
   }
 });
 
@@ -412,8 +405,7 @@ router.post('/:id/mark-recruitable', async (req, res) => {
     const updatedNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [req.params.id]);
     res.json(updatedNpc);
   } catch (error) {
-    console.error('Error marking NPC as recruitable:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'mark NPC as recruitable');
   }
 });
 

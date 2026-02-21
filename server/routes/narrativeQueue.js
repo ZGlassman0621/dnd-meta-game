@@ -7,6 +7,7 @@
 
 import express from 'express';
 import * as narrativeQueueService from '../services/narrativeQueueService.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -30,8 +31,7 @@ router.get('/:characterId', async (req, res) => {
 
     res.json(items);
   } catch (err) {
-    console.error('Error fetching narrative queue:', err);
-    res.status(500).json({ error: 'Failed to fetch narrative queue' });
+    handleServerError(res, err, 'fetch narrative queue');
   }
 });
 
@@ -48,8 +48,7 @@ router.get('/:characterId/context', async (req, res) => {
 
     res.json(context || { items: [], formatted: null, count: 0 });
   } catch (err) {
-    console.error('Error formatting narrative context:', err);
-    res.status(500).json({ error: 'Failed to format narrative context' });
+    handleServerError(res, err, 'format narrative context');
   }
 });
 
@@ -73,8 +72,7 @@ router.post('/deliver', async (req, res) => {
 
     res.json({ delivered: results.length, items: results });
   } catch (err) {
-    console.error('Error marking items delivered:', err);
-    res.status(500).json({ error: 'Failed to mark items delivered' });
+    handleServerError(res, err, 'mark items delivered');
   }
 });
 
@@ -118,8 +116,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(item);
   } catch (err) {
-    console.error('Error adding to narrative queue:', err);
-    res.status(500).json({ error: 'Failed to add to narrative queue' });
+    handleServerError(res, err, 'add to narrative queue');
   }
 });
 
@@ -136,8 +133,7 @@ router.get('/:characterId/history', async (req, res) => {
 
     res.json(history);
   } catch (err) {
-    console.error('Error fetching delivery history:', err);
-    res.status(500).json({ error: 'Failed to fetch delivery history' });
+    handleServerError(res, err, 'fetch delivery history');
   }
 });
 
@@ -153,8 +149,7 @@ router.delete('/:itemId', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Error deleting narrative item:', err);
-    res.status(500).json({ error: 'Failed to delete narrative item' });
+    handleServerError(res, err, 'delete narrative item');
   }
 });
 

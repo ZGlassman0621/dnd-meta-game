@@ -161,7 +161,7 @@ export async function restockMerchant(merchantId, characterLevel = 1) {
 
   await dbRun(`
     UPDATE merchant_inventories
-    SET inventory = ?, gold_gp = ?, last_restocked = ?, updated_at = CURRENT_TIMESTAMP
+    SET inventory = ?, gold_gp = ?, last_restocked = ?, inventory_version = inventory_version + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `, [JSON.stringify(merged), config.goldPurse, new Date().toISOString(), merchantId]);
 
@@ -170,13 +170,34 @@ export async function restockMerchant(merchantId, characterLevel = 1) {
 
 /**
  * Update merchant inventory and gold after a transaction.
+ * Uses optimistic locking on both gold AND inventory_version to prevent concurrent overwrites.
  */
-export async function updateMerchantAfterTransaction(merchantId, updatedInventory, newGold) {
-  await dbRun(`
-    UPDATE merchant_inventories
-    SET inventory = ?, gold_gp = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `, [JSON.stringify(updatedInventory), Math.max(0, newGold), merchantId]);
+export async function updateMerchantAfterTransaction(merchantId, updatedInventory, newGold, expectedGold = null, expectedVersion = null) {
+  if (expectedGold !== null) {
+    // Full optimistic locking: check gold AND inventory version
+    const whereClause = expectedVersion !== null
+      ? 'WHERE id = ? AND gold_gp = ? AND inventory_version = ?'
+      : 'WHERE id = ? AND gold_gp = ?';
+    const args = [
+      JSON.stringify(updatedInventory), Math.max(0, newGold), merchantId, expectedGold,
+      ...(expectedVersion !== null ? [expectedVersion] : [])
+    ];
+
+    const result = await dbRun(`
+      UPDATE merchant_inventories
+      SET inventory = ?, gold_gp = ?, inventory_version = inventory_version + 1, updated_at = CURRENT_TIMESTAMP
+      ${whereClause}
+    `, args);
+    if (Number(result.changes) === 0) {
+      throw new Error('Transaction conflict: merchant inventory was modified by another transaction. Please retry.');
+    }
+  } else {
+    await dbRun(`
+      UPDATE merchant_inventories
+      SET inventory = ?, gold_gp = ?, inventory_version = inventory_version + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [JSON.stringify(updatedInventory), Math.max(0, newGold), merchantId]);
+  }
 }
 
 /**
@@ -201,7 +222,7 @@ export async function addItemToMerchant(merchantId, { name, price_gp, quality, c
 
   await dbRun(`
     UPDATE merchant_inventories
-    SET inventory = ?, updated_at = CURRENT_TIMESTAMP
+    SET inventory = ?, inventory_version = inventory_version + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `, [JSON.stringify(inventory), merchantId]);
 
@@ -249,7 +270,7 @@ export async function ensureItemAtMerchant(campaignId, merchantName, itemName, i
 
   await dbRun(`
     UPDATE merchant_inventories
-    SET inventory = ?, updated_at = CURRENT_TIMESTAMP
+    SET inventory = ?, inventory_version = inventory_version + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `, [JSON.stringify(inventory), merchant.id]);
 

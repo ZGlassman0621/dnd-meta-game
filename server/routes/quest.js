@@ -2,6 +2,7 @@ import express from 'express';
 import * as questService from '../services/questService.js';
 import * as questGenerator from '../services/questGenerator.js';
 import { dbGet } from '../database.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -15,8 +16,7 @@ router.get('/character/:characterId', async (req, res) => {
     const quests = await questService.getCharacterQuests(req.params.characterId);
     res.json(quests);
   } catch (error) {
-    console.error('Error fetching character quests:', error);
-    res.status(500).json({ error: 'Failed to fetch character quests' });
+    handleServerError(res, error, 'fetch character quests');
   }
 });
 
@@ -26,8 +26,7 @@ router.get('/character/:characterId/active', async (req, res) => {
     const quests = await questService.getActiveQuests(req.params.characterId);
     res.json(quests);
   } catch (error) {
-    console.error('Error fetching active quests:', error);
-    res.status(500).json({ error: 'Failed to fetch active quests' });
+    handleServerError(res, error, 'fetch active quests');
   }
 });
 
@@ -40,8 +39,7 @@ router.get('/character/:characterId/main', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error fetching main quest:', error);
-    res.status(500).json({ error: 'Failed to fetch main quest' });
+    handleServerError(res, error, 'fetch main quest');
   }
 });
 
@@ -56,8 +54,7 @@ router.get('/character/:characterId/type/:type', async (req, res) => {
     const quests = await questService.getQuestsByType(req.params.characterId, req.params.type);
     res.json(quests);
   } catch (error) {
-    console.error('Error fetching quests by type:', error);
-    res.status(500).json({ error: 'Failed to fetch quests by type' });
+    handleServerError(res, error, 'fetch quests by type');
   }
 });
 
@@ -67,8 +64,7 @@ router.get('/campaign/:campaignId', async (req, res) => {
     const quests = await questService.getCampaignQuests(req.params.campaignId);
     res.json(quests);
   } catch (error) {
-    console.error('Error fetching campaign quests:', error);
-    res.status(500).json({ error: 'Failed to fetch campaign quests' });
+    handleServerError(res, error, 'fetch campaign quests');
   }
 });
 
@@ -81,8 +77,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error fetching quest:', error);
-    res.status(500).json({ error: 'Failed to fetch quest' });
+    handleServerError(res, error, 'fetch quest');
   }
 });
 
@@ -95,8 +90,7 @@ router.get('/:id/full', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error fetching quest with requirements:', error);
-    res.status(500).json({ error: 'Failed to fetch quest with requirements' });
+    handleServerError(res, error, 'fetch quest with requirements');
   }
 });
 
@@ -112,8 +106,7 @@ router.post('/', async (req, res) => {
     const quest = await questService.createQuest(req.body);
     res.status(201).json(quest);
   } catch (error) {
-    console.error('Error creating quest:', error);
-    res.status(500).json({ error: 'Failed to create quest' });
+    handleServerError(res, error, 'create quest');
   }
 });
 
@@ -126,8 +119,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error updating quest:', error);
-    res.status(500).json({ error: 'Failed to update quest' });
+    handleServerError(res, error, 'update quest');
   }
 });
 
@@ -140,8 +132,7 @@ router.post('/:id/advance', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error advancing quest stage:', error);
-    res.status(500).json({ error: 'Failed to advance quest stage' });
+    handleServerError(res, error, 'advance quest stage');
   }
 });
 
@@ -154,8 +145,7 @@ router.post('/:id/complete', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error completing quest:', error);
-    res.status(500).json({ error: 'Failed to complete quest' });
+    handleServerError(res, error, 'complete quest');
   }
 });
 
@@ -168,8 +158,7 @@ router.post('/:id/fail', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error failing quest:', error);
-    res.status(500).json({ error: 'Failed to fail quest' });
+    handleServerError(res, error, 'fail quest');
   }
 });
 
@@ -182,8 +171,7 @@ router.post('/:id/abandon', async (req, res) => {
     }
     res.json(quest);
   } catch (error) {
-    console.error('Error abandoning quest:', error);
-    res.status(500).json({ error: 'Failed to abandon quest' });
+    handleServerError(res, error, 'abandon quest');
   }
 });
 
@@ -196,8 +184,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting quest:', error);
-    res.status(500).json({ error: 'Failed to delete quest' });
+    handleServerError(res, error, 'delete quest');
   }
 });
 
@@ -211,8 +198,7 @@ router.get('/:questId/requirements', async (req, res) => {
     const requirements = await questService.getQuestRequirements(req.params.questId);
     res.json(requirements);
   } catch (error) {
-    console.error('Error fetching quest requirements:', error);
-    res.status(500).json({ error: 'Failed to fetch quest requirements' });
+    handleServerError(res, error, 'fetch quest requirements');
   }
 });
 
@@ -225,8 +211,7 @@ router.get('/:questId/requirements/stage/:stageIndex', async (req, res) => {
     );
     res.json(requirements);
   } catch (error) {
-    console.error('Error fetching stage requirements:', error);
-    res.status(500).json({ error: 'Failed to fetch stage requirements' });
+    handleServerError(res, error, 'fetch stage requirements');
   }
 });
 
@@ -244,8 +229,7 @@ router.get('/:questId/requirements/incomplete', async (req, res) => {
     );
     res.json(requirements);
   } catch (error) {
-    console.error('Error fetching incomplete requirements:', error);
-    res.status(500).json({ error: 'Failed to fetch incomplete requirements' });
+    handleServerError(res, error, 'fetch incomplete requirements');
   }
 });
 
@@ -266,8 +250,7 @@ router.post('/:questId/requirements', async (req, res) => {
     });
     res.status(201).json(requirement);
   } catch (error) {
-    console.error('Error creating quest requirement:', error);
-    res.status(500).json({ error: 'Failed to create quest requirement' });
+    handleServerError(res, error, 'create quest requirement');
   }
 });
 
@@ -285,8 +268,7 @@ router.post('/:questId/requirements/bulk', async (req, res) => {
     );
     res.status(201).json(created);
   } catch (error) {
-    console.error('Error creating quest requirements:', error);
-    res.status(500).json({ error: 'Failed to create quest requirements' });
+    handleServerError(res, error, 'create quest requirements');
   }
 });
 
@@ -299,8 +281,7 @@ router.put('/requirement/:id', async (req, res) => {
     }
     res.json(requirement);
   } catch (error) {
-    console.error('Error updating requirement:', error);
-    res.status(500).json({ error: 'Failed to update requirement' });
+    handleServerError(res, error, 'update requirement');
   }
 });
 
@@ -314,8 +295,7 @@ router.post('/requirement/:id/complete', async (req, res) => {
     }
     res.json(requirement);
   } catch (error) {
-    console.error('Error completing requirement:', error);
-    res.status(500).json({ error: 'Failed to complete requirement' });
+    handleServerError(res, error, 'complete requirement');
   }
 });
 
@@ -328,8 +308,7 @@ router.delete('/requirement/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting requirement:', error);
-    res.status(500).json({ error: 'Failed to delete requirement' });
+    handleServerError(res, error, 'delete requirement');
   }
 });
 
@@ -344,8 +323,7 @@ router.get('/:questId/stage-complete', async (req, res) => {
     const isComplete = await questService.isStageComplete(req.params.questId, quest.current_stage);
     res.json({ complete: isComplete, stage: quest.current_stage });
   } catch (error) {
-    console.error('Error checking stage completion:', error);
-    res.status(500).json({ error: 'Failed to check stage completion' });
+    handleServerError(res, error, 'check stage completion');
   }
 });
 
@@ -397,8 +375,7 @@ router.post('/generate/main', async (req, res) => {
     const fullQuest = await questService.getQuestWithRequirements(quest.id);
     res.status(201).json(fullQuest);
   } catch (error) {
-    console.error('Error generating main quest:', error);
-    res.status(500).json({ error: 'Failed to generate main quest' });
+    handleServerError(res, error, 'generate main quest');
   }
 });
 
@@ -444,8 +421,7 @@ router.post('/generate/side', async (req, res) => {
     const fullQuest = await questService.getQuestWithRequirements(quest.id);
     res.status(201).json(fullQuest);
   } catch (error) {
-    console.error('Error generating side quest:', error);
-    res.status(500).json({ error: 'Failed to generate side quest' });
+    handleServerError(res, error, 'generate side quest');
   }
 });
 
@@ -495,8 +471,7 @@ router.post('/generate/one-time', async (req, res) => {
     const fullQuest = await questService.getQuestWithRequirements(quest.id);
     res.status(201).json(fullQuest);
   } catch (error) {
-    console.error('Error generating one-time quest:', error);
-    res.status(500).json({ error: 'Failed to generate one-time quest' });
+    handleServerError(res, error, 'generate one-time quest');
   }
 });
 
@@ -556,8 +531,7 @@ router.post('/generate/companion', async (req, res) => {
     const fullQuest = await questService.getQuestWithRequirements(quest.id);
     res.status(201).json(fullQuest);
   } catch (error) {
-    console.error('Error generating companion quest:', error);
-    res.status(500).json({ error: 'Failed to generate companion quest' });
+    handleServerError(res, error, 'generate companion quest');
   }
 });
 

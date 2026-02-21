@@ -8,6 +8,7 @@ import {
   THREAD_TYPES,
   QUEST_RELEVANCE
 } from '../services/storyThreads.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -28,8 +29,7 @@ router.get('/active/:character_id', async (req, res) => {
       count: threads.length
     });
   } catch (error) {
-    console.error('Error getting story threads:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get story threads');
   }
 });
 
@@ -44,8 +44,7 @@ router.get('/quest-resolving/:character_id', async (req, res) => {
       count: threads.length
     });
   } catch (error) {
-    console.error('Error getting quest-resolving threads:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get quest-resolving threads');
   }
 });
 
@@ -65,8 +64,7 @@ router.get('/:thread_id', async (req, res) => {
       potentialOutcomes: JSON.parse(thread.potential_outcomes || '[]')
     });
   } catch (error) {
-    console.error('Error getting story thread:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get story thread');
   }
 });
 
@@ -106,8 +104,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(thread);
   } catch (error) {
-    console.error('Error creating story thread:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'create story thread');
   }
 });
 
@@ -166,8 +163,7 @@ router.put('/:thread_id', async (req, res) => {
     const updatedThread = await dbGet('SELECT * FROM story_threads WHERE id = ?', [threadId]);
     res.json(updatedThread);
   } catch (error) {
-    console.error('Error updating story thread:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'update story thread');
   }
 });
 
@@ -183,8 +179,7 @@ router.post('/:thread_id/resolve', async (req, res) => {
     const thread = await resolveThread(req.params.thread_id, resolution);
     res.json(thread);
   } catch (error) {
-    console.error('Error resolving story thread:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'resolve story thread');
   }
 });
 
@@ -194,8 +189,7 @@ router.delete('/:thread_id', async (req, res) => {
     await dbRun('DELETE FROM story_threads WHERE id = ?', [req.params.thread_id]);
     res.json({ message: 'Thread deleted successfully' });
   } catch (error) {
-    console.error('Error deleting story thread:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'delete story thread');
   }
 });
 

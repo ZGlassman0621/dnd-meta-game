@@ -22,6 +22,7 @@ import {
 import * as factionService from '../services/factionService.js';
 import * as worldEventService from '../services/worldEventService.js';
 import { dbGet } from '../database.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -43,8 +44,7 @@ router.post('/tick/:campaignId', async (req, res) => {
       ...results
     });
   } catch (error) {
-    console.error('Error processing living world tick:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'process living world tick');
   }
 });
 
@@ -61,8 +61,7 @@ router.get('/state/:campaignId', async (req, res) => {
     const state = await getWorldState(req.params.campaignId);
     res.json(state);
   } catch (error) {
-    console.error('Error getting world state:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get world state');
   }
 });
 
@@ -78,8 +77,7 @@ router.get('/character-view/:characterId', async (req, res) => {
     }
     res.json(view);
   } catch (error) {
-    console.error('Error getting character world view:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get character world view');
   }
 });
 
@@ -130,8 +128,7 @@ router.post('/generate/faction-goal/:factionId', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error generating faction goal:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate faction goal');
   }
 });
 
@@ -173,8 +170,7 @@ router.post('/generate/faction-goals/:factionId', async (req, res) => {
       ...results
     });
   } catch (error) {
-    console.error('Error generating faction goals:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate faction goals');
   }
 });
 
@@ -231,8 +227,7 @@ router.post('/generate/world-event/:campaignId', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error generating world event:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate world event');
   }
 });
 
@@ -279,8 +274,7 @@ router.post('/generate/faction-event/:factionId/:goalId', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error generating faction-triggered event:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate faction-triggered event');
   }
 });
 
@@ -327,8 +321,7 @@ router.post('/simulate/:campaignId', async (req, res) => {
       daily_results: allResults
     });
   } catch (error) {
-    console.error('Error simulating world:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'simulate world');
   }
 });
 

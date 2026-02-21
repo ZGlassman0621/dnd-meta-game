@@ -1,5 +1,6 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -643,8 +644,7 @@ router.get('/available/:characterId', async (req, res) => {
       unavailable
     });
   } catch (error) {
-    console.error('Error getting available activities:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get available activities');
   }
 });
 
@@ -717,8 +717,7 @@ router.get('/work-options/:characterId', async (req, res) => {
       unavailable
     });
   } catch (error) {
-    console.error('Error getting work options:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get work options');
   }
 });
 
@@ -756,8 +755,7 @@ router.get('/status/:characterId', async (req, res) => {
       res.json({ status: 'none' });
     }
   } catch (error) {
-    console.error('Error checking downtime status:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'check downtime status');
   }
 });
 
@@ -889,8 +887,7 @@ router.post('/start', async (req, res) => {
       message: `Started ${activityName} for ${actualDuration} in-game hour${actualDuration !== 1 ? 's' : ''} (${realTimeStr} real time)`
     });
   } catch (error) {
-    console.error('Error starting downtime:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'start downtime');
   }
 });
 
@@ -945,8 +942,7 @@ router.post('/complete/:id', async (req, res) => {
       character: updatedCharacter
     });
   } catch (error) {
-    console.error('Error completing downtime:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'complete downtime');
   }
 });
 
@@ -967,8 +963,7 @@ router.post('/cancel/:id', async (req, res) => {
 
     res.json({ message: 'Downtime activity cancelled' });
   } catch (error) {
-    console.error('Error cancelling downtime:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'cancel downtime');
   }
 });
 
@@ -990,8 +985,7 @@ router.get('/history/:characterId', async (req, res) => {
 
     res.json(enriched);
   } catch (error) {
-    console.error('Error fetching downtime history:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch downtime history');
   }
 });
 

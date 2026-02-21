@@ -6,7 +6,7 @@
  */
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b';
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'gemma3:12b';
 
 /**
  * Check if Ollama is running and available

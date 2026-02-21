@@ -7,6 +7,7 @@ import { getCampaignLocations } from '../services/locationService.js';
 import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
+import { safeParse } from '../utils/safeParse.js';
 import {
   PROFICIENCY_BONUS,
   HIT_DICE,
@@ -221,7 +222,7 @@ router.post('/:id/discard-item', async (req, res) => {
     const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [req.params.id]);
     if (!character) return res.status(404).json({ error: 'Character not found' });
 
-    let inventory = JSON.parse(character.inventory || '[]');
+    let inventory = safeParse(character.inventory, []);
     const idx = inventory.findIndex(i => (i.name || i).toLowerCase() === itemName.toLowerCase());
 
     if (idx === -1) return res.status(404).json({ error: 'Item not found in inventory' });
@@ -299,7 +300,7 @@ router.post('/rest/:id', async (req, res) => {
       spell_slots_restored: spellSlotsRestored
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'rest character');
   }
 });
 
@@ -313,7 +314,7 @@ router.get('/spell-slots/:id', async (req, res) => {
 
     // Get max spell slots based on class and level
     const spellSlots = getSpellSlots(character.class, character.level);
-    const spellSlotsUsed = JSON.parse(character.spell_slots_used || '{}');
+    const spellSlotsUsed = safeParse(character.spell_slots_used, {});
 
     res.json({
       max: spellSlots,
@@ -322,7 +323,7 @@ router.get('/spell-slots/:id', async (req, res) => {
       level: character.level
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch spell slots');
   }
 });
 
@@ -340,7 +341,7 @@ router.post('/spell-slots/:id/use', async (req, res) => {
     }
 
     const maxSlots = getSpellSlots(character.class, character.level);
-    const usedSlots = JSON.parse(character.spell_slots_used || '{}');
+    const usedSlots = safeParse(character.spell_slots_used, {});
 
     const maxForLevel = maxSlots[level] || 0;
     const usedForLevel = usedSlots[level] || 0;
@@ -364,7 +365,7 @@ router.post('/spell-slots/:id/use', async (req, res) => {
       max: maxForLevel
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'use spell slot');
   }
 });
 
@@ -382,7 +383,7 @@ router.post('/spell-slots/:id/restore', async (req, res) => {
     }
 
     const maxSlots = getSpellSlots(character.class, character.level);
-    const usedSlots = JSON.parse(character.spell_slots_used || '{}');
+    const usedSlots = safeParse(character.spell_slots_used, {});
 
     const maxForLevel = maxSlots[level] || 0;
     const usedForLevel = usedSlots[level] || 0;
@@ -402,7 +403,7 @@ router.post('/spell-slots/:id/restore', async (req, res) => {
       max: maxForLevel
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'restore spell slot');
   }
 });
 
@@ -422,7 +423,38 @@ router.post('/reset-xp/:id', async (req, res) => {
       character: updatedCharacter
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'reset XP');
+  }
+});
+
+// Grant XP to a character
+router.post('/grant-xp/:id', async (req, res) => {
+  try {
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+    if (!character) {
+      return notFound(res, 'Character');
+    }
+
+    const { amount } = req.body;
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return validationError(res, 'Amount must be a positive number');
+    }
+
+    const newExperience = character.experience + amount;
+    await dbRun('UPDATE characters SET experience = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [newExperience, req.params.id]);
+
+    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+    const canLevel = canLevelUp(updatedCharacter.level, newExperience);
+
+    res.json({
+      character: updatedCharacter,
+      xpGranted: amount,
+      newTotal: newExperience,
+      canLevelUp: canLevel
+    });
+  } catch (error) {
+    handleServerError(res, error, 'grant XP');
   }
 });
 
@@ -457,7 +489,7 @@ router.post('/full-reset/:id', async (req, res) => {
       character: updatedCharacter
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'full reset character');
   }
 });
 
@@ -482,7 +514,7 @@ router.get('/can-level-up/:id', async (req, res) => {
       xpRemaining: xpNeeded ? xpNeeded - currentXP : 0
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'check level up');
   }
 });
 
@@ -495,7 +527,7 @@ router.get('/level-up-info/:id', async (req, res) => {
     }
 
     // Parse class_levels for multiclass support
-    let classLevels = character.class_levels ? JSON.parse(character.class_levels) : null;
+    let classLevels = character.class_levels ? safeParse(character.class_levels, null) : null;
 
     // If no class_levels, create from legacy single-class data
     if (!classLevels) {
@@ -521,7 +553,7 @@ router.get('/level-up-info/:id', async (req, res) => {
       });
     }
 
-    const abilityScores = JSON.parse(character.ability_scores || '{}');
+    const abilityScores = safeParse(character.ability_scores, {});
 
     // Build class options for level up
     const classOptions = [];
@@ -630,7 +662,7 @@ router.get('/level-up-info/:id', async (req, res) => {
       subclassLevel: SUBCLASS_LEVELS[character.class.toLowerCase()]
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get level-up info');
   }
 });
 
@@ -643,7 +675,7 @@ router.post('/level-up/:id', async (req, res) => {
     }
 
     // Parse existing class_levels or create from legacy data
-    let classLevels = character.class_levels ? JSON.parse(character.class_levels) : null;
+    let classLevels = character.class_levels ? safeParse(character.class_levels, null) : null;
     if (!classLevels) {
       classLevels = [{
         class: character.class,
@@ -675,13 +707,10 @@ router.post('/level-up/:id', async (req, res) => {
       rollValue,
       subclass,
       asiChoice, // { type: 'asi', increases: { str: 1, dex: 1 } } or { type: 'feat', feat: 'Alert' }
-      cantrips: _cantrips, // array of cantrip names (TODO: implement spell tracking)
-      spells: _spells // array of spell names (TODO: implement spell tracking)
+      newCantrips, // array of cantrip names to learn
+      newSpells, // array of spell names to learn
+      swapSpell // { old: string, new: string } - swap one known spell (Bard, Sorcerer, Warlock, Ranger)
     } = req.body;
-
-    // Note: cantrips and spells are received but spell tracking is not yet implemented
-    void _cantrips;
-    void _spells;
 
     // Determine which class we're leveling up
     const targetClass = selectedClass || character.class;
@@ -692,7 +721,7 @@ router.post('/level-up/:id', async (req, res) => {
     const isMulticlass = existingClassIndex === -1;
 
     // Parse ability scores for HP calculations
-    const abilityScores = JSON.parse(character.ability_scores || '{}');
+    const abilityScores = safeParse(character.ability_scores, {});
 
     // Note: Multiclass prerequisites are NOT enforced - player can choose any class
     // This is a deliberate design decision to allow player freedom
@@ -775,6 +804,38 @@ router.post('/level-up/:id', async (req, res) => {
       }
     }
 
+    // Persist new cantrips and spells learned during level-up
+    if (newCantrips && Array.isArray(newCantrips) && newCantrips.length > 0) {
+      const existingCantrips = safeParse(character.known_cantrips, []);
+      const updatedCantrips = [...new Set([...existingCantrips, ...newCantrips])];
+      await dbRun('UPDATE characters SET known_cantrips = ? WHERE id = ?', [
+        JSON.stringify(updatedCantrips), req.params.id
+      ]);
+    }
+
+    if (newSpells && Array.isArray(newSpells) && newSpells.length > 0) {
+      const existingSpells = safeParse(character.known_spells, []);
+      let updatedSpells = [...existingSpells];
+
+      // Handle swap first (Bard, Sorcerer, Warlock, Ranger can swap 1 spell on level-up)
+      if (swapSpell && swapSpell.old && swapSpell.new) {
+        updatedSpells = updatedSpells.filter(s => s !== swapSpell.old);
+      }
+
+      updatedSpells = [...new Set([...updatedSpells, ...newSpells])];
+      await dbRun('UPDATE characters SET known_spells = ? WHERE id = ?', [
+        JSON.stringify(updatedSpells), req.params.id
+      ]);
+    } else if (swapSpell && swapSpell.old && swapSpell.new) {
+      // Swap only, no new spells (edge case)
+      const existingSpells = safeParse(character.known_spells, []);
+      const updatedSpells = existingSpells.filter(s => s !== swapSpell.old);
+      updatedSpells.push(swapSpell.new);
+      await dbRun('UPDATE characters SET known_spells = ? WHERE id = ?', [
+        JSON.stringify(updatedSpells), req.params.id
+      ]);
+    }
+
     // Calculate new XP to next level (based on total level)
     const newXPToNextLevel = getXPToNextLevel(newTotalLevel);
 
@@ -843,7 +904,7 @@ router.post('/level-up/:id', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'level up character');
   }
 });
 
@@ -862,7 +923,7 @@ router.get('/:id/campaign', async (req, res) => {
     const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [character.campaign_id]);
     res.json({ campaign });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch character campaign');
   }
 });
 
@@ -892,7 +953,7 @@ router.put('/:id/campaign', async (req, res) => {
     const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(updatedCharacter);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'assign character to campaign');
   }
 });
 
@@ -912,7 +973,7 @@ router.delete('/:id/campaign', async (req, res) => {
 
     res.json({ success: true, message: 'Character removed from campaign' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'remove character from campaign');
   }
 });
 
@@ -941,7 +1002,7 @@ router.get('/:id/quests', async (req, res) => {
 
     res.json(quests);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch quests');
   }
 });
 
@@ -956,7 +1017,7 @@ router.get('/:id/quests/active', async (req, res) => {
     const quests = await questService.getActiveQuests(req.params.id);
     res.json(quests);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch active quests');
   }
 });
 
@@ -971,7 +1032,7 @@ router.get('/:id/quests/main', async (req, res) => {
     const quest = await questService.getMainQuest(req.params.id);
     res.json(quest);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch main quest');
   }
 });
 
@@ -1004,7 +1065,7 @@ router.get('/:id/quests/summary', async (req, res) => {
 
     res.json(summary);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch quest summary');
   }
 });
 
@@ -1022,7 +1083,7 @@ router.get('/:id/campaign-notes', async (req, res) => {
       characterMemories: character.character_memories || ''
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch campaign notes');
   }
 });
 
@@ -1050,7 +1111,7 @@ router.put('/:id/campaign-notes', async (req, res) => {
       message: 'Campaign notes updated'
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'update campaign notes');
   }
 });
 
@@ -1162,7 +1223,7 @@ Be concise but specific. Use names and details from the sessions. Only include t
       generatedNotes = await ollama.chat([
         { role: 'system', content: 'You are a helpful assistant organizing campaign notes for a D&D character.' },
         { role: 'user', content: extractionPrompt }
-      ], 'llama3.1:8b');
+      ], 'gemma3:12b');
     }
 
     // Prepend with a header indicating this was auto-generated
@@ -1214,8 +1275,7 @@ Be concise but specific. Use names and details from the sessions. Only include t
       message: `Generated campaign notes from ${sessions.length} session(s)`
     });
   } catch (error) {
-    console.error('Error generating campaign notes:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate campaign notes');
   }
 });
 

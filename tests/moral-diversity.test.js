@@ -246,8 +246,8 @@ console.log('\n=== Test 5: Session Start Date Randomization Fix ===\n');
     'Checks for prior sessions before picking start day');
   assert(source.includes('isFirstSession'),
     'Uses isFirstSession flag');
-  assert(source.includes('(isFirstSession || !character.game_day)'),
-    'First session OR no game_day triggers randomization');
+  assert(source.includes('isFirstSession && !planHasSessionContinuity) || !character.game_day'),
+    'First session (unless imported mid-progress) OR no game_day triggers randomization');
   assert(source.includes('Math.floor(Math.random() * 365) + 1'),
     'Randomizes to day 1-365 for new characters');
 

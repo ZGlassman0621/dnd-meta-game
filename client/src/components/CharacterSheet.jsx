@@ -4,7 +4,7 @@ import racesData from '../data/races.json'
 import backgroundsData from '../data/backgrounds.json'
 import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
-import spellsData from '../data/spells.json'
+import spellsData from '../data/spells/index.js'
 
 function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdated, onEditInWizard, onLevelUp }) {
   const [character, setCharacter] = useState(initialCharacter)
@@ -23,6 +23,13 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   // Spell management state
   const [showCantripSelection, setShowCantripSelection] = useState(false)
   const [selectedCantrip, setSelectedCantrip] = useState(null)
+  const [spellSlots, setSpellSlots] = useState(null)
+  const [showPrepareSpells, setShowPrepareSpells] = useState(false)
+  const [pendingPrepared, setPendingPrepared] = useState([])
+  const [spellLevelFilter, setSpellLevelFilter] = useState('all')
+  const [spellSearch, setSpellSearch] = useState('')
+  const [showLearnSpell, setShowLearnSpell] = useState(false)
+  const [pendingKnown, setPendingKnown] = useState([])
 
   // Fetch fresh character data on mount to ensure we have all fields
   useEffect(() => {
@@ -53,6 +60,76 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     }
     checkLevelUp()
   }, [character.id, character.experience])
+
+  // Fetch spell slots for spellcasting classes
+  useEffect(() => {
+    const fetchSpellSlots = async () => {
+      try {
+        const response = await fetch(`/api/character/spell-slots/${character.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setSpellSlots(data)
+        }
+      } catch (error) {
+        console.error('Error fetching spell slots:', error)
+      }
+    }
+    fetchSpellSlots()
+  }, [character.id, character.level, character.class])
+
+  const useSpellSlot = async (level) => {
+    try {
+      const response = await fetch(`/api/character/spell-slots/${character.id}/use`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level })
+      })
+      if (response.ok) {
+        setSpellSlots(prev => ({
+          ...prev,
+          used: { ...prev.used, [level]: (prev.used[level] || 0) + 1 }
+        }))
+      }
+    } catch (error) {
+      console.error('Error using spell slot:', error)
+    }
+  }
+
+  const restoreSpellSlot = async (level) => {
+    try {
+      const response = await fetch(`/api/character/spell-slots/${character.id}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level })
+      })
+      if (response.ok) {
+        setSpellSlots(prev => ({
+          ...prev,
+          used: { ...prev.used, [level]: Math.max(0, (prev.used[level] || 0) - 1) }
+        }))
+      }
+    } catch (error) {
+      console.error('Error restoring spell slot:', error)
+    }
+  }
+
+  const handleGrantXP = async (amount) => {
+    try {
+      const response = await fetch(`/api/character/grant-xp/${character.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setCharacter(data.character)
+        setCanLevelUp(data.canLevelUp)
+        onCharacterUpdated?.(data.character)
+      }
+    } catch (error) {
+      console.error('Error granting XP:', error)
+    }
+  }
 
   // Start editing with current character data
   const startEditing = () => {
@@ -130,6 +207,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   const inventory = parseJson(character.inventory, [])
   const advantages = parseJson(character.advantages, [])
   const knownCantrips = parseJson(character.known_cantrips, [])
+  const knownSpells = parseJson(character.known_spells, [])
   const preparedSpells = parseJson(character.prepared_spells, [])
   const equipment = parseJson(character.equipment, {})
 
@@ -489,6 +567,96 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
       onCharacterUpdated && onCharacterUpdated(updated)
     } catch (err) {
       console.error('Error removing cantrip:', err)
+    }
+  }
+
+  // Get max prepared spells for prepared casters
+  const getMaxPrepared = () => {
+    if (!classData?.spellcasting) return 0
+    const className = character.class?.toLowerCase()
+    const abilityKey = classData.spellcasting.ability?.toLowerCase().slice(0, 3)
+    const mod = Math.floor((abilities[abilityKey] - 10) / 2)
+    if (className === 'cleric' || className === 'druid') return Math.max(1, mod + character.level)
+    if (className === 'wizard') return Math.max(1, mod + character.level)
+    if (className === 'paladin') return Math.max(1, mod + Math.floor(character.level / 2))
+    if (className === 'artificer') return Math.max(1, mod + Math.floor(character.level / 2))
+    return 0
+  }
+
+  // Check if class is a prepared caster
+  const isPreparedCaster = () => {
+    const spellsKnown = classData?.spellcasting?.spellsKnown
+    return spellsKnown === 'All prepared' || spellsKnown === 'Spellbook'
+  }
+
+  // Check if class is a known caster
+  const isKnownCaster = () => {
+    return classData?.spellcasting?.spellsKnown === 'Limited known'
+  }
+
+  // Get available class spells for a given level
+  const getClassSpellsForLevel = (spellLevel) => {
+    const className = character.class?.toLowerCase()
+    const levelSpells = spellsData.spells[spellLevel] || []
+    return levelSpells.filter(s => s.classes?.includes(className))
+  }
+
+  // Get all spells the character can prepare from (by level)
+  const getPreparableSpells = () => {
+    if (!spellSlots) return []
+    const className = character.class?.toLowerCase()
+    const isWizard = className === 'wizard'
+    const results = []
+    for (const [level, max] of Object.entries(spellSlots.max || {})) {
+      if (max <= 0) continue
+      const levelKey = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
+      const spellsForLevel = spellsData.spells[levelKey] || []
+      const filtered = isWizard
+        ? spellsForLevel.filter(s => s.classes?.includes('wizard') && knownSpells.includes(s.name))
+        : spellsForLevel.filter(s => s.classes?.includes(className))
+      filtered.forEach(s => results.push({ ...s, spellLevel: levelKey }))
+    }
+    return results
+  }
+
+  // Get subclass always-prepared spell names
+  const getAlwaysPreparedSpellNames = () => {
+    const names = []
+    subclassSpells.forEach(([, spells]) => {
+      spells.forEach(name => names.push(name))
+    })
+    return names
+  }
+
+  // Save prepared spells to server
+  const savePreparedSpells = async (spellNames) => {
+    try {
+      const response = await fetch(`/api/character/${character.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prepared_spells: JSON.stringify(spellNames) })
+      })
+      const updated = await response.json()
+      setCharacter(updated)
+      onCharacterUpdated?.(updated)
+    } catch (err) {
+      console.error('Error saving prepared spells:', err)
+    }
+  }
+
+  // Save known spells to server
+  const saveKnownSpells = async (spellNames) => {
+    try {
+      const response = await fetch(`/api/character/${character.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ known_spells: JSON.stringify(spellNames) })
+      })
+      const updated = await response.json()
+      setCharacter(updated)
+      onCharacterUpdated?.(updated)
+    } catch (err) {
+      console.error('Error saving known spells:', err)
     }
   }
 
@@ -1092,8 +1260,28 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                       style={{ width: `${(character.experience / character.experience_to_next_level) * 100}%` }}
                     />
                   </div>
-                  <div className="xp-percent">
-                    {Math.floor((character.experience / character.experience_to_next_level) * 100)}% to Level {character.level + 1}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="xp-percent">
+                      {Math.floor((character.experience / character.experience_to_next_level) * 100)}% to Level {character.level + 1}
+                    </div>
+                    {character.level < 20 && (
+                      <button
+                        onClick={() => handleGrantXP(500)}
+                        style={{
+                          background: '#27ae60',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '0.25rem 0.6rem',
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          fontWeight: '600'
+                        }}
+                        title="Grant 500 XP"
+                      >
+                        +500 XP
+                      </button>
+                    )}
                   </div>
                 </div>
               </section>
@@ -1406,6 +1594,74 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                   </div>
                 </section>
 
+                {/* Spell Slots */}
+                {spellSlots && Object.keys(spellSlots.max || {}).length > 0 && (
+                  <section className="sheet-section">
+                    <h3>{character.class?.toLowerCase() === 'warlock' ? 'Pact Magic Slots' : 'Spell Slots'}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {Object.entries(spellSlots.max)
+                        .filter(([, max]) => max > 0)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([level, max]) => {
+                          const used = spellSlots.used[level] || 0
+                          const remaining = max - used
+                          const levelLabel = character.class?.toLowerCase() === 'warlock'
+                            ? `Level ${level}`
+                            : `${level}${level === '1' ? 'st' : level === '2' ? 'nd' : level === '3' ? 'rd' : 'th'}`
+                          return (
+                            <div key={level} style={{
+                              display: 'flex', alignItems: 'center', gap: '0.75rem',
+                              padding: '0.4rem 0.6rem', background: 'rgba(255,255,255,0.03)',
+                              borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)'
+                            }}>
+                              <span style={{
+                                minWidth: '36px', fontWeight: '600', fontSize: '0.85rem',
+                                color: '#b0b0b0'
+                              }}>{levelLabel}</span>
+                              <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
+                                {Array.from({ length: max }, (_, i) => (
+                                  <div key={i} style={{
+                                    width: '18px', height: '18px', borderRadius: '50%',
+                                    border: '2px solid ' + (i < remaining ? '#6c63ff' : '#444'),
+                                    background: i < remaining ? '#6c63ff' : 'transparent',
+                                    transition: 'all 0.2s ease'
+                                  }} />
+                                ))}
+                              </div>
+                              <span style={{
+                                fontSize: '0.8rem', color: '#888', minWidth: '30px', textAlign: 'center'
+                              }}>{remaining}/{max}</span>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                  onClick={() => useSpellSlot(Number(level))}
+                                  disabled={remaining <= 0}
+                                  style={{
+                                    background: remaining > 0 ? '#c0392b' : '#555',
+                                    color: '#fff', border: 'none', borderRadius: '4px',
+                                    padding: '2px 8px', fontSize: '0.75rem', cursor: remaining > 0 ? 'pointer' : 'not-allowed',
+                                    opacity: remaining > 0 ? 1 : 0.5
+                                  }}
+                                  title="Use a spell slot"
+                                >Use</button>
+                                <button
+                                  onClick={() => restoreSpellSlot(Number(level))}
+                                  disabled={used <= 0}
+                                  style={{
+                                    background: used > 0 ? '#27ae60' : '#555',
+                                    color: '#fff', border: 'none', borderRadius: '4px',
+                                    padding: '2px 8px', fontSize: '0.75rem', cursor: used > 0 ? 'pointer' : 'not-allowed',
+                                    opacity: used > 0 ? 1 : 0.5
+                                  }}
+                                  title="Restore a spell slot"
+                                >+1</button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  </section>
+                )}
+
                 {/* Subclass Spells */}
                 {subclassSpells.length > 0 && (
                   <section className="sheet-section">
@@ -1461,6 +1717,383 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                         </div>
                       ))}
                     </div>
+                  </section>
+                )}
+
+                {/* Prepared Spells - for Cleric, Druid, Paladin, Wizard, Artificer */}
+                {isPreparedCaster() && (
+                  <section className="sheet-section">
+                    <h3>Prepared Spells ({preparedSpells.length}/{getMaxPrepared()})</h3>
+                    {classData?.spellcasting?.spellsKnown === 'Spellbook' && (
+                      <p className="spell-note" style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>
+                        Wizard: Prepare spells from your spellbook. Spellbook contains {knownSpells.length} spell{knownSpells.length !== 1 ? 's' : ''}.
+                      </p>
+                    )}
+
+                    {/* Currently Prepared */}
+                    {preparedSpells.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                        {preparedSpells.map(spellName => {
+                          const details = getSpellDetails(spellName)
+                          return (
+                            <div key={spellName} style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '0.4rem 0.6rem', background: 'rgba(108,99,255,0.08)',
+                              borderRadius: '6px', border: '1px solid rgba(108,99,255,0.2)'
+                            }}>
+                              <div style={{ flex: 1 }}>
+                                <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{spellName}</span>
+                                {details && (
+                                  <span style={{ color: '#888', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
+                                    {details.level} • {details.school}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const newPrepared = preparedSpells.filter(s => s !== spellName)
+                                  savePreparedSpells(newPrepared)
+                                }}
+                                style={{
+                                  background: 'transparent', border: 'none', color: '#e74c3c',
+                                  cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px'
+                                }}
+                                title="Unprepare spell"
+                              >×</button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.75rem' }}>No spells prepared.</p>
+                    )}
+
+                    {/* Prepare Spells Button */}
+                    {!showPrepareSpells && (
+                      <button
+                        onClick={() => {
+                          setPendingPrepared([...preparedSpells])
+                          setShowPrepareSpells(true)
+                          setSpellLevelFilter('all')
+                          setSpellSearch('')
+                        }}
+                        style={{
+                          background: '#6c63ff', color: '#fff', border: 'none', borderRadius: '6px',
+                          padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem'
+                        }}
+                      >Prepare Spells</button>
+                    )}
+
+                    {/* Prepare Spells Panel */}
+                    {showPrepareSpells && (
+                      <div style={{
+                        border: '1px solid rgba(108,99,255,0.3)', borderRadius: '8px',
+                        padding: '1rem', background: 'rgba(108,99,255,0.05)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <span style={{ fontWeight: '600' }}>
+                            Preparing: {pendingPrepared.length}/{getMaxPrepared()}
+                          </span>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => {
+                                savePreparedSpells(pendingPrepared)
+                                setShowPrepareSpells(false)
+                              }}
+                              style={{
+                                background: '#27ae60', color: '#fff', border: 'none', borderRadius: '4px',
+                                padding: '0.3rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600'
+                              }}
+                            >Save</button>
+                            <button
+                              onClick={() => setShowPrepareSpells(false)}
+                              style={{
+                                background: '#555', color: '#fff', border: 'none', borderRadius: '4px',
+                                padding: '0.3rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem'
+                              }}
+                            >Cancel</button>
+                          </div>
+                        </div>
+
+                        {/* Level Filter */}
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                          <button
+                            onClick={() => setSpellLevelFilter('all')}
+                            style={{
+                              background: spellLevelFilter === 'all' ? '#6c63ff' : '#333',
+                              color: '#fff', border: 'none', borderRadius: '4px',
+                              padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
+                            }}
+                          >All</button>
+                          {spellSlots && Object.keys(spellSlots.max || {}).filter(l => spellSlots.max[l] > 0).sort((a, b) => a - b).map(level => {
+                            const key = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
+                            return (
+                              <button key={level}
+                                onClick={() => setSpellLevelFilter(key)}
+                                style={{
+                                  background: spellLevelFilter === key ? '#6c63ff' : '#333',
+                                  color: '#fff', border: 'none', borderRadius: '4px',
+                                  padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
+                                }}
+                              >{key}</button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Search */}
+                        <input
+                          type="text" placeholder="Search spells..."
+                          value={spellSearch}
+                          onChange={e => setSpellSearch(e.target.value)}
+                          style={{
+                            width: '100%', padding: '0.4rem 0.6rem', borderRadius: '4px',
+                            border: '1px solid #444', background: '#2a2a2a', color: '#eee',
+                            fontSize: '0.85rem', marginBottom: '0.5rem', boxSizing: 'border-box'
+                          }}
+                        />
+
+                        {/* Spell List */}
+                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                          {(() => {
+                            const alwaysPrepared = getAlwaysPreparedSpellNames()
+                            let spells = getPreparableSpells()
+                            if (spellLevelFilter !== 'all') {
+                              spells = spells.filter(s => s.spellLevel === spellLevelFilter)
+                            }
+                            if (spellSearch) {
+                              const q = spellSearch.toLowerCase()
+                              spells = spells.filter(s => s.name.toLowerCase().includes(q))
+                            }
+                            // Remove always-prepared spells
+                            spells = spells.filter(s => !alwaysPrepared.includes(s.name))
+                            if (spells.length === 0) {
+                              return <p style={{ color: '#888', fontSize: '0.8rem' }}>No spells available for this filter.</p>
+                            }
+                            return spells.map(spell => {
+                              const isPrepped = pendingPrepared.includes(spell.name)
+                              const atMax = pendingPrepared.length >= getMaxPrepared()
+                              return (
+                                <div key={spell.name} style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                  padding: '0.35rem 0.5rem', borderRadius: '4px',
+                                  background: isPrepped ? 'rgba(108,99,255,0.15)' : 'transparent',
+                                  cursor: (isPrepped || !atMax) ? 'pointer' : 'not-allowed',
+                                  opacity: (!isPrepped && atMax) ? 0.5 : 1
+                                }}
+                                  onClick={() => {
+                                    if (isPrepped) {
+                                      setPendingPrepared(prev => prev.filter(s => s !== spell.name))
+                                    } else if (!atMax) {
+                                      setPendingPrepared(prev => [...prev, spell.name])
+                                    }
+                                  }}
+                                >
+                                  <div style={{
+                                    width: '16px', height: '16px', borderRadius: '3px',
+                                    border: '2px solid ' + (isPrepped ? '#6c63ff' : '#555'),
+                                    background: isPrepped ? '#6c63ff' : 'transparent',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: '#fff', fontSize: '10px', flexShrink: 0
+                                  }}>{isPrepped ? '✓' : ''}</div>
+                                  <div style={{ flex: 1 }}>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{spell.name}</span>
+                                    <span style={{ color: '#888', fontSize: '0.7rem', marginLeft: '0.4rem' }}>
+                                      {spell.spellLevel} • {spell.school}
+                                    </span>
+                                  </div>
+                                </div>
+                              )
+                            })
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Wizard: Add to Spellbook */}
+                    {classData?.spellcasting?.spellsKnown === 'Spellbook' && !showPrepareSpells && (
+                      <button
+                        onClick={() => {
+                          const spellName = prompt('Enter spell name to add to your spellbook:')
+                          if (spellName && !knownSpells.includes(spellName)) {
+                            saveKnownSpells([...knownSpells, spellName])
+                          }
+                        }}
+                        style={{
+                          background: '#2980b9', color: '#fff', border: 'none', borderRadius: '6px',
+                          padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', marginLeft: '0.5rem'
+                        }}
+                      >+ Add to Spellbook</button>
+                    )}
+                  </section>
+                )}
+
+                {/* Known Spells - for Bard, Ranger, Sorcerer, Warlock */}
+                {isKnownCaster() && (
+                  <section className="sheet-section">
+                    <h3>Known Spells ({knownSpells.length}
+                      {classData?.spellcasting?.spellsKnownByLevel && (
+                        <span>/{classData.spellcasting.spellsKnownByLevel[character.level - 1] || '?'}</span>
+                      )}
+                    )</h3>
+
+                    {/* Known Spells List */}
+                    {knownSpells.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                        {knownSpells.map(spellName => {
+                          const details = getSpellDetails(spellName)
+                          return (
+                            <div key={spellName} style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '0.4rem 0.6rem', background: 'rgba(46,204,113,0.08)',
+                              borderRadius: '6px', border: '1px solid rgba(46,204,113,0.2)'
+                            }}>
+                              <div style={{ flex: 1 }}>
+                                <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{spellName}</span>
+                                {details && (
+                                  <span style={{ color: '#888', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
+                                    {details.level} • {details.school}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Forget ${spellName}?`)) {
+                                    saveKnownSpells(knownSpells.filter(s => s !== spellName))
+                                  }
+                                }}
+                                style={{
+                                  background: 'transparent', border: 'none', color: '#e74c3c',
+                                  cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px'
+                                }}
+                                title="Forget spell"
+                              >×</button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.75rem' }}>No spells known yet.</p>
+                    )}
+
+                    {/* Learn Spell Button */}
+                    {!showLearnSpell && classData?.spellcasting?.spellsKnownByLevel &&
+                      knownSpells.length < (classData.spellcasting.spellsKnownByLevel[character.level - 1] || 0) && (
+                      <button
+                        onClick={() => {
+                          setShowLearnSpell(true)
+                          setSpellLevelFilter('all')
+                          setSpellSearch('')
+                        }}
+                        style={{
+                          background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '6px',
+                          padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem'
+                        }}
+                      >+ Learn New Spell ({(classData.spellcasting.spellsKnownByLevel[character.level - 1] || 0) - knownSpells.length} remaining)</button>
+                    )}
+
+                    {/* Learn Spell Panel */}
+                    {showLearnSpell && (
+                      <div style={{
+                        border: '1px solid rgba(46,204,113,0.3)', borderRadius: '8px',
+                        padding: '1rem', background: 'rgba(46,204,113,0.05)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <span style={{ fontWeight: '600' }}>Learn a Spell</span>
+                          <button
+                            onClick={() => setShowLearnSpell(false)}
+                            style={{
+                              background: '#555', color: '#fff', border: 'none', borderRadius: '4px',
+                              padding: '0.3rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem'
+                            }}
+                          >Close</button>
+                        </div>
+
+                        {/* Level Filter */}
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                          <button
+                            onClick={() => setSpellLevelFilter('all')}
+                            style={{
+                              background: spellLevelFilter === 'all' ? '#2ecc71' : '#333',
+                              color: '#fff', border: 'none', borderRadius: '4px',
+                              padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
+                            }}
+                          >All</button>
+                          {spellSlots && Object.keys(spellSlots.max || {}).filter(l => spellSlots.max[l] > 0).sort((a, b) => a - b).map(level => {
+                            const key = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
+                            return (
+                              <button key={level}
+                                onClick={() => setSpellLevelFilter(key)}
+                                style={{
+                                  background: spellLevelFilter === key ? '#2ecc71' : '#333',
+                                  color: '#fff', border: 'none', borderRadius: '4px',
+                                  padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
+                                }}
+                              >{key}</button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Search */}
+                        <input
+                          type="text" placeholder="Search spells..."
+                          value={spellSearch}
+                          onChange={e => setSpellSearch(e.target.value)}
+                          style={{
+                            width: '100%', padding: '0.4rem 0.6rem', borderRadius: '4px',
+                            border: '1px solid #444', background: '#2a2a2a', color: '#eee',
+                            fontSize: '0.85rem', marginBottom: '0.5rem', boxSizing: 'border-box'
+                          }}
+                        />
+
+                        {/* Available Spells */}
+                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                          {(() => {
+                            const className = character.class?.toLowerCase()
+                            let spells = []
+                            if (spellSlots) {
+                              for (const [level, max] of Object.entries(spellSlots.max || {})) {
+                                if (max <= 0) continue
+                                const levelKey = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
+                                const levelSpells = (spellsData.spells[levelKey] || []).filter(s => s.classes?.includes(className))
+                                levelSpells.forEach(s => spells.push({ ...s, spellLevel: levelKey }))
+                              }
+                            }
+                            // Filter out already known
+                            spells = spells.filter(s => !knownSpells.includes(s.name))
+                            if (spellLevelFilter !== 'all') {
+                              spells = spells.filter(s => s.spellLevel === spellLevelFilter)
+                            }
+                            if (spellSearch) {
+                              const q = spellSearch.toLowerCase()
+                              spells = spells.filter(s => s.name.toLowerCase().includes(q))
+                            }
+                            if (spells.length === 0) {
+                              return <p style={{ color: '#888', fontSize: '0.8rem' }}>No spells available.</p>
+                            }
+                            return spells.map(spell => (
+                              <div key={spell.name} style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '0.35rem 0.5rem', borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                                onClick={() => {
+                                  saveKnownSpells([...knownSpells, spell.name])
+                                  setShowLearnSpell(false)
+                                }}
+                              >
+                                <div>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{spell.name}</span>
+                                  <span style={{ color: '#888', fontSize: '0.7rem', marginLeft: '0.4rem' }}>
+                                    {spell.spellLevel} • {spell.school}
+                                  </span>
+                                </div>
+                                <span style={{ color: '#2ecc71', fontSize: '0.8rem', fontWeight: '600' }}>Learn</span>
+                              </div>
+                            ))
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </section>
                 )}
 

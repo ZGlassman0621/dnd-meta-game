@@ -2,6 +2,7 @@ import express from 'express';
 import * as locationService from '../services/locationService.js';
 import * as locationGenerator from '../services/locationGenerator.js';
 import { dbGet } from '../database.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -11,8 +12,7 @@ router.get('/campaign/:campaignId', async (req, res) => {
     const locations = await locationService.getCampaignLocations(req.params.campaignId);
     res.json(locations);
   } catch (error) {
-    console.error('Error fetching locations:', error);
-    res.status(500).json({ error: 'Failed to fetch locations' });
+    handleServerError(res, error, 'fetch locations');
   }
 });
 
@@ -22,8 +22,7 @@ router.get('/campaign/:campaignId/discovered', async (req, res) => {
     const locations = await locationService.getDiscoveredLocations(req.params.campaignId);
     res.json(locations);
   } catch (error) {
-    console.error('Error fetching discovered locations:', error);
-    res.status(500).json({ error: 'Failed to fetch discovered locations' });
+    handleServerError(res, error, 'fetch discovered locations');
   }
 });
 
@@ -36,8 +35,7 @@ router.get('/campaign/:campaignId/type/:type', async (req, res) => {
     );
     res.json(locations);
   } catch (error) {
-    console.error('Error fetching locations by type:', error);
-    res.status(500).json({ error: 'Failed to fetch locations by type' });
+    handleServerError(res, error, 'fetch locations by type');
   }
 });
 
@@ -50,8 +48,7 @@ router.get('/campaign/:campaignId/region/:region', async (req, res) => {
     );
     res.json(locations);
   } catch (error) {
-    console.error('Error fetching locations by region:', error);
-    res.status(500).json({ error: 'Failed to fetch locations by region' });
+    handleServerError(res, error, 'fetch locations by region');
   }
 });
 
@@ -65,8 +62,7 @@ router.get('/campaign/:campaignId/search', async (req, res) => {
     const locations = await locationService.searchLocations(req.params.campaignId, q);
     res.json(locations);
   } catch (error) {
-    console.error('Error searching locations:', error);
-    res.status(500).json({ error: 'Failed to search locations' });
+    handleServerError(res, error, 'search locations');
   }
 });
 
@@ -79,8 +75,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(location);
   } catch (error) {
-    console.error('Error fetching location:', error);
-    res.status(500).json({ error: 'Failed to fetch location' });
+    handleServerError(res, error, 'fetch location');
   }
 });
 
@@ -90,8 +85,7 @@ router.get('/:id/children', async (req, res) => {
     const locations = await locationService.getChildLocations(req.params.id);
     res.json(locations);
   } catch (error) {
-    console.error('Error fetching child locations:', error);
-    res.status(500).json({ error: 'Failed to fetch child locations' });
+    handleServerError(res, error, 'fetch child locations');
   }
 });
 
@@ -101,8 +95,7 @@ router.get('/:id/connections', async (req, res) => {
     const locations = await locationService.getConnectedLocationsWithDetails(req.params.id);
     res.json(locations);
   } catch (error) {
-    console.error('Error fetching connected locations:', error);
-    res.status(500).json({ error: 'Failed to fetch connected locations' });
+    handleServerError(res, error, 'fetch connected locations');
   }
 });
 
@@ -118,8 +111,7 @@ router.post('/', async (req, res) => {
     const location = await locationService.createLocation(req.body);
     res.status(201).json(location);
   } catch (error) {
-    console.error('Error creating location:', error);
-    res.status(500).json({ error: 'Failed to create location' });
+    handleServerError(res, error, 'create location');
   }
 });
 
@@ -132,8 +124,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(location);
   } catch (error) {
-    console.error('Error updating location:', error);
-    res.status(500).json({ error: 'Failed to update location' });
+    handleServerError(res, error, 'update location');
   }
 });
 
@@ -147,8 +138,7 @@ router.post('/:id/discover', async (req, res) => {
     }
     res.json(location);
   } catch (error) {
-    console.error('Error discovering location:', error);
-    res.status(500).json({ error: 'Failed to discover location' });
+    handleServerError(res, error, 'discover location');
   }
 });
 
@@ -171,8 +161,7 @@ router.put('/:id/discovery-status', async (req, res) => {
     }
     res.json(location);
   } catch (error) {
-    console.error('Error updating discovery status:', error);
-    res.status(500).json({ error: 'Failed to update discovery status' });
+    handleServerError(res, error, 'update discovery status');
   }
 });
 
@@ -190,8 +179,7 @@ router.put('/:id/state', async (req, res) => {
     }
     res.json(location);
   } catch (error) {
-    console.error('Error updating location state:', error);
-    res.status(500).json({ error: 'Failed to update location state' });
+    handleServerError(res, error, 'update location state');
   }
 });
 
@@ -219,8 +207,7 @@ router.post('/connect', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error('Error connecting locations:', error);
-    res.status(500).json({ error: 'Failed to connect locations' });
+    handleServerError(res, error, 'connect locations');
   }
 });
 
@@ -233,8 +220,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting location:', error);
-    res.status(500).json({ error: 'Failed to delete location' });
+    handleServerError(res, error, 'delete location');
   }
 });
 
@@ -272,8 +258,7 @@ router.post('/generate', async (req, res) => {
 
     res.status(201).json(location);
   } catch (error) {
-    console.error('Error generating location:', error);
-    res.status(500).json({ error: 'Failed to generate location' });
+    handleServerError(res, error, 'generate location');
   }
 });
 
@@ -335,8 +320,7 @@ router.post('/generate/region', async (req, res) => {
       connections: createdConnections
     });
   } catch (error) {
-    console.error('Error generating region:', error);
-    res.status(500).json({ error: 'Failed to generate region' });
+    handleServerError(res, error, 'generate region');
   }
 });
 
@@ -371,8 +355,7 @@ router.post('/generate/dungeon', async (req, res) => {
 
     res.status(201).json(location);
   } catch (error) {
-    console.error('Error generating dungeon:', error);
-    res.status(500).json({ error: 'Failed to generate dungeon' });
+    handleServerError(res, error, 'generate dungeon');
   }
 });
 
@@ -421,8 +404,7 @@ router.post('/generate/connections', async (req, res) => {
 
     res.status(201).json(createdConnections);
   } catch (error) {
-    console.error('Error generating connections:', error);
-    res.status(500).json({ error: 'Failed to generate connections' });
+    handleServerError(res, error, 'generate connections');
   }
 });
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import classesData from '../data/classes.json';
 import racesData from '../data/races.json';
-import spellsData from '../data/spells.json';
+import spellsData from '../data/spells/index.js';
 
 function QuickReferencePanel({ character, onClose, spellSlots }) {
   const [quickRefTab, setQuickRefTab] = useState('equipment');

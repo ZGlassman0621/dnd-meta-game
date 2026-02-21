@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { safeParse } from '../utils/safeParse.js';
 import * as factionService from './factionService.js';
 import * as worldEventService from './worldEventService.js';
 
@@ -58,6 +59,10 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
   } catch (error) {
     console.error('Error processing living world tick:', error);
     results.errors.push(error.message);
+    // Re-throw critical errors so callers know the tick failed
+    if (!results.faction_results.length && !results.event_results.length) {
+      throw error;
+    }
   }
 
   return results;
@@ -247,14 +252,14 @@ async function spawnGoalCompletionEvent(campaignId, goal) {
                      : 0;
 
     if (powerBoost > 0) {
-      const newPower = Math.min(10, (faction.power_level || 5) + powerBoost);
+      const newPower = Math.min(10, (faction.power_level ?? 5) + powerBoost);
       await dbRun('UPDATE factions SET power_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [newPower, faction.id]);
 
       await worldEventService.createEventEffect({
         event_id: event.id,
         effect_type: 'faction_power_change',
-        description: `${faction.name} has increased their influence (power ${faction.power_level || 5} → ${newPower})`,
+        description: `${faction.name} has increased their influence (power ${faction.power_level ?? 5} → ${newPower})`,
         target_type: 'faction',
         target_id: faction.id,
         parameters: { power_change: powerBoost, new_power: newPower },
@@ -459,8 +464,8 @@ async function getAllActiveGoals(campaignId) {
 
   return goals.map(g => ({
     ...g,
-    milestones: JSON.parse(g.milestones || '[]'),
-    discovered_by_characters: JSON.parse(g.discovered_by_characters || '[]')
+    milestones: safeParse(g.milestones, []),
+    discovered_by_characters: safeParse(g.discovered_by_characters, [])
   }));
 }
 

@@ -1,6 +1,8 @@
 import express from 'express';
 import * as campaignService from '../services/campaignService.js';
 import * as campaignPlanService from '../services/campaignPlanService.js';
+import { validateImportPayload, importCampaign, normalizePlan } from '../services/campaignImportService.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -10,8 +12,7 @@ router.get('/', async (req, res) => {
     const campaigns = await campaignService.getAllCampaigns();
     res.json(campaigns);
   } catch (error) {
-    console.error('Error fetching campaigns:', error);
-    res.status(500).json({ error: 'Failed to fetch campaigns' });
+    handleServerError(res, error, 'fetch campaigns');
   }
 });
 
@@ -21,8 +22,7 @@ router.get('/active', async (req, res) => {
     const campaigns = await campaignService.getActiveCampaigns();
     res.json(campaigns);
   } catch (error) {
-    console.error('Error fetching active campaigns:', error);
-    res.status(500).json({ error: 'Failed to fetch active campaigns' });
+    handleServerError(res, error, 'fetch active campaigns');
   }
 });
 
@@ -35,8 +35,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(campaign);
   } catch (error) {
-    console.error('Error fetching campaign:', error);
-    res.status(500).json({ error: 'Failed to fetch campaign' });
+    handleServerError(res, error, 'fetch campaign');
   }
 });
 
@@ -46,8 +45,7 @@ router.get('/:id/stats', async (req, res) => {
     const stats = await campaignService.getCampaignStats(req.params.id);
     res.json(stats);
   } catch (error) {
-    console.error('Error fetching campaign stats:', error);
-    res.status(500).json({ error: 'Failed to fetch campaign stats' });
+    handleServerError(res, error, 'fetch campaign stats');
   }
 });
 
@@ -57,8 +55,7 @@ router.get('/:id/characters', async (req, res) => {
     const characters = await campaignService.getCampaignCharacters(req.params.id);
     res.json(characters);
   } catch (error) {
-    console.error('Error fetching campaign characters:', error);
-    res.status(500).json({ error: 'Failed to fetch campaign characters' });
+    handleServerError(res, error, 'fetch campaign characters');
   }
 });
 
@@ -82,8 +79,38 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(campaign);
   } catch (error) {
-    console.error('Error creating campaign:', error);
-    res.status(500).json({ error: 'Failed to create campaign' });
+    handleServerError(res, error, 'create campaign');
+  }
+});
+
+// POST /api/campaign/import - Import a complete campaign from JSON
+router.post('/import', async (req, res) => {
+  try {
+    // Normalize plan field names before validation (maps alternatives like main_story → main_quest)
+    if (req.body.campaign_plan) {
+      req.body.campaign_plan = normalizePlan(req.body.campaign_plan);
+    }
+    const validation = validateImportPayload(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'Invalid import payload',
+        details: validation.errors
+      });
+    }
+
+    const result = await importCampaign(req.body);
+    const campaign = await campaignService.getCampaignById(result.campaignId);
+
+    res.status(201).json({
+      success: true,
+      campaign,
+      characterId: result.characterId,
+      sessionsCreated: result.sessionsCreated,
+      companionsCreated: result.companionsCreated,
+      questsCreated: result.questsCreated || 0
+    });
+  } catch (error) {
+    handleServerError(res, error, 'import campaign');
   }
 });
 
@@ -96,8 +123,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(campaign);
   } catch (error) {
-    console.error('Error updating campaign:', error);
-    res.status(500).json({ error: 'Failed to update campaign' });
+    handleServerError(res, error, 'update campaign');
   }
 });
 
@@ -110,8 +136,7 @@ router.post('/:id/archive', async (req, res) => {
     }
     res.json(campaign);
   } catch (error) {
-    console.error('Error archiving campaign:', error);
-    res.status(500).json({ error: 'Failed to archive campaign' });
+    handleServerError(res, error, 'archive campaign');
   }
 });
 
@@ -131,8 +156,7 @@ router.post('/:id/assign-character', async (req, res) => {
 
     res.json(character);
   } catch (error) {
-    console.error('Error assigning character to campaign:', error);
-    res.status(500).json({ error: 'Failed to assign character to campaign' });
+    handleServerError(res, error, 'assign character to campaign');
   }
 });
 
@@ -145,8 +169,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting campaign:', error);
-    res.status(500).json({ error: 'Failed to delete campaign' });
+    handleServerError(res, error, 'delete campaign');
   }
 });
 
@@ -160,8 +183,7 @@ router.get('/:id/plan', async (req, res) => {
     const plan = await campaignPlanService.getCampaignPlan(req.params.id);
     res.json(plan);
   } catch (error) {
-    console.error('Error fetching campaign plan:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch campaign plan' });
+    handleServerError(res, error, 'fetch campaign plan');
   }
 });
 
@@ -177,8 +199,7 @@ router.post('/:id/plan/generate', async (req, res) => {
     const plan = await campaignPlanService.generateCampaignPlan(req.params.id, character_id);
     res.json(plan);
   } catch (error) {
-    console.error('Error generating campaign plan:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate campaign plan' });
+    handleServerError(res, error, 'generate campaign plan');
   }
 });
 
@@ -188,8 +209,7 @@ router.get('/:id/plan/summary', async (req, res) => {
     const summary = await campaignPlanService.getPlanSummaryForSession(req.params.id);
     res.json(summary);
   } catch (error) {
-    console.error('Error fetching plan summary:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch plan summary' });
+    handleServerError(res, error, 'fetch plan summary');
   }
 });
 
@@ -203,8 +223,7 @@ router.put('/:id/plan/:section', async (req, res) => {
     );
     res.json(plan);
   } catch (error) {
-    console.error('Error updating plan section:', error);
-    res.status(500).json({ error: error.message || 'Failed to update plan section' });
+    handleServerError(res, error, 'update plan section');
   }
 });
 
@@ -214,8 +233,7 @@ router.post('/:id/plan/world-event', async (req, res) => {
     const plan = await campaignPlanService.addWorldEvent(req.params.id, req.body);
     res.json(plan);
   } catch (error) {
-    console.error('Error adding world event:', error);
-    res.status(500).json({ error: error.message || 'Failed to add world event' });
+    handleServerError(res, error, 'add world event');
   }
 });
 
@@ -225,8 +243,7 @@ router.post('/:id/plan/npc', async (req, res) => {
     const plan = await campaignPlanService.addNPC(req.params.id, req.body);
     res.json(plan);
   } catch (error) {
-    console.error('Error adding NPC:', error);
-    res.status(500).json({ error: error.message || 'Failed to add NPC' });
+    handleServerError(res, error, 'add NPC');
   }
 });
 

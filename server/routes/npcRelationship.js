@@ -1,5 +1,6 @@
 import express from 'express';
 import * as npcRelationshipService from '../services/npcRelationshipService.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -13,8 +14,7 @@ router.get('/character/:characterId', async (req, res) => {
     const relationships = await npcRelationshipService.getCharacterRelationships(req.params.characterId);
     res.json(relationships);
   } catch (error) {
-    console.error('Error fetching character relationships:', error);
-    res.status(500).json({ error: 'Failed to fetch relationships' });
+    handleServerError(res, error, 'fetch character relationships');
   }
 });
 
@@ -24,8 +24,7 @@ router.get('/character/:characterId/with-npcs', async (req, res) => {
     const relationships = await npcRelationshipService.getCharacterRelationshipsWithNpcs(req.params.characterId);
     res.json(relationships);
   } catch (error) {
-    console.error('Error fetching relationships with NPCs:', error);
-    res.status(500).json({ error: 'Failed to fetch relationships' });
+    handleServerError(res, error, 'fetch relationships with NPCs');
   }
 });
 
@@ -35,8 +34,7 @@ router.get('/character/:characterId/summary', async (req, res) => {
     const summary = await npcRelationshipService.getRelationshipSummary(req.params.characterId);
     res.json(summary);
   } catch (error) {
-    console.error('Error fetching relationship summary:', error);
-    res.status(500).json({ error: 'Failed to fetch summary' });
+    handleServerError(res, error, 'fetch relationship summary');
   }
 });
 
@@ -46,8 +44,7 @@ router.get('/character/:characterId/allies', async (req, res) => {
     const relationships = await npcRelationshipService.getAlliedNpcs(req.params.characterId);
     res.json(relationships);
   } catch (error) {
-    console.error('Error fetching allies:', error);
-    res.status(500).json({ error: 'Failed to fetch allies' });
+    handleServerError(res, error, 'fetch allies');
   }
 });
 
@@ -57,8 +54,7 @@ router.get('/character/:characterId/hostile', async (req, res) => {
     const relationships = await npcRelationshipService.getHostileNpcs(req.params.characterId);
     res.json(relationships);
   } catch (error) {
-    console.error('Error fetching hostile NPCs:', error);
-    res.status(500).json({ error: 'Failed to fetch hostile NPCs' });
+    handleServerError(res, error, 'fetch hostile NPCs');
   }
 });
 
@@ -71,8 +67,7 @@ router.get('/character/:characterId/by-label/:label', async (req, res) => {
     );
     res.json(relationships);
   } catch (error) {
-    console.error('Error fetching NPCs by label:', error);
-    res.status(500).json({ error: 'Failed to fetch NPCs' });
+    handleServerError(res, error, 'fetch NPCs by label');
   }
 });
 
@@ -88,8 +83,7 @@ router.get('/:characterId/:npcId', async (req, res) => {
     }
     res.json(relationship);
   } catch (error) {
-    console.error('Error fetching relationship:', error);
-    res.status(500).json({ error: 'Failed to fetch relationship' });
+    handleServerError(res, error, 'fetch relationship');
   }
 });
 
@@ -105,8 +99,7 @@ router.post('/', async (req, res) => {
     const relationship = await npcRelationshipService.createRelationship(req.body);
     res.status(201).json(relationship);
   } catch (error) {
-    console.error('Error creating relationship:', error);
-    res.status(500).json({ error: 'Failed to create relationship' });
+    handleServerError(res, error, 'create relationship');
   }
 });
 
@@ -119,8 +112,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(relationship);
   } catch (error) {
-    console.error('Error updating relationship:', error);
-    res.status(500).json({ error: 'Failed to update relationship' });
+    handleServerError(res, error, 'update relationship');
   }
 });
 
@@ -133,8 +125,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting relationship:', error);
-    res.status(500).json({ error: 'Failed to delete relationship' });
+    handleServerError(res, error, 'delete relationship');
   }
 });
 
@@ -159,8 +150,7 @@ router.post('/:characterId/:npcId/disposition', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adjusting disposition:', error);
-    res.status(500).json({ error: 'Failed to adjust disposition' });
+    handleServerError(res, error, 'adjust disposition');
   }
 });
 
@@ -180,8 +170,7 @@ router.post('/:characterId/:npcId/trust', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adjusting trust:', error);
-    res.status(500).json({ error: 'Failed to adjust trust' });
+    handleServerError(res, error, 'adjust trust');
   }
 });
 
@@ -196,8 +185,7 @@ router.post('/:characterId/:npcId/interaction', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error recording interaction:', error);
-    res.status(500).json({ error: 'Failed to record interaction' });
+    handleServerError(res, error, 'record interaction');
   }
 });
 
@@ -221,8 +209,7 @@ router.post('/:characterId/:npcId/known-fact', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adding known fact:', error);
-    res.status(500).json({ error: 'Failed to add known fact' });
+    handleServerError(res, error, 'add known fact');
   }
 });
 
@@ -242,8 +229,7 @@ router.post('/:characterId/:npcId/player-known-fact', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adding player-known fact:', error);
-    res.status(500).json({ error: 'Failed to add player-known fact' });
+    handleServerError(res, error, 'add player-known fact');
   }
 });
 
@@ -263,8 +249,7 @@ router.post('/:characterId/:npcId/secret', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error discovering secret:', error);
-    res.status(500).json({ error: 'Failed to discover secret' });
+    handleServerError(res, error, 'discover secret');
   }
 });
 
@@ -288,8 +273,7 @@ router.post('/:characterId/:npcId/rumor', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adding rumor:', error);
-    res.status(500).json({ error: 'Failed to add rumor' });
+    handleServerError(res, error, 'add rumor');
   }
 });
 
@@ -303,8 +287,7 @@ router.post('/:characterId/:npcId/rumor/:rumorIndex/disprove', async (req, res) 
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error disproving rumor:', error);
-    res.status(500).json({ error: 'Failed to disprove rumor' });
+    handleServerError(res, error, 'disprove rumor');
   }
 });
 
@@ -318,8 +301,7 @@ router.get('/character/:characterId/promises', async (req, res) => {
     const promises = await npcRelationshipService.getPendingPromises(req.params.characterId);
     res.json(promises);
   } catch (error) {
-    console.error('Error fetching pending promises:', error);
-    res.status(500).json({ error: 'Failed to fetch promises' });
+    handleServerError(res, error, 'fetch pending promises');
   }
 });
 
@@ -339,8 +321,7 @@ router.post('/:characterId/:npcId/promise', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adding promise:', error);
-    res.status(500).json({ error: 'Failed to add promise' });
+    handleServerError(res, error, 'add promise');
   }
 });
 
@@ -354,8 +335,7 @@ router.post('/:characterId/:npcId/promise/:promiseIndex/fulfill', async (req, re
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error fulfilling promise:', error);
-    res.status(500).json({ error: 'Failed to fulfill promise' });
+    handleServerError(res, error, 'fulfill promise');
   }
 });
 
@@ -371,8 +351,7 @@ router.post('/:characterId/:npcId/promise/:promiseIndex/break', async (req, res)
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error breaking promise:', error);
-    res.status(500).json({ error: 'Failed to break promise' });
+    handleServerError(res, error, 'break promise');
   }
 });
 
@@ -386,8 +365,7 @@ router.get('/character/:characterId/debts', async (req, res) => {
     const debts = await npcRelationshipService.getOutstandingDebts(req.params.characterId);
     res.json(debts);
   } catch (error) {
-    console.error('Error fetching outstanding debts:', error);
-    res.status(500).json({ error: 'Failed to fetch debts' });
+    handleServerError(res, error, 'fetch outstanding debts');
   }
 });
 
@@ -407,8 +385,7 @@ router.post('/:characterId/:npcId/debt', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error adding debt:', error);
-    res.status(500).json({ error: 'Failed to add debt' });
+    handleServerError(res, error, 'add debt');
   }
 });
 
@@ -424,8 +401,7 @@ router.post('/:characterId/:npcId/debt/:debtIndex/settle', async (req, res) => {
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error settling debt:', error);
-    res.status(500).json({ error: 'Failed to settle debt' });
+    handleServerError(res, error, 'settle debt');
   }
 });
 
@@ -439,8 +415,7 @@ router.post('/:characterId/:npcId/debt/:debtIndex/forgive', async (req, res) => 
     );
     res.json(relationship);
   } catch (error) {
-    console.error('Error forgiving debt:', error);
-    res.status(500).json({ error: 'Failed to forgive debt' });
+    handleServerError(res, error, 'forgive debt');
   }
 });
 

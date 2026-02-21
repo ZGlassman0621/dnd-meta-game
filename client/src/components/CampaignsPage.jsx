@@ -298,6 +298,12 @@ const PIPELINE_STEPS = [
   { key: 'done', label: 'Your world is ready!' }
 ];
 
+const IMPORT_STEPS = [
+  { key: 'validating', label: 'Validating JSON' },
+  { key: 'importing', label: 'Importing campaign data' },
+  { key: 'done', label: 'Campaign imported!' }
+];
+
 const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -314,6 +320,13 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
   const [createdCampaign, setCreatedCampaign] = useState(null);
 
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  // Import state
+  const [showImport, setShowImport] = useState(false);
+  const [importJSON, setImportJSON] = useState('');
+  const [importError, setImportError] = useState(null);
+  const [importStep, setImportStep] = useState(null);
+  const [importResult, setImportResult] = useState(null);
 
   const [newCampaign, setNewCampaign] = useState({
     name: '',
@@ -500,6 +513,61 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
     });
   };
 
+  const handleImportCampaign = async () => {
+    setImportError(null);
+    setImportStep('validating');
+
+    let parsed;
+    try {
+      parsed = JSON.parse(importJSON);
+    } catch (e) {
+      setImportError(`Invalid JSON: ${e.message}`);
+      setImportStep(null);
+      return;
+    }
+
+    if (!parsed.campaign) {
+      setImportError('JSON must contain a "campaign" section');
+      setImportStep(null);
+      return;
+    }
+
+    setImportStep('importing');
+
+    try {
+      const response = await fetch('/api/campaign/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: importJSON
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = result.details
+          ? result.details.join('; ')
+          : result.error;
+        throw new Error(errorMsg);
+      }
+
+      setImportResult(result);
+      setImportStep('done');
+      setCampaigns(prev => [result.campaign, ...prev]);
+      onCharacterUpdated?.();
+    } catch (error) {
+      setImportError(error.message);
+      setImportStep(null);
+    }
+  };
+
+  const resetImport = () => {
+    setShowImport(false);
+    setImportJSON('');
+    setImportError(null);
+    setImportStep(null);
+    setImportResult(null);
+  };
+
   const handleArchiveCampaign = async () => {
     if (!selectedCampaign) return;
     try {
@@ -585,12 +653,20 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
         <div style={styles.panel}>
           <div style={styles.panelTitle}>
             <span>Campaigns</span>
-            <button
-              style={{ ...styles.button, ...styles.primaryButton }}
-              onClick={() => setShowNewCampaign(!showNewCampaign)}
-            >
-              {showNewCampaign ? 'Cancel' : '+ New'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                style={{ ...styles.button, ...styles.primaryButton }}
+                onClick={() => { setShowImport(false); resetImport(); setShowNewCampaign(!showNewCampaign); }}
+              >
+                {showNewCampaign ? 'Cancel' : '+ New'}
+              </button>
+              <button
+                style={{ ...styles.button, ...styles.secondaryButton }}
+                onClick={() => { setShowNewCampaign(false); resetPipeline(); setShowImport(!showImport); }}
+              >
+                {showImport ? 'Cancel' : 'Import'}
+              </button>
+            </div>
           </div>
 
           <div style={styles.filterTabs}>
@@ -859,7 +935,132 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
             </div>
           )}
 
-          {!showNewCampaign && !pipelineStep && (
+          {showImport && !importStep && (
+            <div style={styles.form}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Paste Campaign JSON</label>
+                <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 0.5rem 0' }}>
+                  Paste the full campaign import JSON below. Must contain "campaign" and "character" sections.
+                </p>
+                <textarea
+                  style={{
+                    ...styles.textarea,
+                    minHeight: '300px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.8rem',
+                    resize: 'vertical'
+                  }}
+                  value={importJSON}
+                  onChange={e => setImportJSON(e.target.value)}
+                  placeholder={'{\n  "campaign": { "name": "..." },\n  "character": { "name": "...", "class": "...", "race": "..." },\n  "campaign_plan": { ... },\n  "sessions": [ ... ],\n  "companions": [ ... ]\n}'}
+                />
+              </div>
+
+              {importError && (
+                <div style={{
+                  padding: '0.75rem',
+                  background: 'rgba(231, 76, 60, 0.1)',
+                  border: '1px solid rgba(231, 76, 60, 0.3)',
+                  borderRadius: '6px',
+                  color: '#e74c3c',
+                  fontSize: '0.85rem',
+                  whiteSpace: 'pre-wrap',
+                  marginBottom: '0.75rem'
+                }}>
+                  {importError}
+                </div>
+              )}
+
+              <button
+                style={{ ...styles.button, ...styles.successButton }}
+                onClick={handleImportCampaign}
+                disabled={!importJSON.trim()}
+              >
+                Import Campaign
+              </button>
+            </div>
+          )}
+
+          {importStep && (
+            <div style={{
+              padding: '1.5rem',
+              background: 'rgba(155, 89, 182, 0.05)',
+              borderRadius: '8px',
+              border: '1px solid rgba(155, 89, 182, 0.2)',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ marginBottom: '1rem', fontSize: '1rem', color: '#f5f5f5', fontWeight: '500' }}>
+                {importStep === 'done' ? 'Campaign Imported!' : 'Importing campaign...'}
+              </div>
+
+              {IMPORT_STEPS.map((step, i) => {
+                const stepIndex = IMPORT_STEPS.findIndex(s => s.key === importStep);
+                const isCompleted = i < stepIndex || importStep === 'done';
+                const isCurrent = step.key === importStep && importStep !== 'done';
+
+                return (
+                  <div key={step.key} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    padding: '0.5rem 0',
+                    color: isCompleted ? '#2ecc71' : isCurrent ? '#f5f5f5' : '#555'
+                  }}>
+                    <span style={{ fontSize: '1rem', width: '1.5rem', textAlign: 'center' }}>
+                      {isCompleted ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'}
+                    </span>
+                    <span style={{ fontSize: '0.9rem' }}>{step.label}</span>
+                  </div>
+                );
+              })}
+
+              {importStep === 'done' && importResult && (
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.75rem' }}>
+                    {importResult.characterId ? (
+                      <>
+                        Created {importResult.sessionsCreated} session record{importResult.sessionsCreated !== 1 ? 's' : ''}
+                        {importResult.companionsCreated > 0 && `, ${importResult.companionsCreated} companion${importResult.companionsCreated !== 1 ? 's' : ''}`}
+                      </>
+                    ) : (
+                      'Campaign and plan imported. Create a character and assign them from the campaign details panel.'
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    {importResult.characterId && (
+                      <button
+                        style={{
+                          ...styles.button,
+                          background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
+                          color: '#fff',
+                          padding: '0.75rem 2rem',
+                          fontSize: '1rem',
+                          fontWeight: '600'
+                        }}
+                        onClick={() => {
+                          resetImport();
+                          onNavigateToPlay?.();
+                        }}
+                      >
+                        Play Now
+                      </button>
+                    )}
+                    <button
+                      style={{ ...styles.button, ...styles.secondaryButton }}
+                      onClick={() => {
+                        setSelectedCampaign(importResult.campaign);
+                        resetImport();
+                      }}
+                    >
+                      View Campaign
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!showNewCampaign && !showImport && !pipelineStep && !importStep && (
             <div style={styles.campaignList}>
               {loading ? (
                 <div style={styles.emptyState}>Loading campaigns...</div>

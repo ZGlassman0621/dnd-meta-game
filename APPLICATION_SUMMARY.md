@@ -58,10 +58,13 @@ A comprehensive D&D 5e campaign management and AI-powered narrative generation t
 - **Cantrips and spells**: Tracks known/prepared spells per class
 
 #### Spell Management
-- Spell slot tracking by level (1-9)
+- **284 spells** across levels 1-9 for all 13 classes, stored in per-level JSON files (`client/src/data/spells/`)
+- **Spell slot tracker**: Visual display with filled/empty circles, use/restore buttons per level, Warlock "Pact Magic Slots" handled separately
+- **Prepared spell management** (Cleric, Druid, Paladin, Wizard, Artificer): Inline preparation panel with level filter, search, checkbox toggles; max prepared calculated per class rules; subclass spells always prepared
+- **Known spell management** (Bard, Ranger, Sorcerer, Warlock): Learn/forget spells with max known from progression tables; Wizard spellbook additions
+- **Level-up spell selection**: Dedicated "Spells" step in level-up flow; known casters pick new spells and optionally swap one; Wizards add to spellbook; cantrip selection when cantrips known increases
 - Short and long rest mechanics (Warlock special rules)
-- Spell slot usage and restoration
-- Arcane Recovery and other class abilities
+- Spell slot usage and restoration via backend endpoints
 
 #### Character Progression Utilities
 - **Rest mechanics**: Short rest (1 hour) and long rest (8 hours) with proper D&D 5e rules

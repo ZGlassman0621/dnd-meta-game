@@ -1,5 +1,6 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { generateEncounterLoot } from '../config/rewards.js';
+import { safeParse } from '../utils/safeParse.js';
 
 /**
  * Travel Service - Journey mechanics, encounters, and resource management
@@ -399,6 +400,7 @@ const ROUTE_MODIFIERS = {
  * Calculate travel time in hours
  */
 export function calculateTravelTime(distanceMiles, travelMethod = 'walking', routeType = 'road') {
+  if (!distanceMiles || distanceMiles <= 0 || !Number.isFinite(distanceMiles)) return 0;
   const speed = TRAVEL_SPEEDS[travelMethod] || TRAVEL_SPEEDS.walking;
   const modifier = ROUTE_MODIFIERS[routeType] || ROUTE_MODIFIERS.road;
 
@@ -411,14 +413,17 @@ export function calculateTravelTime(distanceMiles, travelMethod = 'walking', rou
  * Calculate daily rations needed
  */
 export function calculateRationsNeeded(travelHours, partySize = 1) {
+  if (!travelHours || travelHours <= 0 || !Number.isFinite(travelHours)) return 0;
+  const size = Math.max(1, partySize || 1);
   const travelDays = Math.ceil(travelHours / 8); // Assume 8 hours travel per day
-  return travelDays * partySize;
+  return travelDays * size;
 }
 
 /**
  * Estimate travel cost (for hiring transport)
  */
 export function estimateTravelCost(distanceMiles, travelMethod) {
+  if (!distanceMiles || distanceMiles <= 0 || !Number.isFinite(distanceMiles)) return 0;
   const costPerMile = {
     walking: 0,
     forced_march: 0,
@@ -549,16 +554,16 @@ function getChallengeType(encounterType) {
 function parseJourneyJson(journey) {
   return {
     ...journey,
-    traveling_companions: JSON.parse(journey.traveling_companions || '[]')
+    traveling_companions: safeParse(journey.traveling_companions, [])
   };
 }
 
 function parseEncounterJson(encounter) {
   return {
     ...encounter,
-    items_gained: JSON.parse(encounter.items_gained || '[]'),
-    items_lost: JSON.parse(encounter.items_lost || '[]'),
-    npcs_involved: JSON.parse(encounter.npcs_involved || '[]')
+    items_gained: safeParse(encounter.items_gained, []),
+    items_lost: safeParse(encounter.items_lost, []),
+    npcs_involved: safeParse(encounter.npcs_involved, [])
   };
 }
 

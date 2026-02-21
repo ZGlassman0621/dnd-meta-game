@@ -638,12 +638,97 @@ USING THESE MEMORIES:
 }
 
 /**
+ * Format a single NPC entry with optional voice guide
+ */
+function formatNPCEntry(npc, includeVoice) {
+  let entry = `- ${npc.name} (${npc.role}): ${npc.motivation || npc.description || ''} - typically found at ${npc.location || 'various locations'}`;
+  if (includeVoice && npc.voice_guide) {
+    const vg = npc.voice_guide;
+    if (vg.speech) entry += `\n  Voice: ${vg.speech}`;
+    if (vg.surface) entry += `\n  Surface: ${vg.surface}`;
+  }
+  if (npc.secrets && npc.secrets.length > 0) {
+    entry += `\n  DM-ONLY secrets: ${npc.secrets.slice(0, 3).join('; ')}`;
+  }
+  return entry;
+}
+
+/**
  * Format campaign plan for DM context
  */
 function formatCampaignPlan(planSummary) {
   if (!planSummary) return '';
 
+  const isImported = !!planSummary.campaign_metadata || !!planSummary.dm_directives;
+  const hasDetailedNpcs = planSummary.detailed_npcs && planSummary.detailed_npcs.length > 0;
   let sections = [];
+
+  // === PRIMACY: Campaign context and DM directives first ===
+
+  // Campaign metadata (imported campaigns — year, season, status)
+  if (planSummary.campaign_metadata) {
+    const meta = planSummary.campaign_metadata;
+    let metaLines = [];
+    if (meta.year) metaLines.push(`Campaign Year: ${meta.year}`);
+    if (meta.season) metaLines.push(`Season: ${meta.season}`);
+    if (meta.setting) metaLines.push(`Setting: ${meta.setting}`);
+    if (meta.tone) metaLines.push(`Tone: ${meta.tone}`);
+    if (meta.status) metaLines.push(`Current Status: ${meta.status}`);
+    if (meta.expedition_party) metaLines.push(`Active Party: ${Array.isArray(meta.expedition_party) ? meta.expedition_party.join(', ') : meta.expedition_party}`);
+    // Pass through any other metadata fields
+    const knownKeys = ['_schema_extension', 'campaign_name', 'system', 'year', 'season', 'setting', 'tone', 'status', 'expedition_party'];
+    for (const [key, value] of Object.entries(meta)) {
+      if (!knownKeys.includes(key) && value) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        metaLines.push(`${label}: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+      }
+    }
+    if (metaLines.length > 0) {
+      sections.push(`CAMPAIGN CONTEXT:\n${metaLines.join('\n')}`);
+    }
+
+    // Timeline enforcement from campaign metadata year
+    if (meta.year) {
+      const yearStr = String(meta.year);
+      const yearMatch = yearStr.match(/(\d{3,4})/);
+      if (yearMatch) {
+        const campaignYear = parseInt(yearMatch[1]);
+        sections.push(`=== TIMELINE ENFORCEMENT ===
+The campaign year is ${campaignYear} DR. This is NOT negotiable.
+FORBIDDEN: Events after ${campaignYear} DR, documents dated after ${campaignYear} DR, anachronistic references.
+When inventing historical references, use dates 50-200 years BEFORE ${campaignYear} DR.
+=== END TIMELINE ENFORCEMENT ===`);
+      }
+    }
+  }
+
+  // DM directives (imported campaigns — critical behavioral rules)
+  if (planSummary.dm_directives) {
+    const dir = planSummary.dm_directives;
+    let dirLines = [];
+    if (dir.never_reveal && dir.never_reveal.length > 0) {
+      dirLines.push(`NEVER REVEAL TO THE PLAYER:\n${dir.never_reveal.map(r => `- ${r}`).join('\n')}`);
+    }
+    if (dir.always_follow && dir.always_follow.length > 0) {
+      dirLines.push(`ALWAYS FOLLOW:\n${dir.always_follow.map(r => `- ${r}`).join('\n')}`);
+    }
+    if (dir.narrative_principles && dir.narrative_principles.length > 0) {
+      dirLines.push(`NARRATIVE PRINCIPLES:\n${dir.narrative_principles.map(r => `- ${r}`).join('\n')}`);
+    }
+    // Pass through any other directive arrays
+    const knownKeys = ['_schema_extension', 'never_reveal', 'always_follow', 'narrative_principles'];
+    for (const [key, value] of Object.entries(dir)) {
+      if (!knownKeys.includes(key) && Array.isArray(value) && value.length > 0) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        dirLines.push(`${label.toUpperCase()}:\n${value.map(r => `- ${r}`).join('\n')}`);
+      }
+    }
+    if (dirLines.length > 0) {
+      sections.push(`=== DM DIRECTIVES (FOLLOW STRICTLY) ===\n${dirLines.join('\n\n')}\n=== END DM DIRECTIVES ===`);
+    }
+  }
+
+  // === CORE PLAN: Main quest, acts, world state ===
 
   if (planSummary.main_quest_title) {
     let questSection = `MAIN QUEST: ${planSummary.main_quest_title}\n${planSummary.main_quest_summary || ''}`;
@@ -658,9 +743,9 @@ function formatCampaignPlan(planSummary) {
 
   if (planSummary.current_act) {
     const act = planSummary.current_act;
-    sections.push(`CURRENT ACT (Act 1): ${act.title || 'The Beginning'}
+    sections.push(`CURRENT ACT (Act ${act.act_number || 1}): ${act.title || 'The Beginning'}
 ${act.summary || act.description || ''}
-Use this act to guide the opening story arc. IMPORTANT: The opening scene must take place at the character's STARTING LOCATION (see WORLD SETTING above) — build toward this act's events from there, do not skip ahead.`);
+Use this act to guide the current story arc.${!isImported ? ' IMPORTANT: The opening scene must take place at the character\'s STARTING LOCATION (see WORLD SETTING above) — build toward this act\'s events from there, do not skip ahead.' : ''}`);
   }
 
   if (planSummary.world_state) {
@@ -670,15 +755,62 @@ ${ws.political_situation || ''}
 Major Threats: ${(ws.major_threats || []).join(', ')}`);
   }
 
-  if (planSummary.active_npcs && planSummary.active_npcs.length > 0) {
-    sections.push(`KEY NPCs FROM BACKSTORY (USE THESE - DO NOT INVENT REPLACEMENTS):
+  // === NPCs: Use detailed NPCs with voice guides when available ===
+
+  if (hasDetailedNpcs) {
+    const backstoryNpcs = planSummary.detailed_npcs.filter(n => n.from_backstory);
+    const otherNpcs = planSummary.detailed_npcs.filter(n => !n.from_backstory);
+
+    if (backstoryNpcs.length > 0) {
+      sections.push(`KEY NPCs FROM BACKSTORY (USE THESE - DO NOT INVENT REPLACEMENTS):
+${backstoryNpcs.map(npc => formatNPCEntry(npc, true)).join('\n')}`);
+    }
+    if (otherNpcs.length > 0) {
+      sections.push(`OTHER KEY NPCs IN THIS WORLD:
+${otherNpcs.map(npc => formatNPCEntry(npc, true)).join('\n')}`);
+    }
+  } else {
+    // Fallback to simple NPC lists (non-imported plans)
+    if (planSummary.active_npcs && planSummary.active_npcs.length > 0) {
+      sections.push(`KEY NPCs FROM BACKSTORY (USE THESE - DO NOT INVENT REPLACEMENTS):
 ${planSummary.active_npcs.map(npc => `- ${npc.name} (${npc.role}): ${npc.motivation} - typically found at ${npc.location || 'various locations'}`).join('\n')}`);
+    }
+    if (planSummary.all_npcs && planSummary.all_npcs.length > 0) {
+      sections.push(`OTHER KEY NPCs IN THIS WORLD:
+${planSummary.all_npcs.map(npc => `- ${npc.name} (${npc.role}) - ${npc.location || 'various locations'}`).join('\n')}`);
+    }
   }
 
-  if (planSummary.all_npcs && planSummary.all_npcs.length > 0) {
-    sections.push(`OTHER KEY NPCs IN THIS WORLD:
-${planSummary.all_npcs.map(npc => `- ${npc.name} (${npc.role}) - ${npc.location || 'various locations'}`).join('\n')}`);
+  // === NPC relationship system (imported campaigns) ===
+
+  if (planSummary.npc_relationship_system) {
+    const rs = planSummary.npc_relationship_system;
+    let rsLines = [];
+    // Render levels if defined
+    if (rs.levels && Array.isArray(rs.levels)) {
+      rsLines.push('RELATIONSHIP LEVELS:');
+      for (const level of rs.levels) {
+        rsLines.push(`- Level ${level.level || level.name}: ${level.label || ''} — ${level.description || ''}`);
+      }
+    }
+    // Render any other string/array fields
+    const knownKeys = ['_schema_extension', 'levels'];
+    for (const [key, value] of Object.entries(rs)) {
+      if (!knownKeys.includes(key)) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (typeof value === 'string') {
+          rsLines.push(`${label}: ${value}`);
+        } else if (Array.isArray(value)) {
+          rsLines.push(`${label}:\n${value.map(v => `- ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n')}`);
+        }
+      }
+    }
+    if (rsLines.length > 0) {
+      sections.push(`NPC RELATIONSHIP SYSTEM:\n${rsLines.join('\n')}`);
+    }
   }
+
+  // === Standard sections ===
 
   if (planSummary.upcoming_events && planSummary.upcoming_events.length > 0) {
     sections.push(`UPCOMING WORLD EVENTS (these will happen regardless of player action):
@@ -703,11 +835,57 @@ ${planSummary.side_quests.map(q => `- ${q.title}: ${q.description}`).join('\n')}
     sections.push(`TONE GUIDANCE: ${planSummary.dm_notes.tone}`);
   }
 
+  if (planSummary.dm_notes?.twists && planSummary.dm_notes.twists.length > 0) {
+    sections.push(`POTENTIAL TWISTS TO CONSIDER: ${planSummary.dm_notes.twists.join('; ')}`);
+  }
+
+  if (planSummary.dm_notes?.backup_hooks && planSummary.dm_notes.backup_hooks.length > 0) {
+    sections.push(`BACKUP HOOKS (if player goes off-track): ${planSummary.dm_notes.backup_hooks.join('; ')}`);
+  }
+
+  // === RECENCY: Session continuity last (immediate context for the DM) ===
+
+  if (planSummary.session_continuity) {
+    const sc = planSummary.session_continuity;
+    let scLines = [];
+    // Render known fields
+    if (sc.current_state) scLines.push(`Current State: ${typeof sc.current_state === 'string' ? sc.current_state : JSON.stringify(sc.current_state)}`);
+    if (sc.recent_events && Array.isArray(sc.recent_events)) {
+      scLines.push(`Recent Events:\n${sc.recent_events.map(e => `- ${typeof e === 'string' ? e : e.description || JSON.stringify(e)}`).join('\n')}`);
+    }
+    if (sc.immediate_context) scLines.push(`Immediate Context: ${typeof sc.immediate_context === 'string' ? sc.immediate_context : JSON.stringify(sc.immediate_context)}`);
+    if (sc.unresolved_threads && Array.isArray(sc.unresolved_threads)) {
+      scLines.push(`Unresolved Threads:\n${sc.unresolved_threads.map(t => `- ${typeof t === 'string' ? t : t.description || JSON.stringify(t)}`).join('\n')}`);
+    }
+    // Pass through any other fields
+    const knownKeys = ['_schema_extension', 'current_state', 'recent_events', 'immediate_context', 'unresolved_threads'];
+    for (const [key, value] of Object.entries(sc)) {
+      if (!knownKeys.includes(key) && value) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (typeof value === 'string') {
+          scLines.push(`${label}: ${value}`);
+        } else if (Array.isArray(value)) {
+          scLines.push(`${label}:\n${value.map(v => `- ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n')}`);
+        }
+      }
+    }
+    if (scLines.length > 0) {
+      sections.push(`CURRENT CAMPAIGN STATE (pick up from here):\n${scLines.join('\n')}`);
+    }
+  }
+
   if (sections.length === 0) return '';
 
-  return `\n\n=== CAMPAIGN PLAN (Generated by Claude Opus) ===
-This campaign has a pre-generated plan. You MUST use this as your guide for the story.
+  const header = isImported
+    ? `=== IMPORTED CAMPAIGN PLAN ===
+This campaign was imported with a detailed plan. You MUST use this as your guide for the story.
 DO NOT invent your own BBEG, story arc, or quest - the plan below defines all of these.
+Pay special attention to DM DIRECTIVES — they are binding rules for this campaign.`
+    : `=== CAMPAIGN PLAN (Generated by Claude Opus) ===
+This campaign has a pre-generated plan. You MUST use this as your guide for the story.
+DO NOT invent your own BBEG, story arc, or quest - the plan below defines all of these.`;
+
+  return `\n\n${header}
 
 ${sections.join('\n\n')}
 
@@ -717,7 +895,7 @@ CRITICAL RULES FOR USING THIS PLAN:
 3. The CURRENT ACT describes where the story is right now - ground your scenes in it
 4. World events will unfold according to the timeline - the world is ALIVE
 5. Weave the main quest naturally into the narrative - don't force it, but don't ignore it either
-6. This plan is your guide, not a script - adapt to player choices while maintaining the plan's narrative
+6. This plan is your guide, not a script - adapt to player choices while maintaining the plan's narrative${isImported ? '\n7. NPC voice guides define HOW each character speaks - use them for authentic dialogue\n8. DM-ONLY secrets must NEVER be revealed to the player unless they earn the knowledge through gameplay\n9. Respect the NPC relationship system - depth of information shared depends on relationship level' : ''}
 === END CAMPAIGN PLAN ===`;
 }
 
@@ -923,9 +1101,16 @@ ADAPTING THE CAMPAIGN:
       }
     }
 
+    // Skip the STARTING LOCATION RULE for imported mid-progress campaigns
+    // (they have session_continuity which overrides starting location)
+    const planSummary = sessionContext.campaignPlanSummary;
+    const isImportedMidProgress = planSummary?.session_continuity && (planSummary?.campaign_metadata || planSummary?.dm_directives);
+    const startingLocationRule = isImportedMidProgress
+      ? ''
+      : `\n- STARTING LOCATION RULE: The FIRST session MUST begin physically IN ${location?.name}. The opening scene takes place in this location — not traveling away from it, not days after leaving it. The player chose this starting location; respect that choice.`;
+
     worldSettingSection = `WORLD SETTING - THE FORGOTTEN REALMS:
-${location ? `- Starting Location: ${location.name} - ${location.description}${location.region ? ` (${location.region})` : ''}
-- STARTING LOCATION RULE: The FIRST session MUST begin physically IN ${location.name}. The opening scene takes place in this location — not traveling away from it, not days after leaving it. The player chose this starting location; respect that choice.` : ''}
+${location ? `- Starting Location: ${location.name} - ${location.description}${location.region ? ` (${location.region})` : ''}${startingLocationRule}` : ''}
 ${era ? `- Era: ${era.years}
 - Historical Context: ${era.loreContext}` : ''}
 ${hook ? `- How the character${isTwoPlayer ? 's' : ''} arrived: ${hook.name} - ${hook.description}` : ''}

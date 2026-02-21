@@ -4,7 +4,7 @@ import backgroundsData from '../data/backgrounds.json'
 import classesData from '../data/classes.json'
 import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
-import spellsData from '../data/spells.json'
+import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
 
 function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
@@ -785,10 +785,13 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       })
 
       const character = await response.json()
+      if (!response.ok) {
+        throw new Error(character.error || `Server returned ${response.status}`)
+      }
       onCharacterCreated(character)
     } catch (error) {
       console.error(`Error ${isEditMode ? 'updating' : 'creating'} character:`, error)
-      alert(`Failed to ${isEditMode ? 'update' : 'create'} character`)
+      alert(`Failed to ${isEditMode ? 'update' : 'create'} character: ${error.message}`)
     }
   }
 
@@ -1120,7 +1123,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                     }}
                     style={{ width: '100%' }}
                   >
-                    <option value="">Select language {idx + 1}...</option>
+                    <option value="">Select Language {idx + 1}...</option>
                     <optgroup label="Standard Languages">
                       {(equipmentData.languages?.standard || [])
                         .filter(lang => !selectedRaceData?.languages?.includes(lang))

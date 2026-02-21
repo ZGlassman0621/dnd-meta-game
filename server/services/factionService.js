@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { safeParse } from '../utils/safeParse.js';
 
 /**
  * Faction Service - CRUD operations for factions, faction goals, and faction standings
@@ -574,8 +575,11 @@ export async function processFactionTick(campaignId, gameDaysPassed = 1) {
   }
 
   for (const goal of goals) {
+    // Skip goals whose faction was deleted between fetch and processing
+    if (!factionMap[goal.faction_id]) continue;
+
     // Base progress per day based on faction power and goal urgency
-    let baseProgress = goal.power_level || 5;
+    let baseProgress = goal.power_level ?? 5;
 
     // Urgency modifier
     const urgencyModifiers = {
@@ -604,10 +608,10 @@ export async function processFactionTick(campaignId, gameDaysPassed = 1) {
 
         if (relationship === 'hostile' || relationship === 'enemy' || relationship === 'rival') {
           // Hostile factions with active goals slow each other down
-          interference += Math.floor((otherFaction.power_level || 5) * 0.3);
+          interference += Math.floor((otherFaction.power_level ?? 5) * 0.3);
         } else if (relationship === 'allied' || relationship === 'friendly' || relationship === 'ally') {
           // Allied factions with active goals boost each other
-          interference -= Math.floor((otherFaction.power_level || 5) * 0.15);
+          interference -= Math.floor((otherFaction.power_level ?? 5) * 0.15);
         }
       }
       progressGain = Math.max(1, progressGain - interference);
@@ -658,21 +662,21 @@ export async function processFactionTick(campaignId, gameDaysPassed = 1) {
 function parseFactionJson(faction) {
   return {
     ...faction,
-    influence_areas: JSON.parse(faction.influence_areas || '[]'),
-    territory: JSON.parse(faction.territory || '[]'),
-    notable_members: JSON.parse(faction.notable_members || '[]'),
-    faction_relationships: JSON.parse(faction.faction_relationships || '{}'),
-    primary_values: JSON.parse(faction.primary_values || '[]'),
-    typical_methods: JSON.parse(faction.typical_methods || '[]'),
-    membership_benefits: JSON.parse(faction.membership_benefits || '[]')
+    influence_areas: safeParse(faction.influence_areas, []),
+    territory: safeParse(faction.territory, []),
+    notable_members: safeParse(faction.notable_members, []),
+    faction_relationships: safeParse(faction.faction_relationships, {}),
+    primary_values: safeParse(faction.primary_values, []),
+    typical_methods: safeParse(faction.typical_methods, []),
+    membership_benefits: safeParse(faction.membership_benefits, [])
   };
 }
 
 function parseFactionGoalJson(goal) {
   return {
     ...goal,
-    milestones: JSON.parse(goal.milestones || '[]'),
-    discovered_by_characters: JSON.parse(goal.discovered_by_characters || '[]')
+    milestones: safeParse(goal.milestones, []),
+    discovered_by_characters: safeParse(goal.discovered_by_characters, [])
   };
 }
 
@@ -680,13 +684,13 @@ function parseStandingJson(standing) {
   return {
     ...standing,
     is_member: Boolean(standing.is_member),
-    deeds_for: JSON.parse(standing.deeds_for || '[]'),
-    deeds_against: JSON.parse(standing.deeds_against || '[]'),
-    gifts_given: JSON.parse(standing.gifts_given || '[]'),
-    quests_completed: JSON.parse(standing.quests_completed || '[]'),
-    known_members: JSON.parse(standing.known_members || '[]'),
-    known_goals: JSON.parse(standing.known_goals || '[]'),
-    known_secrets: JSON.parse(standing.known_secrets || '[]')
+    deeds_for: safeParse(standing.deeds_for, []),
+    deeds_against: safeParse(standing.deeds_against, []),
+    gifts_given: safeParse(standing.gifts_given, []),
+    quests_completed: safeParse(standing.quests_completed, []),
+    known_members: safeParse(standing.known_members, []),
+    known_goals: safeParse(standing.known_goals, []),
+    known_secrets: safeParse(standing.known_secrets, [])
   };
 }
 

@@ -2,6 +2,8 @@
  * D&D 5e Conditions - Server-side reference for prompt building and marker detection
  */
 
+import { parseMarkerPairs } from '../services/dmSessionService.js';
+
 export const CONDITION_NAMES = [
   'Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled',
   'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned',
@@ -13,6 +15,7 @@ export const CONDITION_NAMES = [
  * Detect condition change markers in AI response text.
  * Markers: [CONDITION_ADD: Target="Player" Condition="poisoned"]
  *          [CONDITION_REMOVE: Target="Player" Condition="poisoned"]
+ * Handles any field order (Condition before Target, etc.) and spaces around =.
  */
 export function detectConditionChanges(text) {
   if (!text) return { applied: [], removed: [] };
@@ -20,17 +23,23 @@ export function detectConditionChanges(text) {
   const applied = [];
   const removed = [];
 
-  // Match [CONDITION_ADD: Target="..." Condition="..."]
-  const addPattern = /\[CONDITION_ADD:\s*Target="([^"]+)"\s*Condition="([^"]+)"\]/gi;
+  // Match [CONDITION_ADD: ...] with flexible field order
+  const addPattern = /\[CONDITION_ADD:\s*([^\]]+)\]/gi;
   let match;
   while ((match = addPattern.exec(text)) !== null) {
-    applied.push({ target: match[1], condition: match[2].toLowerCase().replace(/\s+/g, '_') });
+    const data = parseMarkerPairs(match[1]);
+    if (data.target && data.condition) {
+      applied.push({ target: data.target, condition: data.condition.toLowerCase().replace(/\s+/g, '_') });
+    }
   }
 
-  // Match [CONDITION_REMOVE: Target="..." Condition="..."]
-  const removePattern = /\[CONDITION_REMOVE:\s*Target="([^"]+)"\s*Condition="([^"]+)"\]/gi;
+  // Match [CONDITION_REMOVE: ...] with flexible field order
+  const removePattern = /\[CONDITION_REMOVE:\s*([^\]]+)\]/gi;
   while ((match = removePattern.exec(text)) !== null) {
-    removed.push({ target: match[1], condition: match[2].toLowerCase().replace(/\s+/g, '_') });
+    const data = parseMarkerPairs(match[1]);
+    if (data.target && data.condition) {
+      removed.push({ target: data.target, condition: data.condition.toLowerCase().replace(/\s+/g, '_') });
+    }
   }
 
   return { applied, removed };

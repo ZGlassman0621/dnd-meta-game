@@ -8,8 +8,10 @@ import {
   SUBCLASS_LEVELS
 } from '../config/levelProgression.js';
 import { onCompanionRecruited, onCompanionDismissed, onCompanionLoyaltyChanged } from '../services/narrativeIntegration.js';
+import { safeParse } from '../utils/safeParse.js';
 import * as companionBackstoryGenerator from '../services/companionBackstoryGenerator.js';
 import * as companionBackstoryService from '../services/companionBackstoryService.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -33,7 +35,7 @@ router.get('/character/:characterId', async (req, res) => {
 
     res.json(companions);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch companions');
   }
 });
 
@@ -60,7 +62,7 @@ router.get('/:id', async (req, res) => {
 
     res.json(companion);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch companion');
   }
 });
 
@@ -123,7 +125,9 @@ router.post('/recruit', async (req, res) => {
       companionLevel = starting_level || character.level;
 
       // Parse NPC ability scores or use defaults
-      const abilityScores = npc.ability_scores ? JSON.parse(npc.ability_scores) : {
+      const abilityScores = npc.ability_scores ? safeParse(npc.ability_scores, {
+        str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10
+      }) : {
         str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10
       };
       companionAbilityScores = JSON.stringify(abilityScores);
@@ -186,7 +190,7 @@ router.post('/recruit', async (req, res) => {
       companion
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'recruit companion');
   }
 });
 
@@ -231,7 +235,7 @@ router.put('/:id', async (req, res) => {
 
     res.json(companion);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'update companion');
   }
 });
 
@@ -266,7 +270,7 @@ router.post('/:id/convert-to-class', async (req, res) => {
 
     // Parse ability scores
     const abilityScores = companion.npc_ability_scores
-      ? JSON.parse(companion.npc_ability_scores)
+      ? safeParse(companion.npc_ability_scores, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
       : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 
     // Calculate HP
@@ -309,7 +313,7 @@ router.post('/:id/convert-to-class', async (req, res) => {
       companion: updatedCompanion
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'convert companion to class');
   }
 });
 
@@ -349,7 +353,7 @@ router.post('/:id/level-up', async (req, res) => {
 
     const className = companion.companion_class.toLowerCase();
     const abilityScores = companion.companion_ability_scores
-      ? JSON.parse(companion.companion_ability_scores)
+      ? safeParse(companion.companion_ability_scores, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
       : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 
     // Calculate HP gain
@@ -441,7 +445,7 @@ router.post('/:id/level-up', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'level up companion');
   }
 });
 
@@ -474,7 +478,7 @@ router.get('/:id/level-up-info', async (req, res) => {
     }
 
     const abilityScores = companion.companion_ability_scores
-      ? JSON.parse(companion.companion_ability_scores)
+      ? safeParse(companion.companion_ability_scores, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
       : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 
     const hitDie = HIT_DICE[className] || 8;
@@ -512,7 +516,7 @@ router.get('/:id/level-up-info', async (req, res) => {
       subclassLevel: SUBCLASS_LEVELS[className]
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch level-up info');
   }
 });
 
@@ -554,7 +558,7 @@ router.post('/:id/dismiss', async (req, res) => {
       npcId: companion.npc_id
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'dismiss companion');
   }
 });
 
@@ -584,7 +588,7 @@ router.post('/:id/deceased', async (req, res) => {
       companion: { ...companion, status: 'deceased' }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'mark companion as deceased');
   }
 });
 
@@ -821,8 +825,7 @@ router.post('/create-party-member', async (req, res) => {
       companion
     });
   } catch (error) {
-    console.error('Error creating party member:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'create party member');
   }
 });
 
@@ -842,7 +845,7 @@ router.get('/available/:characterId', async (req, res) => {
 
     res.json(availableNpcs);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch available companions');
   }
 });
 
@@ -861,8 +864,7 @@ router.get('/:id/backstory', async (req, res) => {
 
     res.json(backstory);
   } catch (error) {
-    console.error('Error fetching backstory:', error);
-    res.status(500).json({ error: 'Failed to fetch backstory' });
+    handleServerError(res, error, 'fetch backstory');
   }
 });
 
@@ -926,8 +928,7 @@ router.post('/:id/backstory/generate', async (req, res) => {
       backstory
     });
   } catch (error) {
-    console.error('Error generating backstory:', error);
-    res.status(500).json({ error: 'Failed to generate backstory' });
+    handleServerError(res, error, 'generate backstory');
   }
 });
 
@@ -973,8 +974,7 @@ router.post('/:id/backstory/threads', async (req, res) => {
       backstory: updated
     });
   } catch (error) {
-    console.error('Error adding threads:', error);
-    res.status(500).json({ error: 'Failed to add threads' });
+    handleServerError(res, error, 'add threads');
   }
 });
 
@@ -1023,8 +1023,7 @@ router.post('/:id/backstory/secret', async (req, res) => {
       backstory: updated
     });
   } catch (error) {
-    console.error('Error generating secret:', error);
-    res.status(500).json({ error: 'Failed to generate secret' });
+    handleServerError(res, error, 'generate secret');
   }
 });
 
@@ -1063,8 +1062,7 @@ router.put('/:id/backstory/thread/:threadId', async (req, res) => {
       backstory: updated
     });
   } catch (error) {
-    console.error('Error updating thread:', error);
-    res.status(500).json({ error: 'Failed to update thread' });
+    handleServerError(res, error, 'update thread');
   }
 });
 
@@ -1097,8 +1095,7 @@ router.post('/:id/backstory/secret/:secretId/reveal', async (req, res) => {
       backstory: updated
     });
   } catch (error) {
-    console.error('Error revealing secret:', error);
-    res.status(500).json({ error: 'Failed to reveal secret' });
+    handleServerError(res, error, 'reveal secret');
   }
 });
 

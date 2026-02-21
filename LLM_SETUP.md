@@ -9,8 +9,8 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 | Model | Purpose | When Used |
 |-------|---------|-----------|
 | **Claude Opus** (`claude-opus-4-6`) | World building & generation | Campaign plans, backstory parsing, NPC/quest/location/companion generation, living world events, adventure generation, first session opening |
-| **Claude Sonnet** (`claude-sonnet-4-5`) | AI Dungeon Master sessions | Continuing session gameplay, narration, combat, dialogue |
-| **Ollama (Llama 3.1:8b)** | Offline fallback | All of the above when no internet/API key available |
+| **Claude Sonnet** (`claude-sonnet-4-6`) | AI Dungeon Master sessions | Continuing session gameplay, narration, combat, dialogue |
+| **Ollama (Gemma 3 12B)** | Offline fallback | All of the above when no internet/API key available |
 
 > **Note:** Both Claude models use alias IDs (no date suffix) so they automatically resolve to the latest available version when Anthropic releases updates.
 
@@ -28,7 +28,7 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 │  ┌─────────────────┐  ┌──────────────────────┐  │
 │  │  Claude API      │  │  Ollama (Fallback)   │  │
 │  │  ┌────────────┐  │  │  ┌────────────────┐  │  │
-│  │  │ Opus       │  │  │  │ Llama 3.1 8B   │  │  │
+│  │  │ Opus       │  │  │  │ Gemma 3 12B    │  │  │
 │  │  │ (building) │  │  │  │ (all tasks)    │  │  │
 │  │  ├────────────┤  │  │  └────────────────┘  │  │
 │  │  │ Sonnet     │  │  │                      │  │
@@ -90,7 +90,7 @@ brew install ollama
 brew services start ollama
 
 # Pull the model
-ollama pull llama3.1:8b
+ollama pull gemma3:12b
 ```
 
 ### Configuration
@@ -99,10 +99,10 @@ No `.env` changes needed. The app automatically connects to Ollama at `http://lo
 ### Model Information
 | Property | Value |
 |----------|-------|
-| Model | Llama 3.1 8B |
-| Size | ~4.9 GB |
-| Speed | 6-8 seconds per generation |
-| Quality | Good for creative D&D content |
+| Model | Gemma 3 12B |
+| Size | ~8 GB |
+| Speed | 4-6 seconds per generation (GPU accelerated) |
+| Quality | Excellent for creative D&D content |
 
 ### Status Indicator
 - **Green dot + "Ollama"** = Ollama connected and serving locally
@@ -117,7 +117,7 @@ The server checks providers on startup and per-request:
 2. **Check Ollama** — If Claude is unavailable, check `localhost:11434`
 3. **Status endpoint** — `GET /api/dm-session/llm-status` returns provider info
 
-When Claude is available, Claude Opus handles all world-building and content generation while Claude Sonnet runs interactive DM sessions. When only Ollama is available, Llama 3.1 handles all tasks.
+When Claude is available, Claude Opus handles all world-building and content generation while Claude Sonnet runs interactive DM sessions. When only Ollama is available, Gemma 3 12B handles all tasks.
 
 ---
 
@@ -133,7 +133,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-sonnet-4-5","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}'
+  -d '{"model":"claude-sonnet-4-6","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}'
 ```
 
 ### Ollama Issues
@@ -148,7 +148,7 @@ brew services restart ollama
 ollama list
 
 # Test directly
-ollama run llama3.1:8b "Write a D&D adventure hook"
+ollama run gemma3:12b "Write a D&D adventure hook"
 ```
 
 ### Server Logs

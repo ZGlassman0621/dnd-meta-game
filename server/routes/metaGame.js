@@ -23,6 +23,7 @@ import {
   formatGameTime
 } from '../services/metaGame.js';
 import { processCharacterTimeAdvance, getCharacterWorldView } from '../services/livingWorldService.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -35,8 +36,7 @@ router.get('/context/:characterId', async (req, res) => {
     const context = await aggregateCampaignContext(req.params.characterId);
     res.json(context);
   } catch (error) {
-    console.error('Error getting campaign context:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get campaign context');
   }
 });
 
@@ -49,8 +49,7 @@ router.get('/suggestions/:characterId', async (req, res) => {
     const suggestions = await generateActivitySuggestions(req.params.characterId);
     res.json(suggestions);
   } catch (error) {
-    console.error('Error generating suggestions:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate suggestions');
   }
 });
 
@@ -76,8 +75,7 @@ router.get('/status/:characterId', async (req, res) => {
       timeRatio: TIME_RATIOS[context.calendar.timeRatio] || TIME_RATIOS.normal
     });
   } catch (error) {
-    console.error('Error getting status:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get status');
   }
 });
 
@@ -103,8 +101,7 @@ router.put('/time-ratio/:characterId', async (req, res) => {
     const result = await setTimeRatio(req.params.characterId, ratio);
     res.json(result);
   } catch (error) {
-    console.error('Error setting time ratio:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'set time ratio');
   }
 });
 
@@ -129,8 +126,7 @@ router.get('/queue/:characterId', async (req, res) => {
     if (error.message.includes('no such table')) {
       res.json({ queue: [], count: 0 });
     } else {
-      console.error('Error getting queue:', error);
-      res.status(500).json({ error: error.message });
+      handleServerError(res, error, 'get queue');
     }
   }
 });
@@ -190,8 +186,7 @@ router.post('/queue/:characterId', async (req, res) => {
       // Retry the insert
       return router.handle(req, res);
     }
-    console.error('Error adding to queue:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'add to queue');
   }
 });
 
@@ -218,8 +213,7 @@ router.delete('/queue/:characterId/:queueId', async (req, res) => {
 
     res.json({ message: 'Activity removed from queue' });
   } catch (error) {
-    console.error('Error removing from queue:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'remove from queue');
   }
 });
 
@@ -251,8 +245,7 @@ router.post('/queue/:characterId/reorder', async (req, res) => {
 
     res.json({ queue });
   } catch (error) {
-    console.error('Error reordering queue:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'reorder queue');
   }
 });
 
@@ -372,8 +365,7 @@ router.post('/process/:characterId', async (req, res) => {
 
     res.json(results);
   } catch (error) {
-    console.error('Error processing meta game:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'process meta game');
   }
 });
 
@@ -434,8 +426,7 @@ router.post('/advance-time/:characterId', async (req, res) => {
       livingWorld: livingWorldResults
     });
   } catch (error) {
-    console.error('Error advancing time:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'advance time');
   }
 });
 
@@ -474,8 +465,7 @@ router.get('/calendar/:characterId', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error getting calendar:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get calendar');
   }
 });
 
@@ -555,8 +545,7 @@ router.post('/quick-activities/:characterId', async (req, res) => {
       totalHours: activities.reduce((sum, a) => sum + a.hours, 0)
     });
   } catch (error) {
-    console.error('Error adding quick activities:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'add quick activities');
   }
 });
 
@@ -573,8 +562,7 @@ router.get('/world-view/:characterId', async (req, res) => {
     }
     res.json(worldView);
   } catch (error) {
-    console.error('Error getting world view:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get world view');
   }
 });
 

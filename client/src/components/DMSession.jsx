@@ -20,7 +20,7 @@ import ConditionPanel from './ConditionPanel';
 import { CONDITIONS, getConditionsToClear, reduceExhaustion } from '../data/conditions';
 
 // Default model for D&D sessions (used when Ollama is the provider)
-const DEFAULT_MODEL = 'llama3.1:8b';
+const DEFAULT_MODEL = 'gemma3:12b';
 
 export default function DMSession({ character, allCharacters, onBack, onCharacterUpdated }) {
   const [llmStatus, setLlmStatus] = useState(null);
@@ -1369,7 +1369,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             <ol>
               <li>Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer">ollama.ai</a></li>
               <li>Start Ollama (it runs in the background)</li>
-              <li>Pull a model: <code>ollama pull llama3.1:8b</code></li>
+              <li>Pull a model: <code>ollama pull gemma3:12b</code></li>
             </ol>
           </div>
           <button onClick={checkLLMStatus} className="retry-btn">

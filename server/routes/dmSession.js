@@ -27,6 +27,8 @@ import {
 import { lookupItemByName } from '../data/merchantLootTables.js';
 import { getLootTableForLevel } from '../config/rewards.js';
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
+import { safeParse } from '../utils/safeParse.js';
+import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -129,7 +131,7 @@ router.get('/llm-status', async (req, res) => {
     const { provider, status } = await getLLMProvider(preference);
     res.json({ ...status, provider });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'check LLM status');
   }
 });
 
@@ -139,7 +141,7 @@ router.get('/ollama-status', async (req, res) => {
     const status = await ollama.checkOllamaStatus();
     res.json(status);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'check Ollama status');
   }
 });
 
@@ -149,7 +151,7 @@ router.get('/models', async (req, res) => {
     const models = await ollama.listModels();
     res.json({ models });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'list models');
   }
 });
 
@@ -167,8 +169,8 @@ router.get('/debug/latest-session', async (req, res) => {
       return res.json({ message: 'No sessions found' });
     }
 
-    const messages = JSON.parse(session.messages || '[]');
-    const config = JSON.parse(session.session_config || '{}');
+    const messages = safeParse(session.messages, []);
+    const config = safeParse(session.session_config, {});
 
     res.json({
       id: session.id,
@@ -186,7 +188,7 @@ router.get('/debug/latest-session', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch latest session');
   }
 });
 
@@ -210,9 +212,9 @@ router.get('/active/:characterId', async (req, res) => {
     }
 
     if (session) {
-      session.messages = JSON.parse(session.messages || '[]');
+      session.messages = safeParse(session.messages, []);
       if (session.rewards) {
-        session.rewards = JSON.parse(session.rewards);
+        session.rewards = safeParse(session.rewards, {});
       }
       // Add game date info
       if (session.game_start_day && session.game_start_year) {
@@ -222,7 +224,7 @@ router.get('/active/:characterId', async (req, res) => {
 
     res.json({ session });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch active session');
   }
 });
 
@@ -240,12 +242,12 @@ router.get('/history/:characterId', async (req, res) => {
 
     // Parse rewards JSON
     sessions.forEach(s => {
-      if (s.rewards) s.rewards = JSON.parse(s.rewards);
+      if (s.rewards) s.rewards = safeParse(s.rewards, {});
     });
 
     res.json({ sessions });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch session history');
   }
 });
 
@@ -272,21 +274,16 @@ router.get('/campaign-context/:characterId', async (req, res) => {
           startingLocation: campaign.starting_location || null
         };
         if (campaign.campaign_plan) {
-          try {
-            const plan = JSON.parse(campaign.campaign_plan);
+          const plan = safeParse(campaign.campaign_plan, null);
+          if (plan) {
             campaignPlanInfo.questTitle = plan.main_quest?.title;
             campaignPlanInfo.themes = plan.themes || [];
-          } catch (e) { /* invalid JSON, ignore */ }
+          }
         }
       }
     }
 
-    let campaignConfig = {};
-    try {
-      campaignConfig = JSON.parse(character?.campaign_config || '{}');
-    } catch (e) {
-      campaignConfig = {};
-    }
+    const campaignConfig = safeParse(character?.campaign_config, {});
 
     // Get the most recent completed session with its full config
     const lastSession = await dbGet(`
@@ -320,7 +317,7 @@ router.get('/campaign-context/:characterId', async (req, res) => {
     // Parse the session config from the last session
     let sessionConfig = {};
     try {
-      sessionConfig = JSON.parse(lastSession.session_config || '{}');
+      sessionConfig = safeParse(lastSession.session_config, {});
     } catch (e) {
       sessionConfig = {};
     }
@@ -353,8 +350,7 @@ router.get('/campaign-context/:characterId', async (req, res) => {
       })).reverse() // Chronological order for story context
     });
   } catch (error) {
-    console.error('Error getting campaign context:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'get campaign context');
   }
 });
 
@@ -365,11 +361,11 @@ router.get('/:sessionId', async (req, res) => {
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
-    session.messages = JSON.parse(session.messages || '[]');
-    if (session.rewards) session.rewards = JSON.parse(session.rewards);
+    session.messages = safeParse(session.messages, []);
+    if (session.rewards) session.rewards = safeParse(session.rewards, {});
     res.json({ session });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'fetch session');
   }
 });
 
@@ -484,7 +480,7 @@ router.post('/start', async (req, res) => {
     // Get pending downtime narratives for this character
     let pendingNarratives = [];
     try {
-      pendingNarratives = JSON.parse(character.pending_downtime_narratives || '[]');
+      pendingNarratives = safeParse(character.pending_downtime_narratives, []);
     } catch (e) {
       pendingNarratives = [];
     }
@@ -493,7 +489,7 @@ router.post('/start', async (req, res) => {
     let usedNames = [];
     try {
       // First, check if we have names in campaign_config
-      const campaignConfig = JSON.parse(character.campaign_config || '{}');
+      const campaignConfig = safeParse(character.campaign_config, {});
       if (campaignConfig.usedNames && Array.isArray(campaignConfig.usedNames)) {
         usedNames = [...campaignConfig.usedNames];
       }
@@ -508,7 +504,7 @@ router.post('/start', async (req, res) => {
 
         for (const sess of recentSessions) {
           try {
-            const messages = JSON.parse(sess.messages || '[]');
+            const messages = safeParse(sess.messages, []);
             // Look for proper nouns in assistant messages (simple heuristic)
             for (const msg of messages) {
               if (msg.role === 'assistant') {
@@ -643,12 +639,34 @@ router.post('/start', async (req, res) => {
       const isContinuing = continueCampaign && previousSessionSummaries && previousSessionSummaries.length > 0;
       const lastSessionSummary = isContinuing ? previousSessionSummaries[previousSessionSummaries.length - 1]?.summary : null;
 
+      // Detect imported mid-progress campaigns: the plan has session_continuity,
+      // meaning the campaign is already underway even if this character has no prior sessions
+      const isImportedMidProgress = campaignPlanSummary?.session_continuity
+        && (campaignPlanSummary?.campaign_metadata || campaignPlanSummary?.dm_directives);
+
       if (isPublishedModule) {
         if (isContinuing && lastSessionSummary) {
           openingPrompt = `Continue the ${campaignModule.name} campaign! This is a CONTINUATION from the previous session. Here's what happened last time:\n\n${lastSessionSummary}\n\nCRITICAL - HONOR SPECIFIC PLANS: If the summary mentions ANY specific plans, decisions, or timing the party made (like "agreed to leave at dawn", "planned to depart before sunrise", "decided to meet someone at midnight"), you MUST start the scene at EXACTLY that moment. Do NOT skip past their plans or change the timing they chose. The player made those decisions - respect them.\n\nPick up the story from where it left off. Write in second person ("you see", "you hear"). Do not speak dialogue for the player character. Do NOT recap the entire previous session - just smoothly continue the narrative.`;
         } else {
           openingPrompt = `Begin the ${campaignModule.name} campaign! Set an appropriate opening scene in ${campaignModule.setting}. Write in second person ("you see", "you hear"). Do not speak dialogue for the player character. Present the scene and let the player decide what to do.`;
         }
+      } else if (isImportedMidProgress && !isContinuing) {
+        // Imported mid-progress campaign, character's first session in the system.
+        // Use session_continuity from plan to pick up where the external campaign left off.
+        const currentLoc = character.current_location || 'their current location';
+        const sc = campaignPlanSummary.session_continuity;
+        const currentState = sc.current_state
+          ? (typeof sc.current_state === 'string' ? sc.current_state : JSON.stringify(sc.current_state))
+          : '';
+        const immediateCtx = sc.immediate_context
+          ? (typeof sc.immediate_context === 'string' ? sc.immediate_context : JSON.stringify(sc.immediate_context))
+          : '';
+
+        openingPrompt = `Continue this imported campaign! This campaign was previously played externally and is now continuing in this system. DO NOT start from the beginning — the story is already in progress.
+
+CURRENT SITUATION: ${currentState}${immediateCtx ? `\n\nIMMEDIATE CONTEXT: ${immediateCtx}` : ''}
+
+The character ${charName} is currently at ${currentLoc}. Pick up the story from the CURRENT CAMPAIGN STATE described in the campaign plan. Write in second person ("you see", "you hear"). Do not speak dialogue for the player character. Set a scene that flows naturally from where the story left off — do NOT recap the entire backstory, just establish the current moment and present the player with an engaging situation.`;
       } else {
         const locationDesc = location ? `${location.name}` : 'the Forgotten Realms';
         if (isContinuing && lastSessionSummary) {
@@ -660,7 +678,8 @@ router.post('/start', async (req, res) => {
 
       // Use Opus for first campaign sessions (establishing the narrative arc)
       // Use Sonnet for continuing sessions (regular gameplay)
-      const modelChoice = isContinuing ? 'sonnet' : 'opus';
+      // Imported mid-progress campaigns use Sonnet even for the first system session
+      const modelChoice = (isContinuing || isImportedMidProgress) ? 'sonnet' : 'opus';
 
       const claudeResult = await claude.startSession(systemPrompt, openingPrompt, modelChoice);
       result = {
@@ -690,10 +709,13 @@ router.post('/start', async (req, res) => {
     // Get character's current in-game date for session tracking
     // Prioritize the selected era's year - the player explicitly chose this era for the session
     // For first-ever sessions, pick a narrative-appropriate starting day based on campaign description
+    // For imported mid-progress campaigns, use the character's existing game_day (don't randomize)
     const priorSessions = await dbGet('SELECT COUNT(*) as count FROM dm_sessions WHERE character_id = ?', [characterId]);
     const isFirstSession = !priorSessions || priorSessions.count === 0;
+    const planHasSessionContinuity = campaignPlanSummary?.session_continuity
+      && (campaignPlanSummary?.campaign_metadata || campaignPlanSummary?.dm_directives);
     let gameStartDay;
-    if (isFirstSession || !character.game_day) {
+    if ((isFirstSession && !planHasSessionContinuity) || !character.game_day) {
       // Pick season-appropriate start day based on campaign description keywords
       let campaignDesc = '';
       let campLocationName = '';
@@ -714,6 +736,9 @@ router.post('/start', async (req, res) => {
       if (yearMatch) {
         gameStartYear = parseInt(yearMatch[1], 10);
       }
+    } else if (campaignPlanSummary?.campaign_metadata?.year) {
+      // Use year from imported campaign plan metadata
+      gameStartYear = campaignPlanSummary.campaign_metadata.year;
     } else if (character.game_year && character.game_year !== 1492) {
       // Use character's year only if they have a non-default year (from previous sessions)
       gameStartYear = character.game_year;
@@ -729,7 +754,7 @@ router.post('/start', async (req, res) => {
       title,
       locationName,
       campaignLength || 'ongoing-saga',
-      model || 'llama3.2',
+      model || 'gemma3:12b',
       JSON.stringify(result.messages),
       JSON.stringify(sessionConfig),
       gameStartDay,
@@ -791,8 +816,7 @@ router.post('/start', async (req, res) => {
       narrativeItemsIncluded: narrativeQueueItemIds?.length || 0
     });
   } catch (error) {
-    console.error('Error starting DM session:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'start DM session');
   }
 });
 
@@ -818,7 +842,7 @@ router.post('/:sessionId/message', async (req, res) => {
       return res.status(400).json({ error: 'Session is not active' });
     }
 
-    const messages = JSON.parse(session.messages || '[]');
+    const messages = safeParse(session.messages, []);
 
     // Inject active conditions as context if any are present
     if (activeConditions) {
@@ -1039,7 +1063,7 @@ router.post('/:sessionId/message', async (req, res) => {
       try {
         const character = await dbGet('SELECT id, level, inventory FROM characters WHERE id = ?', [session.character_id]);
         if (character) {
-          let inventory = JSON.parse(character.inventory || '[]');
+          let inventory = safeParse(character.inventory, []);
 
           for (const drop of lootDrops) {
             // Try to find the item in our loot tables
@@ -1089,7 +1113,7 @@ router.post('/:sessionId/message', async (req, res) => {
       try {
         const character = await dbGet('SELECT id, name, nickname, ability_scores FROM characters WHERE id = ?', [session.character_id]);
         const charAbilities = typeof character.ability_scores === 'string'
-          ? JSON.parse(character.ability_scores || '{}')
+          ? safeParse(character.ability_scores, {})
           : (character.ability_scores || {});
         const playerDexMod = Math.floor(((charAbilities.dexterity || 10) - 10) / 2);
 
@@ -1113,7 +1137,7 @@ router.post('/:sessionId/message', async (req, res) => {
         );
         for (const comp of activeCompanions) {
           const compAbilities = typeof comp.companion_ability_scores === 'string'
-            ? JSON.parse(comp.companion_ability_scores || '{}')
+            ? safeParse(comp.companion_ability_scores, {})
             : (comp.companion_ability_scores || {});
           const compDexMod = Math.floor(((compAbilities.dexterity || 10) - 10) / 2);
           const compRoll = rollD20();
@@ -1179,8 +1203,7 @@ router.post('/:sessionId/message', async (req, res) => {
       conditionChanges: hasConditionChanges ? conditionChanges : undefined
     });
   } catch (error) {
-    console.error('Error in DM session message:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'process DM session message');
   }
 });
 
@@ -1202,8 +1225,7 @@ router.post('/item-rarity-lookup', async (req, res) => {
     }
     res.json({ items: results });
   } catch (error) {
-    console.error('Error in item rarity lookup:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'look up item rarity');
   }
 });
 
@@ -1247,8 +1269,7 @@ router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
       merchantGold: dbMerchant.gold_gp
     });
   } catch (error) {
-    console.error('Error loading merchant inventory:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'load merchant inventory');
   }
 });
 
@@ -1264,8 +1285,7 @@ router.get('/:sessionId/merchants', async (req, res) => {
     const merchants = await getMerchantsByCampaign(character.campaign_id);
     res.json({ merchants });
   } catch (error) {
-    console.error('Error listing merchants:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'list merchants');
   }
 });
 
@@ -1280,8 +1300,7 @@ router.post('/:sessionId/restock-merchant', async (req, res) => {
     const result = await restockMerchant(merchantId, character?.level || 1);
     res.json({ success: true, inventory: result.inventory, gold_gp: result.gold_gp });
   } catch (error) {
-    console.error('Error restocking merchant:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'restock merchant');
   }
 });
 
@@ -1297,7 +1316,7 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
     if (!character) return res.status(404).json({ error: 'Character not found' });
 
-    let inventory = JSON.parse(character.inventory || '[]');
+    let inventory = safeParse(character.inventory, []);
     const changes = [];
 
     // Calculate totals in copper
@@ -1374,46 +1393,46 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
     }
 
     // Update the merchant's persistent inventory
+    // This must succeed BEFORE we respond — otherwise character and merchant get out of sync
     if (merchantId) {
-      try {
-        const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
-        if (merchant) {
-          let merchInv = JSON.parse(merchant.inventory || '[]');
+      const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
+      if (merchant) {
+        let merchInv = safeParse(merchant.inventory, []);
 
-          // Remove bought items from merchant stock
-          for (const item of (bought || [])) {
-            const idx = merchInv.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
-            if (idx !== -1) {
-              merchInv[idx].quantity = (merchInv[idx].quantity || 1) - item.quantity;
-              if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
-            }
+        // Remove bought items from merchant stock
+        for (const item of (bought || [])) {
+          const idx = merchInv.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
+          if (idx !== -1) {
+            merchInv[idx].quantity = (merchInv[idx].quantity || 1) - item.quantity;
+            if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
           }
-
-          // Add sold items to merchant stock (at full price for resale)
-          for (const item of (sold || [])) {
-            const existing = merchInv.find(i => i.name.toLowerCase() === item.name.toLowerCase());
-            if (existing) {
-              existing.quantity = (existing.quantity || 1) + item.quantity;
-            } else {
-              merchInv.push({
-                name: item.name,
-                price_gp: (item.price_gp || 0) * 2,
-                price_sp: (item.price_sp || 0) * 2,
-                price_cp: (item.price_cp || 0) * 2,
-                category: 'misc',
-                description: 'Acquired from adventurer',
-                quantity: item.quantity,
-                rarity: 'common'
-              });
-            }
-          }
-
-          // Update merchant gold (they pay for buybacks, receive from sales)
-          const newMerchGold = (merchant.gold_gp || 0) - Math.floor(totalEarnedCp / 100) + Math.floor(totalSpentCp / 100);
-          await updateMerchantAfterTransaction(merchantId, merchInv, newMerchGold);
         }
-      } catch (merchErr) {
-        console.warn('Merchant inventory update failed:', merchErr.message);
+
+        // Add sold items to merchant stock (at full price for resale)
+        for (const item of (sold || [])) {
+          const existing = merchInv.find(i => i.name.toLowerCase() === item.name.toLowerCase());
+          if (existing) {
+            existing.quantity = (existing.quantity || 1) + item.quantity;
+          } else {
+            merchInv.push({
+              name: item.name,
+              price_gp: (item.price_gp || 0) * 2,
+              price_sp: (item.price_sp || 0) * 2,
+              price_cp: (item.price_cp || 0) * 2,
+              category: 'misc',
+              description: 'Acquired from adventurer',
+              quantity: item.quantity,
+              rarity: 'common'
+            });
+          }
+        }
+
+        // Update merchant gold (they pay for buybacks, receive from sales)
+        // Pass original gold + inventory hash for optimistic locking
+        const originalMerchGold = merchant.gold_gp || 0;
+        const newMerchGold = originalMerchGold - Math.floor(totalEarnedCp / 100) + Math.floor(totalSpentCp / 100);
+        const originalInventoryHash = merchant.inventory_version || 0;
+        await updateMerchantAfterTransaction(merchantId, merchInv, newMerchGold, originalMerchGold, originalInventoryHash);
       }
     }
 
@@ -1427,8 +1446,11 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
       reputationChange
     });
   } catch (error) {
-    console.error('Error processing merchant transaction:', error);
-    res.status(500).json({ error: error.message });
+    if (error.message?.includes('Transaction conflict')) {
+      console.warn('Merchant transaction conflict:', error.message);
+      return res.status(409).json({ error: error.message });
+    }
+    handleServerError(res, error, 'process merchant transaction');
   }
 });
 
@@ -1438,8 +1460,8 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
     const { sessionId } = req.params;
     const { daysToAdd } = req.body;
 
-    if (typeof daysToAdd !== 'number') {
-      return res.status(400).json({ error: 'daysToAdd must be a number' });
+    if (typeof daysToAdd !== 'number' || !Number.isFinite(daysToAdd)) {
+      return res.status(400).json({ error: 'daysToAdd must be a finite number' });
     }
 
     const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
@@ -1471,8 +1493,7 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
       year: newDate.year
     });
   } catch (error) {
-    console.error('Error adjusting game date:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'adjust game date');
   }
 });
 
@@ -1491,7 +1512,7 @@ router.post('/:sessionId/inject-context', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    const messages = JSON.parse(session.messages || '[]');
+    const messages = safeParse(session.messages, []);
     // Inject as a user message with a [SYSTEM NOTE] prefix so the AI treats it as context
     messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS, just incorporate it into your awareness]: ${message}` });
 
@@ -1499,8 +1520,7 @@ router.post('/:sessionId/inject-context', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error injecting context:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'inject context');
   }
 });
 
@@ -1519,7 +1539,7 @@ router.post('/:sessionId/rest-narrative', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    const messages = JSON.parse(session.messages || '[]');
+    const messages = safeParse(session.messages, []);
 
     // Get the last 10 non-system messages for context
     const recentMessages = messages
@@ -1562,8 +1582,7 @@ router.post('/:sessionId/rest-narrative', async (req, res) => {
 
     res.json({ narrative });
   } catch (error) {
-    console.error('Error generating rest narrative:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'generate rest narrative');
   }
 });
 
@@ -1582,7 +1601,7 @@ router.post('/:sessionId/end', async (req, res) => {
       return res.status(400).json({ error: 'Session is not active' });
     }
 
-    const messages = JSON.parse(session.messages || '[]');
+    const messages = safeParse(session.messages, []);
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
 
     // Count player actions (user messages after the initial opening prompt)
@@ -1615,7 +1634,7 @@ router.post('/:sessionId/end', async (req, res) => {
     let summary = '';
     let rewardsAnalysis = null;
 
-    const inventory = JSON.parse(character.inventory || '[]');
+    const inventory = safeParse(character.inventory, []);
     const inventoryList = inventory.map(i => `${i.name}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ');
 
     try {
@@ -1802,8 +1821,7 @@ router.post('/:sessionId/end', async (req, res) => {
       npcsExtracted: extractedNpcs.length > 0 ? extractedNpcs : undefined
     });
   } catch (error) {
-    console.error('Error ending DM session:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'end DM session');
   }
 });
 
@@ -1823,7 +1841,7 @@ router.post('/:sessionId/apply-inventory', async (req, res) => {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    let inventory = JSON.parse(character.inventory || '[]');
+    let inventory = safeParse(character.inventory, []);
     const changes = [];
 
     // Process consumed items
@@ -1906,8 +1924,7 @@ router.post('/:sessionId/apply-inventory', async (req, res) => {
       newGold: { gp: newGp, sp: newSp, cp: newCp }
     });
   } catch (error) {
-    console.error('Error applying inventory changes:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'apply inventory changes');
   }
 });
 
@@ -1930,7 +1947,7 @@ router.post('/:sessionId/resume', async (req, res) => {
     let pendingNarratives = [];
     let downtimeContext = '';
     try {
-      pendingNarratives = JSON.parse(character.pending_downtime_narratives || '[]');
+      pendingNarratives = safeParse(character.pending_downtime_narratives, []);
       if (pendingNarratives.length > 0) {
         // Build downtime context to inject into the system prompt
         const narrativeDescriptions = pendingNarratives.map(event => {
@@ -1946,7 +1963,7 @@ router.post('/:sessionId/resume', async (req, res) => {
       pendingNarratives = [];
     }
 
-    let messages = JSON.parse(session.messages || '[]');
+    let messages = safeParse(session.messages, []);
 
     // If there are pending narratives, update the system prompt to include them
     if (pendingNarratives.length > 0) {
@@ -2013,8 +2030,7 @@ router.post('/:sessionId/resume', async (req, res) => {
       downtimeAcknowledged: pendingNarratives.length > 0 ? pendingNarratives.length : 0
     });
   } catch (error) {
-    console.error('Error resuming session:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'resume session');
   }
 });
 
@@ -2044,8 +2060,7 @@ router.post('/:sessionId/pause', async (req, res) => {
       message: 'Adventure paused. You can return to continue where you left off.'
     });
   } catch (error) {
-    console.error('Error pausing session:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'pause session');
   }
 });
 
@@ -2071,8 +2086,7 @@ router.post('/:sessionId/abort', async (req, res) => {
       message: 'Adventure aborted. No rewards have been given and no record has been kept.'
     });
   } catch (error) {
-    console.error('Error aborting session:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'abort session');
   }
 });
 
@@ -2095,7 +2109,7 @@ router.post('/:sessionId/claim', async (req, res) => {
     }
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
-    const rewards = JSON.parse(session.rewards || '{}');
+    const rewards = safeParse(session.rewards, {});
 
     // Apply rewards to character
     const updates = {
@@ -2107,7 +2121,7 @@ router.post('/:sessionId/claim', async (req, res) => {
     };
 
     // Add loot to inventory
-    let inventory = JSON.parse(character.inventory || '[]');
+    let inventory = safeParse(character.inventory, []);
     if (rewards.loot) {
       inventory.push({ name: rewards.loot, quantity: 1 });
     }
@@ -2184,8 +2198,7 @@ router.post('/:sessionId/claim', async (req, res) => {
       hpChange: session.hp_change
     });
   } catch (error) {
-    console.error('Error claiming session rewards:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'claim session rewards');
   }
 });
 
@@ -2198,7 +2211,7 @@ router.delete('/:sessionId', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'delete session');
   }
 });
 
@@ -2219,8 +2232,7 @@ router.delete('/character/:characterId/history', async (req, res) => {
       deletedCount: result.changes
     });
   } catch (error) {
-    console.error('Error clearing session history:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'clear session history');
   }
 });
 
@@ -2234,7 +2246,7 @@ router.post('/:sessionId/extract-npcs', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    const messages = JSON.parse(session.messages || '[]');
+    const messages = safeParse(session.messages, []);
     if (messages.length < 3) {
       return res.json({ extracted: [], message: 'Session too short to extract NPCs' });
     }
@@ -2342,8 +2354,7 @@ If no named NPCs appeared, respond with: NO_NPCS`;
       existingCount: extractedNpcs.filter(n => n.existed).length
     });
   } catch (error) {
-    console.error('Error extracting NPCs from session:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'extract NPCs from session');
   }
 });
 
@@ -2369,7 +2380,7 @@ router.post('/character/:characterId/extract-all-npcs', async (req, res) => {
       try {
         // Make internal call to extract NPCs
         const fullSession = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [session.id]);
-        const messages = JSON.parse(fullSession.messages || '[]');
+        const messages = safeParse(fullSession.messages, []);
 
         if (messages.length < 3) continue;
 
@@ -2470,8 +2481,7 @@ If no named NPCs appeared, respond with: NO_NPCS`;
       npcs: allExtracted
     });
   } catch (error) {
-    console.error('Error extracting NPCs from all sessions:', error);
-    res.status(500).json({ error: error.message });
+    handleServerError(res, error, 'extract NPCs from all sessions');
   }
 });
 

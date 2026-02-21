@@ -15,11 +15,12 @@ export function getTimeMultiplier(hours) {
 
 // Base gold rewards by level (in copper pieces for easier calculation)
 export function getBaseGoldReward(level) {
-  if (level <= 3) return 50; // 50 cp
-  if (level <= 7) return 100; // 10 sp = 100 cp
-  if (level <= 10) return 500; // 50 sp = 500 cp
-  if (level <= 13) return 5000; // 5 gp = 5000 cp
-  if (level <= 16) return 25000; // 25 gp = 25000 cp
+  const l = Math.max(1, Math.min(20, level || 1));
+  if (l <= 3) return 50; // 50 cp
+  if (l <= 7) return 100; // 10 sp = 100 cp
+  if (l <= 10) return 500; // 50 sp = 500 cp
+  if (l <= 13) return 5000; // 5 gp = 5000 cp
+  if (l <= 16) return 25000; // 25 gp = 25000 cp
   return 100000; // 100 gp = 100000 cp (levels 17-20)
 }
 
@@ -34,32 +35,31 @@ export const RISK_MULTIPLIERS = {
 // These represent baseline XP for a standard 8-hour adventure
 export function getBaseXPReward(level) {
   // XP rewards scale with level to match the increasing thresholds
-  // Level 1-4: ~75-100 XP per adventure (need 3-4 adventures to level)
-  // Level 5-10: ~200-400 XP per adventure
-  // Level 11+: ~500-1000+ XP per adventure
-  if (level <= 2) return 75;
-  if (level <= 4) return 150;
-  if (level <= 6) return 300;
-  if (level <= 8) return 500;
-  if (level <= 10) return 750;
-  if (level <= 12) return 1000;
-  if (level <= 14) return 1500;
-  if (level <= 16) return 2000;
-  if (level <= 18) return 3000;
+  const l = Math.max(1, Math.min(20, level || 1));
+  if (l <= 2) return 75;
+  if (l <= 4) return 150;
+  if (l <= 6) return 300;
+  if (l <= 8) return 500;
+  if (l <= 10) return 750;
+  if (l <= 12) return 1000;
+  if (l <= 14) return 1500;
+  if (l <= 16) return 2000;
+  if (l <= 18) return 3000;
   return 4000; // 19-20
 }
 
 // Calculate XP reward
 export function calculateXPReward(currentXP, experienceToNextLevel, riskLevel, timeMultiplier, level = 1) {
   const baseXP = getBaseXPReward(level);
-  const riskMultiplier = RISK_MULTIPLIERS[riskLevel].xp;
-  return Math.floor(baseXP * riskMultiplier * timeMultiplier);
+  const risk = RISK_MULTIPLIERS[riskLevel] || RISK_MULTIPLIERS.medium;
+  return Math.floor(baseXP * risk.xp * timeMultiplier);
 }
 
 // Calculate gold reward (returns object with cp, sp, gp)
 export function calculateGoldReward(level, riskLevel, timeMultiplier) {
   const baseGold = getBaseGoldReward(level);
-  const riskMultiplier = RISK_MULTIPLIERS[riskLevel].gold;
+  const risk = RISK_MULTIPLIERS[riskLevel] || RISK_MULTIPLIERS.medium;
+  const riskMultiplier = risk.gold;
   const totalCopper = Math.floor(baseGold * riskMultiplier * timeMultiplier);
 
   // Convert to gp, sp, cp
@@ -73,8 +73,8 @@ export function calculateGoldReward(level, riskLevel, timeMultiplier) {
 
 // Determine if adventure succeeds or fails (basic version without party synergy)
 export function determineSuccess(riskLevel) {
-  const failureChance = RISK_MULTIPLIERS[riskLevel].failure_chance;
-  return Math.random() > failureChance;
+  const risk = RISK_MULTIPLIERS[riskLevel] || RISK_MULTIPLIERS.medium;
+  return Math.random() > risk.failure_chance;
 }
 
 /**
@@ -82,7 +82,8 @@ export function determineSuccess(riskLevel) {
  * Returns success result plus full odds breakdown for transparency
  */
 export function determineSuccessWithOdds(riskLevel, partyMembers, activityType) {
-  const baseSuccessChance = 1 - RISK_MULTIPLIERS[riskLevel].failure_chance;
+  const risk = RISK_MULTIPLIERS[riskLevel] || RISK_MULTIPLIERS.medium;
+  const baseSuccessChance = 1 - risk.failure_chance;
 
   // Calculate party synergy bonus
   const synergy = calculatePartySynergy(partyMembers, activityType);
@@ -123,7 +124,8 @@ export function determineSuccessWithOdds(riskLevel, partyMembers, activityType) 
  * Get odds preview without rolling (for UI display before starting adventure)
  */
 export function previewOdds(riskLevel, partyMembers, activityType) {
-  const baseSuccessChance = 1 - RISK_MULTIPLIERS[riskLevel].failure_chance;
+  const risk = RISK_MULTIPLIERS[riskLevel] || RISK_MULTIPLIERS.medium;
+  const baseSuccessChance = 1 - risk.failure_chance;
   const synergy = calculatePartySynergy(partyMembers, activityType);
   const modifiedChance = Math.min(0.95, Math.max(0.05, baseSuccessChance + synergy.bonusPercent));
 

@@ -18,6 +18,7 @@ When you create a campaign, the system automatically:
 
 ### Character Management
 - **Character Sheet** — Full D&D 5e characters with race, class, background, stats, equipment, and leveling
+- **Spell Management** — 284 spells (1st-9th level), spell slot tracker, prepared spells (Cleric/Druid/Paladin/Wizard/Artificer), known spells (Bard/Ranger/Sorcerer/Warlock), level-up spell selection with optional swap
 - **Backstory Parser** — AI parses freeform backstories into structured elements (characters, locations, factions, events, story hooks) that feed into campaign generation
 - **Companions** — Track companion characters and their backstories
 - **Downtime** — Manage downtime activities between adventures
@@ -52,6 +53,13 @@ When you create a campaign, the system automatically:
 
 ## Setup
 
+### Prerequisites
+- Node.js (v18 or higher)
+- npm
+- Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
+
+### Installation
+
 1. Install dependencies:
    ```bash
    npm run install-all
@@ -69,6 +77,13 @@ When you create a campaign, the system automatically:
    ```
 
 4. Open http://localhost:5173 in your browser
+
+### Troubleshooting
+
+- **Can't connect:** Ensure ports 3000 (server) and 5173 (client) aren't in use
+- **AI errors:** Verify your `ANTHROPIC_API_KEY` in `.env` and check usage limits at [console.anthropic.com](https://console.anthropic.com)
+- **Database:** SQLite database (`local.db`) is created automatically on first run. Delete to reset all data.
+- **Offline play:** Install [Ollama](https://ollama.ai) and run `ollama pull gemma3:12b` — see [LLM_SETUP.md](LLM_SETUP.md)
 
 ## Scripts
 
@@ -95,9 +110,8 @@ A portable Windows build is available via GitHub Actions — no Node.js installa
 |----------|-------------|
 | [APPLICATION_SUMMARY.md](APPLICATION_SUMMARY.md) | Comprehensive system documentation |
 | [LLM_SETUP.md](LLM_SETUP.md) | AI model configuration (Claude + Ollama) |
-| [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) | Development phases and technical details |
-| [RECENT_IMPROVEMENTS.md](RECENT_IMPROVEMENTS.md) | Latest feature additions |
-| [TEST_RESULTS.md](TEST_RESULTS.md) | System test results |
+| [RECENT_IMPROVEMENTS.md](RECENT_IMPROVEMENTS.md) | Feature development history |
+| [TEST_RESULTS.md](TEST_RESULTS.md) | Test suites and results (650+ assertions) |
 | [FUTURE_FEATURES.md](FUTURE_FEATURES.md) | Planned enhancements |
 
 ## License

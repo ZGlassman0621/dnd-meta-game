@@ -1,5 +1,153 @@
 # Test Results
 
+## Latest: Spell Management System (2026-02-21)
+
+Full spell management system implemented (284 spells, spell slots, prepared/known spell UI, level-up spell selection). This is a frontend-heavy feature using existing backend endpoints — no new test suites added. All existing 9 test suites remain passing from previous run.
+
+**Existing test suites still valid:** 650+ assertions across 9 suites (no backend logic changes that would affect existing tests; the only backend change was adding `newCantrips`/`newSpells`/`swapSpell` handling to the level-up POST endpoint).
+
+---
+
+## A+ All Systems — Defensive Hardening Test Run (2026-02-20)
+
+After deploying safeParse across 11 services (~60 crash vectors eliminated), fixing falsy-zero bugs, adding numeric edge-case guards, fixing silent failures, and adding null guards in tick loops, **all 9 test suites** pass with zero regressions:
+
+| Suite | File | Assertions | Status |
+|-------|------|-----------|--------|
+| Integration | `tests/integration.test.js` | 137 | PASS |
+| Marker Detection | `tests/marker-detection.test.js` | 128 | PASS |
+| Campaign Import | `tests/campaign-import.test.js` | 125 | PASS |
+| Moral Diversity | `tests/moral-diversity.test.js` | 64 | PASS |
+| Companion Skill Checks | `tests/companion-skill-checks.test.js` | 59 | PASS |
+| Condition Tracking | `tests/condition-tracking.test.js` | 56 | PASS |
+| Character Memory | `tests/character-memory.test.js` | 55 | PASS |
+| Combat Tracker | `tests/combat-tracker.test.js` | 26 | PASS |
+| Loot Systems | `tests/loot-systems.test.js` | 4 suites | PASS |
+
+**Total: 650+ assertions across 9 test suites, 0 failures.**
+
+### Changes validated:
+- `safeParse()` utility deployed in: questService, factionService, worldEventService, travelService, livingWorldService, dmSession routes, character routes, companion routes
+- `??` (nullish coalescing) replacing `||` for `power_level` in factionService + livingWorldService
+- Level clamping (1-20) and risk-level fallback in rewards.js
+- `Number.isFinite()` guards in travelService and dmSession routes
+- Quest reward error re-throw in completeQuest()
+- Null guard for deleted factions in processFactionTick()
+- Living world tick error re-throw on total failure
+
+---
+
+## A+ System Audit — Comprehensive Test Run (2026-02-20)
+
+After implementing all 8 A+ upgrades (transaction wrapping, 409 conflict propagation, shared parseMarkerPairs, defensive plan mutations, section allowlist, inventory version locking, comprehensive marker tests, deeper relational records), **every test suite** was run:
+
+| Suite | File | Assertions | Status |
+|-------|------|-----------|--------|
+| Marker Detection | `tests/marker-detection.test.js` | 128 | PASS |
+| Campaign Import | `tests/campaign-import.test.js` | 125 | PASS |
+| Integration | `tests/integration.test.js` | 137 | PASS |
+| Moral Diversity | `tests/moral-diversity.test.js` | 64 | PASS |
+| Companion Skill Checks | `tests/companion-skill-checks.test.js` | 59 | PASS |
+| Condition Tracking | `tests/condition-tracking.test.js` | 56 | PASS |
+| Character Memory | `tests/character-memory.test.js` | 55 | PASS |
+| Combat Tracker | `tests/combat-tracker.test.js` | 26 | PASS |
+| Loot Systems | `tests/loot-systems.test.js` | 4 suites | PASS |
+
+**Total: 650+ assertions across 9 test suites, 0 failures.**
+
+---
+
+## Marker Detection Tests (NEW — 2026-02-20)
+
+**File:** `tests/marker-detection.test.js`
+**Run:** `node tests/marker-detection.test.js`
+**Result: 128 passed, 0 failed**
+
+### Test Summary
+
+| # | Test | Assertions | Status |
+|---|------|-----------|--------|
+| 1 | parseMarkerPairs core parsing | 17 | PASS |
+| 2 | detectMerchantShop | 12 | PASS |
+| 3 | detectMerchantRefer | 9 | PASS |
+| 4 | detectAddItem | 14 | PASS |
+| 5 | detectLootDrop | 9 | PASS |
+| 6 | detectCombatStart | 14 | PASS |
+| 7 | detectCombatEnd | 6 | PASS |
+| 8 | parseNpcJoinMarker | 13 | PASS |
+| 9 | detectConditionChanges (flexible field order) | 19 | PASS |
+| 10 | Detection/stripping consistency | 9 | PASS |
+
+### What Was Tested
+- **parseMarkerPairs**: Double quotes, single quotes, unquoted bare words, spaces around `=`, empty quoted values, mixed formats, key lowercasing
+- **All 7 detection functions**: Standard format, flexible quoting, spaces around `=`, missing required fields, null/empty input, case-insensitive matching
+- **Condition markers**: Reversed field order (`Condition` before `Target`), spaces around `=`, single quotes
+- **Detection/stripping consistency**: Every detected marker is also stripped from displayed narrative (no orphaned brackets)
+
+---
+
+## Previous: System Audit Test Run (2026-02-20)
+
+After implementing 4 initial improvements (relational record creation, optimistic locking, plan validation, marker robustness), all tests pass:
+
+- **Campaign Import**: 125 passed, 0 failed
+- **Moral Diversity**: 64 passed, 0 failed
+- **Integration**: 137 passed, 0 failed
+- **Total: 326 assertions, 0 failures**
+
+---
+
+## Campaign Import Tests (2026-02-20, updated)
+
+**File:** `tests/campaign-import.test.js`
+**Run:** `node tests/campaign-import.test.js`
+**Result: 125 passed, 0 failed**
+
+### Test Summary
+
+| # | Test | Assertions | Status |
+|---|------|-----------|--------|
+| 1 | Minimal import (campaign + character only) | 8 | PASS |
+| 2 | Full import (plan + sessions + companions) | 4 | PASS |
+| 3 | Campaign plan verification | 6 | PASS |
+| 4 | Character data verification | 12 | PASS |
+| 5 | Session history verification | 7 | PASS |
+| 6 | Companion and NPC verification | 9 | PASS |
+| 7 | Validation: missing campaign.name | 2 | PASS |
+| 8 | Import without character section (optional) | 2 | PASS |
+| 9 | Validation: missing character.class | 2 | PASS |
+| 10 | Validation: invalid sessions format | 2 | PASS |
+| 11 | Import with empty sessions array | 2 | PASS |
+| 12 | Import without campaign plan | 3 | PASS |
+| 13 | Imported campaign in campaign list | 4 | PASS |
+| 14 | Validation: companion missing npc.name | 2 | PASS |
+| 15 | Character defaults for missing optional fields | 6 | PASS |
+| 16 | Plan normalizer: missing arrays created | 13 | PASS |
+| 17 | Plan normalizer: alternative field names mapped | 4 | PASS |
+| 18 | Custom plan sections preserved | 12 | PASS |
+| 19 | Plan summary includes extended fields | 8 | PASS |
+| 20 | Plan normalizer: plain events array wrapped | 4 | PASS |
+| 21 | Campaign-only import (no character) | 11 | PASS |
+
+### What Was Tested
+- Minimal import (campaign name + character name/class/race only)
+- Full import with campaign plan, session history, and companions
+- Campaign plan JSON storage and retrieval
+- Character data integrity (stats, equipment, JSON fields, notes, memories)
+- Session history records (status, summaries, game dates)
+- Companion + NPC record creation and linking
+- Input validation (missing required fields, invalid types)
+- Default values for optional character fields
+- Campaign list integration (imported campaigns appear correctly)
+- **Plan normalizer**: Ensures required arrays/objects exist on sparse plans
+- **Alternative field name mapping**: `main_story`→`main_quest`, `characters`→`npcs`, `timeline`→`world_timeline`, etc.
+- **Custom plan sections**: `campaign_metadata`, `dm_directives`, `npc_relationship_system`, `session_continuity`, NPC `voice_guide` and `secrets`
+- **getPlanSummaryForSession**: Extended fields surfaced correctly for DM prompt
+- **Events array wrapping**: Plain `[events]` array auto-wrapped in `{events: [...]}` structure
+- **Campaign-only import**: Import campaign + plan without a character, then build character through the app and assign via campaign details panel
+
+---
+
 ## Moral Diversity & Start Date Tests (2026-02-10)
 
 **File:** `tests/moral-diversity.test.js`

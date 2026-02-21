@@ -23,6 +23,19 @@ export async function generateCampaignPlan(campaignId, characterId) {
     throw new Error('Campaign not found');
   }
 
+  // Protect imported plans from being overwritten by the generation pipeline
+  if (campaign.campaign_plan) {
+    try {
+      const existingPlan = JSON.parse(campaign.campaign_plan);
+      if (existingPlan.imported) {
+        console.log(`Skipping plan generation for campaign ${campaignId} — imported plan exists`);
+        return existingPlan;
+      }
+    } catch (e) {
+      // If plan can't be parsed, proceed with generation
+    }
+  }
+
   const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
   if (!character) {
     throw new Error('Character not found');
@@ -89,7 +102,25 @@ export async function getCampaignPlan(campaignId) {
     return null;
   }
 
-  return JSON.parse(campaign.campaign_plan);
+  try {
+    const plan = JSON.parse(campaign.campaign_plan);
+    // Ensure critical structures exist (guard against malformed stored plans)
+    if (plan && typeof plan === 'object') {
+      if (!plan.npcs) plan.npcs = [];
+      if (!plan.locations) plan.locations = [];
+      if (!plan.factions) plan.factions = [];
+      if (!plan.side_quests) plan.side_quests = [];
+      if (!plan.merchants) plan.merchants = [];
+      if (!plan.themes) plan.themes = [];
+      if (!plan.world_timeline) plan.world_timeline = { events: [] };
+      if (!plan.world_state) plan.world_state = {};
+      if (!plan.dm_notes) plan.dm_notes = {};
+    }
+    return plan;
+  } catch (e) {
+    console.error(`Failed to parse campaign plan for campaign ${campaignId}:`, e.message);
+    return null;
+  }
 }
 
 /**
@@ -99,16 +130,32 @@ export async function getCampaignPlan(campaignId) {
  * @param {object} updates - Updated data for that section
  * @returns {object} Updated campaign plan
  */
+// Sections that are safe for frontend modification
+const ALLOWED_PLAN_SECTIONS = [
+  'main_quest', 'side_quests', 'npcs', 'locations', 'factions',
+  'merchants', 'themes', 'world_timeline', 'world_state', 'dm_notes',
+  'potential_companions', 'session_continuity', 'npc_relationship_system'
+];
+
 export async function updatePlanSection(campaignId, section, updates) {
+  if (!ALLOWED_PLAN_SECTIONS.includes(section)) {
+    throw new Error(`Invalid or protected section: ${section}`);
+  }
+
   const campaign = await dbGet('SELECT campaign_plan FROM campaigns WHERE id = ?', [campaignId]);
   if (!campaign || !campaign.campaign_plan) {
     throw new Error('No campaign plan found');
   }
 
-  const plan = JSON.parse(campaign.campaign_plan);
+  let plan;
+  try {
+    plan = JSON.parse(campaign.campaign_plan);
+  } catch (e) {
+    throw new Error('Campaign plan is corrupted and cannot be updated');
+  }
 
   if (!plan[section]) {
-    throw new Error(`Invalid section: ${section}`);
+    throw new Error(`Section "${section}" not found in plan`);
   }
 
   plan[section] = { ...plan[section], ...updates };
@@ -129,12 +176,25 @@ export async function updatePlanSection(campaignId, section, updates) {
  * @returns {object} Updated campaign plan
  */
 export async function addWorldEvent(campaignId, event) {
+  if (!event || !event.title) {
+    throw new Error('Event title is required');
+  }
+
   const campaign = await dbGet('SELECT campaign_plan FROM campaigns WHERE id = ?', [campaignId]);
   if (!campaign || !campaign.campaign_plan) {
     throw new Error('No campaign plan found');
   }
 
-  const plan = JSON.parse(campaign.campaign_plan);
+  let plan;
+  try {
+    plan = JSON.parse(campaign.campaign_plan);
+  } catch (e) {
+    throw new Error('Campaign plan is corrupted and cannot be updated');
+  }
+
+  // Ensure world_timeline and events array exist
+  if (!plan.world_timeline) plan.world_timeline = { events: [] };
+  if (!Array.isArray(plan.world_timeline.events)) plan.world_timeline.events = [];
 
   const newEvent = {
     ...event,
@@ -160,12 +220,24 @@ export async function addWorldEvent(campaignId, event) {
  * @returns {object} Updated campaign plan
  */
 export async function addNPC(campaignId, npc) {
+  if (!npc || !npc.name) {
+    throw new Error('NPC name is required');
+  }
+
   const campaign = await dbGet('SELECT campaign_plan FROM campaigns WHERE id = ?', [campaignId]);
   if (!campaign || !campaign.campaign_plan) {
     throw new Error('No campaign plan found');
   }
 
-  const plan = JSON.parse(campaign.campaign_plan);
+  let plan;
+  try {
+    plan = JSON.parse(campaign.campaign_plan);
+  } catch (e) {
+    throw new Error('Campaign plan is corrupted and cannot be updated');
+  }
+
+  // Ensure npcs array exists
+  if (!Array.isArray(plan.npcs)) plan.npcs = [];
 
   const newNPC = {
     ...npc,
@@ -570,11 +642,30 @@ export async function getPlanSummaryForSession(campaignId) {
     themes: plan.themes,
     dm_notes: plan.dm_notes ? {
       tone: plan.dm_notes.tone_guidance,
-      twists: plan.dm_notes.planned_twists?.slice(0, 3)
+      twists: plan.dm_notes.potential_twists?.slice(0, 3),
+      backup_hooks: plan.dm_notes.backup_hooks?.slice(0, 3)
     } : null,
     side_quests: plan.side_quests?.slice(0, 3).map(q => ({
       title: q.title,
       description: q.description
+    })),
+    // Extended plan sections (imported campaigns may include these)
+    campaign_metadata: plan.campaign_metadata || null,
+    dm_directives: plan.dm_directives || null,
+    npc_relationship_system: plan.npc_relationship_system || null,
+    session_continuity: plan.session_continuity || null,
+    // Enhanced NPC data with voice guides and secrets for richer DM context
+    detailed_npcs: plan.npcs?.map(n => ({
+      name: n.name,
+      role: n.role,
+      alignment: n.alignment,
+      from_backstory: n.from_backstory,
+      description: n.description,
+      motivation: n.motivation,
+      secrets: n.secrets,
+      location: n.location,
+      relationship_to_player: n.relationship_to_player,
+      voice_guide: n.voice_guide || null
     }))
   };
 }

@@ -73,8 +73,7 @@ router.get('/:id/full', async (req, res) => {
     }
     res.json(journey);
   } catch (error) {
-    console.error('Error fetching journey with encounters:', error);
-    res.status(500).json({ error: 'Failed to fetch journey' });
+    handleServerError(res, error, 'fetch journey with encounters');
   }
 });
 
@@ -92,8 +91,7 @@ router.post('/', async (req, res) => {
     const journey = await travelService.startJourney(req.body);
     res.status(201).json(journey);
   } catch (error) {
-    console.error('Error starting journey:', error);
-    res.status(500).json({ error: 'Failed to start journey' });
+    handleServerError(res, error, 'start journey');
   }
 });
 
@@ -106,8 +104,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(journey);
   } catch (error) {
-    console.error('Error updating journey:', error);
-    res.status(500).json({ error: 'Failed to update journey' });
+    handleServerError(res, error, 'update journey');
   }
 });
 
@@ -125,8 +122,7 @@ router.post('/:id/complete', async (req, res) => {
     }
     res.json(journey);
   } catch (error) {
-    console.error('Error completing journey:', error);
-    res.status(500).json({ error: 'Failed to complete journey' });
+    handleServerError(res, error, 'complete journey');
   }
 });
 
@@ -140,8 +136,7 @@ router.post('/:id/abort', async (req, res) => {
     }
     res.json(journey);
   } catch (error) {
-    console.error('Error aborting journey:', error);
-    res.status(500).json({ error: 'Failed to abort journey' });
+    handleServerError(res, error, 'abort journey');
   }
 });
 
@@ -155,8 +150,7 @@ router.post('/:id/consume-resources', async (req, res) => {
     }
     res.json(journey);
   } catch (error) {
-    console.error('Error consuming resources:', error);
-    res.status(500).json({ error: 'Failed to consume resources' });
+    handleServerError(res, error, 'consume resources');
   }
 });
 
@@ -169,8 +163,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting journey:', error);
-    res.status(500).json({ error: 'Failed to delete journey' });
+    handleServerError(res, error, 'delete journey');
   }
 });
 
@@ -184,8 +177,7 @@ router.get('/:journeyId/encounters', async (req, res) => {
     const encounters = await travelService.getJourneyEncounters(req.params.journeyId);
     res.json(encounters);
   } catch (error) {
-    console.error('Error fetching journey encounters:', error);
-    res.status(500).json({ error: 'Failed to fetch encounters' });
+    handleServerError(res, error, 'fetch journey encounters');
   }
 });
 
@@ -195,8 +187,7 @@ router.get('/:journeyId/encounters/pending', async (req, res) => {
     const encounters = await travelService.getPendingEncounters(req.params.journeyId);
     res.json(encounters);
   } catch (error) {
-    console.error('Error fetching pending encounters:', error);
-    res.status(500).json({ error: 'Failed to fetch encounters' });
+    handleServerError(res, error, 'fetch pending encounters');
   }
 });
 
@@ -215,8 +206,7 @@ router.post('/:journeyId/encounters', async (req, res) => {
     });
     res.status(201).json(encounter);
   } catch (error) {
-    console.error('Error creating encounter:', error);
-    res.status(500).json({ error: 'Failed to create encounter' });
+    handleServerError(res, error, 'create encounter');
   }
 });
 
@@ -229,8 +219,7 @@ router.get('/encounter/:id', async (req, res) => {
     }
     res.json(encounter);
   } catch (error) {
-    console.error('Error fetching encounter:', error);
-    res.status(500).json({ error: 'Failed to fetch encounter' });
+    handleServerError(res, error, 'fetch encounter');
   }
 });
 
@@ -249,8 +238,7 @@ router.post('/encounter/:id/resolve', async (req, res) => {
     }
     res.json(encounter);
   } catch (error) {
-    console.error('Error resolving encounter:', error);
-    res.status(500).json({ error: 'Failed to resolve encounter' });
+    handleServerError(res, error, 'resolve encounter');
   }
 });
 
@@ -269,8 +257,7 @@ router.post('/encounter/:id/avoid', async (req, res) => {
     }
     res.json(encounter);
   } catch (error) {
-    console.error('Error avoiding encounter:', error);
-    res.status(500).json({ error: 'Failed to avoid encounter' });
+    handleServerError(res, error, 'avoid encounter');
   }
 });
 
@@ -283,8 +270,7 @@ router.delete('/encounter/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting encounter:', error);
-    res.status(500).json({ error: 'Failed to delete encounter' });
+    handleServerError(res, error, 'delete encounter');
   }
 });
 
@@ -315,8 +301,7 @@ router.post('/calculate/time', async (req, res) => {
       estimated_cost_gp: cost
     });
   } catch (error) {
-    console.error('Error calculating travel time:', error);
-    res.status(500).json({ error: 'Failed to calculate travel time' });
+    handleServerError(res, error, 'calculate travel time');
   }
 });
 
@@ -328,8 +313,7 @@ router.post('/generate/encounter', async (req, res) => {
     const encounter = travelService.generateRandomEncounter(route_type, danger_level);
     res.json(encounter);
   } catch (error) {
-    console.error('Error generating encounter:', error);
-    res.status(500).json({ error: 'Failed to generate encounter' });
+    handleServerError(res, error, 'generate encounter');
   }
 });
 
@@ -345,8 +329,7 @@ router.post('/check/encounter', async (req, res) => {
     const result = travelService.checkForEncounter(danger_level, hours_elapsed, route_type);
     res.json(result);
   } catch (error) {
-    console.error('Error checking for encounter:', error);
-    res.status(500).json({ error: 'Failed to check for encounter' });
+    handleServerError(res, error, 'check for encounter');
   }
 });
 

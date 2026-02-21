@@ -2,7 +2,7 @@ import { useState } from 'react'
 import classesData from '../data/classes.json'
 import racesData from '../data/races.json'
 import deitiesData from '../data/deities.json'
-import spellsData from '../data/spells.json'
+import spellsData from '../data/spells/index.js'
 
 const ALIGNMENTS = [
   { value: 'LG', label: 'Lawful Good' },

@@ -24,23 +24,35 @@ import {
 // ============================================================
 
 /**
+ * Shared key="value" pair parser for AI markers.
+ * Handles: spaces around =, single/double quotes, empty values, unquoted bare words.
+ */
+export function parseMarkerPairs(markerContent) {
+  const data = {};
+  // Match: Key="value", Key='value', Key=bareword
+  const pairRegex = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g;
+  let match;
+  while ((match = pairRegex.exec(markerContent)) !== null) {
+    const key = match[1].toLowerCase();
+    const value = match[2] ?? match[3] ?? match[4] ?? '';
+    data[key] = value;
+  }
+  return data;
+}
+
+/**
  * Parse the structured NPC_WANTS_TO_JOIN marker from AI response
  */
 export function parseNpcJoinMarker(narrative) {
   const markerMatch = narrative.match(/\[NPC_WANTS_TO_JOIN:\s*([^\]]+)\]/i);
   if (!markerMatch) return null;
 
-  const markerContent = markerMatch[1];
-  const npcData = {};
+  const npcData = parseMarkerPairs(markerMatch[1]);
 
-  const pairRegex = /(\w+)="([^"]+)"/g;
-  let match;
-  while ((match = pairRegex.exec(markerContent)) !== null) {
-    const key = match[1].toLowerCase();
-    npcData[key] = match[2];
+  if (!npcData.name) {
+    console.warn('[Marker] NPC_WANTS_TO_JOIN detected but missing Name field:', markerMatch[0]);
+    return null;
   }
-
-  if (!npcData.name) return null;
 
   return {
     detected: true,
@@ -65,14 +77,11 @@ export function detectMerchantShop(narrative) {
   const markerMatch = narrative.match(/\[MERCHANT_SHOP:\s*([^\]]+)\]/i);
   if (!markerMatch) return null;
 
-  const markerContent = markerMatch[1];
-  const data = {};
-  const pairRegex = /(\w+)="([^"]+)"/g;
-  let match;
-  while ((match = pairRegex.exec(markerContent)) !== null) {
-    data[match[1].toLowerCase()] = match[2];
+  const data = parseMarkerPairs(markerMatch[1]);
+  if (!data.merchant) {
+    console.warn('[Marker] MERCHANT_SHOP detected but missing Merchant field:', markerMatch[0]);
+    return null;
   }
-  if (!data.merchant) return null;
 
   return {
     detected: true,
@@ -91,14 +100,11 @@ export function detectMerchantRefer(narrative) {
   const markerMatch = narrative.match(/\[MERCHANT_REFER:\s*([^\]]+)\]/i);
   if (!markerMatch) return null;
 
-  const markerContent = markerMatch[1];
-  const data = {};
-  const pairRegex = /(\w+)="([^"]+)"/g;
-  let match;
-  while ((match = pairRegex.exec(markerContent)) !== null) {
-    data[match[1].toLowerCase()] = match[2];
+  const data = parseMarkerPairs(markerMatch[1]);
+  if (!data.to || !data.item) {
+    console.warn('[Marker] MERCHANT_REFER detected but missing To/Item field:', markerMatch[0]);
+    return null;
   }
-  if (!data.to || !data.item) return null;
 
   return {
     fromMerchant: data.from || null,
@@ -117,19 +123,7 @@ export function detectAddItem(narrative) {
   const regex = /\[ADD_ITEM:\s*([^\]]+)\]/gi;
   let markerMatch;
   while ((markerMatch = regex.exec(narrative)) !== null) {
-    const markerContent = markerMatch[1];
-    const data = {};
-    const pairRegex = /(\w+)="([^"]+)"/g;
-    let match;
-    while ((match = pairRegex.exec(markerContent)) !== null) {
-      data[match[1].toLowerCase()] = match[2];
-    }
-    // Also parse non-quoted numeric values like Price_GP=15
-    const numRegex = /(\w+)=(\d+(?:\.\d+)?)/g;
-    while ((match = numRegex.exec(markerContent)) !== null) {
-      const key = match[1].toLowerCase();
-      if (!data[key]) data[key] = match[2];
-    }
+    const data = parseMarkerPairs(markerMatch[1]);
 
     if (data.name) {
       markers.push({
@@ -139,6 +133,8 @@ export function detectAddItem(narrative) {
         category: data.category || 'adventuring_gear',
         description: data.description || ''
       });
+    } else {
+      console.warn('[Marker] ADD_ITEM detected but missing Name field:', markerMatch[0]);
     }
   }
   return markers;
@@ -155,18 +151,14 @@ export function detectLootDrop(narrative) {
   const regex = /\[LOOT_DROP:\s*([^\]]+)\]/gi;
   let markerMatch;
   while ((markerMatch = regex.exec(narrative)) !== null) {
-    const markerContent = markerMatch[1];
-    const data = {};
-    const pairRegex = /(\w+)="([^"]+)"/g;
-    let match;
-    while ((match = pairRegex.exec(markerContent)) !== null) {
-      data[match[1].toLowerCase()] = match[2];
-    }
+    const data = parseMarkerPairs(markerMatch[1]);
     if (data.item) {
       drops.push({
         item: data.item,
         source: data.source || 'found'
       });
+    } else {
+      console.warn('[Marker] LOOT_DROP detected but missing Item field:', markerMatch[0]);
     }
   }
   return drops;
@@ -182,14 +174,10 @@ export function detectCombatStart(narrative) {
   const match = regex.exec(narrative);
   if (!match) return { detected: false };
 
-  const markerContent = match[1];
-  const pairRegex = /(\w+)="([^"]+)"/g;
-  let pairMatch;
+  const data = parseMarkerPairs(match[1]);
   let enemies = [];
-  while ((pairMatch = pairRegex.exec(markerContent)) !== null) {
-    if (pairMatch[1].toLowerCase() === 'enemies') {
-      enemies = pairMatch[2].split(',').map(e => e.trim()).filter(Boolean);
-    }
+  if (data.enemies) {
+    enemies = data.enemies.split(',').map(e => e.trim()).filter(Boolean);
   }
 
   return { detected: true, enemies };

@@ -108,6 +108,16 @@ input, select, textarea {
   font-size: 1rem;
 }
 
+select option {
+  background: #2c2c2c;
+  color: #e4e4e4;
+}
+
+select optgroup {
+  background: #2c2c2c;
+  color: #f39c12;
+}
+
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: #f39c12;
@@ -4498,6 +4508,11 @@ input:focus, select:focus, textarea:focus {
 
 .review-features-list li {
   margin-bottom: 0.25rem;
+}
+
+/* Spell option hover in level-up */
+.spell-option-row:hover {
+  background: rgba(168, 85, 247, 0.15);
 }
 
 /* Level Up Button - Glowing Animation */

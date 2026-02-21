@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { safeParse } from '../utils/safeParse.js';
 
 /**
  * World Event Service - CRUD operations for world events and event effects
@@ -497,19 +498,19 @@ export async function processEventTick(campaignId, gameDaysPassed = 1) {
 function parseEventJson(event) {
   return {
     ...event,
-    affected_locations: JSON.parse(event.affected_locations || '[]'),
-    affected_factions: JSON.parse(event.affected_factions || '[]'),
-    stages: JSON.parse(event.stages || '[]'),
-    stage_descriptions: JSON.parse(event.stage_descriptions || '[]'),
-    discovered_by_characters: JSON.parse(event.discovered_by_characters || '[]'),
-    possible_outcomes: JSON.parse(event.possible_outcomes || '[]'),
-    player_intervention_options: JSON.parse(event.player_intervention_options || '[]')
+    affected_locations: safeParse(event.affected_locations, []),
+    affected_factions: safeParse(event.affected_factions, []),
+    stages: safeParse(event.stages, []),
+    stage_descriptions: safeParse(event.stage_descriptions, []),
+    discovered_by_characters: safeParse(event.discovered_by_characters, []),
+    possible_outcomes: safeParse(event.possible_outcomes, []),
+    player_intervention_options: safeParse(event.player_intervention_options, [])
   };
 }
 
 function parseEffectJson(effect) {
   return {
     ...effect,
-    parameters: JSON.parse(effect.parameters || '{}')
+    parameters: safeParse(effect.parameters, {})
   };
 }

@@ -2106,7 +2106,7 @@
     },
     "spellcasting": {
       "ability": "int",
-      "spellsKnown": "All prepared",
+      "spellsKnown": "Spellbook",
       "cantripsKnown": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
     },
     "features": [
@@ -2427,7 +2427,7 @@
     },
     "spellcasting": {
       "ability": "int",
-      "spellsKnown": "Limited known",
+      "spellsKnown": "All prepared",
       "cantripsKnown": [2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4]
     },
     "features": [
