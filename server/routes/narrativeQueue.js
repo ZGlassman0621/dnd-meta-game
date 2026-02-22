@@ -7,6 +7,7 @@
 
 import express from 'express';
 import * as narrativeQueueService from '../services/narrativeQueueService.js';
+import { dbAll } from '../database.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -150,6 +151,34 @@ router.delete('/:itemId', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     handleServerError(res, err, 'delete narrative item');
+  }
+});
+
+/**
+ * Get NPC mail items (delivered + pending) for a character
+ * GET /api/narrative-queue/character/:characterId/mail
+ */
+router.get('/character/:characterId/mail', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const { limit = 50 } = req.query;
+
+    // Get both delivered and pending NPC mail items
+    const allItems = await dbAll(`
+      SELECT * FROM narrative_queue
+      WHERE character_id = ? AND event_type LIKE 'npc_%'
+      ORDER BY
+        CASE status WHEN 'pending' THEN 0 WHEN 'delivered' THEN 1 ELSE 2 END,
+        created_at DESC
+      LIMIT ?
+    `, [characterId, parseInt(limit)]);
+
+    res.json((allItems || []).map(item => ({
+      ...item,
+      context: JSON.parse(item.context || '{}')
+    })));
+  } catch (err) {
+    handleServerError(res, err, 'fetch NPC mail');
   }
 });
 

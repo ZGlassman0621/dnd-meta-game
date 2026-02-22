@@ -111,6 +111,150 @@ The following features were previously tracked here and have been built:
 - **Context-Aware Rest Narratives** (2026-02-11) — AI generates atmospheric rest descriptions based on current session context; mechanical results show immediately
 - **Condition & Status Effect Tracking** (2026-02-11) — 15 D&D 5e conditions + exhaustion 1-6; slide-in panel, info bar chips, AI markers, auto-clear on rest/combat end
 - **Companion Management During Sessions** (2026-02-11) — CompanionsPanel extracted from DMSession; compact companion cards with HP, abilities, equipment accessible during gameplay
+- **Story Chronicle System** (2026-02-21) — Structured canon fact database (`canon_facts` table), session chronicles (`story_chronicles` table), context window management with sliding window compression, adaptive AI context budgeting (2K-8K tokens), priority-ordered fact retrieval (deaths > promises > critical > quest > recent), Chronicle tab in Player Journal with timeline/search/edit, Chronicle stats on Meta Game Dashboard, unlimited campaign notes/character memories/NPC name storage
+- **Homebrew Class Expansion** (2026-02-21) — Added Blood Hunter (4 subclasses), Pugilist (7 subclasses), Warlord (6 subclasses) as full classes; added Forgewright and Warsmith Artificer subclasses, Path of the Witch Hunter and Path of the Dragon Barbarian subclasses, Spellwarden Fighter subclass, Wealth and Stone Domain Cleric subclasses, School of Theurgy Wizard subclass, Surgeon Rogue subclass (16 classes, 151 total subclasses)
+- **NPC Conversation Memory** (2026-02-21) — `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session; extracted via chronicle AI prompt at session end; last 2 conversations per NPC injected into DM prompt under NPC RELATIONSHIPS section
+- **Companion Emotional State** (2026-02-21) — Mood columns on `companion_backstories` (mood, mood_cause, mood_intensity 1-5, mood_set_game_day); 10 mood states (content, anxious, angry, sad, fearful, excited, conflicted, grateful, resentful, exhausted); intensity decays by 1 per 2 game days; mood + RP guidance injected into DM prompt companion section
+
+---
+
+## Consequence Automation
+
+**Priority:** High (Next build)
+**Identified:** 2026-02-21
+
+### Problem
+Broken promises and ignored quests have no automatic consequences. NPCs should remember and react when the player fails to follow through.
+
+### Desired Behavior
+- Broken promises auto-trigger NPC disposition decreases
+- Ignored quests escalate (bandits attack the village, the hostage is killed, etc.)
+- Faction standing changes based on player actions and inactions
+- Canon facts about promises feed directly into consequence triggers
+
+### Files to Modify
+- `server/services/storyChronicleService.js` — Add promise expiration/broken detection
+- `server/services/npcRelationshipService.js` — Auto-update disposition on broken promises
+- `server/services/questService.js` — Quest escalation timers
+
+---
+
+## Crafting System
+
+**Priority:** Medium
+**Identified:** 2026-02-21
+
+### Problem
+Characters have artisan tools and crafting proficiencies but no crafting mechanic.
+
+### Desired Behavior
+- Use artisan tools to create items during downtime
+- Recipe system: known recipes + discoverable recipes
+- Material gathering from exploration and combat loot
+- Quality outcomes based on skill checks and tool proficiency
+- Upgrade existing equipment (add enchantments, improve quality)
+
+---
+
+## Weather & Time of Day
+
+**Priority:** Medium
+**Identified:** 2026-02-21
+
+### Problem
+No weather or time-of-day tracking. All scenes happen in generic conditions.
+
+### Desired Behavior
+- Weather system: clear, rain, storm, snow, fog, etc.
+- Seasonal weather patterns based on Harptos calendar
+- Time of day affects NPC availability (shops closed at night, taverns busy at evening)
+- Weather affects travel speed, visibility, and encounter types
+- Spell effects interact with weather (e.g., Call Lightning in a storm)
+
+---
+
+## Procedural Dungeon Generation
+
+**Priority:** Medium
+**Identified:** 2026-02-21
+
+### Problem
+No multi-room dungeon exploration with spatial awareness.
+
+### Desired Behavior
+- Generate dungeon layouts with rooms, corridors, doors, traps, and treasures
+- Room-by-room exploration with state tracking (visited, cleared, locked)
+- Dungeon map display showing explored areas
+- Encounters tied to specific rooms
+- Keys, puzzles, and locked doors creating exploration objectives
+
+---
+
+## Visual World Map
+
+**Priority:** Low
+**Identified:** 2026-02-21
+
+### Problem
+No visual representation of the game world. Players can't see where they are or where they've been.
+
+### Desired Behavior
+- Location markers on a stylized map
+- Fog of war for unexplored areas
+- Travel routes between discovered locations
+- Click-to-travel for known destinations
+- Notable event markers on the map
+
+---
+
+## Tavern Mini-games
+
+**Priority:** Low
+**Identified:** 2026-02-21
+
+### Problem
+No structured mini-games for social downtime in taverns and inns.
+
+### Desired Behavior
+- Dice games (Liar's Dice, Three Dragon Ante)
+- Card games with NPC opponents
+- Drinking contests with Constitution checks
+- Gambling with gold stakes
+- Win/loss affects NPC relationships
+
+---
+
+## Economy Simulation
+
+**Priority:** Low
+**Identified:** 2026-02-21
+
+### Problem
+Prices are static. Merchants always have the same prices regardless of supply, demand, or world events.
+
+### Desired Behavior
+- Supply and demand affects prices (war = expensive weapons, plague = expensive potions)
+- Merchant memory (merchants remember past transactions)
+- Price fluctuation based on world events
+- Regional price differences (coastal cities have cheaper fish, mountain towns have cheaper ore)
+- Bulk discount/markup for large transactions
+
+---
+
+## Legacy System
+
+**Priority:** Low
+**Identified:** 2026-02-21
+
+### Problem
+Retired or dead characters have no lasting impact on the world for new characters.
+
+### Desired Behavior
+- Retired characters become NPCs in the world
+- Dead characters' graves/monuments can be discovered
+- Previous characters' actions are reflected in world state
+- Items left behind can be found by new characters
+- Legends and stories about previous characters circulate among NPCs
 
 ---
 

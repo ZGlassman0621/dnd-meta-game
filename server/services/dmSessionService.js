@@ -640,12 +640,7 @@ export async function appendCampaignNotes(characterId, existingNotes, newNotes, 
   const newNotesSection = `\n\n--- Session: ${sessionTitle} (${sessionDate.formatted}) ---\n${newNotes}`;
 
   let updatedNotes = existingNotes + newNotesSection;
-  if (updatedNotes.length > 10000) {
-    const trimPoint = updatedNotes.indexOf('\n--- Session:', 2000);
-    if (trimPoint > 0) {
-      updatedNotes = '[Earlier notes trimmed...]\n' + updatedNotes.substring(trimPoint);
-    }
-  }
+  // No cap — unlimited disk storage. Chronicle system handles what the AI sees.
 
   await dbRun('UPDATE characters SET campaign_notes = ? WHERE id = ?', [updatedNotes, characterId]);
   return updatedNotes;
@@ -749,33 +744,7 @@ export async function updateCharacterMemories(characterId, existingMemories, ext
     }
   }
 
-  // Soft cap: if over 3KB, don't save additions (but updates are always saved)
-  if (updated.length > 3000 && updated.length > existing.length + 50) {
-    console.log(`Character memories for ${characterId} at ${updated.length} chars, near cap — keeping updates only`);
-    // Still save updates to existing memories, just don't add new ones
-    // Re-parse with only the UPDATED section applied
-    let updatesOnly = existing;
-    if (updatedSection) {
-      const updateLines = updatedSection[1].split('\n').filter(l => l.trim().startsWith('- OLD:'));
-      for (const line of updateLines) {
-        const match = line.match(/- OLD:\s*(.+?)\s*→\s*NEW:\s*(.+)/i);
-        if (match) {
-          const oldText = match[1].trim();
-          const newText = match[2].trim();
-          const existingLines = updatesOnly.split('\n');
-          for (let i = 0; i < existingLines.length; i++) {
-            const cleanLine = existingLines[i].replace(/^- /, '').trim();
-            if (cleanLine && (oldText.includes(cleanLine.substring(0, 20)) || cleanLine.includes(oldText.substring(0, 20)))) {
-              existingLines[i] = `- ${newText}`;
-              break;
-            }
-          }
-          updatesOnly = existingLines.join('\n');
-        }
-      }
-    }
-    updated = updatesOnly;
-  }
+  // No cap — unlimited disk storage. Chronicle system handles what the AI sees.
 
   await dbRun('UPDATE characters SET character_memories = ? WHERE id = ?', [updated, characterId]);
   return updated;
@@ -791,7 +760,7 @@ export async function updateCharacterMemories(characterId, existingMemories, ext
 export function buildNpcExtractionPrompt() {
   return `List ALL named NPCs (non-player characters) who appeared in this session. For each NPC, provide their details in this EXACT format, one per line:
 
-NPC: Name="Full Name" Race="Race" Gender="Male/Female/Other" Occupation="Their role or job" Location="Where encountered" Relationship="ally/neutral/enemy/unknown" Description="One sentence physical or personality description"
+NPC: Name="Full Name" Race="Race" Gender="Male/Female/Other" Occupation="Their role or job" Location="Where encountered" Relationship="ally/neutral/enemy/unknown" Description="One sentence physical or personality description" Voice="speech pattern, accent, verbal tics" Appearance="notable physical features, clothing, distinguishing marks" Personality="core personality trait observed" Mannerism="distinctive gesture or habit" Motivation="what they seem to want or care about"
 
 Rules:
 - Only include NPCs with actual names (not "the guard" or "a merchant")
@@ -799,12 +768,15 @@ Rules:
 - Use "unknown" for any field you're not sure about
 - Do not include the player characters
 - Include ALL named characters, even minor ones
+- Voice/Appearance/Personality/Mannerism/Motivation are OPTIONAL — only include them if the NPC demonstrated these traits during the session. Use "unknown" or omit for NPCs who were only mentioned or briefly encountered.
 
 If no named NPCs appeared, respond with: NO_NPCS`;
 }
 
 /**
- * Parse NPC extraction response and save to database
+ * Parse NPC extraction response and save to database.
+ * Uses fill-not-overwrite strategy: personality fields are only written
+ * if the NPC's current value is NULL. Each enrichment increments enrichment_level.
  */
 export async function saveExtractedNpcs(npcResponse, sessionTitle) {
   const extractedNpcs = [];
@@ -829,14 +801,70 @@ export async function saveExtractedNpcs(npcResponse, sessionTitle) {
     const relationship = parseField('Relationship') || 'neutral';
     const description = parseField('Description');
 
-    const existing = await dbGet('SELECT id FROM npcs WHERE name = ?', [name]);
+    // New personality/appearance fields
+    const voice = parseField('Voice');
+    const appearance = parseField('Appearance');
+    const personality = parseField('Personality');
+    const mannerism = parseField('Mannerism');
+    const motivation = parseField('Motivation');
+
+    const validVal = (v) => v && v !== 'unknown' && v.trim() !== '';
+
+    const existing = await dbGet(
+      'SELECT id, voice, personality_trait_1, mannerism, motivation, distinguishing_features, enrichment_level FROM npcs WHERE name = ?',
+      [name]
+    );
+
     if (existing) {
-      if (location && location !== 'unknown') {
-        await dbRun(
-          'UPDATE npcs SET current_location = ? WHERE id = ? AND (current_location IS NULL OR current_location = "")',
-          [location, existing.id]
-        );
+      // Fill-not-overwrite: only update fields that are currently NULL
+      const updates = [];
+      const values = [];
+
+      // Always update location (NPCs move)
+      if (validVal(location)) {
+        updates.push('current_location = ?');
+        values.push(location);
       }
+
+      // Fill personality fields only if currently NULL
+      if (validVal(voice) && !existing.voice) {
+        updates.push('voice = ?');
+        values.push(voice);
+      }
+      if (validVal(personality) && !existing.personality_trait_1) {
+        updates.push('personality_trait_1 = ?');
+        values.push(personality);
+      }
+      if (validVal(mannerism) && !existing.mannerism) {
+        updates.push('mannerism = ?');
+        values.push(mannerism);
+      }
+      if (validVal(motivation) && !existing.motivation) {
+        updates.push('motivation = ?');
+        values.push(motivation);
+      }
+      if (validVal(appearance) && !existing.distinguishing_features) {
+        updates.push('distinguishing_features = ?');
+        values.push(appearance);
+      }
+
+      // Increment enrichment_level if we actually filled any personality fields
+      const personalityFieldsFilled = updates.filter(u =>
+        u.startsWith('voice') || u.startsWith('personality_trait_1') ||
+        u.startsWith('mannerism') || u.startsWith('motivation') ||
+        u.startsWith('distinguishing_features')
+      ).length;
+
+      if (personalityFieldsFilled > 0) {
+        updates.push('enrichment_level = ?');
+        values.push((existing.enrichment_level || 0) + 1);
+      }
+
+      if (updates.length > 0) {
+        values.push(existing.id);
+        await dbRun(`UPDATE npcs SET ${updates.join(', ')} WHERE id = ?`, values);
+      }
+
       extractedNpcs.push({ id: existing.id, name, race, occupation, existing: true });
       continue;
     }
@@ -845,8 +873,10 @@ export async function saveExtractedNpcs(npcResponse, sessionTitle) {
       INSERT INTO npcs (
         name, race, gender, occupation, current_location,
         relationship_to_party, campaign_availability,
-        distinguishing_marks, background_notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        distinguishing_marks, background_notes,
+        voice, personality_trait_1, mannerism, motivation, distinguishing_features,
+        enrichment_level
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       name,
       race !== 'unknown' ? race : 'Human',
@@ -856,7 +886,13 @@ export async function saveExtractedNpcs(npcResponse, sessionTitle) {
       relationship !== 'unknown' ? relationship : 'neutral',
       'available',
       description !== 'unknown' ? description : null,
-      `First encountered in session: ${sessionTitle}`
+      `First encountered in session: ${sessionTitle}`,
+      validVal(voice) ? voice : null,
+      validVal(personality) ? personality : null,
+      validVal(mannerism) ? mannerism : null,
+      validVal(motivation) ? motivation : null,
+      validVal(appearance) ? appearance : null,
+      (validVal(voice) || validVal(personality) || validVal(mannerism) || validVal(motivation) || validVal(appearance)) ? 1 : 0
     ]);
 
     extractedNpcs.push({ id: Number(result.lastInsertRowid), name, race, occupation });
@@ -907,9 +943,7 @@ export async function extractAndTrackUsedNames(messages, characterId) {
     }
   }
 
-  if (campaignConfig.usedNames.length > 50) {
-    campaignConfig.usedNames = campaignConfig.usedNames.slice(-50);
-  }
+  // No cap — store all NPC names ever encountered.
 
   await dbRun('UPDATE characters SET campaign_config = ? WHERE id = ?', [JSON.stringify(campaignConfig), characterId]);
 }

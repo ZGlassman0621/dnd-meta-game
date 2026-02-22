@@ -6,7 +6,7 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { on, GAME_EVENTS } from './eventEmitter.js';
+import { on, emit, GAME_EVENTS } from './eventEmitter.js';
 import { REQUIREMENT_TYPES, getRequirementTypesForEvent } from '../config/eventTypes.js';
 import * as questService from './questService.js';
 import * as narrativeQueueService from './narrativeQueueService.js';
@@ -99,6 +99,17 @@ export async function checkQuestProgress(characterId, event) {
 
         // Add quest completion to narrative queue
         await narrativeQueueService.addQuestCompleted(characterId, updatedQuest);
+
+        // Emit QUEST_COMPLETED game event for achievement tracking
+        await emit(GAME_EVENTS.QUEST_COMPLETED, {
+          character_id: characterId,
+          quest_id: quest.id,
+          quest_title: quest.title,
+          quest_type: quest.quest_type,
+          source_type: quest.source_type,
+          source_id: quest.source_id,
+          rewards: quest.rewards
+        });
 
         console.log(`Quest completed: "${quest.title}"`);
       } else {

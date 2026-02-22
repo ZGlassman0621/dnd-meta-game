@@ -405,6 +405,97 @@ export async function deleteBackstoryByCompanionId(companionId) {
 }
 
 // ============================================================
+// MOOD SYSTEM
+// ============================================================
+
+const VALID_MOODS = ['content', 'anxious', 'angry', 'sad', 'fearful', 'excited', 'conflicted', 'grateful', 'resentful', 'exhausted'];
+
+const MOOD_RP_GUIDANCE = {
+  content: 'Roleplay normally based on personality traits',
+  anxious: 'Nervous, second-guessing, seeking reassurance',
+  angry: 'Short-tempered, confrontational, holding a grudge',
+  sad: 'Quiet, withdrawn, mentioning what they lost',
+  fearful: 'Reluctant, cautious, urging retreat',
+  excited: 'Eager, talkative, overconfident',
+  conflicted: 'Hesitant, voicing doubts, asking moral questions',
+  grateful: 'Warm, supportive, going extra mile for the party',
+  resentful: 'Cold, passive-aggressive, bringing up grievances',
+  exhausted: 'Slow, unfocused, asking for rest, making mistakes'
+};
+
+/**
+ * Set a companion's mood
+ */
+export async function setMood(companionId, mood, cause, intensity, gameDaySet) {
+  if (!VALID_MOODS.includes(mood)) {
+    mood = 'content';
+  }
+  intensity = Math.max(1, Math.min(5, intensity || 1));
+
+  const backstory = await getOrCreateBackstory(companionId);
+
+  await dbRun(`
+    UPDATE companion_backstories SET
+      mood = ?, mood_cause = ?, mood_intensity = ?, mood_set_game_day = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `, [mood, cause, intensity, gameDaySet, backstory.id]);
+
+  return getBackstoryById(backstory.id);
+}
+
+/**
+ * Decay moods for all active companions of a character.
+ * Intensity decays by 1 per 2 game days elapsed.
+ * Resets to 'content' when intensity reaches 0.
+ */
+export async function decayMoods(characterId, currentGameDay) {
+  if (!currentGameDay) return;
+
+  // Get all active companions for this character with non-content moods
+  const companions = await dbAll(`
+    SELECT cb.id, cb.companion_id, cb.mood, cb.mood_intensity, cb.mood_set_game_day
+    FROM companion_backstories cb
+    JOIN companions c ON cb.companion_id = c.id
+    WHERE c.recruited_by_character_id = ? AND c.status = 'active'
+    AND cb.mood IS NOT NULL AND cb.mood != 'content'
+    AND cb.mood_set_game_day IS NOT NULL
+  `, [characterId]);
+
+  for (const comp of companions) {
+    const daysElapsed = currentGameDay - (comp.mood_set_game_day || currentGameDay);
+    if (daysElapsed <= 0) continue;
+
+    const decay = Math.floor(daysElapsed / 2);
+    const newIntensity = (comp.mood_intensity || 1) - decay;
+
+    if (newIntensity <= 0) {
+      // Reset to content
+      await dbRun(`
+        UPDATE companion_backstories SET
+          mood = 'content', mood_cause = NULL, mood_intensity = 1, mood_set_game_day = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [comp.id]);
+    } else if (newIntensity < comp.mood_intensity) {
+      // Reduce intensity
+      await dbRun(`
+        UPDATE companion_backstories SET
+          mood_intensity = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [newIntensity, comp.id]);
+    }
+  }
+}
+
+/**
+ * Get RP guidance string for a mood
+ */
+export function getMoodRPGuidance(mood) {
+  return MOOD_RP_GUIDANCE[mood] || MOOD_RP_GUIDANCE.content;
+}
+
+// ============================================================
 // HELPER FUNCTIONS
 // ============================================================
 

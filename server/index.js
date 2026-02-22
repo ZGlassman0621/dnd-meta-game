@@ -23,6 +23,8 @@ import travelRoutes from './routes/travel.js';
 import npcRelationshipRoutes from './routes/npcRelationship.js';
 import livingWorldRoutes from './routes/livingWorld.js';
 import dmModeRoutes from './routes/dmMode.js';
+import achievementRoutes from './routes/achievement.js';
+import chronicleRoutes from './routes/chronicle.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,8 +49,8 @@ app.use(express.static(clientDistPath));
 // Initialize database (async for Turso cloud)
 await initDatabase();
 
-// Initialize narrative systems (event handlers for quests, companions, etc.)
-initNarrativeSystems();
+// Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
+await initNarrativeSystems();
 
 // Routes
 app.use('/api/character', characterRoutes);
@@ -70,6 +72,8 @@ app.use('/api/travel', travelRoutes);
 app.use('/api/npc-relationship', npcRelationshipRoutes);
 app.use('/api/living-world', livingWorldRoutes);
 app.use('/api/dm-mode', dmModeRoutes);
+app.use('/api/achievement', achievementRoutes);
+app.use('/api/chronicle', chronicleRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });

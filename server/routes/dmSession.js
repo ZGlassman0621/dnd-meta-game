@@ -9,7 +9,7 @@ import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSession
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
 import { getCharacterWorldView } from '../services/livingWorldService.js';
 import { getActiveFactions } from '../services/factionService.js';
-import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
+import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from '../services/npcRelationshipService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
@@ -28,6 +28,13 @@ import { lookupItemByName } from '../data/merchantLootTables.js';
 import { getLootTableForLevel } from '../config/rewards.js';
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
+import { generateSessionChronicle, getRelevantContext } from '../services/storyChronicleService.js';
+import { decayMoods } from '../services/companionBackstoryService.js';
+import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
+import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
+import { getAwayCompanions } from '../services/companionActivityService.js';
+import { processAbsenceEffects } from '../services/npcAgingService.js';
+import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget } from '../utils/contextManager.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -442,9 +449,12 @@ router.post('/start', async (req, res) => {
              n.stat_block, n.cr, n.ac, n.hp, n.speed, n.ability_scores as npc_ability_scores,
              n.skills as npc_skills, c.skill_proficiencies,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice, n.mannerism,
-             n.motivation, n.background_notes, n.relationship_to_party
+             n.motivation, n.background_notes, n.relationship_to_party,
+             cb.mood as companion_mood, cb.mood_cause as companion_mood_cause,
+             cb.mood_intensity as companion_mood_intensity
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
+      LEFT JOIN companion_backstories cb ON cb.companion_id = c.id
       WHERE c.recruited_by_character_id = ? AND c.status = 'active'
     `, [characterId]);
 
@@ -528,8 +538,8 @@ router.post('/start', async (req, res) => {
         }
       }
 
-      // Limit to 30 names to avoid prompt bloat
-      usedNames = [...new Set(usedNames)].slice(0, 30);
+      // Deduplicate — no cap, store all names
+      usedNames = [...new Set(usedNames)];
     } catch (e) {
       console.error('Error extracting used names:', e);
       usedNames = [];
@@ -584,10 +594,97 @@ router.post('/start', async (req, res) => {
           visibleEvents: visibleEvents || [],
           npcRelationships: npcRelationships || [],
           discoveredLocations: discoveredLocations || [],
-          activeFactions: activeFactions || []
+          activeFactions: activeFactions || [],
+          currentGameDay: character.game_day || null
         };
       } catch (e) {
         console.error('Error gathering world state for session:', e);
+      }
+    }
+
+    // Get story chronicle context (canon facts for AI prompt)
+    let chronicleContext = '';
+    if (character.campaign_id) {
+      try {
+        // Build hints from current session context
+        const hints = {
+          location: startingLocation?.name || null,
+          npcs: [],
+          quests: []
+        };
+        // Extract NPC names from world state relationships
+        if (worldState?.npcRelationships) {
+          hints.npcs = worldState.npcRelationships.slice(0, 10).map(r => r.npc_name).filter(Boolean);
+        }
+
+        // Calculate adaptive token budget
+        const estimatedPromptTokens = estimateTokens(JSON.stringify(worldState || '') + (character.campaign_notes || '') + (character.character_memories || ''));
+        const chronicleBudget = calculateChronicleBudget(estimatedPromptTokens, 0, 'claude-sonnet-4-6');
+
+        const chronicleResult = await getRelevantContext(characterId, character.campaign_id, hints, chronicleBudget);
+        chronicleContext = chronicleResult.context || '';
+        if (chronicleResult.factsIncluded > 0) {
+          console.log(`Story chronicle: ${chronicleResult.factsIncluded}/${chronicleResult.totalFacts} facts included (budget: ${chronicleBudget} tokens)`);
+        }
+      } catch (e) {
+        console.error('Error fetching chronicle context:', e);
+      }
+    }
+
+    // Sync any deaths from canon facts that weren't propagated to NPC lifecycle
+    if (character.campaign_id) {
+      try {
+        await syncDeathsFromCanonFacts(character.campaign_id);
+      } catch (e) {
+        console.error('Error syncing deaths from canon facts:', e);
+      }
+    }
+
+    // Fetch NPC conversation history for DM prompt context
+    if (character.campaign_id) {
+      try {
+        const npcConversations = await getConversationsForCharacter(characterId);
+        if (worldState) {
+          worldState.npcConversations = npcConversations;
+        }
+      } catch (e) {
+        console.error('Error fetching NPC conversations:', e);
+      }
+    }
+
+    // Fetch NPC event effects for DM prompt context
+    if (character.campaign_id) {
+      try {
+        const npcEventEffects = await getActiveNpcEffects(character.campaign_id);
+        if (worldState) {
+          worldState.npcEventEffects = npcEventEffects;
+        }
+      } catch (e) {
+        console.error('Error fetching NPC event effects:', e);
+      }
+    }
+
+    // Fetch away companions for DM prompt context
+    let awayCompanions = [];
+    try {
+      awayCompanions = await getAwayCompanions(characterId);
+    } catch (e) {
+      console.error('Error fetching away companions:', e);
+    }
+
+    // Decay companion moods based on game days elapsed
+    if (character.game_day) {
+      try {
+        await decayMoods(characterId, character.game_day);
+      } catch (e) {
+        console.error('Error decaying companion moods:', e);
+      }
+
+      // Decay NPC dispositions/trust based on absence
+      try {
+        await processAbsenceEffects(characterId, character.game_day);
+      } catch (e) {
+        console.error('Error processing NPC absence effects:', e);
       }
     }
 
@@ -601,6 +698,7 @@ router.post('/start', async (req, res) => {
       campaignLength,
       customNpcs,
       companions,
+      awayCompanions,
       pendingDowntimeNarratives: pendingNarratives,
       continueCampaign: continueCampaign || false,
       previousSessionSummaries: previousSessionSummaries || [],
@@ -611,7 +709,8 @@ router.post('/start', async (req, res) => {
       narrativeQueueContext,
       narrativeQueueItemIds,
       worldState,
-      campaignPlanSummary
+      campaignPlanSummary,
+      chronicleContext
     };
 
     // Check which LLM provider is available (respects user preference)
@@ -858,20 +957,36 @@ router.post('/:sessionId/message', async (req, res) => {
       return res.status(503).json({ error: 'No LLM provider available' });
     }
 
+    // Check if context window compression is needed
+    let messagesToSend = messages;
+    const modelForCompression = provider === 'claude' ? 'claude-sonnet-4-6' : (session.model || 'gemma3:12b');
+    const compressionCheck = shouldCompress(messages, modelForCompression);
+
+    if (compressionCheck.needsCompression) {
+      console.log(`Context compression triggered (${compressionCheck.urgency}): ${compressionCheck.totalTokens} estimated tokens`);
+      try {
+        messagesToSend = await compressMessageHistory(messages, parseInt(sessionId), modelForCompression);
+        console.log(`Compressed ${messages.length} messages to ${messagesToSend.length}`);
+      } catch (compressError) {
+        console.error('Context compression failed, using full history:', compressError.message);
+        messagesToSend = messages;
+      }
+    }
+
     let result;
     if (provider === 'claude') {
       // Use Claude - extract system prompt from messages
       // Always use Sonnet for ongoing session actions (cost-effective for gameplay)
-      const systemMessage = messages.find(m => m.role === 'system');
+      const systemMessage = messagesToSend.find(m => m.role === 'system');
       const systemPrompt = systemMessage?.content || '';
-      const claudeResult = await claude.continueSession(systemPrompt, messages, action, 'sonnet');
+      const claudeResult = await claude.continueSession(systemPrompt, messagesToSend, action, 'sonnet');
       result = {
         narrative: claudeResult.response,
         messages: claudeResult.messages
       };
     } else {
       // Use Ollama
-      result = await ollama.continueSession(messages, action, session.model);
+      result = await ollama.continueSession(messagesToSend, action, session.model);
     }
 
     // Update the session in the database
@@ -1800,6 +1915,16 @@ router.post('/:sessionId/end', async (req, res) => {
       await emitSessionEndedEvent(session, character, summary, messages);
     } catch (e) {
       console.error('Error emitting session events:', e);
+    }
+
+    // Generate story chronicle (structured session summary + canon facts)
+    try {
+      const chronicleResult = await generateSessionChronicle(parseInt(sessionId));
+      if (chronicleResult) {
+        console.log(`Story chronicle generated: session #${chronicleResult.sessionNumber}, ${chronicleResult.factsExtracted} facts extracted`);
+      }
+    } catch (e) {
+      console.error('Error generating story chronicle:', e);
     }
 
     // Update the session

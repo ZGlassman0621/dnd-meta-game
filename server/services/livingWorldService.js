@@ -2,6 +2,11 @@ import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import * as factionService from './factionService.js';
 import * as worldEventService from './worldEventService.js';
+import * as questGenerator from './questGenerator.js';
+import * as questService from './questService.js';
+import * as narrativeQueueService from './narrativeQueueService.js';
+import { checkAndResolveActivities } from './companionActivityService.js';
+import { generateNpcMail } from './npcMailService.js';
 
 /**
  * Living World Service - Coordinates faction and world event progression
@@ -53,6 +58,45 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       results.effects_expired = expiredEntry.count;
     }
 
+    // 3.5. Check and resolve companion activities that have reached their duration
+    try {
+      const maxDayRow = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const currentGameDay = maxDayRow?.max_day || 0;
+      if (currentGameDay > 0) {
+        const resolvedActivities = await checkAndResolveActivities(campaignId, currentGameDay);
+        results.companion_activities_resolved = resolvedActivities;
+      }
+    } catch (e) {
+      console.error('Error resolving companion activities:', e);
+      results.errors.push(`Companion activities: ${e.message}`);
+    }
+
+    // 3.75. Generate NPC mail
+    try {
+      const maxDayRow2 = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const mailGameDay = maxDayRow2?.max_day || 0;
+      if (mailGameDay > 0) {
+        // Get character for this campaign (solo game — one character per campaign)
+        const charRow = await dbGet(
+          'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
+          [campaignId]
+        );
+        if (charRow) {
+          const npcMail = await generateNpcMail(campaignId, charRow.id, mailGameDay);
+          results.npc_mail_generated = npcMail.length;
+        }
+      }
+    } catch (e) {
+      console.error('Error generating NPC mail:', e);
+      results.errors.push(`NPC mail: ${e.message}`);
+    }
+
     // 4. Record the tick in campaign metadata
     await recordCampaignTick(campaignId, gameDaysPassed, results);
 
@@ -91,6 +135,12 @@ async function checkAndSpawnFactionEvents(campaignId, factionResults) {
         const event = await spawnEventForGoalMilestone(campaignId, goal, milestone);
         if (event) {
           spawnedEvents.push(event);
+        }
+
+        // Generate a faction quest for this milestone
+        const factionQuest = await spawnFactionQuestForMilestone(campaignId, goal, milestone);
+        if (factionQuest) {
+          spawnedEvents.push(factionQuest);
         }
 
         // Check for rival faction reactions at milestones >= 50%
@@ -344,6 +394,86 @@ async function checkRivalReactions(campaignId, goal, milestone) {
   }
 
   return rivalEvents;
+}
+
+/**
+ * Generate a faction quest when a goal hits a milestone.
+ * Creates one quest per character in the campaign.
+ */
+async function spawnFactionQuestForMilestone(campaignId, goal, milestone) {
+  const faction = await factionService.getFactionById(goal.faction_id);
+  if (!faction) return null;
+
+  // Get characters in this campaign
+  const characters = await dbAll(
+    'SELECT * FROM characters WHERE campaign_id = ?',
+    [campaignId]
+  );
+
+  if (characters.length === 0) return null;
+
+  const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [campaignId]);
+
+  // Generate a quest for the first character (solo game, typically one character per campaign)
+  const character = characters[0];
+
+  try {
+    // Get character's standing with this faction
+    const standing = await factionService.getOrCreateStanding(character.id, faction.id);
+
+    // Get existing quests to avoid overlap
+    const existingQuests = await questService.getActiveQuests(character.id);
+
+    const questData = await questGenerator.generateFactionQuest({
+      character,
+      campaign,
+      faction,
+      goal,
+      milestone,
+      standing,
+      existingQuests
+    });
+
+    // Create the quest
+    const quest = await questService.createQuest(questData.quest);
+
+    // Create requirements
+    for (const req of questData.requirements) {
+      await questService.createQuestRequirement({ quest_id: quest.id, ...req });
+    }
+
+    // Add to narrative queue
+    await narrativeQueueService.addToQueue({
+      campaign_id: campaignId,
+      character_id: character.id,
+      event_type: 'quest_available',
+      priority: milestone >= 75 ? 'high' : 'normal',
+      title: `Faction Quest: ${quest.title}`,
+      description: quest.premise,
+      context: {
+        quest_id: quest.id,
+        faction_id: faction.id,
+        faction_name: faction.name,
+        milestone
+      },
+      related_quest_id: quest.id
+    });
+
+    console.log(`Faction quest spawned: "${quest.title}" (${faction.name} at ${milestone}%)`);
+
+    return {
+      type: 'faction_quest',
+      quest_id: quest.id,
+      quest_title: quest.title,
+      faction_id: faction.id,
+      faction_name: faction.name,
+      goal_id: goal.id,
+      milestone
+    };
+  } catch (error) {
+    console.error(`Failed to spawn faction quest for ${faction.name}:`, error);
+    return null;
+  }
 }
 
 /**

@@ -1406,6 +1406,7 @@ router.get('/:id/journal', async (req, res) => {
       location: r.npc_location,
       avatar: r.npc_avatar,
       disposition: r.disposition_label,
+      lifecycleStatus: r.npc_lifecycle_status || 'alive',
       timesMet: r.times_met,
       knownFacts: r.player_known_facts || [],
       discoveredSecrets: r.discovered_secrets || [],

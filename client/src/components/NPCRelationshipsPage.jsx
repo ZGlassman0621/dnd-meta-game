@@ -305,7 +305,7 @@ const NPCRelationshipsPage = ({ character }) => {
   const loadRelationships = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/npc-relationship/character/${character.id}`);
+      const response = await fetch(`/api/npc-relationship/character/${character.id}/with-npcs`);
       const data = await response.json();
       setRelationships(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -345,11 +345,14 @@ const NPCRelationshipsPage = ({ character }) => {
     }
   };
 
+  const deceasedCount = relationships.filter(r => r.npc_lifecycle_status === 'deceased').length;
+
   const filteredRelationships = relationships.filter(rel => {
     if (filter === 'all') return true;
-    if (filter === 'allies') return rel.disposition >= 50;
-    if (filter === 'hostile') return rel.disposition <= -30;
-    if (filter === 'neutral') return rel.disposition > -30 && rel.disposition < 50;
+    if (filter === 'allies') return rel.disposition >= 50 && rel.npc_lifecycle_status !== 'deceased';
+    if (filter === 'hostile') return rel.disposition <= -30 && rel.npc_lifecycle_status !== 'deceased';
+    if (filter === 'neutral') return rel.disposition > -30 && rel.disposition < 50 && rel.npc_lifecycle_status !== 'deceased';
+    if (filter === 'deceased') return rel.npc_lifecycle_status === 'deceased';
     return true;
   });
 
@@ -577,7 +580,7 @@ const NPCRelationshipsPage = ({ character }) => {
           <h2 style={styles.panelTitle}>NPCs Known</h2>
 
           <div style={styles.filterTabs}>
-            {['all', 'allies', 'neutral', 'hostile'].map(f => (
+            {['all', 'allies', 'neutral', 'hostile', ...(deceasedCount > 0 ? ['deceased'] : [])].map(f => (
               <button
                 key={f}
                 style={{
@@ -602,6 +605,7 @@ const NPCRelationshipsPage = ({ character }) => {
               filteredRelationships.map(rel => {
                 const label = rel.disposition_label || getDispositionLabel(rel.disposition);
                 const colorScheme = dispositionColors[label] || dispositionColors.neutral;
+                const isDeceased = rel.npc_lifecycle_status === 'deceased';
 
                 return (
                   <div
@@ -609,22 +613,25 @@ const NPCRelationshipsPage = ({ character }) => {
                     style={{
                       ...styles.npcCard,
                       ...(selectedRelationship?.id === rel.id ? styles.npcCardSelected : {}),
+                      ...(isDeceased ? { opacity: 0.6, borderColor: 'rgba(220, 38, 38, 0.3)' } : {}),
                     }}
                     onClick={() => setSelectedRelationship(rel)}
                   >
                     <div style={styles.npcName}>
-                      NPC #{rel.npc_id}
+                      {rel.npc_name || `NPC #${rel.npc_id}`}
                       <span
                         style={{
                           ...styles.badge,
-                          backgroundColor: colorScheme.bg,
-                          color: colorScheme.text,
+                          backgroundColor: isDeceased ? '#1f2937' : colorScheme.bg,
+                          color: isDeceased ? '#ef4444' : colorScheme.text,
+                          ...(isDeceased ? { border: '1px solid #dc2626' } : {}),
                         }}
                       >
-                        {label}
+                        {isDeceased ? 'Deceased' : label}
                       </span>
                     </div>
                     <div style={styles.npcMeta}>
+                      {rel.npc_occupation && `${rel.npc_occupation} • `}
                       Met {rel.times_met || 1} time{(rel.times_met || 1) !== 1 ? 's' : ''}
                       {rel.first_met_date && ` • First met: ${rel.first_met_date}`}
                     </div>

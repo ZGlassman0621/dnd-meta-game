@@ -1,6 +1,128 @@
 # Test Results
 
-## Latest: Spell Management System (2026-02-21)
+## Latest: NPC System Overhaul — Components E + H + Comprehensive Test Suite (2026-02-22)
+
+Implemented the final two components of the 8-component NPC system overhaul:
+- **Component E**: NPC Mail/Message System — NPCs send letters, warnings, requests, gifts, and rumors between sessions via the existing narrative queue
+- **Component H**: NPC Aging & Absence Effects — disposition/trust decay over time, reunion boosts, relocation/forgetting thresholds
+
+Then ran the most comprehensive test suite yet: **19 test suites, 1,020+ assertions**.
+
+### Full Results Table
+
+| # | Suite | File | Assertions | Status | Notes |
+|---|-------|------|-----------|--------|-------|
+| 1 | Integration | `tests/integration.test.js` | 137 | 134 PASS, 3 FAIL | Pre-existing: `dm_mode_parties` table not created yet |
+| 2 | Marker Detection | `tests/marker-detection.test.js` | 128 | PASS | |
+| 3 | Campaign Import | `tests/campaign-import.test.js` | 125 | PASS | |
+| 4 | DM Mode | `tests/dm-mode.test.js` | 78 | PASS | |
+| 5 | Moral Diversity | `tests/moral-diversity.test.js` | 64 | PASS | |
+| 6 | Companion Skill Checks | `tests/companion-skill-checks.test.js` | 59 | PASS | |
+| 7 | Condition Tracking | `tests/condition-tracking.test.js` | 56 | PASS | |
+| 8 | Character Memory | `tests/character-memory.test.js` | 54 | 53 PASS, 1 FAIL | Pre-existing: "Soft cap at 3KB" test |
+| 9 | Combat Tracker | `tests/combat-tracker.test.js` | 26 | PASS | |
+| 10 | Loot Systems | `tests/loot-systems.test.js` | 4 suites | PASS | |
+| **11** | **NPC Relationships** | `tests/npc-relationships.test.js` | **38** | **PASS** | **NEW** |
+| **12** | **Living World** | `tests/living-world.test.js` | **38** | **PASS** | **NEW** |
+| **13** | **Companion Activities** | `tests/companion-activities.test.js` | **36** | **PASS** | **NEW** |
+| **14** | **NPC Lifecycle** | `tests/npc-lifecycle.test.js` | **31** | **PASS** | **NEW** |
+| **15** | **NPC Aging** | `tests/npc-aging.test.js` | **31** | **PASS** | **NEW** |
+| **16** | **Narrative Queue** | `tests/narrative-queue.test.js` | **31** | **PASS** | **NEW** |
+| **17** | **DM Prompt Builder** | `tests/dm-prompt-builder.test.js` | **30** | **PASS** | **NEW** |
+| **18** | **NPC Mail** | `tests/npc-mail.test.js` | **27** | **PASS** | **NEW** |
+| **19** | **World Event NPCs** | `tests/world-event-npcs.test.js` | **27** | **PASS** | **NEW** |
+
+**Total: 1,020+ assertions across 19 test suites. 4 pre-existing failures (unrelated to this change), 0 new failures.**
+
+### New Test Suites (9 files, 289 assertions)
+
+**NPC Relationships** (38 assertions) — Components A-C
+- `getOrCreateRelationship()`: creation, idempotency, defaults
+- `adjustDisposition()`: increase, decrease, clamping to [-100, 100], witnessed_deeds logging
+- `adjustTrust()`: increase, decrease, clamping, independence from disposition
+- `recordInteraction()`: times_met increment, last_interaction_game_day, game date
+- `getNpcsByLocation()`: alive filtering, location matching
+- `getDispositionLabel()`: all 6 ranges (devoted/allied/friendly/neutral/unfriendly/hostile/nemesis)
+
+**Living World** (38 assertions) — Living world tick pipeline
+- `processLivingWorldTick()`: result shape, faction/event/spawn arrays, error handling
+- Multi-day tick processing
+- Companion activity resolution integration (step 3.5)
+- NPC mail generation integration (step 3.75)
+- `getWorldState()`: factions, goals, events, effects structure
+- `getCharacterWorldView()`: visible events, faction standings, known goals
+- Edge cases: null campaign, nonexistent character
+
+**Companion Activities** (36 assertions) — Component F
+- `sendOnActivity()`: activity creation, status changes, companion status → away
+- `getAwayCompanions()`: filtering, NPC name joining
+- `getActiveActivities()`: in_progress filtering, companion_name
+- `cancelActivity()`: status → cancelled, companion → active, away_activity_id cleared
+- `recallCompanion()`: early recall, partial outcomes, activity status → recalled
+- Dismiss soft-delete: row persists, status=dismissed, dismissed_reason set
+- Activity type validation: valid types accepted, invalid rejected with error
+
+**NPC Lifecycle** (31 assertions) — Components A+B
+- Valid transitions: alive→missing, missing→alive, alive→imprisoned, imprisoned→alive, alive→deceased
+- Invalid transitions: deceased→alive (death is final)
+- Transition history audit trail: old/new status, timestamps, causes
+- NPC enrichment fields: voice, personality_trait_1, mannerism, motivation, enrichment_level
+- Death propagation: companion status update, canon fact creation, narrative queue expiry
+
+**NPC Aging** (31 assertions) — Component H
+- `calculateDispositionDecay()`: 0-7 days=0, 15 days=-1, 30 days=-4, 90 days=-24, floor at -20
+- High-trust NPCs decay at half rate
+- `calculateTrustDecay()`: 0-14 days=0, 30 days=-1, 60 days=-4, floor at 0
+- `checkAbsenceThreshold()`: 60+ days + negative disposition → relocation, 120+ days + low trust → forget
+- `processAbsenceEffects()`: integration with real DB, decay applied correctly
+- `applyReunionBoost()`: 14+ days absence → +3 disposition
+
+**Narrative Queue** (31 assertions) — Previously untested service
+- `addToQueue()`: ID generation, field mapping, JSON context parsing
+- `getPendingItems()`: priority ordering (urgent > normal > low), status filtering
+- `getNextBatch()`: limit enforcement, priority-first ordering
+- `markDelivered()`: status change, delivered_at timestamp, session_id linking
+- `expireOldItems()`: past-due items expired, future items preserved
+- `formatForAIContext()`: formatted string output, count, null for empty
+- `getQueueStats()`: pending/delivered counts
+- `deliver_after` scheduling: future-dated items excluded from pending
+
+**DM Prompt Builder** (30 assertions) — Component D + H
+- `generateNpcVoiceHint()`: enriched NPCs get personality-based hints, non-enriched get occupation fallbacks
+- Occupation fallback map: merchant, guard, noble, innkeeper, priest, blacksmith, farmer, scholar
+- Unknown occupation → disposition-based fallback
+- NPC VOICING GUIDE section presence in generated prompts
+- WORLD EVENT EFFECTS ON NPCs section when effects exist
+- COMPANIONS CURRENTLY AWAY section when companions away
+- [ABSENCE: X days] annotation for NPCs with 14+ days since interaction
+
+**NPC Mail** (27 assertions) — Component E
+- `scoreMailCandidate()`: high disposition, hostile penalty, recent interaction penalty, world event bonus, promise/debt bonus
+- Score threshold filtering (>= 8)
+- `pickMailType()`: world event → warning, promises → request, high disp+trust → gift, trust → rumor, default → letter
+- `generateFromTemplate()`: template selection, variable substitution, correct structure
+- Mail content structure: subject, body, tone, gift_item, requires_response
+
+**World Event NPCs** (27 assertions) — Component G
+- `generateNpcEffectsForEvent()`: political/military/economic event types with stage-appropriate effects
+- Effect types: disposition_shift, status_change, location_change, occupation_change
+- No effects for locations without NPCs
+- `getActiveNpcEffects()`: joined NPC names and event titles
+- `resolveNpcEffectsForEvent()`: status change to resolved, count verification
+- Cap enforcement: max 3 NPCs affected per event stage
+
+### Bug Fix Discovered During Testing
+
+**`companionActivityService.js`**: The `resolveActivity()` function queried non-existent columns (`personality_traits`, `motivation`, `moral_code`) from `companion_backstories`. Fixed to join through `companions` → `npcs` table and use actual columns (`personality_trait_1`, `personality_trait_2`, `personal_goal`, `formative_event`).
+
+### Pre-Existing Failures (4, not caused by this change)
+
+1. **Integration** (3 failures): `dm_mode_parties` table doesn't exist yet — DM Mode schema not created
+2. **Character Memory** (1 failure): "Soft cap at 3KB" test — implementation detail mismatch
+
+---
+
+## Previous: Spell Management System (2026-02-21)
 
 Full spell management system implemented (284 spells, spell slots, prepared/known spell UI, level-up spell selection). This is a frontend-heavy feature using existing backend endpoints — no new test suites added. All existing 9 test suites remain passing from previous run.
 

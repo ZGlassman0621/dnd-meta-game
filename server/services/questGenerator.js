@@ -57,6 +57,24 @@ export async function generateCompanionQuest(context) {
   return parseQuestResponse(result, 'companion', context);
 }
 
+/**
+ * Generate a faction quest (tied to faction milestone)
+ * @param {object} context - Context for generation
+ * @param {object} context.character - The character
+ * @param {object} context.campaign - Campaign settings
+ * @param {object} context.faction - The faction
+ * @param {object} context.goal - The faction goal that hit a milestone
+ * @param {number} context.milestone - Milestone percentage (25, 50, 75, 100)
+ * @param {object} context.standing - Character's standing with this faction
+ * @param {array} context.existingQuests - Existing quests to avoid overlap
+ * @returns {object} Generated quest data
+ */
+export async function generateFactionQuest(context) {
+  const prompt = buildFactionQuestPrompt(context);
+  const result = await generateWithAI(prompt);
+  return parseQuestResponse(result, 'faction', context);
+}
+
 // ============================================================
 // PROMPT BUILDERS
 // ============================================================
@@ -289,6 +307,94 @@ Return ONLY valid JSON:
 }`;
 }
 
+function buildFactionQuestPrompt(context) {
+  const { character, campaign, faction, goal, milestone, standing, existingQuests } = context;
+
+  const standingValue = standing?.standing || 0;
+  const existingQuestTitles = existingQuests?.map(q => q.title).join(', ') || 'None';
+
+  // Determine quest framing based on player's standing with the faction
+  let standingContext;
+  if (standingValue >= 20) {
+    standingContext = `The player is FRIENDLY with ${faction.name} (standing: ${standingValue}). Generate a quest where the player HELPS the faction achieve their goal. The faction may offer the quest directly.`;
+  } else if (standingValue <= -20) {
+    standingContext = `The player is HOSTILE toward ${faction.name} (standing: ${standingValue}). Generate a quest where the player OPPOSES the faction's goal. An opposing faction, wronged party, or independent agent offers this quest.`;
+  } else {
+    standingContext = `The player is NEUTRAL toward ${faction.name} (standing: ${standingValue}). Generate a quest where the player can CHOOSE to help or oppose the faction. Both sides may approach the player.`;
+  }
+
+  // Scale quest complexity by milestone
+  const stageCount = milestone >= 75 ? 3 : 2;
+  const milestoneContext = {
+    25: 'The faction has just begun working toward this goal. The quest involves early-stage activities.',
+    50: 'The faction has made significant progress. The quest involves a critical turning point.',
+    75: 'The faction is close to achieving their goal. The quest involves high-stakes intervention.',
+    100: 'The faction has achieved their goal. The quest deals with the aftermath and consequences.'
+  };
+
+  return `You are a D&D quest designer. Generate a FACTION QUEST tied to a faction's activities.
+
+CHARACTER:
+- Name: ${character.name}
+- Class: ${character.class}
+- Level: ${character.level}
+- Current Location: ${character.current_location || 'Unknown'}
+
+CAMPAIGN:
+- Setting: ${campaign?.setting || 'Forgotten Realms'}
+- Tone: ${campaign?.tone || 'heroic fantasy'}
+
+FACTION:
+- Name: ${faction.name}
+- Description: ${faction.description || 'A powerful organization'}
+- Scope: ${faction.scope || 'regional'}
+- Power Level: ${faction.power_level || 5}/10
+
+FACTION GOAL:
+- Goal: ${goal.title}
+- Type: ${goal.goal_type || 'political'}
+- Progress: ${milestone}% complete
+- Context: ${milestoneContext[milestone] || milestoneContext[50]}
+
+PLAYER STANDING: ${standingContext}
+
+EXISTING QUESTS (avoid overlap): ${existingQuestTitles}
+
+Generate a ${stageCount}-stage FACTION QUEST. This quest should feel directly connected to the faction's activities in the world.
+
+REQUIREMENT TYPES: ${Object.values(REQUIREMENT_TYPES).join(', ')}
+
+Return ONLY valid JSON:
+{
+  "title": "Quest Title",
+  "premise": "One sentence hook tied to faction activities",
+  "description": "2-3 sentences describing the quest",
+  "stages": [
+    {
+      "name": "Stage Name",
+      "description": "What happens",
+      "objectives": ["Objective"]
+    }
+  ],
+  "requirements": [
+    {
+      "stage_index": 0,
+      "type": "adventure_completed",
+      "description": "What the player needs to do",
+      "params": {"adventure_tag": "investigation"},
+      "is_optional": false
+    }
+  ],
+  "rewards": {
+    "gold": ${milestone >= 75 ? 200 : 100},
+    "xp": ${milestone >= 75 ? 400 : 200},
+    "items": [],
+    "faction_standing_change": ${standingValue >= 20 ? 10 : (standingValue <= -20 ? -10 : 5)}
+  },
+  "world_impact_on_complete": "How completing this quest affects the faction and world"
+}`;
+}
+
 // ============================================================
 // AI GENERATION
 // ============================================================
@@ -354,8 +460,8 @@ function parseQuestResponse(response, questType, context) {
       campaign_id: context.campaign?.id || null,
       character_id: context.character?.id || null,
       quest_type: questType,
-      source_type: questType === 'companion' ? 'companion' : 'generated',
-      source_id: context.companion?.id || null,
+      source_type: questType === 'companion' ? 'companion' : questType === 'faction' ? 'faction' : 'generated',
+      source_id: context.companion?.id || context.faction?.id || null,
       title: parsed.title,
       premise: parsed.premise,
       description: parsed.description,
@@ -391,5 +497,6 @@ export default {
   generateMainQuest,
   generateSideQuest,
   generateOneTimeQuest,
-  generateCompanionQuest
+  generateCompanionQuest,
+  generateFactionQuest
 };

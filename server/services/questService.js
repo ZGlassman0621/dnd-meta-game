@@ -1,5 +1,6 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { emit, GAME_EVENTS } from './eventEmitter.js';
 
 /**
  * Quest Service - CRUD operations for quests and quest requirements
@@ -225,6 +226,29 @@ export async function completeQuest(id) {
       console.error(`Error applying quest rewards for "${quest.title}":`, e);
       // Re-throw so callers know rewards failed — quest is still marked completed
       throw new Error(`Quest completed but reward application failed: ${e.message}`);
+    }
+  }
+
+  // Faction standing change for faction quests
+  if (quest.source_type === 'faction' && quest.source_id && quest.character_id) {
+    try {
+      const standingChange = quest.rewards?.faction_standing_change || 10;
+      // Lazy import to avoid circular dependency
+      const factionService = await import('./factionService.js');
+      await factionService.modifyStanding(quest.character_id, quest.source_id, standingChange, {
+        description: `Completed faction quest: ${quest.title}`,
+        quest_id: quest.id
+      });
+      await emit(GAME_EVENTS.FACTION_STANDING_CHANGED, {
+        character_id: quest.character_id,
+        faction_id: quest.source_id,
+        change: standingChange,
+        new_standing: standingChange, // approximate, actual value set by modifyStanding
+        reason: 'faction_quest_completed',
+        quest_id: quest.id
+      });
+    } catch (e) {
+      console.error(`Error updating faction standing for quest "${quest.title}":`, e);
     }
   }
 

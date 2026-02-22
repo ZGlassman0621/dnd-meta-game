@@ -12,6 +12,8 @@ import { safeParse } from '../utils/safeParse.js';
 import * as companionBackstoryGenerator from '../services/companionBackstoryGenerator.js';
 import * as companionBackstoryService from '../services/companionBackstoryService.js';
 import { handleServerError } from '../utils/errorHandler.js';
+import { propagateNpcDeath, canRecruit } from '../services/npcLifecycleService.js';
+import { sendOnActivity, getAwayCompanions, getActivityById, recallCompanion } from '../services/companionActivityService.js';
 
 const router = express.Router();
 
@@ -84,6 +86,12 @@ router.post('/recruit', async (req, res) => {
     const npc = await dbGet('SELECT * FROM npcs WHERE id = ?', [npc_id]);
     if (!npc) {
       return res.status(404).json({ error: 'NPC not found' });
+    }
+
+    // Check lifecycle status — cannot recruit deceased/missing/imprisoned NPCs
+    if (!await canRecruit(npc_id)) {
+      const status = npc.lifecycle_status || 'alive';
+      return res.status(400).json({ error: `This NPC cannot be recruited (${status})` });
     }
 
     // Check if this NPC is already a companion for this character
@@ -537,8 +545,11 @@ router.post('/:id/dismiss', async (req, res) => {
     // Get the character for the event
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
 
-    // Delete the companion record entirely so they can be re-recruited fresh
-    await dbRun('DELETE FROM companions WHERE id = ?', [req.params.id]);
+    // Soft-delete: mark dismissed instead of deleting, preserving history
+    await dbRun(`
+      UPDATE companions SET status = 'dismissed', dismissed_at = CURRENT_TIMESTAMP, dismissed_reason = ?
+      WHERE id = ?
+    `, [req.body.reason || 'Player dismissed', req.params.id]);
 
     // Update NPC to be available for recruitment again
     await dbRun(`
@@ -562,11 +573,11 @@ router.post('/:id/dismiss', async (req, res) => {
   }
 });
 
-// Mark companion as deceased
+// Mark companion as deceased — propagates death across all systems
 router.post('/:id/deceased', async (req, res) => {
   try {
     const companion = await dbGet(`
-      SELECT c.*, n.name
+      SELECT c.*, n.name, c.recruited_by_character_id
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
@@ -576,12 +587,18 @@ router.post('/:id/deceased', async (req, res) => {
       return res.status(404).json({ error: 'Companion not found' });
     }
 
-    await dbRun(`
-      UPDATE companions SET
-        status = 'deceased',
-        dismissed_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [req.params.id]);
+    // Get campaign_id from the recruiting character
+    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
+    const campaignId = character?.campaign_id;
+
+    // Propagate death across all systems (NPC lifecycle, canon facts, promises, narrative queue)
+    await propagateNpcDeath(companion.npc_id, campaignId, companion.recruited_by_character_id, {
+      cause: req.body.cause || 'Killed in combat',
+      gameDay: req.body.game_day || null,
+      location: req.body.location || null,
+      killer: req.body.killer || null,
+      sessionId: req.body.session_id || null
+    });
 
     res.json({
       message: `${companion.name} has fallen.`,
@@ -1096,6 +1113,84 @@ router.post('/:id/backstory/secret/:secretId/reveal', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'reveal secret');
+  }
+});
+
+// ============================================================
+// COMPANION ACTIVITY ROUTES
+// ============================================================
+
+// Send companion on independent activity
+router.post('/:id/send-activity', async (req, res) => {
+  try {
+    const companion = await dbGet(`
+      SELECT c.*, n.name FROM companions c
+      JOIN npcs n ON c.npc_id = n.id
+      WHERE c.id = ? AND c.status = 'active'
+    `, [req.params.id]);
+
+    if (!companion) {
+      return res.status(404).json({ error: 'Companion not found or not active' });
+    }
+
+    const character = await dbGet('SELECT campaign_id, game_day FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
+
+    const activity = await sendOnActivity(companion.id, {
+      activity_type: req.body.activity_type,
+      description: req.body.description,
+      location: req.body.location,
+      objectives: req.body.objectives || [],
+      duration_days: req.body.duration_days || 3,
+      campaign_id: character?.campaign_id,
+      current_game_day: character?.game_day || 1
+    });
+
+    res.json({
+      message: `${companion.name} has been sent on a ${req.body.activity_type} activity.`,
+      activity
+    });
+  } catch (error) {
+    handleServerError(res, error, 'send companion on activity');
+  }
+});
+
+// Get away companions for a character
+router.get('/character/:characterId/away', async (req, res) => {
+  try {
+    const companions = await getAwayCompanions(parseInt(req.params.characterId));
+    res.json(companions);
+  } catch (error) {
+    handleServerError(res, error, 'fetch away companions');
+  }
+});
+
+// Recall companion from activity early
+router.post('/activity/:activityId/recall', async (req, res) => {
+  try {
+    const activity = await getActivityById(parseInt(req.params.activityId));
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    const character = await dbGet('SELECT game_day FROM characters WHERE id = ?', [activity.character_id]);
+    const result = await recallCompanion(parseInt(req.params.activityId), character?.game_day || 1);
+
+    res.json(result);
+  } catch (error) {
+    handleServerError(res, error, 'recall companion');
+  }
+});
+
+// Get activity status
+router.get('/activity/:activityId', async (req, res) => {
+  try {
+    const activity = await getActivityById(parseInt(req.params.activityId));
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+    res.json(activity);
+  } catch (error) {
+    handleServerError(res, error, 'fetch activity status');
   }
 });
 

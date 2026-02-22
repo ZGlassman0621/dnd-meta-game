@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { applyReunionBoost } from './npcAgingService.js';
 
 /**
  * NPC Relationship Service - CRUD operations for character-NPC relationships
@@ -76,7 +77,12 @@ export async function getCharacterRelationships(characterId) {
 export async function getCharacterRelationshipsWithNpcs(characterId) {
   const rels = await dbAll(`
     SELECT r.*, n.name as npc_name, n.race as npc_race, n.occupation as npc_occupation,
-           n.current_location as npc_location, n.avatar as npc_avatar
+           n.current_location as npc_location, n.avatar as npc_avatar,
+           n.voice as npc_voice, n.personality_trait_1 as npc_personality,
+           n.mannerism as npc_mannerism, n.motivation as npc_motivation,
+           n.distinguishing_features as npc_appearance,
+           n.enrichment_level as npc_enrichment_level,
+           n.lifecycle_status as npc_lifecycle_status
     FROM npc_relationships r
     JOIN npcs n ON r.npc_id = n.id
     WHERE r.character_id = ?
@@ -195,18 +201,27 @@ export async function adjustTrust(characterId, npcId, change) {
 }
 
 /**
- * Record an interaction (increments times_met, updates last_interaction_date)
+ * Record an interaction (increments times_met, updates last_interaction_date + game day)
  */
-export async function recordInteraction(characterId, npcId, gameDate = null) {
+export async function recordInteraction(characterId, npcId, gameDate = null, gameDay = null) {
   const rel = await getOrCreateRelationship(characterId, npcId);
 
   await dbRun(`
     UPDATE npc_relationships SET
       times_met = times_met + 1,
       last_interaction_date = ?,
+      last_interaction_game_day = COALESCE(?, last_interaction_game_day),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `, [gameDate || new Date().toISOString(), rel.id]);
+  `, [gameDate || new Date().toISOString(), gameDay, rel.id]);
+
+  // Check for reunion boost (14+ days since last interaction)
+  if (gameDay && rel.last_interaction_game_day) {
+    const daysAbsent = gameDay - rel.last_interaction_game_day;
+    if (daysAbsent >= 14) {
+      await applyReunionBoost(characterId, npcId, gameDay);
+    }
+  }
 
   return getRelationshipById(rel.id);
 }
@@ -567,6 +582,119 @@ export async function getRelationshipSummary(characterId) {
   }
 
   return summary;
+}
+
+// ============================================================
+// NPC CONVERSATION MEMORY
+// ============================================================
+
+/**
+ * Save a conversation summary between player and NPC
+ */
+export async function saveNpcConversation(characterId, npcId, sessionId, gameDay, data) {
+  const {
+    summary,
+    topics = [],
+    tone = null,
+    key_quotes = [],
+    information_exchanged = null,
+    importance = 'minor'
+  } = data;
+
+  if (!summary || summary.trim().length === 0) return null;
+
+  const result = await dbRun(`
+    INSERT INTO npc_conversations (
+      character_id, npc_id, session_id, game_day,
+      summary, topics, tone, key_quotes, information_exchanged, importance
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    characterId, npcId, sessionId, gameDay,
+    summary.trim(),
+    JSON.stringify(topics),
+    tone,
+    JSON.stringify(key_quotes),
+    information_exchanged,
+    importance
+  ]);
+
+  return Number(result.lastInsertRowid);
+}
+
+/**
+ * Get recent conversations with a specific NPC (most recent first)
+ */
+export async function getRecentConversations(characterId, npcId, limit = 2) {
+  const rows = await dbAll(`
+    SELECT nc.*, ds.title as session_title,
+           sc.session_number
+    FROM npc_conversations nc
+    LEFT JOIN dm_sessions ds ON nc.session_id = ds.id
+    LEFT JOIN story_chronicles sc ON nc.session_id = sc.session_id
+    WHERE nc.character_id = ? AND nc.npc_id = ?
+    ORDER BY nc.created_at DESC
+    LIMIT ?
+  `, [characterId, npcId, limit]);
+
+  return rows.map(parseConversationJson);
+}
+
+/**
+ * Get all conversations for a character, grouped by NPC
+ * Used for fetching conversation context at session start
+ */
+export async function getConversationsForCharacter(characterId) {
+  const rows = await dbAll(`
+    SELECT nc.*, n.name as npc_name,
+           sc.session_number
+    FROM npc_conversations nc
+    JOIN npcs n ON nc.npc_id = n.id
+    LEFT JOIN story_chronicles sc ON nc.session_id = sc.session_id
+    WHERE nc.character_id = ?
+    ORDER BY nc.npc_id, nc.created_at DESC
+  `, [characterId]);
+
+  // Group by npc_id, keeping last 2 per NPC
+  const grouped = {};
+  for (const row of rows) {
+    if (!grouped[row.npc_id]) {
+      grouped[row.npc_id] = [];
+    }
+    if (grouped[row.npc_id].length < 2) {
+      grouped[row.npc_id].push(parseConversationJson(row));
+    }
+  }
+
+  return grouped;
+}
+
+function parseConversationJson(row) {
+  return {
+    ...row,
+    topics: JSON.parse(row.topics || '[]'),
+    key_quotes: JSON.parse(row.key_quotes || '[]')
+  };
+}
+
+// ============================================================
+// LOCATION-BASED QUERIES
+// ============================================================
+
+/**
+ * Find NPCs at a given location that the player has met (have relationships).
+ * Used by world event NPC effects to determine which NPCs are affected.
+ */
+export async function getNpcsByLocation(campaignId, locationName) {
+  return dbAll(`
+    SELECT DISTINCT n.id, n.name, n.occupation, n.current_location, n.lifecycle_status,
+           r.disposition, r.trust_level, r.character_id
+    FROM npcs n
+    JOIN npc_relationships r ON r.npc_id = n.id
+    JOIN characters c ON r.character_id = c.id
+    WHERE c.campaign_id = ?
+      AND n.lifecycle_status != 'deceased'
+      AND n.current_location LIKE ?
+  `, [campaignId, `%${locationName}%`]);
 }
 
 // ============================================================

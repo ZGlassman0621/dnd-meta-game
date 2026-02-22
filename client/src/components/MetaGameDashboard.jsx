@@ -19,6 +19,9 @@ function MetaGameDashboard({ character, onCharacterUpdated }) {
   const [showTimeSettings, setShowTimeSettings] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
   const [processingQueue, setProcessingQueue] = useState(false)
+  const [achievements, setAchievements] = useState([])
+  const [showAllAchievements, setShowAllAchievements] = useState(false)
+  const [chronicleStats, setChronicleStats] = useState(null)
 
   // Load all data
   const loadData = useCallback(async () => {
@@ -27,11 +30,12 @@ function MetaGameDashboard({ character, onCharacterUpdated }) {
     setError('')
 
     try {
-      const [statusRes, contextRes, suggestionsRes, queueRes] = await Promise.all([
+      const [statusRes, contextRes, suggestionsRes, queueRes, achievementsRes] = await Promise.all([
         fetch(`/api/meta-game/status/${character.id}`),
         fetch(`/api/meta-game/context/${character.id}`),
         fetch(`/api/meta-game/suggestions/${character.id}`),
-        fetch(`/api/meta-game/queue/${character.id}`)
+        fetch(`/api/meta-game/queue/${character.id}`),
+        fetch(`/api/achievement/character/${character.id}/progress`)
       ])
 
       if (statusRes.ok) {
@@ -50,6 +54,19 @@ function MetaGameDashboard({ character, onCharacterUpdated }) {
       if (queueRes.ok) {
         const data = await queueRes.json()
         setQueue(data.queue || [])
+      }
+
+      if (achievementsRes.ok) {
+        const data = await achievementsRes.json()
+        setAchievements(Array.isArray(data) ? data : [])
+      }
+
+      // Fetch chronicle stats if character has a campaign
+      if (character?.campaign_id) {
+        try {
+          const chronicleRes = await fetch(`/api/chronicle/stats/${character.campaign_id}/${character.id}`)
+          if (chronicleRes.ok) setChronicleStats(await chronicleRes.json())
+        } catch { /* non-critical */ }
       }
     } catch (err) {
       console.error('Error loading Meta Game data:', err)
@@ -404,6 +421,206 @@ function MetaGameDashboard({ character, onCharacterUpdated }) {
           </div>
         )}
       </div>
+
+      {/* Achievements */}
+      {achievements.length > 0 && (() => {
+        const earned = achievements.filter(a => a.earned_at)
+        const unearned = achievements.filter(a => !a.earned_at && !a.hidden)
+        const displayed = showAllAchievements ? unearned : unearned.slice(0, 4)
+        const CATEGORY_COLORS = {
+          combat: '#e74c3c', exploration: '#27ae60', social: '#e91e63',
+          wealth: '#f39c12', story: '#9b59b6', companion: '#3498db', session: '#1abc9c'
+        }
+
+        return (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h3 style={styles.sectionTitle}>
+                Achievements ({earned.length}/{achievements.length})
+              </h3>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{
+              height: '6px', borderRadius: '3px', backgroundColor: '#eee',
+              marginBottom: '1rem', overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${(earned.length / achievements.length) * 100}%`,
+                height: '100%', borderRadius: '3px',
+                background: 'linear-gradient(90deg, #f39c12, #e67e22)',
+                transition: 'width 0.5s ease'
+              }} />
+            </div>
+
+            {/* Recently earned */}
+            {earned.length > 0 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Earned
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {earned.map((ach, idx) => (
+                    <div key={idx} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                      padding: '0.4rem 0.7rem', borderRadius: '0.5rem',
+                      backgroundColor: '#fff8e1', border: '1px solid #ffe082'
+                    }} title={`${ach.description}${ach.rewards?.xp ? ` (+${ach.rewards.xp} XP)` : ''}${ach.rewards?.gold ? ` (+${ach.rewards.gold} gp)` : ''}`}>
+                      <span style={{ fontSize: '1.1rem' }}>{ach.icon || '\uD83C\uDFC6'}</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#5d4037' }}>{ach.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Unearned / available */}
+            {unearned.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Available
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {displayed.map((ach, idx) => {
+                    const catColor = CATEGORY_COLORS[ach.category] || '#888'
+                    const progress = ach.progress || 0
+                    const threshold = ach.criteria?.threshold || 1
+                    const isCounter = ach.criteria?.type === 'counter' && threshold > 1
+
+                    return (
+                      <div key={idx} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                        padding: '0.5rem 0.75rem', borderRadius: '0.5rem',
+                        backgroundColor: '#f8f9fa'
+                      }}>
+                        <span style={{ fontSize: '1.2rem', filter: 'grayscale(0.5)', opacity: 0.7 }}>
+                          {ach.icon || '\uD83C\uDFC6'}
+                        </span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.9rem', fontWeight: '500', color: '#555' }}>{ach.title}</span>
+                            <span style={{
+                              fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '3px',
+                              backgroundColor: `${catColor}18`, color: catColor, textTransform: 'capitalize'
+                            }}>{ach.category}</span>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.15rem' }}>{ach.description}</div>
+                          {isCounter && (
+                            <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{
+                                flex: 1, height: '4px', borderRadius: '2px',
+                                backgroundColor: '#eee', overflow: 'hidden'
+                              }}>
+                                <div style={{
+                                  width: `${Math.min(100, (progress / threshold) * 100)}%`,
+                                  height: '100%', borderRadius: '2px', backgroundColor: catColor
+                                }} />
+                              </div>
+                              <span style={{ fontSize: '0.7rem', color: '#999' }}>{progress}/{threshold}</span>
+                            </div>
+                          )}
+                        </div>
+                        {ach.rewards && (
+                          <div style={{ fontSize: '0.75rem', color: '#aaa', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {ach.rewards.xp > 0 && <div>+{ach.rewards.xp} XP</div>}
+                            {ach.rewards.gold > 0 && <div>+{ach.rewards.gold} gp</div>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {unearned.length > 4 && (
+                  <button
+                    onClick={() => setShowAllAchievements(!showAllAchievements)}
+                    style={{
+                      marginTop: '0.75rem', padding: '0.4rem 0.75rem',
+                      backgroundColor: '#f8f9fa', border: '1px solid #ddd',
+                      borderRadius: '0.25rem', cursor: 'pointer',
+                      fontSize: '0.85rem', color: '#666', width: '100%'
+                    }}
+                  >
+                    {showAllAchievements ? 'Show Less' : `Show All (${unearned.length} remaining)`}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Story Chronicle */}
+      {chronicleStats && (chronicleStats.totalFacts > 0 || chronicleStats.totalChronicles > 0) && (
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>Story Chronicle</h3>
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <div style={{ padding: '0.5rem', background: '#f0f9ff', borderRadius: '0.5rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#2563eb' }}>{chronicleStats.totalChronicles}</div>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>Sessions</div>
+            </div>
+            <div style={{ padding: '0.5rem', background: '#faf5ff', borderRadius: '0.5rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#7c3aed' }}>{chronicleStats.totalFacts}</div>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>Canon Facts</div>
+            </div>
+            <div style={{ padding: '0.5rem', background: '#fef3c7', borderRadius: '0.5rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#d97706' }}>{chronicleStats.activePromises?.length || 0}</div>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>Promises</div>
+            </div>
+          </div>
+
+          {/* Last session recap */}
+          {chronicleStats.latestChronicle && (
+            <div style={{ ...styles.card, borderLeft: '4px solid #2563eb' }}>
+              <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.25rem' }}>
+                Last Session (#{chronicleStats.latestChronicle.session_number})
+                {chronicleStats.latestChronicle.mood && ` - ${chronicleStats.latestChronicle.mood}`}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#2c3e50', lineHeight: 1.4 }}>
+                {chronicleStats.latestChronicle.summary?.substring(0, 250)}
+                {chronicleStats.latestChronicle.summary?.length > 250 ? '...' : ''}
+              </div>
+              {chronicleStats.latestChronicle.cliffhanger && (
+                <div style={{ fontSize: '0.8rem', color: '#7c3aed', fontStyle: 'italic', marginTop: '0.5rem' }}>
+                  Unresolved: {chronicleStats.latestChronicle.cliffhanger}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Active promises */}
+          {chronicleStats.activePromises?.length > 0 && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#d97706', marginBottom: '0.25rem' }}>Active Promises:</div>
+              {chronicleStats.activePromises.slice(0, 3).map((p, i) => (
+                <div key={i} style={{ fontSize: '0.8rem', color: '#666', marginLeft: '0.5rem' }}>
+                  - {p.subject}: {p.fact}
+                </div>
+              ))}
+              {chronicleStats.activePromises.length > 3 && (
+                <div style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
+                  +{chronicleStats.activePromises.length - 3} more
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Deaths */}
+          {chronicleStats.deaths?.length > 0 && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#ef4444', marginBottom: '0.25rem' }}>Fallen:</div>
+              {chronicleStats.deaths.map((d, i) => (
+                <div key={i} style={{ fontSize: '0.8rem', color: '#666', marginLeft: '0.5rem' }}>
+                  - {d.subject}: {d.fact}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

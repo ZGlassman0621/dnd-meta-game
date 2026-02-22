@@ -8,6 +8,8 @@
 
 import { initQuestProgressChecker } from './questProgressChecker.js';
 import { initCompanionTriggerChecker } from './companionTriggerChecker.js';
+import { initAchievementChecker } from './achievementChecker.js';
+import { seedAchievements } from './achievementService.js';
 import { on, GAME_EVENTS } from './eventEmitter.js';
 
 let initialized = false;
@@ -15,7 +17,7 @@ let initialized = false;
 /**
  * Initialize all narrative system event handlers
  */
-export function initNarrativeSystems() {
+export async function initNarrativeSystems() {
   if (initialized) {
     console.log('Narrative systems already initialized');
     return;
@@ -28,6 +30,12 @@ export function initNarrativeSystems() {
 
   // Initialize companion trigger checker
   initCompanionTriggerChecker();
+
+  // Initialize achievement checker
+  initAchievementChecker();
+
+  // Seed achievement definitions into database
+  await seedAchievements();
 
   // Register any additional global handlers here
   registerGlobalHandlers();

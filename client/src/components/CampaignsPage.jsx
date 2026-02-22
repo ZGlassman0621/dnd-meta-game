@@ -541,7 +541,16 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
         body: importJSON
       });
 
-      const result = await response.json();
+      // Handle non-JSON responses (server errors, HTML error pages, empty bodies)
+      let result;
+      const contentType = response.headers.get('content-type') || '';
+      try {
+        const text = await response.text();
+        if (!text) throw new Error(`Server returned empty response (HTTP ${response.status})`);
+        result = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(`Server error (HTTP ${response.status}): ${parseErr.message}`);
+      }
 
       if (!response.ok) {
         const errorMsg = result.details
@@ -938,10 +947,43 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
           {showImport && !importStep && (
             <div style={styles.form}>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Paste Campaign JSON</label>
+                <label style={styles.label}>Import Campaign JSON</label>
                 <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 0.5rem 0' }}>
-                  Paste the full campaign import JSON below. Must contain "campaign" and "character" sections.
+                  Load a JSON file or paste campaign JSON below. Must contain a "campaign" section; "character" and "campaign_plan" are optional.
                 </p>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: 'rgba(52, 152, 219, 0.15)',
+                      border: '1px solid rgba(52, 152, 219, 0.4)',
+                      borderRadius: '6px',
+                      color: '#3498db',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem'
+                    }}
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = '.json';
+                      input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setImportJSON(ev.target.result);
+                        reader.readAsText(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    Load from File
+                  </button>
+                  {importJSON && (
+                    <span style={{ fontSize: '0.8rem', color: '#27ae60', alignSelf: 'center' }}>
+                      {(importJSON.length / 1024).toFixed(1)} KB loaded
+                    </span>
+                  )}
+                </div>
                 <textarea
                   style={{
                     ...styles.textarea,
@@ -952,7 +994,7 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                   }}
                   value={importJSON}
                   onChange={e => setImportJSON(e.target.value)}
-                  placeholder={'{\n  "campaign": { "name": "..." },\n  "character": { "name": "...", "class": "...", "race": "..." },\n  "campaign_plan": { ... },\n  "sessions": [ ... ],\n  "companions": [ ... ]\n}'}
+                  placeholder={'{\n  "campaign": { "name": "..." },\n  "campaign_plan": { ... },\n  "character": { "name": "...", "class": "...", "race": "..." }\n}'}
                 />
               </div>
 

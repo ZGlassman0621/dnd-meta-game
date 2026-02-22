@@ -1,7 +1,14 @@
 import { useState } from 'react';
 
-function CompanionsPanel({ companions, onClose }) {
+function CompanionsPanel({ companions, awayCompanions = [], onClose, onSendActivity, onRecallCompanion }) {
   const [selectedCompanionIdx, setSelectedCompanionIdx] = useState(0);
+  const [showSendForm, setShowSendForm] = useState(false);
+  const [sendFormData, setSendFormData] = useState({
+    activity_type: 'training',
+    description: '',
+    location: '',
+    duration_days: 3
+  });
 
   return (
           <div className="companions-ref-overlay" style={{
@@ -264,10 +271,160 @@ function CompanionsPanel({ companions, onClose }) {
                         </div>
                       </div>
                     )}
+
+                    {/* Send on Mission */}
+                    {onSendActivity && (
+                      <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                        {!showSendForm ? (
+                          <button
+                            onClick={() => setShowSendForm(true)}
+                            style={{
+                              width: '100%',
+                              padding: '0.6rem',
+                              background: 'rgba(59, 130, 246, 0.2)',
+                              border: '1px solid rgba(59, 130, 246, 0.4)',
+                              borderRadius: '6px',
+                              color: '#60a5fa',
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            Send on Mission
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <select
+                              value={sendFormData.activity_type}
+                              onChange={e => setSendFormData(prev => ({ ...prev, activity_type: e.target.value }))}
+                              style={{
+                                padding: '0.4rem', background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px',
+                                color: '#ddd', fontSize: '0.85rem'
+                              }}
+                            >
+                              <option value="training">Training</option>
+                              <option value="scouting">Scouting</option>
+                              <option value="personal_quest">Personal Quest</option>
+                              <option value="guarding">Guarding</option>
+                              <option value="researching">Researching</option>
+                              <option value="shopping">Shopping</option>
+                              <option value="socializing">Socializing</option>
+                              <option value="resting">Resting</option>
+                            </select>
+                            <input
+                              placeholder="Location (optional)"
+                              value={sendFormData.location}
+                              onChange={e => setSendFormData(prev => ({ ...prev, location: e.target.value }))}
+                              style={{
+                                padding: '0.4rem', background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px',
+                                color: '#ddd', fontSize: '0.85rem'
+                              }}
+                            />
+                            <input
+                              placeholder="Description (optional)"
+                              value={sendFormData.description}
+                              onChange={e => setSendFormData(prev => ({ ...prev, description: e.target.value }))}
+                              style={{
+                                padding: '0.4rem', background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px',
+                                color: '#ddd', fontSize: '0.85rem'
+                              }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <label style={{ color: '#888', fontSize: '0.8rem' }}>Days:</label>
+                              <input
+                                type="number" min="1" max="30"
+                                value={sendFormData.duration_days}
+                                onChange={e => setSendFormData(prev => ({ ...prev, duration_days: parseInt(e.target.value) || 3 }))}
+                                style={{
+                                  width: '60px', padding: '0.4rem', background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px',
+                                  color: '#ddd', fontSize: '0.85rem'
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={() => {
+                                  onSendActivity(companion.id, sendFormData);
+                                  setShowSendForm(false);
+                                  setSendFormData({ activity_type: 'training', description: '', location: '', duration_days: 3 });
+                                }}
+                                style={{
+                                  flex: 1, padding: '0.5rem', background: 'rgba(34, 197, 94, 0.2)',
+                                  border: '1px solid rgba(34, 197, 94, 0.4)', borderRadius: '4px',
+                                  color: '#22c55e', cursor: 'pointer', fontSize: '0.85rem'
+                                }}
+                              >
+                                Send
+                              </button>
+                              <button
+                                onClick={() => setShowSendForm(false)}
+                                style={{
+                                  flex: 1, padding: '0.5rem', background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px',
+                                  color: '#888', cursor: 'pointer', fontSize: '0.85rem'
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 );
               })()}
             </div>
+
+            {/* Away on Mission Section */}
+            {awayCompanions.length > 0 && (
+              <div style={{
+                borderTop: '1px solid rgba(255, 159, 67, 0.3)',
+                padding: '0.75rem 1rem',
+                background: 'rgba(255, 159, 67, 0.05)'
+              }}>
+                <h5 style={{ margin: '0 0 0.5rem 0', color: '#ff9f43', fontSize: '0.85rem' }}>
+                  Away on Mission ({awayCompanions.length})
+                </h5>
+                {awayCompanions.map(ac => (
+                  <div key={ac.companion_id} style={{
+                    padding: '0.5rem',
+                    marginBottom: '0.5rem',
+                    background: 'rgba(255, 159, 67, 0.1)',
+                    border: '1px solid rgba(255, 159, 67, 0.2)',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ color: '#ff9f43' }}>{ac.name}</strong>
+                      {onRecallCompanion && ac.activity_id && (
+                        <button
+                          onClick={() => onRecallCompanion(ac.activity_id)}
+                          style={{
+                            padding: '0.2rem 0.5rem', background: 'rgba(239, 68, 68, 0.2)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '4px',
+                            color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem'
+                          }}
+                        >
+                          Recall
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ color: '#ccc', marginTop: '0.25rem' }}>
+                      {ac.activity_type?.replace('_', ' ')}{ac.location ? ` at ${ac.location}` : ''}
+                    </div>
+                    {ac.expected_duration_days && (
+                      <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.15rem' }}>
+                        ~{ac.expected_duration_days} day mission
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Panel Footer */}
             <div style={{
@@ -278,6 +435,7 @@ function CompanionsPanel({ companions, onClose }) {
               color: '#888'
             }}>
               {companions.length} companion{companions.length !== 1 ? 's' : ''} in party
+              {awayCompanions.length > 0 && ` · ${awayCompanions.length} away`}
             </div>
           </div>
   );

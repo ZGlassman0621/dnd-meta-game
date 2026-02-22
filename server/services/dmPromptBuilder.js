@@ -32,6 +32,20 @@ const ARMOR_DATA = {
   'Plate': { baseAC: 18, type: 'heavy' }
 };
 
+// Companion mood RP guidance for the DM
+const MOOD_RP_GUIDANCE = {
+  content: null, // No special guidance needed
+  anxious: 'nervous, second-guessing, seeking reassurance',
+  angry: 'short-tempered, confrontational, holding a grudge',
+  sad: 'quiet, withdrawn, mentioning what they lost',
+  fearful: 'reluctant, cautious, urging retreat',
+  excited: 'eager, talkative, overconfident',
+  conflicted: 'hesitant, voicing doubts, asking moral questions',
+  grateful: 'warm, supportive, going extra mile for the party',
+  resentful: 'cold, passive-aggressive, bringing up grievances',
+  exhausted: 'slow, unfocused, asking for rest, making mistakes'
+};
+
 /**
  * Calculate combat stats from character equipment
  */
@@ -333,10 +347,28 @@ function computePassivePerception(abilityScores, skillNames, level) {
 }
 
 /**
+ * Format a companion's current mood for the system prompt
+ */
+function formatCompanionMood(companion) {
+  const mood = companion.companion_mood || 'content';
+  if (mood === 'content' || !mood) return null;
+
+  const intensity = companion.companion_mood_intensity || 1;
+  const cause = companion.companion_mood_cause;
+  const guidance = MOOD_RP_GUIDANCE[mood];
+
+  let line = `  CURRENT MOOD: ${mood.charAt(0).toUpperCase() + mood.slice(1)} (${intensity}/5)`;
+  if (cause) line += ` — ${cause}`;
+  if (guidance) line += `\n  → Roleplay as ${guidance}`;
+
+  return line;
+}
+
+/**
  * Format active companions for the system prompt
  */
-function formatCompanions(companions) {
-  if (!companions || companions.length === 0) return '';
+function formatCompanions(companions, awayCompanions = []) {
+  if ((!companions || companions.length === 0) && awayCompanions.length === 0) return '';
 
   const companionDescriptions = companions.map(companion => {
     const isClassBased = companion.progression_type === 'class_based';
@@ -466,7 +498,8 @@ function formatCompanions(companions) {
       companion.motivation ? `  Motivation: ${companion.motivation}` : null,
       companion.relationship_to_party ? `  Relationship to Party: ${companion.relationship_to_party}` : null,
       companion.background_notes ? `  Backstory: ${companion.background_notes}` : null,
-      companion.notes ? `  Player Notes: ${companion.notes}` : null
+      companion.notes ? `  Player Notes: ${companion.notes}` : null,
+      formatCompanionMood(companion)
     ].filter(Boolean);
 
     return parts.join('\n');
@@ -524,7 +557,27 @@ When you call for a skill check from the player, consider if present companions 
 - Social checks (Persuasion, Deception, Intimidation) usually only involve the speaker
 - Companions with high passive Perception may notice things the player misses
 
-${companionDescriptions.join('\n\n')}`;
+${companionDescriptions.join('\n\n')}${formatAwayCompanions(awayCompanions)}`;
+}
+
+/**
+ * Format away companions section for the DM prompt.
+ */
+function formatAwayCompanions(awayCompanions) {
+  if (!awayCompanions || awayCompanions.length === 0) return '';
+
+  const lines = awayCompanions.map(c => {
+    const elapsed = c.start_game_day ? `away ${c.expected_duration_days ? `~${c.expected_duration_days} days` : 'unknown duration'}` : '';
+    const location = c.location ? ` at ${c.location}` : '';
+    return `- ${c.name}: ${c.activity_type}${location} (${elapsed})`;
+  });
+
+  return `
+
+COMPANIONS CURRENTLY AWAY:
+These companions are NOT present. Do NOT include them in scenes or combat.
+If the player asks about them, reference their activity.
+${lines.join('\n')}`;
 }
 
 /**
@@ -929,6 +982,70 @@ function getTrustLabel(trust) {
 }
 
 /**
+ * Generate a 1-line RP voice hint for an NPC.
+ * Enriched NPCs get personality-derived hints; others get occupation-based defaults.
+ */
+function generateNpcVoiceHint(r) {
+  // Enriched NPCs — distill voice + personality into an actionable RP instruction
+  if (r.npc_enrichment_level >= 1) {
+    const parts = [];
+    if (r.npc_voice) parts.push(r.npc_voice);
+    if (r.npc_personality) parts.push(r.npc_personality);
+    if (r.npc_mannerism) parts.push(r.npc_mannerism);
+    if (parts.length > 0) {
+      return `  -> RP: ${parts.join('; ').substring(0, 120)}`;
+    }
+  }
+
+  // Non-enriched NPCs — derive from occupation
+  const occupationVoiceMap = {
+    merchant: 'transactional, names prices, values repeat customers',
+    shopkeeper: 'transactional, names prices, values repeat customers',
+    trader: 'transactional, names prices, values repeat customers',
+    guard: 'clipped and authoritative, suspicious of strangers',
+    soldier: 'clipped and authoritative, follows chain of command',
+    noble: 'formal diction, expects deference, speaks in measured tones',
+    innkeeper: 'warm and chatty, knows local gossip, hospitable',
+    bartender: 'warm and chatty, knows local gossip, hospitable',
+    priest: 'serene and measured, speaks in blessings, offers counsel',
+    cleric: 'serene and measured, speaks in blessings, offers counsel',
+    blacksmith: 'gruff, few words, respects action over talk',
+    farmer: 'plain-spoken, weather-focused, community-minded',
+    thief: 'evasive, speaks in implications, never commits to facts',
+    rogue: 'evasive, speaks in implications, never commits to facts',
+    scholar: 'precise vocabulary, corrects others, loves tangents',
+    wizard: 'precise vocabulary, speaks cryptically, tests intelligence',
+    sage: 'precise vocabulary, speaks cryptically, tests intelligence',
+    beggar: 'desperate, obsequious, shrewd underneath',
+    bard: 'theatrical, embellishes everything, quotes poems',
+    ranger: 'terse, observant, speaks of nature and trails',
+    hunter: 'terse, observant, speaks of nature and trails'
+  };
+
+  const occ = (r.npc_occupation || '').toLowerCase();
+  for (const [key, hint] of Object.entries(occupationVoiceMap)) {
+    if (occ.includes(key)) {
+      return `  -> Voice hint: ${hint}`;
+    }
+  }
+
+  // Final fallback — derive from disposition
+  const dispLabel = (r.disposition_label || 'neutral').toLowerCase();
+  const dispositionVoiceMap = {
+    hostile: 'aggressive, may refuse to engage',
+    unfriendly: 'curt, gives minimal answers',
+    neutral: 'polite but reserved',
+    friendly: 'open, willing to chat',
+    allied: 'warm, volunteers information',
+    devoted: 'eager to help, deeply loyal'
+  };
+  const dispHint = dispositionVoiceMap[dispLabel];
+  if (dispHint) return `  -> Voice hint: ${dispHint}`;
+
+  return '';
+}
+
+/**
  * Format compressed world state snapshot for DM context
  * Includes: faction standings, active world events, NPC relationships,
  * known faction goals, and discovered locations.
@@ -965,18 +1082,47 @@ function formatWorldStateSnapshot(worldState) {
     sections.push('WORLD EVENTS IN PROGRESS:\n' + lines.join('\n'));
   }
 
-  // 3. NPC Relationships (most narrative-critical section)
-  const npcs = (worldState.npcRelationships || []).filter(r => {
+  // 3. NPC Voicing Guide + Relationships
+  sections.push(`NPC VOICING GUIDE:
+When roleplaying NPCs, differentiate them through speech patterns:
+- USE their RP/Voice hint to shape dialogue (accent, vocabulary, tempo)
+- Disposition CHANGES how they interact: hostile NPCs withhold info, allied NPCs volunteer it
+- Trust level determines what NPCs reveal: Low = surface conversation; High = secrets and favors
+- Each NPC's occupation defines their expertise and what they talk about naturally
+- NPCs with conversation history remember what was discussed — reference past topics`);
+
+  const allNpcs = (worldState.npcRelationships || []).filter(r => {
     const hasPendingPromises = r.promises_made?.some(p => p.status === 'pending');
     const hasOutstandingDebts = r.debts_owed?.some(d => d.status === 'outstanding');
     const hasSecrets = r.discovered_secrets?.length > 0;
     return r.disposition !== 0 || hasPendingPromises || hasOutstandingDebts || hasSecrets;
   });
-  if (npcs.length > 0) {
-    const lines = npcs.slice(0, 8).map(r => {
+
+  // Separate alive vs deceased NPCs
+  const aliveNpcs = allNpcs.filter(r => (r.npc_lifecycle_status || 'alive') !== 'deceased');
+  const deceasedNpcs = allNpcs.filter(r => r.npc_lifecycle_status === 'deceased');
+
+  // Build NPC event effects lookup for inline annotations
+  const npcEffectsMap = {};
+  for (const effect of (worldState.npcEventEffects || [])) {
+    if (!npcEffectsMap[effect.npc_id]) npcEffectsMap[effect.npc_id] = [];
+    npcEffectsMap[effect.npc_id].push(effect);
+  }
+
+  if (aliveNpcs.length > 0) {
+    const lines = aliveNpcs.slice(0, 8).map(r => {
       const occupation = r.npc_occupation ? ` (${r.npc_occupation})` : '';
       const location = r.npc_location ? ` at ${r.npc_location}` : '';
       const parts = [`- ${r.npc_name}${occupation}${location}: ${(r.disposition_label || 'neutral').toUpperCase()}, Trust: ${getTrustLabel(r.trust_level || 0)}`];
+
+      // Voice/RP hint (enriched NPCs get personality-derived, others get occupation-based)
+      const voiceHint = generateNpcVoiceHint(r);
+      if (voiceHint) parts.push(voiceHint);
+
+      // Motivation (kept separate — drives NPC goals, not voice)
+      if (r.npc_enrichment_level >= 1 && r.npc_motivation) {
+        parts.push(`  Motivation: ${r.npc_motivation}`);
+      }
 
       // Pending promises only
       const pendingPromises = (r.promises_made || []).filter(p => p.status === 'pending');
@@ -999,9 +1145,63 @@ function formatWorldStateSnapshot(worldState) {
         if (text) parts.push(`  Secret known: ${text.substring(0, 100)}`);
       });
 
+      // Recent conversation history (last 2 conversations with this NPC)
+      const npcConvs = worldState.npcConversations?.[r.npc_id];
+      if (npcConvs && npcConvs.length > 0) {
+        const mostRecent = npcConvs[0];
+        const sessionLabel = mostRecent.session_number ? `Session ${mostRecent.session_number}` : 'recent';
+        const toneNote = mostRecent.tone ? ` Tone: ${mostRecent.tone}.` : '';
+        parts.push(`  Last conversation (${sessionLabel}): ${mostRecent.summary.substring(0, 200)}${toneNote}`);
+
+        if (npcConvs.length > 1) {
+          const older = npcConvs[1];
+          const olderLabel = older.session_number ? `Session ${older.session_number}` : 'earlier';
+          parts.push(`  Earlier (${olderLabel}): ${older.summary.substring(0, 120)}`);
+        }
+      }
+
+      // Inline world event effect annotations
+      const npcEffects = npcEffectsMap[r.npc_id];
+      if (npcEffects && npcEffects.length > 0) {
+        for (const eff of npcEffects.slice(0, 2)) {
+          const params = typeof eff.parameters === 'string' ? JSON.parse(eff.parameters) : eff.parameters;
+          const shortDesc = eff.effect_type === 'disposition_shift' ? `attitude shifted ${params.shift > 0 ? '+' : ''}${params.shift}`
+            : eff.effect_type === 'location_change' ? `relocated to ${params.new_location}`
+            : eff.effect_type === 'status_change' ? `now ${params.new_status}`
+            : eff.effect_type === 'occupation_change' ? `now ${params.new_occupation}`
+            : eff.description;
+          parts.push(`  [EVENT: "${eff.event_title}" → ${shortDesc}]`);
+        }
+      }
+
+      // Absence annotation — helps AI roleplay appropriate warmth/unfamiliarity
+      if (worldState.currentGameDay && r.last_interaction_game_day) {
+        const daysAbsent = worldState.currentGameDay - r.last_interaction_game_day;
+        if (daysAbsent >= 14) {
+          parts.push(`  [ABSENCE: ${daysAbsent} days — disposition may have cooled]`);
+        }
+      }
+
       return parts.join('\n');
     });
     sections.push('NPC RELATIONSHIPS:\n' + lines.join('\n'));
+  }
+
+  // Deceased NPCs section — prevent the DM from resurrecting dead NPCs
+  if (deceasedNpcs.length > 0) {
+    const lines = deceasedNpcs.slice(0, 5).map(r => {
+      return `- ${r.npc_name}${r.npc_occupation ? ` (${r.npc_occupation})` : ''} — DECEASED`;
+    });
+    sections.push('DECEASED NPCs (do NOT have them appear alive):\n' + lines.join('\n'));
+  }
+
+  // 3.5. World Event Effects on NPCs (summary section)
+  const npcEventEffects = worldState.npcEventEffects || [];
+  if (npcEventEffects.length > 0) {
+    const lines = npcEventEffects.slice(0, 6).map(eff => {
+      return `- ${eff.npc_name}${eff.npc_occupation ? ` (${eff.npc_occupation})` : ''} — affected by "${eff.event_title}": ${eff.description}`;
+    });
+    sections.push('WORLD EVENT EFFECTS ON NPCs:\nThese NPCs have been affected by ongoing events. Reflect these changes in roleplay.\n' + lines.join('\n'));
   }
 
   // 4. Known Faction Goals
@@ -1245,7 +1445,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"

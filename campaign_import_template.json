@@ -1,0 +1,253 @@
+{
+  "_instructions": "This is a template for importing campaigns into the D&D Meta Game app. Fill in the sections below and paste the JSON into the Import Campaign dialog. Only 'campaign' and 'campaign_plan.main_quest' are required — everything else is optional. Delete this _instructions field before importing.",
+
+  "campaign": {
+    "name": "Campaign Name",
+    "description": "A 1-2 sentence summary of the campaign premise.",
+    "setting": "Forgotten Realms, Sword Coast",
+    "tone": "Heroic fantasy with moral complexity",
+    "starting_location": "Starting Town Name",
+    "time_ratio": "normal"
+  },
+
+  "campaign_plan": {
+    "main_quest": {
+      "title": "The Main Quest Title",
+      "summary": "What the overarching conflict is about.",
+      "hook": "How the player gets drawn into the main quest.",
+      "stakes": "What happens if the player fails.",
+      "acts": [
+        {
+          "act_number": 1,
+          "title": "Act 1 Title",
+          "level_range": "1-4",
+          "summary": "What happens in this act.",
+          "key_events": [
+            "First major event",
+            "Second major event"
+          ],
+          "climax": "The dramatic conclusion of this act."
+        },
+        {
+          "act_number": 2,
+          "title": "Act 2 Title",
+          "level_range": "5-8",
+          "summary": "What happens in this act.",
+          "key_events": [
+            "First major event",
+            "Second major event"
+          ],
+          "climax": "The dramatic conclusion of this act."
+        },
+        {
+          "act_number": 3,
+          "title": "Act 3 Title",
+          "level_range": "9-12",
+          "summary": "What happens in this act.",
+          "key_events": [
+            "First major event",
+            "Second major event"
+          ],
+          "climax": "The dramatic conclusion of this act."
+        }
+      ]
+    },
+
+    "side_quests": [
+      {
+        "title": "Side Quest Title",
+        "description": "What this side quest involves.",
+        "connection_to_main_quest": "How it ties back to the main story.",
+        "level_range": "2-4",
+        "location": "Where it takes place",
+        "reward": "What the player earns"
+      }
+    ],
+
+    "npcs": [
+      {
+        "id": "npc_unique_id",
+        "name": "NPC Full Name",
+        "role": "ally/neutral/antagonist/quest_giver",
+        "alignment": "neutral_good",
+        "description": "Brief physical and personality description.",
+        "motivation": "What drives this NPC.",
+        "secrets": ["A secret this NPC is hiding."],
+        "location": "Where they can usually be found",
+        "faction_affiliations": ["Faction Name"],
+        "relationship_to_player": "How they relate to the player character.",
+        "from_backstory": false
+      }
+    ],
+
+    "potential_companions": [
+      {
+        "id": "comp_unique_id",
+        "name": "Companion Name",
+        "race": "Dwarf",
+        "class": "Fighter",
+        "level": 3,
+        "subclass": "Champion",
+        "description": "Brief description of the companion.",
+        "personality": "Personality summary.",
+        "motivation": "Why they might join the party.",
+        "combat_style": "How they fight.",
+        "recruitment_conditions": "How/where the player can recruit them.",
+        "location": "Where they are found"
+      }
+    ],
+
+    "factions": [
+      {
+        "name": "Faction Name",
+        "description": "What this faction is and what they want.",
+        "alignment": "lawful_neutral",
+        "scope": "regional/local/global",
+        "primary_values": "Core values of the faction",
+        "motto": "Their motto or creed",
+        "power_level": "moderate",
+        "influence_areas": "Where they have power",
+        "leadership_structure": "How they're organized",
+        "notable_members": "Key members",
+        "typical_methods": "How they operate",
+        "public_reputation": "How the public views them"
+      }
+    ],
+
+    "locations": [
+      {
+        "id": "loc_unique_id",
+        "name": "Location Name",
+        "type": "town/city/dungeon/wilderness/landmark",
+        "description": "What this place looks and feels like.",
+        "significance": "Why it matters to the story.",
+        "notable_features": ["A key feature of this location"],
+        "dangers": ["Threats found here"],
+        "connections": ["Other locations it connects to"]
+      }
+    ],
+
+    "merchants": [
+      {
+        "name": "Merchant Name",
+        "location": "Where they operate",
+        "shop_name": "The Shop Name",
+        "specialty": "What they specialize in",
+        "personality": "Brief personality description",
+        "inventory_style": "general/weapons/armor/magic/potions/scrolls"
+      }
+    ],
+
+    "world_state": {
+      "political_situation": "Current political landscape.",
+      "major_threats": ["Threat 1", "Threat 2"],
+      "faction_tensions": ["Tension between factions"],
+      "regional_news": ["Recent news and rumors"]
+    },
+
+    "world_timeline": {
+      "description": "Events that unfold regardless of player action.",
+      "events": [
+        {
+          "day_range": [10, 20],
+          "description": "Something that happens between day 10 and 20.",
+          "consequences": "What changes as a result."
+        }
+      ]
+    },
+
+    "themes": ["Found family", "Redemption", "Power and corruption"],
+
+    "dm_notes": {
+      "tone_guidance": "Notes on maintaining the campaign's tone.",
+      "pacing_notes": "Guidance on story pacing.",
+      "player_agency": "How to handle player choices that deviate from the plan."
+    }
+  },
+
+  "character": {
+    "_note": "OPTIONAL. Omit this entire section to create the character through the in-app wizard instead.",
+    "name": "Character Full Name",
+    "first_name": "First",
+    "last_name": "Last",
+    "nickname": "Nick",
+    "gender": "Male/Female/Non-binary",
+    "class": "Fighter",
+    "subclass": "Champion",
+    "race": "Human",
+    "subrace": "Variant Human",
+    "background": "Soldier",
+    "level": 1,
+    "max_hp": 12,
+    "current_hp": 12,
+    "armor_class": 16,
+    "speed": 30,
+    "ability_scores": { "str": 16, "dex": 14, "con": 14, "int": 10, "wis": 12, "cha": 8 },
+    "experience": 0,
+    "experience_to_next_level": 300,
+    "gold_gp": 15,
+    "gold_sp": 0,
+    "gold_cp": 0,
+    "alignment": "Neutral Good",
+    "backstory": "Character backstory text.",
+    "personality_traits": "Personality traits.",
+    "ideals": "What the character believes in.",
+    "bonds": "What the character cares about.",
+    "flaws": "Character weaknesses.",
+    "languages": ["Common", "Dwarvish"],
+    "skills": ["Athletics", "Perception"],
+    "inventory": [
+      { "name": "Longsword", "quantity": 1 },
+      { "name": "Shield", "quantity": 1 }
+    ],
+    "equipment": ["Longsword", "Shield", "Chain Mail"],
+    "current_location": "Starting Town Name",
+    "game_day": 1,
+    "game_year": 1492,
+    "game_hour": 8
+  },
+
+  "sessions": [
+    {
+      "_note": "OPTIONAL. Use this to import prior session history if continuing a campaign.",
+      "title": "Session 1: The Beginning",
+      "summary": "What happened in this session.",
+      "game_start_day": 1,
+      "game_start_year": 1492,
+      "game_end_day": 3,
+      "game_end_year": 1492
+    }
+  ],
+
+  "companions": [
+    {
+      "_note": "OPTIONAL. Use this to import companions the character has already recruited.",
+      "npc": {
+        "name": "Companion NPC Name",
+        "race": "Elf",
+        "gender": "Female",
+        "age": "120",
+        "occupation": "Ranger",
+        "personality_trait_1": "Quiet and observant.",
+        "personality_trait_2": "Fiercely loyal.",
+        "motivation": "Protect the wilds.",
+        "secret": "Hiding from her past.",
+        "current_location": "Starting Town",
+        "background_notes": "Former member of an elven patrol.",
+        "relationship_to_party": "Trusted ally"
+      },
+      "progression_type": "class_based",
+      "companion_class": "Ranger",
+      "companion_subclass": "Gloom Stalker",
+      "companion_level": 3,
+      "companion_max_hp": 28,
+      "companion_current_hp": 28,
+      "companion_ability_scores": { "str": 12, "dex": 16, "con": 14, "int": 10, "wis": 14, "cha": 8 },
+      "equipment": { "weapons": ["Longbow", "Shortsword"], "armor": "Leather Armor" },
+      "alignment": "Chaotic Good",
+      "ideals": "Freedom above all.",
+      "bonds": "The forest is my home.",
+      "flaws": "Trusts no one easily."
+    }
+  ]
+}

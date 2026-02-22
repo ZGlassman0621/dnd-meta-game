@@ -63,6 +63,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [inventoryApplied, setInventoryApplied] = useState(false);
   const [preInventorySnapshot, setPreInventorySnapshot] = useState(null);
   const [extractedNpcs, setExtractedNpcs] = useState([]);
+  const [sessionAchievements, setSessionAchievements] = useState([]);
 
   const [sessionHistory, setSessionHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -87,6 +88,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Companions quick reference panel state
   const [showCompanionsRef, setShowCompanionsRef] = useState(false);
   const [companions, setCompanions] = useState([]);
+  const [awayCompanions, setAwayCompanions] = useState([]);
 
   // Game date and spell slots state
   const [gameDate, setGameDate] = useState(null);
@@ -136,6 +138,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     fetchAvailableNpcs();
     fetchCampaignContext();
     fetchCompanions();
+    fetchAwayCompanions();
   }, [character.id]);
 
   const fetchCompanions = async () => {
@@ -147,6 +150,49 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
     } catch (error) {
       console.error('Error fetching companions:', error);
+    }
+  };
+
+  const fetchAwayCompanions = async () => {
+    try {
+      const response = await fetch(`/api/companion/character/${character.id}/away`);
+      if (response.ok) {
+        const data = await response.json();
+        setAwayCompanions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching away companions:', error);
+    }
+  };
+
+  const handleSendOnActivity = async (companionId, formData) => {
+    try {
+      const response = await fetch(`/api/companion/${companionId}/send-activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (response.ok) {
+        fetchCompanions();
+        fetchAwayCompanions();
+      }
+    } catch (error) {
+      console.error('Error sending companion on activity:', error);
+    }
+  };
+
+  const handleRecallCompanion = async (activityId) => {
+    try {
+      const response = await fetch(`/api/companion/activity/${activityId}/recall`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        fetchCompanions();
+        fetchAwayCompanions();
+      }
+    } catch (error) {
+      console.error('Error recalling companion:', error);
     }
   };
 
@@ -614,6 +660,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       setSessionEnded(false);
       setSessionRewards(null);
+      setSessionAchievements([]);
       setSessionRecap(null);
       setActiveGameTab('adventure');
       setLastMerchantContext(null);
@@ -1038,6 +1085,17 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         }
       }
 
+      // Fetch any achievements earned during this session
+      try {
+        const achRes = await fetch(`/api/achievement/recent/${character.id}`);
+        const achData = await achRes.json();
+        if (Array.isArray(achData) && achData.length > 0) {
+          setSessionAchievements(achData);
+        }
+      } catch (achErr) {
+        console.error('Failed to fetch session achievements:', achErr);
+      }
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1056,6 +1114,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to claim rewards');
+      }
+
+      // Acknowledge achievements so they don't show again next session
+      if (sessionAchievements.length > 0) {
+        fetch(`/api/achievement/${character.id}/acknowledge`, { method: 'POST' }).catch(() => {});
       }
 
       // Update character in parent
@@ -1084,6 +1147,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setMerchantDbId(null);
       setMerchantPersonality(null);
       setMerchantGold(null);
+      setSessionAchievements([]);
       fetchSessionHistory();
       fetchCampaignContext(); // Refresh campaign context to show updated session recap
 
@@ -1470,6 +1534,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         inventoryApplied={inventoryApplied}
         preInventorySnapshot={preInventorySnapshot}
         extractedNpcs={extractedNpcs}
+        sessionAchievements={sessionAchievements}
         onClaimRewards={claimRewards}
         onApplyInventory={applyInventoryChanges}
         onUndoInventory={undoInventoryChanges}
@@ -1672,10 +1737,13 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         )}
 
         {/* Companions Quick Reference Panel (Overlay) */}
-        {showCompanionsRef && companions.length > 0 && (
+        {showCompanionsRef && (companions.length > 0 || awayCompanions.length > 0) && (
           <CompanionsPanel
             companions={companions}
+            awayCompanions={awayCompanions}
             onClose={() => setShowCompanionsRef(false)}
+            onSendActivity={handleSendOnActivity}
+            onRecallCompanion={handleRecallCompanion}
           />
         )}
 

@@ -1,5 +1,6 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { generateNpcEffectsForEvent, resolveNpcEffectsForEvent } from './worldEventNpcService.js';
 
 /**
  * World Event Service - CRUD operations for world events and event effects
@@ -219,6 +220,13 @@ export async function resolveEvent(id, outcome, outcomeDescription = null) {
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `, [outcome, outcomeDescription, id]);
+
+  // Resolve NPC effects associated with this event
+  try {
+    await resolveNpcEffectsForEvent(id);
+  } catch (e) {
+    console.error(`Error resolving NPC effects for event ${id}:`, e);
+  }
 
   return getWorldEventById(id);
 }
@@ -477,13 +485,27 @@ export async function processEventTick(campaignId, gameDaysPassed = 1) {
         const updated = await advanceEventStage(event.id);
         await recordEventTick(event.id, `Advanced to stage ${updated.current_stage} on day tick`);
 
-        results.push({
-          type: 'event_stage_advanced',
-          event_id: event.id,
-          title: event.title,
-          new_stage: updated.current_stage,
-          stage_name: event.stages[updated.current_stage] || 'Unknown'
-        });
+        // Generate NPC effects for this stage advance
+        try {
+          const npcEffects = await generateNpcEffectsForEvent(event, updated.current_stage);
+          results.push({
+            type: 'event_stage_advanced',
+            event_id: event.id,
+            title: event.title,
+            new_stage: updated.current_stage,
+            stage_name: event.stages[updated.current_stage] || 'Unknown',
+            npc_effects: npcEffects
+          });
+        } catch (e) {
+          console.error(`Error generating NPC effects for event ${event.id}:`, e);
+          results.push({
+            type: 'event_stage_advanced',
+            event_id: event.id,
+            title: event.title,
+            new_stage: updated.current_stage,
+            stage_name: event.stages[updated.current_stage] || 'Unknown'
+          });
+        }
       }
     }
   }

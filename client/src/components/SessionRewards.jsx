@@ -17,6 +17,7 @@ function SessionRewards({
   inventoryApplied,
   preInventorySnapshot,
   extractedNpcs,
+  sessionAchievements = [],
   onClaimRewards,
   onApplyInventory,
   onUndoInventory,
@@ -247,6 +248,48 @@ function SessionRewards({
               <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.8rem', color: '#888' }}>
                 These NPCs are now available on the NPCs page where you can view and edit their details.
               </p>
+            </div>
+          )}
+
+          {/* Achievements Earned Section */}
+          {sessionAchievements.length > 0 && (
+            <div style={{
+              marginTop: '1rem',
+              padding: '1rem',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%)',
+              borderRadius: '8px',
+              border: '1px solid rgba(245, 158, 11, 0.4)'
+            }}>
+              <h4 style={{ margin: '0 0 0.75rem 0', color: '#f59e0b' }}>
+                Achievements Unlocked!
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {sessionAchievements.map((ach, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.75rem',
+                    padding: '0.5rem',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    borderRadius: '6px'
+                  }}>
+                    <span style={{ fontSize: '1.5rem', lineHeight: '1' }}>{ach.icon || '🏆'}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>{ach.title}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.15rem' }}>{ach.description}</div>
+                      {ach.rewards && (
+                        <div style={{ fontSize: '0.8rem', color: '#d4d4d4', marginTop: '0.35rem' }}>
+                          {[
+                            ach.rewards.xp && `+${ach.rewards.xp} XP`,
+                            ach.rewards.gold && `+${ach.rewards.gold} gp`,
+                            ...(ach.rewards.items || [])
+                          ].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -32,6 +32,8 @@ export const GAME_EVENTS = {
   NPC_PROMISE_MADE: 'npc_promise_made',
   NPC_PROMISE_FULFILLED: 'npc_promise_fulfilled',
   NPC_PROMISE_BROKEN: 'npc_promise_broken',
+  NPC_DECEASED: 'npc_deceased',
+  NPC_STATUS_CHANGED: 'npc_status_changed',
 
   // Item events
   ITEM_OBTAINED: 'item_obtained',
@@ -63,6 +65,12 @@ export const GAME_EVENTS = {
   CHARACTER_LEVEL_UP: 'character_level_up',
   CHARACTER_REST: 'character_rest',
   CHARACTER_LOCATION_CHANGED: 'character_location_changed',
+
+  // Quest events
+  QUEST_COMPLETED: 'quest_completed_game',
+
+  // Achievement events
+  ACHIEVEMENT_EARNED: 'achievement_earned',
 
   // Time events
   GAME_TIME_ADVANCED: 'game_time_advanced',
@@ -136,6 +144,9 @@ export const NARRATIVE_EVENTS = {
 
   // Discovery
   DISCOVERY_MADE: 'discovery_made',
+
+  // Achievement
+  ACHIEVEMENT_EARNED: 'achievement_earned',
 
   // Flavor/ambient
   FLAVOR_EVENT: 'flavor_event'

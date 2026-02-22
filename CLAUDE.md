@@ -24,14 +24,42 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - DM prompt uses primacy/recency reinforcement — critical rules at top (ABSOLUTE RULES) and bottom (FINAL REMINDER)
 - Event bus (`server/services/eventEmitter.js`) connects game systems
 - Error handling via `server/utils/errorHandler.js` (handleServerError, notFound, validationError)
+- Story Chronicle system: canon facts in `canon_facts` table, session chronicles in `story_chronicles` table
+- Context window management: adaptive budgeting (2K-8K tokens), sliding window compression for long sessions
+- No storage caps: campaign_notes, character_memories, and usedNames all grow without limit
+- NPC conversation memory: `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session
+- Companion emotional state: mood columns on `companion_backstories` (mood, mood_cause, mood_intensity, mood_set_game_day) with time-based decay
+- NPC lifecycle state machine: `lifecycle_status` on `npcs` table (alive/deceased/missing/imprisoned/unknown), `npc_lifecycle_history` audit trail
+- NPC personality enrichment: session extraction fills voice/personality/mannerism/motivation/appearance over time (fill-not-overwrite), `enrichment_level` tracks depth
+- NPC death propagation: `propagateNpcDeath()` in `npcLifecycleService.js` cascades to companion status, canon facts, promises/debts, narrative queue, events
+- NPC voice differentiation: `generateNpcVoiceHint()` in dmPromptBuilder.js — enriched NPCs get personality RP hints, others get occupation-based voice guidance
+- Companion activities: `companion_activities` table tracks off-screen activities (training, scouting, etc.); companions can be 'away' status; activities resolve via Opus AI
+- Companion dismiss is soft-delete: status='dismissed' preserves history instead of DELETE
+- World event NPC effects: `worldEventNpcService.js` generates NPC effects (disposition shift, location change, status change, occupation change) when world events advance stages
+- NPC mail system: `npcMailService.js` scores NPC candidates (disposition/trust/absence/events), generates AI or template mail, queues via narrative_queue — runs as step 3.75 in living world tick
+- NPC aging/absence: `npcAgingService.js` decays disposition/trust based on days since last interaction (applied at session start like decayMoods), reunion boost (+3 disp) after 14+ day absence, relocation/forget thresholds for extreme absence
+- `last_interaction_game_day` INTEGER on `npc_relationships` — populated by `recordInteraction()`, used for absence math and [ABSENCE: X days] annotations in DM prompt
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
-- `server/database.js` — Schema (monolithic, ~1300 lines)
+- `server/database.js` — Schema (imports migrationRunner, ~35 lines)
+- `server/migrationRunner.js` — Numbered migration system with up/down
 - `server/services/claude.js` — Claude API client
 - `server/services/dmPromptBuilder.js` — DM system prompt (~600 lines)
 - `server/services/dmSessionService.js` — Session logic, marker detection
+- `server/services/storyChronicleService.js` — Canon fact database, session chronicles, context retrieval, NPC conversation + mood extraction
+- `server/services/npcRelationshipService.js` — NPC relationship CRUD, conversation memory
+- `server/services/npcLifecycleService.js` — NPC lifecycle transitions, death propagation cascade, canon fact sync
+- `server/services/companionBackstoryService.js` — Companion backstories, loyalty, mood system
+- `server/services/companionActivityService.js` — Away companion activities, resolution, recall
+- `server/services/worldEventNpcService.js` — NPC effects from world event stage advances
+- `server/services/npcMailService.js` — NPC mail candidate scoring, AI/template content generation, narrative queue integration
+- `server/services/npcAgingService.js` — Absence-based disposition/trust decay, reunion boost, relocation/forget thresholds
+- `server/services/livingWorldService.js` — Living world tick pipeline (factions → events → companions → NPC mail → record)
+- `server/services/narrativeQueueService.js` — Narrative queue CRUD, priority ordering, delivery tracking, AI context formatting
+- `server/utils/contextManager.js` — Token estimation, context window compression, adaptive budgeting
 - `server/routes/dmSession.js` — DM session routes (~1700 lines)
+- `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
 - `client/src/App.jsx` — SPA root, navigation, state
 - `client/src/components/DMSession.jsx` — Main DM session UI (~4300 lines)
 
