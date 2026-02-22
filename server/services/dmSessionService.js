@@ -403,6 +403,187 @@ export function detectRecruitment(narrative, playerAction) {
 }
 
 // ============================================================
+// WEATHER, SURVIVAL & CRAFTING MARKER DETECTION
+// ============================================================
+
+/**
+ * Detect [WEATHER_CHANGE: Type="thunderstorm" Duration_Hours=6]
+ */
+export function detectWeatherChange(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[WEATHER_CHANGE:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  if (!data.type) return null;
+  return {
+    type: data.type,
+    duration_hours: parseInt(data.duration_hours) || 24
+  };
+}
+
+/**
+ * Detect [SHELTER_FOUND: Type="cave" Quality="adequate"]
+ */
+export function detectShelterFound(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[SHELTER_FOUND:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  if (!data.type) return null;
+  return {
+    type: data.type,
+    quality: data.quality || 'adequate'
+  };
+}
+
+/**
+ * Detect [SWIM: Duration="brief"]
+ */
+export function detectSwim(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[SWIM:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  return { duration: data.duration || 'brief' };
+}
+
+/**
+ * Detect [EAT: Item="Rations (1 day)"] markers — can appear multiple times
+ */
+export function detectEat(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[EAT:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.item) results.push({ item: data.item });
+  }
+  return results;
+}
+
+/**
+ * Detect [DRINK: Item="Waterskin"] markers — can appear multiple times
+ */
+export function detectDrink(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[DRINK:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.item) results.push({ item: data.item });
+  }
+  return results;
+}
+
+/**
+ * Detect [FORAGE: Terrain="forest" Result="success" Food=1 Water=1]
+ */
+export function detectForage(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[FORAGE:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  return {
+    terrain: data.terrain || 'unknown',
+    result: data.result || 'success',
+    food: parseInt(data.food) || 0,
+    water: parseInt(data.water) || 0
+  };
+}
+
+/**
+ * Detect [RECIPE_FOUND: Name="Potion of Healing" Source="ancient journal"]
+ */
+export function detectRecipeFound(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[RECIPE_FOUND:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.name) results.push({ name: data.name, source: data.source || 'found' });
+  }
+  return results;
+}
+
+/**
+ * Detect [MATERIAL_FOUND: Name="Healing Herbs" Quantity=3 Quality="standard"]
+ */
+export function detectMaterialFound(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[MATERIAL_FOUND:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.name) {
+      results.push({
+        name: data.name,
+        quantity: parseInt(data.quantity) || 1,
+        quality: data.quality || 'standard'
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Detect [CRAFT_PROGRESS: Hours=4]
+ */
+export function detectCraftProgress(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[CRAFT_PROGRESS:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  const hours = parseFloat(data.hours);
+  if (!hours || hours <= 0) return null;
+  return { hours };
+}
+
+/**
+ * Detect [RECIPE_GIFT: Name="Gerda's Mutton Stew" Category="food" Description="..." Materials="Raw Meat:1,Herbs:1" Tools="Cook's Utensils" DC=10 Hours=2 Ability="wisdom" OutputName="..." OutputDesc="..." GiftedBy="Gerda the Innkeeper"]
+ * Creates a NEW recipe that didn't exist before (vs RECIPE_FOUND which discovers existing ones).
+ */
+export function detectRecipeGift(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[RECIPE_GIFT:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.name && data.category) {
+      // Parse compact materials format "Name:Qty,Name:Qty"
+      const materials = (data.materials || '').split(',')
+        .map(m => {
+          const parts = m.trim().split(':');
+          return { name: parts[0]?.trim(), quantity: parseInt(parts[1]) || 1 };
+        })
+        .filter(m => m.name);
+
+      results.push({
+        name: data.name,
+        category: data.category,
+        description: data.description || '',
+        materials,
+        tools: !data.tools || data.tools === 'none' ? [] : [data.tools],
+        dc: parseInt(data.dc) || 10,
+        hours: parseInt(data.hours) || 4,
+        ability: data.ability || 'intelligence',
+        outputName: data.outputname || data.name,
+        outputDesc: data.outputdesc || data.description || '',
+        outputCategory: data.outputcategory || data.category,
+        outputRarity: data.outputrarity || 'common',
+        outputPrice: parseInt(data.outputprice) || 1,
+        giftedBy: data.giftedby || 'Unknown'
+      });
+    }
+  }
+  return results;
+}
+
+// ============================================================
 // SESSION ANALYSIS & REWARDS
 // ============================================================
 

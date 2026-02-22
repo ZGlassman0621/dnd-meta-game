@@ -1445,7 +1445,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"
@@ -1487,6 +1487,40 @@ When conditions are active, they appear as system notes in the conversation.
 - When applying a condition, emit: [CONDITION_ADD: Target="Player" Condition="frightened"]
 - For companions, use their name as Target: [CONDITION_ADD: Target="Elara" Condition="charmed"]
 - Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion_1 through exhaustion_6
+
+WEATHER & SURVIVAL MARKERS:
+The system tracks weather, temperature, hunger, thirst, and exposure. When relevant weather/survival events occur in the narrative, emit these markers:
+- Weather changes: [WEATHER_CHANGE: Type="thunderstorm" Duration_Hours=6] — when weather shifts dramatically in the narrative
+  Valid types: clear, cloudy, overcast, rain, heavy_rain, thunderstorm, snow, blizzard, hail, fog, heat_wave, dust_storm, sleet
+- Finding shelter: [SHELTER_FOUND: Type="cave" Quality="adequate"] — when the party finds shelter (cave, building, overhang)
+  Valid types: cave, building, tent, bedroll, overhang
+- Swimming: [SWIM: Duration="brief"] — when a character enters water (provides heat relief)
+- Eating: [EAT: Item="Rations (1 day)"] — when the player eats a specific food item from inventory
+- Drinking: [DRINK: Item="Waterskin"] — when the player drinks from a water source in inventory
+- Foraging: [FORAGE: Terrain="forest" Result="success" Food=1 Water=1] — when the player forages and you determine the result
+  Call for a Survival check before determining foraging success. The DC depends on terrain.
+
+WEATHER EFFECTS TO ENFORCE (when weather context is provided above):
+- Reference weather in scene descriptions naturally (rain dripping, wind howling, heat shimmering)
+- Apply mechanical effects from the weather context section (visibility, travel speed, ranged attack penalties)
+- If temperature is dangerous, remind the player of exposure risks and call for CON saves as noted
+- When the player asks about conditions outside, describe the weather without requiring a check
+
+CRAFTING MARKERS:
+When the player discovers recipes, finds crafting materials, or works on crafting projects:
+- Recipe discovery (existing recipe): [RECIPE_FOUND: Name="Potion of Healing" Source="ancient alchemist's journal"]
+- Material discovery: [MATERIAL_FOUND: Name="Healing Herbs" Quantity=3 Quality="standard"]
+  Valid qualities: standard, fine, superior
+- Crafting time: [CRAFT_PROGRESS: Hours=4] — when the player spends narrative time crafting
+- Materials can be found while exploring, looting, foraging, or bought from merchants
+- Recipes can be found in books, scrolls, taught by NPCs, or discovered through experimentation
+- When a player says they want to craft something, acknowledge it and use the CRAFT_PROGRESS marker for time spent
+
+RADIANT RECIPE GIFTS — for unique, NPC-gifted recipes that don't exist in the standard catalog:
+- [RECIPE_GIFT: Name="Gerda's Mutton Stew" Category="food" Description="A hearty stew with rosemary and root vegetables" Materials="Raw Meat:1,Herbs:1,Vegetables:1,Salt:1" Tools="Cook's Utensils" DC=10 Hours=2 Ability="wisdom" OutputName="Gerda's Mutton Stew" OutputDesc="A filling savory stew that warms the soul" GiftedBy="Gerda the Innkeeper"]
+  Required fields: Name, Category, Description, Materials (Name:Qty,Name:Qty format), Tools (tool name or "none"), DC, Hours, Ability (strength/dexterity/intelligence/wisdom), OutputName, OutputDesc, GiftedBy
+  Category must be one of: food, potion, weapon, armor, adventuring_gear, poison, scroll, ammunition, shelter
+  GUIDELINES: Only gift recipes when narratively earned (strong NPC relationships, completed favors, trade secrets shared in gratitude). Keep balance reasonable: DC 8-16, 1-4 material types, 1-16 hours craft time. Match gifter to category (innkeepers→food, blacksmiths→weapons, herbalists→potions). This should be RARE — maybe once every 3-5 sessions. Each recipe should feel unique and personal.
 
 CONVERSATION FLOW:
 - SHORT RESPONSES ARE GOOD. You do not need to fill space. 1-3 sentences is often perfect.
@@ -1971,6 +2005,10 @@ COMBAT: Emit [COMBAT_START: Enemies="enemy1, enemy2"] when combat begins. System
 COMPANION SKILL CHECKS: When calling for skill checks, consider if present companions with matching proficiencies also attempt it. If the player fails but a companion succeeds, narrate the companion stepping in.
 
 CONDITIONS: Respect active condition mechanics. Emit [CONDITION_ADD: Target="name" Condition="condition"] and [CONDITION_REMOVE: Target="name" Condition="condition"] markers when conditions change.
+
+WEATHER & SURVIVAL: Reference current weather in descriptions. Enforce exposure rules and mechanical effects from the weather context. Use [EAT], [DRINK], [FORAGE] markers when players consume food/water or forage. Use [WEATHER_CHANGE] when weather shifts dramatically. Use [SHELTER_FOUND] when shelter is discovered.
+
+CRAFTING: Use [RECIPE_FOUND] when players discover existing recipes, [MATERIAL_FOUND] for raw materials found, [CRAFT_PROGRESS] for crafting time, and [RECIPE_GIFT] when an NPC shares a unique personal recipe. Materials come from foraging, looting, merchants, and exploration.
 
 NPC MORAL DIVERSITY: Not every NPC is kind or helpful. Most people are self-interested. Merchants overcharge, officials stall, strangers are suspicious. Allies can be rude, greedy, or morally gray. Help should cost something. Play NPC alignments from the campaign plan faithfully.
 

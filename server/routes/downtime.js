@@ -1,6 +1,8 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { handleServerError } from '../utils/errorHandler.js';
+import { advanceProject, getProjectStatus } from '../services/craftingService.js';
+import { autoConsumeRations } from '../services/survivalService.js';
 
 const router = express.Router();
 
@@ -1069,6 +1071,20 @@ function calculateBenefits(downtime, character, activity) {
         }
         benefits.longRest = true;
         benefits.abilitiesRecharged = 'all';
+
+        // Auto-consume rations during long rest
+        try {
+          const consumeResult = await autoConsumeRations(character.id, character.game_day || 1);
+          if (consumeResult.foodConsumed || consumeResult.waterConsumed) {
+            benefits.rationsConsumed = consumeResult;
+            const parts = [];
+            if (consumeResult.foodConsumed) parts.push(consumeResult.foodConsumed);
+            if (consumeResult.waterConsumed) parts.push(consumeResult.waterConsumed);
+            benefits.description += `. Consumed: ${parts.join(', ')}`;
+          }
+        } catch (e) {
+          // Non-critical — don't fail the rest over ration tracking
+        }
       } else {
         // SHORT REST: Can spend Hit Dice to recover HP
         // For simplicity, we'll auto-calculate a reasonable HP recovery
@@ -1157,9 +1173,34 @@ function calculateBenefits(downtime, character, activity) {
       break;
 
     case 'craft':
-      // Crafting progress (for now, small gold value created)
-      benefits.goldEarned = Math.floor(hours * 1.5);
-      benefits.description = `Crafted for ${hours} hours, creating items worth ${benefits.goldEarned} GP`;
+      // Try to advance an active crafting project
+      try {
+        const projects = await getProjectStatus(character.id);
+        const activeProject = projects.find(p => p.status === 'in_progress');
+        if (activeProject) {
+          const result = await advanceProject(activeProject.id, hours);
+          benefits.craftingProgress = {
+            project: activeProject.recipe_name,
+            hoursAdded: hours,
+            totalHours: result.hours_invested,
+            required: result.hours_required,
+            readyToComplete: result.ready_to_complete,
+            progressPct: result.progress_pct
+          };
+          benefits.description = `Worked on ${activeProject.recipe_name} for ${hours} hours (${result.progress_pct}% complete)`;
+          if (result.ready_to_complete) {
+            benefits.description += ' — ready to complete!';
+            benefits.events.push(`Your ${activeProject.recipe_name} project is ready to complete!`);
+          }
+        } else {
+          // No active project — fallback to generic crafting gold
+          benefits.goldEarned = Math.floor(hours * 1.5);
+          benefits.description = `Crafted for ${hours} hours, creating items worth ${benefits.goldEarned} GP`;
+        }
+      } catch (e) {
+        benefits.goldEarned = Math.floor(hours * 1.5);
+        benefits.description = `Crafted for ${hours} hours, creating items worth ${benefits.goldEarned} GP`;
+      }
       break;
 
     case 'work':

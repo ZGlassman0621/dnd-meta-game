@@ -7,6 +7,9 @@ import * as questService from './questService.js';
 import * as narrativeQueueService from './narrativeQueueService.js';
 import { checkAndResolveActivities } from './companionActivityService.js';
 import { generateNpcMail } from './npcMailService.js';
+import { advanceWeather, getWeather } from './weatherService.js';
+import { processDayChange as processSurvivalDayChange } from './survivalService.js';
+import { getSeason } from '../config/harptos.js';
 
 /**
  * Living World Service - Coordinates faction and world event progression
@@ -40,6 +43,21 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
   };
 
   try {
+    // 0.5. Advance weather
+    try {
+      const maxDayRow = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const currentGameDay = maxDayRow?.max_day || 1;
+      const season = getSeason(currentGameDay);
+      const weatherResult = await advanceWeather(campaignId, gameDaysPassed * 24, currentGameDay, season);
+      results.weather = weatherResult;
+    } catch (e) {
+      console.error('Error advancing weather:', e);
+      results.errors.push(`Weather: ${e.message}`);
+    }
+
     // 1. Process faction goals (they advance over time)
     const factionResults = await factionService.processFactionTick(campaignId, gameDaysPassed);
     results.faction_results = factionResults;
@@ -522,12 +540,24 @@ export async function processCharacterTimeAdvance(characterId, hoursAdvanced) {
   // Process the living world tick
   const results = await processLivingWorldTick(character.campaign_id, daysPassed);
 
+  // Process survival day-change if a full day passed
+  let survivalEffects = null;
+  if (daysPassed >= 1) {
+    try {
+      const weather = await getWeather(character.campaign_id);
+      survivalEffects = await processSurvivalDayChange(characterId, character.game_day || 1, weather);
+    } catch (e) {
+      console.error('Error processing survival day change:', e);
+    }
+  }
+
   return {
     processed: true,
     campaign_id: character.campaign_id,
     hours_advanced: hoursAdvanced,
     days_equivalent: daysPassed,
-    results
+    results,
+    survivalEffects
   };
 }
 

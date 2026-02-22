@@ -105,6 +105,11 @@ export default function PlayerJournalPage({ character, onBack }) {
   const [expandedChronicle, setExpandedChronicle] = useState(null);
   const [editingFact, setEditingFact] = useState(null);
   const [mailItems, setMailItems] = useState([]);
+  const [craftingRecipes, setCraftingRecipes] = useState([]);
+  const [craftingMaterials, setCraftingMaterials] = useState([]);
+  const [craftingProjects, setCraftingProjects] = useState([]);
+  const [craftingSubTab, setCraftingSubTab] = useState('recipes');
+  const [craftingCategoryFilter, setCraftingCategoryFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -113,6 +118,7 @@ export default function PlayerJournalPage({ character, onBack }) {
     fetchAchievements();
     if (character.campaign_id) fetchChronicleData();
     fetchMail();
+    fetchCrafting();
   }, [character.id]);
 
   const fetchJournal = async () => {
@@ -162,6 +168,58 @@ export default function PlayerJournalPage({ character, onBack }) {
     } catch {
       // Mail is non-critical
     }
+  };
+
+  const fetchCrafting = async () => {
+    try {
+      const [recipesRes, materialsRes, projectsRes] = await Promise.all([
+        fetch(`/api/crafting/${character.id}/recipes`),
+        fetch(`/api/crafting/${character.id}/materials`),
+        fetch(`/api/crafting/${character.id}/projects`)
+      ]);
+      if (recipesRes.ok) setCraftingRecipes(await recipesRes.json());
+      if (materialsRes.ok) setCraftingMaterials(await materialsRes.json());
+      if (projectsRes.ok) setCraftingProjects(await projectsRes.json());
+    } catch {
+      // Crafting data is non-critical
+    }
+  };
+
+  const handleStartProject = async (recipeId) => {
+    try {
+      const res = await fetch(`/api/crafting/${character.id}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipe_id: recipeId, campaign_id: character.campaign_id, game_day: character.game_day })
+      });
+      if (res.ok) fetchCrafting();
+      else {
+        const data = await res.json();
+        alert(data.error || 'Failed to start project');
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleCompleteProject = async (projectId) => {
+    try {
+      const res = await fetch(`/api/crafting/projects/${projectId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_day: character.game_day })
+      });
+      if (res.ok) fetchCrafting();
+      else {
+        const data = await res.json();
+        alert(data.error || 'Failed to complete project');
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleAbandonProject = async (projectId) => {
+    try {
+      const res = await fetch(`/api/crafting/projects/${projectId}/abandon`, { method: 'POST' });
+      if (res.ok) fetchCrafting();
+    } catch { /* ignore */ }
   };
 
   const handleSearchFacts = async (query) => {
@@ -273,6 +331,9 @@ export default function PlayerJournalPage({ character, onBack }) {
             Mail <span style={{ opacity: 0.6 }}>({mailItems.length})</span>
           </button>
         )}
+        <button onClick={() => setTab('crafting')} style={TAB_STYLE(tab === 'crafting')}>
+          Crafting {craftingRecipes.length > 0 && <span style={{ opacity: 0.6 }}>({craftingRecipes.length})</span>}
+        </button>
       </div>
 
       <div style={{ padding: '0 1rem 1rem 1rem', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
@@ -1000,6 +1061,314 @@ export default function PlayerJournalPage({ character, onBack }) {
                     </>
                   );
                 })()}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Crafting Tab */}
+        {tab === 'crafting' && (
+          <>
+            {/* Sub-tab navigation */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              {['recipes', 'materials', 'projects'].map(st => (
+                <button
+                  key={st}
+                  onClick={() => setCraftingSubTab(st)}
+                  style={{
+                    padding: '0.4rem 0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                    fontSize: '0.85rem', textTransform: 'capitalize',
+                    background: craftingSubTab === st ? `${ACCENT}30` : 'rgba(255,255,255,0.06)',
+                    color: craftingSubTab === st ? ACCENT : '#888'
+                  }}
+                >
+                  {st}{st === 'materials' && craftingMaterials.length > 0 ? ` (${craftingMaterials.length})` : ''}
+                  {st === 'projects' && craftingProjects.filter(p => p.status === 'in_progress').length > 0
+                    ? ` (${craftingProjects.filter(p => p.status === 'in_progress').length} active)` : ''}
+                </button>
+              ))}
+            </div>
+
+            {/* Recipes Sub-tab */}
+            {craftingSubTab === 'recipes' && (
+              <>
+                {craftingRecipes.length === 0 ? (
+                  <EmptyState message="No recipes known yet. Default recipes will appear once the crafting system initializes." />
+                ) : (
+                  <>
+                    {/* Category filter */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
+                      <button
+                        onClick={() => setCraftingCategoryFilter('all')}
+                        style={{
+                          padding: '0.3rem 0.65rem', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          background: craftingCategoryFilter === 'all' ? `${ACCENT}30` : 'rgba(255,255,255,0.06)',
+                          color: craftingCategoryFilter === 'all' ? ACCENT : '#888'
+                        }}
+                      >All ({craftingRecipes.length})</button>
+                      {[...new Set(craftingRecipes.map(r => r.category))].sort().map(cat => {
+                        const count = craftingRecipes.filter(r => r.category === cat).length;
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() => setCraftingCategoryFilter(cat)}
+                            style={{
+                              padding: '0.3rem 0.65rem', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                              fontSize: '0.8rem', textTransform: 'capitalize',
+                              background: craftingCategoryFilter === cat ? `${ACCENT}30` : 'rgba(255,255,255,0.06)',
+                              color: craftingCategoryFilter === cat ? ACCENT : '#888'
+                            }}
+                          >{cat.replace('_', ' ')} ({count})</button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Recipe cards */}
+                    {craftingRecipes
+                      .filter(r => craftingCategoryFilter === 'all' || r.category === craftingCategoryFilter)
+                      .map(recipe => {
+                        const CATEGORY_ICONS = {
+                          potion: '🧪', poison: '☠️', weapon: '⚔️', armor: '🛡️', food: '🍖',
+                          adventuring_gear: '🎒', scroll: '📜', ammunition: '🏹', alchemical: '⚗️', tool: '🔧', shelter: '⛺'
+                        };
+                        const activeProject = craftingProjects.find(p => p.recipe_id === recipe.id && p.status === 'in_progress');
+                        return (
+                          <div key={recipe.id} style={{
+                            ...CARD_STYLE,
+                            borderLeft: `3px solid ${recipe.canCraft ? ACCENT : '#666'}`
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                              <span style={{ fontSize: '1.2rem' }}>{CATEGORY_ICONS[recipe.category] || '🔨'}</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 'bold', color: '#f5f5f5' }}>{recipe.name}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                  {recipe.craft_time_hours}h craft time | DC {recipe.difficulty_dc} {recipe.ability_check}
+                                  {recipe.gold_cost > 0 && ` | ${recipe.gold_cost} gp`}
+                                </div>
+                              </div>
+                              {recipe.canCraft && !activeProject && (
+                                <button
+                                  onClick={() => handleStartProject(recipe.id)}
+                                  style={{
+                                    padding: '0.3rem 0.65rem', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                                    fontSize: '0.8rem', background: ACCENT, color: '#fff', fontWeight: 'bold'
+                                  }}
+                                >Craft</button>
+                              )}
+                              {activeProject && (
+                                <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>In Progress</span>
+                              )}
+                            </div>
+
+                            {recipe.description && (
+                              <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '0.5rem' }}>{recipe.description}</div>
+                            )}
+
+                            {/* Materials list */}
+                            {recipe.required_materials?.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginBottom: '0.3rem' }}>
+                                {recipe.required_materials.map((mat, i) => {
+                                  const missing = recipe.missingMaterials?.find(m => m.name === mat.name);
+                                  return (
+                                    <span key={i} style={{
+                                      ...BADGE(missing ? '239, 68, 68' : '16, 185, 129'),
+                                      color: missing ? '#ef4444' : ACCENT
+                                    }}>
+                                      {mat.name} x{mat.quantity}{missing ? ` (have ${missing.have})` : ''}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Tool requirements */}
+                            {recipe.required_tools?.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                {recipe.required_tools.map((tool, i) => {
+                                  const missing = recipe.missingTools?.includes(tool);
+                                  return (
+                                    <span key={i} style={{
+                                      ...BADGE(missing ? '245, 158, 11' : '96, 165, 250'),
+                                      color: missing ? '#f59e0b' : '#60a5fa'
+                                    }}>
+                                      {tool}{missing ? ' (missing)' : ''}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Materials Sub-tab */}
+            {craftingSubTab === 'materials' && (
+              <>
+                {craftingMaterials.length === 0 ? (
+                  <EmptyState message="No crafting materials collected yet. Find materials by foraging, looting, or buying from merchants." />
+                ) : (
+                  craftingMaterials.map((mat, idx) => (
+                    <div key={idx} style={{
+                      ...CARD_STYLE,
+                      display: 'flex', alignItems: 'center', gap: '0.75rem'
+                    }}>
+                      <div style={{
+                        width: '36px', height: '36px', borderRadius: '6px',
+                        background: mat.quality === 'superior' ? 'rgba(168, 85, 247, 0.2)' :
+                          mat.quality === 'fine' ? 'rgba(96, 165, 250, 0.2)' : 'rgba(255,255,255,0.08)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '1rem', flexShrink: 0,
+                        border: `1px solid ${mat.quality === 'superior' ? '#a855f740' :
+                          mat.quality === 'fine' ? '#60a5fa40' : 'rgba(255,255,255,0.15)'}`
+                      }}>
+                        {mat.quantity}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 'bold', color: '#f5f5f5' }}>{mat.material_name}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                          {mat.quality !== 'standard' && <span style={{
+                            color: mat.quality === 'superior' ? '#a78bfa' : '#60a5fa',
+                            textTransform: 'capitalize'
+                          }}>{mat.quality} </span>}
+                          {mat.source && `Found: ${mat.source}`}
+                          {mat.value_gp > 0 && ` | ${mat.value_gp} gp each`}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+
+            {/* Projects Sub-tab */}
+            {craftingSubTab === 'projects' && (
+              <>
+                {craftingProjects.length === 0 ? (
+                  <EmptyState message="No crafting projects started yet. Choose a recipe and start crafting!" />
+                ) : (
+                  <>
+                    {/* Active projects */}
+                    {craftingProjects.filter(p => p.status === 'in_progress').length > 0 && (
+                      <>
+                        <h3 style={{ color: ACCENT, fontSize: '0.95rem', marginBottom: '0.75rem' }}>Active Projects</h3>
+                        {craftingProjects.filter(p => p.status === 'in_progress').map(project => {
+                          const progress = Math.min(100, Math.round((project.hours_invested / project.hours_required) * 100));
+                          const ready = project.hours_invested >= project.hours_required;
+                          return (
+                            <div key={project.id} style={CARD_STYLE}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 'bold', color: '#f5f5f5' }}>{project.recipe_name || `Project #${project.id}`}</div>
+                                  <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                    {project.hours_invested}/{project.hours_required} hours
+                                    {project.started_game_day && ` | Started day ${project.started_game_day}`}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  {ready && (
+                                    <button
+                                      onClick={() => handleCompleteProject(project.id)}
+                                      style={{
+                                        padding: '0.3rem 0.65rem', borderRadius: '4px', border: 'none',
+                                        cursor: 'pointer', fontSize: '0.8rem', background: ACCENT,
+                                        color: '#fff', fontWeight: 'bold'
+                                      }}
+                                    >Complete</button>
+                                  )}
+                                  <button
+                                    onClick={() => handleAbandonProject(project.id)}
+                                    style={{
+                                      padding: '0.3rem 0.65rem', borderRadius: '4px', border: 'none',
+                                      cursor: 'pointer', fontSize: '0.8rem',
+                                      background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444'
+                                    }}
+                                  >Abandon</button>
+                                </div>
+                              </div>
+                              {/* Progress bar */}
+                              <div style={{
+                                height: '6px', borderRadius: '3px',
+                                background: 'rgba(255,255,255,0.1)', overflow: 'hidden'
+                              }}>
+                                <div style={{
+                                  width: `${progress}%`, height: '100%', borderRadius: '3px',
+                                  background: ready ? ACCENT : '#f59e0b',
+                                  transition: 'width 0.3s ease'
+                                }} />
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem', textAlign: 'right' }}>
+                                {progress}%{ready ? ' — Ready to complete!' : ''}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* Completed projects */}
+                    {craftingProjects.filter(p => p.status === 'completed').length > 0 && (
+                      <>
+                        <h3 style={{ color: '#888', fontSize: '0.95rem', marginTop: '1.5rem', marginBottom: '0.75rem' }}>
+                          Completed ({craftingProjects.filter(p => p.status === 'completed').length})
+                        </h3>
+                        {craftingProjects.filter(p => p.status === 'completed').map(project => {
+                          const QUALITY_COLORS = { standard: '#9ca3af', fine: '#60a5fa', superior: '#a78bfa', masterwork: '#f59e0b' };
+                          return (
+                            <div key={project.id} style={{
+                              ...CARD_STYLE,
+                              background: 'rgba(255,255,255,0.03)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              opacity: 0.75
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ color: ACCENT }}>✓</span>
+                                <span style={{ fontWeight: 'bold', color: '#ccc' }}>{project.recipe_name || `Project #${project.id}`}</span>
+                                {project.quality_result && (
+                                  <span style={{
+                                    ...BADGE('96, 165, 250'),
+                                    color: QUALITY_COLORS[project.quality_result] || '#888',
+                                    textTransform: 'capitalize'
+                                  }}>{project.quality_result}</span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                                Completed day {project.completed_game_day || '?'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* Failed/Abandoned projects */}
+                    {craftingProjects.filter(p => p.status === 'failed' || p.status === 'abandoned').length > 0 && (
+                      <>
+                        <h3 style={{ color: '#666', fontSize: '0.95rem', marginTop: '1.5rem', marginBottom: '0.75rem' }}>
+                          Failed/Abandoned
+                        </h3>
+                        {craftingProjects.filter(p => p.status === 'failed' || p.status === 'abandoned').map(project => (
+                          <div key={project.id} style={{
+                            ...CARD_STYLE,
+                            background: 'rgba(255,255,255,0.02)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            opacity: 0.5
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ color: '#ef4444' }}>{project.status === 'failed' ? '✗' : '—'}</span>
+                              <span style={{ color: '#888' }}>{project.recipe_name || `Project #${project.id}`}</span>
+                              <span style={{ ...BADGE('156, 163, 175'), textTransform: 'capitalize' }}>{project.status}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+                )}
               </>
             )}
           </>

@@ -2,7 +2,7 @@ import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
-import { dayToDate, advanceTime } from '../config/harptos.js';
+import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
 import { XP_THRESHOLDS } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted } from '../services/narrativeIntegration.js';
@@ -16,6 +16,8 @@ import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMe
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
   detectMerchantRefer, detectAddItem, detectLootDrop, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
+  detectWeatherChange, detectShelterFound, detectSwim, detectEat, detectDrink,
+  detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -36,6 +38,9 @@ import { getAwayCompanions } from '../services/companionActivityService.js';
 import { processAbsenceEffects } from '../services/npcAgingService.js';
 import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget } from '../utils/contextManager.js';
 import { handleServerError } from '../utils/errorHandler.js';
+import { getWeather, setWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
+import { getSurvivalStatus, consumeFood, consumeWater, formatSurvivalForPrompt } from '../services/survivalService.js';
+import { formatCraftingForPrompt, discoverRecipe, addMaterial, advanceProject, getProjectStatus, createRadiantRecipe } from '../services/craftingService.js';
 
 const router = express.Router();
 
@@ -688,6 +693,37 @@ router.post('/start', async (req, res) => {
       }
     }
 
+    // Gather weather, survival, and crafting context for DM prompt
+    let weatherContext = '';
+    let survivalContext = '';
+    let craftingContext = '';
+    if (character.campaign_id) {
+      try {
+        const weather = await getWeather(character.campaign_id);
+        const season = getSeason(character.game_day || 1);
+        const timeOfDay = getTimeOfDay(character.game_hour || 8);
+        const effectiveTemp = getEffectiveTemperature(weather.temperature_f, weather.weather_type, timeOfDay);
+        const gearSummary = calculateGearWarmth(character.inventory, character.equipment);
+        const shelterType = checkHasShelter(character.current_location || '', character.inventory);
+        weatherContext = formatWeatherForPrompt(weather, effectiveTemp, timeOfDay, gearSummary, shelterType, character.current_location || '');
+      } catch (e) {
+        console.error('Error gathering weather context:', e);
+      }
+
+      try {
+        const weather = await getWeather(character.campaign_id);
+        survivalContext = formatSurvivalForPrompt(character, weather, null);
+      } catch (e) {
+        console.error('Error gathering survival context:', e);
+      }
+
+      try {
+        craftingContext = await formatCraftingForPrompt(characterId);
+      } catch (e) {
+        console.error('Error gathering crafting context:', e);
+      }
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -710,7 +746,10 @@ router.post('/start', async (req, res) => {
       narrativeQueueItemIds,
       worldState,
       campaignPlanSummary,
-      chronicleContext
+      chronicleContext,
+      weatherContext,
+      survivalContext,
+      craftingContext
     };
 
     // Check which LLM provider is available (respects user preference)
@@ -1100,6 +1139,16 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[CONDITION_ADD:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[CONDITION_REMOVE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[WEATHER_CHANGE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[SHELTER_FOUND:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[SWIM:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[EAT:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[DRINK:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[FORAGE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[RECIPE_FOUND:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[MATERIAL_FOUND:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[CRAFT_PROGRESS:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[RECIPE_GIFT:[^\]]+\]\s*/gi, '').trim();
 
     // Handle ADD_ITEM markers — add custom items to current merchant's inventory
     const addItems = detectAddItem(result.narrative);
@@ -1306,6 +1355,130 @@ router.post('/:sessionId/message', async (req, res) => {
     const conditionChanges = detectConditionChanges(result.narrative);
     const hasConditionChanges = conditionChanges.applied.length > 0 || conditionChanges.removed.length > 0;
 
+    // Process weather/survival/crafting markers
+    let weatherChangeResult = null;
+    let survivalEvents = [];
+    let craftingEvents = [];
+
+    try {
+      const character = await dbGet('SELECT id, campaign_id, game_day, inventory FROM characters WHERE id = ?', [session.character_id]);
+      if (character?.campaign_id) {
+        // Weather change
+        const weatherChange = detectWeatherChange(result.narrative);
+        if (weatherChange) {
+          const updated = await setWeather(character.campaign_id, weatherChange.type, weatherChange.duration_hours, character.game_day || 1);
+          weatherChangeResult = { type: weatherChange.type, duration_hours: weatherChange.duration_hours };
+          console.log(`🌦️ WEATHER_CHANGE: ${weatherChange.type} for ${weatherChange.duration_hours}h`);
+        }
+
+        // Shelter found
+        const shelter = detectShelterFound(result.narrative);
+        if (shelter) {
+          await dbRun('UPDATE characters SET shelter_type = ? WHERE id = ?', [shelter.type, character.id]);
+          survivalEvents.push({ type: 'shelter_found', shelter: shelter.type });
+        }
+
+        // Eating
+        const eatMarkers = detectEat(result.narrative);
+        for (const eat of eatMarkers) {
+          try {
+            await consumeFood(character.id, eat.item, character.game_day || 1);
+            survivalEvents.push({ type: 'ate', item: eat.item });
+          } catch (e) {
+            console.error(`Error processing EAT marker for ${eat.item}:`, e.message);
+          }
+        }
+
+        // Drinking
+        const drinkMarkers = detectDrink(result.narrative);
+        for (const drink of drinkMarkers) {
+          try {
+            await consumeWater(character.id, drink.item, character.game_day || 1);
+            survivalEvents.push({ type: 'drank', item: drink.item });
+          } catch (e) {
+            console.error(`Error processing DRINK marker for ${drink.item}:`, e.message);
+          }
+        }
+
+        // Foraging
+        const forage = detectForage(result.narrative);
+        if (forage && forage.result === 'success') {
+          if (forage.food > 0) {
+            // Add foraged food to inventory
+            const inv = safeParse(character.inventory, []);
+            const existing = inv.find(i => i.name === 'Foraged Food');
+            if (existing) existing.quantity = (existing.quantity || 1) + forage.food;
+            else inv.push({ name: 'Foraged Food', quantity: forage.food, category: 'food', nutrition_days: 1, perishable: true, spoils_in_days: 2, acquired_game_day: character.game_day || 1 });
+            await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(inv), character.id]);
+          }
+          if (forage.water > 0) {
+            const inv = safeParse(character.inventory, []);
+            const existing = inv.find(i => i.name === 'Collected Water');
+            if (existing) existing.quantity = (existing.quantity || 1) + forage.water;
+            else inv.push({ name: 'Collected Water', quantity: forage.water, category: 'water', hydration_days: 1 });
+            await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(inv), character.id]);
+          }
+          survivalEvents.push({ type: 'foraged', terrain: forage.terrain, food: forage.food, water: forage.water });
+        }
+
+        // Recipe discovery
+        const recipes = detectRecipeFound(result.narrative);
+        for (const recipe of recipes) {
+          try {
+            await discoverRecipe(character.id, recipe.name, recipe.source, character.game_day || 1);
+            craftingEvents.push({ type: 'recipe_found', name: recipe.name, source: recipe.source });
+          } catch (e) {
+            console.error(`Error processing RECIPE_FOUND for ${recipe.name}:`, e.message);
+          }
+        }
+
+        // Material discovery
+        const materials = detectMaterialFound(result.narrative);
+        for (const mat of materials) {
+          try {
+            await addMaterial(character.id, mat.name, mat.quantity, mat.quality, 'found', character.game_day || 1);
+            craftingEvents.push({ type: 'material_found', name: mat.name, quantity: mat.quantity });
+          } catch (e) {
+            console.error(`Error processing MATERIAL_FOUND for ${mat.name}:`, e.message);
+          }
+        }
+
+        // Craft progress
+        const craftProgress = detectCraftProgress(result.narrative);
+        if (craftProgress) {
+          try {
+            const projects = await getProjectStatus(character.id);
+            const activeProject = projects.find(p => p.status === 'in_progress');
+            if (activeProject) {
+              await advanceProject(activeProject.id, craftProgress.hours);
+              craftingEvents.push({ type: 'craft_progress', hours: craftProgress.hours, project_id: activeProject.id });
+            }
+          } catch (e) {
+            console.error('Error processing CRAFT_PROGRESS:', e.message);
+          }
+        }
+
+        // Radiant recipe gifts (AI-created unique recipes)
+        const recipeGifts = detectRecipeGift(result.narrative);
+        for (const gift of recipeGifts) {
+          try {
+            const created = await createRadiantRecipe(character.id, gift, character.game_day || 1);
+            craftingEvents.push({
+              type: 'recipe_gift',
+              name: gift.name,
+              category: gift.category,
+              gifted_by: gift.giftedBy,
+              recipe_id: created.recipe?.id
+            });
+          } catch (e) {
+            console.error(`Error processing RECIPE_GIFT for ${gift.name}:`, e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error processing weather/survival/crafting markers:', e);
+    }
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
@@ -1315,7 +1488,10 @@ router.post('/:sessionId/message', async (req, res) => {
       lootDrops: lootDropResults.length > 0 ? lootDropResults : undefined,
       combatStart: combatStart || undefined,
       combatEnd: combatEnd || undefined,
-      conditionChanges: hasConditionChanges ? conditionChanges : undefined
+      conditionChanges: hasConditionChanges ? conditionChanges : undefined,
+      weatherChange: weatherChangeResult || undefined,
+      survivalEvents: survivalEvents.length > 0 ? survivalEvents : undefined,
+      craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined
     });
   } catch (error) {
     handleServerError(res, error, 'process DM session message');

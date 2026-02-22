@@ -115,6 +115,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [companionConditions, setCompanionConditions] = useState({});
   const [showConditionPanel, setShowConditionPanel] = useState(false);
 
+  // Weather & Survival state
+  const [weatherState, setWeatherState] = useState(null);
+  const [survivalState, setSurvivalState] = useState(null);
+
   // Merchant shop state
   const [pendingMerchantShop, setPendingMerchantShop] = useState(null);
   const [merchantInventory, setMerchantInventory] = useState([]);
@@ -396,6 +400,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
+      fetchWeatherSurvival();
     } catch (err) {
       console.error('Error checking for active session:', err);
     }
@@ -410,6 +415,20 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
     } catch (err) {
       console.error('Error fetching spell slots:', err);
+    }
+  };
+
+  const fetchWeatherSurvival = async () => {
+    if (!character?.campaign_id) return;
+    try {
+      const [weatherRes, survivalRes] = await Promise.all([
+        fetch(`/api/weather/${character.campaign_id}/full/${character.id}`),
+        fetch(`/api/survival/${character.id}`)
+      ]);
+      if (weatherRes.ok) setWeatherState(await weatherRes.json());
+      if (survivalRes.ok) setSurvivalState(await survivalRes.json());
+    } catch (err) {
+      console.error('Error fetching weather/survival:', err);
     }
   };
 
@@ -670,6 +689,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
+      fetchWeatherSurvival();
 
     } catch (err) {
       setError(err.message);
@@ -790,6 +810,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             }
           }
         }
+      }
+
+      // Refresh weather/survival on any weather or survival events
+      if (data.weatherChange || data.survivalEvents?.length > 0) {
+        fetchWeatherSurvival();
       }
 
     } catch (err) {
@@ -1832,6 +1857,59 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               </div>
             )}
           </div>
+
+          {/* Weather Widget */}
+          {weatherState && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              title={`${weatherState.weather?.weather_type || 'clear'} | Wind: ${weatherState.weather?.wind_speed || 'calm'} | Visibility: ${weatherState.weather?.visibility || 'normal'}${weatherState.exposure?.severity ? `\nExposure: ${weatherState.exposure.severity}` : ''}`}
+            >
+              <span style={{ fontSize: '1rem' }}>
+                {weatherState.weather?.weather_type === 'clear' ? '\u2600\uFE0F' :
+                 weatherState.weather?.weather_type === 'cloudy' ? '\u2601\uFE0F' :
+                 weatherState.weather?.weather_type === 'rain' ? '\uD83C\uDF27\uFE0F' :
+                 weatherState.weather?.weather_type === 'heavy_rain' ? '\u26C8\uFE0F' :
+                 weatherState.weather?.weather_type === 'thunderstorm' ? '\u26C8\uFE0F' :
+                 weatherState.weather?.weather_type === 'snow' ? '\uD83C\uDF28\uFE0F' :
+                 weatherState.weather?.weather_type === 'blizzard' ? '\u2744\uFE0F' :
+                 weatherState.weather?.weather_type === 'fog' ? '\uD83C\uDF2B\uFE0F' :
+                 weatherState.weather?.weather_type === 'heat_wave' ? '\uD83D\uDD25' :
+                 weatherState.weather?.weather_type === 'dust_storm' ? '\uD83D\uDCA8' :
+                 '\u2600\uFE0F'}
+              </span>
+              <span style={{
+                color: (weatherState.weather?.effective_temperature ?? 65) < 32 ? '#60a5fa' :
+                       (weatherState.weather?.effective_temperature ?? 65) > 85 ? '#ef4444' : '#a3a3a3',
+                fontWeight: 'bold',
+                fontSize: '0.85rem'
+              }}>
+                {weatherState.weather?.effective_temperature ?? '--'}{'\u00B0'}F
+              </span>
+            </div>
+          )}
+
+          {/* Survival Status */}
+          {survivalState && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span title={`Hunger: ${survivalState.hunger_level || 'fed'} (${survivalState.days_without_food || 0}d without food)`}
+                style={{
+                  color: survivalState.hunger_level === 'fed' ? '#10b981' :
+                         survivalState.hunger_level === 'hungry' ? '#f59e0b' :
+                         survivalState.hunger_level === 'starving' ? '#ef4444' : '#ef4444',
+                  fontSize: '0.85rem', cursor: 'default'
+                }}>
+                {'\uD83C\uDF56'}
+              </span>
+              <span title={`Thirst: ${survivalState.thirst_level || 'hydrated'} (${survivalState.days_without_water || 0}d without water)`}
+                style={{
+                  color: survivalState.thirst_level === 'hydrated' ? '#10b981' :
+                         survivalState.thirst_level === 'thirsty' ? '#f59e0b' :
+                         survivalState.thirst_level === 'dehydrated' ? '#ef4444' : '#ef4444',
+                  fontSize: '0.85rem', cursor: 'default'
+                }}>
+                {'\uD83D\uDCA7'}
+              </span>
+            </div>
+          )}
 
           {/* Game Date Display with Controls */}
           {gameDate && (

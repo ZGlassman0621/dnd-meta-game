@@ -25,6 +25,9 @@ import livingWorldRoutes from './routes/livingWorld.js';
 import dmModeRoutes from './routes/dmMode.js';
 import achievementRoutes from './routes/achievement.js';
 import chronicleRoutes from './routes/chronicle.js';
+import weatherRoutes from './routes/weather.js';
+import survivalRoutes from './routes/survival.js';
+import craftingRoutes from './routes/crafting.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -74,6 +77,9 @@ app.use('/api/living-world', livingWorldRoutes);
 app.use('/api/dm-mode', dmModeRoutes);
 app.use('/api/achievement', achievementRoutes);
 app.use('/api/chronicle', chronicleRoutes);
+app.use('/api/weather', weatherRoutes);
+app.use('/api/survival', survivalRoutes);
+app.use('/api/crafting', craftingRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });

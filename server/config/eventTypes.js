@@ -74,7 +74,24 @@ export const GAME_EVENTS = {
 
   // Time events
   GAME_TIME_ADVANCED: 'game_time_advanced',
-  GAME_DAY_CHANGED: 'game_day_changed'
+  GAME_DAY_CHANGED: 'game_day_changed',
+
+  // Weather events
+  WEATHER_CHANGED: 'weather_changed',
+
+  // Survival events
+  FOOD_CONSUMED: 'food_consumed',
+  WATER_CONSUMED: 'water_consumed',
+  FOOD_SPOILED: 'food_spoiled',
+  STARVATION_CHECK: 'starvation_check',
+  DEHYDRATION_CHECK: 'dehydration_check',
+
+  // Crafting events
+  CRAFTING_PROJECT_STARTED: 'crafting_project_started',
+  CRAFTING_PROJECT_COMPLETED: 'crafting_project_completed',
+  CRAFTING_PROJECT_FAILED: 'crafting_project_failed',
+  RECIPE_DISCOVERED: 'recipe_discovered',
+  MATERIAL_GATHERED: 'material_gathered'
 };
 
 // ============================================================
@@ -149,7 +166,13 @@ export const NARRATIVE_EVENTS = {
   ACHIEVEMENT_EARNED: 'achievement_earned',
 
   // Flavor/ambient
-  FLAVOR_EVENT: 'flavor_event'
+  FLAVOR_EVENT: 'flavor_event',
+
+  // Weather/Survival/Crafting
+  WEATHER_WARNING: 'weather_warning',
+  SURVIVAL_WARNING: 'survival_warning',
+  CRAFTING_COMPLETED: 'crafting_completed',
+  RECIPE_FOUND: 'recipe_found'
 };
 
 // ============================================================
