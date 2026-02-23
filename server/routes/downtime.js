@@ -920,7 +920,7 @@ router.post('/complete/:id', async (req, res) => {
     const activity = ACTIVITIES[downtime.activity_type];
 
     // Calculate benefits based on activity type and duration
-    const benefits = calculateBenefits(downtime, character, activity);
+    const benefits = await calculateBenefits(downtime, character, activity);
 
     // Update downtime record
     await dbRun(`
@@ -992,7 +992,7 @@ router.get('/history/:characterId', async (req, res) => {
 });
 
 // Calculate benefits based on activity
-function calculateBenefits(downtime, character, activity) {
+async function calculateBenefits(downtime, character, activity) {
   const hours = downtime.duration_hours;
   const benefits = {
     type: downtime.activity_type,
