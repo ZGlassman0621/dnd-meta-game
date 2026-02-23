@@ -681,10 +681,14 @@ export function detectPromiseMade(narrative) {
   while ((match = regex.exec(narrative)) !== null) {
     const data = parseMarkerPairs(match[1]);
     if (data.npc && data.promise) {
+      // Validate weight — must be one of the valid levels, default to 'moderate'
+      const validWeights = ['trivial', 'minor', 'moderate', 'major', 'critical'];
+      const weight = validWeights.includes(data.weight?.toLowerCase()) ? data.weight.toLowerCase() : 'moderate';
       results.push({
         npc: data.npc,
         promise: data.promise,
-        deadline: parseInt(data.deadline) || 0 // 0 = no explicit deadline
+        deadline: parseInt(data.deadline) || 0, // 0 = no explicit deadline
+        weight
       });
     } else {
       console.warn('[Marker] PROMISE_MADE detected but missing NPC or Promise field:', match[0]);

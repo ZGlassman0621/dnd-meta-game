@@ -9,7 +9,7 @@ import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSession
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
 import { getCharacterWorldView } from '../services/livingWorldService.js';
 import { getActiveFactions } from '../services/factionService.js';
-import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter, addPromise, fulfillPromise, getPendingPromises } from '../services/npcRelationshipService.js';
+import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter, addPromise, fulfillPromise, getPendingPromises, adjustDisposition as adjustNpcDisposition, adjustTrust as adjustNpcTrust } from '../services/npcRelationshipService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
@@ -46,6 +46,8 @@ import { formatCraftingForPrompt, discoverRecipe, addMaterial, advanceProject, g
 import { formatMythicForPrompt } from '../services/dmPromptBuilder.js';
 import { getMythicStatus, recordTrial, useMythicPower, advanceTier, findLegendaryItemByName, advanceItemState } from '../services/mythicService.js';
 import { adjustPiety } from '../services/pietyService.js';
+import { FULFILL_WEIGHTS, spreadReputationRipple, spreadFactionStanding, calculatePriceModifier } from '../services/consequenceService.js';
+import { getActiveQuests as getCharacterActiveQuests } from '../services/questService.js';
 
 const router = express.Router();
 
@@ -605,7 +607,8 @@ router.post('/start', async (req, res) => {
           npcRelationships: npcRelationships || [],
           discoveredLocations: discoveredLocations || [],
           activeFactions: activeFactions || [],
-          currentGameDay: character.game_day || null
+          currentGameDay: character.game_day || null,
+          activeQuests: []
         };
       } catch (e) {
         console.error('Error gathering world state for session:', e);
@@ -671,6 +674,30 @@ router.post('/start', async (req, res) => {
         }
       } catch (e) {
         console.error('Error fetching NPC event effects:', e);
+      }
+    }
+
+    // Fetch active quests for DM prompt context
+    if (character.campaign_id && worldState) {
+      try {
+        const activeQuests = await getCharacterActiveQuests(characterId);
+        // Enrich with faction names for quest display
+        for (const q of activeQuests) {
+          if (q.source_type === 'faction' && q.source_id) {
+            const faction = worldState.activeFactions.find(f => f.id === q.source_id);
+            q.faction_name = faction?.name || null;
+          }
+          // For conflict quests, add faction names from rewards
+          if (q.quest_type === 'faction_conflict' && q.rewards) {
+            const agg = worldState.activeFactions.find(f => f.id === q.rewards.aggressor_faction_id);
+            const def = worldState.activeFactions.find(f => f.id === q.rewards.defender_faction_id);
+            q.rewards.aggressor_faction_name = agg?.name || null;
+            q.rewards.defender_faction_name = def?.name || null;
+          }
+        }
+        worldState.activeQuests = activeQuests;
+      } catch (e) {
+        console.error('Error fetching active quests:', e);
       }
     }
 
@@ -1596,9 +1623,10 @@ router.post('/:sessionId/message', async (req, res) => {
             const deadlineGameDay = pm.deadline > 0 ? (character.game_day || 0) + pm.deadline : null;
             await addPromise(character.id, npc.id, pm.promise, {
               gameDay: character.game_day || null,
-              deadlineGameDay
+              deadlineGameDay,
+              weight: pm.weight || 'moderate'
             });
-            promiseEvents.push({ type: 'promise_made', npc: pm.npc, promise: pm.promise, deadline: pm.deadline });
+            promiseEvents.push({ type: 'promise_made', npc: pm.npc, promise: pm.promise, deadline: pm.deadline, weight: pm.weight });
 
             // Also create canon fact
             await dbRun(`
@@ -1607,7 +1635,7 @@ router.post('/:sessionId/message', async (req, res) => {
             `, [
               character.campaign_id, character.id,
               npc.name,
-              `Promised ${npc.name}: "${pm.promise}"${pm.deadline > 0 ? ` (due in ${pm.deadline} days)` : ''}`,
+              `Promised ${npc.name} (${pm.weight}): "${pm.promise}"${pm.deadline > 0 ? ` (due in ${pm.deadline} days)` : ''}`,
               character.game_day || 0
             ]);
           }
@@ -1632,8 +1660,23 @@ router.post('/:sessionId/message', async (req, res) => {
               (p.promise || '').toLowerCase().includes(pf.promise.toLowerCase().substring(0, 20))
             );
             if (match) {
-              await fulfillPromise(character.id, npc.id, match.promise_index);
-              promiseEvents.push({ type: 'promise_fulfilled', npc: pf.npc, promise: pf.promise });
+              const { weight } = await fulfillPromise(character.id, npc.id, match.promise_index);
+
+              // Apply weight-based rewards
+              const fw = FULFILL_WEIGHTS[weight] || FULFILL_WEIGHTS.moderate;
+              await adjustNpcDisposition(character.id, npc.id, fw.directDisposition, `Fulfilled a promise (${weight})`);
+              await adjustNpcTrust(character.id, npc.id, fw.directTrust);
+
+              // Reputation ripple — nearby NPCs hear about the kept promise
+              const rippleResults = await spreadReputationRipple(character.campaign_id, character.id, npc.id, weight, false);
+              // Faction standing boost
+              const factionResults = await spreadFactionStanding(character.id, character.campaign_id, npc.id, weight, false);
+
+              promiseEvents.push({
+                type: 'promise_fulfilled', npc: pf.npc, promise: pf.promise, weight,
+                dispositionChange: fw.directDisposition, trustChange: fw.directTrust,
+                rippleCount: rippleResults.length, factionChanges: factionResults.length
+              });
 
               // Create canon fact
               await dbRun(`
@@ -1642,7 +1685,7 @@ router.post('/:sessionId/message', async (req, res) => {
               `, [
                 character.campaign_id, character.id,
                 npc.name,
-                `Fulfilled promise to ${npc.name}: "${pf.promise}"`,
+                `Fulfilled ${weight} promise to ${npc.name}: "${pf.promise}"`,
                 character.game_day || 0
               ]);
             }
@@ -1728,9 +1771,37 @@ router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
 
     const buybackItems = generateBuybackPrices(playerItems || []);
 
+    // Calculate price modifier based on disposition + faction standing
+    let priceModifier = null;
+    try {
+      const merchantNpc = await dbGet(
+        'SELECT id FROM npcs WHERE campaign_id = ? AND LOWER(name) LIKE LOWER(?) LIMIT 1',
+        [character.campaign_id, `%${merchantName}%`]
+      );
+      if (merchantNpc) {
+        priceModifier = await calculatePriceModifier(session.character_id, character.campaign_id, merchantNpc.id);
+      }
+    } catch (e) {
+      console.warn('Price modifier calculation failed:', e.message);
+    }
+
+    // Apply modifier to inventory prices (preserve originals as base_price_*)
+    const inventory = (priceModifier && priceModifier.multiplier !== 1)
+      ? dbMerchant.inventory.map(item => ({
+          ...item,
+          base_price_gp: item.price_gp,
+          price_gp: Math.round(item.price_gp * priceModifier.multiplier * 100) / 100,
+          base_price_sp: item.price_sp,
+          price_sp: Math.round((item.price_sp || 0) * priceModifier.multiplier),
+          base_price_cp: item.price_cp,
+          price_cp: Math.round((item.price_cp || 0) * priceModifier.multiplier)
+        }))
+      : dbMerchant.inventory;
+
     res.json({
-      inventory: dbMerchant.inventory,
+      inventory,
       buybackItems,
+      priceModifier: priceModifier || undefined,
       merchantName: dbMerchant.merchant_name,
       merchantType: dbMerchant.merchant_type,
       merchantId: dbMerchant.id,

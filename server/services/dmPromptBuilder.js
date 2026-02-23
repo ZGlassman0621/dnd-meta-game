@@ -1141,7 +1141,8 @@ When roleplaying NPCs, differentiate them through speech patterns:
               urgency = ` [OVERDUE — ${daysSince} days]`;
             }
           }
-          parts.push(`  Promise: ${text.substring(0, 100)}${urgency}`);
+          const weightLabel = p.weight ? ` [${p.weight.toUpperCase()}]` : '';
+          parts.push(`  Promise${weightLabel}: ${text.substring(0, 100)}${urgency}`);
         }
       });
 
@@ -1226,6 +1227,37 @@ When roleplaying NPCs, differentiate them through speech patterns:
       return `- ${g.faction_name}: "${g.title}" (${g.progress_percent}% complete${urgency})`;
     });
     sections.push('KNOWN FACTION ACTIVITIES:\n' + lines.join('\n'));
+  }
+
+  // 4.5. Active Quests
+  const activeQuests = worldState.activeQuests || [];
+  if (activeQuests.length > 0) {
+    const lines = activeQuests.slice(0, 6).map(q => {
+      const stages = q.stages || [];
+      const currentStage = stages[q.current_stage];
+      const stageInfo = stages.length > 0 ? ` (Stage ${q.current_stage + 1}/${stages.length}: ${currentStage?.name || 'Unknown'})` : '';
+      const objectives = currentStage?.objectives?.map(o => `    - ${o}`).join('\n') || '';
+      const typeLabel = q.quest_type === 'main' ? '[MAIN]' :
+                        q.quest_type === 'faction' ? `[FACTION: ${q.faction_name || 'Unknown'}]` :
+                        q.quest_type === 'faction_conflict' ? `[CONFLICT: ${q.faction_name || 'Unknown'}]` :
+                        q.quest_type === 'companion' ? '[COMPANION]' :
+                        q.quest_type === 'side' ? '[SIDE]' : '';
+      const priority = q.priority === 'high' ? ' {HIGH PRIORITY}' : '';
+      const parts = [`- ${typeLabel} "${q.title}"${stageInfo}${priority}`];
+      if (q.premise) parts.push(`  Hook: ${q.premise}`);
+      if (currentStage?.description) parts.push(`  Current: ${currentStage.description.substring(0, 150)}`);
+      if (objectives) parts.push(`  Objectives:\n${objectives}`);
+      if (q.quest_type === 'faction_conflict') {
+        const rewards = q.rewards || {};
+        if (rewards.aggressor_faction_name && rewards.defender_faction_name) {
+          parts.push(`  Factions at odds: ${rewards.aggressor_faction_name || 'Unknown'} vs ${rewards.defender_faction_name || 'Unknown'}`);
+        }
+      }
+      return parts.join('\n');
+    });
+    sections.push(`ACTIVE QUESTS:
+Reference these quests naturally in the narrative. Do NOT info-dump quest objectives — weave them into NPC dialogue, discovered clues, and environmental storytelling. When the player's actions align with quest objectives, acknowledge progress narratively.
+${lines.join('\n')}`);
   }
 
   // 5. Discovered Locations
@@ -1549,12 +1581,21 @@ Use ONLY when the character has mythic abilities and events are narratively sign
 
 PROMISE & CONSEQUENCE MARKERS:
 When the player makes a promise to an NPC or fulfills one, use these markers for automatic tracking:
-- Promise made: [PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10]
-  NPC = name of the NPC the promise was made to. Promise = what was promised. Deadline = days until due (optional, omit for open-ended promises).
+- Promise made: [PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10 Weight=major]
+  NPC = name of the NPC the promise was made to. Promise = what was promised.
+  Deadline = days until due (optional, omit for open-ended promises).
+  Weight = importance of the promise (REQUIRED). Values:
+    trivial — casual, low-stakes (returning a small item, buying someone a drink)
+    minor — small favors (delivering a message, watching someone's stall for an hour)
+    moderate — meaningful commitments (escorting someone, finding a lost item, investigating a matter)
+    major — significant oaths (saving a life, retrieving a rare artifact, avenging someone)
+    critical — world-altering pledges (defeating a great evil, restoring a kingdom, saving a city)
+  If unsure, use "moderate" — err on the side of lower weight.
   Use this when the player explicitly commits to doing something for an NPC — verbal agreements, oaths, deals, or accepted quests with a personal stake.
 - Promise fulfilled: [PROMISE_FULFILLED: NPC="Elara" Promise="Return the stolen amulet"]
   Use when the player completes what they promised. The Promise text should match closely enough to identify which promise.
-  NPCs should react positively when promises are kept.
+  NPCs should react positively when promises are kept — the more significant the promise, the greater the reaction.
+- Weighted consequences: Breaking promises has cascading effects proportional to weight. Trivial broken promises barely register; critical broken promises spread as rumors to nearby NPCs, damage faction standings, and affect merchant prices. Fulfilling promises has equivalent positive effects.
 - Do NOT use PROMISE_MADE for routine quest acceptance — only for personal commitments the NPC will remember and hold the player to.
 - When an NPC has an overdue promise (shown in their relationship data above), they should bring it up naturally: disappointed, hurt, or angry depending on disposition.
 
@@ -2048,7 +2089,15 @@ CRAFTING: Use [RECIPE_FOUND] when players discover existing recipes, [MATERIAL_F
 
 MYTHIC: If the character has mythic abilities, reference them naturally — their presence affects how NPCs react, their surge die adds to dramatic moments, and path abilities should feel like natural extensions of who they are. Use [MYTHIC_TRIAL] for extraordinary achievements, [PIETY_CHANGE] for deity-relevant choices, [ITEM_AWAKEN] for legendary item milestones, [MYTHIC_SURGE] for power usage tracking.
 
-PROMISES & CONSEQUENCES: When the player makes a personal commitment to an NPC, emit [PROMISE_MADE]. When they fulfill one, emit [PROMISE_FULFILLED]. NPCs with overdue promises (marked [OVERDUE] in relationship data) should bring it up — disappointed, accusatory, or hurt depending on their disposition. Broken promises have real consequences: disposition drops, trust loss, and damaged reputations. Actions and inactions both have consequences in this world.
+ACTIVE QUESTS = WEAVE NATURALLY:
+When ACTIVE QUESTS are listed in the world state, incorporate them organically into the narrative:
+- Reference quest objectives through NPC dialogue, environmental clues, and overheard rumors — NOT by telling the player "your quest requires X"
+- When faction quests are active, the faction's NPCs should mention their goal's progress or setbacks in conversation
+- Faction conflict quests should show BOTH sides' perspectives through different NPCs — let the player hear arguments from each faction
+- When the player's actions align with a quest objective, acknowledge it narratively (e.g., an NPC thanks them, they find relevant evidence)
+- Quest stage advancement happens through the requirement system — your job is to make it feel natural and earned
+
+PROMISES & CONSEQUENCES: When the player makes a personal commitment to an NPC, emit [PROMISE_MADE] with an appropriate Weight (trivial/minor/moderate/major/critical). When they fulfill one, emit [PROMISE_FULFILLED]. NPCs with overdue promises (marked [OVERDUE] in relationship data) should bring it up — disappointed, accusatory, or hurt depending on their disposition. Breaking promises has weighted consequences — the more significant the promise, the greater the reputation damage spreads to nearby NPCs and affiliated factions. Merchant prices are influenced by reputation. Fulfilling promises earns proportional rewards. Actions and inactions both have consequences in this world.
 
 NPC MORAL DIVERSITY: Not every NPC is kind or helpful. Most people are self-interested. Merchants overcharge, officials stall, strangers are suspicious. Allies can be rude, greedy, or morally gray. Help should cost something. Play NPC alignments from the campaign plan faithfully.
 

@@ -4,25 +4,6 @@ This file tracks feature ideas and enhancements for future implementation.
 
 ---
 
-## Faction-Driven Quest Generation
-
-**Priority:** Medium
-**Identified:** 2026-02-09
-
-### Problem
-Factions have goals with progress tracking, but quests are generated independently. When a faction reaches a milestone or two factions come into conflict, there's no automatic quest generation to make those world events playable.
-
-### Desired Behavior
-- When faction goals hit key thresholds (25%, 50%, 75%, 100%), auto-generate related quests
-- Faction conflicts spawn quests with player choices
-- Player's faction standing affects quest availability and rewards
-- Completing faction quests shifts standings and affects faction goal progress
-
-### Files to Modify
-- `server/services/livingWorldService.js` — Add quest generation triggers to tick processing
-- `server/services/questGenerator.js` — Add faction-aware quest generation prompts
-- `server/services/questService.js` — Link quest completion to faction standings
-
 ---
 
 ## Procedural Dungeon Generation
@@ -142,7 +123,8 @@ Retired or dead characters have no lasting impact on the world for new character
 
 The following features were previously tracked here and have been built:
 
-- **Consequence Automation** (2026-02-23) — Overdue promise auto-breaking (warning at 21 game days, auto-break at 45 or explicit deadline), quest deadline enforcement with escalation narratives, consequence logging table, [PROMISE_MADE] and [PROMISE_FULFILLED] AI markers for real-time promise tracking with game_day and optional deadline, DM prompt urgency annotations ([OVERDUE], [URGENT]), living world tick step 3.8, narrative queue integration for consequence delivery, canon fact creation for broken promises/failed quests, 86-assertion test suite
+- **Faction-Driven Quest Generation** (2026-02-23) — Milestone-based faction quest spawning (25/50/75/100%), conflict quests when rival factions clash (player chooses sides), quest completion → faction goal progress feedback (regular quests advance goals by 5-10, conflict quests advance defender +8 and hinder aggressor -5), standing-based reward scaling (allied 1.5x, neutral 1.0x, hostile 0.75x), active quest injection in DM prompt with stage/objective/faction context, quest type labels ([MAIN], [FACTION], [CONFLICT], [COMPANION], [SIDE]), 112-assertion test suite
+- **Consequence Automation + Weighted Reputation System** (2026-02-23) — Overdue promise auto-breaking (warning at 21 game days, auto-break at 45 or explicit deadline), quest deadline enforcement with escalation narratives, consequence logging table, [PROMISE_MADE] and [PROMISE_FULFILLED] AI markers with Weight parameter (trivial/minor/moderate/major/critical), weight-scaled disposition/trust effects, reputation ripple to nearby NPCs (probability proportional to weight), faction standing propagation (via leader_npc_id + notable_members, leaders 1.5x), merchant price modifiers (disposition + faction → 0.85-1.25 multiplier with discount/markup badge UI), DM prompt urgency annotations, living world tick step 3.8, 185-assertion test suite
 - **Mythic Progression System** (2026-02-22) — 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only), Mythic Power pool (3 + 2×tier/day), Surge mechanic (d6→d12 by tier), trial-based advancement, 53-deity piety system (all character creator deities across 9 pantheons), 12 epic boons, legendary items (4 states: Dormant → Awakened → Exalted → Mythic), shadow-path interaction, 4 AI markers ([MYTHIC_TRIAL], [PIETY_CHANGE], [ITEM_AWAKEN], [MYTHIC_SURGE]), 7-tab frontend UI, 1004-assertion test suite
 - **Weather, Survival & Crafting Systems** (2026-02-22) — Weather system (season-based probability tables, region mods, temperature calc, gear warmth, exposure thresholds), survival system (D&D 5e PHB hunger/thirst/starvation/dehydration, auto-consume, food spoilage, foraging DCs by terrain), crafting system (112 recipes across 10 categories, quality tiers, tool proficiency, discoverable recipes, radiant AI-generated recipes via [RECIPE_GIFT] marker)
 - **NPC System Overhaul** (2026-02-21) — NPC lifecycle state machine (alive/deceased/missing/imprisoned/unknown) with death propagation cascade, NPC personality enrichment (voice/personality/mannerism/motivation/appearance fill-not-overwrite), NPC voice differentiation in DM prompt, companion activities (off-screen tasks with AI resolution), NPC mail system (candidate scoring, AI/template generation, narrative queue), NPC aging/absence (disposition/trust decay, reunion boost, relocation/forget thresholds), living world tick pipeline (weather → factions → events → companions → NPC mail → survival), narrative queue system

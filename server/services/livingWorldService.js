@@ -371,7 +371,8 @@ async function spawnGoalCompletionEvent(campaignId, goal) {
 }
 
 /**
- * Check if rival factions react to a goal reaching a significant milestone
+ * Check if rival factions react to a goal reaching a significant milestone.
+ * Spawns both a world event AND a conflict quest for the player.
  */
 async function checkRivalReactions(campaignId, goal, milestone) {
   const rivalEvents = [];
@@ -384,7 +385,10 @@ async function checkRivalReactions(campaignId, goal, milestone) {
     if (rival.id === triggerFaction.id) continue;
 
     // Check the rival's relationship toward the triggering faction
-    const relationship = String(rival.faction_relationships?.[triggerFaction.id] || 'neutral').toLowerCase();
+    const factionRels = typeof rival.faction_relationships === 'string'
+      ? JSON.parse(rival.faction_relationships || '{}')
+      : (rival.faction_relationships || {});
+    const relationship = String(factionRels[triggerFaction.id] || 'neutral').toLowerCase();
 
     if (relationship === 'hostile' || relationship === 'enemy' || relationship === 'rival') {
       // 40% chance rival spawns a counter-event
@@ -425,6 +429,12 @@ async function checkRivalReactions(campaignId, goal, milestone) {
               goal_id: goal.id
             });
           }
+
+          // Spawn a conflict quest so the player can participate
+          const conflictQuest = await spawnConflictQuest(campaignId, rival, triggerFaction, goal, milestone);
+          if (conflictQuest) {
+            rivalEvents.push(conflictQuest);
+          }
         } catch (error) {
           console.error(`Failed to spawn rival reaction for ${rival.name}:`, error);
         }
@@ -433,6 +443,99 @@ async function checkRivalReactions(campaignId, goal, milestone) {
   }
 
   return rivalEvents;
+}
+
+/**
+ * Spawn a conflict quest when two factions clash.
+ * The player must choose which side to support (or mediate).
+ */
+async function spawnConflictQuest(campaignId, aggressor, defender, goal, milestone) {
+  const characters = await dbAll(
+    'SELECT * FROM characters WHERE campaign_id = ?',
+    [campaignId]
+  );
+  if (characters.length === 0) return null;
+
+  const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [campaignId]);
+  const character = characters[0];
+
+  try {
+    const [aggressorStanding, defenderStanding, existingQuests] = await Promise.all([
+      factionService.getOrCreateStanding(character.id, aggressor.id),
+      factionService.getOrCreateStanding(character.id, defender.id),
+      questService.getActiveQuests(character.id)
+    ]);
+
+    // Skip if there's already an active conflict quest between these factions
+    const hasConflictQuest = existingQuests.some(q =>
+      q.quest_type === 'faction_conflict' &&
+      q.status === 'active' &&
+      q.rewards?.aggressor_faction_id === aggressor.id &&
+      q.rewards?.defender_faction_id === defender.id
+    );
+    if (hasConflictQuest) return null;
+
+    const questData = await questGenerator.generateConflictQuest({
+      character,
+      campaign,
+      aggressor,
+      defender,
+      goal,
+      milestone,
+      aggressorStanding,
+      defenderStanding,
+      existingQuests
+    });
+
+    // Store faction IDs in rewards for later resolution
+    questData.quest.rewards = {
+      ...questData.quest.rewards,
+      aggressor_faction_id: aggressor.id,
+      defender_faction_id: defender.id,
+      linked_goal_id: goal.id
+    };
+    questData.quest.quest_type = 'faction_conflict';
+    questData.quest.priority = milestone >= 75 ? 'high' : 'normal';
+
+    const quest = await questService.createQuest(questData.quest);
+
+    for (const req of questData.requirements) {
+      await questService.createQuestRequirement({ quest_id: quest.id, ...req });
+    }
+
+    await narrativeQueueService.addToQueue({
+      campaign_id: campaignId,
+      character_id: character.id,
+      event_type: 'quest_available',
+      priority: 'high',
+      title: `Faction Conflict: ${quest.title}`,
+      description: quest.premise,
+      context: {
+        quest_id: quest.id,
+        aggressor_faction_id: aggressor.id,
+        aggressor_faction_name: aggressor.name,
+        defender_faction_id: defender.id,
+        defender_faction_name: defender.name,
+        milestone
+      },
+      related_quest_id: quest.id
+    });
+
+    console.log(`Conflict quest spawned: "${quest.title}" (${aggressor.name} vs ${defender.name})`);
+
+    return {
+      type: 'conflict_quest',
+      quest_id: quest.id,
+      quest_title: quest.title,
+      aggressor_faction: aggressor.name,
+      defender_faction: defender.name,
+      goal_id: goal.id,
+      milestone
+    };
+  } catch (error) {
+    console.error(`Failed to spawn conflict quest (${aggressor.name} vs ${defender.name}):`, error);
+    return null;
+  }
 }
 
 /**

@@ -51,8 +51,15 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Epic Boons (2024 PHB): 12 boons at Level 19+, each with +1 ability score (max 30)
 - Legendary items: 4 states (Dormant → Awakened → Exalted → Mythic), narrative milestone advancement
 - Consequence automation: overdue promises auto-break after 45 game days (warning at 21), explicit deadlines honored, expired quests auto-fail with escalation narratives
-- Promise tracking: `[PROMISE_MADE]` and `[PROMISE_FULFILLED]` markers create/resolve promise tracking with game_day and optional deadline_game_day
+- Promise tracking: `[PROMISE_MADE]` and `[PROMISE_FULFILLED]` markers create/resolve promise tracking with game_day, optional deadline_game_day, and weight (trivial/minor/moderate/major/critical)
+- Weighted promise system: AI assigns weight to promises; breaking/fulfilling scales disposition (-3 to -40 / +2 to +30), trust, reputation ripple to nearby NPCs, and faction standing changes
+- Reputation ripple: broken/fulfilled promises spread to nearby NPCs via `getNpcsByLocation()` with probability proportional to weight; adds rumors via `addRumorHeard()`
+- Faction standing propagation: NPC-linked factions (via `leader_npc_id` + `notable_members`) gain/lose standing proportional to promise weight; leaders incur 1.5x effect
+- Merchant price modifiers: disposition-based (-10% to +15%) + faction-based (-5% to +10%) multiplier, clamped [0.85, 1.25]; applied in `generate-merchant-inventory` endpoint
 - Consequence log: `consequence_log` table tracks all automated consequences (broken promises, quest expirations) with narrative queue integration
+- Faction-driven quests: milestone-based quest spawning at 25/50/75/100% goal progress, conflict quests when rival factions clash, quest completion feeds back into goal progress (regular +5/+10, conflict +8/-5), standing-based reward scaling (allied 1.5x, neutral 1.0x, hostile 0.75x)
+- Active quest injection: DM prompt includes active quests with type labels ([MAIN], [FACTION], [CONFLICT], [COMPANION], [SIDE]), stage progress, objectives, faction context; loaded from `getActiveQuests()` in session creation
+- Conflict quests: `faction_conflict` quest type with `aggressor_faction_id` + `defender_faction_id` + `linked_goal_id` in rewards JSON; opposing faction standing change on completion; deduplication prevents duplicate active conflicts between same factions
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
@@ -69,7 +76,10 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/services/worldEventNpcService.js` — NPC effects from world event stage advances
 - `server/services/npcMailService.js` — NPC mail candidate scoring, AI/template content generation, narrative queue integration
 - `server/services/npcAgingService.js` — Absence-based disposition/trust decay, reunion boost, relocation/forget thresholds
-- `server/services/livingWorldService.js` — Living world tick pipeline (weather → factions → events → companions → NPC mail → consequences → survival → record)
+- `server/services/livingWorldService.js` — Living world tick pipeline (weather → factions → events → conflict quests → companions → NPC mail → consequences → survival → record)
+- `server/services/questService.js` — Quest CRUD, stage advancement, completion with auto-rewards + faction standing + goal progress feedback
+- `server/services/questGenerator.js` — AI quest generation (main, side, one-time, companion, faction, conflict)
+- `server/services/questProgressChecker.js` — Event-driven quest requirement checking, stage advancement
 - `server/services/narrativeQueueService.js` — Narrative queue CRUD, priority ordering, delivery tracking, AI context formatting
 - `server/services/weatherService.js` — Weather state, generation, advance, temperature, exposure checks
 - `server/services/survivalService.js` — Hunger, thirst, food spoilage, auto-consume, foraging DC

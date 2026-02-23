@@ -131,6 +131,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [merchantDbId, setMerchantDbId] = useState(null);
   const [merchantPersonality, setMerchantPersonality] = useState(null);
   const [merchantGold, setMerchantGold] = useState(null);
+  const [merchantPriceModifier, setMerchantPriceModifier] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -1263,6 +1264,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setMerchantDbId(data.merchantId || null);
       setMerchantPersonality(data.personality || null);
       setMerchantGold(data.merchantGold ?? null);
+      setMerchantPriceModifier(data.priceModifier || null);
       // Update context with DB data
       if (data.merchantName) {
         const updatedCtx = { ...ctx, merchantName: data.merchantName, merchantType: data.merchantType || ctx.merchantType };
@@ -2438,6 +2440,28 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                 </span>
               </div>
 
+              {/* Price modifier badge */}
+              {merchantPriceModifier && merchantPriceModifier.multiplier !== 1 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem',
+                  borderRadius: '6px', marginBottom: '0.75rem', fontSize: '0.85rem',
+                  background: merchantPriceModifier.multiplier < 1
+                    ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  border: `1px solid ${merchantPriceModifier.multiplier < 1
+                    ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  color: merchantPriceModifier.multiplier < 1 ? '#10b981' : '#ef4444'
+                }}>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {merchantPriceModifier.multiplier < 1
+                      ? `${Math.round((1 - merchantPriceModifier.multiplier) * 100)}% Discount`
+                      : `${Math.round((merchantPriceModifier.multiplier - 1) * 100)}% Markup`}
+                  </span>
+                  <span style={{ color: '#888', fontSize: '0.75rem' }}>
+                    — {merchantPriceModifier.details?.disposition || ''}{merchantPriceModifier.details?.faction && merchantPriceModifier.details.faction !== 'no faction link' ? `, ${merchantPriceModifier.details.faction}` : ''}
+                  </span>
+                </div>
+              )}
+
               {merchantLoading ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
                   Loading merchant inventory...
@@ -2473,6 +2497,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                               </div>
                               <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                 <div style={{ color: '#f59e0b', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                                  {item.base_price_gp !== undefined && item.base_price_gp !== item.price_gp && (
+                                    <span style={{ textDecoration: 'line-through', color: '#666', fontWeight: 'normal', marginRight: '4px', fontSize: '0.75rem' }}>
+                                      {item.base_price_gp > 0 && `${item.base_price_gp}gp`}
+                                    </span>
+                                  )}
                                   {item.price_gp > 0 && `${item.price_gp}gp`}{item.price_sp > 0 && ` ${item.price_sp}sp`}{item.price_cp > 0 && ` ${item.price_cp}cp`}
                                 </div>
                                 <div style={{ fontSize: '0.7rem', color: '#666' }}>×{remaining} left</div>

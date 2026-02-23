@@ -247,8 +247,32 @@ export async function completeQuest(id) {
         reason: 'faction_quest_completed',
         quest_id: quest.id
       });
+
+      // Feed back into linked faction goal progress
+      await advanceFactionGoalFromQuest(factionService, quest);
     } catch (e) {
       console.error(`Error updating faction standing for quest "${quest.title}":`, e);
+    }
+  }
+
+  // Conflict quest: apply opposing faction standing change too
+  if (quest.quest_type === 'faction_conflict' && quest.character_id) {
+    try {
+      const factionService = await import('./factionService.js');
+      const opposingChange = quest.rewards?.opposing_faction_standing_change || -5;
+      const aggressorId = quest.rewards?.aggressor_faction_id;
+      const defenderId = quest.rewards?.defender_faction_id;
+
+      // The opposing faction (whichever isn't source_id) gets negative standing
+      const opposingFactionId = quest.source_id === defenderId ? aggressorId : defenderId;
+      if (opposingFactionId) {
+        await factionService.modifyStanding(quest.character_id, opposingFactionId, opposingChange, {
+          description: `Opposed in faction conflict: ${quest.title}`,
+          quest_id: quest.id
+        });
+      }
+    } catch (e) {
+      console.error(`Error updating opposing faction standing for conflict quest "${quest.title}":`, e);
     }
   }
 
@@ -507,6 +531,66 @@ export async function isStageComplete(questId, stageIndex) {
   `, [questId, stageIndex]);
 
   return incomplete.count === 0;
+}
+
+// ============================================================
+// FACTION GOAL FEEDBACK
+// ============================================================
+
+/**
+ * Advance a faction goal when a linked quest is completed.
+ * Regular faction quests advance the source faction's goal by 5-15 points.
+ * Conflict quests advance the helped faction's goal and hinder the other.
+ */
+async function advanceFactionGoalFromQuest(factionService, quest) {
+  const rewards = quest.rewards || {};
+
+  if (quest.quest_type === 'faction_conflict') {
+    // Conflict quests: advance the helped faction's goal, hinder the opposed
+    const linkedGoalId = rewards.linked_goal_id;
+    if (linkedGoalId) {
+      // The linked goal belongs to the defender; completing quest helped the defender
+      // so advance defender's goal by 5-10 and set back aggressor's active goals
+      try {
+        await factionService.advanceGoalProgress(linkedGoalId, 8);
+        console.log(`Conflict quest completion advanced goal ${linkedGoalId} by 8`);
+      } catch (e) {
+        console.error('Error advancing linked goal from conflict quest:', e);
+      }
+
+      // Hinder aggressor's active goals
+      const aggressorId = rewards.aggressor_faction_id;
+      if (aggressorId) {
+        try {
+          const aggressorGoals = await factionService.getActiveFactionGoals(aggressorId);
+          for (const goal of aggressorGoals.slice(0, 1)) {
+            // Set back 5 points (clamped to 0 in advanceGoalProgress)
+            await factionService.advanceGoalProgress(goal.id, -5);
+            console.log(`Conflict quest set back aggressor goal ${goal.id} by 5`);
+          }
+        } catch (e) {
+          console.error('Error hindering aggressor goals from conflict quest:', e);
+        }
+      }
+    }
+  } else {
+    // Regular faction quest: advance the source faction's linked goal
+    // Look for active goals of this faction and advance the most relevant one
+    const factionId = quest.source_id;
+    if (factionId) {
+      try {
+        const activeGoals = await factionService.getActiveFactionGoals(factionId);
+        if (activeGoals.length > 0) {
+          // Advance the first active goal (most urgent) by 5-10 based on quest priority
+          const advanceAmount = quest.priority === 'high' ? 10 : 5;
+          await factionService.advanceGoalProgress(activeGoals[0].id, advanceAmount);
+          console.log(`Faction quest completion advanced goal ${activeGoals[0].id} by ${advanceAmount}`);
+        }
+      } catch (e) {
+        console.error('Error advancing faction goal from quest completion:', e);
+      }
+    }
+  }
 }
 
 // ============================================================

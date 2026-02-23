@@ -307,6 +307,111 @@ Return ONLY valid JSON:
 }`;
 }
 
+/**
+ * Generate a faction conflict quest (two factions clashing)
+ * @param {object} context - Context for generation
+ * @param {object} context.character - The character
+ * @param {object} context.campaign - Campaign settings
+ * @param {object} context.aggressor - The rival faction launching the counter-action
+ * @param {object} context.defender - The faction being opposed
+ * @param {object} context.goal - The defender's goal that triggered the conflict
+ * @param {number} context.milestone - Goal milestone percentage
+ * @param {object} context.aggressorStanding - Character's standing with the aggressor
+ * @param {object} context.defenderStanding - Character's standing with the defender
+ * @param {array} context.existingQuests - Existing quests to avoid overlap
+ * @returns {object} Generated quest data
+ */
+export async function generateConflictQuest(context) {
+  const prompt = buildConflictQuestPrompt(context);
+  const result = await generateWithAI(prompt);
+  return parseQuestResponse(result, 'faction_conflict', context);
+}
+
+function buildConflictQuestPrompt(context) {
+  const { character, campaign, aggressor, defender, goal, milestone, aggressorStanding, defenderStanding, existingQuests } = context;
+
+  const aggressorStandingValue = aggressorStanding?.standing || 0;
+  const defenderStandingValue = defenderStanding?.standing || 0;
+  const existingQuestTitles = existingQuests?.map(q => q.title).join(', ') || 'None';
+
+  // Determine how the player is positioned in this conflict
+  let playerContext;
+  if (defenderStandingValue >= 20 && aggressorStandingValue <= -20) {
+    playerContext = `The player is ALLIED with ${defender.name} and HOSTILE to ${aggressor.name}. The quest should favor helping ${defender.name} defend against ${aggressor.name}'s aggression.`;
+  } else if (aggressorStandingValue >= 20 && defenderStandingValue <= -20) {
+    playerContext = `The player is ALLIED with ${aggressor.name} and HOSTILE to ${defender.name}. The quest should favor helping ${aggressor.name} undermine ${defender.name}'s goal.`;
+  } else {
+    playerContext = `The player has no strong allegiance to either faction (${defender.name}: ${defenderStandingValue}, ${aggressor.name}: ${aggressorStandingValue}). Both sides approach the player seeking help. The quest should present a genuine CHOICE — the player must decide which faction to support or attempt a risky mediation.`;
+  }
+
+  return `You are a D&D quest designer. Generate a FACTION CONFLICT QUEST where two factions are clashing.
+
+CHARACTER:
+- Name: ${character.name}
+- Class: ${character.class}
+- Level: ${character.level}
+- Current Location: ${character.current_location || 'Unknown'}
+
+CAMPAIGN:
+- Setting: ${campaign?.setting || 'Forgotten Realms'}
+- Tone: ${campaign?.tone || 'heroic fantasy'}
+
+DEFENDING FACTION (being opposed):
+- Name: ${defender.name}
+- Description: ${defender.description || 'A powerful organization'}
+- Scope: ${defender.scope || 'regional'}
+- Goal Under Threat: "${goal.title}" (${milestone}% complete)
+
+AGGRESSOR FACTION (launching counter-action):
+- Name: ${aggressor.name}
+- Description: ${aggressor.description || 'A rival organization'}
+- Scope: ${aggressor.scope || 'regional'}
+
+PLAYER POSITION: ${playerContext}
+
+EXISTING QUESTS (avoid overlap): ${existingQuestTitles}
+
+Generate a 3-stage FACTION CONFLICT QUEST. This quest must involve the tension between two factions and present the player with a meaningful CHOICE about which side to support. The quest should:
+- Stage 1: Both factions approach the player or the conflict directly affects the player's area
+- Stage 2: The player must take action that either helps one faction or mediates
+- Stage 3: Resolution with consequences for the losing faction
+
+REQUIREMENT TYPES: ${Object.values(REQUIREMENT_TYPES).join(', ')}
+
+Return ONLY valid JSON:
+{
+  "title": "Quest Title reflecting the conflict",
+  "premise": "One sentence hook about the faction clash",
+  "description": "2-3 sentences about the conflict and the player's role",
+  "stages": [
+    {
+      "name": "Stage Name",
+      "description": "What happens",
+      "objectives": ["Objective"]
+    }
+  ],
+  "requirements": [
+    {
+      "stage_index": 0,
+      "type": "adventure_completed",
+      "description": "What the player needs to do",
+      "params": {"adventure_tag": "investigation"},
+      "is_optional": false
+    }
+  ],
+  "rewards": {
+    "gold": ${milestone >= 75 ? 250 : 150},
+    "xp": ${milestone >= 75 ? 500 : 300},
+    "items": [],
+    "faction_standing_change": 10,
+    "opposing_faction_standing_change": -5
+  },
+  "world_impact_on_complete": "How completing this quest changes the balance of power",
+  "aggressor_faction_id": ${aggressor.id},
+  "defender_faction_id": ${defender.id}
+}`;
+}
+
 function buildFactionQuestPrompt(context) {
   const { character, campaign, faction, goal, milestone, standing, existingQuests } = context;
 
@@ -323,8 +428,15 @@ function buildFactionQuestPrompt(context) {
     standingContext = `The player is NEUTRAL toward ${faction.name} (standing: ${standingValue}). Generate a quest where the player can CHOOSE to help or oppose the faction. Both sides may approach the player.`;
   }
 
-  // Scale quest complexity by milestone
+  // Scale quest complexity by milestone and rewards by standing
   const stageCount = milestone >= 75 ? 3 : 2;
+  // Standing-based reward scaling: allied factions are generous, hostile quests pay through other means
+  const standingRewardScale = standingValue >= 40 ? 1.5 : standingValue >= 20 ? 1.25 : standingValue <= -20 ? 0.75 : 1.0;
+  const baseGold = milestone >= 75 ? 200 : 100;
+  const baseXP = milestone >= 75 ? 400 : 200;
+  const scaledGold = Math.round(baseGold * standingRewardScale);
+  const scaledXP = Math.round(baseXP * standingRewardScale);
+
   const milestoneContext = {
     25: 'The faction has just begun working toward this goal. The quest involves early-stage activities.',
     50: 'The faction has made significant progress. The quest involves a critical turning point.',
@@ -386,8 +498,8 @@ Return ONLY valid JSON:
     }
   ],
   "rewards": {
-    "gold": ${milestone >= 75 ? 200 : 100},
-    "xp": ${milestone >= 75 ? 400 : 200},
+    "gold": ${scaledGold},
+    "xp": ${scaledXP},
     "items": [],
     "faction_standing_change": ${standingValue >= 20 ? 10 : (standingValue <= -20 ? -10 : 5)}
   },
@@ -460,8 +572,8 @@ function parseQuestResponse(response, questType, context) {
       campaign_id: context.campaign?.id || null,
       character_id: context.character?.id || null,
       quest_type: questType,
-      source_type: questType === 'companion' ? 'companion' : questType === 'faction' ? 'faction' : 'generated',
-      source_id: context.companion?.id || context.faction?.id || null,
+      source_type: questType === 'companion' ? 'companion' : (questType === 'faction' || questType === 'faction_conflict') ? 'faction' : 'generated',
+      source_id: context.companion?.id || context.faction?.id || context.defender?.id || null,
       title: parsed.title,
       premise: parsed.premise,
       description: parsed.description,
@@ -498,5 +610,6 @@ export default {
   generateSideQuest,
   generateOneTimeQuest,
   generateCompanionQuest,
-  generateFactionQuest
+  generateFactionQuest,
+  generateConflictQuest
 };

@@ -289,7 +289,8 @@ export async function addPromise(characterId, npcId, promise, options = {}) {
     made_date: new Date().toISOString(),
     status: 'pending',
     game_day_made: options.gameDay || null,
-    deadline_game_day: options.deadlineGameDay || null
+    deadline_game_day: options.deadlineGameDay || null,
+    weight: options.weight || 'moderate'
   });
 
   await dbRun(`
@@ -306,6 +307,7 @@ export async function fulfillPromise(characterId, npcId, promiseIndex) {
   const rel = await getOrCreateRelationship(characterId, npcId);
 
   const promises = rel.promises_made || [];
+  const promiseWeight = promises[promiseIndex]?.weight || 'moderate';
   if (promises[promiseIndex]) {
     promises[promiseIndex].status = 'fulfilled';
     promises[promiseIndex].fulfilled_date = new Date().toISOString();
@@ -314,12 +316,10 @@ export async function fulfillPromise(characterId, npcId, promiseIndex) {
       UPDATE npc_relationships SET promises_made = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `, [JSON.stringify(promises), rel.id]);
 
-    // Keeping a promise improves disposition and trust
-    await adjustDisposition(characterId, npcId, 10, 'Fulfilled a promise');
-    await adjustTrust(characterId, npcId, 5, 'Fulfilled a promise');
+    // Weight-aware effects are now handled by the caller (consequenceService / dmSession route)
   }
 
-  return getRelationshipById(rel.id);
+  return { rel: await getRelationshipById(rel.id), weight: promiseWeight };
 }
 
 /**
@@ -402,6 +402,7 @@ export async function breakPromise(characterId, npcId, promiseIndex, reason = nu
   const rel = await getOrCreateRelationship(characterId, npcId);
 
   const promises = rel.promises_made || [];
+  const promiseWeight = promises[promiseIndex]?.weight || 'moderate';
   if (promises[promiseIndex] && promises[promiseIndex].status === 'pending') {
     promises[promiseIndex].status = 'broken';
     promises[promiseIndex].broken_date = new Date().toISOString();
@@ -411,11 +412,10 @@ export async function breakPromise(characterId, npcId, promiseIndex, reason = nu
       UPDATE npc_relationships SET promises_made = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `, [JSON.stringify(promises), rel.id]);
 
-    // Breaking a promise should negatively impact disposition
-    await adjustDisposition(characterId, npcId, -15, 'Broke a promise');
+    // Weight-aware effects are now handled by the caller (consequenceService)
   }
 
-  return getRelationshipById(rel.id);
+  return { rel: await getRelationshipById(rel.id), weight: promiseWeight };
 }
 
 /**

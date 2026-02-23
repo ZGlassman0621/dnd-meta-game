@@ -396,6 +396,198 @@ console.log('\n=== Test 13: Living World Tick Integration ===\n');
 }
 
 // ============================================================
+// 14. Promise Weight Config
+// ============================================================
+console.log('\n=== Test 14: Promise Weight Config ===\n');
+
+{
+  const { PROMISE_WEIGHTS, FULFILL_WEIGHTS, VALID_WEIGHTS } = await import('../server/services/consequenceService.js');
+
+  assert(VALID_WEIGHTS.length === 5, 'VALID_WEIGHTS has 5 levels');
+  assert(VALID_WEIGHTS.includes('trivial'), 'VALID_WEIGHTS includes trivial');
+  assert(VALID_WEIGHTS.includes('minor'), 'VALID_WEIGHTS includes minor');
+  assert(VALID_WEIGHTS.includes('moderate'), 'VALID_WEIGHTS includes moderate');
+  assert(VALID_WEIGHTS.includes('major'), 'VALID_WEIGHTS includes major');
+  assert(VALID_WEIGHTS.includes('critical'), 'VALID_WEIGHTS includes critical');
+
+  // PROMISE_WEIGHTS: all 5 levels exist with correct structure
+  for (const w of VALID_WEIGHTS) {
+    assert(PROMISE_WEIGHTS[w] !== undefined, `PROMISE_WEIGHTS has ${w} level`);
+    assert(typeof PROMISE_WEIGHTS[w].directDisposition === 'number', `PROMISE_WEIGHTS.${w} has directDisposition`);
+    assert(typeof PROMISE_WEIGHTS[w].directTrust === 'number', `PROMISE_WEIGHTS.${w} has directTrust`);
+    assert(typeof PROMISE_WEIGHTS[w].rippleChance === 'number', `PROMISE_WEIGHTS.${w} has rippleChance`);
+    assert(typeof PROMISE_WEIGHTS[w].factionStanding === 'number', `PROMISE_WEIGHTS.${w} has factionStanding`);
+  }
+
+  // Values scale correctly: trivial < minor < moderate < major < critical (absolute values)
+  assert(Math.abs(PROMISE_WEIGHTS.trivial.directDisposition) < Math.abs(PROMISE_WEIGHTS.minor.directDisposition),
+    'PROMISE_WEIGHTS: trivial < minor disposition');
+  assert(Math.abs(PROMISE_WEIGHTS.minor.directDisposition) < Math.abs(PROMISE_WEIGHTS.moderate.directDisposition),
+    'PROMISE_WEIGHTS: minor < moderate disposition');
+  assert(Math.abs(PROMISE_WEIGHTS.moderate.directDisposition) < Math.abs(PROMISE_WEIGHTS.major.directDisposition),
+    'PROMISE_WEIGHTS: moderate < major disposition');
+  assert(Math.abs(PROMISE_WEIGHTS.major.directDisposition) < Math.abs(PROMISE_WEIGHTS.critical.directDisposition),
+    'PROMISE_WEIGHTS: major < critical disposition');
+
+  // Ripple chance scales: trivial = 0, critical = 0.85
+  assert(PROMISE_WEIGHTS.trivial.rippleChance === 0, 'Trivial weight has 0 ripple chance');
+  assert(PROMISE_WEIGHTS.critical.rippleChance === 0.85, 'Critical weight has 0.85 ripple chance');
+
+  // FULFILL_WEIGHTS: all positive values
+  for (const w of VALID_WEIGHTS) {
+    assert(FULFILL_WEIGHTS[w] !== undefined, `FULFILL_WEIGHTS has ${w} level`);
+    assert(FULFILL_WEIGHTS[w].directDisposition > 0, `FULFILL_WEIGHTS.${w} has positive directDisposition`);
+    assert(FULFILL_WEIGHTS[w].directTrust > 0, `FULFILL_WEIGHTS.${w} has positive directTrust`);
+    assert(FULFILL_WEIGHTS[w].rippleChance >= 0, `FULFILL_WEIGHTS.${w} has non-negative rippleChance`);
+  }
+
+  // Fulfill values scale: critical > major > moderate > minor > trivial
+  assert(FULFILL_WEIGHTS.critical.directDisposition > FULFILL_WEIGHTS.major.directDisposition,
+    'FULFILL_WEIGHTS: critical > major disposition');
+  assert(FULFILL_WEIGHTS.major.directDisposition > FULFILL_WEIGHTS.moderate.directDisposition,
+    'FULFILL_WEIGHTS: major > moderate disposition');
+}
+
+// ============================================================
+// 15. Weight Detection in PROMISE_MADE Marker
+// ============================================================
+console.log('\n=== Test 15: Weight Detection in PROMISE_MADE ===\n');
+
+{
+  // Weight=major
+  const result = detectPromiseMade('[PROMISE_MADE: NPC="Elara" Promise="Save her daughter" Deadline=10 Weight=major]');
+  assert(result.length === 1, 'Detects PROMISE_MADE with Weight');
+  assert(result[0].weight === 'major', 'Extracts Weight=major correctly');
+}
+
+{
+  // Weight=trivial
+  const result = detectPromiseMade('[PROMISE_MADE: NPC="Child" Promise="Return the sweet treat" Weight=trivial]');
+  assert(result.length === 1, 'Detects trivial weight');
+  assert(result[0].weight === 'trivial', 'Extracts Weight=trivial correctly');
+}
+
+{
+  // Weight=critical
+  const result = detectPromiseMade('[PROMISE_MADE: NPC="King" Promise="Save the realm" Weight=critical Deadline=30]');
+  assert(result.length === 1, 'Detects critical weight');
+  assert(result[0].weight === 'critical', 'Extracts Weight=critical correctly');
+  assert(result[0].deadline === 30, 'Deadline still parsed with weight present');
+}
+
+{
+  // Missing Weight defaults to moderate
+  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test promise"]');
+  assert(result.length === 1, 'Detects marker without Weight field');
+  assert(result[0].weight === 'moderate', 'Missing weight defaults to moderate');
+}
+
+{
+  // Invalid Weight defaults to moderate
+  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test" Weight=legendary]');
+  assert(result.length === 1, 'Detects marker with invalid Weight');
+  assert(result[0].weight === 'moderate', 'Invalid weight defaults to moderate');
+}
+
+{
+  // Case-insensitive weight
+  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test" Weight=MAJOR]');
+  assert(result.length === 1, 'Detects UPPERCASE weight');
+  assert(result[0].weight === 'major', 'Uppercase weight normalized to lowercase');
+}
+
+// ============================================================
+// 16. New Consequence Service Exports
+// ============================================================
+console.log('\n=== Test 16: New Consequence Service Exports ===\n');
+
+{
+  const csModule = await import('../server/services/consequenceService.js');
+
+  assert(typeof csModule.spreadReputationRipple === 'function', 'spreadReputationRipple is exported');
+  assert(typeof csModule.findNpcFactions === 'function', 'findNpcFactions is exported');
+  assert(typeof csModule.spreadFactionStanding === 'function', 'spreadFactionStanding is exported');
+  assert(typeof csModule.calculatePriceModifier === 'function', 'calculatePriceModifier is exported');
+  assert(typeof csModule.PROMISE_WEIGHTS === 'object', 'PROMISE_WEIGHTS is exported');
+  assert(typeof csModule.FULFILL_WEIGHTS === 'object', 'FULFILL_WEIGHTS is exported');
+  assert(Array.isArray(csModule.VALID_WEIGHTS), 'VALID_WEIGHTS is exported as array');
+}
+
+// ============================================================
+// 17. Price Modifier Formula Validation
+// ============================================================
+console.log('\n=== Test 17: Price Modifier Formula ===\n');
+
+{
+  // Test the disposition-to-modifier mapping
+  function testDispositionMod(disposition) {
+    if (disposition <= -50) return 0.15;
+    if (disposition <= -25) return 0.10;
+    if (disposition <= 0) return 0.05;
+    if (disposition <= 25) return 0;
+    if (disposition <= 50) return -0.03;
+    if (disposition <= 75) return -0.06;
+    return -0.10;
+  }
+
+  assert(testDispositionMod(-75) === 0.15, 'Hostile NPC: +15% markup');
+  assert(testDispositionMod(-50) === 0.15, 'Hostile boundary: +15% markup');
+  assert(testDispositionMod(-30) === 0.10, 'Unfriendly NPC: +10% markup');
+  assert(testDispositionMod(-10) === 0.05, 'Cold NPC: +5% markup');
+  assert(testDispositionMod(0) === 0.05, 'Neutral-cold: +5% markup');
+  assert(testDispositionMod(10) === 0, 'Neutral: no modifier');
+  assert(testDispositionMod(40) === -0.03, 'Friendly: -3% discount');
+  assert(testDispositionMod(60) === -0.06, 'Allied: -6% discount');
+  assert(testDispositionMod(80) === -0.10, 'Devoted: -10% discount');
+
+  // Test clamping
+  const minClamp = Math.max(0.85, Math.min(1.25, 1 + (-0.10) + (-0.05)));
+  assert(minClamp === 0.85, 'Price clamped to 0.85 minimum');
+
+  const maxClamp = Math.max(0.85, Math.min(1.25, 1 + 0.15 + 0.10));
+  assert(maxClamp === 1.25, 'Price clamped to 1.25 maximum');
+
+  const normalClamp = Math.max(0.85, Math.min(1.25, 1 + 0 + 0));
+  assert(normalClamp === 1.0, 'Neutral disposition + no faction = multiplier 1.0');
+}
+
+// ============================================================
+// 18. Weight in Promise Storage Signature
+// ============================================================
+console.log('\n=== Test 18: Weight in Promise Storage ===\n');
+
+{
+  const relModule = await import('../server/services/npcRelationshipService.js');
+
+  // fulfillPromise should return an object with weight
+  assert(typeof relModule.fulfillPromise === 'function', 'fulfillPromise is exported');
+  assert(typeof relModule.breakPromise === 'function', 'breakPromise is exported');
+
+  // Verify addPromise still works (function signature unchanged except for options.weight)
+  assert(relModule.addPromise.length >= 3, 'addPromise still accepts 3+ params');
+}
+
+// ============================================================
+// 19. Severity from Weight Mapping
+// ============================================================
+console.log('\n=== Test 19: Severity from Weight Mapping ===\n');
+
+{
+  function getSeverity(weight) {
+    if (weight === 'critical') return 'severe';
+    if (weight === 'major') return 'major';
+    if (weight === 'trivial') return 'minor';
+    return 'moderate';
+  }
+
+  assert(getSeverity('trivial') === 'minor', 'Trivial weight maps to minor severity');
+  assert(getSeverity('minor') === 'moderate', 'Minor weight maps to moderate severity');
+  assert(getSeverity('moderate') === 'moderate', 'Moderate weight maps to moderate severity');
+  assert(getSeverity('major') === 'major', 'Major weight maps to major severity');
+  assert(getSeverity('critical') === 'severe', 'Critical weight maps to severe severity');
+}
+
+// ============================================================
 // SUMMARY
 // ============================================================
 

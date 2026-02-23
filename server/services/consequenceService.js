@@ -11,6 +11,9 @@ import { emit, GAME_EVENTS } from './eventEmitter.js';
  * - Overdue promise detection and auto-breaking
  * - Quest deadline enforcement and escalation
  * - Consequence logging and narrative queue integration
+ * - Weighted reputation ripple (nearby NPCs hear about broken/kept promises)
+ * - Faction standing propagation (NPC-linked factions affected by promises)
+ * - Merchant price modifiers (disposition + faction standing influence prices)
  */
 
 // ============================================================
@@ -21,6 +24,253 @@ import { emit, GAME_EVENTS } from './eventEmitter.js';
 const PROMISE_WARNING_DAYS = 21;      // Queue a reminder to narrative
 const PROMISE_BREAK_DAYS = 45;        // Auto-break if no explicit deadline
 const PROMISE_WARNING_FRACTION = 0.5; // Warn at half of explicit deadline
+
+// ============================================================
+// PROMISE WEIGHT SYSTEM
+// ============================================================
+
+/**
+ * Weight levels for promises, determining magnitude of all consequences.
+ * AI assigns weight via [PROMISE_MADE: ... Weight=major] marker.
+ */
+export const VALID_WEIGHTS = ['trivial', 'minor', 'moderate', 'major', 'critical'];
+
+/**
+ * Consequence magnitudes when a promise is BROKEN, keyed by weight.
+ * - directDisposition: applied to the promise NPC
+ * - directTrust: applied to the promise NPC
+ * - rippleChance: probability (0-1) that each nearby NPC hears about it
+ * - rippleDisposition: disposition change for NPCs who hear the rumor
+ * - factionStanding: standing change for NPC-linked factions (leaders get 1.5x)
+ */
+export const PROMISE_WEIGHTS = {
+  trivial:   { directDisposition: -3,  directTrust: -1,  rippleChance: 0,    rippleDisposition: 0,   factionStanding: 0 },
+  minor:     { directDisposition: -8,  directTrust: -3,  rippleChance: 0.15, rippleDisposition: -3,  factionStanding: -3 },
+  moderate:  { directDisposition: -15, directTrust: -5,  rippleChance: 0.35, rippleDisposition: -5,  factionStanding: -5 },
+  major:     { directDisposition: -25, directTrust: -10, rippleChance: 0.6,  rippleDisposition: -8,  factionStanding: -10 },
+  critical:  { directDisposition: -40, directTrust: -15, rippleChance: 0.85, rippleDisposition: -12, factionStanding: -15 }
+};
+
+/**
+ * Reward magnitudes when a promise is FULFILLED, keyed by weight.
+ */
+export const FULFILL_WEIGHTS = {
+  trivial:   { directDisposition: 2,  directTrust: 1,  rippleChance: 0,    rippleDisposition: 0,  factionStanding: 0 },
+  minor:     { directDisposition: 5,  directTrust: 2,  rippleChance: 0.1,  rippleDisposition: 2,  factionStanding: 2 },
+  moderate:  { directDisposition: 10, directTrust: 5,  rippleChance: 0.25, rippleDisposition: 3,  factionStanding: 3 },
+  major:     { directDisposition: 18, directTrust: 8,  rippleChance: 0.5,  rippleDisposition: 5,  factionStanding: 7 },
+  critical:  { directDisposition: 30, directTrust: 12, rippleChance: 0.75, rippleDisposition: 8,  factionStanding: 10 }
+};
+
+// ============================================================
+// REPUTATION RIPPLE — Nearby NPCs hear about broken/kept promises
+// ============================================================
+
+/**
+ * Spread reputation effects to nearby NPCs when a promise is broken or fulfilled.
+ * Uses getNpcsByLocation() to find NPCs in the same area, then probabilistically
+ * applies disposition changes and adds rumors based on promise weight.
+ *
+ * @returns Array of { npcId, npcName, dispositionChange } for affected NPCs
+ */
+export async function spreadReputationRipple(campaignId, characterId, npcId, weight, isBroken) {
+  const config = isBroken
+    ? (PROMISE_WEIGHTS[weight] || PROMISE_WEIGHTS.moderate)
+    : (FULFILL_WEIGHTS[weight] || FULFILL_WEIGHTS.moderate);
+
+  if (config.rippleChance <= 0) return [];
+
+  // Get the NPC's location
+  const npc = await dbGet('SELECT name, current_location FROM npcs WHERE id = ?', [npcId]);
+  if (!npc?.current_location) return [];
+
+  // Find NPCs in the same area
+  const nearbyNpcs = await npcRelationshipService.getNpcsByLocation(campaignId, npc.current_location);
+  const affected = [];
+
+  for (const nearby of nearbyNpcs) {
+    // Skip the promise NPC themselves
+    if (nearby.id === npcId) continue;
+
+    // Probabilistic hearing — each nearby NPC has rippleChance of finding out
+    if (Math.random() >= config.rippleChance) continue;
+
+    const dispChange = config.rippleDisposition;
+    const rumorAction = isBroken ? 'broke a promise to' : 'kept a promise to';
+    const rumorText = `Word has spread that the adventurer ${rumorAction} ${npc.name}.`;
+
+    try {
+      await npcRelationshipService.adjustDisposition(characterId, nearby.id, dispChange,
+        `Heard about ${isBroken ? 'broken' : 'kept'} promise to ${npc.name}`);
+      await npcRelationshipService.addRumorHeard(characterId, nearby.id, rumorText);
+      affected.push({ npcId: nearby.id, npcName: nearby.name, dispositionChange: dispChange });
+    } catch (e) {
+      console.warn(`Ripple to NPC ${nearby.id} failed:`, e.message);
+    }
+  }
+
+  return affected;
+}
+
+// ============================================================
+// FACTION STANDING PROPAGATION
+// ============================================================
+
+/**
+ * Find factions linked to an NPC (as leader or notable member).
+ * @returns Array of { factionId, factionName, role: 'leader'|'member' }
+ */
+export async function findNpcFactions(campaignId, npcId) {
+  const results = [];
+
+  // Factions where this NPC is the leader
+  const leaderFactions = await dbAll(
+    'SELECT id, name FROM factions WHERE campaign_id = ? AND leader_npc_id = ?',
+    [campaignId, npcId]
+  );
+  for (const f of leaderFactions) {
+    results.push({ factionId: f.id, factionName: f.name, role: 'leader' });
+  }
+
+  // Factions where this NPC is a notable member (stored as JSON array)
+  const allFactions = await dbAll(
+    'SELECT id, name, notable_members FROM factions WHERE campaign_id = ? AND leader_npc_id != ? AND notable_members IS NOT NULL',
+    [campaignId, npcId]
+  );
+  for (const f of allFactions) {
+    try {
+      const members = JSON.parse(f.notable_members || '[]');
+      // notable_members can be array of IDs or objects with id/npc_id field
+      const isMember = members.some(m =>
+        m === npcId || m?.id === npcId || m?.npc_id === npcId
+      );
+      if (isMember) {
+        results.push({ factionId: f.id, factionName: f.name, role: 'member' });
+      }
+    } catch (e) {
+      // Skip malformed JSON
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Propagate faction standing changes when a promise to a faction-linked NPC is broken/fulfilled.
+ * Leaders incur 1.5x the standing change; regular members get 1x.
+ *
+ * @returns Array of { factionId, factionName, standingChange }
+ */
+export async function spreadFactionStanding(characterId, campaignId, npcId, weight, isBroken) {
+  const config = isBroken
+    ? (PROMISE_WEIGHTS[weight] || PROMISE_WEIGHTS.moderate)
+    : (FULFILL_WEIGHTS[weight] || FULFILL_WEIGHTS.moderate);
+
+  if (config.factionStanding === 0) return [];
+
+  const factions = await findNpcFactions(campaignId, npcId);
+  if (factions.length === 0) return [];
+
+  const npc = await dbGet('SELECT name FROM npcs WHERE id = ?', [npcId]);
+  const npcName = npc?.name || 'an NPC';
+  const results = [];
+
+  for (const faction of factions) {
+    const multiplier = faction.role === 'leader' ? 1.5 : 1.0;
+    const standingChange = Math.round(config.factionStanding * multiplier);
+    if (standingChange === 0) continue;
+
+    try {
+      const { modifyStanding } = await import('./factionService.js');
+      const deed = { description: `${isBroken ? 'Broke' : 'Kept'} promise to ${npcName} (${faction.role})` };
+      await modifyStanding(characterId, faction.factionId, standingChange, deed);
+      results.push({ factionId: faction.factionId, factionName: faction.factionName, standingChange });
+    } catch (e) {
+      console.warn(`Faction standing update for ${faction.factionName} failed:`, e.message);
+    }
+  }
+
+  return results;
+}
+
+// ============================================================
+// MERCHANT PRICE MODIFIER
+// ============================================================
+
+/**
+ * Calculate a price multiplier for a merchant based on:
+ * 1. Disposition between character and merchant NPC
+ * 2. Faction standings for factions the merchant belongs to
+ *
+ * Returns { multiplier, dispositionMod, factionMod, details }
+ * multiplier is clamped to [0.85, 1.25] — max 15% discount, max 25% markup
+ */
+export async function calculatePriceModifier(characterId, campaignId, merchantNpcId) {
+  // --- Disposition component ---
+  let dispositionMod = 0;
+  let dispositionDetails = 'no relationship';
+  const rel = await npcRelationshipService.getRelationship(characterId, merchantNpcId);
+
+  if (rel) {
+    const disp = rel.disposition;
+    if (disp <= -50) { dispositionMod = 0.15; dispositionDetails = `hostile (${disp})`; }
+    else if (disp <= -25) { dispositionMod = 0.10; dispositionDetails = `unfriendly (${disp})`; }
+    else if (disp <= 0)   { dispositionMod = 0.05; dispositionDetails = `cold (${disp})`; }
+    else if (disp <= 25)  { dispositionMod = 0;    dispositionDetails = `neutral (${disp})`; }
+    else if (disp <= 50)  { dispositionMod = -0.03; dispositionDetails = `friendly (${disp})`; }
+    else if (disp <= 75)  { dispositionMod = -0.06; dispositionDetails = `allied (${disp})`; }
+    else                  { dispositionMod = -0.10; dispositionDetails = `devoted (${disp})`; }
+  }
+
+  // --- Faction component ---
+  let factionMod = 0;
+  let factionDetails = 'no faction link';
+  const factions = await findNpcFactions(campaignId, merchantNpcId);
+
+  if (factions.length > 0) {
+    // Use the most favorable faction modifier for the player
+    let bestFactionMod = 0;
+    let bestFactionName = '';
+
+    for (const faction of factions) {
+      try {
+        const { getOrCreateStanding } = await import('./factionService.js');
+        const standing = await getOrCreateStanding(characterId, faction.factionId);
+        const s = standing.standing || 0;
+
+        let mod = 0;
+        if (s <= -50)      mod = 0.10;
+        else if (s <= -25) mod = 0.05;
+        else if (s <= 0)   mod = 0.02;
+        else if (s <= 25)  mod = 0;
+        else if (s <= 50)  mod = -0.02;
+        else               mod = -0.05;
+
+        // Best = lowest (most discount)
+        if (mod < bestFactionMod || bestFactionName === '') {
+          bestFactionMod = mod;
+          bestFactionName = faction.factionName;
+        }
+      } catch (e) {
+        console.warn(`Faction standing lookup for ${faction.factionName} failed:`, e.message);
+      }
+    }
+
+    factionMod = bestFactionMod;
+    factionDetails = bestFactionName ? `${bestFactionName} (${factionMod > 0 ? '+' : ''}${Math.round(factionMod * 100)}%)` : 'no standing';
+  }
+
+  // --- Combine and clamp ---
+  const rawMultiplier = 1 + dispositionMod + factionMod;
+  const multiplier = Math.round(Math.max(0.85, Math.min(1.25, rawMultiplier)) * 100) / 100;
+
+  return {
+    multiplier,
+    dispositionMod: Math.round(dispositionMod * 100) / 100,
+    factionMod: Math.round(factionMod * 100) / 100,
+    details: { disposition: dispositionDetails, faction: factionDetails }
+  };
+}
 
 // ============================================================
 // MAIN TICK PROCESSING
@@ -140,26 +390,46 @@ async function hasRecentWarning(characterId, npcId, promiseText) {
 }
 
 /**
- * Apply consequences for a broken promise.
+ * Apply consequences for a broken promise (weight-aware).
+ * Uses promise weight to scale disposition, trust, ripple, and faction effects.
  */
 async function applyPromiseBrokenConsequences(characterId, campaignId, npcId, promiseIndex, promise, currentGameDay, reason) {
   const effects = [];
+  const weight = promise.weight || 'moderate';
+  const pw = PROMISE_WEIGHTS[weight] || PROMISE_WEIGHTS.moderate;
 
-  // 1. Break the promise (applies -15 disposition via existing function)
+  // 1. Break the promise (sets status only — no hardcoded disposition change)
   await npcRelationshipService.breakPromise(characterId, npcId, promiseIndex, reason);
-  effects.push({ type: 'disposition', npc_id: npcId, change: -15, reason: 'Broken promise' });
 
-  // 2. Additional trust penalty (-5)
-  await npcRelationshipService.adjustTrust(characterId, npcId, -5, 'Broke a promise');
-  effects.push({ type: 'trust', npc_id: npcId, change: -5, reason: 'Broken promise' });
+  // 2. Apply weight-based direct effects
+  await npcRelationshipService.adjustDisposition(characterId, npcId, pw.directDisposition, `Broke a promise (${weight})`);
+  effects.push({ type: 'disposition', npc_id: npcId, change: pw.directDisposition, reason: `Broken promise (${weight})` });
 
-  // 3. Get NPC name for narrative
+  await npcRelationshipService.adjustTrust(characterId, npcId, pw.directTrust);
+  effects.push({ type: 'trust', npc_id: npcId, change: pw.directTrust, reason: `Broken promise (${weight})` });
+
+  // 3. Reputation ripple to nearby NPCs
+  const rippleResults = await spreadReputationRipple(campaignId, characterId, npcId, weight, true);
+  for (const r of rippleResults) {
+    effects.push({ type: 'ripple', npc_id: r.npcId, npc_name: r.npcName, change: r.dispositionChange });
+  }
+
+  // 4. Faction standing changes
+  const factionResults = await spreadFactionStanding(characterId, campaignId, npcId, weight, true);
+  for (const f of factionResults) {
+    effects.push({ type: 'faction', faction_id: f.factionId, faction_name: f.factionName, change: f.standingChange });
+  }
+
+  // 5. Get NPC name for narrative
   const npc = await dbGet('SELECT name, occupation FROM npcs WHERE id = ?', [npcId]);
   const npcName = npc?.name || 'Unknown NPC';
   const npcOccupation = npc?.occupation || '';
   const promiseText = promise.promise || promise.text || 'a promise';
 
-  // 4. Log the consequence
+  // 6. Determine severity from weight
+  const severity = weight === 'critical' ? 'severe' : weight === 'major' ? 'major' : weight === 'trivial' ? 'minor' : 'moderate';
+
+  // 7. Log the consequence
   const sourceId = JSON.stringify({ npc_id: npcId, promise_index: promiseIndex });
   const logEntry = await logConsequence({
     campaign_id: campaignId,
@@ -168,37 +438,43 @@ async function applyPromiseBrokenConsequences(characterId, campaignId, npcId, pr
     source_type: 'promise',
     source_id: sourceId,
     title: `Broken promise to ${npcName}`,
-    description: `You failed to fulfill your promise to ${npcName}${npcOccupation ? ` (${npcOccupation})` : ''}: "${promiseText}". ${reason}.`,
+    description: `You failed to fulfill your ${weight} promise to ${npcName}${npcOccupation ? ` (${npcOccupation})` : ''}: "${promiseText}". ${reason}.`,
     effects_applied: JSON.stringify(effects),
-    severity: 'moderate',
+    severity,
     game_day: currentGameDay
   });
 
-  // 5. Queue narrative for DM delivery
+  // 8. Queue narrative for DM delivery
+  const rippleSummary = rippleResults.length > 0 ? ` Word has spread to ${rippleResults.length} nearby NPC${rippleResults.length !== 1 ? 's' : ''}.` : '';
+  const factionSummary = factionResults.length > 0 ? ` Your standing with ${factionResults.map(f => f.factionName).join(', ')} has been affected.` : '';
+
   const queueEntry = await narrativeQueueService.addToQueue({
     campaign_id: campaignId,
     character_id: characterId,
     event_type: 'broken_promise',
-    priority: 'high',
+    priority: weight === 'critical' || weight === 'major' ? 'high' : 'normal',
     title: `Broken promise to ${npcName}`,
-    description: `${npcName} has grown bitter about your unfulfilled promise: "${promiseText}". Their trust in you has diminished. ${reason}.`,
+    description: `${npcName} has grown bitter about your unfulfilled promise: "${promiseText}". ${reason}.${rippleSummary}${factionSummary}`,
     context: {
       npc_id: npcId,
       npc_name: npcName,
       promise: promiseText,
-      disposition_change: -15,
-      trust_change: -5,
+      weight,
+      disposition_change: pw.directDisposition,
+      trust_change: pw.directTrust,
+      ripple_count: rippleResults.length,
+      faction_changes: factionResults,
       consequence_id: logEntry?.id
     },
     related_npc_id: npcId
   });
 
-  // 6. Update consequence log with narrative queue ID
+  // 9. Update consequence log with narrative queue ID
   if (logEntry && queueEntry) {
     await dbRun('UPDATE consequence_log SET narrative_queue_id = ? WHERE id = ?', [queueEntry.id, logEntry.id]);
   }
 
-  // 7. Create canon fact about the broken promise
+  // 10. Create canon fact about the broken promise
   try {
     await dbRun(`
       INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
@@ -206,7 +482,7 @@ async function applyPromiseBrokenConsequences(characterId, campaignId, npcId, pr
     `, [
       campaignId, characterId,
       npcName,
-      `Broke promise to ${npcName}: "${promiseText}" — ${reason}`,
+      `Broke ${weight} promise to ${npcName}: "${promiseText}" — ${reason}`,
       currentGameDay
     ]);
   } catch (e) {
@@ -217,6 +493,7 @@ async function applyPromiseBrokenConsequences(characterId, campaignId, npcId, pr
     npc_id: npcId,
     npc_name: npcName,
     promise: promiseText,
+    weight,
     reason,
     effects
   };
