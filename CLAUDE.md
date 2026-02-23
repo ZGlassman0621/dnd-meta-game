@@ -20,7 +20,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Claude model aliases (no date suffix): `claude-opus-4-6`, `claude-sonnet-4-6`
 - Opus handles ALL generation (campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world)
 - Sonnet handles ONLY interactive DM sessions (except first session opening which uses Opus)
-- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`
+- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`, `[PROMISE_MADE]`, `[PROMISE_FULFILLED]`
 - DM prompt uses primacy/recency reinforcement — critical rules at top (ABSOLUTE RULES) and bottom (FINAL REMINDER)
 - Event bus (`server/services/eventEmitter.js`) connects game systems
 - Error handling via `server/utils/errorHandler.js` (handleServerError, notFound, validationError)
@@ -50,6 +50,9 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Piety system (Theros): score 1-50+ per deity, thresholds at 3/10/25/50 unlock abilities. 53 deities (all from character creator: Faerûnian, Draconic, Elven, Drow, Dwarven, Halfling, Orcish, Exandrian, Greyhawk)
 - Epic Boons (2024 PHB): 12 boons at Level 19+, each with +1 ability score (max 30)
 - Legendary items: 4 states (Dormant → Awakened → Exalted → Mythic), narrative milestone advancement
+- Consequence automation: overdue promises auto-break after 45 game days (warning at 21), explicit deadlines honored, expired quests auto-fail with escalation narratives
+- Promise tracking: `[PROMISE_MADE]` and `[PROMISE_FULFILLED]` markers create/resolve promise tracking with game_day and optional deadline_game_day
+- Consequence log: `consequence_log` table tracks all automated consequences (broken promises, quest expirations) with narrative queue integration
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
@@ -66,7 +69,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/services/worldEventNpcService.js` — NPC effects from world event stage advances
 - `server/services/npcMailService.js` — NPC mail candidate scoring, AI/template content generation, narrative queue integration
 - `server/services/npcAgingService.js` — Absence-based disposition/trust decay, reunion boost, relocation/forget thresholds
-- `server/services/livingWorldService.js` — Living world tick pipeline (weather → factions → events → companions → NPC mail → survival → record)
+- `server/services/livingWorldService.js` — Living world tick pipeline (weather → factions → events → companions → NPC mail → consequences → survival → record)
 - `server/services/narrativeQueueService.js` — Narrative queue CRUD, priority ordering, delivery tracking, AI context formatting
 - `server/services/weatherService.js` — Weather state, generation, advance, temperature, exposure checks
 - `server/services/survivalService.js` — Hunger, thirst, food spoilage, auto-consume, foraging DC
@@ -81,6 +84,8 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/services/mythicService.js` — Mythic CRUD, tier advancement, path selection, power tracking, legendary items
 - `server/services/pietyService.js` — Piety CRUD, threshold checks, history
 - `server/routes/mythic.js` — Mythic REST API (status, paths, trials, piety, boons, items)
+- `server/services/consequenceService.js` — Automated consequence processing (overdue promises, expired quests)
+- `server/migrations/011_consequence_automation.js` — Consequence log table + quest deadline_game_day
 - `server/utils/contextManager.js` — Token estimation, context window compression, adaptive budgeting
 - `server/routes/dmSession.js` — DM session routes (~1700 lines)
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)

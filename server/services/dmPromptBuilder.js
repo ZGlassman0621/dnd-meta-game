@@ -1124,11 +1124,25 @@ When roleplaying NPCs, differentiate them through speech patterns:
         parts.push(`  Motivation: ${r.npc_motivation}`);
       }
 
-      // Pending promises only
+      // Pending promises with urgency annotations
       const pendingPromises = (r.promises_made || []).filter(p => p.status === 'pending');
       pendingPromises.slice(0, 2).forEach(p => {
         const text = typeof p === 'string' ? p : (p.promise || p.text || '');
-        if (text) parts.push(`  Promise: ${text.substring(0, 100)}`);
+        if (text) {
+          let urgency = '';
+          if (worldState.currentGameDay && p.game_day_made) {
+            const daysSince = worldState.currentGameDay - p.game_day_made;
+            if (p.deadline_game_day && worldState.currentGameDay > p.deadline_game_day) {
+              urgency = ' [OVERDUE — DEADLINE PASSED]';
+            } else if (p.deadline_game_day) {
+              const daysLeft = p.deadline_game_day - worldState.currentGameDay;
+              if (daysLeft <= 7) urgency = ` [URGENT — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left]`;
+            } else if (daysSince >= 21) {
+              urgency = ` [OVERDUE — ${daysSince} days]`;
+            }
+          }
+          parts.push(`  Promise: ${text.substring(0, 100)}${urgency}`);
+        }
       });
 
       // Outstanding debts only
@@ -1532,6 +1546,17 @@ Use ONLY when the character has mythic abilities and events are narratively sign
   States: awakened, exalted, mythic. Extremely rare: once every 10+ sessions per item.
 - Mythic power usage: [MYTHIC_SURGE: Ability="divine_surge" Cost=1]
   Track when the character narratively activates a mythic ability that costs Mythic Power.
+
+PROMISE & CONSEQUENCE MARKERS:
+When the player makes a promise to an NPC or fulfills one, use these markers for automatic tracking:
+- Promise made: [PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10]
+  NPC = name of the NPC the promise was made to. Promise = what was promised. Deadline = days until due (optional, omit for open-ended promises).
+  Use this when the player explicitly commits to doing something for an NPC — verbal agreements, oaths, deals, or accepted quests with a personal stake.
+- Promise fulfilled: [PROMISE_FULFILLED: NPC="Elara" Promise="Return the stolen amulet"]
+  Use when the player completes what they promised. The Promise text should match closely enough to identify which promise.
+  NPCs should react positively when promises are kept.
+- Do NOT use PROMISE_MADE for routine quest acceptance — only for personal commitments the NPC will remember and hold the player to.
+- When an NPC has an overdue promise (shown in their relationship data above), they should bring it up naturally: disappointed, hurt, or angry depending on disposition.
 
 CONVERSATION FLOW:
 - SHORT RESPONSES ARE GOOD. You do not need to fill space. 1-3 sentences is often perfect.
@@ -2022,6 +2047,8 @@ WEATHER & SURVIVAL: Reference current weather in descriptions. Enforce exposure 
 CRAFTING: Use [RECIPE_FOUND] when players discover existing recipes, [MATERIAL_FOUND] for raw materials found, [CRAFT_PROGRESS] for crafting time, and [RECIPE_GIFT] when an NPC shares a unique personal recipe. Materials come from foraging, looting, merchants, and exploration.
 
 MYTHIC: If the character has mythic abilities, reference them naturally — their presence affects how NPCs react, their surge die adds to dramatic moments, and path abilities should feel like natural extensions of who they are. Use [MYTHIC_TRIAL] for extraordinary achievements, [PIETY_CHANGE] for deity-relevant choices, [ITEM_AWAKEN] for legendary item milestones, [MYTHIC_SURGE] for power usage tracking.
+
+PROMISES & CONSEQUENCES: When the player makes a personal commitment to an NPC, emit [PROMISE_MADE]. When they fulfill one, emit [PROMISE_FULFILLED]. NPCs with overdue promises (marked [OVERDUE] in relationship data) should bring it up — disappointed, accusatory, or hurt depending on their disposition. Broken promises have real consequences: disposition drops, trust loss, and damaged reputations. Actions and inactions both have consequences in this world.
 
 NPC MORAL DIVERSITY: Not every NPC is kind or helpful. Most people are self-interested. Merchants overcharge, officials stall, strangers are suspicious. Allies can be rude, greedy, or morally gray. Help should cost something. Play NPC alignments from the campaign plan faithfully.
 

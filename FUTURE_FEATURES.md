@@ -4,27 +4,6 @@ This file tracks feature ideas and enhancements for future implementation.
 
 ---
 
-## Consequence Automation
-
-**Priority:** High (Next build)
-**Identified:** 2026-02-21
-
-### Problem
-Broken promises and ignored quests have no automatic consequences. NPCs should remember and react when the player fails to follow through.
-
-### Desired Behavior
-- Broken promises auto-trigger NPC disposition decreases
-- Ignored quests escalate (bandits attack the village, the hostage is killed, etc.)
-- Faction standing changes based on player actions and inactions
-- Canon facts about promises feed directly into consequence triggers
-
-### Files to Modify
-- `server/services/storyChronicleService.js` — Add promise expiration/broken detection
-- `server/services/npcRelationshipService.js` — Auto-update disposition on broken promises
-- `server/services/questService.js` — Quest escalation timers
-
----
-
 ## Faction-Driven Quest Generation
 
 **Priority:** Medium
@@ -163,6 +142,7 @@ Retired or dead characters have no lasting impact on the world for new character
 
 The following features were previously tracked here and have been built:
 
+- **Consequence Automation** (2026-02-23) — Overdue promise auto-breaking (warning at 21 game days, auto-break at 45 or explicit deadline), quest deadline enforcement with escalation narratives, consequence logging table, [PROMISE_MADE] and [PROMISE_FULFILLED] AI markers for real-time promise tracking with game_day and optional deadline, DM prompt urgency annotations ([OVERDUE], [URGENT]), living world tick step 3.8, narrative queue integration for consequence delivery, canon fact creation for broken promises/failed quests, 86-assertion test suite
 - **Mythic Progression System** (2026-02-22) — 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only), Mythic Power pool (3 + 2×tier/day), Surge mechanic (d6→d12 by tier), trial-based advancement, 53-deity piety system (all character creator deities across 9 pantheons), 12 epic boons, legendary items (4 states: Dormant → Awakened → Exalted → Mythic), shadow-path interaction, 4 AI markers ([MYTHIC_TRIAL], [PIETY_CHANGE], [ITEM_AWAKEN], [MYTHIC_SURGE]), 7-tab frontend UI, 1004-assertion test suite
 - **Weather, Survival & Crafting Systems** (2026-02-22) — Weather system (season-based probability tables, region mods, temperature calc, gear warmth, exposure thresholds), survival system (D&D 5e PHB hunger/thirst/starvation/dehydration, auto-consume, food spoilage, foraging DCs by terrain), crafting system (112 recipes across 10 categories, quality tiers, tool proficiency, discoverable recipes, radiant AI-generated recipes via [RECIPE_GIFT] marker)
 - **NPC System Overhaul** (2026-02-21) — NPC lifecycle state machine (alive/deceased/missing/imprisoned/unknown) with death propagation cascade, NPC personality enrichment (voice/personality/mannerism/motivation/appearance fill-not-overwrite), NPC voice differentiation in DM prompt, companion activities (off-screen tasks with AI resolution), NPC mail system (candidate scoring, AI/template generation, narrative queue), NPC aging/absence (disposition/trust decay, reunion boost, relocation/forget thresholds), living world tick pipeline (weather → factions → events → companions → NPC mail → survival), narrative queue system

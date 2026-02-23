@@ -668,6 +668,54 @@ export function detectMythicSurge(narrative) {
   };
 }
 
+/**
+ * Detect [PROMISE_MADE: NPC="Elara" Promise="Return the amulet" Deadline=10]
+ * Deadline is optional (in game days from now).
+ * Returns array of { npc, promise, deadline } or empty array.
+ */
+export function detectPromiseMade(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[PROMISE_MADE:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.npc && data.promise) {
+      results.push({
+        npc: data.npc,
+        promise: data.promise,
+        deadline: parseInt(data.deadline) || 0 // 0 = no explicit deadline
+      });
+    } else {
+      console.warn('[Marker] PROMISE_MADE detected but missing NPC or Promise field:', match[0]);
+    }
+  }
+  return results;
+}
+
+/**
+ * Detect [PROMISE_FULFILLED: NPC="Elara" Promise="Return the amulet"]
+ * Returns array of { npc, promise } or empty array.
+ */
+export function detectPromiseFulfilled(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[PROMISE_FULFILLED:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.npc && data.promise) {
+      results.push({
+        npc: data.npc,
+        promise: data.promise
+      });
+    } else {
+      console.warn('[Marker] PROMISE_FULFILLED detected but missing NPC or Promise field:', match[0]);
+    }
+  }
+  return results;
+}
+
 // ============================================================
 // SESSION ANALYSIS & REWARDS
 // ============================================================

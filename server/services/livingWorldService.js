@@ -9,6 +9,7 @@ import { checkAndResolveActivities } from './companionActivityService.js';
 import { generateNpcMail } from './npcMailService.js';
 import { advanceWeather, getWeather } from './weatherService.js';
 import { processDayChange as processSurvivalDayChange } from './survivalService.js';
+import { processConsequences } from './consequenceService.js';
 import { getSeason } from '../config/harptos.js';
 
 /**
@@ -113,6 +114,26 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     } catch (e) {
       console.error('Error generating NPC mail:', e);
       results.errors.push(`NPC mail: ${e.message}`);
+    }
+
+    // 3.8. Process consequences (overdue promises, expired quests)
+    try {
+      const charRow2 = await dbGet(
+        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
+        [campaignId]
+      );
+      const maxDayRow3 = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const consequenceGameDay = maxDayRow3?.max_day || 0;
+      if (charRow2 && consequenceGameDay > 0) {
+        const consequenceResults = await processConsequences(campaignId, charRow2.id, consequenceGameDay);
+        results.consequences = consequenceResults;
+      }
+    } catch (e) {
+      console.error('Error processing consequences:', e);
+      results.errors.push(`Consequences: ${e.message}`);
     }
 
     // 4. Record the tick in campaign metadata

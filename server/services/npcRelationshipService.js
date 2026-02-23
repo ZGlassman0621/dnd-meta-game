@@ -280,14 +280,16 @@ export async function discoverSecret(characterId, npcId, secret) {
 /**
  * Add a promise
  */
-export async function addPromise(characterId, npcId, promise) {
+export async function addPromise(characterId, npcId, promise, options = {}) {
   const rel = await getOrCreateRelationship(characterId, npcId);
 
   const promises = rel.promises_made || [];
   promises.push({
     promise,
     made_date: new Date().toISOString(),
-    status: 'pending'
+    status: 'pending',
+    game_day_made: options.gameDay || null,
+    deadline_game_day: options.deadlineGameDay || null
   });
 
   await dbRun(`

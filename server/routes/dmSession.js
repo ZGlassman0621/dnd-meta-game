@@ -9,7 +9,7 @@ import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSession
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
 import { getCharacterWorldView } from '../services/livingWorldService.js';
 import { getActiveFactions } from '../services/factionService.js';
-import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from '../services/npcRelationshipService.js';
+import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter, addPromise, fulfillPromise, getPendingPromises } from '../services/npcRelationshipService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
@@ -19,6 +19,7 @@ import {
   detectWeatherChange, detectShelterFound, detectSwim, detectEat, detectDrink,
   detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
   detectMythicTrial, detectPietyChange, detectItemAwaken, detectMythicSurge,
+  detectPromiseMade, detectPromiseFulfilled,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -1169,6 +1170,8 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[PIETY_CHANGE:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[ITEM_AWAKEN:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[MYTHIC_SURGE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[PROMISE_MADE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[PROMISE_FULFILLED:[^\]]+\]\s*/gi, '').trim();
 
     // Handle ADD_ITEM markers — add custom items to current merchant's inventory
     const addItems = detectAddItem(result.narrative);
@@ -1573,6 +1576,85 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('Error processing mythic markers:', e);
     }
 
+    // ---- PROMISE MARKERS ----
+    let promiseEvents = [];
+    try {
+      const character = session.character_id
+        ? await dbGet('SELECT id, campaign_id, game_day FROM characters WHERE id = ?', [session.character_id])
+        : null;
+
+      // Promise made detection
+      const promisesMade = detectPromiseMade(result.narrative);
+      for (const pm of promisesMade) {
+        try {
+          // Find NPC by name
+          const npc = await dbGet(
+            'SELECT id, name FROM npcs WHERE campaign_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
+            [character?.campaign_id, pm.npc]
+          );
+          if (npc && character) {
+            const deadlineGameDay = pm.deadline > 0 ? (character.game_day || 0) + pm.deadline : null;
+            await addPromise(character.id, npc.id, pm.promise, {
+              gameDay: character.game_day || null,
+              deadlineGameDay
+            });
+            promiseEvents.push({ type: 'promise_made', npc: pm.npc, promise: pm.promise, deadline: pm.deadline });
+
+            // Also create canon fact
+            await dbRun(`
+              INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
+              VALUES (?, ?, 'promise', ?, ?, ?, 'major', 1, '["promise_made"]')
+            `, [
+              character.campaign_id, character.id,
+              npc.name,
+              `Promised ${npc.name}: "${pm.promise}"${pm.deadline > 0 ? ` (due in ${pm.deadline} days)` : ''}`,
+              character.game_day || 0
+            ]);
+          }
+        } catch (e) {
+          console.error(`Error processing PROMISE_MADE for ${pm.npc}:`, e.message);
+        }
+      }
+
+      // Promise fulfilled detection
+      const promisesFulfilled = detectPromiseFulfilled(result.narrative);
+      for (const pf of promisesFulfilled) {
+        try {
+          const npc = await dbGet(
+            'SELECT id, name FROM npcs WHERE campaign_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
+            [character?.campaign_id, pf.npc]
+          );
+          if (npc && character) {
+            // Find matching pending promise by text similarity
+            const pending = await getPendingPromises(character.id);
+            const match = pending.find(p =>
+              p.npc_id === npc.id &&
+              (p.promise || '').toLowerCase().includes(pf.promise.toLowerCase().substring(0, 20))
+            );
+            if (match) {
+              await fulfillPromise(character.id, npc.id, match.promise_index);
+              promiseEvents.push({ type: 'promise_fulfilled', npc: pf.npc, promise: pf.promise });
+
+              // Create canon fact
+              await dbRun(`
+                INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
+                VALUES (?, ?, 'promise', ?, ?, ?, 'major', 1, '["promise_fulfilled"]')
+              `, [
+                character.campaign_id, character.id,
+                npc.name,
+                `Fulfilled promise to ${npc.name}: "${pf.promise}"`,
+                character.game_day || 0
+              ]);
+            }
+          }
+        } catch (e) {
+          console.error(`Error processing PROMISE_FULFILLED for ${pf.npc}:`, e.message);
+        }
+      }
+    } catch (e) {
+      console.error('Error processing promise markers:', e);
+    }
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
@@ -1586,7 +1668,8 @@ router.post('/:sessionId/message', async (req, res) => {
       weatherChange: weatherChangeResult || undefined,
       survivalEvents: survivalEvents.length > 0 ? survivalEvents : undefined,
       craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined,
-      mythicEvents: mythicEvents.length > 0 ? mythicEvents : undefined
+      mythicEvents: mythicEvents.length > 0 ? mythicEvents : undefined,
+      promiseEvents: promiseEvents.length > 0 ? promiseEvents : undefined
     });
   } catch (error) {
     handleServerError(res, error, 'process DM session message');
