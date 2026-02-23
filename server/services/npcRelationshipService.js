@@ -313,6 +313,10 @@ export async function fulfillPromise(characterId, npcId, promiseIndex) {
     await dbRun(`
       UPDATE npc_relationships SET promises_made = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `, [JSON.stringify(promises), rel.id]);
+
+    // Keeping a promise improves disposition and trust
+    await adjustDisposition(characterId, npcId, 10, 'Fulfilled a promise');
+    await adjustTrust(characterId, npcId, 5, 'Fulfilled a promise');
   }
 
   return getRelationshipById(rel.id);
