@@ -47,7 +47,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Mythic progression: 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only), Mythic Power resource pool (3 + 2×tier/day), Surge mechanic (bonus die d6→d12 by tier), trial-based advancement
 - Mythic paths: Hierophant, Angel, Aeon, Azata, Gold Dragon, Lich, Demon, Devil, Trickster, Legend (extra class levels), Redemption, Corrupted Dawn (consequence), Beast/Dark Hunt (DM), Swarm (DM)
 - Shadow-path interaction: light paths (hierophant/angel/azata/gold_dragon/redemption) need shadow ≤5 to select, full power at ≤2; dark paths powered by shadow; neutral unaffected
-- Piety system (Theros): score 1-50+ per deity, thresholds at 3/10/25/50 unlock abilities. 11 deities: Lathander, Malar, Tyr, Torm, Tempus, Mystra, Selune, Kelemvor, Silvanus, Chauntea, Oghma
+- Piety system (Theros): score 1-50+ per deity, thresholds at 3/10/25/50 unlock abilities. 53 deities (all from character creator: Faerûnian, Draconic, Elven, Drow, Dwarven, Halfling, Orcish, Exandrian, Greyhawk)
 - Epic Boons (2024 PHB): 12 boons at Level 19+, each with +1 ability score (max 30)
 - Legendary items: 4 states (Dormant → Awakened → Exalted → Mythic), narrative milestone advancement
 

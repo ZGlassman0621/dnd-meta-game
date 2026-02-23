@@ -311,6 +311,32 @@ if (malar) {
   assert(malar.thresholds[3] !== undefined, 'Malar has threshold at 3');
 }
 
+// All 53 deities exist and have required structure
+const allDeityKeys = Object.keys(PIETY_DEITIES);
+assert(allDeityKeys.length === 53, `Should have 53 deities, got ${allDeityKeys.length}`);
+
+const requiredDeities = [
+  'lathander', 'malar', 'tyr', 'torm', 'tempus', 'mystra', 'selune', 'kelemvor', 'silvanus', 'chauntea', 'oghma',
+  'asmodeus', 'auril', 'azuth', 'bane', 'beshaba', 'bhaal', 'cyric', 'deneir', 'eldath', 'gond', 'helm',
+  'ilmater', 'loviatar', 'lolth', 'mask', 'mielikki', 'milil', 'moradin', 'myrkul', 'savras', 'shar',
+  'sune', 'talos', 'bahamut', 'tiamat', 'tymora', 'umberlee', 'waukeen', 'corellon', 'sehanine', 'gruumsh',
+  'yondalla', 'avandra', 'erathis', 'ioun', 'kord', 'melora', 'pelor', 'vecna', 'raven_queen', 'torog', 'zehir'
+];
+for (const dk of requiredDeities) {
+  const d = PIETY_DEITIES[dk];
+  assert(d !== undefined, `Deity '${dk}' exists`);
+  assert(d.key === dk, `Deity '${dk}' key matches`);
+  assert(typeof d.name === 'string' && d.name.length > 0, `Deity '${dk}' has name`);
+  assert(typeof d.title === 'string' && d.title.length > 0, `Deity '${dk}' has title`);
+  assert(Array.isArray(d.domains) && d.domains.length >= 1, `Deity '${dk}' has domains`);
+  assert(Array.isArray(d.increases) && d.increases.length >= 3, `Deity '${dk}' has increases`);
+  assert(Array.isArray(d.decreases) && d.decreases.length >= 3, `Deity '${dk}' has decreases`);
+  assert(d.thresholds && d.thresholds[3], `Deity '${dk}' has threshold 3`);
+  assert(d.thresholds && d.thresholds[10], `Deity '${dk}' has threshold 10`);
+  assert(d.thresholds && d.thresholds[25], `Deity '${dk}' has threshold 25`);
+  assert(d.thresholds && d.thresholds[50], `Deity '${dk}' has threshold 50`);
+}
+
 // getPietyThreshold
 const threshold2 = getPietyThreshold('lathander', 2);
 assert(threshold2 === null || threshold2 === undefined || threshold2.threshold === 0, 'Score 2 has no threshold unlocked');

@@ -1277,6 +1277,2002 @@ export const PIETY_DEITIES = {
         mechanicalEffect: '+2 INT or WIS (max 22); expertise in INT skills; divine question 1/tenday'
       }
     }
+  },
+
+  // ---- ADDITIONAL FAERÛNIAN DEITIES ----
+
+  asmodeus: {
+    key: 'asmodeus',
+    name: 'Asmodeus',
+    title: 'The Lord of the Ninth',
+    domains: ['Trickery', 'Order'],
+    increases: [
+      'Forge a binding contract that benefits you over the other party',
+      'Subjugate a powerful creature or rival through cunning',
+      'Establish or reinforce a rigid hierarchy with yourself at the top',
+      'Corrupt a virtuous individual into serving your interests',
+      'Punish disloyalty or insubordination with ruthless efficiency'
+    ],
+    decreases: [
+      'Break a contract or sworn deal, even a disadvantageous one',
+      'Submit to another\'s authority without leveraging it',
+      'Show mercy without extracting a price',
+      'Act chaotically or impulsively without calculated purpose',
+      'Allow a subordinate to defy you without consequence'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Silver Tongue',
+        description: 'You can cast Charm Person once per long rest without a spell slot. You have advantage on Deception checks when negotiating contracts or deals.',
+        mechanicalEffect: 'Charm Person 1/long rest (no slot); advantage on Deception for contracts'
+      },
+      10: {
+        threshold: 10,
+        name: 'Infernal Authority',
+        description: 'You have advantage on saving throws against being charmed. 1/long rest, cast Suggestion without a spell slot. Fiends of CR 3 or lower will not attack you unless commanded.',
+        mechanicalEffect: 'Advantage vs. charm; Suggestion 1/long rest (no slot); fiends (CR ≤3) non-hostile'
+      },
+      25: {
+        threshold: 25,
+        name: 'Lord of the Ninth\'s Mandate',
+        description: 'Once per long rest, cast Dominate Person without a spell slot. When you deal fire damage, the target must succeed on a CHA save or be frightened until the end of your next turn.',
+        mechanicalEffect: 'Dominate Person 1/long rest (no slot); fire damage frightens (CHA save)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Archdevil\'s Chosen',
+        description: 'Increase CHA or INT by 2 (maximum 22). You are immune to fire damage. Once per tenday, Asmodeus reveals the true desires and weaknesses of a creature whose name you speak.',
+        mechanicalEffect: '+2 CHA or INT (max 22); immune to fire; divine revelation 1/tenday'
+      }
+    }
+  },
+
+  auril: {
+    key: 'auril',
+    name: 'Auril',
+    title: 'The Frostmaiden',
+    domains: ['Nature', 'Tempest'],
+    increases: [
+      'Endure extreme cold without complaint or magical aid',
+      'Destroy sources of warmth or shelter for your enemies',
+      'Spread winter\'s reach to places that resist it',
+      'Isolate others, forcing them to face the cold alone',
+      'Perform a sacrifice during the coldest night'
+    ],
+    decreases: [
+      'Use fire magic to bring warmth and comfort',
+      'Protect others from the cold without demanding payment',
+      'Celebrate the coming of spring or summer',
+      'Melt ice or snow to aid travelers',
+      'Show warmth, compassion, or generosity freely'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Frostmaiden\'s Kiss',
+        description: 'You can cast Ray of Frost as a cantrip if not already known. You are immune to the effects of extreme cold weather and ice/snow difficult terrain.',
+        mechanicalEffect: 'Ray of Frost cantrip; immune to extreme cold and ice/snow difficult terrain'
+      },
+      10: {
+        threshold: 10,
+        name: 'Winter\'s Embrace',
+        description: 'You gain resistance to cold damage. 1/long rest, cast Sleet Storm without a spell slot. Creatures you touch with a melee attack take an additional 1d6 cold damage.',
+        mechanicalEffect: 'Cold resistance; Sleet Storm 1/long rest (no slot); +1d6 cold on melee'
+      },
+      25: {
+        threshold: 25,
+        name: 'Heart of the Glacier',
+        description: '1/long rest, cast Cone of Cold without a spell slot. You can walk on water (it freezes beneath your feet). Creatures killed by your cold damage become ice sculptures.',
+        mechanicalEffect: 'Cone of Cold 1/long rest (no slot); walk on water (freezes); cold kills freeze targets'
+      },
+      50: {
+        threshold: 50,
+        name: 'The Eternal Winter',
+        description: 'Increase CON or WIS by 2 (maximum 22). You are immune to cold damage. Once per tenday, call upon Auril to blanket an area up to 1 mile in radius with a supernatural blizzard lasting 24 hours.',
+        mechanicalEffect: '+2 CON or WIS (max 22); immune to cold; summon blizzard (1 mile) 1/tenday'
+      }
+    }
+  },
+
+  azuth: {
+    key: 'azuth',
+    name: 'Azuth',
+    title: 'The High One',
+    domains: ['Arcana', 'Knowledge'],
+    increases: [
+      'Master a new spell or develop a novel magical technique',
+      'Teach spellcraft to a dedicated student of magic',
+      'Resolve a magical dispute through reason rather than violence',
+      'Study and catalog rare or dangerous magical phenomena',
+      'Uphold the responsible and disciplined use of arcane power'
+    ],
+    decreases: [
+      'Cast spells recklessly or without understanding their effects',
+      'Use magic for wanton destruction when subtlety would serve',
+      'Refuse to study or improve your magical craft',
+      'Allow magical knowledge to be lost through negligence',
+      'Reject the authority of established magical tradition'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Azuth\'s Primer',
+        description: 'You learn one cantrip of your choice from the Wizard spell list. Once per long rest, cast Identify without a spell slot or material components.',
+        mechanicalEffect: '+1 Wizard cantrip; Identify 1/long rest (no slot/components)'
+      },
+      10: {
+        threshold: 10,
+        name: 'The High One\'s Discipline',
+        description: 'You have advantage on Constitution saving throws to maintain concentration. 1/long rest, cast Counterspell without a spell slot.',
+        mechanicalEffect: 'Advantage on concentration saves; Counterspell 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Archmage\'s Precision',
+        description: 'When you cast a spell of 1st level or higher that deals damage, you can reroll a number of damage dice up to your INT modifier. 1/long rest, cast Arcane Eye without a spell slot.',
+        mechanicalEffect: 'Reroll up to INT mod damage dice on spells; Arcane Eye 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the High One',
+        description: 'Increase INT by 2 (maximum 22). You regain one expended spell slot of 3rd level or lower on a short rest. Once per tenday, Azuth reveals the workings of any spell or magical effect.',
+        mechanicalEffect: '+2 INT (max 22); recover 1 spell slot (≤3rd) on short rest; divine spell analysis 1/tenday'
+      }
+    }
+  },
+
+  bane: {
+    key: 'bane',
+    name: 'Bane',
+    title: 'The Black Hand',
+    domains: ['War', 'Order'],
+    increases: [
+      'Conquer territory or subjugate a settlement through force',
+      'Crush a rebellion or dissent against established authority',
+      'Demonstrate military superiority over a worthy foe',
+      'Impose strict discipline and obedience on followers',
+      'Seize power through strategic brilliance and ruthless planning'
+    ],
+    decreases: [
+      'Show weakness or retreat from a fight you could win',
+      'Allow subordinates to question your authority',
+      'Surrender or submit to an enemy',
+      'Engage in chaos or purposeless destruction',
+      'Share power equally rather than commanding it'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Iron Discipline',
+        description: 'You can cast Command once per long rest without a spell slot. You have advantage on Intimidation checks against creatures of lower CR than your level.',
+        mechanicalEffect: 'Command 1/long rest (no slot); advantage on Intimidation vs. lower CR'
+      },
+      10: {
+        threshold: 10,
+        name: 'The Black Hand\'s Grip',
+        description: 'You have advantage on saves against Frightened. 1/long rest, cast Fear without a spell slot. Frightened creatures have disadvantage on attacks.',
+        mechanicalEffect: 'Advantage vs. Frightened; Fear 1/long rest (no slot); frightened targets disadvantage on attacks'
+      },
+      25: {
+        threshold: 25,
+        name: 'Tyrant\'s Authority',
+        description: 'Once per long rest, cast Hold Monster without a spell slot. When you deal damage to a frightened creature, deal an additional 2d6 psychic damage.',
+        mechanicalEffect: 'Hold Monster 1/long rest (no slot); +2d6 psychic vs. frightened targets'
+      },
+      50: {
+        threshold: 50,
+        name: 'Fist of Bane',
+        description: 'Increase STR or CHA by 2 (maximum 22). You are immune to the Frightened and Charmed conditions. Once per tenday, Bane reveals the military disposition and weaknesses of any force you name.',
+        mechanicalEffect: '+2 STR or CHA (max 22); immune to Frightened/Charmed; divine military intelligence 1/tenday'
+      }
+    }
+  },
+
+  beshaba: {
+    key: 'beshaba',
+    name: 'Beshaba',
+    title: 'Lady Doom',
+    domains: ['Trickery'],
+    increases: [
+      'Cause misfortune to befall someone who wronged you',
+      'Gamble recklessly and win against the odds',
+      'Spread fear of bad luck and superstition',
+      'Sabotage another\'s plans through subtle misdirection',
+      'Survive a situation that should have killed you'
+    ],
+    decreases: [
+      'Bring good fortune or hope to others selflessly',
+      'Rely on careful planning instead of embracing chaos',
+      'Aid followers of Tymora or promote good luck',
+      'Act predictably or follow a strict routine',
+      'Show gratitude or acknowledge that luck favored you'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Doom\'s Whisper',
+        description: 'Once per long rest, when a creature within 30 ft succeeds on a save or check, you can force it to reroll and take the lower result.',
+        mechanicalEffect: 'Force reroll (take lower) on save/check within 30 ft; 1/long rest'
+      },
+      10: {
+        threshold: 10,
+        name: 'Lady Doom\'s Favor',
+        description: 'You have advantage on saves against traps and effects that rely on chance. 1/long rest, cast Bestow Curse without a spell slot.',
+        mechanicalEffect: 'Advantage vs. traps/chance; Bestow Curse 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Aura of Misfortune',
+        description: 'Hostile creatures within 15 ft subtract 1d4 from attack rolls and saving throws. 1/long rest, cast Blight without a spell slot.',
+        mechanicalEffect: 'Enemies within 15 ft: -1d4 attacks/saves; Blight 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of Lady Doom',
+        description: 'Increase CHA or DEX by 2 (maximum 22). Once per long rest, when you would die, the killing blow strikes the nearest hostile creature instead. Once per tenday, curse a creature by name with disadvantage on all d20 rolls for 24 hours.',
+        mechanicalEffect: '+2 CHA or DEX (max 22); redirect killing blow 1/long rest; name-curse 1/tenday'
+      }
+    }
+  },
+
+  bhaal: {
+    key: 'bhaal',
+    name: 'Bhaal',
+    title: 'Lord of Murder',
+    domains: ['Death'],
+    increases: [
+      'Kill a creature of significant power or status',
+      'Assassinate a target through stealth and precision',
+      'Spread fear of death and murder throughout a community',
+      'Perform a ritualistic killing in Bhaal\'s name',
+      'End a life that others believed untouchable'
+    ],
+    decreases: [
+      'Show mercy when a kill was expected or demanded',
+      'Heal or resurrect the dead',
+      'Protect life when death would serve Bhaal\'s will',
+      'Kill sloppily, without craft or purpose',
+      'Refuse to take a life when commanded by Bhaal\'s servants'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Murderous Intent',
+        description: 'Once per long rest, when you hit a creature that is surprised or hasn\'t acted yet in combat, deal an additional 2d6 necrotic damage.',
+        mechanicalEffect: '+2d6 necrotic vs. surprised/hasn\'t acted; 1/long rest'
+      },
+      10: {
+        threshold: 10,
+        name: 'Bhaal\'s Shadow',
+        description: 'You have advantage on Stealth in dim light or darkness. 1/long rest, cast Invisibility on yourself without a spell slot. First attack while invisible deals +1d8 necrotic.',
+        mechanicalEffect: 'Advantage on Stealth in dim/dark; Invisibility (self) 1/long rest (no slot); +1d8 necrotic first invisible attack'
+      },
+      25: {
+        threshold: 25,
+        name: 'Lord of Murder\'s Mark',
+        description: 'As a bonus action, mark a creature you can see. For 1 minute, your attacks against it crit on 18-20 and deal extra 1d10 necrotic. 1/long rest.',
+        mechanicalEffect: 'Mark: crits on 18-20 + 1d10 necrotic vs. target; 1 min; 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Slayer of the Lord of Murder',
+        description: 'Increase DEX or STR by 2 (maximum 22). You are immune to Frightened and effects that detect your presence. Once per tenday, Bhaal reveals the location and vulnerabilities of a creature you wish to kill.',
+        mechanicalEffect: '+2 DEX or STR (max 22); immune to Frightened; undetectable; divine hunt 1/tenday'
+      }
+    }
+  },
+
+  cyric: {
+    key: 'cyric',
+    name: 'Cyric',
+    title: 'Prince of Lies',
+    domains: ['Trickery'],
+    increases: [
+      'Deceive someone in a way that causes lasting harm or distrust',
+      'Sow discord between allies, turning friends into enemies',
+      'Murder a rival or someone who trusted you',
+      'Spread the worship of Cyric or discredit other faiths',
+      'Achieve personal power through manipulation and betrayal'
+    ],
+    decreases: [
+      'Tell the truth when a lie would better serve your interests',
+      'Build genuine trust or lasting alliances',
+      'Show loyalty to anyone other than Cyric',
+      'Act selflessly without hidden ulterior motives',
+      'Submit to the authority of another deity\'s servant'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Mask of Lies',
+        description: 'You can cast Disguise Self at will. You are immune to Zone of Truth and similar effects that force honesty.',
+        mechanicalEffect: 'Disguise Self at will; immune to truth-compulsion effects'
+      },
+      10: {
+        threshold: 10,
+        name: 'Prince of Lies\' Tongue',
+        description: 'You have advantage on Deception and Persuasion checks. 1/long rest, cast Crown of Madness without a spell slot.',
+        mechanicalEffect: 'Advantage on Deception/Persuasion; Crown of Madness 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Seeds of Madness',
+        description: 'Once per long rest, cast Modify Memory without a spell slot. Creatures you have deceived in the last 24 hours have disadvantage on saves against your spells.',
+        mechanicalEffect: 'Modify Memory 1/long rest (no slot); deceived creatures disadvantage vs. your spells'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Dark Sun',
+        description: 'Increase CHA or INT by 2 (maximum 22). You are immune to psychic damage and the Charmed condition. Once per tenday, Cyric whispers a deeply hidden truth about a creature or organization you name.',
+        mechanicalEffect: '+2 CHA or INT (max 22); immune to psychic/Charmed; divine secret 1/tenday'
+      }
+    }
+  },
+
+  deneir: {
+    key: 'deneir',
+    name: 'Deneir',
+    title: 'Lord of All Glyphs and Images',
+    domains: ['Knowledge'],
+    increases: [
+      'Transcribe important knowledge into a permanent written record',
+      'Decode an ancient script, cipher, or magical glyph',
+      'Illuminate a manuscript or create a map of an unexplored area',
+      'Preserve a dying language or endangered body of knowledge',
+      'Use glyphs or written magic to protect the innocent'
+    ],
+    decreases: [
+      'Destroy written records, maps, or scholarly works',
+      'Forge documents to spread false knowledge',
+      'Ignore an opportunity to record important events',
+      'Deface inscriptions, glyphs, or works of calligraphy',
+      'Hoard written knowledge where others cannot access it'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Scrivener\'s Blessing',
+        description: 'You can cast Illusory Script at will. You can read any mundane language, even those you have never studied.',
+        mechanicalEffect: 'Illusory Script at will; read all mundane languages'
+      },
+      10: {
+        threshold: 10,
+        name: 'Deneir\'s Glyph',
+        description: 'You have advantage on Investigation checks to find traps and hidden writing. 1/long rest, cast Glyph of Warding without a spell slot or material components.',
+        mechanicalEffect: 'Advantage on Investigation for traps/writing; Glyph of Warding 1/long rest (no slot/components)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Living Scripture',
+        description: 'You can inscribe a magical glyph that stores one spell of 5th level or lower (up to 2 active). 1/long rest, cast Legend Lore without material components.',
+        mechanicalEffect: 'Store spells (≤5th) in glyphs (2 max); Legend Lore 1/long rest (no components)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Lord of Glyphs',
+        description: 'Increase INT or WIS by 2 (maximum 22). Written text you create is immune to mundane destruction. Once per tenday, Deneir reveals the complete history of any object or text you touch.',
+        mechanicalEffect: '+2 INT or WIS (max 22); your writings indestructible (mundane); divine object reading 1/tenday'
+      }
+    }
+  },
+
+  eldath: {
+    key: 'eldath',
+    name: 'Eldath',
+    title: 'The Quiet One',
+    domains: ['Life', 'Nature'],
+    increases: [
+      'Resolve a conflict through peaceful negotiation instead of violence',
+      'Protect or consecrate a natural spring, pool, or waterfall',
+      'Heal the wounded and comfort the grieving without asking payment',
+      'Create a sanctuary or place of peace in a war-torn area',
+      'Convince a hostile creature to lay down its weapons'
+    ],
+    decreases: [
+      'Initiate violence when a peaceful option existed',
+      'Pollute or defile a natural water source',
+      'Revel in bloodshed or celebrate killing',
+      'Destroy a place of peace, sanctuary, or healing',
+      'Refuse to offer aid to the wounded or suffering'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Eldath\'s Calm',
+        description: 'You can cast Sanctuary once per long rest without a spell slot. While not in combat, you can purify up to 1 gallon of water by touching it.',
+        mechanicalEffect: 'Sanctuary 1/long rest (no slot); purify water by touch (1 gallon, out of combat)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Quiet One\'s Embrace',
+        description: 'You have advantage on Persuasion checks to calm hostilities or negotiate peace. 1/long rest, cast Calm Emotions without a spell slot.',
+        mechanicalEffect: 'Advantage on peace Persuasion; Calm Emotions 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Wellspring of Peace',
+        description: 'Once per long rest, create a 30-ft radius sanctuary for 8 hours — hostile creatures entering must WIS save or lose the desire to fight. 1/long rest, cast Mass Cure Wounds without a spell slot.',
+        mechanicalEffect: '30 ft sanctuary (WIS save) 8 hrs; Mass Cure Wounds 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Quiet One',
+        description: 'Increase WIS or CHA by 2 (maximum 22). You are immune to psychic damage. Any creature that attacks you must first succeed on a WIS save or choose a different target. Once per tenday, Eldath reveals the nearest source of corruption threatening nature.',
+        mechanicalEffect: '+2 WIS or CHA (max 22); immune to psychic; attackers must save or retarget; divine corruption sense 1/tenday'
+      }
+    }
+  },
+
+  gond: {
+    key: 'gond',
+    name: 'Gond',
+    title: 'Lord of All Smiths',
+    domains: ['Forge', 'Knowledge'],
+    increases: [
+      'Invent a new device, mechanism, or crafting technique',
+      'Repair or improve an existing tool, weapon, or structure',
+      'Teach the principles of craft and innovation to others',
+      'Use ingenious engineering to solve an impossible problem',
+      'Build something that will outlast its creator'
+    ],
+    decreases: [
+      'Destroy a unique invention or masterwork creation',
+      'Dismiss the value of craftsmanship or manual labor',
+      'Steal another artisan\'s design without improving upon it',
+      'Choose brute force over an engineered solution',
+      'Suppress innovation or discourage experimentation'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Maker\'s Touch',
+        description: 'You can cast Mending at will. You gain proficiency with one set of artisan\'s tools (or expertise if already proficient). Crafting time reduced 25%.',
+        mechanicalEffect: 'Mending at will; +1 tool proficiency (or expertise); 25% faster crafting'
+      },
+      10: {
+        threshold: 10,
+        name: 'Gond\'s Ingenuity',
+        description: 'You have advantage on all ability checks involving artisan\'s tools. 1/long rest, cast Heat Metal without a spell slot. You can jury-rig broken objects for 24 hours.',
+        mechanicalEffect: 'Advantage on artisan tool checks; Heat Metal 1/long rest (no slot); jury-rig 24 hrs'
+      },
+      25: {
+        threshold: 25,
+        name: 'Grand Artificer',
+        description: 'Items you craft are always Fine quality or better. 1/long rest, cast Fabricate without a spell slot. Once per long rest, temporarily enchant a mundane weapon or armor (+1 bonus) for 1 hour.',
+        mechanicalEffect: 'Minimum Fine quality; Fabricate 1/long rest (no slot); temp +1 enchant 1 hr 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Lord of Smiths',
+        description: 'Increase INT or STR by 2 (maximum 22). Items you craft have a 10% chance of gaining a random magical property. Once per tenday, Gond inspires you with the blueprint for a wondrous invention.',
+        mechanicalEffect: '+2 INT or STR (max 22); 10% magic on crafted items; divine blueprint 1/tenday'
+      }
+    }
+  },
+
+  helm: {
+    key: 'helm',
+    name: 'Helm',
+    title: 'The Vigilant One',
+    domains: ['Life', 'Light'],
+    increases: [
+      'Stand guard over the defenseless through the night',
+      'Fulfill a sworn duty even at great personal cost',
+      'Protect a ward, charge, or sacred site from harm',
+      'Remain vigilant when others grow complacent or weary',
+      'Sacrifice personal comfort to ensure others\' safety'
+    ],
+    decreases: [
+      'Abandon a post or duty you swore to uphold',
+      'Fall asleep or become incapacitated while on watch',
+      'Allow harm through negligence to those under your protection',
+      'Pursue personal vendettas when your duty demands otherwise',
+      'Delegate a sacred charge to someone unworthy or unreliable'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Watchful Eye',
+        description: 'You cannot be surprised while conscious. Once per long rest, cast Warding Bond without a spell slot.',
+        mechanicalEffect: 'Cannot be surprised; Warding Bond 1/long rest (no slot)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Helm\'s Vigilance',
+        description: 'You have advantage on Perception checks and initiative rolls. 1/long rest, cast Protection from Energy without a spell slot (touch ally).',
+        mechanicalEffect: 'Advantage on Perception/initiative; Protection from Energy 1/long rest (no slot, touch ally)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Guardian Eternal',
+        description: 'As a reaction, when a creature within 30 ft takes damage, teleport adjacent and take the damage instead (halved). 3/long rest. 1/long rest, cast Wall of Force without a spell slot.',
+        mechanicalEffect: 'Teleport + absorb half damage for ally (30 ft) 3/long rest; Wall of Force 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Vigilant One',
+        description: 'Increase CON or STR by 2 (maximum 22). You are immune to Charmed and Incapacitated conditions. Once per tenday, Helm grants a vision of the greatest threat to those you have sworn to protect.',
+        mechanicalEffect: '+2 CON or STR (max 22); immune to Charmed/Incapacitated; divine threat vision 1/tenday'
+      }
+    }
+  },
+
+  ilmater: {
+    key: 'ilmater',
+    name: 'Ilmater',
+    title: 'The Crying God',
+    domains: ['Life'],
+    increases: [
+      'Endure great suffering or torture without breaking faith',
+      'Heal or tend to the sick, wounded, or dying',
+      'Sacrifice your own well-being to shield others from harm',
+      'Show mercy to a defeated or helpless enemy',
+      'Provide comfort and aid to the oppressed or downtrodden'
+    ],
+    decreases: [
+      'Inflict needless suffering on the innocent',
+      'Refuse to help someone in obvious pain or distress',
+      'Use cruelty or torture to extract information',
+      'Turn away from the sick or dying when you could aid them',
+      'Take pleasure in another creature\'s agony'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Martyr\'s Touch',
+        description: 'You can cast Spare the Dying as a bonus action at a range of 30 feet.',
+        mechanicalEffect: 'Spare the Dying as bonus action at 30 ft range'
+      },
+      10: {
+        threshold: 10,
+        name: 'Endurance of the Broken God',
+        description: 'You have resistance to one damage type of your choice (chosen each dawn). You have advantage on Constitution saving throws against exhaustion.',
+        mechanicalEffect: 'Resistance to 1 damage type (chosen at dawn); advantage on CON saves vs. exhaustion'
+      },
+      25: {
+        threshold: 25,
+        name: 'Ilmater\'s Sacrifice',
+        description: 'Once per long rest, cast Beacon of Hope without a spell slot. When you heal a creature, you can transfer one condition (poisoned, blinded, diseased) from them to yourself, ending it on yourself at the start of your next turn.',
+        mechanicalEffect: 'Beacon of Hope 1/long rest (no slot); transfer conditions from healed creature'
+      },
+      50: {
+        threshold: 50,
+        name: 'Avatar of Compassion',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to Frightened and to being magically compelled to harm an innocent. Once per tenday, commune directly with Ilmater.',
+        mechanicalEffect: '+2 WIS (max 22); immune to Frightened; cannot be compelled to harm innocents; divine communion 1/tenday'
+      }
+    }
+  },
+
+  loviatar: {
+    key: 'loviatar',
+    name: 'Loviatar',
+    title: 'The Maiden of Pain',
+    domains: ['Death'],
+    increases: [
+      'Endure pain willingly as an offering to Loviatar',
+      'Inflict exquisite suffering on a worthy foe during combat',
+      'Convert others to embrace pain as a path to strength',
+      'Conduct a ritual of painful devotion',
+      'Punish oathbreakers or the unfaithful through torment'
+    ],
+    decreases: [
+      'Use magical healing to avoid pain you could have endured',
+      'Show cowardice or flee from pain when you could stand fast',
+      'Grant a quick painless death when a lingering one would honor Loviatar',
+      'Express pity for suffering that serves the Maiden\'s will',
+      'Numb yourself with drink or drugs to avoid feeling pain'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Lash of Devotion',
+        description: 'When you take damage from a melee attack, you can use your reaction to gain advantage on your next attack roll before the end of your next turn.',
+        mechanicalEffect: 'Reaction on melee damage taken: advantage on next attack'
+      },
+      10: {
+        threshold: 10,
+        name: 'Pain is Pleasure',
+        description: 'You have resistance to necrotic damage. When below half HP, you deal an extra 1d6 necrotic damage with melee weapon attacks.',
+        mechanicalEffect: 'Necrotic resistance; +1d6 necrotic melee below half HP'
+      },
+      25: {
+        threshold: 25,
+        name: 'Scourge of the Maiden',
+        description: 'Once per long rest, cast Contagion without a spell slot. Once per long rest, when you hit a creature, it must CON save or be stunned until end of your next turn.',
+        mechanicalEffect: 'Contagion 1/long rest (no slot); stun on hit (CON save) 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Beloved of Loviatar',
+        description: 'Increase CON by 2 (maximum 22). You are immune to Frightened and Stunned conditions. Once per tenday, commune directly with Loviatar.',
+        mechanicalEffect: '+2 CON (max 22); immune to Frightened/Stunned; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- DROW PANTHEON ----
+
+  lolth: {
+    key: 'lolth',
+    name: 'Lolth',
+    title: 'Queen of Spiders',
+    domains: ['Trickery'],
+    increases: [
+      'Betray a rival or superior to seize power for yourself',
+      'Offer a significant sacrifice to Lolth in ritual',
+      'Spread fear and domination among lesser creatures in Lolth\'s name',
+      'Advance the supremacy of drow over surface dwellers',
+      'Weave deception that leads to the ruin of Lolth\'s enemies'
+    ],
+    decreases: [
+      'Show genuine mercy or compassion to an enemy',
+      'Ally sincerely with surface elves or their gods',
+      'Fail to punish disloyalty among your subordinates',
+      'Allow a rival to surpass you without retaliation',
+      'Worship or praise any other deity in Lolth\'s presence'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Spider\'s Kiss',
+        description: 'You can cast Dancing Lights at will (appearing as faint spiders). You gain darkvision to 60 feet if you don\'t already have it.',
+        mechanicalEffect: 'Dancing Lights at will; darkvision 60 ft'
+      },
+      10: {
+        threshold: 10,
+        name: 'Web of the Queen',
+        description: 'You gain a climbing speed equal to your walking speed and advantage on Stealth in dim light or darkness. 1/long rest, cast Web without a spell slot.',
+        mechanicalEffect: 'Climbing speed; advantage on Stealth in dim/dark; Web 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Demonweb Pits\' Favor',
+        description: 'Once per long rest, cast Conjure Animals (spiders only) without a spell slot. You are immune to the poisoned condition and resistant to poison damage.',
+        mechanicalEffect: 'Conjure Animals (spiders) 1/long rest (no slot); immune to poisoned; poison resistance'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of Lolth',
+        description: 'Increase CHA by 2 (maximum 22). You can cast Dominate Person once per long rest without a spell slot. Once per tenday, commune directly with Lolth.',
+        mechanicalEffect: '+2 CHA (max 22); Dominate Person 1/long rest (no slot); divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- MORE FAERÛNIAN DEITIES ----
+
+  mask: {
+    key: 'mask',
+    name: 'Mask',
+    title: 'Lord of Shadows',
+    domains: ['Trickery'],
+    increases: [
+      'Pull off a daring heist or theft of significant value',
+      'Deceive a powerful figure and escape undetected',
+      'Protect the secrets of fellow thieves or rogues',
+      'Operate from the shadows without revealing your identity',
+      'Outsmart a trap, puzzle, or scheme set by others'
+    ],
+    decreases: [
+      'Steal from the poor or destitute without purpose',
+      'Betray a fellow thief to authorities for personal gain',
+      'Get caught red-handed in a clumsy, artless theft',
+      'Act with brute force when cunning would suffice',
+      'Reveal your true name or identity recklessly to enemies'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Shadow\'s Veil',
+        description: 'You can cast Minor Illusion at will. You have advantage on Sleight of Hand checks to pick pockets or palm objects.',
+        mechanicalEffect: 'Minor Illusion at will; advantage on Sleight of Hand'
+      },
+      10: {
+        threshold: 10,
+        name: 'Cloak of the Lord of Shadows',
+        description: 'You have advantage on Stealth checks. Once per long rest, cast Invisibility on yourself without a spell slot.',
+        mechanicalEffect: 'Advantage on Stealth; Invisibility (self) 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Shadowstep',
+        description: 'Once per long rest, cast Dimension Door without a spell slot (origin and destination must be in dim light or darkness). You have resistance to necrotic damage.',
+        mechanicalEffect: 'Dimension Door 1/long rest (no slot, dim/dark only); necrotic resistance'
+      },
+      50: {
+        threshold: 50,
+        name: 'Master of Thieves',
+        description: 'Increase DEX by 2 (maximum 22). You are immune to detection by divination magic unless you choose to be found. Once per tenday, commune directly with Mask.',
+        mechanicalEffect: '+2 DEX (max 22); immune to divination detection; divine communion 1/tenday'
+      }
+    }
+  },
+
+  mielikki: {
+    key: 'mielikki',
+    name: 'Mielikki',
+    title: 'Our Lady of the Forest',
+    domains: ['Nature'],
+    increases: [
+      'Protect a forest, grove, or wilderness area from destruction',
+      'Tend to wounded or sick animals and release them to the wild',
+      'Plant trees or restore land scarred by fire or corruption',
+      'Live in harmony with nature during extended wilderness travel',
+      'Defeat aberrations, undead, or creatures that corrupt the natural world'
+    ],
+    decreases: [
+      'Needlessly fell trees or burn forestland',
+      'Kill animals for sport rather than sustenance or defense',
+      'Spread blight, pollution, or corruption in natural places',
+      'Cage or enslave wild beasts for entertainment',
+      'Side with those who exploit the wilderness for profit without balance'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Whisper of the Woods',
+        description: 'You can cast Druidcraft at will. You gain proficiency in Animal Handling (or expertise if already proficient).',
+        mechanicalEffect: 'Druidcraft at will; Animal Handling proficiency (or expertise)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Forest\'s Embrace',
+        description: 'You have advantage on Survival checks in natural terrain. Once per long rest, cast Pass Without Trace without a spell slot.',
+        mechanicalEffect: 'Advantage on Survival (natural terrain); Pass Without Trace 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Mielikki\'s Chosen Ranger',
+        description: 'Once per long rest, cast Conjure Animals without a spell slot. In natural terrain, you and allies within 30 ft have poison resistance and can\'t be tracked nonmagically.',
+        mechanicalEffect: 'Conjure Animals 1/long rest (no slot); poison resistance + untrackable in nature (30 ft)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Voice of the Wilds',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to poison damage and the poisoned condition. Beasts of CR 1 or lower won\'t attack you unless magically compelled. Once per tenday, commune with Mielikki.',
+        mechanicalEffect: '+2 WIS (max 22); immune to poison/poisoned; beasts friendly; divine communion 1/tenday'
+      }
+    }
+  },
+
+  milil: {
+    key: 'milil',
+    name: 'Milil',
+    title: 'Lord of Song',
+    domains: ['Light'],
+    increases: [
+      'Compose or perform a song, poem, or tale that inspires others',
+      'Preserve a forgotten story, ballad, or piece of lost lore',
+      'Use music or art to bring comfort or courage to the downtrodden',
+      'Win a contest of artistic skill or bardic performance',
+      'Spread beauty and artistry in places of ugliness or despair'
+    ],
+    decreases: [
+      'Destroy a work of art, music, or literature',
+      'Use song or poetry to spread malicious lies or despair',
+      'Silence another performer out of jealousy or spite',
+      'Refuse to share a tale when others would benefit from hearing it',
+      'Act with willful crudeness when beauty could be offered'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Songbird\'s Gift',
+        description: 'You can cast Vicious Mockery at will. You have advantage on Performance checks.',
+        mechanicalEffect: 'Vicious Mockery at will; advantage on Performance'
+      },
+      10: {
+        threshold: 10,
+        name: 'Harmonics of the Lord of Song',
+        description: 'Once per long rest, cast Calm Emotions without a spell slot. When you use the Help action, the assisted creature also gains temporary HP equal to your proficiency bonus.',
+        mechanicalEffect: 'Calm Emotions 1/long rest (no slot); Help action grants temp HP = proficiency'
+      },
+      25: {
+        threshold: 25,
+        name: 'Aria of Restoration',
+        description: 'Once per long rest, cast Mass Cure Wounds without a spell slot. Once per long rest, end one charm or fear effect on each friendly creature within 30 ft as an action.',
+        mechanicalEffect: 'Mass Cure Wounds 1/long rest (no slot); end charm/fear on allies (30 ft) 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Divine Virtuoso',
+        description: 'Increase CHA by 2 (maximum 22). You are immune to Charmed and Silenced conditions. Once per tenday, commune directly with Milil.',
+        mechanicalEffect: '+2 CHA (max 22); immune to Charmed/Silenced; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- DWARVEN PANTHEON ----
+
+  moradin: {
+    key: 'moradin',
+    name: 'Moradin',
+    title: 'The All-Father',
+    domains: ['Forge', 'Knowledge'],
+    increases: [
+      'Craft a weapon, armor, or object of exceptional quality',
+      'Defend dwarven settlements, traditions, or sacred sites',
+      'Teach smithing, stonemasonry, or other crafts to the worthy',
+      'Uphold oaths and honor ancestral traditions',
+      'Drive back aberrations, giants, or goblinoids threatening dwarven holds'
+    ],
+    decreases: [
+      'Break a sworn oath or promise made in good faith',
+      'Allow a forge or workshop to fall into ruin through neglect',
+      'Defile or disrespect dwarven tombs, holds, or ancestral relics',
+      'Produce shoddy or deliberately flawed craftsmanship',
+      'Abandon allies or kin in battle out of cowardice'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Soulforger\'s Spark',
+        description: 'You can cast Mending at will. You gain proficiency with smith\'s tools (or expertise if already proficient).',
+        mechanicalEffect: 'Mending at will; smith\'s tools proficiency (or expertise)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Anvil\'s Resilience',
+        description: 'You have resistance to fire damage. You have advantage on saves against being knocked prone or forcibly moved.',
+        mechanicalEffect: 'Fire resistance; advantage vs. prone/forced movement'
+      },
+      25: {
+        threshold: 25,
+        name: 'Blessing of the All-Father',
+        description: 'Once per long rest, cast Fabricate without a spell slot. Weapons and armor you craft have a +1 bonus (doesn\'t stack with other magical bonuses).',
+        mechanicalEffect: 'Fabricate 1/long rest (no slot); crafted weapons/armor gain +1'
+      },
+      50: {
+        threshold: 50,
+        name: 'Moradin\'s Living Forge',
+        description: 'Increase STR by 2 (maximum 22). You are immune to fire damage. Once per tenday, commune directly with Moradin.',
+        mechanicalEffect: '+2 STR (max 22); immune to fire; divine communion 1/tenday'
+      }
+    }
+  },
+
+  myrkul: {
+    key: 'myrkul',
+    name: 'Myrkul',
+    title: 'Lord of Bones',
+    domains: ['Death'],
+    increases: [
+      'Raise undead servants to serve your purposes',
+      'Instill the fear of death in the living through word or deed',
+      'Perform funerary rites that bind the dead to Myrkul\'s service',
+      'Destroy those who cheat death through means not sanctioned by Myrkul',
+      'Spread despair and the inevitability of death\'s dominion'
+    ],
+    decreases: [
+      'Resurrect a creature that has rightfully died without Myrkul\'s blessing',
+      'Destroy undead that serve Myrkul\'s will',
+      'Show fear of death or flee your own demise in a cowardly manner',
+      'Bring hope or comfort regarding the afterlife to the dying',
+      'Ally with celestials or life-domain clerics who oppose the natural order'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Grasp of the Grave',
+        description: 'You can cast Chill Touch at will. The cantrip deals extra necrotic damage equal to your proficiency bonus.',
+        mechanicalEffect: 'Chill Touch at will; +proficiency bonus necrotic damage'
+      },
+      10: {
+        threshold: 10,
+        name: 'Death\'s Shroud',
+        description: 'You have resistance to necrotic damage. Once per long rest, cast Blindness/Deafness without a spell slot.',
+        mechanicalEffect: 'Necrotic resistance; Blindness/Deafness 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Lord of Bones\' Command',
+        description: 'Once per long rest, cast Animate Dead without a spell slot, raising up to 3 undead instead of 1. Undead you control deal an extra 1d6 necrotic with their attacks.',
+        mechanicalEffect: 'Animate Dead (3 undead) 1/long rest (no slot); your undead +1d6 necrotic'
+      },
+      50: {
+        threshold: 50,
+        name: 'Herald of the Lord of Dead',
+        description: 'Increase CON by 2 (maximum 22). You are immune to necrotic damage and the Frightened condition. Once per tenday, commune directly with Myrkul.',
+        mechanicalEffect: '+2 CON (max 22); immune to necrotic/Frightened; divine communion 1/tenday'
+      }
+    }
+  },
+
+  savras: {
+    key: 'savras',
+    name: 'Savras',
+    title: 'The All-Seeing',
+    domains: ['Knowledge'],
+    increases: [
+      'Uncover a hidden truth, secret, or prophecy',
+      'Share visions or divinations honestly, even when unwelcome',
+      'Expose liars, frauds, and those who obscure the truth',
+      'Record and preserve prophecies or oracular knowledge',
+      'Meditate on the future and accept what fate reveals'
+    ],
+    decreases: [
+      'Deliberately conceal a true prophecy from those it concerns',
+      'Use divination magic to deceive or mislead others',
+      'Destroy records of prophecy, history, or oracular wisdom',
+      'Blind yourself to truth out of fear or selfishness',
+      'Interfere with another seer\'s legitimate divination'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Third Eye Flicker',
+        description: 'You can cast Guidance at will. Once per long rest, add 1d4 to a roll after seeing it but before the outcome is declared.',
+        mechanicalEffect: 'Guidance at will; +1d4 to any roll (after seeing) 1/long rest'
+      },
+      10: {
+        threshold: 10,
+        name: 'All-Seeing Gaze',
+        description: 'You have advantage on Investigation to see through illusions and Insight to detect lies. Once per long rest, cast See Invisibility without a spell slot.',
+        mechanicalEffect: 'Advantage on Investigation (illusions)/Insight (lies); See Invisibility 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Oracle\'s Vision',
+        description: 'Once per long rest, cast Divination or Scrying without a spell slot or material components. You cannot be surprised while conscious.',
+        mechanicalEffect: 'Divination/Scrying 1/long rest (no slot/components); cannot be surprised'
+      },
+      50: {
+        threshold: 50,
+        name: 'Eye of Savras',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to the Blinded condition and illusion spells of 5th level or lower. Once per tenday, commune directly with Savras.',
+        mechanicalEffect: '+2 WIS (max 22); immune to Blinded/illusions (≤5th); divine communion 1/tenday'
+      }
+    }
+  },
+
+  shar: {
+    key: 'shar',
+    name: 'Shar',
+    title: 'Mistress of the Night',
+    domains: ['Death', 'Trickery'],
+    increases: [
+      'Operate in secrecy to advance Shar\'s influence',
+      'Destroy sources of light, hope, or knowledge that oppose the darkness',
+      'Convert the grieving or despairing to embrace the void of Shar',
+      'Undermine the worship of Selûne or other deities of light',
+      'Guard or recover ancient secrets lost to forgotten ages'
+    ],
+    decreases: [
+      'Bring light or hope to those who have embraced Shar\'s darkness',
+      'Reveal Sharran secrets to outsiders or the uninitiated',
+      'Aid worshippers of Selûne or work against Shar\'s faithful',
+      'Show vulnerability or emotional weakness in front of enemies',
+      'Choose open confrontation when shadow and subtlety would serve better'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Kiss of Shadow',
+        description: 'You can cast Minor Illusion at will (visuals appear as patches of darkness). You have darkvision to 60 feet, or extend existing darkvision by 30 feet.',
+        mechanicalEffect: 'Minor Illusion at will (shadow variant); darkvision 60 ft (or +30 ft)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Nightbringer\'s Cloak',
+        description: 'You have resistance to necrotic damage and advantage on Stealth in dim light or darkness. 1/long rest, cast Darkness without a spell slot — you can see through this darkness normally.',
+        mechanicalEffect: 'Necrotic resistance; advantage on Stealth (dim/dark); Darkness 1/long rest (no slot, see through)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Void of the Mistress',
+        description: 'Once per long rest, cast Enervation without a spell slot. When you deal necrotic damage, you can ignore resistance to necrotic damage (but not immunity).',
+        mechanicalEffect: 'Enervation 1/long rest (no slot); necrotic pierces resistance'
+      },
+      50: {
+        threshold: 50,
+        name: 'Nightsinger Ascendant',
+        description: 'Increase CHA by 2 (maximum 22). You are immune to necrotic damage and the Blinded condition. You can see perfectly in magical and nonmagical darkness to 120 feet. Once per tenday, commune with Shar.',
+        mechanicalEffect: '+2 CHA (max 22); immune to necrotic/Blinded; see in all darkness 120 ft; divine communion 1/tenday'
+      }
+    }
+  },
+
+  sune: {
+    key: 'sune',
+    name: 'Sune',
+    title: 'Lady Firehair',
+    domains: ['Life', 'Light'],
+    increases: [
+      'Perform an act of genuine love, romance, or passionate devotion',
+      'Create or preserve something of great beauty',
+      'Defend the innocent from those who would mar beauty or love',
+      'Show compassion and kindness to uplift the downtrodden or lonely',
+      'Resolve conflict through charm and diplomacy rather than violence'
+    ],
+    decreases: [
+      'Willfully destroy something beautiful without cause',
+      'Use love or desire as a weapon to manipulate and harm others',
+      'Show cruelty or indifference to beauty in all its forms',
+      'Scar or disfigure a creature unnecessarily',
+      'Reject love or companionship out of cold ambition or spite'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Firehair\'s Charm',
+        description: 'You can cast Friends at will without the target becoming hostile when the spell ends. You have advantage on Persuasion checks involving appeals to emotion or beauty.',
+        mechanicalEffect: 'Friends at will (no hostility); advantage on emotional Persuasion'
+      },
+      10: {
+        threshold: 10,
+        name: 'Heartfire Shield',
+        description: 'You have resistance to fire damage. Once per long rest, cast Warding Bond without a spell slot, the bond manifesting as a shimmering rose-gold thread.',
+        mechanicalEffect: 'Fire resistance; Warding Bond 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Sune\'s Embrace',
+        description: 'Once per long rest, cast Mass Cure Wounds without a spell slot. Once per long rest, end the charmed or frightened condition on up to 6 creatures within 30 feet as an action.',
+        mechanicalEffect: 'Mass Cure Wounds 1/long rest (no slot); end charm/fear on 6 creatures (30 ft) 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Beloved of Sune',
+        description: 'Increase CHA by 2 (maximum 22). You are immune to the Charmed condition and effects that magically age you. Once per tenday, commune directly with Sune.',
+        mechanicalEffect: '+2 CHA (max 22); immune to Charmed/magical aging; divine communion 1/tenday'
+      }
+    }
+  },
+
+  talos: {
+    key: 'talos',
+    name: 'Talos',
+    title: 'The Destroyer',
+    domains: ['Tempest'],
+    increases: [
+      'Unleash destruction during a storm or in Talos\'s name',
+      'Destroy a building, ship, or fortification dramatically',
+      'Intimidate or terrorize a settlement into offering tribute',
+      'Perform a ritual sacrifice during a thunderstorm',
+      'Defeat a powerful foe using lightning, thunder, or elemental fury'
+    ],
+    decreases: [
+      'Protect a structure or settlement from a natural storm',
+      'Show restraint or mercy when destruction would honor Talos',
+      'Build lasting shelters or fortifications that defy the storm',
+      'Calm a storm or suppress natural weather with magic',
+      'Cower in fear from lightning, thunder, or natural disasters'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Stormcaller\'s Spark',
+        description: 'You can cast Shocking Grasp at will. When outdoors during a storm, your attack rolls with this cantrip have advantage.',
+        mechanicalEffect: 'Shocking Grasp at will; advantage during storms'
+      },
+      10: {
+        threshold: 10,
+        name: 'Eye of the Destroyer',
+        description: 'You have resistance to lightning and thunder damage. Once per long rest, cast Shatter without a spell slot.',
+        mechanicalEffect: 'Lightning/thunder resistance; Shatter 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Talos\'s Fury',
+        description: 'Once per long rest, cast Call Lightning without a spell slot — the first bolt deals maximum damage. You are immune to being deafened.',
+        mechanicalEffect: 'Call Lightning 1/long rest (no slot, first bolt max damage); immune to deafened'
+      },
+      50: {
+        threshold: 50,
+        name: 'Herald of the Destroyer',
+        description: 'Increase STR by 2 (maximum 22). You are immune to lightning and thunder damage. Once per tenday, commune directly with Talos.',
+        mechanicalEffect: '+2 STR (max 22); immune to lightning/thunder; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- DRACONIC PANTHEON ----
+
+  bahamut: {
+    key: 'bahamut',
+    name: 'Bahamut',
+    title: 'The Platinum Dragon',
+    domains: ['Life', 'War'],
+    increases: [
+      'Protect the weak and innocent from tyranny or evil',
+      'Slay an evil dragon or defeat a servant of Tiamat',
+      'Show mercy to a repentant enemy and guide them toward redemption',
+      'Uphold justice with honor, never stooping to cruelty',
+      'Defend the honor and legacy of metallic dragonkind'
+    ],
+    decreases: [
+      'Kill a metallic dragon or aid in its destruction',
+      'Use cruelty or torture, even against evil creatures',
+      'Ally with chromatic dragons or servants of Tiamat',
+      'Abandon innocents to save yourself',
+      'Act dishonorably — lie, cheat, or break an oath'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Platinum Scales',
+        description: 'You can cast Shield of Faith once per long rest without a spell slot. You have advantage on saves against dragon Frightful Presence.',
+        mechanicalEffect: 'Shield of Faith 1/long rest (no slot); advantage vs. dragon Frightful Presence'
+      },
+      10: {
+        threshold: 10,
+        name: 'Bahamut\'s Valor',
+        description: 'You gain resistance to one type of dragon breath damage of your choice (chosen when this threshold is reached). 1/long rest, cast Beacon of Hope without a spell slot.',
+        mechanicalEffect: 'Resistance to one dragon breath type; Beacon of Hope 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Wings of the Platinum Dragon',
+        description: 'As a bonus action, manifest spectral dragon wings for 1 hour, gaining 60 ft fly speed. While active, weapon attacks deal +1d8 radiant. 1/long rest.',
+        mechanicalEffect: 'Spectral wings: 60 ft fly + 1d8 radiant on weapons; 1 hour; 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Platinum Dragon',
+        description: 'Increase STR or CHA by 2 (maximum 22). You are immune to dragon Frightful Presence and metallic breath weapons. Once per tenday, Bahamut sends a gold canary servant to aid you for 24 hours.',
+        mechanicalEffect: '+2 STR or CHA (max 22); immune to Frightful Presence/metallic breath; gold canary servant 1/tenday'
+      }
+    }
+  },
+
+  tiamat: {
+    key: 'tiamat',
+    name: 'Tiamat',
+    title: 'Queen of Dragons',
+    domains: ['Trickery', 'War'],
+    increases: [
+      'Amass a great hoard of treasure, wealth, or magical items',
+      'Defeat a metallic dragon or servant of Bahamut',
+      'Dominate others through fear, cunning, or overwhelming power',
+      'Make offerings of gold, gems, or magic items at a shrine to Tiamat',
+      'Spread the dread of dragonkind across the land'
+    ],
+    decreases: [
+      'Give away treasure or wealth freely without strategic purpose',
+      'Show deference or respect to Bahamut or metallic dragons',
+      'Display weakness or submit to a creature of lesser power',
+      'Allow your hoard to be stolen without retaliation',
+      'Ally with those who would slay chromatic dragons'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Dragon\'s Avarice',
+        description: 'You can cast Thaumaturgy at will. You have advantage on Investigation checks to find hidden objects, treasure, or secret doors.',
+        mechanicalEffect: 'Thaumaturgy at will; advantage on Investigation for treasure/secrets'
+      },
+      10: {
+        threshold: 10,
+        name: 'Chromatic Ward',
+        description: 'At the end of each long rest, choose one: acid, cold, fire, lightning, or poison. You have resistance to that damage type until next long rest. 1/long rest, cast Fear without a spell slot.',
+        mechanicalEffect: 'Resistance to 1 chromatic type (chosen at dawn); Fear 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Breath of Tiamat',
+        description: 'Once per long rest, exhale a 30-foot cone of elemental energy (choose acid, cold, fire, lightning, or poison). DC 16 DEX save, 8d6 damage on failure, half on success.',
+        mechanicalEffect: 'Breath weapon: 30 ft cone, 8d6 (choose type), DC 16 DEX; 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of the Dragon Queen',
+        description: 'Increase CHA by 2 (maximum 22). You are immune to Frightened and to one chromatic damage type of your choice (permanent). Once per tenday, commune directly with Tiamat.',
+        mechanicalEffect: '+2 CHA (max 22); immune to Frightened + 1 chromatic type; divine communion 1/tenday'
+      }
+    }
+  },
+
+  tymora: {
+    key: 'tymora',
+    name: 'Tymora',
+    title: 'Lady Luck',
+    domains: ['Trickery'],
+    increases: [
+      'Take a bold risk or daring gamble that succeeds spectacularly',
+      'Help the downtrodden seize an opportunity to change their fortune',
+      'Trust in luck rather than cautious planning and be rewarded',
+      'Win a game of chance and attribute the victory to Tymora',
+      'Venture into danger without hesitation when others would hold back'
+    ],
+    decreases: [
+      'Refuse to take a risk when opportunity clearly presents itself',
+      'Cheat at games of chance rather than trusting in luck',
+      'Act with excessive caution or cowardice when fortune favors the bold',
+      'Curse your luck or blame Tymora for misfortune',
+      'Hoard opportunity and refuse to share good fortune with others'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Lucky Coin',
+        description: 'Once per long rest, reroll one attack roll, ability check, or saving throw and take the higher result.',
+        mechanicalEffect: 'Reroll any d20 (take higher) 1/long rest'
+      },
+      10: {
+        threshold: 10,
+        name: 'Fortune\'s Favor',
+        description: 'You have advantage on death saving throws. Once per long rest, when a creature hits you, use your reaction to force a reroll (take lower).',
+        mechanicalEffect: 'Advantage on death saves; force attack reroll (take lower) 1/long rest'
+      },
+      25: {
+        threshold: 25,
+        name: 'Lady Luck\'s Intervention',
+        description: 'Once per long rest, turn one failed save into an automatic success, or one missed attack into an automatic crit. 1/long rest, cast Bless without a spell slot (bonus die is 1d6 instead of 1d4).',
+        mechanicalEffect: 'Auto-succeed save or auto-crit 1/long rest; Bless (1d6) 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Tymora\'s Chosen',
+        description: 'Increase CHA by 2 (maximum 22). Once per long rest, when you roll a 1 on any d20, treat it as a 20 instead. Once per tenday, commune directly with Tymora.',
+        mechanicalEffect: '+2 CHA (max 22); nat 1 becomes nat 20 1/long rest; divine communion 1/tenday'
+      }
+    }
+  },
+
+  umberlee: {
+    key: 'umberlee',
+    name: 'Umberlee',
+    title: 'The Bitch Queen',
+    domains: ['Tempest'],
+    increases: [
+      'Make a significant offering to Umberlee before a sea voyage',
+      'Destroy a ship or sink cargo in her name',
+      'Drown a creature as a sacrifice to the depths',
+      'Punish those who disrespect the sea or fail to pay tribute',
+      'Spread fear of the ocean among coastal communities'
+    ],
+    decreases: [
+      'Calm a storm or save a sinking vessel without offering thanks',
+      'Worship a rival sea deity such as Valkur',
+      'Build structures that dam or divert natural waterways',
+      'Show mercy to those who have offended the sea',
+      'Refuse to make an offering before traveling by water'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Sea\'s Whisper',
+        description: 'You can cast Shape Water at will. You can breathe underwater.',
+        mechanicalEffect: 'Shape Water at will; water breathing'
+      },
+      10: {
+        threshold: 10,
+        name: 'Stormcaller\'s Favor',
+        description: 'You have resistance to lightning and thunder damage. You gain a swim speed equal to your walking speed.',
+        mechanicalEffect: 'Lightning/thunder resistance; swim speed = walking speed'
+      },
+      25: {
+        threshold: 25,
+        name: 'Wrath of the Deep',
+        description: 'Once per long rest, cast Maelstrom without a spell slot. You can control water within 100 ft at will (as Shape Water but larger scale).',
+        mechanicalEffect: 'Maelstrom 1/long rest (no slot); large-scale water control 100 ft'
+      },
+      50: {
+        threshold: 50,
+        name: 'Queen\'s Dominion',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to cold damage and cannot drown. Once per tenday, commune with Umberlee.',
+        mechanicalEffect: '+2 WIS (max 22); immune to cold; cannot drown; divine communion 1/tenday'
+      }
+    }
+  },
+
+  waukeen: {
+    key: 'waukeen',
+    name: 'Waukeen',
+    title: 'Merchant\'s Friend',
+    domains: ['Knowledge', 'Trickery'],
+    increases: [
+      'Broker a profitable trade deal or open a new trade route',
+      'Donate generously to a temple of Waukeen or a merchant guild',
+      'Expose and punish those who counterfeit coin or cheat in trade',
+      'Accumulate significant wealth through clever commerce',
+      'Protect a merchant caravan from bandits or monsters'
+    ],
+    decreases: [
+      'Steal from merchants or disrupt fair trade',
+      'Destroy valuable goods or wealth needlessly',
+      'Break a contract or renege on a business agreement',
+      'Embrace poverty as a virtue or reject commerce',
+      'Allow thieves to rob a marketplace without intervention'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Merchant\'s Eye',
+        description: 'You instinctively know the fair market value of any item you examine. Once per long rest, cast Identify without a spell slot or material components.',
+        mechanicalEffect: 'Know fair value of items; Identify 1/long rest (no slot/components)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Golden Tongue',
+        description: 'You have advantage on Persuasion checks related to negotiation, bartering, or commerce. All purchases you make cost 10% less.',
+        mechanicalEffect: 'Advantage on trade Persuasion; 10% discount on purchases'
+      },
+      25: {
+        threshold: 25,
+        name: 'Fortune\'s Vault',
+        description: 'Once per long rest, cast Creation without a spell slot. Once per week, cast Magnificent Mansion (trade hall variant) without a spell slot.',
+        mechanicalEffect: 'Creation 1/long rest (no slot); Magnificent Mansion 1/week (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Coinmaiden\'s Chosen',
+        description: 'Increase CHA by 2 (maximum 22). You are immune to the Charmed condition. Once per tenday, commune with Waukeen.',
+        mechanicalEffect: '+2 CHA (max 22); immune to Charmed; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- ELVEN PANTHEON ----
+
+  corellon: {
+    key: 'corellon',
+    name: 'Corellon',
+    title: 'Creator of the Elves',
+    domains: ['Arcana', 'Light'],
+    increases: [
+      'Create a work of lasting beauty — art, music, poetry, or magic',
+      'Protect elven communities, sacred groves, or fey crossings',
+      'Use arcane magic with grace, creativity, and elegance',
+      'Defend against the corruption of drow or forces of Lolth',
+      'Preserve elven traditions and the memory of ages past'
+    ],
+    decreases: [
+      'Destroy a work of art or beauty without cause',
+      'Aid drow agents of Lolth or betray elven kin',
+      'Use magic brutishly, without artistry or finesse',
+      'Defile a sacred grove, fey crossing, or elven holy site',
+      'Embrace rigid conformity that stifles creativity'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Corellon\'s Grace',
+        description: 'You can cast Faerie Fire once per long rest without a spell slot. You gain proficiency in one artisan\'s tool or musical instrument.',
+        mechanicalEffect: 'Faerie Fire 1/long rest (no slot); +1 artisan/instrument proficiency'
+      },
+      10: {
+        threshold: 10,
+        name: 'Blessing of the Creator',
+        description: 'You have advantage on saves against being charmed and magic cannot put you to sleep. 1/long rest, cast Hypnotic Pattern without a spell slot.',
+        mechanicalEffect: 'Advantage vs. charm; immune to magical sleep; Hypnotic Pattern 1/long rest (no slot)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Arvandor\'s Champion',
+        description: 'Once per turn, a creature you damage must CHA save or be blinded until the end of your next turn. 1/long rest, cast Greater Invisibility without a spell slot.',
+        mechanicalEffect: 'Damage blinds (CHA save) 1/turn; Greater Invisibility 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of Corellon',
+        description: 'Increase DEX or CHA by 2 (maximum 22). You do not age. Once per long rest, change your appearance as per Alter Self for 24 hours. Once per tenday, commune with Corellon.',
+        mechanicalEffect: '+2 DEX or CHA (max 22); ageless; Alter Self (appearance) 1/long rest; divine communion 1/tenday'
+      }
+    }
+  },
+
+  sehanine: {
+    key: 'sehanine',
+    name: 'Sehanine',
+    title: 'The Moonweaver',
+    domains: ['Trickery'],
+    increases: [
+      'Protect lovers, dreamers, or those who travel by moonlight',
+      'Expose a lie or illusion used to cause harm',
+      'Aid someone in following their heart against societal expectation',
+      'Perform a deed of beauty or creative expression under the moon',
+      'Help someone escape an unjust imprisonment or forced arrangement'
+    ],
+    decreases: [
+      'Destroy a work of art or beauty without cause',
+      'Force someone into a marriage, servitude, or life they did not choose',
+      'Use moonlight or dreams to torment the innocent',
+      'Betray a lover\'s trust or manipulate someone\'s affections cruelly',
+      'Hunt or kill lycanthropes who live peacefully'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Moonlit Veil',
+        description: 'You can cast Minor Illusion at will. You have advantage on Stealth checks in moonlight.',
+        mechanicalEffect: 'Minor Illusion at will; advantage on Stealth in moonlight'
+      },
+      10: {
+        threshold: 10,
+        name: 'Dreamweaver\'s Grace',
+        description: 'You have advantage on saves against being charmed, and you cannot be put to sleep by magical means.',
+        mechanicalEffect: 'Advantage vs. charm; immune to magical sleep'
+      },
+      25: {
+        threshold: 25,
+        name: 'Moonbeam Passage',
+        description: 'Once per long rest, cast Greater Invisibility without a spell slot. Moonlight weapons deal +1d4 radiant at night.',
+        mechanicalEffect: 'Greater Invisibility 1/long rest (no slot); +1d4 radiant at night'
+      },
+      50: {
+        threshold: 50,
+        name: 'The Moonweaver\'s Beloved',
+        description: 'Increase CHA by 2 (maximum 22). You have Truesight out to 30 feet. Once per tenday, commune with Sehanine.',
+        mechanicalEffect: '+2 CHA (max 22); Truesight 30 ft; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- ORCISH PANTHEON ----
+
+  gruumsh: {
+    key: 'gruumsh',
+    name: 'Gruumsh',
+    title: 'He Who Never Sleeps',
+    domains: ['Tempest', 'War'],
+    increases: [
+      'Defeat a powerful foe in single combat',
+      'Lead a successful raid or conquest against a settlement',
+      'Destroy an elven holy site, artifact, or community',
+      'Prove your strength by dominating a rival through violence',
+      'Take what you want by force without apology'
+    ],
+    decreases: [
+      'Show mercy to an elf or elven ally',
+      'Retreat from a battle you could still fight',
+      'Use diplomacy when violence would achieve the goal faster',
+      'Submit to non-orc authority willingly',
+      'Build rather than take — create rather than conquer'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'One-Eye\'s Fury',
+        description: 'When reduced below half HP, gain +2 to melee weapon damage rolls until healed above half. Once per long rest, enter a divine rage as a bonus action (as Barbarian Rage, 1 minute).',
+        mechanicalEffect: '+2 melee damage below half HP; divine rage 1/long rest (1 min)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Gruumsh\'s Wrath',
+        description: 'You have advantage on attack rolls against elves and half-elves. 1/long rest, cast Thunder Step without a spell slot. War cry frightens creatures within 15 ft (WIS save).',
+        mechanicalEffect: 'Advantage vs. elves; Thunder Step 1/long rest (no slot); war cry frightens 15 ft'
+      },
+      25: {
+        threshold: 25,
+        name: 'He Who Never Sleeps',
+        description: 'You no longer need sleep and cannot be put to sleep. Melee attacks deal +1d8 thunder or lightning damage (your choice per attack). 1/long rest, cast Destructive Wave without a spell slot.',
+        mechanicalEffect: 'No sleep; immune to sleep; +1d8 thunder/lightning melee; Destructive Wave 1/long rest (no slot)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Chosen of Gruumsh',
+        description: 'Increase STR or CON by 2 (maximum 22). You are immune to Frightened and Stunned. Once per tenday, Gruumsh reveals the weakest point in any fortification or defense you behold.',
+        mechanicalEffect: '+2 STR or CON (max 22); immune to Frightened/Stunned; divine weak-point revelation 1/tenday'
+      }
+    }
+  },
+
+  // ---- HALFLING PANTHEON ----
+
+  yondalla: {
+    key: 'yondalla',
+    name: 'Yondalla',
+    title: 'The Blessed One',
+    domains: ['Life'],
+    increases: [
+      'Defend a halfling community or homestead from danger',
+      'Share a bountiful meal with those in need',
+      'Nurture and protect children or the vulnerable',
+      'Cultivate a garden, farm, or place of comfort and plenty',
+      'Show hospitality to strangers and welcome them with warmth'
+    ],
+    decreases: [
+      'Turn away a hungry traveler or refuse to share food',
+      'Destroy a home, farm, or place of shelter',
+      'Betray the trust of a community that welcomed you',
+      'Act with cruelty toward children or the defenseless',
+      'Hoard resources while others nearby starve'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Hearthward',
+        description: 'You can cast Spare the Dying at will with a range of 30 feet. You have advantage on cooking-related checks.',
+        mechanicalEffect: 'Spare the Dying at will (30 ft); advantage on cooking checks'
+      },
+      10: {
+        threshold: 10,
+        name: 'Blessed Bounty',
+        description: 'You can cast Lesser Restoration once per long rest without a spell slot. Food you prepare never spoils.',
+        mechanicalEffect: 'Lesser Restoration 1/long rest (no slot); your food never spoils'
+      },
+      25: {
+        threshold: 25,
+        name: 'Shield of the Blessed',
+        description: 'Once per long rest, cast Beacon of Hope without a spell slot. While active, you also gain +1 to AC.',
+        mechanicalEffect: 'Beacon of Hope 1/long rest (no slot); +1 AC while active'
+      },
+      50: {
+        threshold: 50,
+        name: 'The Blessed One\'s Embrace',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to Frightened. You and allies within 30 ft have advantage on saves against Frightened. Once per tenday, commune with Yondalla.',
+        mechanicalEffect: '+2 WIS (max 22); immune to Frightened; anti-fear aura 30 ft; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- EXANDRIAN PANTHEON ----
+
+  avandra: {
+    key: 'avandra',
+    name: 'Avandra',
+    title: 'The Changebringer',
+    domains: ['Trickery'],
+    increases: [
+      'Embrace a dangerous risk that leads to a positive outcome',
+      'Free someone from captivity, oppression, or tyranny',
+      'Explore uncharted territory or venture into the unknown',
+      'Defy fate or overcome seemingly impossible odds',
+      'Help someone start a new life or break free of stagnation'
+    ],
+    decreases: [
+      'Refuse to take a risk when the stakes demand boldness',
+      'Enforce rigid laws that crush freedom or individuality',
+      'Choose the safe, predictable path out of cowardice',
+      'Imprison or enslave others',
+      'Cling to tradition solely to resist necessary change'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Lucky Break',
+        description: 'Once per long rest, reroll a d20 roll and take either result.',
+        mechanicalEffect: 'Reroll any d20 (take either) 1/long rest'
+      },
+      10: {
+        threshold: 10,
+        name: 'Wanderer\'s Step',
+        description: 'You have advantage on Dexterity saving throws against effects you can see. Your movement speed increases by 10 ft.',
+        mechanicalEffect: 'Advantage on DEX saves vs. visible effects; +10 ft speed'
+      },
+      25: {
+        threshold: 25,
+        name: 'Fortune\'s Turn',
+        description: 'Once per long rest, cast Freedom of Movement without a spell slot. Once per long rest, when hit by an attack, use your reaction to force the attacker to reroll.',
+        mechanicalEffect: 'Freedom of Movement 1/long rest (no slot); force attack reroll 1/long rest'
+      },
+      50: {
+        threshold: 50,
+        name: 'Changebringer\'s Grace',
+        description: 'Increase DEX by 2 (maximum 22). You are immune to being restrained or grappled. Once per tenday, commune with Avandra.',
+        mechanicalEffect: '+2 DEX (max 22); immune to restrained/grappled; divine communion 1/tenday'
+      }
+    }
+  },
+
+  erathis: {
+    key: 'erathis',
+    name: 'Erathis',
+    title: 'The Lawbearer',
+    domains: ['Knowledge'],
+    increases: [
+      'Establish or restore order in a lawless region',
+      'Found or improve a settlement, institution, or governing body',
+      'Mediate a dispute and bring opposing parties to agreement',
+      'Create or enforce just laws that protect the common good',
+      'Build infrastructure such as roads, walls, or public works'
+    ],
+    decreases: [
+      'Incite chaos or anarchy within an ordered society',
+      'Destroy public works, buildings, or civic institutions',
+      'Break a lawful oath or contract without just cause',
+      'Side with brigands, rebels, or agents of disorder',
+      'Allow corruption to fester in a position of authority'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Order\'s Voice',
+        description: 'You can cast Command once per long rest without a spell slot. You have advantage on History checks about civilizations and governments.',
+        mechanicalEffect: 'Command 1/long rest (no slot); advantage on History (civilizations)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Pillar of Civilization',
+        description: 'You have advantage on saving throws against being charmed or confused. You gain proficiency in one tool used in construction or governance.',
+        mechanicalEffect: 'Advantage vs. charm/confusion; +1 tool proficiency (construction/governance)'
+      },
+      25: {
+        threshold: 25,
+        name: 'Lawbearer\'s Edict',
+        description: 'Once per long rest, cast Wall of Force without a spell slot. Allies within 30 ft in a settlement gain +1 AC.',
+        mechanicalEffect: 'Wall of Force 1/long rest (no slot); +1 AC for allies in settlements (30 ft)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Foundation of Empire',
+        description: 'Increase INT by 2 (maximum 22). You are immune to Confused and Stunned conditions. Once per tenday, commune with Erathis.',
+        mechanicalEffect: '+2 INT (max 22); immune to Confused/Stunned; divine communion 1/tenday'
+      }
+    }
+  },
+
+  ioun: {
+    key: 'ioun',
+    name: 'Ioun',
+    title: 'The Knowing Mentor',
+    domains: ['Knowledge'],
+    increases: [
+      'Discover and preserve lost or forbidden knowledge',
+      'Found or restore a library, school, or place of learning',
+      'Share knowledge freely with those who seek to learn',
+      'Defeat those who would destroy books, lore, or intellectual pursuits',
+      'Solve an ancient mystery or decipher a forgotten language'
+    ],
+    decreases: [
+      'Destroy books, scrolls, or repositories of knowledge',
+      'Hoard knowledge to maintain power over others',
+      'Spread deliberate misinformation or propaganda',
+      'Refuse to investigate a mystery or turn away from truth',
+      'Burn a library or suppress intellectual inquiry'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Seeker\'s Insight',
+        description: 'You can cast Detect Magic at will without a spell slot.',
+        mechanicalEffect: 'Detect Magic at will'
+      },
+      10: {
+        threshold: 10,
+        name: 'Lorekeeper\'s Mind',
+        description: 'You have advantage on all Intelligence checks (History, Arcana, Religion, Nature). You learn one additional language.',
+        mechanicalEffect: 'Advantage on all INT checks; +1 language'
+      },
+      25: {
+        threshold: 25,
+        name: 'Eye of the Mentor',
+        description: 'Once per long rest, cast Legend Lore without a spell slot or material components. You have perfect recall of anything read in the last 30 days.',
+        mechanicalEffect: 'Legend Lore 1/long rest (no slot/components); perfect recall 30 days'
+      },
+      50: {
+        threshold: 50,
+        name: 'The Knowing\'s Vessel',
+        description: 'Increase INT by 2 (maximum 22). You are immune to psychic damage. Once per tenday, commune with Ioun.',
+        mechanicalEffect: '+2 INT (max 22); immune to psychic; divine communion 1/tenday'
+      }
+    }
+  },
+
+  kord: {
+    key: 'kord',
+    name: 'Kord',
+    title: 'The Stormlord',
+    domains: ['Tempest', 'War'],
+    increases: [
+      'Win a battle or contest of strength through personal valor',
+      'Challenge a powerful foe to single combat and fight honorably',
+      'Perform a feat of extraordinary athletic prowess',
+      'Rush headlong into a dangerous storm without fear',
+      'Spare a worthy opponent who fought bravely'
+    ],
+    decreases: [
+      'Flee from a fight you could have won',
+      'Use poison, deception, or cowardly tactics to defeat a foe',
+      'Refuse a direct challenge from a worthy opponent',
+      'Show weakness or surrender without a fight',
+      'Rely on others to fight your battles when you are able'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Thunderous Grip',
+        description: 'Once per long rest, deal an extra 1d6 lightning damage on a melee weapon attack. You have advantage on Athletics checks.',
+        mechanicalEffect: '+1d6 lightning on melee 1/long rest; advantage on Athletics'
+      },
+      10: {
+        threshold: 10,
+        name: 'Stormlord\'s Endurance',
+        description: 'You have resistance to lightning and thunder damage. You gain proficiency in all martial weapons if not already proficient.',
+        mechanicalEffect: 'Lightning/thunder resistance; all martial weapon proficiency'
+      },
+      25: {
+        threshold: 25,
+        name: 'Fury of the Storm',
+        description: 'Once per long rest, cast Destructive Wave without a spell slot (thunder and lightning variant). Your melee attacks deal +1d6 lightning.',
+        mechanicalEffect: 'Destructive Wave 1/long rest (no slot); +1d6 lightning on melee'
+      },
+      50: {
+        threshold: 50,
+        name: 'Champion of the Stormlord',
+        description: 'Increase STR by 2 (maximum 22). You are immune to lightning damage and the Frightened condition. Once per tenday, commune with Kord.',
+        mechanicalEffect: '+2 STR (max 22); immune to lightning/Frightened; divine communion 1/tenday'
+      }
+    }
+  },
+
+  melora: {
+    key: 'melora',
+    name: 'Melora',
+    title: 'The Wildmother',
+    domains: ['Nature', 'Tempest'],
+    increases: [
+      'Protect a natural wilderness from destruction or corruption',
+      'Destroy an aberration or undead that defiles the natural order',
+      'Live off the land and respect the balance of predator and prey',
+      'Plant trees, restore damaged ecosystems, or cleanse polluted water',
+      'Guide lost travelers safely through dangerous wilderness'
+    ],
+    decreases: [
+      'Needlessly destroy natural habitats or kill animals for sport',
+      'Use necromancy or create undead creatures',
+      'Pollute waterways or poison the earth',
+      'Aid those who exploit nature for greed without regard for balance',
+      'Cage wild animals or bend nature to unnatural purposes'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Wildmother\'s Guidance',
+        description: 'You can cast Druidcraft at will. You cannot become lost in natural terrain.',
+        mechanicalEffect: 'Druidcraft at will; cannot be lost in natural terrain'
+      },
+      10: {
+        threshold: 10,
+        name: 'Nature\'s Resilience',
+        description: 'You have resistance to poison damage and advantage on saves against the poisoned condition.',
+        mechanicalEffect: 'Poison resistance; advantage vs. poisoned'
+      },
+      25: {
+        threshold: 25,
+        name: 'Call of the Wild',
+        description: 'Once per long rest, cast Conjure Animals without a spell slot (beasts of CR 2 or lower). You gain +2 AC in natural terrain.',
+        mechanicalEffect: 'Conjure Animals 1/long rest (no slot, CR ≤2); +2 AC in nature'
+      },
+      50: {
+        threshold: 50,
+        name: 'Voice of the Wildmother',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to poison damage and the poisoned condition. Once per tenday, commune with Melora.',
+        mechanicalEffect: '+2 WIS (max 22); immune to poison/poisoned; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- GREYHAWK PANTHEON ----
+
+  pelor: {
+    key: 'pelor',
+    name: 'Pelor',
+    title: 'The Dawnfather',
+    domains: ['Life', 'Light'],
+    increases: [
+      'Heal the sick or tend to the wounded without expectation of reward',
+      'Destroy undead or fiends that lurk in darkness',
+      'Bring hope and comfort to those suffering in despair',
+      'Expose corruption or evil hidden in positions of authority',
+      'Perform a sunrise prayer or dedicate a victory to the Dawnfather'
+    ],
+    decreases: [
+      'Create or command undead creatures',
+      'Extinguish sources of light or hope in a community',
+      'Refuse to heal someone in mortal danger when you have the means',
+      'Ally with creatures of darkness or evil for personal gain',
+      'Spread despair or cause needless suffering'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Dawn\'s Light',
+        description: 'You can cast Light and Sacred Flame at will.',
+        mechanicalEffect: 'Light and Sacred Flame at will'
+      },
+      10: {
+        threshold: 10,
+        name: 'Dawnfather\'s Warmth',
+        description: 'When you cast a spell that restores HP, add your proficiency bonus to the amount healed. You have resistance to radiant damage.',
+        mechanicalEffect: '+proficiency bonus to healing spells; radiant resistance'
+      },
+      25: {
+        threshold: 25,
+        name: 'Sunburst Rebuke',
+        description: 'Once per long rest, cast Sunbeam without a spell slot. Undead within 30 ft of you have disadvantage on all rolls.',
+        mechanicalEffect: 'Sunbeam 1/long rest (no slot); undead disadvantage on all rolls (30 ft)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Exarch of the Dawn',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to radiant damage and the Blinded condition. Once per tenday, commune with Pelor.',
+        mechanicalEffect: '+2 WIS (max 22); immune to radiant/Blinded; divine communion 1/tenday'
+      }
+    }
+  },
+
+  vecna: {
+    key: 'vecna',
+    name: 'Vecna',
+    title: 'The Whispered One',
+    domains: ['Arcana', 'Death'],
+    increases: [
+      'Uncover a powerful secret and keep it for yourself',
+      'Betray an ally to gain arcane power or forbidden knowledge',
+      'Create undead servants or practice necromancy',
+      'Destroy those who know your secrets or true plans',
+      'Acquire a lost spell, artifact, or fragment of forbidden lore'
+    ],
+    decreases: [
+      'Share a secret freely without extracting payment',
+      'Destroy a source of arcane knowledge or forbidden lore',
+      'Show loyalty or selflessness without ulterior motive',
+      'Submit to the authority of another deity or power',
+      'Allow someone to learn your true weaknesses or plans'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Whispered Secret',
+        description: 'Once per long rest, cast Detect Thoughts without a spell slot. You have advantage on Arcana checks for forbidden knowledge.',
+        mechanicalEffect: 'Detect Thoughts 1/long rest (no slot); advantage on Arcana (forbidden lore)'
+      },
+      10: {
+        threshold: 10,
+        name: 'Veil of Secrets',
+        description: 'You are immune to having your thoughts read or alignment detected by any means. You have advantage on Deception checks.',
+        mechanicalEffect: 'Immune to thought reading/alignment detection; advantage on Deception'
+      },
+      25: {
+        threshold: 25,
+        name: 'Hand of the Lich',
+        description: 'Once per long rest, cast Finger of Death without a spell slot. Necrotic damage you deal ignores resistance.',
+        mechanicalEffect: 'Finger of Death 1/long rest (no slot); necrotic pierces resistance'
+      },
+      50: {
+        threshold: 50,
+        name: 'Archlich\'s Heir',
+        description: 'Increase INT by 2 (maximum 22). You are immune to necrotic damage. Once per long rest, when reduced to 0 HP, drop to 1 HP instead. Once per tenday, commune with Vecna.',
+        mechanicalEffect: '+2 INT (max 22); immune to necrotic; cheat death 1/long rest; divine communion 1/tenday'
+      }
+    }
+  },
+
+  // ---- MORE EXANDRIAN DEITIES ----
+
+  raven_queen: {
+    key: 'raven_queen',
+    name: 'The Raven Queen',
+    title: 'Matron of Death',
+    domains: ['Life', 'Death'],
+    increases: [
+      'Destroy undead abominations that defy the natural cycle of death',
+      'Guide a dying creature peacefully to its final rest',
+      'Prevent a soul from being trapped, consumed, or perverted',
+      'Hunt down those who use necromancy to cheat death',
+      'Perform funerary rites for the unburied dead'
+    ],
+    decreases: [
+      'Create undead or use necromancy to raise the dead',
+      'Attempt to resurrect someone who has passed on willingly',
+      'Trap or consume souls for personal power',
+      'Assist a lich, vampire, or other creature that has cheated death',
+      'Desecrate a graveyard or place of final rest'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Death\'s Sight',
+        description: 'You can cast Spare the Dying at will with a range of 30 feet. You can sense undead within 60 feet.',
+        mechanicalEffect: 'Spare the Dying at will (30 ft); sense undead 60 ft'
+      },
+      10: {
+        threshold: 10,
+        name: 'Fate\'s Ward',
+        description: 'You have resistance to necrotic damage and advantage on death saving throws.',
+        mechanicalEffect: 'Necrotic resistance; advantage on death saves'
+      },
+      25: {
+        threshold: 25,
+        name: 'Raven\'s Mantle',
+        description: 'Once per long rest, cast Spirit Guardians (necrotic) without a spell slot. While active, you gain a flying speed of 30 feet.',
+        mechanicalEffect: 'Spirit Guardians (necrotic) 1/long rest (no slot); 30 ft fly while active'
+      },
+      50: {
+        threshold: 50,
+        name: 'Matron\'s Chosen',
+        description: 'Increase WIS by 2 (maximum 22). You are immune to necrotic damage and cannot be aged magically. Once per tenday, commune with the Raven Queen.',
+        mechanicalEffect: '+2 WIS (max 22); immune to necrotic/magical aging; divine communion 1/tenday'
+      }
+    }
+  },
+
+  torog: {
+    key: 'torog',
+    name: 'Torog',
+    title: 'The Crawling King',
+    domains: ['Death'],
+    increases: [
+      'Capture and imprison a creature in prolonged torment',
+      'Tunnel deeper into the Underdark or discover hidden subterranean passages',
+      'Break the will of a prisoner through suffering and despair',
+      'Enslave creatures to labor in darkness beneath the earth',
+      'Desecrate a temple of a surface deity deep underground'
+    ],
+    decreases: [
+      'Free prisoners or break chains of enslavement',
+      'Show mercy to a defeated foe instead of imprisoning them',
+      'Seal or collapse tunnels into the Underdark',
+      'Bring light and hope to those trapped in darkness',
+      'Heal those who suffer from torture or long captivity'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Jailer\'s Grasp',
+        description: 'Once per long rest, when you hit with a melee attack, the target must STR save (DC 8 + proficiency + STR mod) or be restrained until end of your next turn.',
+        mechanicalEffect: 'Melee restrain (STR save) 1/long rest'
+      },
+      10: {
+        threshold: 10,
+        name: 'Eyes of the Depths',
+        description: 'You gain darkvision 120 feet (or extend existing by 60 feet). You have advantage on Survival checks underground.',
+        mechanicalEffect: 'Darkvision 120 ft (or +60 ft); advantage on Survival underground'
+      },
+      25: {
+        threshold: 25,
+        name: 'Chains of Torment',
+        description: 'Once per long rest, cast Hold Monster without a spell slot. Creatures you restrain cannot teleport or plane shift.',
+        mechanicalEffect: 'Hold Monster 1/long rest (no slot); restrained targets can\'t teleport'
+      },
+      50: {
+        threshold: 50,
+        name: 'The Crawling King\'s Warden',
+        description: 'Increase CON by 2 (maximum 22). You are immune to Restrained and Paralyzed conditions. Once per tenday, commune with Torog.',
+        mechanicalEffect: '+2 CON (max 22); immune to Restrained/Paralyzed; divine communion 1/tenday'
+      }
+    }
+  },
+
+  zehir: {
+    key: 'zehir',
+    name: 'Zehir',
+    title: 'The Cloaked Serpent',
+    domains: ['Trickery', 'Death'],
+    increases: [
+      'Assassinate a target through stealth and poison',
+      'Spread darkness, fear, or distrust in a community',
+      'Breed or command venomous serpents',
+      'Betray someone who trusted you for personal gain',
+      'Perform a ritual sacrifice under the cover of night'
+    ],
+    decreases: [
+      'Cure poison or heal someone afflicted by venom',
+      'Kill snakes or serpentine creatures needlessly',
+      'Act openly and honestly when deception would serve better',
+      'Show mercy to an enemy who has seen your true nature',
+      'Bring light or expose hidden things to public view'
+    ],
+    thresholds: {
+      3: {
+        threshold: 3,
+        name: 'Serpent\'s Kiss',
+        description: 'Your weapon attacks deal an extra 1d4 poison damage. You have resistance to poison damage.',
+        mechanicalEffect: '+1d4 poison on weapons; poison resistance'
+      },
+      10: {
+        threshold: 10,
+        name: 'Cloaked in Shadow',
+        description: 'You have advantage on Stealth in dim light or darkness. You are immune to the poisoned condition.',
+        mechanicalEffect: 'Advantage on Stealth (dim/dark); immune to poisoned'
+      },
+      25: {
+        threshold: 25,
+        name: 'Venomfang Strike',
+        description: 'Once per long rest, cast Cloudkill without a spell slot. Your weapon attacks deal +1d6 poison damage (replaces the 1d4).',
+        mechanicalEffect: 'Cloudkill 1/long rest (no slot); +1d6 poison on weapons (upgrade)'
+      },
+      50: {
+        threshold: 50,
+        name: 'Avatar of the Cloaked Serpent',
+        description: 'Increase DEX by 2 (maximum 22). You are immune to poison damage. Once per tenday, commune with Zehir.',
+        mechanicalEffect: '+2 DEX (max 22); immune to poison; divine communion 1/tenday'
+      }
+    }
   }
 };
 

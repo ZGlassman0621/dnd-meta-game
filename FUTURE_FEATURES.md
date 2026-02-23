@@ -4,19 +4,24 @@ This file tracks feature ideas and enhancements for future implementation.
 
 ---
 
-## Database Migration System
+## Consequence Automation
 
-**Priority:** Medium
-**Identified:** 2026-02-07
+**Priority:** High (Next build)
+**Identified:** 2026-02-21
 
 ### Problem
-`server/database.js` is 1309 lines of `CREATE TABLE IF NOT EXISTS` statements with conditional `ALTER TABLE` additions scattered throughout. Every schema change requires adding another conditional alter that runs on every startup.
+Broken promises and ignored quests have no automatic consequences. NPCs should remember and react when the player fails to follow through.
 
-### Planned Implementation
-- Replace monolithic `database.js` with numbered migration files (e.g., `001_initial_schema.js`, `002_add_campaign_notes.js`)
-- Track applied migrations in a `_migrations` table
-- Each migration runs once, is idempotent, and includes both `up()` and `down()` functions
-- Startup checks which migrations have run and applies any new ones in order
+### Desired Behavior
+- Broken promises auto-trigger NPC disposition decreases
+- Ignored quests escalate (bandits attack the village, the hostage is killed, etc.)
+- Faction standing changes based on player actions and inactions
+- Canon facts about promises feed directly into consequence triggers
+
+### Files to Modify
+- `server/services/storyChronicleService.js` — Add promise expiration/broken detection
+- `server/services/npcRelationshipService.js` — Auto-update disposition on broken promises
+- `server/services/questService.js` — Quest escalation timers
 
 ---
 
@@ -41,26 +46,20 @@ Factions have goals with progress tracking, but quests are generated independent
 
 ---
 
-## Achievement System with Rewards
+## Procedural Dungeon Generation
 
 **Priority:** Medium
-**Identified:** 2026-02-09
+**Identified:** 2026-02-21
 
 ### Problem
-No way to track memorable milestones or reward players for accomplishments beyond quest completion.
+No multi-room dungeon exploration with spatial awareness.
 
 ### Desired Behavior
-- Achievements triggered by in-game actions (first dragon slain, reached level 5, etc.)
-- Achievement popup notification during gameplay
-- Achievements carry rewards: gold, items, crafting materials
-- Some achievements hidden until earned (discovery achievements)
-- Categories: Combat, Exploration, Social, Wealth, Story, Companion
-
-### Implementation Approach
-- New `achievements` and `character_achievements` tables
-- Hook into existing event emission system (`emitSessionEvents`)
-- Achievement service: `checkAchievements(characterId, event)` → returns newly earned achievements
-- Auto-apply rewards using existing inventory management patterns
+- Generate dungeon layouts with rooms, corridors, doors, traps, and treasures
+- Room-by-room exploration with state tracking (visited, cleared, locked)
+- Dungeon map display showing explored areas
+- Encounters tied to specific rooms
+- Keys, puzzles, and locked doors creating exploration objectives
 
 ---
 
@@ -83,110 +82,6 @@ Characters have an `avatar` field and players can upload images, but there's no 
 - Integrate an image generation API (DALL-E, Stable Diffusion, etc.)
 - Build prompt from character attributes
 - Store generated images locally or as base64 in the database
-
----
-
-## Already Implemented
-
-The following features were previously tracked here and have been built:
-
-- **Full Spell Management System** (2026-02-21) — 284 spells (1st-9th level, all classes), spell slot display with use/restore, prepared spell UI (Cleric/Druid/Paladin/Wizard/Artificer), known spell UI (Bard/Ranger/Sorcerer/Warlock), level-up spell selection step with optional swap
-- **Inventory Management During/After Sessions** (2026-02-08) — Auto-detect items consumed/gained at session end with undo
-- **Downtime Integration** (2026-01-29) — Pending downtime narratives injected into DM session context
-- **Rest Button Pronoun Fix** (2026-01-29) — Uses character gender for he/she/they pronouns
-- **In-Session Calendar Advancement** (2026-01-29) — Manual +/- buttons, long rest auto-advances 1 day
-- **Backstory Parser** (2026-02-07) — AI parses backstory into structured elements, editable by player
-- **Streamlined Campaign Creation** (2026-02-07) — Auto-pipeline: create → assign → parse → generate plan
-- **Gameplay Tabs** (2026-02-07) — Adventure/Downtime/Stats tabs during DM sessions
-- **Companion Level-Up UI** (2026-02-07) — HP roll vs average, ASI distribution, subclass selection
-- **Quick-Reference Stats Panel** (2026-02-09) — HP/AC/Gold in session bar, racial traits in Abilities tab
-- **In-Session Inventory Viewer** (2026-02-09) — Slide-in panel with rarity colors, filter tabs, discard
-- **Initiative & Combat Tracker** (2026-02-09) — COMBAT_START/END markers, initiative rolling, turn order bar
-- **Persistent Merchant Inventories** (2026-02-10) — Loot tables, referrals, custom items, cursed items, DMG magic items
-- **Opus for All Generation** (2026-02-10) — All 6 generators + campaign plan use Opus; Sonnet for DM sessions only
-- **Content Preference Cleanup** (2026-02-11) — Removed 9 redundant content pref toggles (romance, horror, etc.); campaign tone handled by Opus plan
-- **Frontend Component Decomposition** (2026-02-11) — Extracted 5 components from DMSession.jsx (SessionSetup, SessionRewards, CampaignNotesPanel, QuickReferencePanel, CompanionsPanel); reduced from 4583 to 2395 lines
-- **Player Journal** (2026-02-11) — Player Knowledge Tracker showing NPCs met, locations visited, faction standings, quests, and world events; aggregates existing session data
-- **Companion Skill Checks** (2026-02-11) — Companion skill modifiers + passive Perception in DM prompt; AI narrates companion skill attempts when player fails
-- **Context-Aware Rest Narratives** (2026-02-11) — AI generates atmospheric rest descriptions based on current session context; mechanical results show immediately
-- **Condition & Status Effect Tracking** (2026-02-11) — 15 D&D 5e conditions + exhaustion 1-6; slide-in panel, info bar chips, AI markers, auto-clear on rest/combat end
-- **Companion Management During Sessions** (2026-02-11) — CompanionsPanel extracted from DMSession; compact companion cards with HP, abilities, equipment accessible during gameplay
-- **Story Chronicle System** (2026-02-21) — Structured canon fact database (`canon_facts` table), session chronicles (`story_chronicles` table), context window management with sliding window compression, adaptive AI context budgeting (2K-8K tokens), priority-ordered fact retrieval (deaths > promises > critical > quest > recent), Chronicle tab in Player Journal with timeline/search/edit, Chronicle stats on Meta Game Dashboard, unlimited campaign notes/character memories/NPC name storage
-- **Homebrew Class Expansion** (2026-02-21) — Added Blood Hunter (4 subclasses), Pugilist (7 subclasses), Warlord (6 subclasses) as full classes; added Forgewright and Warsmith Artificer subclasses, Path of the Witch Hunter and Path of the Dragon Barbarian subclasses, Spellwarden Fighter subclass, Wealth and Stone Domain Cleric subclasses, School of Theurgy Wizard subclass, Surgeon Rogue subclass (16 classes, 151 total subclasses)
-- **NPC Conversation Memory** (2026-02-21) — `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session; extracted via chronicle AI prompt at session end; last 2 conversations per NPC injected into DM prompt under NPC RELATIONSHIPS section
-- **Companion Emotional State** (2026-02-21) — Mood columns on `companion_backstories` (mood, mood_cause, mood_intensity 1-5, mood_set_game_day); 10 mood states (content, anxious, angry, sad, fearful, excited, conflicted, grateful, resentful, exhausted); intensity decays by 1 per 2 game days; mood + RP guidance injected into DM prompt companion section
-
----
-
-## Consequence Automation
-
-**Priority:** High (Next build)
-**Identified:** 2026-02-21
-
-### Problem
-Broken promises and ignored quests have no automatic consequences. NPCs should remember and react when the player fails to follow through.
-
-### Desired Behavior
-- Broken promises auto-trigger NPC disposition decreases
-- Ignored quests escalate (bandits attack the village, the hostage is killed, etc.)
-- Faction standing changes based on player actions and inactions
-- Canon facts about promises feed directly into consequence triggers
-
-### Files to Modify
-- `server/services/storyChronicleService.js` — Add promise expiration/broken detection
-- `server/services/npcRelationshipService.js` — Auto-update disposition on broken promises
-- `server/services/questService.js` — Quest escalation timers
-
----
-
-## Crafting System
-
-**Priority:** Medium
-**Identified:** 2026-02-21
-
-### Problem
-Characters have artisan tools and crafting proficiencies but no crafting mechanic.
-
-### Desired Behavior
-- Use artisan tools to create items during downtime
-- Recipe system: known recipes + discoverable recipes
-- Material gathering from exploration and combat loot
-- Quality outcomes based on skill checks and tool proficiency
-- Upgrade existing equipment (add enchantments, improve quality)
-
----
-
-## Weather & Time of Day
-
-**Priority:** Medium
-**Identified:** 2026-02-21
-
-### Problem
-No weather or time-of-day tracking. All scenes happen in generic conditions.
-
-### Desired Behavior
-- Weather system: clear, rain, storm, snow, fog, etc.
-- Seasonal weather patterns based on Harptos calendar
-- Time of day affects NPC availability (shops closed at night, taverns busy at evening)
-- Weather affects travel speed, visibility, and encounter types
-- Spell effects interact with weather (e.g., Call Lightning in a storm)
-
----
-
-## Procedural Dungeon Generation
-
-**Priority:** Medium
-**Identified:** 2026-02-21
-
-### Problem
-No multi-room dungeon exploration with spatial awareness.
-
-### Desired Behavior
-- Generate dungeon layouts with rooms, corridors, doors, traps, and treasures
-- Room-by-room exploration with state tracking (visited, cleared, locked)
-- Dungeon map display showing explored areas
-- Encounters tied to specific rooms
-- Keys, puzzles, and locked doors creating exploration objectives
 
 ---
 
@@ -261,3 +156,40 @@ Retired or dead characters have no lasting impact on the world for new character
 ## Other Ideas (Add as needed)
 
 <!-- Add future feature requests below this line -->
+
+---
+
+## Already Implemented
+
+The following features were previously tracked here and have been built:
+
+- **Mythic Progression System** (2026-02-22) — 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only), Mythic Power pool (3 + 2×tier/day), Surge mechanic (d6→d12 by tier), trial-based advancement, 53-deity piety system (all character creator deities across 9 pantheons), 12 epic boons, legendary items (4 states: Dormant → Awakened → Exalted → Mythic), shadow-path interaction, 4 AI markers ([MYTHIC_TRIAL], [PIETY_CHANGE], [ITEM_AWAKEN], [MYTHIC_SURGE]), 7-tab frontend UI, 1004-assertion test suite
+- **Weather, Survival & Crafting Systems** (2026-02-22) — Weather system (season-based probability tables, region mods, temperature calc, gear warmth, exposure thresholds), survival system (D&D 5e PHB hunger/thirst/starvation/dehydration, auto-consume, food spoilage, foraging DCs by terrain), crafting system (112 recipes across 10 categories, quality tiers, tool proficiency, discoverable recipes, radiant AI-generated recipes via [RECIPE_GIFT] marker)
+- **NPC System Overhaul** (2026-02-21) — NPC lifecycle state machine (alive/deceased/missing/imprisoned/unknown) with death propagation cascade, NPC personality enrichment (voice/personality/mannerism/motivation/appearance fill-not-overwrite), NPC voice differentiation in DM prompt, companion activities (off-screen tasks with AI resolution), NPC mail system (candidate scoring, AI/template generation, narrative queue), NPC aging/absence (disposition/trust decay, reunion boost, relocation/forget thresholds), living world tick pipeline (weather → factions → events → companions → NPC mail → survival), narrative queue system
+- **Story Chronicle System** (2026-02-21) — Structured canon fact database (`canon_facts` table), session chronicles (`story_chronicles` table), context window management with sliding window compression, adaptive AI context budgeting (2K-8K tokens), priority-ordered fact retrieval (deaths > promises > critical > quest > recent), Chronicle tab in Player Journal with timeline/search/edit, Chronicle stats on Meta Game Dashboard, unlimited campaign notes/character memories/NPC name storage
+- **Full Spell Management System** (2026-02-21) — 284 spells (1st-9th level, all classes), spell slot display with use/restore, prepared spell UI (Cleric/Druid/Paladin/Wizard/Artificer), known spell UI (Bard/Ranger/Sorcerer/Warlock), level-up spell selection step with optional swap
+- **NPC Conversation Memory** (2026-02-21) — `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session; extracted via chronicle AI prompt at session end; last 2 conversations per NPC injected into DM prompt under NPC RELATIONSHIPS section
+- **Companion Emotional State** (2026-02-21) — Mood columns on `companion_backstories` (mood, mood_cause, mood_intensity 1-5, mood_set_game_day); 10 mood states; intensity decays by 1 per 2 game days; mood + RP guidance injected into DM prompt companion section
+- **Homebrew Class Expansion** (2026-02-21) — Added Blood Hunter (4 subclasses), Pugilist (7 subclasses), Warlord (6 subclasses) as full classes; added Forgewright and Warsmith Artificer subclasses, Path of the Witch Hunter and Path of the Dragon Barbarian subclasses, Spellwarden Fighter subclass, Wealth and Stone Domain Cleric subclasses, School of Theurgy Wizard subclass, Surgeon Rogue subclass (16 classes, 151 total subclasses)
+- **Database Migration System** (2026-02-21) — Numbered migration files (`server/migrations/001_*.js` through `010_mythic_progression.js`), `_migrations` tracking table, `up()`/`down()` functions, runs once on startup
+- **Achievement System** (2026-02-21) — Achievement tracking with categories, rewards, and discovery achievements; hooked into event emission system
+- **Inventory Management During/After Sessions** (2026-02-08) — Auto-detect items consumed/gained at session end with undo
+- **Downtime Integration** (2026-01-29) — Pending downtime narratives injected into DM session context
+- **Rest Button Pronoun Fix** (2026-01-29) — Uses character gender for he/she/they pronouns
+- **In-Session Calendar Advancement** (2026-01-29) — Manual +/- buttons, long rest auto-advances 1 day
+- **Backstory Parser** (2026-02-07) — AI parses backstory into structured elements, editable by player
+- **Streamlined Campaign Creation** (2026-02-07) — Auto-pipeline: create → assign → parse → generate plan
+- **Gameplay Tabs** (2026-02-07) — Adventure/Downtime/Stats tabs during DM sessions
+- **Companion Level-Up UI** (2026-02-07) — HP roll vs average, ASI distribution, subclass selection
+- **Quick-Reference Stats Panel** (2026-02-09) — HP/AC/Gold in session bar, racial traits in Abilities tab
+- **In-Session Inventory Viewer** (2026-02-09) — Slide-in panel with rarity colors, filter tabs, discard
+- **Initiative & Combat Tracker** (2026-02-09) — COMBAT_START/END markers, initiative rolling, turn order bar
+- **Persistent Merchant Inventories** (2026-02-10) — Loot tables, referrals, custom items, cursed items, DMG magic items
+- **Opus for All Generation** (2026-02-10) — All 6 generators + campaign plan use Opus; Sonnet for DM sessions only
+- **Content Preference Cleanup** (2026-02-11) — Removed 9 redundant content pref toggles; campaign tone handled by Opus plan
+- **Frontend Component Decomposition** (2026-02-11) — Extracted 5 components from DMSession.jsx; reduced from 4583 to 2395 lines
+- **Player Journal** (2026-02-11) — Player Knowledge Tracker showing NPCs met, locations visited, faction standings, quests, and world events
+- **Companion Skill Checks** (2026-02-11) — Companion skill modifiers + passive Perception in DM prompt; AI narrates companion skill attempts
+- **Context-Aware Rest Narratives** (2026-02-11) — AI generates atmospheric rest descriptions based on session context
+- **Condition & Status Effect Tracking** (2026-02-11) — 15 D&D 5e conditions + exhaustion 1-6; slide-in panel, info bar chips, AI markers, auto-clear on rest/combat end
+- **Companion Management During Sessions** (2026-02-11) — CompanionsPanel extracted; compact companion cards with HP, abilities, equipment
