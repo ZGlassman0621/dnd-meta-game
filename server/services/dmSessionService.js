@@ -583,6 +583,91 @@ export function detectRecipeGift(narrative) {
   return results;
 }
 
+/**
+ * Detect [MYTHIC_TRIAL: Name="The Bridge of Dawn" Description="Riv held the bridge alone" Outcome="passed"]
+ * Returns { name, description, outcome } or null
+ */
+export function detectMythicTrial(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[MYTHIC_TRIAL:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  if (!data.name) {
+    console.warn('[Marker] MYTHIC_TRIAL detected but missing Name field:', match[0]);
+    return null;
+  }
+  const validOutcomes = ['passed', 'failed', 'redirected'];
+  return {
+    name: data.name,
+    description: data.description || '',
+    outcome: validOutcomes.includes(data.outcome) ? data.outcome : 'passed'
+  };
+}
+
+/**
+ * Detect all [PIETY_CHANGE: Deity="Lathander" Amount=1 Reason="Protected the innocent"] markers.
+ * Returns array of { deity, amount, reason } or empty array.
+ */
+export function detectPietyChange(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[PIETY_CHANGE:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.deity) {
+      results.push({
+        deity: data.deity,
+        amount: parseInt(data.amount) || 0,
+        reason: data.reason || ''
+      });
+    } else {
+      console.warn('[Marker] PIETY_CHANGE detected but missing Deity field:', match[0]);
+    }
+  }
+  return results;
+}
+
+/**
+ * Detect [ITEM_AWAKEN: Item="Dawn's Light" NewState="awakened" Deed="Struck down the shadow demon"]
+ * Returns { item, newState, deed } or null
+ */
+export function detectItemAwaken(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[ITEM_AWAKEN:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  if (!data.item) {
+    console.warn('[Marker] ITEM_AWAKEN detected but missing Item field:', match[0]);
+    return null;
+  }
+  const validStates = ['awakened', 'exalted', 'mythic'];
+  return {
+    item: data.item,
+    newState: validStates.includes(data.newstate) ? data.newstate : 'awakened',
+    deed: data.deed || ''
+  };
+}
+
+/**
+ * Detect [MYTHIC_SURGE: Ability="divine_surge" Cost=1]
+ * Returns { ability, cost } or null
+ */
+export function detectMythicSurge(narrative) {
+  if (!narrative) return null;
+  const match = narrative.match(/\[MYTHIC_SURGE:\s*([^\]]+)\]/i);
+  if (!match) return null;
+  const data = parseMarkerPairs(match[1]);
+  if (!data.ability) {
+    console.warn('[Marker] MYTHIC_SURGE detected but missing Ability field:', match[0]);
+    return null;
+  }
+  return {
+    ability: data.ability,
+    cost: parseInt(data.cost) || 1
+  };
+}
+
 // ============================================================
 // SESSION ANALYSIS & REWARDS
 // ============================================================

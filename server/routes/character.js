@@ -6,6 +6,7 @@ import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipSe
 import { getCampaignLocations } from '../services/locationService.js';
 import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
+import { resetMythicPower } from '../services/mythicService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import { safeParse } from '../utils/safeParse.js';
 import {
@@ -268,6 +269,9 @@ router.post('/rest/:id', async (req, res) => {
         WHERE id = ?
       `, [newHp, req.params.id]);
       spellSlotsRestored = true;
+
+      // Reset mythic power on long rest
+      try { await resetMythicPower(parseInt(req.params.id)); } catch (_) { /* no mythic record is fine */ }
     } else {
       // Short rest: restore 50% of missing HP, partial spell slot recovery for some classes
       const missingHp = character.max_hp - character.current_hp;

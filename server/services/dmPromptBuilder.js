@@ -1445,7 +1445,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"
@@ -1521,6 +1521,17 @@ RADIANT RECIPE GIFTS — for unique, NPC-gifted recipes that don't exist in the 
   Required fields: Name, Category, Description, Materials (Name:Qty,Name:Qty format), Tools (tool name or "none"), DC, Hours, Ability (strength/dexterity/intelligence/wisdom), OutputName, OutputDesc, GiftedBy
   Category must be one of: food, potion, weapon, armor, adventuring_gear, poison, scroll, ammunition, shelter
   GUIDELINES: Only gift recipes when narratively earned (strong NPC relationships, completed favors, trade secrets shared in gratitude). Keep balance reasonable: DC 8-16, 1-4 material types, 1-16 hours craft time. Match gifter to category (innkeepers→food, blacksmiths→weapons, herbalists→potions). This should be RARE — maybe once every 3-5 sessions. Each recipe should feel unique and personal.
+
+MYTHIC PROGRESSION MARKERS:
+Use ONLY when the character has mythic abilities and events are narratively significant.
+- Mythic trial: [MYTHIC_TRIAL: Name="The Bridge of Dawn" Description="Held the bridge alone against overwhelming odds" Outcome="passed"]
+  Outcomes: passed (counts toward tier), failed (no advancement penalty), redirected (suggests path change). Extremely rare: 1 per 5-10 sessions maximum.
+- Piety change: [PIETY_CHANGE: Deity="Lathander" Amount=1 Reason="Protected the innocent at great personal cost"]
+  Amount: +1 for deity-aligned actions, -1 for acting against. Max 1-2 per session, only for meaningful choices — NOT routine prayer or combat.
+- Legendary item advancement: [ITEM_AWAKEN: Item="Dawn's Light" NewState="awakened" Deed="Struck down the shadow demon lord"]
+  States: awakened, exalted, mythic. Extremely rare: once every 10+ sessions per item.
+- Mythic power usage: [MYTHIC_SURGE: Ability="divine_surge" Cost=1]
+  Track when the character narratively activates a mythic ability that costs Mythic Power.
 
 CONVERSATION FLOW:
 - SHORT RESPONSES ARE GOOD. You do not need to fill space. 1-3 sentences is often perfect.
@@ -2010,6 +2021,8 @@ WEATHER & SURVIVAL: Reference current weather in descriptions. Enforce exposure 
 
 CRAFTING: Use [RECIPE_FOUND] when players discover existing recipes, [MATERIAL_FOUND] for raw materials found, [CRAFT_PROGRESS] for crafting time, and [RECIPE_GIFT] when an NPC shares a unique personal recipe. Materials come from foraging, looting, merchants, and exploration.
 
+MYTHIC: If the character has mythic abilities, reference them naturally — their presence affects how NPCs react, their surge die adds to dramatic moments, and path abilities should feel like natural extensions of who they are. Use [MYTHIC_TRIAL] for extraordinary achievements, [PIETY_CHANGE] for deity-relevant choices, [ITEM_AWAKEN] for legendary item milestones, [MYTHIC_SURGE] for power usage tracking.
+
 NPC MORAL DIVERSITY: Not every NPC is kind or helpful. Most people are self-interested. Merchants overcharge, officials stall, strangers are suspicious. Allies can be rude, greedy, or morally gray. Help should cost something. Play NPC alignments from the campaign plan faithfully.
 
 PLAYER OBSERVATION = CALL FOR A CHECK:
@@ -2023,6 +2036,52 @@ OTHER CRITICAL RULES:
 - Use the EXACT names given for NPCs — always refer to named characters by name, never by vague description
 - Stay in second person ("you") for the player character
 - NEVER generate player dialogue — no quoting them, no "you say/reply/ask", no implied speech or decisions like nodding, agreeing, or thanking. Describe the world, then STOP and let the player speak for themselves. Zero exceptions.`;
+}
+
+/**
+ * Format mythic progression status for DM prompt context.
+ * Only called when character has mythic tier > 0.
+ */
+export function formatMythicForPrompt(mythicStatus, character) {
+  if (!mythicStatus || mythicStatus.tier === 0) return '';
+
+  const lines = [
+    '=== MYTHIC STATUS ===',
+    `Mythic Tier: ${mythicStatus.tier} — ${mythicStatus.tierName}`,
+  ];
+
+  if (mythicStatus.path) {
+    lines.push(`Mythic Path: ${mythicStatus.pathName}${mythicStatus.pathSubtitle ? ` (${mythicStatus.pathSubtitle})` : ''}`);
+  }
+
+  lines.push(`Mythic Power: ${mythicStatus.mythicPowerRemaining}/${mythicStatus.mythicPowerMax} (Surge: ${mythicStatus.surgeDie})`);
+
+  // Active abilities
+  const baseAbilities = mythicStatus.abilities.filter(a => a.ability_type === 'base');
+  const pathAbilities = mythicStatus.abilities.filter(a => a.ability_type === 'path');
+
+  if (baseAbilities.length > 0) {
+    lines.push(`Base Abilities: ${baseAbilities.map(a => a.ability_key.replace(/_/g, ' ')).join(', ')}`);
+  }
+  if (pathAbilities.length > 0) {
+    lines.push(`Path Abilities: ${pathAbilities.map(a => a.ability_key.replace(/_/g, ' ')).join(', ')}`);
+  }
+
+  // Shadow points constraint status
+  const shadow = character?.shadow_points || 0;
+  if (mythicStatus.path && shadow > 0) {
+    lines.push(`Shadow Points: ${shadow}`);
+  }
+
+  // Legend path special note
+  if (mythicStatus.isLegend) {
+    lines.push(`Legend Path: Extra class levels (+${mythicStatus.tier * 4}), no supernatural path abilities`);
+  }
+
+  lines.push('');
+  lines.push('The character\'s mythic status affects how NPCs react — awe, unease, or recognition of extraordinary power. Reference mythic abilities naturally in the narrative when the character uses them.');
+
+  return lines.join('\n');
 }
 
 export { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception };

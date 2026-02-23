@@ -29,6 +29,7 @@ const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
 const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
 const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
 const DMMode = lazy(() => import('./components/DMMode'))
+const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -399,6 +400,14 @@ function App() {
         <NarrativeQueuePage
           character={selectedCharacter}
         />
+      ) : activeView === 'showMythicProgression' && selectedCharacter ? (
+        <MythicProgressionPage
+          character={selectedCharacter}
+          onCharacterUpdated={(char) => {
+            setSelectedCharacter(char)
+            loadCharacters()
+          }}
+        />
       ) : activeView === 'showGeneration' && selectedCharacter ? (
         <GenerationControlsPage
           character={selectedCharacter}
@@ -473,6 +482,7 @@ function App() {
                 { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
                 { key: 'showDMMode', label: 'DM Mode', desc: 'You DM for 4 AI player characters', color: '#e67e22' },
                 { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
+                { key: 'showMythicProgression', label: 'Mythic Progression', desc: 'Mythic tiers, paths, piety, epic boons, and legendary items', color: '#ff6b35' },
                 { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
               ].map(card => (
                 <div

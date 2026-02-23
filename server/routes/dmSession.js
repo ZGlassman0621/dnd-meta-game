@@ -18,6 +18,7 @@ import {
   detectMerchantRefer, detectAddItem, detectLootDrop, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
   detectWeatherChange, detectShelterFound, detectSwim, detectEat, detectDrink,
   detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
+  detectMythicTrial, detectPietyChange, detectItemAwaken, detectMythicSurge,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -41,6 +42,9 @@ import { handleServerError } from '../utils/errorHandler.js';
 import { getWeather, setWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
 import { getSurvivalStatus, consumeFood, consumeWater, formatSurvivalForPrompt } from '../services/survivalService.js';
 import { formatCraftingForPrompt, discoverRecipe, addMaterial, advanceProject, getProjectStatus, createRadiantRecipe } from '../services/craftingService.js';
+import { formatMythicForPrompt } from '../services/dmPromptBuilder.js';
+import { getMythicStatus, recordTrial, useMythicPower, advanceTier, findLegendaryItemByName, advanceItemState } from '../services/mythicService.js';
+import { adjustPiety } from '../services/pietyService.js';
 
 const router = express.Router();
 
@@ -724,6 +728,17 @@ router.post('/start', async (req, res) => {
       }
     }
 
+    // Gather mythic context for DM prompt
+    let mythicContext = '';
+    try {
+      const mythicStatus = await getMythicStatus(characterId);
+      if (mythicStatus && mythicStatus.tier > 0) {
+        mythicContext = formatMythicForPrompt(mythicStatus, character);
+      }
+    } catch (e) {
+      console.error('Error gathering mythic context:', e);
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -749,7 +764,8 @@ router.post('/start', async (req, res) => {
       chronicleContext,
       weatherContext,
       survivalContext,
-      craftingContext
+      craftingContext,
+      mythicContext
     };
 
     // Check which LLM provider is available (respects user preference)
@@ -1149,6 +1165,10 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[MATERIAL_FOUND:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[CRAFT_PROGRESS:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[RECIPE_GIFT:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[MYTHIC_TRIAL:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[PIETY_CHANGE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[ITEM_AWAKEN:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[MYTHIC_SURGE:[^\]]+\]\s*/gi, '').trim();
 
     // Handle ADD_ITEM markers — add custom items to current merchant's inventory
     const addItems = detectAddItem(result.narrative);
@@ -1479,6 +1499,80 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('Error processing weather/survival/crafting markers:', e);
     }
 
+    // ---- MYTHIC PROGRESSION MARKERS ----
+    let mythicEvents = [];
+    try {
+      const character = await dbGet('SELECT id, campaign_id, game_day, has_mythic FROM characters WHERE id = ?', [session.character_id]);
+
+      // Mythic trial detection
+      const mythicTrial = detectMythicTrial(result.narrative);
+      if (mythicTrial && character) {
+        try {
+          const trialResult = await recordTrial(character.id, character.campaign_id, {
+            name: mythicTrial.name,
+            description: mythicTrial.description,
+            outcome: mythicTrial.outcome,
+            gameDay: character.game_day,
+            sessionId: session.id
+          });
+          mythicEvents.push({ type: 'trial', ...mythicTrial, ...trialResult });
+
+          // Auto-advance tier if trials completed
+          if (trialResult.canAdvance) {
+            try {
+              const advanceResult = await advanceTier(character.id, character.game_day);
+              mythicEvents.push({ type: 'tier_advance', newTier: advanceResult.tier, tierName: advanceResult.tierName });
+            } catch (advErr) {
+              console.error('Error auto-advancing mythic tier:', advErr.message);
+            }
+          }
+        } catch (e) {
+          console.error('Error recording mythic trial:', e.message);
+        }
+      }
+
+      // Piety changes
+      const pietyChanges = detectPietyChange(result.narrative);
+      for (const change of pietyChanges) {
+        try {
+          const pietyResult = await adjustPiety(
+            session.character_id, change.deity, change.amount,
+            change.reason, character?.game_day, session.id
+          );
+          mythicEvents.push({ type: 'piety', deity: change.deity, ...pietyResult });
+        } catch (e) {
+          console.error(`Error adjusting piety for ${change.deity}:`, e.message);
+        }
+      }
+
+      // Legendary item state changes
+      const itemAwaken = detectItemAwaken(result.narrative);
+      if (itemAwaken && character) {
+        try {
+          const legendaryItem = await findLegendaryItemByName(character.id, itemAwaken.item);
+          if (legendaryItem) {
+            const advancedItem = await advanceItemState(legendaryItem.id, itemAwaken.newState, itemAwaken.deed, character.game_day);
+            mythicEvents.push({ type: 'item_awaken', item: itemAwaken.item, newState: itemAwaken.newState });
+          }
+        } catch (e) {
+          console.error('Error advancing legendary item:', e.message);
+        }
+      }
+
+      // Mythic power usage tracking
+      const mythicSurge = detectMythicSurge(result.narrative);
+      if (mythicSurge && character?.has_mythic) {
+        try {
+          await useMythicPower(character.id, mythicSurge.cost);
+          mythicEvents.push({ type: 'surge', ability: mythicSurge.ability, cost: mythicSurge.cost });
+        } catch (e) {
+          console.error('Error tracking mythic power usage:', e.message);
+        }
+      }
+    } catch (e) {
+      console.error('Error processing mythic markers:', e);
+    }
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
@@ -1491,7 +1585,8 @@ router.post('/:sessionId/message', async (req, res) => {
       conditionChanges: hasConditionChanges ? conditionChanges : undefined,
       weatherChange: weatherChangeResult || undefined,
       survivalEvents: survivalEvents.length > 0 ? survivalEvents : undefined,
-      craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined
+      craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined,
+      mythicEvents: mythicEvents.length > 0 ? mythicEvents : undefined
     });
   } catch (error) {
     handleServerError(res, error, 'process DM session message');

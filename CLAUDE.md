@@ -20,7 +20,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Claude model aliases (no date suffix): `claude-opus-4-6`, `claude-sonnet-4-6`
 - Opus handles ALL generation (campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world)
 - Sonnet handles ONLY interactive DM sessions (except first session opening which uses Opus)
-- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`
+- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`
 - DM prompt uses primacy/recency reinforcement — critical rules at top (ABSOLUTE RULES) and bottom (FINAL REMINDER)
 - Event bus (`server/services/eventEmitter.js`) connects game systems
 - Error handling via `server/utils/errorHandler.js` (handleServerError, notFound, validationError)
@@ -44,6 +44,12 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Crafting system: `crafting_recipes`/`character_recipes`/`crafting_projects`/`character_materials` tables, quality tiers (standard/fine/superior/masterwork) based on d20 roll margin, default vs discoverable recipes, tool proficiency requirements
 - Radiant recipes: AI-generated unique recipes via `[RECIPE_GIFT]` marker — `is_radiant=1`, `gifted_by` tracks NPC attribution, linked via `character_recipes` with `discovered_method='gift'`
 - Recipe data: 112 total recipes (42 default, 70 discoverable) across 3 data files — weapons (simple + martial), armor (light/medium/heavy + shields), ammunition, food, gear, potions, poisons, scrolls, alchemical
+- Mythic progression: 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only), Mythic Power resource pool (3 + 2×tier/day), Surge mechanic (bonus die d6→d12 by tier), trial-based advancement
+- Mythic paths: Hierophant, Angel, Aeon, Azata, Gold Dragon, Lich, Demon, Devil, Trickster, Legend (extra class levels), Redemption, Corrupted Dawn (consequence), Beast/Dark Hunt (DM), Swarm (DM)
+- Shadow-path interaction: light paths (hierophant/angel/azata/gold_dragon/redemption) need shadow ≤5 to select, full power at ≤2; dark paths powered by shadow; neutral unaffected
+- Piety system (Theros): score 1-50+ per deity, thresholds at 3/10/25/50 unlock abilities. 11 deities: Lathander, Malar, Tyr, Torm, Tempus, Mystra, Selune, Kelemvor, Silvanus, Chauntea, Oghma
+- Epic Boons (2024 PHB): 12 boons at Level 19+, each with +1 ability score (max 30)
+- Legendary items: 4 states (Dormant → Awakened → Exalted → Mythic), narrative milestone advancement
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
@@ -70,11 +76,17 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/data/weaponRecipes.js` — Simple + martial weapon recipes (32)
 - `server/data/armorGearRecipes.js` — Armor, ammunition, gear, food, alchemical recipes (38)
 - `server/migrations/009_radiant_recipes.js` — Radiant recipe columns + unique name index
+- `server/migrations/010_mythic_progression.js` — Mythic tables (7) + character columns
+- `server/config/mythicProgression.js` — Mythic tiers, 14 paths, piety, epic boons, shadow interaction, helpers
+- `server/services/mythicService.js` — Mythic CRUD, tier advancement, path selection, power tracking, legendary items
+- `server/services/pietyService.js` — Piety CRUD, threshold checks, history
+- `server/routes/mythic.js` — Mythic REST API (status, paths, trials, piety, boons, items)
 - `server/utils/contextManager.js` — Token estimation, context window compression, adaptive budgeting
 - `server/routes/dmSession.js` — DM session routes (~1700 lines)
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
 - `client/src/App.jsx` — SPA root, navigation, state
 - `client/src/components/DMSession.jsx` — Main DM session UI (~4300 lines)
+- `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)
 
 ## Coding Conventions
 - No TypeScript — pure JavaScript throughout
