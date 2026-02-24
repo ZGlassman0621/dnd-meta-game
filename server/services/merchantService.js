@@ -144,8 +144,30 @@ export async function restockMerchant(merchantId, characterLevel = 1) {
   // 50% of existing items persist (simulates some stock remaining)
   const persisted = oldInventory.filter(() => Math.random() < 0.5);
 
+  // Smart restocking: analyze transaction history to stock more of what sells
+  let popularCategories = {};
+  try {
+    const history = JSON.parse(merchant.transaction_history || '[]');
+    for (const tx of history) {
+      for (const item of (tx.bought || [])) {
+        const cat = item.category || 'misc';
+        popularCategories[cat] = (popularCategories[cat] || 0) + (item.qty || 1);
+      }
+    }
+  } catch (e) { /* ignore parse errors */ }
+
   // Generate fresh stock
   const freshStock = generateInventory(merchant.merchant_type, merchant.prosperity, characterLevel);
+
+  // If there are popular categories, generate extra items from those categories
+  // Add 1-3 bonus items from the top selling category
+  const topCategory = Object.entries(popularCategories).sort((a, b) => b[1] - a[1])[0];
+  if (topCategory && topCategory[1] >= 3) {
+    const bonusStock = generateInventory(merchant.merchant_type, merchant.prosperity, characterLevel);
+    const categoryItems = bonusStock.filter(i => i.category === topCategory[0]);
+    const bonusItems = categoryItems.slice(0, Math.min(3, categoryItems.length));
+    freshStock.push(...bonusItems);
+  }
 
   // Merge: persisted items stay, fresh items fill remaining slots
   const merged = [...persisted];

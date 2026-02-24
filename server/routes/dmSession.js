@@ -48,6 +48,7 @@ import { getMythicStatus, recordTrial, useMythicPower, advanceTier, findLegendar
 import { adjustPiety } from '../services/pietyService.js';
 import { FULFILL_WEIGHTS, spreadReputationRipple, spreadFactionStanding, calculatePriceModifier } from '../services/consequenceService.js';
 import { getActiveQuests as getCharacterActiveQuests } from '../services/questService.js';
+import { calculateEconomyModifiers, getItemEconomyMultiplier, recordTransaction, getBulkDiscount } from '../services/economyService.js';
 
 const router = express.Router();
 
@@ -1771,7 +1772,7 @@ router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
 
     const buybackItems = generateBuybackPrices(playerItems || []);
 
-    // Calculate price modifier based on disposition + faction standing
+    // Calculate reputation-based price modifier (disposition + faction standing)
     let priceModifier = null;
     try {
       const merchantNpc = await dbGet(
@@ -1785,23 +1786,51 @@ router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
       console.warn('Price modifier calculation failed:', e.message);
     }
 
-    // Apply modifier to inventory prices (preserve originals as base_price_*)
-    const inventory = (priceModifier && priceModifier.multiplier !== 1)
-      ? dbMerchant.inventory.map(item => ({
-          ...item,
+    // Calculate economy modifiers (world events + region + merchant memory)
+    let economyModifiers = null;
+    try {
+      economyModifiers = await calculateEconomyModifiers(
+        character.campaign_id, dbMerchant.id, dbMerchant.location, session.character_id
+      );
+    } catch (e) {
+      console.warn('Economy modifier calculation failed:', e.message);
+    }
+
+    // Apply both modifiers per-item: reputation (uniform) × economy (per-category) × loyalty
+    const reputationMult = priceModifier?.multiplier || 1;
+    const loyaltyDiscount = economyModifiers?.loyaltyDiscount || 0;
+
+    const inventory = dbMerchant.inventory.map(item => {
+      const economyMult = economyModifiers
+        ? getItemEconomyMultiplier(item.category, economyModifiers)
+        : 1;
+      const combinedMult = Math.max(0.50, Math.min(2.00,
+        reputationMult * economyMult * (1 - loyaltyDiscount)
+      ));
+      const modified = Math.round(combinedMult * 100) !== 100;
+      return {
+        ...item,
+        ...(modified ? {
           base_price_gp: item.price_gp,
-          price_gp: Math.round(item.price_gp * priceModifier.multiplier * 100) / 100,
+          price_gp: Math.round(item.price_gp * combinedMult * 100) / 100,
           base_price_sp: item.price_sp,
-          price_sp: Math.round((item.price_sp || 0) * priceModifier.multiplier),
+          price_sp: Math.round((item.price_sp || 0) * combinedMult),
           base_price_cp: item.price_cp,
-          price_cp: Math.round((item.price_cp || 0) * priceModifier.multiplier)
-        }))
-      : dbMerchant.inventory;
+          price_cp: Math.round((item.price_cp || 0) * combinedMult)
+        } : {})
+      };
+    });
 
     res.json({
       inventory,
       buybackItems,
       priceModifier: priceModifier || undefined,
+      economyModifiers: economyModifiers ? {
+        activeEffects: economyModifiers.eventEffects.activeEffects,
+        appliedRegions: economyModifiers.regionalModifiers.appliedRegions,
+        loyaltyDiscount: economyModifiers.loyaltyDiscount,
+        visitCount: economyModifiers.merchantMemory.visitCount
+      } : undefined,
       merchantName: dbMerchant.merchant_name,
       merchantType: dbMerchant.merchant_type,
       merchantId: dbMerchant.id,
@@ -1875,6 +1904,13 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
         inventory.push({ name: item.name, quantity: item.quantity });
       }
       changes.push(`Bought ${item.quantity}x ${item.name}`);
+    }
+
+    // Apply bulk discount for large purchases
+    const totalBuyQty = (bought || []).reduce((sum, i) => sum + (i.quantity || 1), 0);
+    const bulkDiscount = getBulkDiscount(totalBuyQty);
+    if (bulkDiscount > 0) {
+      totalSpentCp = Math.round(totalSpentCp * (1 - bulkDiscount));
     }
 
     // Process sold items
@@ -1976,6 +2012,15 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
       }
     }
 
+    // Record transaction in merchant memory for loyalty/economy tracking
+    if (merchantId) {
+      try {
+        await recordTransaction(merchantId, session.character_id, bought, sold, character.game_day);
+      } catch (e) {
+        console.warn('Recording transaction history failed:', e.message);
+      }
+    }
+
     res.json({
       success: true,
       changes,
@@ -1983,6 +2028,7 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
       newGold: { gp: newGp, sp: newSp, cp: newCp },
       totalSpent: { gp: Math.floor(totalSpentCp / 100), sp: Math.floor((totalSpentCp % 100) / 10), cp: totalSpentCp % 10 },
       totalEarned: { gp: Math.floor(totalEarnedCp / 100), sp: Math.floor((totalEarnedCp % 100) / 10), cp: totalEarnedCp % 10 },
+      bulkDiscount: bulkDiscount > 0 ? Math.round(bulkDiscount * 100) : undefined,
       reputationChange
     });
   } catch (error) {

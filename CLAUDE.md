@@ -60,6 +60,10 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Faction-driven quests: milestone-based quest spawning at 25/50/75/100% goal progress, conflict quests when rival factions clash, quest completion feeds back into goal progress (regular +5/+10, conflict +8/-5), standing-based reward scaling (allied 1.5x, neutral 1.0x, hostile 0.75x)
 - Active quest injection: DM prompt includes active quests with type labels ([MAIN], [FACTION], [CONFLICT], [COMPANION], [SIDE]), stage progress, objectives, faction context; loaded from `getActiveQuests()` in session creation
 - Conflict quests: `faction_conflict` quest type with `aggressor_faction_id` + `defender_faction_id` + `linked_goal_id` in rewards JSON; opposing faction standing change on completion; deduplication prevents duplicate active conflicts between same factions
+- Economy simulation: dynamic per-category pricing from world events (military → weapons expensive), regional geography (coastal/mountain/desert), merchant memory (loyalty discounts, demand markups), bulk purchase discounts (3/5/10+ items)
+- Economy config: `server/config/economyConfig.js` — EVENT_PRICE_EFFECTS (5 event types × 3 stages), REGIONAL_MODIFIERS (11 region types), BULK_DISCOUNT_TIERS, MERCHANT_MEMORY constants
+- Economy service: `server/services/economyService.js` — calculates per-category price modifiers from events + region + memory, combined with reputation modifier multiplicatively, clamped [0.50, 2.00]
+- Transaction history: `transaction_history` JSON column on `merchant_inventories` (migration 011), records bought/sold per merchant per character, drives loyalty discounts and smart restocking
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
@@ -95,7 +99,10 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/services/pietyService.js` — Piety CRUD, threshold checks, history
 - `server/routes/mythic.js` — Mythic REST API (status, paths, trials, piety, boons, items)
 - `server/services/consequenceService.js` — Automated consequence processing (overdue promises, expired quests)
+- `server/services/economyService.js` — Dynamic economy (event/regional/memory modifiers, bulk discounts, transaction recording)
+- `server/config/economyConfig.js` — Economy constants (event price effects, regional modifiers, bulk tiers, merchant memory)
 - `server/migrations/011_consequence_automation.js` — Consequence log table + quest deadline_game_day
+- `server/migrations/012_economy_simulation.js` — Transaction history column on merchant_inventories
 - `server/utils/contextManager.js` — Token estimation, context window compression, adaptive budgeting
 - `server/routes/dmSession.js` — DM session routes (~1700 lines)
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)

@@ -132,6 +132,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [merchantPersonality, setMerchantPersonality] = useState(null);
   const [merchantGold, setMerchantGold] = useState(null);
   const [merchantPriceModifier, setMerchantPriceModifier] = useState(null);
+  const [merchantEconomyModifiers, setMerchantEconomyModifiers] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -1199,11 +1200,15 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
   const playerTotalCp = (character.gold_gp || 0) * 100 + (character.gold_sp || 0) * 10 + (character.gold_cp || 0);
 
+  const totalBuyQty = shopCart.buying.reduce((sum, i) => sum + (i.quantity || 1), 0);
+  const bulkDiscountPct = totalBuyQty >= 10 ? 8 : totalBuyQty >= 5 ? 5 : totalBuyQty >= 3 ? 3 : 0;
+
   const calculateBuyTotal = () => {
     let total = 0;
     for (const item of shopCart.buying) {
       total += ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
     }
+    if (bulkDiscountPct > 0) total = Math.round(total * (1 - bulkDiscountPct / 100));
     return total;
   };
 
@@ -1265,6 +1270,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setMerchantPersonality(data.personality || null);
       setMerchantGold(data.merchantGold ?? null);
       setMerchantPriceModifier(data.priceModifier || null);
+      setMerchantEconomyModifiers(data.economyModifiers || null);
       // Update context with DB data
       if (data.merchantName) {
         const updatedCtx = { ...ctx, merchantName: data.merchantName, merchantType: data.merchantType || ctx.merchantType };
@@ -2441,10 +2447,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               </div>
 
               {/* Price modifier badge */}
+              {/* Reputation price modifier badge */}
               {merchantPriceModifier && merchantPriceModifier.multiplier !== 1 && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem',
-                  borderRadius: '6px', marginBottom: '0.75rem', fontSize: '0.85rem',
+                  borderRadius: '6px', marginBottom: '0.5rem', fontSize: '0.85rem',
                   background: merchantPriceModifier.multiplier < 1
                     ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                   border: `1px solid ${merchantPriceModifier.multiplier < 1
@@ -2453,12 +2460,49 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                 }}>
                   <span style={{ fontWeight: 'bold' }}>
                     {merchantPriceModifier.multiplier < 1
-                      ? `${Math.round((1 - merchantPriceModifier.multiplier) * 100)}% Discount`
-                      : `${Math.round((merchantPriceModifier.multiplier - 1) * 100)}% Markup`}
+                      ? `${Math.round((1 - merchantPriceModifier.multiplier) * 100)}% Reputation Discount`
+                      : `${Math.round((merchantPriceModifier.multiplier - 1) * 100)}% Reputation Markup`}
                   </span>
                   <span style={{ color: '#888', fontSize: '0.75rem' }}>
                     — {merchantPriceModifier.details?.disposition || ''}{merchantPriceModifier.details?.faction && merchantPriceModifier.details.faction !== 'no faction link' ? `, ${merchantPriceModifier.details.faction}` : ''}
                   </span>
+                </div>
+              )}
+
+              {/* Economy modifier badges */}
+              {merchantEconomyModifiers && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                  {/* World event effects */}
+                  {(merchantEconomyModifiers.activeEffects || []).map((effect, idx) => (
+                    <div key={`event-${idx}`} style={{
+                      padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem',
+                      background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b'
+                    }}>
+                      {effect.eventTitle}: {effect.categories.map(c =>
+                        `${c} ${Object.values(effect.modifiers)[effect.categories.indexOf(c)] > 0 ? '+' : ''}${Math.round(Object.values(effect.modifiers)[effect.categories.indexOf(c)] * 100)}%`
+                      ).join(', ')}
+                    </div>
+                  ))}
+
+                  {/* Regional modifiers */}
+                  {(merchantEconomyModifiers.appliedRegions || []).length > 0 && (
+                    <div style={{
+                      padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem',
+                      background: 'rgba(96, 165, 250, 0.1)', border: '1px solid rgba(96, 165, 250, 0.3)', color: '#60a5fa'
+                    }}>
+                      Regional: {merchantEconomyModifiers.appliedRegions.join(', ')}
+                    </div>
+                  )}
+
+                  {/* Loyalty discount */}
+                  {merchantEconomyModifiers.loyaltyDiscount > 0 && (
+                    <div style={{
+                      padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem',
+                      background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#a855f7'
+                    }}>
+                      Loyal Customer: -{Math.round(merchantEconomyModifiers.loyaltyDiscount * 100)}% ({merchantEconomyModifiers.visitCount} visits)
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2585,6 +2629,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                       {shopCart.buying.length > 0 && (
                         <div style={{ color: '#10b981', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
                           Buying: {shopCart.buying.map(i => `${i.quantity}x ${i.name}`).join(', ')} = {formatCopper(calculateBuyTotal())}
+                        </div>
+                      )}
+                      {bulkDiscountPct > 0 && (
+                        <div style={{ color: '#a855f7', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                          Bulk discount ({totalBuyQty} items): -{bulkDiscountPct}%
                         </div>
                       )}
                       {shopCart.selling.length > 0 && (

@@ -2073,6 +2073,15 @@ ITEM NOT IN STOCK? Two options:
 ADD CUSTOM ITEMS to merchant's stock: [ADD_ITEM: Name="name" Price_GP=X Quality="standard/fine/superior/masterwork" Category="category"]
 Only for items that fit the merchant's specialty. Price must be D&D 5e reasonable.
 
+ECONOMY AWARENESS:
+Prices fluctuate based on world events, regional supply, and merchant relationships.
+- War/conflict nearby → weapons, armor, ammunition are scarce and expensive — merchants mention supply shortages
+- Plague/disaster → potions and adventuring gear cost more — "Hard to come by these days"
+- Coastal/port cities → trade goods cheaper; mountain regions → metal and ore cheaper
+- Loyal customers (frequent shoppers) get better deals — merchants acknowledge returning customers warmly
+- Bulk purchases get small discounts — narrate this naturally ("Buy the lot and I'll cut you a deal")
+Weave price context into merchant dialogue naturally. Never break character to explain mechanics.
+
 LOOT DROPS = EMIT MARKER:
 When the player finds treasure, loots enemies, or receives item rewards, emit: [LOOT_DROP: Item="Item Name" Source="description"]
 This adds the item to the player's real inventory. Use for combat loot, hidden treasure, and NPC gifts — NOT for merchant purchases.
