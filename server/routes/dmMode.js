@@ -180,7 +180,8 @@ router.post('/start', async (req, res) => {
     let openingNarrative;
 
     if (claude.isClaudeAvailable()) {
-      openingNarrative = await claude.startSession(systemPrompt, openingPrompt, modelChoice);
+      const result = await claude.startSession(systemPrompt, openingPrompt, modelChoice);
+      openingNarrative = result.response;
     } else {
       openingNarrative = `**${characters[0]?.name || 'Character 1'}:** *looks around at the group* "So. We're really doing this."\n\n**${characters[1]?.name || 'Character 2'}:** "Apparently. Try not to get us killed."\n\n*The party waits for the DM to set the scene.*`;
     }
@@ -242,7 +243,8 @@ router.post('/:sessionId/message', async (req, res) => {
     // Call AI
     let narrative;
     if (claude.isClaudeAvailable()) {
-      narrative = await claude.continueSession(systemPrompt, messages, action, 'sonnet');
+      const result = await claude.continueSession(systemPrompt, messages, action, 'sonnet');
+      narrative = result.response;
     } else {
       return res.status(503).json({ error: 'No AI provider available' });
     }
@@ -306,7 +308,8 @@ router.post('/:sessionId/roll-result', async (req, res) => {
     // Get AI reaction to the resolved roll
     let narrative;
     if (claude.isClaudeAvailable()) {
-      narrative = await claude.continueSession(systemPrompt, messages, rollNote, 'sonnet');
+      const result = await claude.continueSession(systemPrompt, messages, rollNote, 'sonnet');
+      narrative = result.response;
     } else {
       return res.status(503).json({ error: 'No AI provider available' });
     }
@@ -360,6 +363,164 @@ router.post('/:sessionId/update-hp', async (req, res) => {
   }
 });
 
+// D&D 5e XP thresholds per level
+const XP_THRESHOLDS = {
+  1: 0, 2: 300, 3: 900, 4: 2700, 5: 6500,
+  6: 14000, 7: 23000, 8: 34000, 9: 48000, 10: 64000,
+  11: 85000, 12: 100000, 13: 120000, 14: 140000, 15: 165000,
+  16: 195000, 17: 225000, 18: 265000, 19: 305000, 20: 355000
+};
+
+function xpForNextLevel(level) {
+  return XP_THRESHOLDS[level + 1] || null; // null means max level
+}
+
+// POST /api/dm-mode/:sessionId/award-xp — Award XP to party or individual
+router.post('/:sessionId/award-xp', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { amount, characterName, splitEvenly } = req.body;
+    // amount: total XP to award
+    // characterName: optional, if set only that character gets XP
+    // splitEvenly: if true, split amount evenly among party (default)
+
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'amount must be positive' });
+
+    const session = await dbGet('SELECT dm_mode_party_id FROM dm_sessions WHERE id = ? AND session_type = ?', [sessionId, 'dm_mode']);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const party = await dbGet('SELECT * FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const characters = JSON.parse(party.party_data || '[]');
+    const results = [];
+
+    if (characterName) {
+      // Award to single character
+      const char = characters.find(c => c.name === characterName);
+      if (!char) return res.status(404).json({ error: 'Character not found' });
+      char.xp = (char.xp || 0) + amount;
+      const nextLevelXp = xpForNextLevel(char.level || 1);
+      results.push({ name: char.name, xp: char.xp, level: char.level, canLevelUp: nextLevelXp && char.xp >= nextLevelXp });
+    } else {
+      // Award to all (split evenly by default)
+      const perChar = splitEvenly !== false ? Math.floor(amount / characters.length) : amount;
+      for (const char of characters) {
+        char.xp = (char.xp || 0) + perChar;
+        const nextLevelXp = xpForNextLevel(char.level || 1);
+        results.push({ name: char.name, xp: char.xp, level: char.level, canLevelUp: nextLevelXp && char.xp >= nextLevelXp });
+      }
+    }
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(characters), session.dm_mode_party_id]
+    );
+
+    res.json({ characters: results });
+  } catch (error) {
+    console.error('Error awarding XP:', error);
+    res.status(500).json({ error: 'Failed to award XP' });
+  }
+});
+
+// POST /api/dm-mode/:sessionId/award-loot — Add items or gold to characters
+router.post('/:sessionId/award-loot', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { characterName, items, gold } = req.body;
+    // characterName: which character gets the loot (required)
+    // items: array of item names to add to inventory
+    // gold: number of gold pieces to add
+
+    if (!characterName) return res.status(400).json({ error: 'characterName is required' });
+
+    const session = await dbGet('SELECT dm_mode_party_id FROM dm_sessions WHERE id = ? AND session_type = ?', [sessionId, 'dm_mode']);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const party = await dbGet('SELECT * FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const characters = JSON.parse(party.party_data || '[]');
+    const char = characters.find(c => c.name === characterName);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+
+    if (items && Array.isArray(items)) {
+      if (!char.inventory) char.inventory = [];
+      char.inventory.push(...items);
+    }
+
+    if (gold && typeof gold === 'number') {
+      char.gold_gp = (char.gold_gp || 0) + gold;
+    }
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(characters), session.dm_mode_party_id]
+    );
+
+    res.json({ characterName, inventory: char.inventory, gold_gp: char.gold_gp });
+  } catch (error) {
+    console.error('Error awarding loot:', error);
+    res.status(500).json({ error: 'Failed to award loot' });
+  }
+});
+
+// POST /api/dm-mode/:sessionId/level-up — Level up a character
+router.post('/:sessionId/level-up', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { characterName, hpIncrease } = req.body;
+    // characterName: which character to level up
+    // hpIncrease: how much to increase max HP (DM decides: roll or average)
+
+    if (!characterName) return res.status(400).json({ error: 'characterName is required' });
+    if (!hpIncrease || hpIncrease <= 0) return res.status(400).json({ error: 'hpIncrease must be positive' });
+
+    const session = await dbGet('SELECT dm_mode_party_id FROM dm_sessions WHERE id = ? AND session_type = ?', [sessionId, 'dm_mode']);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const party = await dbGet('SELECT * FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const characters = JSON.parse(party.party_data || '[]');
+    const char = characters.find(c => c.name === characterName);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+
+    const currentLevel = char.level || 1;
+    if (currentLevel >= 20) return res.status(400).json({ error: 'Character is already level 20' });
+
+    const nextLevelXp = xpForNextLevel(currentLevel);
+    if (nextLevelXp && (char.xp || 0) < nextLevelXp) {
+      return res.status(400).json({ error: `Not enough XP. Need ${nextLevelXp}, have ${char.xp || 0}` });
+    }
+
+    char.level = currentLevel + 1;
+    char.max_hp = (char.max_hp || 0) + hpIncrease;
+    char.current_hp = (char.current_hp || 0) + hpIncrease;
+
+    // Update party level to match highest character level
+    const maxLevel = Math.max(...characters.map(c => c.level || 1));
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET party_data = ?, level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(characters), maxLevel, session.dm_mode_party_id]
+    );
+
+    res.json({
+      characterName,
+      newLevel: char.level,
+      max_hp: char.max_hp,
+      current_hp: char.current_hp,
+      xp: char.xp,
+      nextLevelXp: xpForNextLevel(char.level)
+    });
+  } catch (error) {
+    console.error('Error leveling up:', error);
+    res.status(500).json({ error: 'Failed to level up' });
+  }
+});
+
 // POST /api/dm-mode/:sessionId/end — End session, generate summary
 router.post('/:sessionId/end', async (req, res) => {
   try {
@@ -403,6 +564,25 @@ router.post('/:sessionId/end', async (req, res) => {
   }
 });
 
+// PUT /api/dm-mode/session/:sessionId/summary — Edit a session summary
+router.put('/session/:sessionId/summary', async (req, res) => {
+  try {
+    const { summary } = req.body;
+    if (!summary || !summary.trim()) return res.status(400).json({ error: 'summary is required' });
+
+    const result = await dbRun(
+      'UPDATE dm_sessions SET summary = ? WHERE id = ? AND session_type = ?',
+      [summary.trim(), req.params.sessionId, 'dm_mode']
+    );
+    if (result.changes === 0) return res.status(404).json({ error: 'Session not found' });
+
+    res.json({ success: true, summary: summary.trim() });
+  } catch (error) {
+    console.error('Error updating summary:', error);
+    res.status(500).json({ error: 'Failed to update summary' });
+  }
+});
+
 // GET /api/dm-mode/active/:partyId — Get active session for a party
 router.get('/active/:partyId', async (req, res) => {
   try {
@@ -412,11 +592,21 @@ router.get('/active/:partyId', async (req, res) => {
     );
     if (!session) return res.json(null);
 
+    const allMessages = JSON.parse(session.messages || '[]');
+    // Return non-system messages so client can rebuild conversation display
+    const displayMessages = allMessages
+      .filter(m => m.role !== 'system')
+      .map(m => ({
+        role: m.role === 'user' ? 'dm' : 'party',
+        content: m.content
+      }));
+
     res.json({
       id: session.id,
       title: session.title,
       status: session.status,
-      messageCount: JSON.parse(session.messages || '[]').filter(m => m.role === 'user').length
+      messageCount: allMessages.filter(m => m.role === 'user').length,
+      messages: displayMessages
     });
   } catch (error) {
     console.error('Error getting active session:', error);

@@ -64,6 +64,18 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Economy config: `server/config/economyConfig.js` — EVENT_PRICE_EFFECTS (5 event types × 3 stages), REGIONAL_MODIFIERS (11 region types), BULK_DISCOUNT_TIERS, MERCHANT_MEMORY constants
 - Economy service: `server/services/economyService.js` — calculates per-category price modifiers from events + region + memory, combined with reputation modifier multiplicatively, clamped [0.50, 2.00]
 - Transaction history: `transaction_history` JSON column on `merchant_inventories` (migration 011), records bought/sold per merchant per character, drives loyalty discounts and smart restocking
+- Authentication: JWT-based user accounts, bcryptjs password hashing, auto-generated JWT secret stored in `_app_settings` table
+- Auth middleware: `server/middleware/auth.js` verifies Bearer token on all `/api/*` routes except `/api/auth/*` and `/api/health`
+- Campaign ownership: `user_id` column on `campaigns` table, campaign list/create operations scoped to authenticated user
+- Frontend auth: global fetch interceptor injects Authorization header on all `/api` requests, LoginPage shown when no valid token
+- DM Mode: user is the DM, AI plays 4 characters. Separate from Player Mode (campaign-based sessions)
+- DM Mode party data: stored as JSON blob in `dm_mode_parties.party_data` — character stats (HP, XP, level, inventory, gold, spells) persist across sessions
+- DM Mode session continuity: last 3 completed session summaries injected into AI system prompt as memory. Summaries are editable by the DM
+- DM Mode prompt: 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER) in `dmModePromptBuilder.js`
+- DM Mode session resume: `/api/dm-mode/active/:partyId` returns full message history; auto-detected on party select
+- DM Mode XP/leveling: D&D 5e XP thresholds, party-split or individual XP awards, level-up with hit dice HP rolls
+- DM Mode sessions use `dm_sessions` table with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is NULL)
+- Migration 014: `dm_sessions.character_id` made nullable for DM Mode compatibility
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
@@ -103,11 +115,25 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/config/economyConfig.js` — Economy constants (event price effects, regional modifiers, bulk tiers, merchant memory)
 - `server/migrations/011_consequence_automation.js` — Consequence log table + quest deadline_game_day
 - `server/migrations/012_economy_simulation.js` — Transaction history column on merchant_inventories
+- `server/migrations/013_user_accounts.js` — Users table, _app_settings table, user_id on campaigns
+- `server/services/authService.js` — Register, login, JWT token management, auto-generated secret
+- `server/middleware/auth.js` — JWT verification middleware for protected routes
+- `server/routes/auth.js` — Auth REST API (register, login, me)
+- `client/src/components/LoginPage.jsx` — Login/register form
 - `server/utils/contextManager.js` — Token estimation, context window compression, adaptive budgeting
 - `server/routes/dmSession.js` — DM session routes (~1700 lines)
+- `server/routes/dmMode.js` — DM Mode routes (party gen, sessions, XP/loot, coaching)
+- `server/services/dmModePromptBuilder.js` — DM Mode system prompt builder (3-point reinforcement)
+- `server/services/dmModeService.js` — DM Mode helpers (skill checks, attacks, narrative parsing)
+- `server/services/partyGeneratorService.js` — Opus-powered 4-character party generation
+- `server/services/dmCoachingService.js` — Sonnet-powered DM coaching tips, DC reference
+- `server/migrations/014_dm_sessions_nullable_character.js` — Nullable character_id for DM Mode sessions
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
 - `client/src/App.jsx` — SPA root, navigation, state
-- `client/src/components/DMSession.jsx` — Main DM session UI (~4300 lines)
+- `client/src/components/DMMode.jsx` — DM Mode UI (party select, session gameplay, history, summary editing)
+- `client/src/components/PartyView.jsx` — DM Mode party display (stats, XP, inventory, level-up)
+- `client/src/components/DMCoachingPanel.jsx` — DM coaching tips panel
+- `client/src/components/DMSession.jsx` — Main Player Mode DM session UI (~4300 lines)
 - `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)
 
 ## Coding Conventions

@@ -29,6 +29,8 @@ import weatherRoutes from './routes/weather.js';
 import survivalRoutes from './routes/survival.js';
 import craftingRoutes from './routes/crafting.js';
 import mythicRoutes from './routes/mythic.js';
+import authRoutes from './routes/auth.js';
+import authMiddleware from './middleware/auth.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,7 +58,17 @@ await initDatabase();
 // Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
 await initNarrativeSystems();
 
-// Routes
+// Public routes (no authentication required)
+app.use('/api/auth', authRoutes);
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
+});
+
+// Auth middleware for all other /api routes
+app.use('/api', authMiddleware);
+
+// Protected routes
 app.use('/api/character', characterRoutes);
 app.use('/api/adventure', adventureRoutes);
 app.use('/api/upload', uploadRoutes);
@@ -82,10 +94,6 @@ app.use('/api/weather', weatherRoutes);
 app.use('/api/survival', survivalRoutes);
 app.use('/api/crafting', craftingRoutes);
 app.use('/api/mythic', mythicRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
-});
 
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {

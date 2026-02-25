@@ -12,6 +12,7 @@ import CompanionsPage from './components/CompanionsPage'
 import CampaignsPage from './components/CampaignsPage'
 import BackstoryParserPage from './components/BackstoryParserPage'
 import NavigationMenu from './components/NavigationMenu'
+import LoginPage from './components/LoginPage'
 
 // Lazy-loaded pages (loaded on demand to reduce initial bundle)
 const DMSession = lazy(() => import('./components/DMSession'))
@@ -30,6 +31,19 @@ const GenerationControlsPage = lazy(() => import('./components/GenerationControl
 const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
 const DMMode = lazy(() => import('./components/DMMode'))
 const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
+
+// Global fetch interceptor — adds auth token to all /api requests automatically.
+// This avoids touching every fetch call across all components.
+const _originalFetch = window.fetch;
+window.fetch = (url, opts = {}) => {
+  if (typeof url === 'string' && url.startsWith('/api') && !url.startsWith('/api/auth/login') && !url.startsWith('/api/auth/register')) {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
+    }
+  }
+  return _originalFetch(url, opts);
+};
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -59,6 +73,8 @@ class ErrorBoundary extends Component {
 }
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [characters, setCharacters] = useState([])
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [activeAdventure, setActiveAdventure] = useState(null)
@@ -70,6 +86,30 @@ function App() {
   const [llmStatus, setLlmStatus] = useState(null)
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
+
+  // Check for existing auth token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      setAuthLoading(false)
+      return
+    }
+    fetch('/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => setUser(data.user))
+      .catch(() => localStorage.removeItem('auth_token'))
+      .finally(() => setAuthLoading(false))
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token')
+    setUser(null)
+    setCharacters([])
+    setSelectedCharacter(null)
+    setActiveView(null)
+  }
 
   // Navigation helper
   const navigateTo = (view) => {
@@ -85,9 +125,11 @@ function App() {
   }
 
   useEffect(() => {
-    loadCharacters()
-    checkLLMStatus()
-  }, [])
+    if (user) {
+      loadCharacters()
+      checkLLMStatus()
+    }
+  }, [user])
 
   const checkLLMStatus = async () => {
     try {
@@ -202,6 +244,18 @@ function App() {
     setActiveView('showCharacterSheet')
   }
 
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="loading">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <LoginPage onLogin={setUser} />
+  }
+
   if (loading) {
     return (
       <div className="app">
@@ -257,6 +311,8 @@ function App() {
           onNavigate={navigateTo}
           hasCharacter={!!selectedCharacter}
           onHome={goHome}
+          user={user}
+          onLogout={handleLogout}
         />
       </header>
 

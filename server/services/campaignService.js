@@ -14,13 +14,14 @@ export async function createCampaign(data) {
     setting = 'Forgotten Realms',
     tone = 'heroic fantasy',
     starting_location = null,
-    time_ratio = 'normal'
+    time_ratio = 'normal',
+    user_id = null
   } = data;
 
   const result = await dbRun(`
-    INSERT INTO campaigns (name, description, setting, tone, starting_location, time_ratio)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, [name, description, setting, tone, starting_location, time_ratio]);
+    INSERT INTO campaigns (name, description, setting, tone, starting_location, time_ratio, user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [name, description, setting, tone, starting_location, time_ratio, user_id]);
 
   return getCampaignById(result.lastInsertRowid);
 }
@@ -35,14 +36,20 @@ export async function getCampaignById(id) {
 /**
  * Get all campaigns
  */
-export async function getAllCampaigns() {
+export async function getAllCampaigns(userId = null) {
+  if (userId) {
+    return dbAll('SELECT * FROM campaigns WHERE user_id = ? ORDER BY updated_at DESC', [userId]);
+  }
   return dbAll('SELECT * FROM campaigns ORDER BY updated_at DESC');
 }
 
 /**
  * Get active campaigns
  */
-export async function getActiveCampaigns() {
+export async function getActiveCampaigns(userId = null) {
+  if (userId) {
+    return dbAll("SELECT * FROM campaigns WHERE user_id = ? AND status = 'active' ORDER BY updated_at DESC", [userId]);
+  }
   return dbAll("SELECT * FROM campaigns WHERE status = 'active' ORDER BY updated_at DESC");
 }
 

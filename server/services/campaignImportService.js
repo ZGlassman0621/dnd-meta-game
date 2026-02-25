@@ -171,7 +171,7 @@ export function validateImportPayload(payload) {
  * @param {object} payload - Validated import payload
  * @returns {{ campaignId: number, characterId: number|null, sessionsCreated: number, companionsCreated: number }}
  */
-export async function importCampaign(payload) {
+export async function importCampaign(payload, userId = null) {
   const { campaign, campaign_plan, character, sessions, companions } = payload;
 
   // Wrap entire import in a transaction — all-or-nothing, no orphaned records on failure
@@ -179,15 +179,16 @@ export async function importCampaign(payload) {
   try {
     // Step 1: Create campaign
     const campaignResult = await tx.execute({
-      sql: `INSERT INTO campaigns (name, description, setting, tone, starting_location, time_ratio)
-            VALUES (?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO campaigns (name, description, setting, tone, starting_location, time_ratio, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
         campaign.name,
         campaign.description || null,
         campaign.setting || 'Forgotten Realms',
         campaign.tone || 'heroic fantasy',
         campaign.starting_location || null,
-        campaign.time_ratio || 'normal'
+        campaign.time_ratio || 'normal',
+        userId
       ]
     });
     const campaignId = Number(campaignResult.lastInsertRowid);

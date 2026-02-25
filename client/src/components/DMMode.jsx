@@ -28,6 +28,12 @@ export default function DMMode({ onBack }) {
   const [startingSession, setStartingSession] = useState(false);
   const [openingScene, setOpeningScene] = useState('');
 
+  // Active session detection
+  const [activeSession, setActiveSession] = useState(null); // { id, title, messageCount, messages }
+  const [checkingActive, setCheckingActive] = useState(false);
+  const [sessionHistory, setSessionHistory] = useState([]);
+  const [editingSummary, setEditingSummary] = useState(null); // { sessionId, text }
+
   // Pending dice rolls
   const [pendingRolls, setPendingRolls] = useState([]);
 
@@ -57,6 +63,56 @@ export default function DMMode({ onBack }) {
   }, []);
 
   useEffect(() => { loadParties(); }, [loadParties]);
+
+  // Check for active session and load history when a party is selected
+  useEffect(() => {
+    if (!selectedParty) {
+      setActiveSession(null);
+      setSessionHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setCheckingActive(true);
+    fetch(`/api/dm-mode/active/${selectedParty.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled) setActiveSession(data);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveSession(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingActive(false);
+      });
+    // Also load session history
+    fetch(`/api/dm-mode/history/${selectedParty.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled) setSessionHistory(Array.isArray(data) ? data.filter(s => s.status === 'completed') : []);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionHistory([]);
+      });
+    return () => { cancelled = true; };
+  }, [selectedParty?.id]);
+
+  const handleSaveSummary = async (sessionId, newSummary) => {
+    try {
+      const res = await fetch(`/api/dm-mode/session/${sessionId}/summary`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: newSummary })
+      });
+      if (res.ok) {
+        setSessionHistory(prev => prev.map(s =>
+          s.id === sessionId ? { ...s, summary: newSummary } : s
+        ));
+        setEditingSummary(null);
+      }
+    } catch (err) {
+      console.error('Failed to save summary:', err);
+    }
+  };
 
   // ============================================================
   // PARTY GENERATION
@@ -116,9 +172,24 @@ export default function DMMode({ onBack }) {
       });
 
       if (res.status === 409) {
-        // Active session exists — resume it
-        const data = await res.json();
-        await handleResumeSession(data.sessionId);
+        // Active session exists — refresh active session data and resume
+        const activeRes = await fetch(`/api/dm-mode/active/${selectedParty.id}`);
+        const activeData = await activeRes.json();
+        if (activeData) {
+          setActiveSession(activeData);
+          setSessionId(activeData.id);
+          const displayMessages = (activeData.messages || []).map(m => {
+            if (m.role === 'dm') return { role: 'dm', content: m.content };
+            const segments = parseSegments(m.content);
+            return { role: 'party', content: m.content, segments };
+          });
+          setMessages(displayMessages.length > 0 ? displayMessages : [{
+            role: 'party', content: '*Session resumed.*',
+            segments: [{ character: null, content: '*Session resumed.*' }]
+          }]);
+          setPhase('gameplay');
+          setOpeningScene('');
+        }
         return;
       }
 
@@ -148,21 +219,36 @@ export default function DMMode({ onBack }) {
     }
   };
 
-  const handleResumeSession = async (existingSessionId) => {
+  const handleResumeSession = async () => {
+    if (!activeSession) return;
+    setStartingSession(true);
+    setSessionError(null);
     try {
-      // Load session data
-      const res = await fetch(`/api/dm-mode/active/${selectedParty.id}`);
-      const session = await res.json();
-      if (session) {
-        setSessionId(session.id);
-        // We don't have the full message history on the client, just start fresh display
-        setMessages([{
+      // activeSession already has messages from the /active endpoint
+      const session = activeSession;
+      setSessionId(session.id);
+
+      // Rebuild display messages from stored history
+      const displayMessages = (session.messages || []).map(m => {
+        if (m.role === 'dm') {
+          return { role: 'dm', content: m.content };
+        } else {
+          const segments = parseSegments(m.content);
+          return { role: 'party', content: m.content, segments };
+        }
+      });
+
+      if (displayMessages.length === 0) {
+        displayMessages.push({
           role: 'party',
           content: '*Session resumed. The party awaits your narration.*',
           segments: [{ character: null, content: '*Session resumed. The party awaits your narration.*' }]
-        }]);
-        setPhase('gameplay');
+        });
       }
+
+      setMessages(displayMessages);
+      setPhase('gameplay');
+      setOpeningScene('');
     } catch (err) {
       setSessionError('Failed to resume session: ' + err.message);
     } finally {
@@ -299,6 +385,76 @@ export default function DMMode({ onBack }) {
       }
     } catch (err) {
       console.error('HP update error:', err);
+    }
+  };
+
+  const handleAwardXp = async (amount, characterName = null) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/dm-mode/${sessionId}/award-xp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, characterName, splitEvenly: !characterName })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => {
+          if (!prev) return prev;
+          const chars = prev.characters.map(c => {
+            const updated = data.characters.find(u => u.name === c.name);
+            return updated ? { ...c, xp: updated.xp } : c;
+          });
+          return { ...prev, characters: chars };
+        });
+      }
+    } catch (err) {
+      console.error('XP award error:', err);
+    }
+  };
+
+  const handleAwardLoot = async (characterName, items, gold) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/dm-mode/${sessionId}/award-loot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterName, items: items || [], gold: gold || 0 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => {
+          if (!prev) return prev;
+          const chars = prev.characters.map(c =>
+            c.name === characterName ? { ...c, inventory: data.inventory, gold_gp: data.gold_gp } : c
+          );
+          return { ...prev, characters: chars };
+        });
+      }
+    } catch (err) {
+      console.error('Loot award error:', err);
+    }
+  };
+
+  const handleLevelUp = async (characterName, hpIncrease) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/dm-mode/${sessionId}/level-up`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterName, hpIncrease })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => {
+          if (!prev) return prev;
+          const chars = prev.characters.map(c =>
+            c.name === characterName ? { ...c, level: data.newLevel, max_hp: data.max_hp, current_hp: data.current_hp, xp: data.xp } : c
+          );
+          return { ...prev, characters: chars };
+        });
+      }
+    } catch (err) {
+      console.error('Level up error:', err);
     }
   };
 
@@ -554,62 +710,258 @@ export default function DMMode({ onBack }) {
           </div>
         )}
 
-        {/* Start Session */}
+        {/* Continue or Start Session */}
         {selectedParty && (
           <div style={{
             marginTop: '1.5rem',
             padding: '1.25rem',
-            background: 'rgba(46, 204, 113, 0.08)',
-            border: '1px solid rgba(46, 204, 113, 0.3)',
+            background: activeSession
+              ? 'rgba(52, 152, 219, 0.08)'
+              : 'rgba(46, 204, 113, 0.08)',
+            border: `1px solid ${activeSession ? 'rgba(52, 152, 219, 0.3)' : 'rgba(46, 204, 113, 0.3)'}`,
             borderRadius: '8px'
           }}>
-            <h3 style={{ color: '#2ecc71', margin: '0 0 0.75rem' }}>
-              Start Session with {selectedParty.name}
-            </h3>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label style={{ color: '#aaa', fontSize: '0.8rem', display: 'block', marginBottom: '0.3rem' }}>
-                Opening Scene (optional — leave blank for character introductions)
-              </label>
-              <textarea
-                value={openingScene}
-                onChange={e => setOpeningScene(e.target.value)}
-                placeholder="e.g., You stand at the gates of a crumbling fortress. Rain pelts your cloaks as lightning illuminates the dark towers above..."
-                rows={3}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: '6px',
-                  color: '#fff',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
-                  fontSize: '0.9rem',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
+            {checkingActive ? (
+              <div style={{ color: '#999', fontSize: '0.85rem' }}>Checking for active session...</div>
+            ) : activeSession ? (
+              <>
+                <h3 style={{ color: '#3498db', margin: '0 0 0.5rem' }}>
+                  Active Session: {activeSession.title}
+                </h3>
+                <p style={{ color: '#aaa', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+                  {activeSession.messageCount} exchange{activeSession.messageCount !== 1 ? 's' : ''} so far
+                </p>
 
-            {sessionError && (
-              <div style={{ color: '#e74c3c', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{sessionError}</div>
+                {sessionError && (
+                  <div style={{ color: '#e74c3c', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{sessionError}</div>
+                )}
+
+                <button
+                  onClick={handleResumeSession}
+                  disabled={startingSession}
+                  style={{
+                    padding: '0.75rem 2rem',
+                    background: startingSession ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3498db, #2980b9)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    cursor: startingSession ? 'wait' : 'pointer',
+                    fontWeight: '600',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {startingSession ? 'Loading...' : 'Continue Session'}
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 style={{ color: '#2ecc71', margin: '0 0 0.75rem' }}>
+                  Start Session with {selectedParty.name}
+                </h3>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <label style={{ color: '#aaa', fontSize: '0.8rem', display: 'block', marginBottom: '0.3rem' }}>
+                    Opening Scene (optional — leave blank for character introductions)
+                  </label>
+                  <textarea
+                    value={openingScene}
+                    onChange={e => setOpeningScene(e.target.value)}
+                    placeholder="e.g., You stand at the gates of a crumbling fortress. Rain pelts your cloaks as lightning illuminates the dark towers above..."
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '6px',
+                      color: '#fff',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                      fontSize: '0.9rem',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                {sessionError && (
+                  <div style={{ color: '#e74c3c', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{sessionError}</div>
+                )}
+
+                <button
+                  onClick={handleStartSession}
+                  disabled={startingSession}
+                  style={{
+                    padding: '0.75rem 2rem',
+                    background: startingSession ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #2ecc71, #27ae60)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    cursor: startingSession ? 'wait' : 'pointer',
+                    fontWeight: '600',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {startingSession ? 'Starting...' : 'Begin Session'}
+                </button>
+              </>
             )}
+          </div>
+        )}
 
-            <button
-              onClick={handleStartSession}
-              disabled={startingSession}
-              style={{
-                padding: '0.75rem 2rem',
-                background: startingSession ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #2ecc71, #27ae60)',
-                border: 'none',
-                borderRadius: '6px',
-                color: '#fff',
-                cursor: startingSession ? 'wait' : 'pointer',
-                fontWeight: '600',
-                fontSize: '1rem'
-              }}
-            >
-              {startingSession ? 'Starting...' : 'Begin Session'}
-            </button>
+        {/* Session Persistence Reference */}
+        {selectedParty && sessionHistory.length > 0 && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '1rem 1.25rem',
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '8px'
+          }}>
+            <h4 style={{ color: '#e67e22', margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: '600', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+              Session Memory Guide
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <h5 style={{ color: '#2ecc71', margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: '600' }}>What Persists Across Sessions</h5>
+                <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#aaa', fontSize: '0.78rem', lineHeight: '1.6' }}>
+                  <li>Character stats (HP, AC, level, XP)</li>
+                  <li>Inventory, gold, and equipment</li>
+                  <li>Ability scores and skill proficiencies</li>
+                  <li>Spells and spell slots</li>
+                  <li>Personality, secrets, flaws, and bonds</li>
+                  <li>Party relationships and tensions</li>
+                  <li>Session summaries (last 3 fed to AI)</li>
+                </ul>
+              </div>
+              <div>
+                <h5 style={{ color: '#e74c3c', margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: '600' }}>What Doesn't Persist</h5>
+                <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#aaa', fontSize: '0.78rem', lineHeight: '1.6' }}>
+                  <li>Full conversation history (only summaries)</li>
+                  <li>NPC names and details (add to summary!)</li>
+                  <li>Locations visited (add to summary!)</li>
+                  <li>Plot threads and clues found</li>
+                  <li>Promises made or deals struck</li>
+                  <li>Current quest objectives</li>
+                  <li>Conditions, curses, or ongoing effects</li>
+                </ul>
+              </div>
+            </div>
+            <p style={{ color: '#888', fontSize: '0.75rem', margin: '0.6rem 0 0', fontStyle: 'italic' }}>
+              Tip: Include NPC names, quest progress, important locations, and unresolved plot hooks in your session summaries so the AI remembers them next session.
+            </p>
+          </div>
+        )}
+
+        {/* Session History */}
+        {selectedParty && sessionHistory.length > 0 && (
+          <div style={{ marginTop: '1rem' }}>
+            <h3 style={{ color: '#aaa', margin: '0 0 0.75rem', fontSize: '0.95rem', fontWeight: '600' }}>
+              Past Sessions ({sessionHistory.length})
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {sessionHistory.map(session => (
+                <div key={session.id} style={{
+                  padding: '1rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                    <div>
+                      <span style={{ color: '#e67e22', fontWeight: '600', fontSize: '0.9rem' }}>
+                        {session.title || `Session ${session.id}`}
+                      </span>
+                      {session.end_time && (
+                        <span style={{ color: '#666', fontSize: '0.75rem', marginLeft: '0.75rem' }}>
+                          {new Date(session.end_time).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    {editingSummary?.sessionId !== session.id && (
+                      <button
+                        onClick={() => setEditingSummary({ sessionId: session.id, text: session.summary || '' })}
+                        style={{
+                          padding: '0.25rem 0.6rem',
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '4px',
+                          color: '#999',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          flexShrink: 0
+                        }}
+                      >
+                        Edit Summary
+                      </button>
+                    )}
+                  </div>
+
+                  {editingSummary?.sessionId === session.id ? (
+                    <div>
+                      <textarea
+                        value={editingSummary.text}
+                        onChange={e => setEditingSummary(prev => ({ ...prev, text: e.target.value }))}
+                        rows={5}
+                        style={{
+                          width: '100%',
+                          padding: '0.6rem',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(230, 126, 34, 0.4)',
+                          borderRadius: '6px',
+                          color: '#ddd',
+                          resize: 'vertical',
+                          fontFamily: 'inherit',
+                          fontSize: '0.85rem',
+                          boxSizing: 'border-box',
+                          lineHeight: '1.5'
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <button
+                          onClick={() => handleSaveSummary(session.id, editingSummary.text)}
+                          style={{
+                            padding: '0.35rem 1rem',
+                            background: '#e67e22',
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            fontWeight: '600'
+                          }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingSummary(null)}
+                          style={{
+                            padding: '0.35rem 1rem',
+                            background: 'transparent',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            borderRadius: '4px',
+                            color: '#999',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{
+                      color: session.summary ? '#bbb' : '#666',
+                      fontSize: '0.85rem',
+                      margin: 0,
+                      lineHeight: '1.5',
+                      fontStyle: session.summary ? 'normal' : 'italic',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {session.summary || 'No summary yet — click Edit Summary to add one.'}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -976,6 +1328,10 @@ export default function DMMode({ onBack }) {
           party={selectedParty}
           onClose={() => setShowPartyView(false)}
           onUpdateHp={handleUpdateHp}
+          onAwardXp={handleAwardXp}
+          onAwardLoot={handleAwardLoot}
+          onLevelUp={handleLevelUp}
+          sessionId={sessionId}
         />
       )}
       {showDiceRoller && (

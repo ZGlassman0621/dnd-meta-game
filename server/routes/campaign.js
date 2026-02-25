@@ -9,7 +9,7 @@ const router = express.Router();
 // GET /api/campaign - Get all campaigns
 router.get('/', async (req, res) => {
   try {
-    const campaigns = await campaignService.getAllCampaigns();
+    const campaigns = await campaignService.getAllCampaigns(req.user?.id);
     res.json(campaigns);
   } catch (error) {
     handleServerError(res, error, 'fetch campaigns');
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 // GET /api/campaign/active - Get active campaigns only
 router.get('/active', async (req, res) => {
   try {
-    const campaigns = await campaignService.getActiveCampaigns();
+    const campaigns = await campaignService.getActiveCampaigns(req.user?.id);
     res.json(campaigns);
   } catch (error) {
     handleServerError(res, error, 'fetch active campaigns');
@@ -74,7 +74,8 @@ router.post('/', async (req, res) => {
       setting,
       tone,
       starting_location,
-      time_ratio
+      time_ratio,
+      user_id: req.user?.id
     });
 
     res.status(201).json(campaign);
@@ -98,7 +99,7 @@ router.post('/import', async (req, res) => {
       });
     }
 
-    const result = await importCampaign(req.body);
+    const result = await importCampaign(req.body, req.user?.id);
     const campaign = await campaignService.getCampaignById(result.campaignId);
 
     res.status(201).json({

@@ -68,8 +68,26 @@ function PersonalityItem({ label, value, color }) {
   );
 }
 
-export default function PartyView({ party, onClose, onUpdateHp }) {
+const XP_THRESHOLDS = {
+  1: 0, 2: 300, 3: 900, 4: 2700, 5: 6500,
+  6: 14000, 7: 23000, 8: 34000, 9: 48000, 10: 64000,
+  11: 85000, 12: 100000, 13: 120000, 14: 140000, 15: 165000,
+  16: 195000, 17: 225000, 18: 265000, 19: 305000, 20: 355000
+};
+
+const HIT_DICE = {
+  'Barbarian': 12, 'Fighter': 10, 'Paladin': 10, 'Ranger': 10,
+  'Bard': 8, 'Cleric': 8, 'Druid': 8, 'Monk': 8, 'Rogue': 8, 'Warlock': 8,
+  'Sorcerer': 6, 'Wizard': 6
+};
+
+export default function PartyView({ party, onClose, onUpdateHp, onAwardXp, onAwardLoot, onLevelUp, sessionId }) {
   const [activeTab, setActiveTab] = useState(0);
+  const [xpAmount, setXpAmount] = useState('');
+  const [xpMode, setXpMode] = useState('party'); // 'party' or 'individual'
+  const [lootItem, setLootItem] = useState('');
+  const [goldAmount, setGoldAmount] = useState('');
+  const [levelUpHp, setLevelUpHp] = useState(null); // { charName, rolled: false, amount: 0 }
 
   if (!party?.characters?.length) return null;
 
@@ -310,6 +328,163 @@ export default function PartyView({ party, onClose, onUpdateHp }) {
           </div>
         </div>
 
+        {/* 2b. XP & Level Up */}
+        {sessionId && (() => {
+          const charXp = char.xp || 0;
+          const level = char.level || 1;
+          const nextLevelXp = XP_THRESHOLDS[level + 1] || null;
+          const prevLevelXp = XP_THRESHOLDS[level] || 0;
+          const xpProgress = nextLevelXp ? (charXp - prevLevelXp) / (nextLevelXp - prevLevelXp) : 1;
+          const canLevelUp = nextLevelXp && charXp >= nextLevelXp;
+          const hitDie = HIT_DICE[char.class] || 8;
+          const conMod = Math.floor(((char.ability_scores?.con || 10) - 10) / 2);
+          const avgHp = Math.floor(hitDie / 2) + 1 + conMod;
+
+          return (
+            <div style={{
+              marginBottom: '0.75rem',
+              padding: '0.5rem 0.6rem',
+              background: canLevelUp ? 'rgba(234, 179, 8, 0.08)' : 'rgba(255,255,255,0.03)',
+              borderRadius: '6px',
+              border: canLevelUp ? '1px solid rgba(234, 179, 8, 0.3)' : '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                <span style={{ color: '#888', fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Experience
+                </span>
+                <span style={{ color: canLevelUp ? '#eab308' : '#aaa', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                  {charXp.toLocaleString()} {nextLevelXp ? `/ ${nextLevelXp.toLocaleString()}` : '(MAX)'}
+                </span>
+              </div>
+              {/* XP Progress Bar */}
+              <div style={{
+                height: '6px',
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: '3px',
+                overflow: 'hidden',
+                marginBottom: '0.4rem'
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${Math.min(1, Math.max(0, xpProgress)) * 100}%`,
+                  background: canLevelUp ? '#eab308' : charColor,
+                  borderRadius: '3px',
+                  transition: 'width 0.3s'
+                }} />
+              </div>
+
+              {/* Award XP */}
+              <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', marginBottom: canLevelUp ? '0.5rem' : 0 }}>
+                <input
+                  type="number"
+                  value={xpAmount}
+                  onChange={e => setXpAmount(e.target.value)}
+                  placeholder="XP"
+                  min="1"
+                  style={{
+                    width: '70px', padding: '0.25rem 0.4rem', background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '3px',
+                    color: '#fff', fontSize: '0.75rem'
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const amt = parseInt(xpAmount);
+                    if (amt > 0 && onAwardXp) {
+                      onAwardXp(amt, xpMode === 'individual' ? char.name : null);
+                      setXpAmount('');
+                    }
+                  }}
+                  style={{
+                    padding: '0.25rem 0.5rem', background: `${charColor}30`,
+                    border: `1px solid ${charColor}50`, borderRadius: '3px',
+                    color: charColor, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold'
+                  }}
+                >
+                  {xpMode === 'individual' ? 'Award' : 'Split Party'}
+                </button>
+                <button
+                  onClick={() => setXpMode(xpMode === 'party' ? 'individual' : 'party')}
+                  style={{
+                    padding: '0.25rem 0.4rem', background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '3px',
+                    color: '#888', fontSize: '0.65rem', cursor: 'pointer'
+                  }}
+                  title={xpMode === 'party' ? 'Switch to individual award' : 'Switch to party split'}
+                >
+                  {xpMode === 'party' ? 'Party' : 'Solo'}
+                </button>
+              </div>
+
+              {/* Level Up */}
+              {canLevelUp && (
+                <div style={{
+                  padding: '0.4rem',
+                  background: 'rgba(234, 179, 8, 0.1)',
+                  border: '1px solid rgba(234, 179, 8, 0.25)',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ color: '#eab308', fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.3rem' }}>
+                    Ready to level up to {level + 1}!
+                  </div>
+                  <div style={{ color: '#999', fontSize: '0.7rem', marginBottom: '0.3rem' }}>
+                    Hit Die: d{hitDie} + {conMod >= 0 ? '+' : ''}{conMod} CON (avg {avgHp})
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                    <button
+                      onClick={() => {
+                        const roll = Math.floor(Math.random() * hitDie) + 1;
+                        const total = Math.max(1, roll + conMod);
+                        setLevelUpHp({ charName: char.name, amount: total, rolled: true, roll, conMod });
+                      }}
+                      style={{
+                        padding: '0.25rem 0.5rem', background: 'rgba(234, 179, 8, 0.2)',
+                        border: '1px solid rgba(234, 179, 8, 0.4)', borderRadius: '3px',
+                        color: '#eab308', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold'
+                      }}
+                    >
+                      Roll d{hitDie}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLevelUpHp({ charName: char.name, amount: avgHp, rolled: false });
+                      }}
+                      style={{
+                        padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.15)', borderRadius: '3px',
+                        color: '#aaa', fontSize: '0.7rem', cursor: 'pointer'
+                      }}
+                    >
+                      Take Average ({avgHp})
+                    </button>
+                  </div>
+                  {levelUpHp && levelUpHp.charName === char.name && (
+                    <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: '#eab308', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                        +{levelUpHp.amount} HP
+                        {levelUpHp.rolled && <span style={{ color: '#999', fontSize: '0.7rem' }}> (rolled {levelUpHp.roll} + {levelUpHp.conMod} CON)</span>}
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (onLevelUp) onLevelUp(char.name, levelUpHp.amount);
+                          setLevelUpHp(null);
+                        }}
+                        style={{
+                          padding: '0.2rem 0.6rem', background: '#eab308',
+                          border: 'none', borderRadius: '3px',
+                          color: '#000', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold'
+                        }}
+                      >
+                        Confirm Level Up
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* 3. Ability Scores */}
         <div style={{
           display: 'grid',
@@ -489,9 +664,9 @@ export default function PartyView({ party, onClose, onUpdateHp }) {
         )}
 
         {/* 7. Inventory */}
-        {char.inventory?.length > 0 && (
-          <CollapsibleSection label="Inventory" color={charColor}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem' }}>
+        <CollapsibleSection label={`Inventory${char.inventory?.length ? ` (${char.inventory.length})` : ''}`} color={charColor}>
+          {char.inventory?.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem', marginBottom: '0.4rem' }}>
               {char.inventory.map((item, i) => {
                 const itemName = typeof item === 'string' ? item : item.name;
                 const qty = typeof item === 'object' ? (item.quantity || 1) : 1;
@@ -509,8 +684,75 @@ export default function PartyView({ party, onClose, onUpdateHp }) {
                 );
               })}
             </div>
-          </CollapsibleSection>
-        )}
+          ) : (
+            <div style={{ color: '#666', fontSize: '0.75rem', fontStyle: 'italic', marginBottom: '0.4rem' }}>No items</div>
+          )}
+          {/* Award Loot */}
+          {sessionId && (
+            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={lootItem}
+                onChange={e => setLootItem(e.target.value)}
+                placeholder="Item name"
+                style={{
+                  flex: 1, minWidth: '100px', padding: '0.25rem 0.4rem', background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.15)', borderRadius: '3px',
+                  color: '#fff', fontSize: '0.75rem'
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && lootItem.trim() && onAwardLoot) {
+                    onAwardLoot(char.name, [lootItem.trim()], 0);
+                    setLootItem('');
+                  }
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (lootItem.trim() && onAwardLoot) {
+                    onAwardLoot(char.name, [lootItem.trim()], 0);
+                    setLootItem('');
+                  }
+                }}
+                style={{
+                  padding: '0.25rem 0.4rem', background: `${charColor}30`,
+                  border: `1px solid ${charColor}50`, borderRadius: '3px',
+                  color: charColor, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold'
+                }}
+              >
+                +Item
+              </button>
+              <input
+                type="number"
+                value={goldAmount}
+                onChange={e => setGoldAmount(e.target.value)}
+                placeholder="GP"
+                min="1"
+                style={{
+                  width: '55px', padding: '0.25rem 0.4rem', background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(212, 175, 55, 0.3)', borderRadius: '3px',
+                  color: '#d4af37', fontSize: '0.75rem'
+                }}
+              />
+              <button
+                onClick={() => {
+                  const gp = parseInt(goldAmount);
+                  if (gp > 0 && onAwardLoot) {
+                    onAwardLoot(char.name, [], gp);
+                    setGoldAmount('');
+                  }
+                }}
+                style={{
+                  padding: '0.25rem 0.4rem', background: 'rgba(212, 175, 55, 0.15)',
+                  border: '1px solid rgba(212, 175, 55, 0.3)', borderRadius: '3px',
+                  color: '#d4af37', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold'
+                }}
+              >
+                +Gold
+              </button>
+            </div>
+          )}
+        </CollapsibleSection>
 
         {/* 8. Personality */}
         <CollapsibleSection label="Personality" color={charColor}>

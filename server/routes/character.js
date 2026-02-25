@@ -198,15 +198,72 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete character
+// Delete character and all related data
 router.delete('/:id', async (req, res) => {
   try {
-    // Delete all related records first (to satisfy foreign key constraints)
-    await dbRun('DELETE FROM dm_sessions WHERE character_id = ?', [req.params.id]);
-    await dbRun('DELETE FROM adventures WHERE character_id = ?', [req.params.id]);
+    const id = req.params.id;
 
-    // Then delete the character
-    await dbRun('DELETE FROM characters WHERE id = ?', [req.params.id]);
+    // Verify character exists
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [id]);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+
+    // Delete all related records in dependency order to satisfy foreign key constraints
+
+    // 1. Session message summaries (FK → dm_sessions, no cascade)
+    await dbRun('DELETE FROM session_message_summaries WHERE session_id IN (SELECT id FROM dm_sessions WHERE character_id = ?)', [id]);
+
+    // 2. Story chronicles and canon facts (FK → characters + dm_sessions)
+    await dbRun('DELETE FROM story_chronicles WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM canon_facts WHERE character_id = ?', [id]);
+
+    // 3. DM sessions (now safe — summaries already deleted)
+    await dbRun('DELETE FROM dm_sessions WHERE character_id = ?', [id]);
+
+    // 4. Adventures and adventure options
+    await dbRun('DELETE FROM adventure_options WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM adventures WHERE character_id = ?', [id]);
+
+    // 5. Companion data (companion_backstories cascade from companions via ON DELETE CASCADE)
+    await dbRun('DELETE FROM companion_activities WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM companions WHERE recruited_by_character_id = ?', [id]);
+
+    // 6. Quests (quest_requirements cascade via ON DELETE CASCADE)
+    await dbRun('DELETE FROM quests WHERE character_id = ?', [id]);
+
+    // 7. NPC data
+    await dbRun('DELETE FROM npc_relationships WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM npc_conversations WHERE character_id = ?', [id]);
+
+    // 8. Narrative and world data
+    await dbRun('DELETE FROM narrative_queue WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM faction_standings WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM journeys WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM story_threads WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM consequence_log WHERE character_id = ?', [id]);
+
+    // 9. Activity and downtime
+    await dbRun('DELETE FROM activity_queue WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM downtime WHERE character_id = ?', [id]);
+
+    // 10. Achievements
+    await dbRun('DELETE FROM character_achievements WHERE character_id = ?', [id]);
+
+    // 11. Crafting data
+    await dbRun('DELETE FROM crafting_projects WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM character_recipes WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM character_materials WHERE character_id = ?', [id]);
+
+    // 12. Mythic progression data
+    await dbRun('DELETE FROM mythic_characters WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM mythic_trials WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM mythic_abilities WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM character_piety WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM character_epic_boons WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM legendary_items WHERE character_id = ?', [id]);
+    await dbRun('DELETE FROM piety_history WHERE character_id = ?', [id]);
+
+    // 13. Finally delete the character
+    await dbRun('DELETE FROM characters WHERE id = ?', [id]);
 
     res.json({ message: 'Character deleted successfully' });
   } catch (error) {

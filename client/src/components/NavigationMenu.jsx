@@ -142,7 +142,7 @@ function DropdownMenu({ category, isOpen, onToggle, activeView, onNavigate, hasC
   )
 }
 
-export default function NavigationMenu({ activeView, onNavigate, hasCharacter, onHome }) {
+export default function NavigationMenu({ activeView, onNavigate, hasCharacter, onHome, user, onLogout }) {
   const [openMenu, setOpenMenu] = useState(null)
 
   const isAnyViewActive = activeView !== null
@@ -156,6 +156,36 @@ export default function NavigationMenu({ activeView, onNavigate, hasCharacter, o
       gap: '0.5rem',
       alignItems: 'center'
     }}>
+      {user && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          marginRight: '0.5rem'
+        }}>
+          <span style={{ color: '#999', fontSize: '0.8rem' }}>
+            {user.display_name || user.username}
+          </span>
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            style={{
+              background: 'none',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#999',
+              padding: '0.3rem 0.6rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.75rem'
+            }}
+            onMouseEnter={e => { e.target.style.color = '#e74c3c'; e.target.style.borderColor = 'rgba(231, 76, 60, 0.4)' }}
+            onMouseLeave={e => { e.target.style.color = '#999'; e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)' }}
+          >
+            Sign Out
+          </button>
+        </div>
+      )}
+
       {isAnyViewActive && (
         <button
           onClick={onHome}
