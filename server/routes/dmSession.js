@@ -32,7 +32,7 @@ import { lookupItemByName } from '../data/merchantLootTables.js';
 import { getLootTableForLevel } from '../config/rewards.js';
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
-import { generateSessionChronicle, getRelevantContext } from '../services/storyChronicleService.js';
+import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
 import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
 import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
@@ -324,14 +324,13 @@ router.get('/campaign-context/:characterId', async (req, res) => {
       });
     }
 
-    // Get recent session summaries for story context (last 5 sessions)
+    // Get ALL session summaries for story context (no limit — memory is part of the fun)
     const recentSessions = await dbAll(`
       SELECT id, title, summary, game_start_day, game_start_year,
              game_end_day, game_end_year, end_time
       FROM dm_sessions
       WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 1
       ORDER BY created_at DESC
-      LIMIT 5
     `, [req.params.characterId]);
 
     // Parse the session config from the last session
@@ -628,7 +627,7 @@ router.post('/start', async (req, res) => {
         };
         // Extract NPC names from world state relationships
         if (worldState?.npcRelationships) {
-          hints.npcs = worldState.npcRelationships.slice(0, 10).map(r => r.npc_name).filter(Boolean);
+          hints.npcs = worldState.npcRelationships.slice(0, 30).map(r => r.npc_name).filter(Boolean);
         }
 
         // Calculate adaptive token budget
@@ -768,6 +767,16 @@ router.post('/start', async (req, res) => {
       console.error('Error gathering mythic context:', e);
     }
 
+    // Fetch ALL chronicle summaries (richer 300-500 word AI-generated recaps)
+    let chronicleSummaries = [];
+    if (character.campaign_id) {
+      try {
+        chronicleSummaries = await getSessionSummariesForPrompt(character.campaign_id, characterId);
+      } catch (e) {
+        console.error('Error fetching chronicle summaries:', e);
+      }
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -791,6 +800,7 @@ router.post('/start', async (req, res) => {
       worldState,
       campaignPlanSummary,
       chronicleContext,
+      chronicleSummaries,
       weatherContext,
       survivalContext,
       craftingContext,
@@ -820,7 +830,11 @@ router.post('/start', async (req, res) => {
 
       // Check if continuing from a previous session
       const isContinuing = continueCampaign && previousSessionSummaries && previousSessionSummaries.length > 0;
-      const lastSessionSummary = isContinuing ? previousSessionSummaries[previousSessionSummaries.length - 1]?.summary : null;
+      // Prefer richer chronicle summary over dm_sessions summary
+      const lastChronicle = chronicleSummaries.length > 0 ? chronicleSummaries[chronicleSummaries.length - 1] : null;
+      const lastSessionSummary = isContinuing
+        ? (lastChronicle?.summary || previousSessionSummaries[previousSessionSummaries.length - 1]?.summary)
+        : null;
 
       // Detect imported mid-progress campaigns: the plan has session_continuity,
       // meaning the campaign is already underway even if this character has no prior sessions

@@ -25,9 +25,11 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Event bus (`server/services/eventEmitter.js`) connects game systems
 - Error handling via `server/utils/errorHandler.js` (handleServerError, notFound, validationError)
 - Story Chronicle system: canon facts in `canon_facts` table, session chronicles in `story_chronicles` table
-- Context window management: adaptive budgeting (2K-8K tokens), sliding window compression for long sessions
+- Context window management: adaptive budgeting (2K+ tokens, no hard cap, 40% of remaining context), sliding window compression for long sessions
 - No storage caps: campaign_notes, character_memories, and usedNames all grow without limit
-- NPC conversation memory: `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session
+- NPC conversation memory: `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session (last 5 per NPC loaded into DM prompt)
+- Session memory: ALL canon facts loaded (no SQL limits), ALL chronicle summaries (300-500 word AI recaps with mood/cliffhanger/key decisions), up to 25 NPCs with 4 conversations each, standalone promises/debts summary, graduated absence annotations (7/14/30 day thresholds)
+- `getSessionSummariesForPrompt()` in storyChronicleService.js fetches rich chronicle summaries for DM prompt
 - Companion emotional state: mood columns on `companion_backstories` (mood, mood_cause, mood_intensity, mood_set_game_day) with time-based decay
 - NPC lifecycle state machine: `lifecycle_status` on `npcs` table (alive/deceased/missing/imprisoned/unknown), `npc_lifecycle_history` audit trail
 - NPC personality enrichment: session extraction fills voice/personality/mannerism/motivation/appearance over time (fill-not-overwrite), `enrichment_level` tracks depth
@@ -70,7 +72,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Frontend auth: global fetch interceptor injects Authorization header on all `/api` requests, LoginPage shown when no valid token
 - DM Mode: user is the DM, AI plays 4 characters. Separate from Player Mode (campaign-based sessions)
 - DM Mode party data: stored as JSON blob in `dm_mode_parties.party_data` — character stats (HP, XP, level, inventory, gold, spells) persist across sessions
-- DM Mode session continuity: last 3 completed session summaries injected into AI system prompt as memory. Summaries are editable by the DM
+- DM Mode session continuity: ALL completed session summaries injected into AI system prompt as memory. Summaries are editable by the DM
 - DM Mode prompt: 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER) in `dmModePromptBuilder.js`
 - DM Mode session resume: `/api/dm-mode/active/:partyId` returns full message history; auto-detected on party select
 - DM Mode XP/leveling: D&D 5e XP thresholds, party-split or individual XP awards, level-up with hit dice HP rolls

@@ -110,6 +110,30 @@ export async function verifyToken(token) {
 }
 
 /**
+ * Change password for an authenticated user.
+ */
+export async function changePassword(userId, currentPassword, newPassword) {
+  if (!newPassword || newPassword.length < 6) {
+    throw Object.assign(new Error('New password must be at least 6 characters'), { status: 400 });
+  }
+
+  const user = await dbGet('SELECT * FROM users WHERE id = ?', [userId]);
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { status: 404 });
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) {
+    throw Object.assign(new Error('Current password is incorrect'), { status: 401 });
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await dbRun('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, userId]);
+
+  return { success: true };
+}
+
+/**
  * Look up a user by ID (for middleware).
  */
 export async function getUserById(id) {

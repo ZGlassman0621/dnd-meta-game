@@ -1,6 +1,27 @@
 # Test Results
 
-## Latest: NPC System Overhaul — Components E + H + Comprehensive Test Suite (2026-02-22)
+## Latest: Session Memory Enhancement + Auth Password Change (2026-02-26)
+
+Comprehensive session memory overhaul: removed all artificial limits on canon fact retrieval, raised token budget (no hard cap, 40% of remaining context), load ALL session chronicle summaries, expanded NPC conversation history to 5 per NPC, added standalone promises/debts summary, and graduated absence annotations. Also added password change endpoint + UI.
+
+### Test Results
+
+| # | Suite | File | Assertions | Status | Notes |
+|---|-------|------|-----------|--------|-------|
+| 1 | DM Prompt Builder | `tests/dm-prompt-builder.test.js` | 30 | PASS | All absence annotation tests pass |
+| 2 | Moral Diversity | `tests/moral-diversity.test.js` | 64 | PASS | |
+| 3 | DM Mode | `tests/dm-mode.test.js` | 78 | PASS | |
+| 4 | Companion Skill Checks | `tests/companion-skill-checks.test.js` | 59 | PASS | |
+| 5 | Condition Tracking | `tests/condition-tracking.test.js` | 56 | PASS | |
+| 6 | Character Memory | `tests/character-memory.test.js` | 54 | 53 PASS, 1 FAIL | Pre-existing: "Soft cap at 3KB" test |
+| 7 | Combat Tracker | `tests/combat-tracker.test.js` | 26 | PASS | |
+| 8 | Loot Systems | `tests/loot-systems.test.js` | 4 suites | PASS | |
+
+Client build: PASS (vite build completes cleanly)
+
+---
+
+## Previous: NPC System Overhaul — Components E + H + Comprehensive Test Suite (2026-02-22)
 
 Implemented the final two components of the 8-component NPC system overhaul:
 - **Component E**: NPC Mail/Message System — NPCs send letters, warnings, requests, gifts, and rumors between sessions via the existing narrative queue

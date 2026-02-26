@@ -41,7 +41,7 @@ export function getModelLimits(model) {
  * @param {number} systemPromptTokens - Estimated tokens in system prompt
  * @param {number} conversationTokens - Estimated tokens in message history
  * @param {string} model - Model identifier
- * @returns {number} Token budget available for chronicle context (2000-8000)
+ * @returns {number} Token budget available for chronicle context (2000+, no hard cap)
  */
 export function calculateChronicleBudget(systemPromptTokens, conversationTokens, model) {
   const { safeBudget } = getModelLimits(model);
@@ -53,9 +53,9 @@ export function calculateChronicleBudget(systemPromptTokens, conversationTokens,
     return 2000; // Minimum guaranteed budget
   }
 
-  // Use 30% of remaining space for chronicle, capped at 8000
-  const budget = Math.floor(remaining * 0.3);
-  return Math.max(2000, Math.min(budget, 8000));
+  // Use 40% of remaining space for chronicle — no hard cap, let the context window be the limit
+  const budget = Math.floor(remaining * 0.4);
+  return Math.max(2000, budget);
 }
 
 /**

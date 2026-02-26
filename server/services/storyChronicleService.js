@@ -438,9 +438,9 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
     }
   };
 
-  // Get recent session IDs for "recent facts" priority
+  // Get ALL session IDs for "recent facts" priority (no artificial limit)
   const recentSessions = await dbAll(
-    'SELECT session_id FROM story_chronicles WHERE campaign_id = ? AND character_id = ? ORDER BY session_number DESC LIMIT 3',
+    'SELECT session_id FROM story_chronicles WHERE campaign_id = ? AND character_id = ? ORDER BY session_number DESC',
     [campaignId, characterId]
   );
   const recentSessionIds = recentSessions.map(s => s.session_id);
@@ -512,8 +512,7 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
     `SELECT cf.*, sc.session_number FROM canon_facts cf
      LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
      WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.category = 'quest' AND cf.is_active = 1
-     ORDER BY cf.importance = 'critical' DESC, cf.importance = 'major' DESC, cf.game_day DESC
-     LIMIT 20`,
+     ORDER BY cf.importance = 'critical' DESC, cf.importance = 'major' DESC, cf.game_day DESC`,
     [campaignId, characterId]
   );
   addFacts(questFacts, 'QUEST PROGRESS');
@@ -528,49 +527,45 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
        AND cf.source_session_id IN (${placeholders})
        AND cf.category NOT IN ('death', 'promise')
        AND cf.importance != 'critical'
-       ORDER BY cf.game_day DESC, cf.id DESC
-       LIMIT 30`,
+       ORDER BY cf.game_day DESC, cf.id DESC`,
       [campaignId, characterId, ...recentSessionIds]
     );
     addFacts(recentFacts, 'RECENT EVENTS');
   }
 
   // 7. Major importance facts (fill remaining)
-  if (tokensUsed < tokenBudget * 0.8) {
+  if (tokensUsed < tokenBudget * 0.95) {
     const majorFacts = await dbAll(
       `SELECT cf.*, sc.session_number FROM canon_facts cf
        LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
        WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.importance = 'major' AND cf.is_active = 1
        AND cf.category NOT IN ('death', 'promise')
-       ORDER BY cf.game_day DESC
-       LIMIT 20`,
+       ORDER BY cf.game_day DESC`,
       [campaignId, characterId]
     );
     addFacts(majorFacts, 'MAJOR STORY EVENTS');
   }
 
   // 8. Location-specific facts (fill remaining)
-  if (tokensUsed < tokenBudget * 0.9) {
+  if (tokensUsed < tokenBudget * 0.98) {
     const locationFacts = await dbAll(
       `SELECT cf.*, sc.session_number FROM canon_facts cf
        LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
        WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.category = 'location' AND cf.is_active = 1
-       ORDER BY cf.game_day DESC
-       LIMIT 10`,
+       ORDER BY cf.game_day DESC`,
       [campaignId, characterId]
     );
     addFacts(locationFacts, 'KNOWN LOCATIONS');
   }
 
-  // 9. Minor/flavor facts (only if plenty of budget remains)
-  if (tokensUsed < tokenBudget * 0.7) {
+  // 9. Minor/flavor facts (fill remaining budget)
+  if (tokensUsed < tokenBudget * 0.9) {
     const flavorFacts = await dbAll(
       `SELECT cf.*, sc.session_number FROM canon_facts cf
        LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
        WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.importance IN ('minor', 'flavor') AND cf.is_active = 1
        AND cf.category NOT IN ('death', 'promise')
-       ORDER BY cf.game_day DESC
-       LIMIT 10`,
+       ORDER BY cf.game_day DESC`,
       [campaignId, characterId]
     );
     addFacts(flavorFacts, 'WORLD DETAILS');
@@ -603,6 +598,21 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
 // ============================================================
 // QUERY & SEARCH
 // ============================================================
+
+/**
+ * Get ALL session chronicle summaries for injection into DM prompt.
+ * These are richer (300-500 word AI-generated recaps) than dm_sessions.summary.
+ */
+export async function getSessionSummariesForPrompt(campaignId, characterId) {
+  return await dbAll(
+    `SELECT session_number, summary, mood, cliffhanger, key_decisions,
+            game_day_start, game_day_end
+     FROM story_chronicles
+     WHERE campaign_id = ? AND character_id = ?
+     ORDER BY session_number ASC`,
+    [campaignId, characterId]
+  );
+}
 
 /**
  * Get all session chronicles for a campaign

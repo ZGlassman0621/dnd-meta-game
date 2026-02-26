@@ -660,13 +660,13 @@ export async function getConversationsForCharacter(characterId) {
     ORDER BY nc.npc_id, nc.created_at DESC
   `, [characterId]);
 
-  // Group by npc_id, keeping last 2 per NPC
+  // Group by npc_id, keeping last 5 per NPC for richer conversation history
   const grouped = {};
   for (const row of rows) {
     if (!grouped[row.npc_id]) {
       grouped[row.npc_id] = [];
     }
-    if (grouped[row.npc_id].length < 2) {
+    if (grouped[row.npc_id].length < 5) {
       grouped[row.npc_id].push(parseConversationJson(row));
     }
   }

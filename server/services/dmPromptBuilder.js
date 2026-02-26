@@ -628,22 +628,57 @@ IMPORTANT: Reference this downtime ONCE at the start, then move on. Don't keep b
 }
 
 /**
- * Format previous session summaries for campaign continuity
+ * Format previous session summaries for campaign continuity.
+ * Prefers richer chronicle summaries (300-500 words with mood/cliffhanger) when available.
  */
-function formatPreviousSessionSummaries(summaries, isContinuing) {
-  if (!summaries || summaries.length === 0 || !isContinuing) return '';
+function formatPreviousSessionSummaries(summaries, isContinuing, chronicleSummaries = []) {
+  // Use chronicle summaries if available (richer data), otherwise fall back to dm_sessions summaries
+  const hasChronicles = chronicleSummaries && chronicleSummaries.length > 0;
+  const hasSummaries = summaries && summaries.length > 0;
 
-  const summaryDescriptions = summaries.map((session, index) => {
-    return `Session ${index + 1}: ${session.summary || 'No summary available.'}`;
-  });
+  if (!hasChronicles && !hasSummaries) return '';
 
-  return `\n\nPREVIOUS ADVENTURES - CAMPAIGN CONTINUITY:
-This is a CONTINUING campaign. The character has had previous adventures that shape the ongoing story.
-You should reference past events naturally when relevant - NPCs might remember the character, consequences of past actions might appear, and the story should feel connected.
+  let summaryDescriptions;
+
+  if (hasChronicles) {
+    summaryDescriptions = chronicleSummaries.map(c => {
+      const dayRange = c.game_day_start && c.game_day_end
+        ? ` (Days ${c.game_day_start}-${c.game_day_end})`
+        : c.game_day_start ? ` (Day ${c.game_day_start})` : '';
+      const mood = c.mood ? `, Mood: ${c.mood}` : '';
+      let text = `Session ${c.session_number}${dayRange}${mood}: ${c.summary || 'No summary available.'}`;
+      if (c.cliffhanger) {
+        text += `\n  Cliffhanger: ${c.cliffhanger}`;
+      }
+      // Include key decisions if available
+      const decisions = typeof c.key_decisions === 'string' ? JSON.parse(c.key_decisions || '[]') : (c.key_decisions || []);
+      if (decisions.length > 0) {
+        const decisionLines = decisions.slice(0, 3).map(d => {
+          const decision = d.decision || d;
+          const consequence = d.consequence ? ` → ${d.consequence}` : '';
+          return `  - ${decision}${consequence}`;
+        });
+        text += '\n  Key decisions:\n' + decisionLines.join('\n');
+      }
+      return text;
+    });
+  } else {
+    summaryDescriptions = summaries.map((session, index) => {
+      return `Session ${index + 1}: ${session.summary || 'No summary available.'}`;
+    });
+  }
+
+  return `\n\nPREVIOUS ADVENTURES — FULL CAMPAIGN HISTORY:
+This character has a rich history of previous adventures. ALL of these events are CANON — they happened and shape the ongoing story.
+NPCs remember the character. Consequences of past actions persist. The story is deeply connected across sessions.
 
 ${summaryDescriptions.join('\n\n')}
 
-IMPORTANT: Don't recap everything at once. Let past events surface naturally as they become relevant to current situations. The player lived through these events - subtle references are better than exposition dumps.`;
+USING THIS HISTORY:
+- Reference past events naturally when they become relevant — NPCs may mention them, consequences may surface
+- The player lived through these events — subtle callbacks are better than exposition dumps
+- Don't recap everything at once, but DO remember it all. When an NPC from Session 2 appears in Session 8, they remember what happened
+- Promises, deals, and unfinished business from ANY session remain active until resolved`;
 }
 
 /**
@@ -1095,7 +1130,9 @@ When roleplaying NPCs, differentiate them through speech patterns:
     const hasPendingPromises = r.promises_made?.some(p => p.status === 'pending');
     const hasOutstandingDebts = r.debts_owed?.some(d => d.status === 'outstanding');
     const hasSecrets = r.discovered_secrets?.length > 0;
-    return r.disposition !== 0 || hasPendingPromises || hasOutstandingDebts || hasSecrets;
+    const hasConversations = worldState.npcConversations?.[r.npc_id]?.length > 0;
+    const hasInteracted = r.times_met > 0;
+    return r.disposition !== 0 || hasPendingPromises || hasOutstandingDebts || hasSecrets || hasConversations || hasInteracted;
   });
 
   // Separate alive vs deceased NPCs
@@ -1110,7 +1147,7 @@ When roleplaying NPCs, differentiate them through speech patterns:
   }
 
   if (aliveNpcs.length > 0) {
-    const lines = aliveNpcs.slice(0, 8).map(r => {
+    const lines = aliveNpcs.slice(0, 25).map(r => {
       const occupation = r.npc_occupation ? ` (${r.npc_occupation})` : '';
       const location = r.npc_location ? ` at ${r.npc_location}` : '';
       const parts = [`- ${r.npc_name}${occupation}${location}: ${(r.disposition_label || 'neutral').toUpperCase()}, Trust: ${getTrustLabel(r.trust_level || 0)}`];
@@ -1126,7 +1163,7 @@ When roleplaying NPCs, differentiate them through speech patterns:
 
       // Pending promises with urgency annotations
       const pendingPromises = (r.promises_made || []).filter(p => p.status === 'pending');
-      pendingPromises.slice(0, 2).forEach(p => {
+      pendingPromises.slice(0, 5).forEach(p => {
         const text = typeof p === 'string' ? p : (p.promise || p.text || '');
         if (text) {
           let urgency = '';
@@ -1148,7 +1185,7 @@ When roleplaying NPCs, differentiate them through speech patterns:
 
       // Outstanding debts only
       const outstandingDebts = (r.debts_owed || []).filter(d => d.status === 'outstanding');
-      outstandingDebts.slice(0, 2).forEach(d => {
+      outstandingDebts.slice(0, 5).forEach(d => {
         const direction = d.direction === 'player_owes_npc' ? 'You owe them' : 'They owe you';
         const desc = typeof d === 'string' ? d : (d.description || d.type || '');
         if (desc) parts.push(`  Debt: ${direction} - ${desc.substring(0, 80)}`);
@@ -1160,19 +1197,16 @@ When roleplaying NPCs, differentiate them through speech patterns:
         if (text) parts.push(`  Secret known: ${text.substring(0, 100)}`);
       });
 
-      // Recent conversation history (last 2 conversations with this NPC)
+      // Conversation history (up to 4 conversations with this NPC)
       const npcConvs = worldState.npcConversations?.[r.npc_id];
       if (npcConvs && npcConvs.length > 0) {
-        const mostRecent = npcConvs[0];
-        const sessionLabel = mostRecent.session_number ? `Session ${mostRecent.session_number}` : 'recent';
-        const toneNote = mostRecent.tone ? ` Tone: ${mostRecent.tone}.` : '';
-        parts.push(`  Last conversation (${sessionLabel}): ${mostRecent.summary.substring(0, 200)}${toneNote}`);
-
-        if (npcConvs.length > 1) {
-          const older = npcConvs[1];
-          const olderLabel = older.session_number ? `Session ${older.session_number}` : 'earlier';
-          parts.push(`  Earlier (${olderLabel}): ${older.summary.substring(0, 120)}`);
-        }
+        npcConvs.slice(0, 4).forEach((conv, i) => {
+          const label = conv.session_number ? `Session ${conv.session_number}` : (i === 0 ? 'recent' : 'earlier');
+          const toneNote = conv.tone ? ` Tone: ${conv.tone}.` : '';
+          const topicsNote = conv.topics?.length > 0 ? ` Topics: ${conv.topics.join(', ')}.` : '';
+          const maxLen = i === 0 ? 400 : 250;
+          parts.push(`  Conversation (${label}): ${conv.summary.substring(0, maxLen)}${toneNote}${topicsNote}`);
+        });
       }
 
       // Inline world event effect annotations
@@ -1192,14 +1226,66 @@ When roleplaying NPCs, differentiate them through speech patterns:
       // Absence annotation — helps AI roleplay appropriate warmth/unfamiliarity
       if (worldState.currentGameDay && r.last_interaction_game_day) {
         const daysAbsent = worldState.currentGameDay - r.last_interaction_game_day;
-        if (daysAbsent >= 14) {
+        if (daysAbsent >= 30) {
+          parts.push(`  [ABSENCE: ${daysAbsent} days — may not remember player well]`);
+        } else if (daysAbsent >= 14) {
           parts.push(`  [ABSENCE: ${daysAbsent} days — disposition may have cooled]`);
+        } else if (daysAbsent >= 7) {
+          parts.push(`  [ABSENCE: ${daysAbsent} days]`);
         }
+        parts.push(`  Last seen: Day ${r.last_interaction_game_day}`);
+      } else if (!r.last_interaction_game_day && r.times_met > 0) {
+        parts.push(`  [Last interaction day unknown]`);
       }
 
       return parts.join('\n');
     });
     sections.push('NPC RELATIONSHIPS:\n' + lines.join('\n'));
+  }
+
+  // Aggregate ALL promises and debts across ALL NPCs (standalone summary)
+  const allPromises = [];
+  const allDebts = [];
+  for (const r of (worldState.npcRelationships || [])) {
+    const pendingPromises = (r.promises_made || []).filter(p => p.status === 'pending');
+    pendingPromises.forEach(p => {
+      const text = typeof p === 'string' ? p : (p.promise || p.text || '');
+      if (text) allPromises.push({ npc: r.npc_name, text, ...p });
+    });
+    const outstandingDebts = (r.debts_owed || []).filter(d => d.status === 'outstanding');
+    outstandingDebts.forEach(d => {
+      const desc = typeof d === 'string' ? d : (d.description || d.type || '');
+      if (desc) allDebts.push({ npc: r.npc_name, direction: d.direction, text: desc });
+    });
+  }
+  if (allPromises.length > 0 || allDebts.length > 0) {
+    const promiseLines = [];
+    if (allPromises.length > 0) {
+      promiseLines.push('PROMISES MADE (the player committed to these — NPCs WILL ask about them):');
+      allPromises.forEach(p => {
+        let urgency = '';
+        if (worldState.currentGameDay && p.game_day_made) {
+          const daysSince = worldState.currentGameDay - p.game_day_made;
+          if (p.deadline_game_day && worldState.currentGameDay > p.deadline_game_day) {
+            urgency = ' [OVERDUE — DEADLINE PASSED]';
+          } else if (p.deadline_game_day) {
+            const daysLeft = p.deadline_game_day - worldState.currentGameDay;
+            if (daysLeft <= 7) urgency = ` [URGENT — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left]`;
+          } else if (daysSince >= 21) {
+            urgency = ` [OVERDUE — ${daysSince} days]`;
+          }
+        }
+        promiseLines.push(`- To ${p.npc}: ${p.text}${urgency}`);
+      });
+    }
+    if (allDebts.length > 0) {
+      promiseLines.push('OUTSTANDING DEBTS:');
+      allDebts.forEach(d => {
+        const dir = d.direction === 'player_owes_npc' ? `You owe ${d.npc}` : `${d.npc} owes you`;
+        promiseLines.push(`- ${dir}: ${d.text}`);
+      });
+    }
+    sections.push(promiseLines.join('\n'));
   }
 
   // Deceased NPCs section — prevent the DM from resurrecting dead NPCs
@@ -1491,7 +1577,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"
@@ -2115,6 +2201,9 @@ Any player question asking what they can perceive, notice, sense, or learn about
 
 NARRATIVE SELF-CONSISTENCY:
 Before ending your response, verify all details match — times, names, numbers, distances. Never contradict a fact you stated earlier in the same response.
+
+STORY MEMORY = CANON:
+The PREVIOUS ADVENTURES, STORY CHRONICLE, NPC CONVERSATIONS, and PROMISES sections above are CANONICAL FACTS from prior sessions. Treat them as things that actually happened. Reference past events, NPCs, conversations, and promises naturally when relevant. NPCs remember the player and previous interactions. The world remembers the player's choices and their consequences. Never contradict established canon.
 
 OTHER CRITICAL RULES:
 - ONLY use NPCs explicitly named in the scene — NO inventing new characters

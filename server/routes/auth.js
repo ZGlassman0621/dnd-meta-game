@@ -3,7 +3,7 @@
  */
 
 import express from 'express';
-import { register, login, getUserById, verifyToken } from '../services/authService.js';
+import { register, login, getUserById, verifyToken, changePassword } from '../services/authService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -54,6 +54,26 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
     handleServerError(res, error, 'get current user');
+  }
+});
+
+// POST /api/auth/change-password (requires valid token)
+router.post('/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const decoded = await verifyToken(authHeader.slice(7));
+
+    const { currentPassword, newPassword } = req.body;
+    const result = await changePassword(decoded.userId, currentPassword, newPassword);
+    res.json(result);
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    handleServerError(res, error, 'change password');
   }
 });
 
