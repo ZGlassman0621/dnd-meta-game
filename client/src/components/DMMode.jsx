@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import PartyView from './PartyView';
 import DiceRoller from './DiceRoller';
 import DMCoachingPanel from './DMCoachingPanel';
+import PartyLorePanel from './PartyLorePanel';
 
 const CHAR_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
 
@@ -41,6 +42,7 @@ export default function DMMode({ onBack }) {
   const [showPartyView, setShowPartyView] = useState(false);
   const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [showCoaching, setShowCoaching] = useState(false);
+  const [showLore, setShowLore] = useState(false);
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -545,6 +547,7 @@ export default function DMMode({ onBack }) {
     setShowPartyView(panel === 'party');
     setShowDiceRoller(panel === 'dice');
     setShowCoaching(panel === 'coaching');
+    setShowLore(panel === 'lore');
   };
 
   // ============================================================
@@ -1124,6 +1127,12 @@ export default function DMMode({ onBack }) {
             onClick={() => openPanel(showCoaching ? null : 'coaching')}
             color="#14b8a6"
           />
+          <ToolbarButton
+            label="Lore"
+            active={showLore}
+            onClick={() => openPanel(showLore ? null : 'lore')}
+            color="#a855f7"
+          />
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)', margin: '0 0.25rem' }} />
           <button
             onClick={handleEndSession}
@@ -1346,6 +1355,12 @@ export default function DMMode({ onBack }) {
         <DMCoachingPanel
           sessionId={sessionId}
           onClose={() => setShowCoaching(false)}
+        />
+      )}
+      {showLore && selectedParty && (
+        <PartyLorePanel
+          party={selectedParty}
+          onClose={() => setShowLore(false)}
         />
       )}
     </div>

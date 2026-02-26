@@ -31,15 +31,16 @@ router.post('/generate-party', async (req, res) => {
 
     // Save to database
     const result = await dbRun(
-      `INSERT INTO dm_mode_parties (name, setting, tone, level, party_data, party_dynamics, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+      `INSERT INTO dm_mode_parties (name, setting, tone, level, party_data, party_dynamics, party_concept, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
       [
         partyResult.party_name,
         config.setting,
         config.tone,
         config.level,
         JSON.stringify(partyResult.characters),
-        JSON.stringify(partyResult.tensions)
+        JSON.stringify(partyResult.tensions),
+        partyResult.party_concept || ''
       ]
     );
 
@@ -64,7 +65,7 @@ router.post('/generate-party', async (req, res) => {
 router.get('/parties', async (req, res) => {
   try {
     const parties = await dbAll(
-      'SELECT id, name, setting, tone, level, party_data, party_dynamics, status, created_at FROM dm_mode_parties ORDER BY created_at DESC'
+      'SELECT id, name, setting, tone, level, party_data, party_dynamics, party_concept, status, created_at FROM dm_mode_parties ORDER BY created_at DESC'
     );
     const parsed = parties.map(p => ({
       ...p,
@@ -153,7 +154,7 @@ router.post('/start', async (req, res) => {
     // Build system prompt
     const partyForPrompt = {
       party_name: party.name,
-      party_concept: '', // Stored in tensions/dynamics
+      party_concept: party.party_concept || '',
       characters,
       tensions,
       party_dynamics: party.party_dynamics
