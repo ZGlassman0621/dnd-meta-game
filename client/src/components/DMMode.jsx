@@ -824,32 +824,30 @@ export default function DMMode({ onBack }) {
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <h5 style={{ color: '#2ecc71', margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: '600' }}>What Persists Across Sessions</h5>
+                <h5 style={{ color: '#2ecc71', margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: '600' }}>Character Data (Always)</h5>
                 <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#aaa', fontSize: '0.78rem', lineHeight: '1.6' }}>
-                  <li>Character stats (HP, AC, level, XP)</li>
+                  <li>Stats (HP, AC, level, XP)</li>
                   <li>Inventory, gold, and equipment</li>
-                  <li>Ability scores and skill proficiencies</li>
+                  <li>Ability scores and proficiencies</li>
                   <li>Spells and spell slots</li>
-                  <li>Personality, secrets, flaws, and bonds</li>
+                  <li>Personality, secrets, and bonds</li>
                   <li>Party relationships and tensions</li>
-                  <li>Session summaries (last 3 fed to AI)</li>
                 </ul>
               </div>
               <div>
-                <h5 style={{ color: '#e74c3c', margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: '600' }}>What Doesn't Persist</h5>
+                <h5 style={{ color: '#2ecc71', margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: '600' }}>Extracted Each Session (Auto)</h5>
                 <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#aaa', fontSize: '0.78rem', lineHeight: '1.6' }}>
-                  <li>Full conversation history (only summaries)</li>
-                  <li>NPC names and details (add to summary!)</li>
-                  <li>Locations visited (add to summary!)</li>
-                  <li>Plot threads and clues found</li>
-                  <li>Promises made or deals struck</li>
-                  <li>Current quest objectives</li>
-                  <li>Conditions, curses, or ongoing effects</li>
+                  <li>NPC names, roles, and descriptions</li>
+                  <li>Locations visited and events</li>
+                  <li>Active and resolved plot threads</li>
+                  <li>Key decisions and consequences</li>
+                  <li>Character development moments</li>
+                  <li>Combat encounters and outcomes</li>
                 </ul>
               </div>
             </div>
             <p style={{ color: '#888', fontSize: '0.75rem', margin: '0.6rem 0 0', fontStyle: 'italic' }}>
-              Tip: Include NPC names, quest progress, important locations, and unresolved plot hooks in your session summaries so the AI remembers them next session.
+              The AI automatically extracts structured memory from each session. NPCs, plot threads, locations, and character moments are tracked across your entire campaign history.
             </p>
           </div>
         )}

@@ -5,6 +5,176 @@
 
 import { SKILL_ABILITY_MAP, computeSkillModifiers } from './dmPromptBuilder.js';
 
+// ==========================================
+// CHRONICLE HELPERS
+// ==========================================
+
+function safeParse(jsonStr, fallback = []) {
+  if (!jsonStr) return fallback;
+  try {
+    return typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+  } catch { return fallback; }
+}
+
+/**
+ * Deduplicate NPCs across all chronicles. Track which sessions each appeared in.
+ * Sort by recurrence (most frequently appearing first).
+ */
+function aggregateNpcs(chronicles) {
+  const npcMap = new Map();
+  for (const c of chronicles) {
+    const npcs = safeParse(c.npcs_involved, []);
+    for (const npc of npcs) {
+      if (!npc.name) continue;
+      const key = npc.name.toLowerCase();
+      if (npcMap.has(key)) {
+        const existing = npcMap.get(key);
+        existing.sessions.add(c.session_number);
+        if (npc.role && npc.role.length > (existing.role || '').length) existing.role = npc.role;
+        if (npc.description && !existing.description) existing.description = npc.description;
+      } else {
+        npcMap.set(key, {
+          name: npc.name,
+          role: npc.role || 'Unknown',
+          description: npc.description || null,
+          sessions: new Set([c.session_number])
+        });
+      }
+    }
+  }
+  return Array.from(npcMap.values())
+    .map(n => ({ ...n, sessions: Array.from(n.sessions).sort((a, b) => a - b) }))
+    .sort((a, b) => b.sessions.length - a.sessions.length);
+}
+
+/**
+ * Aggregate plot threads across all chronicles.
+ * A thread is "resolved" if its most recent mention has status "resolved".
+ */
+function aggregatePlotThreads(chronicles) {
+  const threadMap = new Map();
+  for (const c of chronicles) {
+    const threads = safeParse(c.plot_threads, []);
+    for (const t of threads) {
+      if (!t.thread) continue;
+      const key = t.thread.toLowerCase();
+      if (threadMap.has(key)) {
+        const existing = threadMap.get(key);
+        if (t.status === 'resolved') {
+          existing.status = 'resolved';
+          existing.resolvedIn = c.session_number;
+        }
+        if (t.details) existing.details = t.details;
+      } else {
+        threadMap.set(key, {
+          thread: t.thread,
+          status: t.status || 'ongoing',
+          details: t.details || '',
+          firstSeen: c.session_number,
+          resolvedIn: t.status === 'resolved' ? c.session_number : null
+        });
+      }
+    }
+  }
+  const all = Array.from(threadMap.values());
+  return {
+    active: all.filter(t => t.status !== 'resolved').sort((a, b) => a.firstSeen - b.firstSeen),
+    resolved: all.filter(t => t.status === 'resolved').sort((a, b) => (a.resolvedIn || 0) - (b.resolvedIn || 0))
+  };
+}
+
+/**
+ * Build the CAMPAIGN HISTORY section from structured chronicles.
+ * @param {Array} chronicles - Structured chronicle records
+ * @param {Array} uncoveredSummaries - Plain summaries from sessions that predate the chronicle system
+ */
+function formatCampaignHistory(chronicles, uncoveredSummaries = []) {
+  if (!chronicles || chronicles.length === 0) return '';
+
+  const parts = [];
+
+  // Include pre-chronicle session summaries so older sessions aren't lost
+  if (uncoveredSummaries.length > 0) {
+    parts.push('=== EARLIER SESSIONS (before structured tracking) ===\n');
+    for (const summary of uncoveredSummaries) {
+      parts.push(`Session: ${summary.title || 'Untitled'}`);
+      parts.push(summary.summary || 'No summary available.');
+      parts.push('');
+    }
+  }
+
+  // 1. Aggregated NPC reference
+  const allNpcs = aggregateNpcs(chronicles);
+  if (allNpcs.length > 0) {
+    parts.push('=== NPCs ENCOUNTERED ===');
+    parts.push('These NPCs have appeared in the campaign. The party remembers interacting with them.\n');
+    for (const npc of allNpcs) {
+      const desc = npc.description ? ` — ${npc.description}` : '';
+      parts.push(`- ${npc.name}: ${npc.role}${desc} (Sessions: ${npc.sessions.join(', ')})`);
+    }
+    parts.push('');
+  }
+
+  // 2. Plot threads
+  const { active, resolved } = aggregatePlotThreads(chronicles);
+  if (active.length > 0) {
+    parts.push('=== ACTIVE PLOT THREADS ===');
+    parts.push('These storylines are currently unresolved:\n');
+    for (const thread of active) {
+      parts.push(`- ${thread.thread}: ${thread.details} (since Session ${thread.firstSeen})`);
+    }
+    parts.push('');
+  }
+  if (resolved.length > 0) {
+    parts.push('=== RESOLVED PLOT THREADS ===');
+    for (const thread of resolved.slice(-10)) {
+      parts.push(`- ${thread.thread}: ${thread.details} (resolved Session ${thread.resolvedIn})`);
+    }
+    parts.push('');
+  }
+
+  // 3. Session chronicles (last 50 with full detail)
+  parts.push('=== SESSION CHRONICLES ===');
+  parts.push('The party has adventured together across these sessions. ALL of this is CANON — it happened and shapes the ongoing story.\n');
+
+  const recentChronicles = chronicles.slice(-50);
+  for (const c of recentChronicles) {
+    parts.push(`--- Session ${c.session_number} [${c.mood || 'neutral'}] ---`);
+    parts.push(c.summary || 'No summary available.');
+
+    const decisions = safeParse(c.key_decisions, []);
+    if (decisions.length > 0) {
+      parts.push('Decisions: ' + decisions.map(d => {
+        const who = d.who_decided ? `${d.who_decided}: ` : '';
+        return `${who}${d.decision}`;
+      }).join('; '));
+    }
+
+    const moments = safeParse(c.character_moments, []);
+    if (moments.length > 0) {
+      parts.push('Character moments: ' + moments.map(m => `${m.character} — ${m.moment}`).join('; '));
+    }
+
+    if (c.cliffhanger) {
+      parts.push(`Cliffhanger: ${c.cliffhanger}`);
+    }
+    parts.push('');
+  }
+
+  parts.push('USING THIS HISTORY:');
+  parts.push('- Reference past events, NPCs, and plot threads naturally when they become relevant');
+  parts.push('- Characters remember what happened — subtle callbacks are better than exposition dumps');
+  parts.push('- NPCs from earlier sessions remember the party when re-encountered');
+  parts.push('- Active plot threads should inform character decisions and reactions');
+  parts.push('- Continue from where the last session left off');
+
+  return '\n' + parts.join('\n');
+}
+
+// ==========================================
+// CHARACTER FORMATTING
+// ==========================================
+
 /**
  * Format a single character's sheet for the system prompt.
  */
@@ -110,10 +280,10 @@ function formatCharacterBlock(char, allCharacters) {
 /**
  * Build the full system prompt for DM Mode sessions.
  * @param {Object} party - Party data from dm_mode_parties table
- * @param {Object} context - { previousSummaries, sessionCount }
+ * @param {Object} context - { previousSummaries, sessionCount, chronicles }
  */
 export function createDMModeSystemPrompt(party, context = {}) {
-  const { previousSummaries, sessionCount = 0 } = context;
+  const { previousSummaries, sessionCount = 0, chronicles = [] } = context;
   const chars = party.characters || [];
   const tensions = party.tensions || [];
   const dynamics = party.party_dynamics;
@@ -254,9 +424,16 @@ SECRETS:
 - When a secret IS revealed, it should be a BIG moment with real consequences.`);
 
   // ==========================================
-  // SESSION CONTINUITY
+  // CAMPAIGN HISTORY
   // ==========================================
-  if (previousSummaries && previousSummaries.length > 0) {
+  if (chronicles.length > 0) {
+    // Include plain summaries from sessions that predate the chronicle system
+    const chronicleSessionIds = new Set(chronicles.map(c => c.session_id));
+    const uncoveredSummaries = (previousSummaries || []).filter(s => !chronicleSessionIds.has(s.id));
+
+    sections.push(formatCampaignHistory(chronicles, uncoveredSummaries));
+  } else if (previousSummaries && previousSummaries.length > 0) {
+    // Fallback: plain summaries for pre-chronicle sessions
     sections.push('\n=== PREVIOUS SESSIONS ===');
     sections.push('The party has adventured together before. Here is what happened:\n');
     for (const summary of previousSummaries) {

@@ -72,7 +72,8 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Frontend auth: global fetch interceptor injects Authorization header on all `/api` requests, LoginPage shown when no valid token
 - DM Mode: user is the DM, AI plays 4 characters. Separate from Player Mode (campaign-based sessions)
 - DM Mode party data: stored as JSON blob in `dm_mode_parties.party_data` — character stats (HP, XP, level, inventory, gold, spells) persist across sessions
-- DM Mode session continuity: ALL completed session summaries injected into AI system prompt as memory. Summaries are editable by the DM
+- DM Mode session continuity: structured chronicles extracted at session end via Sonnet (NPCs, locations, plot threads, decisions, character moments, mood, cliffhanger); all chronicles injected into next session's system prompt with aggregated NPC reference and plot thread tracking. Plain summaries used as fallback for pre-chronicle sessions. Summaries still editable by the DM
+- DM Mode chronicles: `dm_mode_chronicles` table stores structured session data; `dmModeChronicleService.js` handles extraction and retrieval; prompt builder aggregates NPCs and plot threads across all sessions
 - DM Mode prompt: 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER) in `dmModePromptBuilder.js`
 - DM Mode session resume: `/api/dm-mode/active/:partyId` returns full message history; auto-detected on party select
 - DM Mode XP/leveling: D&D 5e XP thresholds, party-split or individual XP awards, level-up with hit dice HP rolls
@@ -127,13 +128,17 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/routes/dmMode.js` — DM Mode routes (party gen, sessions, XP/loot, coaching)
 - `server/services/dmModePromptBuilder.js` — DM Mode system prompt builder (3-point reinforcement)
 - `server/services/dmModeService.js` — DM Mode helpers (skill checks, attacks, narrative parsing)
+- `server/services/dmModeChronicleService.js` — DM Mode session chronicle extraction (Sonnet) and retrieval
 - `server/services/partyGeneratorService.js` — Opus-powered 4-character party generation
 - `server/services/dmCoachingService.js` — Sonnet-powered DM coaching tips, DC reference
 - `server/migrations/014_dm_sessions_nullable_character.js` — Nullable character_id for DM Mode sessions
+- `server/migrations/015_party_concept.js` — Party concept column on dm_mode_parties
+- `server/migrations/016_dm_mode_chronicles.js` — DM Mode chronicles table for persistent structured memory
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
 - `client/src/App.jsx` — SPA root, navigation, state
 - `client/src/components/DMMode.jsx` — DM Mode UI (party select, session gameplay, history, summary editing)
 - `client/src/components/PartyView.jsx` — DM Mode party display (stats, XP, inventory, level-up)
+- `client/src/components/PartyLorePanel.jsx` — DM Mode backstory/lore panel (party concept, character backstories, relationships, tensions)
 - `client/src/components/DMCoachingPanel.jsx` — DM coaching tips panel
 - `client/src/components/DMSession.jsx` — Main Player Mode DM session UI (~4300 lines)
 - `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)

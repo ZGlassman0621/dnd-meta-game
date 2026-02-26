@@ -9,6 +9,7 @@ import { generateParty } from '../services/partyGeneratorService.js';
 import { createDMModeSystemPrompt } from '../services/dmModePromptBuilder.js';
 import { detectSkillChecks, detectAttacks, detectSpellCasts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
+import { generateDMModeChronicle, getChroniclesForParty } from '../services/dmModeChronicleService.js';
 import * as claude from '../services/claude.js';
 
 const router = express.Router();
@@ -145,9 +146,16 @@ router.post('/start', async (req, res) => {
     const characters = JSON.parse(party.party_data || '[]');
     const tensions = JSON.parse(party.party_dynamics || '[]');
 
-    // Get previous session summaries for continuity
+    // Load structured chronicles (preferred) and plain summaries (fallback for pre-chronicle sessions)
+    let chronicles = [];
+    try {
+      chronicles = await getChroniclesForParty(partyId);
+    } catch (e) {
+      console.error('[DM Mode] Failed to load chronicles:', e.message);
+    }
+
     const previousSessions = await dbAll(
-      "SELECT title, summary FROM dm_sessions WHERE dm_mode_party_id = ? AND status = 'completed' AND summary IS NOT NULL ORDER BY created_at DESC LIMIT 3",
+      "SELECT id, title, summary FROM dm_sessions WHERE dm_mode_party_id = ? AND status = 'completed' AND summary IS NOT NULL ORDER BY created_at ASC",
       [partyId]
     );
 
@@ -162,11 +170,12 @@ router.post('/start', async (req, res) => {
 
     const systemPrompt = createDMModeSystemPrompt(partyForPrompt, {
       previousSummaries: previousSessions,
-      sessionCount: previousSessions.length
+      sessionCount: previousSessions.length,
+      chronicles
     });
 
     // Build opening prompt
-    const isFirstSession = previousSessions.length === 0;
+    const isFirstSession = chronicles.length === 0 && previousSessions.length === 0;
     let openingPrompt;
     if (openingScene) {
       openingPrompt = openingScene;
@@ -557,6 +566,18 @@ router.post('/:sessionId/end', async (req, res) => {
       "UPDATE dm_sessions SET status = 'completed', summary = ?, end_time = CURRENT_TIMESTAMP WHERE id = ?",
       [summary, sessionId]
     );
+
+    // Generate structured chronicle (non-blocking — don't fail session end)
+    if (claude.isClaudeAvailable() && userMessages.length > 1) {
+      try {
+        const chronicle = await generateDMModeChronicle(parseInt(sessionId), session.dm_mode_party_id);
+        if (chronicle) {
+          console.log(`[DM Mode] Generated chronicle #${chronicle.sessionNumber} for session ${sessionId}`);
+        }
+      } catch (e) {
+        console.error('[DM Mode] Chronicle generation failed:', e.message);
+      }
+    }
 
     res.json({ summary });
   } catch (error) {
