@@ -81,7 +81,7 @@ const HIT_DICE = {
   'Sorcerer': 6, 'Wizard': 6
 };
 
-export default function PartyView({ party, onClose, onUpdateHp, onAwardXp, onAwardLoot, onLevelUp, sessionId }) {
+export default function PartyView({ party, onClose, onUpdateHp, onAwardXp, onAwardLoot, onLevelUp, onUpdateSpellSlot, onLongRest, sessionId }) {
   const [activeTab, setActiveTab] = useState(0);
   const [xpAmount, setXpAmount] = useState('');
   const [xpMode, setXpMode] = useState('party'); // 'party' or 'individual'
@@ -597,7 +597,8 @@ export default function PartyView({ party, onClose, onUpdateHp, onAwardXp, onAwa
                 marginBottom: '0.4rem',
                 padding: '0.35rem 0.5rem',
                 background: 'rgba(255,255,255,0.03)',
-                borderRadius: '4px'
+                borderRadius: '4px',
+                alignItems: 'center'
               }}>
                 {Object.entries(spellSlots).map(([level, total]) => {
                   const used = spellSlotsUsed[level] || 0;
@@ -605,20 +606,52 @@ export default function PartyView({ party, onClose, onUpdateHp, onAwardXp, onAwa
                   return (
                     <div key={level} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <span style={{ color: '#888', fontSize: '0.7rem' }}>Lv{level}:</span>
-                      <div style={{ display: 'flex', gap: '2px' }}>
-                        {Array.from({ length: total }).map((_, i) => (
-                          <div key={i} style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            background: i < remaining ? charColor : 'rgba(255,255,255,0.1)',
-                            border: `1px solid ${i < remaining ? charColor : 'rgba(255,255,255,0.2)'}`
-                          }} />
-                        ))}
+                      <div style={{ display: 'flex', gap: '3px' }}>
+                        {Array.from({ length: total }).map((_, i) => {
+                          const isFilled = i < remaining;
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                if (!onUpdateSpellSlot || !sessionId) return;
+                                onUpdateSpellSlot(char.name, level, isFilled ? used + 1 : Math.max(0, used - 1));
+                              }}
+                              title={isFilled ? `Use Lv${level} slot` : `Restore Lv${level} slot`}
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '50%',
+                                background: isFilled ? charColor : 'rgba(255,255,255,0.1)',
+                                border: `1px solid ${isFilled ? charColor : 'rgba(255,255,255,0.2)'}`,
+                                cursor: sessionId ? 'pointer' : 'default',
+                                transition: 'all 0.15s'
+                              }}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })}
+                {sessionId && onLongRest && (
+                  <button
+                    onClick={onLongRest}
+                    title="Long Rest: restore all HP and spell slots"
+                    style={{
+                      marginLeft: 'auto',
+                      padding: '0.15rem 0.5rem',
+                      background: 'transparent',
+                      border: '1px solid rgba(46,204,113,0.4)',
+                      borderRadius: '3px',
+                      color: '#2ecc71',
+                      cursor: 'pointer',
+                      fontSize: '0.65rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Long Rest
+                  </button>
+                )}
               </div>
             )}
             {/* Cantrips */}

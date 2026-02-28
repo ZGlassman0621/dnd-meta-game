@@ -3,6 +3,8 @@ import PartyView from './PartyView';
 import DiceRoller from './DiceRoller';
 import DMCoachingPanel from './DMCoachingPanel';
 import PartyLorePanel from './PartyLorePanel';
+import NPCCodexPanel from './NPCCodexPanel';
+import PlotThreadPanel from './PlotThreadPanel';
 
 const CHAR_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
 
@@ -43,6 +45,8 @@ export default function DMMode({ onBack }) {
   const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [showCoaching, setShowCoaching] = useState(false);
   const [showLore, setShowLore] = useState(false);
+  const [showNpcCodex, setShowNpcCodex] = useState(false);
+  const [showPlotThreads, setShowPlotThreads] = useState(false);
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -482,6 +486,62 @@ export default function DMMode({ onBack }) {
     }
   };
 
+  const handleUpdateSpellSlot = async (characterName, level, newUsed) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/dm-mode/${sessionId}/update-spell-slots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterName, level, used: Math.max(0, newUsed) })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => {
+          if (!prev) return prev;
+          const chars = prev.characters.map(c =>
+            c.name === characterName ? { ...c, spell_slots_used: data.spell_slots_used } : c
+          );
+          return { ...prev, characters: chars };
+        });
+      }
+    } catch (err) {
+      console.error('Spell slot update error:', err);
+    }
+  };
+
+  const handleLongRest = async () => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/dm-mode/${sessionId}/long-rest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => prev ? { ...prev, characters: data.characters } : prev);
+      }
+    } catch (err) {
+      console.error('Long rest error:', err);
+    }
+  };
+
+  const handleGameDayChange = async (delta) => {
+    if (!selectedParty) return;
+    try {
+      const res = await fetch(`/api/dm-mode/party/${selectedParty.id}/game-day`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => prev ? { ...prev, current_game_day: data.current_game_day } : prev);
+      }
+    } catch (err) {
+      console.error('Game day update error:', err);
+    }
+  };
+
   const handleEndSession = async () => {
     if (!sessionId) return;
     if (!confirm('End this session? A summary will be generated.')) return;
@@ -570,6 +630,8 @@ export default function DMMode({ onBack }) {
     setShowDiceRoller(panel === 'dice');
     setShowCoaching(panel === 'coaching');
     setShowLore(panel === 'lore');
+    setShowNpcCodex(panel === 'npcs');
+    setShowPlotThreads(panel === 'threads');
   };
 
   // ============================================================
@@ -1126,6 +1188,29 @@ export default function DMMode({ onBack }) {
           })}
         </div>
 
+        {/* Game Day Counter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0 0.5rem' }}>
+          <button
+            onClick={() => handleGameDayChange(-1)}
+            style={{
+              width: '20px', height: '20px', borderRadius: '3px', border: '1px solid rgba(212,175,55,0.3)',
+              background: 'transparent', color: '#d4af37', cursor: 'pointer', fontSize: '0.75rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0
+            }}
+          >-</button>
+          <span style={{ color: '#d4af37', fontWeight: 'bold', fontSize: '0.8rem', minWidth: '3.5rem', textAlign: 'center' }}>
+            Day {selectedParty?.current_game_day || 1}
+          </span>
+          <button
+            onClick={() => handleGameDayChange(1)}
+            style={{
+              width: '20px', height: '20px', borderRadius: '3px', border: '1px solid rgba(212,175,55,0.3)',
+              background: 'transparent', color: '#d4af37', cursor: 'pointer', fontSize: '0.75rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0
+            }}
+          >+</button>
+        </div>
+
         {/* Toolbar */}
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <ToolbarButton
@@ -1152,6 +1237,18 @@ export default function DMMode({ onBack }) {
             active={showLore}
             onClick={() => openPanel(showLore ? null : 'lore')}
             color="#a855f7"
+          />
+          <ToolbarButton
+            label="NPCs"
+            active={showNpcCodex}
+            onClick={() => openPanel(showNpcCodex ? null : 'npcs')}
+            color="#e74c3c"
+          />
+          <ToolbarButton
+            label="Quests"
+            active={showPlotThreads}
+            onClick={() => openPanel(showPlotThreads ? null : 'threads')}
+            color="#3b82f6"
           />
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)', margin: '0 0.25rem' }} />
           <button
@@ -1373,6 +1470,8 @@ export default function DMMode({ onBack }) {
           onAwardXp={handleAwardXp}
           onAwardLoot={handleAwardLoot}
           onLevelUp={handleLevelUp}
+          onUpdateSpellSlot={handleUpdateSpellSlot}
+          onLongRest={handleLongRest}
           sessionId={sessionId}
         />
       )}
@@ -1394,6 +1493,18 @@ export default function DMMode({ onBack }) {
         <PartyLorePanel
           party={selectedParty}
           onClose={() => setShowLore(false)}
+        />
+      )}
+      {showNpcCodex && selectedParty && (
+        <NPCCodexPanel
+          partyId={selectedParty.id}
+          onClose={() => setShowNpcCodex(false)}
+        />
+      )}
+      {showPlotThreads && selectedParty && (
+        <PlotThreadPanel
+          partyId={selectedParty.id}
+          onClose={() => setShowPlotThreads(false)}
         />
       )}
     </div>

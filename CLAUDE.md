@@ -79,6 +79,11 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - DM Mode OOC (Out of Character): prefix messages with `OOC:` or `OOC CharName:` to speak to "players" about their characters. Server wraps with instructions for player-voice response. Purple-themed UI styling. Stored in transcript as `[OOC]` prefixed messages. No dice/markers processed for OOC.
 - DM Mode session resume: `/api/dm-mode/active/:partyId` returns full message history; auto-detected on party select
 - DM Mode XP/leveling: D&D 5e XP thresholds, party-split or individual XP awards, level-up with hit dice HP rolls
+- DM Mode spell slots: clickable slot circles in PartyView to use/restore; Long Rest button resets all slots and restores HP to max
+- DM Mode game day: `current_game_day` column on `dm_mode_parties`; manual counter (+/-) in gameplay top bar
+- DM Mode NPC Codex: `dm_mode_npcs` table stores NPCs auto-synced from chronicles (name, role, description, voice_notes, sessions_appeared); searchable panel with sort by name/frequency/recency
+- DM Mode NPC voice extraction: `extractNpcVoiceNotes()` in `dmModeNpcService.js` — Sonnet analyzes DM narration at session end for speech patterns, mannerisms, accents per NPC; accumulated in `voice_notes` column
+- DM Mode plot threads: `dm_mode_plot_threads` table with status (ongoing/resolved/abandoned/new), tags (JSON array), source (auto/manual); auto-synced from chronicles but manual status overrides prevent auto-updates; UI panel with filter tabs, status dropdown, tag management, manual thread creation
 - DM Mode sessions use `dm_sessions` table with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is NULL)
 - Migration 014: `dm_sessions.character_id` made nullable for DM Mode compatibility
 
@@ -136,11 +141,15 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/migrations/014_dm_sessions_nullable_character.js` — Nullable character_id for DM Mode sessions
 - `server/migrations/015_party_concept.js` — Party concept column on dm_mode_parties
 - `server/migrations/016_dm_mode_chronicles.js` — DM Mode chronicles table for persistent structured memory
+- `server/migrations/017_dm_mode_extensions.js` — NPC codex table, plot threads table, game day column
+- `server/services/dmModeNpcService.js` — NPC codex sync/CRUD, plot thread management, NPC voice extraction
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
 - `client/src/App.jsx` — SPA root, navigation, state
 - `client/src/components/DMMode.jsx` — DM Mode UI (party select, session gameplay, history, summary editing)
-- `client/src/components/PartyView.jsx` — DM Mode party display (stats, XP, inventory, level-up)
+- `client/src/components/PartyView.jsx` — DM Mode party display (stats, XP, inventory, spell slots, level-up)
 - `client/src/components/PartyLorePanel.jsx` — DM Mode backstory/lore panel (party concept, character backstories, relationships, tensions)
+- `client/src/components/NPCCodexPanel.jsx` — DM Mode NPC codex panel (search, sort, voice notes)
+- `client/src/components/PlotThreadPanel.jsx` — DM Mode plot thread tracker (status, tags, manual creation)
 - `client/src/components/DMCoachingPanel.jsx` — DM coaching tips panel
 - `client/src/components/DMSession.jsx` — Main Player Mode DM session UI (~4300 lines)
 - `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)

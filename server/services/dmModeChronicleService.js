@@ -159,7 +159,7 @@ export async function generateDMModeChronicle(sessionId, partyId) {
     );
 
     console.log(`[DM Chronicle] Generated chronicle #${sessionNumber} for session ${sessionId}`);
-    return { id: Number(result.lastInsertRowid), sessionNumber };
+    return { id: Number(result.lastInsertRowid), sessionNumber, data: chronicle };
   } catch (error) {
     console.error('[DM Chronicle] AI extraction failed:', error.message);
     return null;

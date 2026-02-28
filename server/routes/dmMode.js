@@ -10,6 +10,7 @@ import { createDMModeSystemPrompt } from '../services/dmModePromptBuilder.js';
 import { detectSkillChecks, detectAttacks, detectSpellCasts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
 import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
+import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
 import * as claude from '../services/claude.js';
 
 const router = express.Router();
@@ -591,11 +592,12 @@ router.post('/:sessionId/end', async (req, res) => {
     );
 
     // Generate structured chronicle (non-blocking — don't fail session end)
+    let chronicleResult = null;
     if (claude.isClaudeAvailable() && userMessages.length > 1) {
       try {
-        const chronicle = await generateDMModeChronicle(parseInt(sessionId), session.dm_mode_party_id);
-        if (chronicle) {
-          console.log(`[DM Mode] Generated chronicle #${chronicle.sessionNumber} for session ${sessionId}`);
+        chronicleResult = await generateDMModeChronicle(parseInt(sessionId), session.dm_mode_party_id);
+        if (chronicleResult) {
+          console.log(`[DM Mode] Generated chronicle #${chronicleResult.sessionNumber} for session ${sessionId}`);
         }
       } catch (e) {
         console.error('[DM Mode] Chronicle generation failed:', e.message);
@@ -609,6 +611,23 @@ router.post('/:sessionId/end', async (req, res) => {
         }
       } catch (e) {
         console.error('[DM Mode] Relationship extraction failed:', e.message);
+      }
+
+      // Sync NPCs and plot threads from chronicle (non-blocking)
+      if (chronicleResult?.data) {
+        try {
+          await syncNpcsFromChronicle(session.dm_mode_party_id, chronicleResult.data, chronicleResult.sessionNumber);
+          await syncPlotThreadsFromChronicle(session.dm_mode_party_id, chronicleResult.data, chronicleResult.sessionNumber);
+        } catch (e) {
+          console.error('[DM Mode] NPC/thread sync failed:', e.message);
+        }
+      }
+
+      // Extract NPC voice notes (non-blocking)
+      try {
+        await extractNpcVoiceNotes(parseInt(sessionId), session.dm_mode_party_id);
+      } catch (e) {
+        console.error('[DM Mode] Voice extraction failed:', e.message);
       }
     }
 
@@ -704,6 +723,191 @@ router.post('/:sessionId/coaching-tip', async (req, res) => {
   } catch (error) {
     console.error('Error generating coaching tip:', error);
     res.status(500).json({ error: 'Failed to generate tip' });
+  }
+});
+
+// ============================================================
+// NPC CODEX
+// ============================================================
+
+// GET /api/dm-mode/npcs/:partyId — List NPCs for a party
+router.get('/npcs/:partyId', async (req, res) => {
+  try {
+    const { search, sort } = req.query;
+    const npcs = await getNpcsForParty(parseInt(req.params.partyId), { search, sort });
+    res.json(npcs);
+  } catch (error) {
+    console.error('Error getting NPCs:', error);
+    res.status(500).json({ error: 'Failed to get NPCs' });
+  }
+});
+
+// ============================================================
+// PLOT THREADS
+// ============================================================
+
+// GET /api/dm-mode/plot-threads/:partyId — List plot threads
+router.get('/plot-threads/:partyId', async (req, res) => {
+  try {
+    const { status } = req.query;
+    const threads = await getPlotThreadsForParty(parseInt(req.params.partyId), { status });
+    res.json(threads);
+  } catch (error) {
+    console.error('Error getting plot threads:', error);
+    res.status(500).json({ error: 'Failed to get plot threads' });
+  }
+});
+
+// POST /api/dm-mode/plot-threads/:partyId — Create a manual plot thread
+router.post('/plot-threads/:partyId', async (req, res) => {
+  try {
+    const { threadName, status, details, tags } = req.body;
+    if (!threadName?.trim()) return res.status(400).json({ error: 'threadName is required' });
+
+    const thread = await createManualPlotThread(parseInt(req.params.partyId), {
+      threadName: threadName.trim(), status, details, tags
+    });
+    res.json(thread);
+  } catch (error) {
+    if (error.message?.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'A thread with this name already exists' });
+    }
+    console.error('Error creating plot thread:', error);
+    res.status(500).json({ error: 'Failed to create plot thread' });
+  }
+});
+
+// PUT /api/dm-mode/plot-thread/:threadId/status — Update thread status
+router.put('/plot-thread/:threadId/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['ongoing', 'resolved', 'abandoned', 'new'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    const thread = await updatePlotThreadStatus(parseInt(req.params.threadId), status);
+    res.json({ ...thread, tags: JSON.parse(thread.tags || '[]') });
+  } catch (error) {
+    console.error('Error updating plot thread status:', error);
+    res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// PUT /api/dm-mode/plot-thread/:threadId/tags — Update thread tags
+router.put('/plot-thread/:threadId/tags', async (req, res) => {
+  try {
+    const { tags } = req.body;
+    if (!Array.isArray(tags)) return res.status(400).json({ error: 'tags must be an array' });
+    const thread = await updatePlotThreadTags(parseInt(req.params.threadId), tags);
+    res.json({ ...thread, tags: JSON.parse(thread.tags || '[]') });
+  } catch (error) {
+    console.error('Error updating plot thread tags:', error);
+    res.status(500).json({ error: 'Failed to update tags' });
+  }
+});
+
+// ============================================================
+// SPELL SLOTS & LONG REST
+// ============================================================
+
+// POST /api/dm-mode/:sessionId/update-spell-slots — Update spell slot usage
+router.post('/:sessionId/update-spell-slots', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { characterName, level, used } = req.body;
+
+    const session = await dbGet('SELECT dm_mode_party_id FROM dm_sessions WHERE id = ? AND session_type = ?', [sessionId, 'dm_mode']);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const party = await dbGet('SELECT * FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const characters = JSON.parse(party.party_data || '[]');
+    const char = characters.find(c => c.name === characterName);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+
+    const slots = char.spell_slots || {};
+    const maxForLevel = slots[String(level)] || 0;
+    if (!char.spell_slots_used) char.spell_slots_used = {};
+    char.spell_slots_used[String(level)] = Math.max(0, Math.min(maxForLevel, used));
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(characters), session.dm_mode_party_id]
+    );
+
+    res.json({ characterName, spell_slots: char.spell_slots, spell_slots_used: char.spell_slots_used });
+  } catch (error) {
+    console.error('Error updating spell slots:', error);
+    res.status(500).json({ error: 'Failed to update spell slots' });
+  }
+});
+
+// POST /api/dm-mode/:sessionId/long-rest — Reset spell slots and restore HP
+router.post('/:sessionId/long-rest', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const session = await dbGet('SELECT dm_mode_party_id FROM dm_sessions WHERE id = ? AND session_type = ?', [sessionId, 'dm_mode']);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const party = await dbGet('SELECT * FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const characters = JSON.parse(party.party_data || '[]');
+    for (const char of characters) {
+      // Restore HP to max
+      char.current_hp = char.max_hp;
+      // Reset all spell slots
+      if (char.spell_slots_used) {
+        for (const level of Object.keys(char.spell_slots_used)) {
+          char.spell_slots_used[level] = 0;
+        }
+      }
+    }
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(characters), session.dm_mode_party_id]
+    );
+
+    res.json({ characters });
+  } catch (error) {
+    console.error('Error processing long rest:', error);
+    res.status(500).json({ error: 'Failed to process long rest' });
+  }
+});
+
+// ============================================================
+// GAME DAY
+// ============================================================
+
+// POST /api/dm-mode/party/:partyId/game-day — Update game day
+router.post('/party/:partyId/game-day', async (req, res) => {
+  try {
+    const { delta, day } = req.body;
+    const partyId = parseInt(req.params.partyId);
+
+    const party = await dbGet('SELECT current_game_day FROM dm_mode_parties WHERE id = ?', [partyId]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    let newDay;
+    if (day !== undefined) {
+      newDay = Math.max(1, day);
+    } else if (delta !== undefined) {
+      newDay = Math.max(1, (party.current_game_day || 1) + delta);
+    } else {
+      return res.status(400).json({ error: 'Provide delta or day' });
+    }
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET current_game_day = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [newDay, partyId]
+    );
+
+    res.json({ current_game_day: newDay });
+  } catch (error) {
+    console.error('Error updating game day:', error);
+    res.status(500).json({ error: 'Failed to update game day' });
   }
 });
 
