@@ -179,11 +179,13 @@ export default function PartyView({ party, onClose, onUpdateHp, onAwardXp, onAwa
                 fontSize: '0.8rem',
                 fontWeight: isActive ? 'bold' : 'normal',
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 minWidth: 0,
                 transition: 'all 0.2s'
               }}
             >
-              {c.name}
+              {c.name?.split(' ')[0] || c.name}
             </button>
           );
         })}

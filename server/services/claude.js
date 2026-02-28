@@ -112,8 +112,21 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Claude API error: ${error.error?.message || 'Unknown error'}`);
+        // Retry on overloaded (529) or server error (503, 500)
+        const isRetryableStatus = response.status === 529 || response.status === 503 || response.status === 500;
+        if (isRetryableStatus && attempt < maxRetries) {
+          const delay = Math.pow(2, attempt - 1) * 2000; // 2s, 4s, 8s for overloaded
+          console.log(`Claude API overloaded/error (${response.status}, attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        let errorBody;
+        try {
+          errorBody = await response.json();
+        } catch {
+          errorBody = { error: { message: `HTTP ${response.status}` } };
+        }
+        throw new Error(`Claude API error: ${errorBody.error?.message || `HTTP ${response.status}`}`);
       }
 
       const data = await response.json();

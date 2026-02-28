@@ -265,12 +265,22 @@ function formatCharacterBlock(char, allCharacters) {
   parts.push(`Social Style: ${char.social_style}`);
   parts.push(`Moral Tendencies: ${char.moral_tendencies}`);
 
-  // Relationships
+  // Relationships (with evolving warmth/trust scores)
   if (char.party_relationships) {
     parts.push('');
     parts.push('RELATIONSHIPS WITH PARTY MEMBERS:');
     for (const [name, rel] of Object.entries(char.party_relationships)) {
-      parts.push(`- ${name}: ${rel.attitude} — "${rel.tension}"`);
+      const warmth = rel.warmth || 0;
+      const trust = rel.trust || 0;
+      const w = warmth >= 0 ? `+${warmth}` : `${warmth}`;
+      const t = trust >= 0 ? `+${trust}` : `${trust}`;
+      parts.push(`- ${name}: ${rel.attitude} [warmth: ${w}, trust: ${t}] — "${rel.tension}"`);
+      // Include last 2 history entries for recent context
+      if (rel.history && rel.history.length > 0) {
+        for (const h of rel.history.slice(-2)) {
+          parts.push(`  Recent: ${h.shift} — ${h.reason} (Session ${h.session})`);
+        }
+      }
     }
   }
 
@@ -335,6 +345,21 @@ DICE AND RESOLUTION — MANDATORY:
 - WRONG: **${characterNames[0]}** checks the door and finds a tripwire.
 - When a character wants to attempt something uncertain, suggest the relevant skill and state their modifier. Then STOP and let the DM resolve it.
 
+PLAYER INITIATIVE — MANDATORY:
+- These are PLAYERS, not puppets. They have their own goals, curiosity, and ideas.
+- Characters should ASK QUESTIONS: "What does the room look like?" "Is anyone else in the tavern?" "Can I see what's on the other side?"
+- Characters should PROPOSE ACTIONS the DM hasn't suggested: searching drawers, talking to bystanders, investigating a sound, tasting the wine, climbing a wall to get a better view.
+- Characters should PURSUE THEIR MOTIVATIONS: the scholar looks for books, the thief cases the room for valuables, the paladin checks on the injured.
+- When entering a new location or meeting new NPCs, characters should actively engage — not wait to be told what to do.
+
+NO ECHOING — MANDATORY:
+- NEVER repeat, quote, or parrot phrases from the DM's narration. This is the single most important dialogue rule.
+- When an NPC says something memorable, a character should REACT to the sentiment — not repeat the words.
+- WRONG: "Inns aren't run on money. Not really." *She repeats it like she's filing it away.*
+- RIGHT: *Something about that lands. She touches her holy symbol.* "There are still good people."
+- Characters respond with THEIR OWN words, filtered through THEIR OWN voice and worldview.
+- If a character is moved by what was said, show it through action, expression, or their own original reflection — never by echoing the DM's text.
+
 PLAYER AGENCY — FORBIDDEN:
 - NEVER narrate what NPCs do, say, or feel. The DM controls all NPCs and the world.
 - NEVER describe environmental changes, weather, or world events. The DM controls the world.
@@ -357,7 +382,7 @@ PLAYER AGENCY — FORBIDDEN:
   // ==========================================
   if (tensions.length > 0 || dynamics) {
     sections.push('=== INTER-PARTY DYNAMICS ===');
-    sections.push('These tensions should SIMMER beneath the surface. Not every response is a fight, but undercurrents are always there. A terse word, a meaningful look, a sarcastic aside — these build real dynamics.\n');
+    sections.push('These tensions EVOLVE over the campaign. Old tensions may have softened or intensified, new ones may have emerged. Play them at their CURRENT intensity, not their original level. A terse word, a meaningful look, a sarcastic aside — these build real dynamics.\n');
     for (const tension of tensions) {
       sections.push(`- ${tension}`);
     }
@@ -381,6 +406,15 @@ ADDRESSING:
 - When the DM addresses the full party (e.g., "You all arrive at the tavern"), 2-3 most relevant characters react.
 - When the DM addresses a specific character by name (e.g., "${characterNames[0]}, an elf approaches you"), that character responds primarily. Others CAN chime in if it's natural — eavesdropping, reacting to what they see, commenting to each other.
 - When the DM describes a scene or situation, each character reacts based on THEIR personality: the cautious one checks for danger, the curious one examines something, the social one talks to people, the pragmatic one asks "why does this matter?"
+
+PLAYER CURIOSITY AND INITIATIVE:
+- These characters are played by REAL PLAYERS who are curious, engaged, and proactive. They do NOT passively wait for the DM to spoon-feed them the adventure.
+- When entering a new room/location: at least one character should investigate, look around, ask what they see, or interact with something WITHOUT being prompted.
+- When meeting NPCs: characters should ask questions, push for information, try to read the person, or comment to each other about what they think.
+- Characters have THEIR OWN IDEAS about what to do next. They propose plans, suggest directions, debate approaches, and sometimes go off on tangents that interest them.
+- A curious character might wander off to look at something. A suspicious one might ask "What's behind that door?" A greedy one might ask "Is there a reward?" A scholarly one might examine the runes.
+- Between scenes or when travel is described, characters should bring up things on their mind: unresolved questions, worries, suspicions about NPCs, plans for the future.
+- When the DM gives an open-ended prompt, DO NOT just echo it back or wait for direction. Take initiative. Make choices. Drive the story forward.
 
 INTER-CHARACTER CONVERSATION:
 - Characters talk TO EACH OTHER, not just to the DM.
@@ -464,7 +498,11 @@ SECRETS:
 
 6. DISAGREEMENT: At least 2 characters should have different opinions on significant decisions. Root disagreements in their specific values and flaws.
 
-7. INTER-PARTY DYNAMICS: The tensions listed above should simmer. Not every line is a fight, but undercurrents are always present.
+7. INTER-PARTY DYNAMICS: Tensions and warmth/trust scores reflect how characters have EVOLVED. A character with warmth: -3 toward someone is NOT friendly to them. Play the CURRENT relationship state, not the original one.
+
+8. PLAYER INITIATIVE: These are REAL PLAYERS — curious, proactive, and engaged. They ask questions, investigate things, propose plans, and drive the story forward. They do NOT passively wait for the DM to tell them what to do next.
+
+9. NO ECHOING: NEVER repeat, quote, or parrot phrases from the DM's narration. Characters react with THEIR OWN words filtered through THEIR OWN voice — not by restating what they just heard.
 
 ========================================`);
 

@@ -260,7 +260,13 @@ export default function PartyLorePanel({ party, onClose }) {
           <LoreSection title={`${char.name?.split(' ')[0]}'s Relationships`} color={charColor}>
             {Object.entries(char.party_relationships).map(([name, rel]) => {
               const attitude = rel.attitude || 'neutral';
-              const attitudeColor = ATTITUDE_COLORS[attitude.toLowerCase()] || '#888';
+              const warmth = rel.warmth || 0;
+              const trust = rel.trust || 0;
+              // Use attitude color if available, otherwise derive from warmth
+              const attitudeColor = ATTITUDE_COLORS[attitude.toLowerCase()] ||
+                (warmth > 0 ? '#22c55e' : warmth < 0 ? '#ef4444' : '#eab308');
+              const warmthColor = warmth >= 0 ? '#22c55e' : '#ef4444';
+              const trustColor = trust >= 0 ? '#3b82f6' : '#f97316';
               return (
                 <div key={name} style={{
                   marginBottom: '0.75rem',
@@ -269,7 +275,7 @@ export default function PartyLorePanel({ party, onClose }) {
                   borderRadius: '6px',
                   borderLeft: `3px solid ${attitudeColor}`
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
                     <span style={{ color: '#ddd', fontWeight: 'bold', fontSize: '0.85rem' }}>
                       {name.split(' ')[0]}
                     </span>
@@ -285,10 +291,29 @@ export default function PartyLorePanel({ party, onClose }) {
                     }}>
                       {attitude}
                     </span>
+                    {(warmth !== 0 || trust !== 0) && (
+                      <>
+                        <span style={{ fontSize: '0.6rem', color: warmthColor, fontWeight: 'bold' }}>
+                          W:{warmth >= 0 ? '+' : ''}{warmth}
+                        </span>
+                        <span style={{ fontSize: '0.6rem', color: trustColor, fontWeight: 'bold' }}>
+                          T:{trust >= 0 ? '+' : ''}{trust}
+                        </span>
+                      </>
+                    )}
                   </div>
                   {rel.tension && (
                     <div style={{ color: '#aaa', fontSize: '0.8rem', lineHeight: '1.4' }}>
                       {rel.tension}
+                    </div>
+                  )}
+                  {rel.history && rel.history.length > 0 && (
+                    <div style={{ marginTop: '0.35rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.35rem' }}>
+                      {rel.history.slice(-3).map((h, i) => (
+                        <div key={i} style={{ color: '#777', fontSize: '0.7rem', marginBottom: '0.1rem' }}>
+                          S{h.session}: {h.reason}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

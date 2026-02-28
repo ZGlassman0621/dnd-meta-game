@@ -130,8 +130,14 @@ export default function DMMode({ onBack }) {
         body: JSON.stringify(genConfig)
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Generation failed');
+        let errMsg = 'Generation failed';
+        try {
+          const err = await res.json();
+          errMsg = err.error || errMsg;
+        } catch {
+          errMsg = `Server error (${res.status})`;
+        }
+        throw new Error(errMsg);
       }
       const party = await res.json();
       setParties(prev => [party, ...prev]);
@@ -196,8 +202,14 @@ export default function DMMode({ onBack }) {
       }
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to start session');
+        let errMsg = 'Failed to start session';
+        try {
+          const err = await res.json();
+          errMsg = err.error || errMsg;
+        } catch {
+          errMsg = `Server error (${res.status})`;
+        }
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -266,8 +278,11 @@ export default function DMMode({ onBack }) {
     setSessionError(null);
     setInputText('');
 
+    // Detect OOC prefix for display
+    const isOOC = /^(?:\(?\s*OOC\s*\)?\s*(?:to\s+)?\w*\s*[:—-])/i.test(text);
+
     // Add DM message to display
-    setMessages(prev => [...prev, { role: 'dm', content: text }]);
+    setMessages(prev => [...prev, { role: 'dm', content: text, ooc: isOOC }]);
 
     try {
       const res = await fetch(`/api/dm-mode/${sessionId}/message`, {
@@ -277,8 +292,14 @@ export default function DMMode({ onBack }) {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to send message');
+        let errMsg = 'Failed to send message';
+        try {
+          const err = await res.json();
+          errMsg = err.error || errMsg;
+        } catch {
+          errMsg = `Server error (${res.status})`;
+        }
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -311,7 +332,8 @@ export default function DMMode({ onBack }) {
       setMessages(prev => [...prev, {
         role: 'party',
         content: data.narrative,
-        segments
+        segments,
+        ooc: data.ooc || false
       }]);
     } catch (err) {
       setSessionError(err.message);
@@ -1160,18 +1182,19 @@ export default function DMMode({ onBack }) {
       }}>
         {messages.map((msg, idx) => {
           if (msg.role === 'dm') {
+            const dmOOC = msg.ooc;
             return (
               <div key={idx} style={{
                 alignSelf: 'flex-end',
                 maxWidth: '80%',
                 padding: '0.75rem 1rem',
-                background: 'rgba(230, 126, 34, 0.15)',
+                background: dmOOC ? 'rgba(139, 92, 246, 0.12)' : 'rgba(230, 126, 34, 0.15)',
                 borderRadius: '12px 12px 2px 12px',
-                border: '1px solid rgba(230, 126, 34, 0.3)',
+                border: `1px solid ${dmOOC ? 'rgba(139, 92, 246, 0.35)' : 'rgba(230, 126, 34, 0.3)'}`,
                 color: '#eee'
               }}>
-                <div style={{ fontSize: '0.7rem', color: '#e67e22', marginBottom: '0.3rem', fontWeight: 'bold' }}>
-                  DM (You)
+                <div style={{ fontSize: '0.7rem', color: dmOOC ? '#a78bfa' : '#e67e22', marginBottom: '0.3rem', fontWeight: 'bold' }}>
+                  {dmOOC ? 'DM (OOC)' : 'DM (You)'}
                 </div>
                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>{msg.content}</div>
               </div>
@@ -1196,21 +1219,33 @@ export default function DMMode({ onBack }) {
           }
 
           // Party message — render character segments
+          const partyOOC = msg.ooc;
           return (
             <div key={idx} style={{
               alignSelf: 'flex-start',
               maxWidth: '85%',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.5rem'
+              gap: '0.5rem',
+              ...(partyOOC ? {
+                padding: '0.5rem',
+                background: 'rgba(139, 92, 246, 0.06)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '8px'
+              } : {})
             }}>
+              {partyOOC && (
+                <div style={{ fontSize: '0.65rem', color: '#a78bfa', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 0.25rem' }}>
+                  Out of Character
+                </div>
+              )}
               {(msg.segments || []).map((seg, si) => {
                 if (!seg.character) {
                   // Narration (no character label)
                   return (
                     <div key={si} style={{
                       padding: '0.5rem 0.75rem',
-                      color: '#bbb',
+                      color: partyOOC ? '#c4b5fd' : '#bbb',
                       fontStyle: 'italic',
                       fontSize: '0.9rem',
                       lineHeight: '1.5'
@@ -1219,18 +1254,18 @@ export default function DMMode({ onBack }) {
                     </div>
                   );
                 }
-                const color = getCharColor(seg.character);
+                const color = partyOOC ? '#a78bfa' : getCharColor(seg.character);
                 return (
                   <div key={si} style={{
                     padding: '0.6rem 0.75rem',
                     borderLeft: `3px solid ${color}`,
-                    background: `${color}0a`,
+                    background: partyOOC ? 'rgba(139, 92, 246, 0.08)' : `${color}0a`,
                     borderRadius: '0 8px 8px 0'
                   }}>
                     <div style={{ color, fontWeight: 'bold', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
                       {seg.character}
                     </div>
-                    <div style={{ color: '#ddd', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '0.9rem' }}>
+                    <div style={{ color: partyOOC ? '#d4c8f0' : '#ddd', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '0.9rem' }}>
                       {seg.content}
                     </div>
                   </div>

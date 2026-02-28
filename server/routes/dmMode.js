@@ -9,7 +9,7 @@ import { generateParty } from '../services/partyGeneratorService.js';
 import { createDMModeSystemPrompt } from '../services/dmModePromptBuilder.js';
 import { detectSkillChecks, detectAttacks, detectSpellCasts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
-import { generateDMModeChronicle, getChroniclesForParty } from '../services/dmModeChronicleService.js';
+import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
 import * as claude from '../services/claude.js';
 
 const router = express.Router();
@@ -250,19 +250,41 @@ router.post('/:sessionId/message', async (req, res) => {
     const messages = JSON.parse(session.messages || '[]');
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
 
+    // Detect OOC (Out of Character) messages
+    // Formats: "OOC: ...", "OOC Vask: ...", "ooc to Fidget: ...", "(OOC) ..."
+    const oocMatch = action.match(/^(?:\(?\s*OOC\s*\)?\s*(?:to\s+)?(\w+)?\s*[:—-]\s*)(.*)/is);
+    const isOOC = !!oocMatch;
+    let aiInput = action;
+
+    if (isOOC) {
+      const targetName = oocMatch[1] || null;
+      const oocContent = oocMatch[2].trim();
+
+      // Build OOC wrapper for the AI
+      const targetClause = targetName
+        ? `the player behind ${targetName}. Only ${targetName}'s player should respond`
+        : `the players at the table. Any or all players may respond`;
+      aiInput = `[OOC — The DM is speaking OUT OF CHARACTER to ${targetClause}. ` +
+        `Respond as the PLAYER(S), not the characters. Players have full knowledge of their character's backstory, secrets, motivations, fears, and inner thoughts. ` +
+        `Speak honestly and reflectively about the character — their psychology, why they made certain choices, what they're feeling underneath the surface, what the player's intent is. ` +
+        `Use a casual, conversational player voice — not the character's in-game voice. ` +
+        `Format: **PlayerName (OOC):** response. Keep the game paused — no in-character actions or world progression.]\n\n` +
+        `DM (OOC${targetName ? ` to ${targetName}'s player` : ''}): ${oocContent}`;
+    }
+
     // Call AI
     let narrative;
     if (claude.isClaudeAvailable()) {
-      const result = await claude.continueSession(systemPrompt, messages, action, 'sonnet');
+      const result = await claude.continueSession(systemPrompt, messages, aiInput, 'sonnet');
       narrative = result.response;
     } else {
       return res.status(503).json({ error: 'No AI provider available' });
     }
 
-    // Detect markers
-    const skillChecks = detectSkillChecks(narrative);
-    const attacks = detectAttacks(narrative);
-    const spellCasts = detectSpellCasts(narrative);
+    // Detect markers (skip for OOC — no game actions)
+    const skillChecks = isOOC ? [] : detectSkillChecks(narrative);
+    const attacks = isOOC ? [] : detectAttacks(narrative);
+    const spellCasts = isOOC ? [] : detectSpellCasts(narrative);
 
     // Clean narrative
     const cleanedNarrative = cleanDMModeNarrative(narrative);
@@ -270,8 +292,8 @@ router.post('/:sessionId/message', async (req, res) => {
     // Parse character segments for client rendering
     const segments = parseCharacterSegments(cleanedNarrative);
 
-    // Update session messages
-    messages.push({ role: 'user', content: action });
+    // Update session messages — store original action (not wrapped) for transcript readability
+    messages.push({ role: 'user', content: isOOC ? `[OOC] ${action}` : action });
     messages.push({ role: 'assistant', content: narrative });
     await dbRun(
       'UPDATE dm_sessions SET messages = ? WHERE id = ?',
@@ -281,6 +303,7 @@ router.post('/:sessionId/message', async (req, res) => {
     res.json({
       narrative: cleanedNarrative,
       segments,
+      ooc: isOOC,
       pendingRolls: {
         skillChecks,
         attacks,
@@ -576,6 +599,16 @@ router.post('/:sessionId/end', async (req, res) => {
         }
       } catch (e) {
         console.error('[DM Mode] Chronicle generation failed:', e.message);
+      }
+
+      // Extract relationship evolution (non-blocking)
+      try {
+        const evolution = await extractRelationshipEvolution(parseInt(sessionId), session.dm_mode_party_id);
+        if (evolution) {
+          console.log(`[DM Mode] Extracted ${evolution.shifts?.length || 0} relationship shifts for session ${sessionId}`);
+        }
+      } catch (e) {
+        console.error('[DM Mode] Relationship extraction failed:', e.message);
       }
     }
 
