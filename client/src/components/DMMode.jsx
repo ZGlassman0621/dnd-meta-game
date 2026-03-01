@@ -5,11 +5,13 @@ import DMCoachingPanel from './DMCoachingPanel';
 import PartyLorePanel from './PartyLorePanel';
 import NPCCodexPanel from './NPCCodexPanel';
 import PlotThreadPanel from './PlotThreadPanel';
+import CampaignPrepScreen from './CampaignPrepScreen';
+import PrepReferencePanel from './PrepReferencePanel';
 
 const CHAR_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
 
 export default function DMMode({ onBack }) {
-  // Phase: 'select' | 'gameplay' | 'end'
+  // Phase: 'select' | 'prep' | 'gameplay' | 'end'
   const [phase, setPhase] = useState('select');
 
   // Party management
@@ -47,6 +49,7 @@ export default function DMMode({ onBack }) {
   const [showLore, setShowLore] = useState(false);
   const [showNpcCodex, setShowNpcCodex] = useState(false);
   const [showPlotThreads, setShowPlotThreads] = useState(false);
+  const [showPrepRef, setShowPrepRef] = useState(false);
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -632,6 +635,7 @@ export default function DMMode({ onBack }) {
     setShowLore(panel === 'lore');
     setShowNpcCodex(panel === 'npcs');
     setShowPlotThreads(panel === 'threads');
+    setShowPrepRef(panel === 'prep');
   };
 
   // ============================================================
@@ -894,6 +898,28 @@ export default function DMMode({ onBack }) {
           </div>
         )}
 
+        {/* Campaign Prep Button */}
+        {selectedParty && (
+          <div style={{ marginTop: '1rem' }}>
+            <button
+              onClick={() => setPhase('prep')}
+              style={{
+                padding: '0.6rem 1.25rem',
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.08))',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                borderRadius: '8px',
+                color: '#10b981',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.9rem',
+                width: '100%'
+              }}
+            >
+              Campaign Prep
+            </button>
+          </div>
+        )}
+
         {/* Session Persistence Reference */}
         {selectedParty && sessionHistory.length > 0 && (
           <div style={{
@@ -1140,6 +1166,19 @@ export default function DMMode({ onBack }) {
   }
 
   // ============================================================
+  // RENDER: PREP PHASE
+  // ============================================================
+
+  if (phase === 'prep') {
+    return (
+      <CampaignPrepScreen
+        party={selectedParty}
+        onBack={() => setPhase('select')}
+      />
+    );
+  }
+
+  // ============================================================
   // RENDER: GAMEPLAY PHASE
   // ============================================================
 
@@ -1249,6 +1288,12 @@ export default function DMMode({ onBack }) {
             active={showPlotThreads}
             onClick={() => openPanel(showPlotThreads ? null : 'threads')}
             color="#3b82f6"
+          />
+          <ToolbarButton
+            label="Prep"
+            active={showPrepRef}
+            onClick={() => openPanel(showPrepRef ? null : 'prep')}
+            color="#10b981"
           />
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)', margin: '0 0.25rem' }} />
           <button
@@ -1505,6 +1550,12 @@ export default function DMMode({ onBack }) {
         <PlotThreadPanel
           partyId={selectedParty.id}
           onClose={() => setShowPlotThreads(false)}
+        />
+      )}
+      {showPrepRef && selectedParty && (
+        <PrepReferencePanel
+          partyId={selectedParty.id}
+          onClose={() => setShowPrepRef(false)}
         />
       )}
     </div>

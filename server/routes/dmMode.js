@@ -11,6 +11,7 @@ import { detectSkillChecks, detectAttacks, detectSpellCasts, cleanDMModeNarrativ
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
 import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
 import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
+import { getPrep, getPrepItem, createPrep, updatePrep, archivePrep, deletePrep, duplicatePrep, getPrepCounts, reorderPrep } from '../services/dmModePrepService.js';
 import * as claude from '../services/claude.js';
 
 const router = express.Router();
@@ -908,6 +909,132 @@ router.post('/party/:partyId/game-day', async (req, res) => {
   } catch (error) {
     console.error('Error updating game day:', error);
     res.status(500).json({ error: 'Failed to update game day' });
+  }
+});
+
+// ============================================================
+// CAMPAIGN PREP
+// ============================================================
+
+// GET /api/dm-mode/prep/:partyId — List prep items
+router.get('/prep/:partyId', async (req, res) => {
+  try {
+    const partyId = parseInt(req.params.partyId);
+    const { type, search, archived } = req.query;
+    const items = await getPrep(partyId, {
+      type: type || '',
+      search: search || '',
+      archived: archived === '1' ? 1 : 0
+    });
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching prep items:', error);
+    res.status(500).json({ error: 'Failed to fetch prep items' });
+  }
+});
+
+// GET /api/dm-mode/prep/:partyId/counts — Counts per type
+router.get('/prep/:partyId/counts', async (req, res) => {
+  try {
+    const partyId = parseInt(req.params.partyId);
+    const counts = await getPrepCounts(partyId);
+    res.json(counts);
+  } catch (error) {
+    console.error('Error fetching prep counts:', error);
+    res.status(500).json({ error: 'Failed to fetch prep counts' });
+  }
+});
+
+// GET /api/dm-mode/prep-item/:id — Single item
+router.get('/prep-item/:id', async (req, res) => {
+  try {
+    const item = await getPrepItem(parseInt(req.params.id));
+    if (!item) return res.status(404).json({ error: 'Prep item not found' });
+    res.json(item);
+  } catch (error) {
+    console.error('Error fetching prep item:', error);
+    res.status(500).json({ error: 'Failed to fetch prep item' });
+  }
+});
+
+// POST /api/dm-mode/prep/:partyId — Create prep item
+router.post('/prep/:partyId', async (req, res) => {
+  try {
+    const partyId = parseInt(req.params.partyId);
+    const { type, name, content } = req.body;
+    if (!type || !name) return res.status(400).json({ error: 'type and name are required' });
+    const item = await createPrep(partyId, { type, name, content: content || {} });
+    res.json(item);
+  } catch (error) {
+    if (error.message?.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'An item with this name already exists in this category' });
+    }
+    console.error('Error creating prep item:', error);
+    res.status(400).json({ error: error.message || 'Failed to create prep item' });
+  }
+});
+
+// PUT /api/dm-mode/prep-item/:id — Update prep item
+router.put('/prep-item/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { name, content, sort_order } = req.body;
+    const item = await updatePrep(id, { name, content, sort_order });
+    if (!item) return res.status(404).json({ error: 'Prep item not found' });
+    res.json(item);
+  } catch (error) {
+    if (error.message?.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'An item with this name already exists in this category' });
+    }
+    console.error('Error updating prep item:', error);
+    res.status(500).json({ error: 'Failed to update prep item' });
+  }
+});
+
+// PUT /api/dm-mode/prep/:partyId/reorder — Reorder items
+router.put('/prep/:partyId/reorder', async (req, res) => {
+  try {
+    const partyId = parseInt(req.params.partyId);
+    const { type, orderedIds } = req.body;
+    if (!type || !Array.isArray(orderedIds)) return res.status(400).json({ error: 'type and orderedIds required' });
+    await reorderPrep(partyId, type, orderedIds);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error reordering prep items:', error);
+    res.status(500).json({ error: 'Failed to reorder' });
+  }
+});
+
+// POST /api/dm-mode/prep-item/:id/duplicate — Duplicate item
+router.post('/prep-item/:id/duplicate', async (req, res) => {
+  try {
+    const item = await duplicatePrep(parseInt(req.params.id));
+    res.json(item);
+  } catch (error) {
+    console.error('Error duplicating prep item:', error);
+    res.status(500).json({ error: error.message || 'Failed to duplicate' });
+  }
+});
+
+// POST /api/dm-mode/prep-item/:id/archive — Soft-delete
+router.post('/prep-item/:id/archive', async (req, res) => {
+  try {
+    await archivePrep(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error archiving prep item:', error);
+    res.status(500).json({ error: 'Failed to archive' });
+  }
+});
+
+// DELETE /api/dm-mode/prep-item/:id — Hard delete
+router.delete('/prep-item/:id', async (req, res) => {
+  try {
+    await deletePrep(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting prep item:', error);
+    res.status(500).json({ error: 'Failed to delete' });
   }
 });
 

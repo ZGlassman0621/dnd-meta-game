@@ -84,6 +84,8 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - DM Mode NPC Codex: `dm_mode_npcs` table stores NPCs auto-synced from chronicles (name, role, description, voice_notes, sessions_appeared); searchable panel with sort by name/frequency/recency
 - DM Mode NPC voice extraction: `extractNpcVoiceNotes()` in `dmModeNpcService.js` — Sonnet analyzes DM narration at session end for speech patterns, mannerisms, accents per NPC; accumulated in `voice_notes` column
 - DM Mode plot threads: `dm_mode_plot_threads` table with status (ongoing/resolved/abandoned/new), tags (JSON array), source (auto/manual); auto-synced from chronicles but manual status overrides prevent auto-updates; UI panel with filter tabs, status dropdown, tag management, manual thread creation
+- DM Mode campaign prep: `dm_mode_prep` table with type discriminator (npc/enemy/location/lore/treasure/session_notes) + JSON content blob; full-screen CampaignPrepScreen workspace accessible from party select; read-only PrepReferencePanel (420px) during sessions via "Prep" toolbar button
+- DM Mode enemy stat blocks: Full D&D 5e stat blocks in prep system — AC, HP, speed, ability scores, saves, skills, resistances, immunities, traits, actions, reactions, legendary actions, lair actions, CR/XP auto-lookup, loot
 - DM Mode sessions use `dm_sessions` table with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is NULL)
 - Migration 014: `dm_sessions.character_id` made nullable for DM Mode compatibility
 
@@ -142,14 +144,18 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/migrations/015_party_concept.js` — Party concept column on dm_mode_parties
 - `server/migrations/016_dm_mode_chronicles.js` — DM Mode chronicles table for persistent structured memory
 - `server/migrations/017_dm_mode_extensions.js` — NPC codex table, plot threads table, game day column
+- `server/migrations/018_dm_mode_prep.js` — Campaign prep table (type + JSON content)
 - `server/services/dmModeNpcService.js` — NPC codex sync/CRUD, plot thread management, NPC voice extraction
+- `server/services/dmModePrepService.js` — Campaign prep CRUD (create, update, archive, delete, duplicate, reorder, counts)
 - `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
 - `client/src/App.jsx` — SPA root, navigation, state
-- `client/src/components/DMMode.jsx` — DM Mode UI (party select, session gameplay, history, summary editing)
+- `client/src/components/DMMode.jsx` — DM Mode UI (party select, prep phase, session gameplay, history, summary editing)
 - `client/src/components/PartyView.jsx` — DM Mode party display (stats, XP, inventory, spell slots, level-up)
 - `client/src/components/PartyLorePanel.jsx` — DM Mode backstory/lore panel (party concept, character backstories, relationships, tensions)
 - `client/src/components/NPCCodexPanel.jsx` — DM Mode NPC codex panel (search, sort, voice notes)
 - `client/src/components/PlotThreadPanel.jsx` — DM Mode plot thread tracker (status, tags, manual creation)
+- `client/src/components/CampaignPrepScreen.jsx` — Full-screen campaign prep workspace (6 content types, enemy stat block editor)
+- `client/src/components/PrepReferencePanel.jsx` — Read-only 420px prep reference panel for sessions
 - `client/src/components/DMCoachingPanel.jsx` — DM coaching tips panel
 - `client/src/components/DMSession.jsx` — Main Player Mode DM session UI (~4300 lines)
 - `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)
