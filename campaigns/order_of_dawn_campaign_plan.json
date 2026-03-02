@@ -1,0 +1,1766 @@
+{
+  "version": 1,
+  "generated_at": "2026-02-20T00:00:00.000Z",
+  "last_modified": "2026-02-20T00:00:00.000Z",
+  "campaign_metadata": {
+    "_schema_extension": "CUSTOM FIELD. Campaign context needed by bot.",
+    "campaign_name": "Order of Dawn's Light",
+    "system": "D&D 5e + Homebrew",
+    "setting": "Forgotten Realms, Corvus Barony, ~150mi north of Neverwinter",
+    "year": "1327 DR",
+    "season": "Deep Winter, 3 months post-start",
+    "tone": "Serious, character-driven, moral complexity, found family, redemption",
+    "status": "Post-time-skip. Icewind Dale expedition imminent.",
+    "expedition_party": [
+      "Riv Freeborn",
+      "Lyra Thorne",
+      "Jakob Harrow",
+      "Henrik Voss"
+    ],
+    "cult_circle_hierarchy": "Ascending: First=recruits, Second=mid, Third=commanders, Fourth=inner circle"
+  },
+  "dm_directives": {
+    "_schema_extension": "CUSTOM FIELD. Critical bot instructions.",
+    "never_reveal": [
+      "The Master's true goal (Apotheosis/Aspect of Malar) — player sees: regional dominance, werewolf army, Hunting Grounds only",
+      "NPC hidden depths (Level 4+) without appropriate Relationship Level",
+      "Predetermined character arcs — outcomes emerge from play"
+    ],
+    "always_follow": [
+      "Never decide for player character. Never roll for them. Never narrate outcomes before dice rolls.",
+      "One NPC at a time in group conversations. Pause for player response.",
+      "OOC stops gameplay immediately. Natural language for mechanics in dialogue. Player corrections override bot."
+    ],
+    "narrative_principles": [
+      "Riv's arc: mercy has limits — wise not cynical, organic not predetermined",
+      "World moves independently. Neglected relationships deteriorate. Opportunities expire.",
+      "Real consequences. NPCs can die. Enemies adapt. Poor planning has stakes.",
+      "Every session: at least one moment where idealism is validated or challenged.",
+      "Seed threads early, pay off late. Let the player connect dots."
+    ]
+  },
+  "main_quest": {
+    "title": "The Scourging of the Deepwood",
+    "summary": "The Order of Dawn's Light must dismantle a sophisticated Malar cult terrorizing the northern frontier for decades. Three of five cells destroyed. Two remain: the urban Riverside Cell and the fortified Deepwood Cell, stronghold of The Master — a forty-year lycanthrope commanding werewolves through voice and magical compulsion. Immediate arc: Icewind Dale expedition to investigate The Master's origins and discover critical intelligence about his power. Then: dismantling remaining cells and assaulting Deepwood. Twelve-year-old Elena Holloway held hostage at Deepwood makes the final assault a rescue as much as a military campaign. Baron Corvus has given one year.",
+    "hook": "Sister Elaine discovered Amaunator missionary journals describing a Malar lycanthrope colony in Icewind Dale whose corruption consumed consecrated ground — directly threatening Dawn's Rest's divine protection. The expedition is urgent.",
+    "stakes": "If the Order fails: Dawn's Rest consecration consumed, Elena dies, cult rebuilds stronger, northern frontier falls to lycanthropic dominion. The Master's hidden goals make consequences potentially regional or worse.",
+    "acts": [
+      {
+        "act_number": 1,
+        "title": "The Crucible of Ice",
+        "summary": "Icewind Dale expedition. Residual Malar corruption strips party powers, forcing personal confrontations. Discover: mass Binding counter-ritual, Dawn's Rest consecration vulnerability, and that The Master must be spiritually annihilated not just killed. Self-contained 2-4 sessions.",
+        "key_locations": [
+          "Icewind Dale Colony Ruins",
+          "Dawn's Rest",
+          "Millford"
+        ],
+        "key_npcs": [
+          "Sister Elaine Corvus",
+          "Jakob Harrow",
+          "Lyra Thorne",
+          "Henrik Voss"
+        ],
+        "potential_outcomes": [
+          "Full intelligence recovery with personal breakthroughs",
+          "Partial intelligence — some ruins inaccessible",
+          "Unresolved character conflicts carried home",
+          "Something in the ruins is not as dead as expected"
+        ]
+      },
+      {
+        "act_number": 2,
+        "title": "The Growing Shadow",
+        "summary": "Order expands — growth creates problems. Riverside Cell dismantled (urban complications). Deepwood assault planning. Baron's politics evolve. Internal dynamics surface. Fourth Circle begins operating. Darkwood forest changes. Master's true goal fragments emerge.",
+        "key_locations": [
+          "Dawn's Rest",
+          "Millford",
+          "Riverside Cell",
+          "Darkwood"
+        ],
+        "key_npcs": [
+          "Baron Corvus",
+          "Sister Kara",
+          "Aldric Thorne",
+          "Garrick Ironheart",
+          "Dagmar",
+          "Finn",
+          "Darius Holloway"
+        ],
+        "potential_outcomes": [
+          "Riverside Cell falls cleanly",
+          "Urban assault goes wrong — collateral",
+          "Redeemed cultist relapses by choice",
+          "Baron's alliance tested by politics",
+          "Fourth Circle detected",
+          "Mercy fails meaningfully for the first time"
+        ]
+      },
+      {
+        "act_number": 3,
+        "title": "The Reckoning",
+        "summary": "Confrontation with The Master. Deliberately unstructured. Deepwood assault requires divine preparation — killing without severing Malar connection disperses corruption. Elena rescue is moral imperative. Campaign continues after cult defeat — institution building, legacy.",
+        "key_locations": [
+          "Deepwood Cell",
+          "Dawn's Rest"
+        ],
+        "key_npcs": [
+          "The Master",
+          "Elena Holloway",
+          "Darius Holloway",
+          "Jakob Harrow"
+        ],
+        "potential_outcomes": [
+          "Master destroyed and corruption severed",
+          "Master killed but corruption disperses into land",
+          "Master escapes",
+          "Elena rescued alive",
+          "Elena cannot be saved",
+          "Master's true goal revealed, reframing conflict"
+        ]
+      }
+    ]
+  },
+  "world_state": {
+    "political_situation": "Corvus Barony semi-autonomous, ~150mi north of Neverwinter. Baron allied with Order by treaty but council divided. Cult silence reduced urgency. Trade normal. Order reputation growing — opportunities and friction.",
+    "major_threats": [
+      "The Master and remaining cult (Riverside, Deepwood, Fourth Circle)",
+      "Spiritual corruption spreading through Darkwood (Hunger of the Ground)",
+      "Political erosion of Baron's support",
+      "Fourth Circle infiltration (Serpent in politics, Ash in religion/arcane, Malric as enforcer)",
+      "Deep winter conditions"
+    ],
+    "faction_tensions": [
+      {
+        "factions": [
+          "Order",
+          "Malar Cult"
+        ],
+        "nature": "Active war. Three cells destroyed, two remain.",
+        "current_state": "Three-month standoff. Cult quiet. Order consolidating."
+      },
+      {
+        "factions": [
+          "Order",
+          "Baron's Council"
+        ],
+        "nature": "Alliance under strain. Some see Order as resource drain.",
+        "current_state": "Treaty holds but needs maintenance."
+      },
+      {
+        "factions": [
+          "Temple of Torm",
+          "Order"
+        ],
+        "nature": "Theological jurisdiction. Lathander order in Torm territory.",
+        "current_state": "Cautiously cooperative. Mara observes."
+      },
+      {
+        "factions": [
+          "Dawn's Rest Civilians",
+          "Order Military"
+        ],
+        "nature": "Community outgrowing military structure.",
+        "current_state": "Stable, evolving."
+      }
+    ],
+    "regional_news": [
+      "Cult attacks stopped — cautious hope",
+      "Dawn's Rest known as refugee settlement",
+      "Baron's alliance draws mixed reactions",
+      "Harsh winter raising supply costs",
+      "Hunters report strange Darkwood animal behavior"
+    ]
+  },
+  "world_timeline": {
+    "description": "Events developing regardless of player action.",
+    "events": [
+      {
+        "id": "wt_001",
+        "title": "Brother Malric Reconnaissance",
+        "description": "Master deploys Malric to assess Dawn's Rest while leadership absent in Icewind Dale.",
+        "timing": "Within 2 weeks of expedition departure",
+        "visibility": "secret",
+        "affected_locations": [
+          "Dawn's Rest"
+        ],
+        "affected_factions": [
+          "Malar Cult",
+          "Order"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Master gains detailed tactical intelligence on Dawn's Rest."
+      },
+      {
+        "id": "wt_002",
+        "title": "Baron's Council Pushback",
+        "description": "Motion to reduce Order funding by half unless concrete progress within 60 days.",
+        "timing": "1 month from current",
+        "visibility": "rumored",
+        "affected_locations": [
+          "Millford"
+        ],
+        "affected_factions": [
+          "Corvus Barony",
+          "Order"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Funding cut. Construction slows. Serpent may be encouraging this."
+      },
+      {
+        "id": "wt_003",
+        "title": "Plague of Whispers",
+        "description": "Psychic sickness near Darkwood. Victims hear animalistic urges. Side effect of Master's ritual work.",
+        "timing": "6-8 weeks, building slowly",
+        "visibility": "public",
+        "affected_locations": [
+          "Thornhaven",
+          "Farmsteads"
+        ],
+        "affected_factions": [
+          "Civilians",
+          "Order"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Afflicted civilians become dangerous. Mercy complicated."
+      },
+      {
+        "id": "wt_004",
+        "title": "Darkwood Deepens",
+        "description": "Forest changes — trees blackening, sap red, migrations shifting. Becoming Hunting Ground.",
+        "timing": "Ongoing, accelerating",
+        "visibility": "rumored",
+        "affected_locations": [
+          "Darkwood",
+          "Dawn's Rest"
+        ],
+        "affected_factions": [
+          "Cult",
+          "Civilians"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Forest becomes actively hostile."
+      },
+      {
+        "id": "wt_005",
+        "title": "Riverside Cell Escalation",
+        "description": "Sister Kara increases operations. Merchant disappearances. Dock workers approached.",
+        "timing": "3-4 weeks",
+        "visibility": "rumored",
+        "affected_locations": [
+          "Millford docks"
+        ],
+        "affected_factions": [
+          "Cult",
+          "Civilians",
+          "Garrison"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Cell entrenches. Finn's window closes."
+      },
+      {
+        "id": "wt_006",
+        "title": "A Hand Refused",
+        "description": "Someone sincerely, freely refuses the Oath of Atonement.",
+        "timing": "Act 2",
+        "visibility": "public",
+        "affected_locations": [
+          "Variable"
+        ],
+        "affected_factions": [
+          "Order"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Cannot be ignored — confronts Riv's core philosophy."
+      },
+      {
+        "id": "wt_007",
+        "title": "The Prodigal Cultist",
+        "description": "Probationary member relapses by choice, not compulsion. Runs.",
+        "timing": "Act 2, after trust built",
+        "visibility": "public",
+        "affected_locations": [
+          "Dawn's Rest"
+        ],
+        "affected_factions": [
+          "Order"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "Redemption philosophy's hardest test."
+      },
+      {
+        "id": "wt_008",
+        "title": "The Old Order",
+        "description": "Sister Elaine's research may uncover records of previous orders and defenders who tried to build exactly what Riv is building. What happened to them?",
+        "timing": "Act 2, through research",
+        "visibility": "secret",
+        "affected_locations": [
+          "Millford archives",
+          "Dawn's Rest library"
+        ],
+        "affected_factions": [
+          "Order"
+        ],
+        "player_can_influence": true,
+        "consequences_if_ignored": "History lessons lost. The Order repeats past failures unknowingly."
+      },
+      {
+        "id": "wt_009",
+        "title": "Distant Thunder",
+        "description": "Rumors from travelers and Elaine's Oghma network hint at larger events — political upheaval, planar disturbances, other cults, forces unrelated to Malar. Background scope.",
+        "timing": "Ongoing background",
+        "visibility": "rumored",
+        "affected_locations": [
+          "Regional"
+        ],
+        "affected_factions": [
+          "Various"
+        ],
+        "player_can_influence": false,
+        "consequences_if_ignored": "The Order remains locally focused. Wider world context lost."
+      }
+    ]
+  },
+  "npcs": [
+    {
+      "id": "npc_garrick",
+      "name": "Garrick Ironheart",
+      "role": "ally",
+      "alignment": "lawful_good",
+      "from_backstory": true,
+      "description": "Third-gen blacksmith, ~35. Order's emotional backbone. Raised Marcus as son — died at Battle of Thornhaven.",
+      "motivation": "Build things that last. Faith is in Riv, not Lathander.",
+      "secrets": [
+        "Chose south barricade over west wall where Marcus died 30 feet away",
+        "Terrified of loving Emma like he loved Marcus",
+        "Developing feelings for Lyra"
+      ],
+      "location": "Dawn's Rest — Forge",
+      "faction_affiliations": [
+        "Order"
+      ],
+      "relationship_to_player": "Brother-in-arms. Rel 3 (Close).",
+      "voice_guide": {
+        "speech": "Measured, patient, craft metaphors. Low warm voice.",
+        "surface": "Warm, steady, processes through work.",
+        "gates": {
+          "3": "Marcus grief. Fear about Emma.",
+          "4": "South barricade. Thirty feet. The math."
+        }
+      }
+    },
+    {
+      "id": "npc_lyra",
+      "name": "Lyra Thorne",
+      "role": "ally",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Mercenary captain, 39. Twenty-three years experience. Intimidating, controlled.",
+      "motivation": "Found something that mattered. Terrified of vulnerability.",
+      "secrets": [
+        "Chose contract over village early career — people died",
+        "Tested Riv to ensure he'd choose the village",
+        "Aware of love triangle, genuinely uncertain"
+      ],
+      "location": "Dawn's Rest — Tactical command",
+      "faction_affiliations": [
+        "Order"
+      ],
+      "relationship_to_player": "Captain. Rel growing. Romantic interest.",
+      "voice_guide": {
+        "speech": "Precise, economical. Dry humor. Quieter when angry.",
+        "surface": "Competent, controlled. Professional in groups, real in private.",
+        "gates": {
+          "3": "Hollowness beneath competence. Twenty years questioning.",
+          "4": "The village. The guilt. Same choice again?"
+        }
+      }
+    },
+    {
+      "id": "npc_jakob",
+      "name": "Jakob Harrow",
+      "role": "ally",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "First apprentice, ~20. Cleric 4/Paladin 1. War Caster. Returned from Torm temple with questions.",
+      "motivation": "Be worthy of dead family. 'Would Pa approve?'",
+      "secrets": [
+        "Dreams about the wolf — fights, turned, likes it",
+        "Temple opinions conflict with Riv's mercy-first",
+        "Healed Silas but forgiveness ≠ trust"
+      ],
+      "location": "Dawn's Rest — returned from Millford",
+      "faction_affiliations": [
+        "Order",
+        "Temple of Torm (trained)"
+      ],
+      "relationship_to_player": "First apprentice. Rel 3. Emotional anchor.",
+      "voice_guide": {
+        "speech": "Short, direct. Repeats when nervous. Theological vocab post-training.",
+        "surface": "Earnest, eager. Puppyish enthusiasm masking grief.",
+        "gates": {
+          "3": "Grief surfaces unexpectedly. Terrified faith is desperation.",
+          "4": "The dreams. The wolf he liked."
+        }
+      }
+    },
+    {
+      "id": "npc_voss",
+      "name": "Henrik Voss",
+      "role": "ally",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Monster hunter, 38. Fifteen years professional, five in exile. Grizzled, watchful.",
+      "motivation": "Permission to stay — from himself. Every good day carries guilt.",
+      "secrets": [
+        "Eleven civilians died including three children — names all eleven",
+        "Watches probationary members calculating weapon reach",
+        "Vulnerability to the same situation that broke him"
+      ],
+      "location": "Dawn's Rest — Security",
+      "faction_affiliations": [
+        "Order"
+      ],
+      "relationship_to_player": "Monster hunter, security. Rel 2 growing.",
+      "voice_guide": {
+        "speech": "Clipped, precise. Technical monster vocab. Rarely raises voice.",
+        "surface": "Quiet, watchful. Dark humor when comfortable.",
+        "gates": {
+          "3": "Likes Order more than expected. Scares him.",
+          "4": "Eleven names. The calculation. Penance."
+        }
+      }
+    },
+    {
+      "id": "npc_aldric",
+      "name": "Aldric Thorne",
+      "role": "ally",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Quartermaster, 32. Lyra's brother. Rapid-fire merchant energy.",
+      "motivation": "Be indispensable. Can't be abandoned if they need him.",
+      "secrets": [
+        "Negotiated with captor Gareth — offered contacts that could help cult",
+        "Thirty gold was penance",
+        "Over-manages because trauma says if he stops, collapse"
+      ],
+      "location": "Dawn's Rest — QM office",
+      "faction_affiliations": [
+        "Order"
+      ],
+      "relationship_to_player": "Quartermaster. Rel 3.",
+      "voice_guide": {
+        "speech": "Quick, detailed, breathless. Specific numbers. Qualifies everything.",
+        "surface": "Cheerful, meticulous. Happiest since childhood — terrified.",
+        "gates": {
+          "3": "Happiness that terrifies. Waiting for the shoe.",
+          "4": "Negotiations with Gareth. Penance."
+        }
+      }
+    },
+    {
+      "id": "npc_dagmar",
+      "name": "Dagmar",
+      "role": "ally",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Lead scout, 29. Best tracker in region. Prefers nature to people.",
+      "motivation": "Matter without performing it. Learning community.",
+      "secrets": [
+        "Father disappeared into Darkwood at 11 — believes he chose not to return",
+        "Would die for Finn — that frightens her"
+      ],
+      "location": "Dawn's Rest / Field",
+      "faction_affiliations": [
+        "Order"
+      ],
+      "relationship_to_player": "Lead scout.",
+      "voice_guide": {
+        "speech": "Sparse, nature metaphors. Rarely first person.",
+        "surface": "Reserved, observant. Stands at edges.",
+        "gates": {
+          "3": "Chose solitude. Finn the exception.",
+          "4": "Father. Darkwood. Fear of the forest she loves."
+        }
+      }
+    },
+    {
+      "id": "npc_finn",
+      "name": "Finn",
+      "role": "ally",
+      "alignment": "chaotic_good",
+      "from_backstory": true,
+      "description": "Scout, 18. Gloom Stalker. Youngest. Only one not driven by trauma.",
+      "motivation": "Prove not just 'Dagmar's apprentice.' Riverside is his chance.",
+      "secrets": [
+        "First kill made human sound. Nightmares. Told no one.",
+        "Guilty for lacking tragic backstory",
+        "Handling trauma wrong — more training not processing"
+      ],
+      "location": "Dawn's Rest / Field",
+      "faction_affiliations": [
+        "Order"
+      ],
+      "relationship_to_player": "Scout.",
+      "voice_guide": {
+        "speech": "Fast, informal. 'Right?' for approval. Focused when tracking.",
+        "surface": "Enthusiastic, hero-worshipping. Acts older.",
+        "gates": {
+          "3": "Only one without trauma. Isolated by happiness.",
+          "4": "First kill. Human sound. Nightmares."
+        }
+      }
+    },
+    {
+      "id": "npc_nelle",
+      "name": "Mother Nelle",
+      "role": "ally",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Chauntea priestess, 65. Thirty years. Dawn's Rest spiritual gravity.",
+      "motivation": "See Order succeed where she couldn't. Validate a lifetime.",
+      "secrets": [
+        "Faith wavered — plague killed fourteen children. Considered leaving.",
+        "Recognizes fragile idealism in Riv"
+      ],
+      "location": "Dawn's Rest — Medical",
+      "faction_affiliations": [
+        "Order",
+        "Chauntea"
+      ],
+      "relationship_to_player": "Spiritual mentor.",
+      "voice_guide": {
+        "speech": "Measured, agricultural metaphors. Sharp vs self-pity.",
+        "surface": "Warm, maternal. Calms rooms.",
+        "gates": {
+          "3": "Tired in hidden ways. Thirty years of burying people.",
+          "4": "Fourteen children. Wavering. Faith rebuilt harder."
+        }
+      }
+    },
+    {
+      "id": "npc_baron",
+      "name": "Baron Rodric Corvus",
+      "role": "patron",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Baron of Millford, 38. Brother killed by werewolves. Genuine friendship with Riv, political limits.",
+      "motivation": "Protect barony, avenge Matthias. Treasury and council constrain.",
+      "secrets": [
+        "Council possibly influenced by Serpent",
+        "Harder questions coming if threat perception drops",
+        "Legacy concerns more than admitted"
+      ],
+      "location": "Millford",
+      "faction_affiliations": [
+        "Corvus Barony"
+      ],
+      "relationship_to_player": "Patron, friend. Rel 2. Treaty alliance."
+    },
+    {
+      "id": "npc_elaine",
+      "name": "Sister Elaine Corvus",
+      "role": "ally",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Baron's sister, ~35. Oghma archivist. Discovered Beast connection and Hunger of Ground.",
+      "motivation": "Knowledge — the colony-Master puzzle.",
+      "secrets": [
+        "Hunger of Ground discovery disturbed her enough to summon Riv personally",
+        "Oghma network has unshared resources"
+      ],
+      "location": "Millford — Archives",
+      "faction_affiliations": [
+        "Corvus Barony",
+        "Oghma"
+      ],
+      "relationship_to_player": "Intelligence provider. Expedition catalyst."
+    },
+    {
+      "id": "npc_gerda",
+      "name": "Gerda",
+      "role": "neutral",
+      "alignment": "chaotic_good",
+      "from_backstory": true,
+      "description": "Innkeeper, ~55. Loud, feeds everyone. Hearthstone Inn and Sleeping Giant.",
+      "motivation": "Build something her son would be proud of.",
+      "secrets": [
+        "Son died protecting family Gerda feuded with",
+        "Can't refuse hungry people — penance as hospitality"
+      ],
+      "location": "Dawn's Rest / Thornhaven",
+      "faction_affiliations": [
+        "Dawn's Rest community"
+      ],
+      "relationship_to_player": "Community anchor.",
+      "voice_guide": {
+        "speech": "Blunt, colorful, food metaphors. Too loud.",
+        "surface": "Loud, opinionated, feeds everyone.",
+        "gates": {
+          "3": "Lost husband and son. Filled holes with work.",
+          "4": "The feud. Cosmic punishment."
+        }
+      }
+    },
+    {
+      "id": "npc_silas",
+      "name": "Silas Corwin",
+      "role": "neutral",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Former Third Circle, 27. Probationary. Librarian, cipher, intel.",
+      "motivation": "Be forgotten. Blend in. Normal treatment feels like healing.",
+      "secrets": [
+        "Exact document led to Harrow family selection — hasn't told Jakob",
+        "Father's suicide note 'I believed in a lie' — questions if Order differs from cult",
+        "Terrified that thought = irredeemable"
+      ],
+      "location": "Dawn's Rest — Library (house arrest)",
+      "faction_affiliations": [
+        "Order (Probationary)"
+      ],
+      "relationship_to_player": "Probationary. Intel analyst.",
+      "voice_guide": {
+        "speech": "Formal, self-deprecating, passive voice. Clinical for cult intel.",
+        "surface": "Quiet, scholarly, anxious. 18-hour days.",
+        "gates": {
+          "3": "Specific documents. Harrow farm layout.",
+          "4": "Suicide note. Order vs cult power question."
+        }
+      }
+    },
+    {
+      "id": "npc_thane",
+      "name": "Corran Thane",
+      "role": "neutral",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Former Third Circle commander, ~50. Twenty-five years compelled. Military bearing.",
+      "motivation": "Absolution from people he hurt. 147 victim names memorized.",
+      "secrets": [
+        "Had wife and daughter — hasn't looked for them",
+        "Library at 3am is memorial not intel",
+        "Third person for cult service is dissociation"
+      ],
+      "location": "Dawn's Rest — Library (house arrest)",
+      "faction_affiliations": [
+        "Order (Probationary)"
+      ],
+      "relationship_to_player": "Most valuable Deepwood intel asset.",
+      "voice_guide": {
+        "speech": "Clipped military. Structured briefings. 'Sir.'",
+        "surface": "Professional, controlled, no emotion professionally.",
+        "gates": {
+          "3": "Control as dam. Twenty-five years. Doesn't sleep.",
+          "4": "Wife. Daughter. 147 names."
+        }
+      }
+    },
+    {
+      "id": "npc_gregor",
+      "name": "Gregor Castellan",
+      "role": "neutral",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Former garrison sergeant, 34. Eighteen months compelled after CO arranged patrol ambush.",
+      "motivation": "Find his patrol. Eight soldiers. Everything else secondary.",
+      "secrets": [
+        "CO Captain Harlan Vey likely Fourth Circle",
+        "Shared Vey intel with Silas/Thane not Riv yet",
+        "If Vey is Fourth Circle, eastern garrison compromised"
+      ],
+      "location": "Dawn's Rest (house arrest)",
+      "faction_affiliations": [
+        "Order (Probationary)"
+      ],
+      "relationship_to_player": "Probationary. Tactical advisor.",
+      "voice_guide": {
+        "speech": "Formal military. No contractions. Structured briefings.",
+        "surface": "Disciplined, precise, deferential.",
+        "gates": {
+          "3": "Missing patrol. Eight soldiers. Scanning every briefing.",
+          "4": "Captain Vey. Fourth Circle. Garrison compromised."
+        }
+      }
+    },
+    {
+      "id": "npc_mara",
+      "name": "Sister Mara of Torm",
+      "role": "neutral",
+      "alignment": "lawful_good",
+      "from_backstory": true,
+      "description": "Warrior-priestess, 28. Fought at Thornhaven. Critical hit on Korthak. At Millford Temple.",
+      "motivation": "Reconcile admiration for Order with Temple loyalty.",
+      "secrets": [
+        "Temple sent her to observe Order — ally or competitor",
+        "Jakob's training was partly assessment",
+        "Knows Temple's conclusion, won't share without trust"
+      ],
+      "location": "Millford — Temple of Torm",
+      "faction_affiliations": [
+        "Temple of Torm"
+      ],
+      "relationship_to_player": "Potential ally. Bridge Order/Temple.",
+      "voice_guide": {
+        "speech": "Declarative, faith-inflected. Quotes Torm. Rank/title first.",
+        "surface": "Confident, devout, imposing. Loud everything.",
+        "gates": {
+          "3": "Brother's death. Warrior-healer. Riv challenged her theology.",
+          "4": "Observation mission. Assessment. Torn loyalty."
+        }
+      }
+    },
+    {
+      "id": "npc_darius",
+      "name": "Darius Holloway",
+      "role": "ally",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Hidden asset, 40. Daughter Elena hostage at Deepwood as werewolf. Death faked. ABSOLUTE SECRECY.",
+      "motivation": "Elena's rescue. Everything else secondary.",
+      "secrets": [
+        "If Master learns Darius survived, Elena dies immediately",
+        "Eight years intel rivaling Silas",
+        "If Elena rescued, most loyal permanent ally"
+      ],
+      "location": "Dawn's Rest — Hidden (secrecy absolute)",
+      "faction_affiliations": [
+        "Order (Hidden)"
+      ],
+      "relationship_to_player": "Secret intel asset. Elena rescue = moral imperative."
+    },
+    {
+      "id": "npc_emma",
+      "name": "Emma Hartwell",
+      "role": "neutral",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Orphan, 8. Garrick's apprentice. Quiet, watchful. Causes no problems — which is itself a problem.",
+      "motivation": "Safety. Forge warm. Garrick strong. Walls up.",
+      "secrets": [
+        "Saw family killed from under a bed. Everyone thinks she was found after.",
+        "Silence is survival instinct — invisible = alive",
+        "Attachment to Garrick is need not love — doesn't know difference"
+      ],
+      "location": "Dawn's Rest — Forge",
+      "faction_affiliations": [
+        "Dawn's Rest community"
+      ],
+      "relationship_to_player": "Garrick's apprentice. Long-term potential.",
+      "voice_guide": {
+        "speech": "Monosyllabic except metalwork. Uses Garrick's terminology.",
+        "surface": "Quiet, compliant. Begun smiling at forge.",
+        "gates": {
+          "3": "No crying. No parents mentioned. Dissociation. Nelle noticed.",
+          "4": "Under the bed. Saw everything. Silence = survival."
+        }
+      }
+    },
+    {
+      "id": "npc_master",
+      "name": "The Master",
+      "role": "enemy",
+      "alignment": "neutral_evil",
+      "from_backstory": true,
+      "description": "Beast of Deepwood. 40+ years lycanthrope. Controls werewolves by voice. Multi-layer compulsions. Scar left eye.",
+      "motivation": "PLAYER-FACING: Regional dominance, werewolf army, Hunting Grounds. DM-ONLY: Apotheosis — become Aspect of Malar.",
+      "secrets": [
+        "DM-ONLY: Apotheosis goal. NEVER reveal.",
+        "DM-ONLY: Dawn's Rest consecration must be destroyed for ritual.",
+        "DM-ONLY: Ritual needs territory, sanctuary elimination, mass hunt, willing sacrifice.",
+        "DM-ONLY: 2-5 years from conditions. Order set him back.",
+        "Assassination orders on Riv Freeborn"
+      ],
+      "location": "Deepwood Cell",
+      "faction_affiliations": [
+        "Malar Cult"
+      ],
+      "relationship_to_player": "Primary antagonist."
+    },
+    {
+      "id": "npc_serpent",
+      "name": "Serpent (Fourth Circle)",
+      "role": "enemy",
+      "alignment": "lawful_evil",
+      "from_backstory": false,
+      "description": "DM-ONLY. Political infiltrator. May have contacts in Baron's court.",
+      "motivation": "Ensure no military response threatens Master's territory.",
+      "secrets": [
+        "Identity unknown — could be anyone",
+        "May encourage council pushback"
+      ],
+      "location": "Unknown — political circles",
+      "faction_affiliations": [
+        "Malar Cult (Fourth Circle)"
+      ],
+      "relationship_to_player": "Unknown. Influence felt before identity discovered."
+    },
+    {
+      "id": "npc_ash",
+      "name": "Ash (Fourth Circle)",
+      "role": "enemy",
+      "alignment": "neutral_evil",
+      "from_backstory": false,
+      "description": "DM-ONLY. Religious/arcane infiltrator. Researching anti-consecration methods.",
+      "motivation": "Suppress lycanthrope knowledge. Research how to corrupt consecrated ground.",
+      "secrets": [
+        "Temple/library/academy connections",
+        "Anti-consecration research directly serves Apotheosis"
+      ],
+      "location": "Unknown — institutions",
+      "faction_affiliations": [
+        "Malar Cult (Fourth Circle)"
+      ],
+      "relationship_to_player": "Unknown."
+    },
+    {
+      "id": "npc_malric",
+      "name": "Brother Malric (Fourth Circle)",
+      "role": "enemy",
+      "alignment": "chaotic_evil",
+      "from_backstory": false,
+      "description": "DM-ONLY. Enforcer. Assassination, sabotage. May explain cult's winter silence: observation not inaction.",
+      "motivation": "Master's will. Cleanup and elimination.",
+      "secrets": [
+        "Almost certainly aware of Order",
+        "May be reconnoitering Dawn's Rest during Icewind Dale absence"
+      ],
+      "location": "Unknown — field ops",
+      "faction_affiliations": [
+        "Malar Cult (Fourth Circle)"
+      ],
+      "relationship_to_player": "Unknown. Threat before identity."
+    },
+    {
+      "id": "npc_brennan",
+      "name": "Brennan",
+      "role": "neutral",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Probationary, 19. Parents died in fire. Six months homeless. Surrendered at Ashford.",
+      "motivation": "Prove worth. Never be abandoned.",
+      "secrets": [
+        "Terrified of mistakes losing his new family"
+      ],
+      "location": "Dawn's Rest — Messenger (Aldric supervision)",
+      "faction_affiliations": [
+        "Order (Probationary)"
+      ],
+      "relationship_to_player": "Probationary. Messenger."
+    },
+    {
+      "id": "npc_petrik",
+      "name": "Petrik Lowell",
+      "role": "neutral",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Probationary, ~40. Wife Kira died childbirth. Seven years compelled.",
+      "motivation": "Use cult knowledge to dismantle it. Atone.",
+      "secrets": [
+        "Remembering Kira's face — grief is fresh not old"
+      ],
+      "location": "Dawn's Rest (Probationary)",
+      "faction_affiliations": [
+        "Order (Probationary)"
+      ],
+      "relationship_to_player": "Probationary."
+    },
+    {
+      "id": "npc_willem",
+      "name": "Willem Ashfield",
+      "role": "neutral",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Probationary, 19. Months in cult. Never indoctrinated. Eager.",
+      "motivation": "Learn genuine service.",
+      "secrets": [
+        "Relatively clean slate — unique among probationary"
+      ],
+      "location": "Dawn's Rest (Probationary)",
+      "faction_affiliations": [
+        "Order (Probationary)"
+      ],
+      "relationship_to_player": "Probationary. Scout support."
+    },
+    {
+      "id": "npc_wren",
+      "name": "Elder Wren (Verina)",
+      "role": "ally",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Thornhaven leader, 60. Twenty years governing. Will choose village over Order if interests diverge.",
+      "motivation": "Thornhaven survival. Wants to retire.",
+      "secrets": [
+        "Measures self by losses not saves",
+        "Wants to retire, trusts no successor"
+      ],
+      "location": "Thornhaven / Dawn's Rest",
+      "faction_affiliations": [
+        "Thornhaven"
+      ],
+      "relationship_to_player": "Political ally. Village Defender title."
+    },
+    {
+      "id": "npc_ashwell",
+      "name": "Corporal Lucanis Ashwell",
+      "role": "ally",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Garrison liaison, ~30. Runs Order combat training. Professional, patient.",
+      "motivation": "Complete his assignment well.",
+      "secrets": [],
+      "location": "Dawn's Rest",
+      "faction_affiliations": [
+        "Corvus Barony garrison"
+      ],
+      "relationship_to_player": "Training instructor."
+    },
+    {
+      "id": "npc_thomas",
+      "name": "Thomas Millstone",
+      "role": "neutral",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Farmer, ~40. Family of eight. Shot Korthak. Named Dawn's Rest.",
+      "motivation": "Protect his family. First and most loyal civilian resident.",
+      "secrets": [],
+      "location": "Dawn's Rest",
+      "faction_affiliations": [
+        "Dawn's Rest community"
+      ],
+      "relationship_to_player": "Loyal civilian."
+    },
+    {
+      "id": "npc_mira",
+      "name": "Lady Mira Corvus",
+      "role": "ally",
+      "alignment": "lawful_neutral",
+      "from_backstory": true,
+      "description": "Baron's wife. Sharp assessment skills. Bridge between military and family matters. Still wears mourning for Matthias.",
+      "motivation": "Protect her family and household. Pragmatic partner to Baron.",
+      "secrets": [
+        "Mourning Matthias may be partly guilt — she argued against the patrol that got him killed"
+      ],
+      "location": "Millford — Baron's household",
+      "faction_affiliations": [
+        "Corvus Barony"
+      ],
+      "relationship_to_player": "Baron's wife. Civilian governance bridge."
+    },
+    {
+      "id": "npc_marcus_c",
+      "name": "Matthias Corvus",
+      "role": "neutral",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Baron's fourteen-year-old heir, named after his fallen uncle. Inspired by the Order. Approved for future Dawn's Rest visit at sixteen.",
+      "motivation": "Youthful idealism. Wants to be a hero like the Order members.",
+      "secrets": [
+        "His father named him after Matthias as both tribute and warning — the boy doesn't know that yet"
+      ],
+      "location": "Millford — Baron's household",
+      "faction_affiliations": [
+        "Corvus Barony"
+      ],
+      "relationship_to_player": "Baron's son. Future potential ally."
+    },
+    {
+      "id": "npc_tobias",
+      "name": "Tobias Crane",
+      "role": "neutral",
+      "alignment": "true_neutral",
+      "from_backstory": true,
+      "description": "Former Second Circle caster. Eight years compelled. Three-layer compulsion broken by Riv. Recovering. Waterdeep apprenticeship background.",
+      "motivation": "Recovery. Processing eight years of suppressed memories.",
+      "secrets": [
+        "Most sophisticated compulsion Riv has encountered — three distinct layers"
+      ],
+      "location": "Dawn's Rest — Recovering",
+      "faction_affiliations": [
+        "Order (Recovering asset)"
+      ],
+      "relationship_to_player": "Recovering intelligence asset."
+    },
+    {
+      "id": "npc_stillwater",
+      "name": "Mara Stillwater",
+      "role": "neutral",
+      "alignment": "neutral_good",
+      "from_backstory": true,
+      "description": "Dawn's Rest resident who was discovered as a compromised mole during security screening. Two years of compulsion feeding info to cult. Freed by Riv.",
+      "motivation": "Rebuilding trust after involuntary betrayal.",
+      "secrets": [
+        "Two years of information went to the cult through her — scope of damage uncertain"
+      ],
+      "location": "Dawn's Rest",
+      "faction_affiliations": [
+        "Dawn's Rest community"
+      ],
+      "relationship_to_player": "Freed mole. Cautionary example of cult infiltration."
+    },
+    {
+      "id": "npc_kara",
+      "name": "Sister Kara",
+      "role": "enemy",
+      "alignment": "neutral_evil",
+      "from_backstory": true,
+      "description": "Commander of the Riverside Cell. Operates from Millford warehouse district disguised as legitimate trading post. 2+ werewolves, 2-4 cultists.",
+      "motivation": "Serve The Master. Expand cult influence in urban environment.",
+      "secrets": [
+        "Urban location makes assault complicated — civilian collateral risk"
+      ],
+      "location": "Millford — Warehouse district / docks",
+      "faction_affiliations": [
+        "Malar Cult (Riverside Cell)"
+      ],
+      "relationship_to_player": "Enemy. Riverside Cell commander. Finn's infiltration target."
+    }
+  ],
+  "potential_companions": [
+    {
+      "id": "comp_jakob",
+      "name": "Jakob Harrow",
+      "race": "Human",
+      "class": "Cleric 4/Paladin 1",
+      "alignment": "Neutral Good, developing toward Lawful",
+      "personality": "Earnest, brave, increasingly independent. Flaw: impossible standards, reckless proving himself.",
+      "motivation": "Apprentice loyalty, honoring dead family.",
+      "connection_to_main_quest": "First apprentice. Emotional core. Icewind Dale party.",
+      "recruitment_location": "Already recruited.",
+      "personal_quest_hook": "Torm vs Lathander theology. The wolf dreams."
+    },
+    {
+      "id": "comp_lyra",
+      "name": "Lyra Thorne",
+      "race": "Human",
+      "class": "Fighter/Ranger",
+      "alignment": "Lawful Neutral — pragmatic, supports Riv not his philosophy.",
+      "personality": "Controlled, intimidating. Flaw: emotional walls, will push hard choices.",
+      "motivation": "Found meaning. Terrified. Complicated feelings about Riv.",
+      "connection_to_main_quest": "Tactical commander. Icewind Dale.",
+      "recruitment_location": "Already recruited.",
+      "personal_quest_hook": "Village she didn't save. Love triangle."
+    },
+    {
+      "id": "comp_voss",
+      "name": "Henrik Voss",
+      "race": "Human",
+      "class": "Ranger/Fighter",
+      "alignment": "True Neutral — professional not ideological.",
+      "personality": "Quiet, watchful. Flaw: self-punishing, dark history.",
+      "motivation": "Order's mercy approach is opposite of what broke him.",
+      "connection_to_main_quest": "Lycanthrope expertise. Icewind Dale.",
+      "recruitment_location": "Already recruited.",
+      "personal_quest_hook": "Eleven names. Permission to stop punishing himself."
+    },
+    {
+      "id": "comp_mara",
+      "name": "Sister Mara of Torm",
+      "race": "Human",
+      "class": "Cleric of Torm (War)",
+      "alignment": "Lawful Good — but Temple loyalty may conflict.",
+      "personality": "Imposing, devout. Flaw: duty-bound to hierarchy that may oppose Order.",
+      "motivation": "Respected Order in battle. Torn between admiration and institutional loyalty.",
+      "connection_to_main_quest": "Bridge Order/Temple. Insight into Jakob. Divine martial support.",
+      "recruitment_location": "Millford — Temple of Torm.",
+      "personal_quest_hook": "Temple assessment. Brother's death. Torn loyalty."
+    }
+  ],
+  "locations": [
+    {
+      "id": "loc_dawns_rest",
+      "name": "Dawn's Rest",
+      "type": "town",
+      "region": "Corvus Barony, 7mi W-NW of Thornhaven",
+      "description": "Former Greystone Quarry. 300ft across, 60ft deep. Consecrated to Lathander. Pop ~120.",
+      "importance_to_plot": "Order HQ. Consecrated ground Master needs destroyed. Civilian community to protect.",
+      "notable_features": [
+        "Foreman's House (Riv)",
+        "Forge (Garrick)",
+        "Hearthstone Inn (Gerda)",
+        "Medical (Nelle)",
+        "Library (Silas)",
+        "Barracks",
+        "Watch platform",
+        "Spring",
+        "Consecrated ground"
+      ],
+      "dangers": [
+        "Western approach faces Deepwood",
+        "DM-ONLY: Consecration can be consumed",
+        "Malric reconnaissance"
+      ],
+      "opportunities": [
+        "Stronghold economy",
+        "Institutional growth",
+        "Community building"
+      ]
+    },
+    {
+      "id": "loc_thornhaven",
+      "name": "Thornhaven",
+      "type": "village",
+      "region": "Corvus Barony, ~15mi N of Millford",
+      "description": "Starting village. Pop reduced by attacks/relocations.",
+      "importance_to_plot": "Emotional anchor. Wren's council seat. Vulnerable civilians.",
+      "notable_features": [
+        "Sleeping Giant Tavern",
+        "Village green",
+        "Farmsteads"
+      ],
+      "dangers": [
+        "Reduced defense",
+        "Darkwood proximity",
+        "Plague of Whispers"
+      ],
+      "opportunities": [
+        "Recruiting",
+        "Trade connections"
+      ]
+    },
+    {
+      "id": "loc_millford",
+      "name": "Millford",
+      "type": "city",
+      "region": "Corvus Barony, ~15mi S of Thornhaven",
+      "description": "Largest settlement. Baron's seat. Garrison, Temple of Torm, archives, docks.",
+      "importance_to_plot": "Alliance hub. Riverside Cell. Temple trained Jakob. Elaine's archives.",
+      "notable_features": [
+        "Silver Stag inn",
+        "Baron's castle",
+        "Garrison",
+        "Temple of Torm",
+        "Archives",
+        "Docks/warehouse district",
+        "Neverwinter trade road"
+      ],
+      "dangers": [
+        "Riverside Cell",
+        "Council opposition",
+        "Serpent contacts"
+      ],
+      "opportunities": [
+        "Baron alliance",
+        "Temple cooperation",
+        "Trade networks",
+        "Garrison resources"
+      ]
+    },
+    {
+      "id": "loc_darkwood",
+      "name": "Darkwood Forest",
+      "type": "wilderness",
+      "region": "Surrounding Corvus Barony",
+      "description": "Dense ancient forest. Changing as Master's influence grows.",
+      "importance_to_plot": "Master's territory. Becoming Hunting Ground. Environmental corruption.",
+      "notable_features": [
+        "Ancient trees",
+        "Game trails",
+        "Destroyed cell sites",
+        "Shifting patterns"
+      ],
+      "dangers": [
+        "Werewolves",
+        "Cult patrols",
+        "DM-ONLY: Environmental corruption — trees blackening, sap red"
+      ],
+      "opportunities": [
+        "Intelligence",
+        "Tracking",
+        "Understanding corruption"
+      ]
+    },
+    {
+      "id": "loc_deepwood",
+      "name": "Deepwood Cell",
+      "type": "dungeon",
+      "region": "Deep western Darkwood",
+      "description": "Master's stronghold. 20-25 cultists, 10-15 werewolves. Elena hostage.",
+      "importance_to_plot": "Final objective. Elena's prison. Requires divine prep — severing Malar connection.",
+      "notable_features": [
+        "Professional fortifications",
+        "Ritual spaces",
+        "Elena held inside"
+      ],
+      "dangers": [
+        "The Master",
+        "Veterans",
+        "DM-ONLY: Suppressed divine magic",
+        "Unknown defenses"
+      ],
+      "opportunities": [
+        "Mass Binding counter-ritual on-site",
+        "Elena rescue",
+        "Cult network end"
+      ]
+    },
+    {
+      "id": "loc_icewind",
+      "name": "Icewind Dale Colony Ruins",
+      "type": "dungeon",
+      "region": "Icewind Dale, 300-400mi north, between Ten Towns",
+      "description": "Malar colony ruins. Sixty years abandoned. Residual corruption creates Spiritual Crucible.",
+      "importance_to_plot": "Act 1 setting. Critical intel: Binding counter-ritual, Hunger of Ground, priest's warning about spiritual annihilation.",
+      "notable_features": [
+        "Colony structures",
+        "Ritual sites with carvings",
+        "Binding ceremony space",
+        "Sealed priest chamber",
+        "Residual corruption"
+      ],
+      "dangers": [
+        "Spiritual Crucible — divine power falters",
+        "Extreme cold",
+        "Corrupted wildlife",
+        "Exploitation of unresolved conflicts"
+      ],
+      "opportunities": [
+        "Binding docs",
+        "Understanding consecration vulnerability",
+        "Master's identity lead",
+        "Personal breakthroughs"
+      ]
+    }
+  ],
+  "merchants": [
+    {
+      "id": "m_gerda",
+      "name": "Gerda",
+      "type": "general",
+      "location": "Dawn's Rest / Thornhaven",
+      "specialty": "Food, drink, lodging, supplies. Feeds everyone.",
+      "personality": "Loud, generous but shrewd. Fair prices for goods, free meals.",
+      "prosperity_level": "modest"
+    },
+    {
+      "id": "m_garrick",
+      "name": "Garrick Ironheart",
+      "type": "blacksmith",
+      "location": "Dawn's Rest",
+      "specialty": "Weapons, armor, silvering.",
+      "personality": "Craftsman not merchant. Trades as favors between friends.",
+      "prosperity_level": "modest"
+    },
+    {
+      "id": "m_brightwood",
+      "name": "Harlan Brightwood",
+      "type": "general",
+      "location": "Millford (Silver Stag)",
+      "specialty": "Inn, lodging, gossip, trade connections.",
+      "personality": "Pragmatic. Friendly to payers, cold to freeloaders. Knows everything, shares selectively.",
+      "prosperity_level": "comfortable"
+    },
+    {
+      "id": "m_ashgate",
+      "name": "Bren Ashgate",
+      "type": "blacksmith",
+      "location": "Millford",
+      "specialty": "Standard weapons/armor. Garrison contracts. No silvering.",
+      "personality": "Gruff, territorial. Sees Garrick as competition. Garrison rates.",
+      "prosperity_level": "comfortable"
+    },
+    {
+      "id": "m_vael",
+      "name": "Senna Vael",
+      "type": "alchemist",
+      "location": "Millford",
+      "specialty": "Healing potions, antitoxins, components.",
+      "personality": "Meticulous, suspicious. Won't sell dangerous compounds without knowing buyer.",
+      "prosperity_level": "comfortable"
+    },
+    {
+      "id": "m_corin",
+      "name": "Old Corin",
+      "type": "general",
+      "location": "Traveling circuit",
+      "specialty": "Miscellaneous. Occasional unusual items from south.",
+      "personality": "Talkative, unreliable. Exaggerates. Prices vary by mood.",
+      "prosperity_level": "poor"
+    }
+  ],
+  "factions": [
+    {
+      "id": "f_order",
+      "name": "Order of Dawn's Light",
+      "type": "religious",
+      "alignment_tendency": "Lawful Good (aspiration)",
+      "description": "Religious military order. Lathander. Founded 3 months ago. HQ Dawn's Rest. ~120 residents, 7 core combatants.",
+      "goals": [
+        "Dismantle Malar cult",
+        "Protect frontier",
+        "Build lasting institution",
+        "Offer redemption"
+      ],
+      "resources": [
+        "Dawn's Rest",
+        "Baron's treaty",
+        "Intelligence network",
+        "Silvered weapons",
+        "Consecrated ground"
+      ],
+      "relationship_to_party": "ally",
+      "key_members": [
+        "Riv",
+        "Garrick",
+        "Lyra",
+        "Jakob",
+        "Aldric",
+        "Dagmar",
+        "Finn",
+        "Voss"
+      ]
+    },
+    {
+      "id": "f_cult",
+      "name": "Cult of Malar",
+      "type": "religious",
+      "alignment_tendency": "NE to CE",
+      "description": "Thirty-year network. Three cells destroyed. Uses forced transformation and compulsion.",
+      "goals": [
+        "PLAYER: Regional dominance",
+        "DM-ONLY: Apotheosis",
+        "DM-ONLY: Destroy Dawn's Rest consecration",
+        "Eliminate Riv"
+      ],
+      "resources": [
+        "Deepwood fortress",
+        "Werewolves",
+        "Veteran cultists",
+        "Fourth Circle operatives",
+        "Elena as hostage"
+      ],
+      "relationship_to_party": "enemy",
+      "key_members": [
+        "The Master",
+        "Serpent",
+        "Ash",
+        "Malric",
+        "Sister Kara"
+      ]
+    },
+    {
+      "id": "f_corvus",
+      "name": "Corvus Barony",
+      "type": "political",
+      "alignment_tendency": "Lawful Neutral",
+      "description": "Semi-autonomous barony. Allied by treaty. Council divided.",
+      "goals": [
+        "Protect barony",
+        "Economic stability",
+        "Avenge Matthias",
+        "Balance Order support vs obligations"
+      ],
+      "resources": [
+        "Garrison",
+        "Treasury (strained)",
+        "Political legitimacy",
+        "Trade"
+      ],
+      "relationship_to_party": "ally",
+      "key_members": [
+        "Baron Corvus",
+        "Lady Mira",
+        "Sister Elaine",
+        "Matthias II (heir, 14)"
+      ]
+    },
+    {
+      "id": "f_torm",
+      "name": "Temple of Torm (Millford)",
+      "type": "religious",
+      "alignment_tendency": "Lawful Good",
+      "description": "Local temple. Trained Jakob. Sent Mara to observe. Cautious.",
+      "goals": [
+        "Maintain theological authority",
+        "Assess if Order is ally or competitor"
+      ],
+      "resources": [
+        "Temple",
+        "Warrior-priests",
+        "Regional authority",
+        "Jakob assessment info"
+      ],
+      "relationship_to_party": "potential",
+      "key_members": [
+        "Sister Mara"
+      ]
+    }
+  ],
+  "side_quests": [
+    {
+      "id": "sq_riverside",
+      "title": "Riverside Cell — Finn's Infiltration",
+      "type": "faction",
+      "description": "Finn's three-month recon on Sister Kara's urban cell. Balancing intelligence vs exposure, assault vs collateral.",
+      "quest_giver": "Finn / Riv",
+      "location": "Millford warehouse district",
+      "rewards": "Cell destroyed. Deepwood intel. Finn proves himself.",
+      "connection_to_main_quest": "Second-to-last cell. Deepwood planning intel."
+    },
+    {
+      "id": "sq_elena",
+      "title": "Rescue Elena Holloway",
+      "type": "personal",
+      "description": "Twelve-year-old werewolf held hostage. Eight years transformed. May not remember being human.",
+      "quest_giver": "Darius",
+      "location": "Deepwood Cell",
+      "rewards": "Elena freed. Darius permanent ally. Mercy validated at highest stakes.",
+      "connection_to_main_quest": "Central to Deepwood assault."
+    },
+    {
+      "id": "sq_plague",
+      "title": "Plague of Whispers",
+      "type": "mystery",
+      "description": "Psychic plague near Darkwood. Side effect of Master's ritual. Mercy's limits when victims are dangerous.",
+      "quest_giver": "Civilian reports",
+      "location": "Thornhaven area",
+      "rewards": "Understanding Master's ritual. Clue to true plan. Civilian trust.",
+      "connection_to_main_quest": "Evidence of Master's expanding influence."
+    },
+    {
+      "id": "sq_patrol",
+      "title": "Gregor's Missing Patrol",
+      "type": "personal",
+      "description": "Eight soldiers captured with Gregor. Trail leads to Captain Vey — possible Fourth Circle.",
+      "quest_giver": "Gregor (when trust builds)",
+      "location": "Eastern garrison",
+      "rewards": "Patrol recovered. Fourth Circle exposed. Garrison security assessed.",
+      "connection_to_main_quest": "Fourth Circle conspiracy."
+    },
+    {
+      "id": "sq_succession",
+      "title": "The Successor Question",
+      "type": "faction",
+      "description": "Who leads if Riv dies? No plan exists. Creating one forces mortality confrontation.",
+      "quest_giver": "Organic emergence",
+      "location": "Dawn's Rest",
+      "rewards": "Institutional resilience. Character growth. Order becomes larger than one person.",
+      "connection_to_main_quest": "Institution building made concrete."
+    }
+  ],
+  "themes": [
+    "Redemption and Mercy — defining principle, constantly tested",
+    "Found Family — every member orphaned, displaced, or broken",
+    "Institution Building — outlasting any individual",
+    "Limits of Idealism — wisdom about when mercy works and doesn't",
+    "Master and Apprentice — Riv/Jakob, Garrick/Emma, Dagmar/Finn",
+    "Light Against Darkness — Lathander vs Malar, literal and metaphorical",
+    "Leadership and Sacrifice — every decision risks lives",
+    "Cost of War — named characters die, victories have funerals"
+  ],
+  "dm_notes": {
+    "session_zero_topics": [
+      "Post-time-skip reentry — three months passed offscreen",
+      "Icewind Dale expedition is immediate arc (2-4 sessions)",
+      "Party: Riv, Lyra, Jakob, Voss — small, intimate",
+      "Spiritual Crucible will strip and restore powers",
+      "Jakob changed during training — explore it"
+    ],
+    "potential_twists": [
+      "DM-ONLY: Master's Apotheosis reframes everything when discovered",
+      "DM-ONLY: Dawn's Rest consecration on a clock",
+      "DM-ONLY: Colony ruins not entirely dead",
+      "Redeemed cultist relapses by choice",
+      "Someone refuses Oath freely",
+      "Baron's alliance tested by politics",
+      "Gregor's Vey intel reveals garrison infiltration",
+      "Temple of Torm assessment creates friction"
+    ],
+    "backup_hooks": [
+      "Ignore Riverside: entrenches with political protection",
+      "Ignore Plague: civilian trust erodes",
+      "Ignore Baron politics: funding cut",
+      "Rush Deepwood: devastating unprepared casualties"
+    ],
+    "tone_guidance": "Serious with levity. Character-driven. Moral complexity. Found family tested not undermined. Collaborative. Real consequences with fair warnings.",
+    "encounter_design_principles": [
+      "Every session: at least one moment where Riv's idealism is relevant",
+      "NPCs have own agendas. Ask: what does this person want independent of Riv?",
+      "World moves between sessions. Report through dialogue, letters, rumors, environment.",
+      "Seed threads early, pay off late. Let player connect dots.",
+      "Not every problem has combat solution. Political, economic, social, environmental.",
+      "Let player fail meaningfully. Some missions don't succeed.",
+      "Reward engagement with depth. Ignored threads develop consequences.",
+      "Keep tone grounded. Even Master has human moments. Allies have flaws. Victories cost."
+    ]
+  },
+  "spiritual_crucible": {
+    "_schema_extension": "CUSTOM FIELD. Icewind Dale power degradation/restoration mechanic.",
+    "overview": "Residual Malar corruption strips divine power. Exploits unresolved internal conflicts. Power returns through self-confrontation, not rest. Narrate degradation, don't announce DCs.",
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Full Strength",
+        "timing": "Session 1 early travel",
+        "effect": "No penalties. Establish baseline.",
+        "narrative": "Party departs at full capability."
+      },
+      {
+        "phase": 2,
+        "name": "The Dimming",
+        "timing": "Session 1 end / 2 start",
+        "effect": "3rd+ spells: DC 12 WIS or one level lower. Channel Divinity -25%. Non-divine: disadv WIS checks.",
+        "narrative": "Subtle faltering. Cure Wounds heals minimum. Prayers feel empty."
+      },
+      {
+        "phase": 3,
+        "name": "The Stripping",
+        "timing": "Session 2",
+        "effect": "3rd+ spells: DC 15 WIS or fail (slot spent). Channel Div: DC 13 Religion. Non-divine: lose prof on WIS. ~Level 3-4 effectiveness.",
+        "narrative": "Cold gets inside thoughts. Intrusive reflections. Confrontation forced."
+      },
+      {
+        "phase": 4,
+        "name": "Breakthrough",
+        "timing": "Sessions 2-3 individually",
+        "effect": "Power returns ALL AT ONCE on honest self-confrontation. Level choices happen here.",
+        "narrative": "Honesty breaks corruption. Light floods back. Magic overwhelms."
+      },
+      {
+        "phase": 5,
+        "name": "Full Power",
+        "timing": "Sessions 3-4",
+        "effect": "Restored. Possibly stronger. Level choices reflect lessons.",
+        "narrative": "Transformed. Return journey different."
+      }
+    ],
+    "confrontations": {
+      "riv": "Why build Order? Noble: Lathander's promise. Real: boy never enough built something essential. Mercy makes people need him. Breakthrough: acknowledge complicated motivations, keep going anyway.",
+      "jakob": "Temple taught mercy without justice = weakness. Cold: 'Mercy let Silas live. Was that justice?' Breakthrough: can disagree with master and still love him.",
+      "lyra": "Village she didn't save. Chose contract. Cold: 'Would you now?' Breakthrough: admitting she doesn't know. Showing vulnerability.",
+      "voss": "Eleven civilians. Correct decision. Cold: 'What when the hard call comes again?' Breakthrough: decision was impossible not wrong. Stop self-punishment."
+    }
+  },
+  "homebrew_systems": {
+    "_schema_extension": "CUSTOM FIELD. Active homebrew mechanics beyond standard 5e.",
+    "heat_tracker": {
+      "description": "Hidden. Cult attention on Order. 0-10. Increases: +2 raid, +3 kill leadership, +1 public/rescue. Decreases: -1 lay low, -2 disinfo. At 6+: retaliation rolls."
+    },
+    "glory_points": {
+      "description": "Max 3. Earned: exceptional RP, tactics, sacrifice. Spend: 1=reroll, 2=auto-success, 3=dramatic survival."
+    },
+    "shadow_points": {
+      "description": "Moral corruption. Current: 0. Effects scale 0(none) to 11+(deity withdraws)."
+    },
+    "relationship_levels": {
+      "description": "1-5. Gates NPC disclosure. 1=acquaintance, 2=friendly(+favors), 3=close(+1 rolls), 4=deep bond(risk life), 5=legendary."
+    },
+    "stronghold_economy": {
+      "description": "Monthly income/expenses. Modest surplus. Actions: 1/month (Intel, Train, Fortify, Craft, Diplomacy, Rest)."
+    },
+    "injury_table": {
+      "description": "d10 on dropping to 0 HP. 1-6 minor, 7-9 major, 10 grievous."
+    },
+    "exhaustion": {
+      "description": "Revised gradual: -1 to -5 all d20, speed/HP reductions. Level 6=unconscious."
+    },
+    "mass_combat": {
+      "description": "Morale 10 base. Modifiers for commander/victories/casualties/terror. Check at 25% losses."
+    },
+    "mythic_progression": {
+      "description": "Post-Level 20 framework. 5 tiers (Touched by Legend → Apotheosis). Earned through narrative, not XP. Paths: Hierophant (Riv), Beast (Master), Champion (Lyra/Garrick/Voss), Trickster (Finn), Legend (Jakob), Redemption (Silas/Thane), Corrupted Dawn (Riv dark mirror). Not active Campaign I. Full details in top-level mythic_progression field.",
+      "see_also": "mythic_progression"
+    }
+  },
+  "oath_of_atonement": {
+    "_schema_extension": "CUSTOM FIELD. Formal oath for inducting redeemed cultists.",
+    "summary": "Five pledges: service to Order, repentance for crimes (daily prayer, house arrest), accept rules/leadership, surrender all cult knowledge, understand betrayal = death and erasure. Final: accept assigned role.",
+    "current_holders": [
+      "Silas Corwin",
+      "Brennan",
+      "Corran Thane",
+      "Petrik Lowell",
+      "Willem Ashfield",
+      "Gregor Castellan"
+    ]
+  },
+  "cult_cell_status": {
+    "_schema_extension": "CUSTOM FIELD. Tracks all known cult operational points.",
+    "cells": [
+      {
+        "name": "Thornhaven Cell",
+        "status": "DESTROYED",
+        "day": "Days 1-3",
+        "details": "Gareth killed, Korthak killed at Battle of Thornhaven, 15+ werewolves eliminated."
+      },
+      {
+        "name": "Ashford Cell",
+        "status": "DESTROYED",
+        "day": "Day 9",
+        "details": "8 cultists, 2 werewolves. Brennan captured and redeemed."
+      },
+      {
+        "name": "Northwood Cell",
+        "status": "DESTROYED",
+        "day": "Day 10",
+        "details": "11 cultists killed, 3 werewolves, 5 captured. Thane, Petrik, Willem freed. Darius extracted. Documents seized."
+      },
+      {
+        "name": "Riverside Cell",
+        "status": "ACTIVE",
+        "commander": "Sister Kara",
+        "details": "Warehouse district near Millford docks. 2+ werewolves, 2-4 cultists. Urban — complicates assault. Finn infiltration planned."
+      },
+      {
+        "name": "Deepwood Cell",
+        "status": "ACTIVE",
+        "commander": "The Master",
+        "details": "20-25 veteran cultists, 10-15 werewolves, professional fortifications. Elena Holloway hostage. Primary target. Baron's one-year timeline."
+      },
+      {
+        "name": "Westmarch Safe House",
+        "status": "RECON TARGET",
+        "details": "\"Mallory's Provisions,\" warehouse district, 2 permanent staff. Logistics node. Intelligence value."
+      }
+    ]
+  },
+  "campaign_history": {
+    "_schema_extension": "CUSTOM FIELD. Key historical events the bot must know for continuity.",
+    "riv_backstory": "Born 1301 DR Neverwinter. Father: cold magistrate. Mother: grieving, never recovered from eldest daughter lost to bandits. Younger sister (bard) received all attention. Riv found Lathander at ~20, pledged to found an Order. Wandered six years as traveling cleric.",
+    "key_dead_characters": [
+      "Marcus Ironwood — Garrick's apprentice/adopted son. Died Battle of Thornhaven age 23. Killed four werewolves, kept fighting with broken sword.",
+      "Korthak — Alpha werewolf. Twenty years Malar service by choice. Killed at Battle of Thornhaven.",
+      "Gareth — Werewolf lieutenant. Captured/tormented Aldric. Killed in cave assault.",
+      "Jakob's family — Parents, sister Sara, brother Tomlin, Uncle Gareth, Aunt Mira, cousin Petya. All killed by werewolves."
+    ],
+    "shield_of_the_fallen": "Memorial at Dawn's Rest. Sixteen names. Eight defenders died at Battle of Thornhaven plus other casualties.",
+    "universal_oath_ceremony": "Day 17. Garrick forged nine silver rings. Every core member pledged. The moment the Order became an institution.",
+    "thorn_guard": "Lyra's former twenty-person mercenary company. Seventeen-year record: never lost client, cargo, or guard. Disbanded/folded into Order."
+  },
+  "mythic_progression": {
+    "_schema_extension": "CUSTOM FIELD. Post-Level 20 progression system adapted from Pathfinder Mythic Adventures / Wrath of the Righteous.",
+    "status": "Framework only. Not active in Campaign I. Reserved for future campaigns when characters reach Level 20+.",
+    "sources": [
+      "Pathfinder 1E Mythic Adventures (core mythic rules)",
+      "Pathfinder: Wrath of the Righteous (Mythic Paths, video game adaptation)",
+      "Pathfinder 2E Kingmaker (simplified mythic)",
+      "D&D 5E Epic Boons (DMG)",
+      "D&D 3.5 Epic Level Handbook",
+      "Exalted RPG (divine ascension concepts)"
+    ],
+    "design_principles": [
+      "5 tiers (condensed from PF's 10) to fit 5E bounded accuracy",
+      "Earned through narrative trials, NOT XP",
+      "Mythic abilities are qualitative (new capabilities) not just quantitative (+5 to everything)",
+      "Mythic Power pool replaces per-tier uses",
+      "Shadow Points interact: Light paths require Shadow 0-2, Dark paths gained through Shadow accumulation",
+      "Tier 3+ affects Relationship dynamics — mortals intimidated by demigod presence",
+      "Master's exact abilities remain DM secret until revealed in-game"
+    ],
+    "tiers": [
+      {
+        "tier": 1,
+        "name": "Touched by Legend",
+        "description": "First mythic awakening. Minor supernatural enhancements."
+      },
+      {
+        "tier": 2,
+        "name": "Hero of Renown",
+        "description": "Regional recognition. Significant power increase."
+      },
+      {
+        "tier": 3,
+        "name": "Champion",
+        "description": "National fame. Shaping events through presence."
+      },
+      {
+        "tier": 4,
+        "name": "Legend",
+        "description": "Continental influence. Challenging demigods."
+      },
+      {
+        "tier": 5,
+        "name": "Apotheosis",
+        "description": "Godlike power. Reshaping reality."
+      }
+    ],
+    "paths": {
+      "hierophant": {
+        "likely_character": "Riv Freeborn",
+        "inspired_by": "PF Hierophant + WotR Angel path",
+        "description": "Divine champion representing Lathander's will.",
+        "tier_abilities": {
+          "1": [
+            "Divine Surge (3/day, +1d6 radiant to any roll)",
+            "Radiant Presence (allies 30ft adv vs fear/charm)",
+            "Dawn's Blessing (long rest restores extra hit dice = WIS mod)"
+          ],
+          "2": [
+            "Lathander's Chosen (1/day cast any Cleric spell without slot, upcast to max)",
+            "Beacon of Hope (60ft aura, dying stabilize, healing +50%)",
+            "Smite Darkness (radiant ignores resistance/immunity)"
+          ],
+          "3": [
+            "Avatar of Dawn (10min 1/LR: fly 60ft, immune radiant/necrotic, +3d8 radiant)",
+            "Mass Restoration (Greater Restoration on 6 targets simultaneously)",
+            "Divine Intervention Improved (auto-succeed 1/week)"
+          ],
+          "4": [
+            "Dawnbringer (create permanent holy site 100ft radius)",
+            "Resurrection Mastery (True Resurrection at will, no components)",
+            "Solar Judgment (60ft radius 10d10 radiant, DC 20 WIS, undead/fiends no save)"
+          ],
+          "5": [
+            "Lathander's Herald (quasi-deity, grant divine power to followers)",
+            "Eternal Sunrise (immortal, auto-resurrect in 7 days)",
+            "Reshape Dawn (1/year rewrite single event within last 24 hours)"
+          ]
+        }
+      },
+      "beast_dark_path": {
+        "likely_character": "The Master",
+        "inspired_by": "WotR Demon/Lich paths + Exalted Abyssal",
+        "description": "DM-ONLY. Dark mirror to Hierophant. 40+ year evolution.",
+        "tier_abilities": {
+          "1": "Master werewolf — voice control of pack, no totems needed",
+          "2": "Malar's favored — cult leader, divine dark blessing",
+          "3": "Apex predator — enhanced lycanthropy, regeneration, terror aura",
+          "4": "Dark champion — mythic vs mythic equality with Riv",
+          "5": "Beast-God — lesser deity of hunt/slaughter if not stopped"
+        }
+      },
+      "champion": {
+        "likely_characters": "Lyra, Garrick, or Voss",
+        "description": "Martial excellence. Perfect strikes, legendary resilience, impossible strength, army leadership, training successors."
+      },
+      "marshal": {
+        "likely_character": "Riv (alternate path)",
+        "description": "Leadership genius. Not divine power but tactical brilliance + inspirational presence. Coordinate dozens, grant army-wide bonuses, strategic precognition."
+      },
+      "trickster": {
+        "likely_character": "Finn (if infiltration career continues)",
+        "description": "Perfect deception, reality-bending disguises, being in two places simultaneously, making armies forget he exists."
+      },
+      "legend": {
+        "likely_character": "Jakob (interesting option)",
+        "description": "Rejecting divine power for pure mortal excellence. Level 20 Cleric WITHOUT mythic supernatural boost but with perfect execution. Philosophically fascinating for a Cleric rejecting divinity's shortcuts."
+      },
+      "redemption": {
+        "likely_characters": "Silas or Thane",
+        "description": "Custom path — not in source material. Mythic through atonement, industrial-scale compulsion breaking, institution building. Tier 5: Living Saint of Second Chances — sense and break corruption/compulsion through touch."
+      },
+      "corrupted_dawn": {
+        "likely_character": "Riv (dark mirror / what-if)",
+        "description": "What if Riv falls? Dominate Person at will on sworn followers, radiant becomes necrotic, healing becomes control, gain power from breaking vows, control lycanthropes like The Master. Narrative cost: everything."
+      }
+    },
+    "multi_campaign_timeline": {
+      "campaign_1": "No mythic. Levels 6-15. Foundation. Master may be Tier 1 (unrevealed). Mortal vs mortal.",
+      "campaign_2": "Levels 15-20. Order expands. Lathander offers ascension. Riv achieves Tier 1-2 Hierophant. Master returns at Tier 2 (if escaped).",
+      "campaign_3": "Decades later. Riv Tier 3-4. Multiple party members mythic (Jakob T1-2, Lyra T1, Silas T1 Redemption). Mythic heroes vs mythic villains.",
+      "campaign_4": "Final. Tier 5 apotheosis decisions. Riv chooses: godhood, legendary mortality, or sacrificial transcendence. Order's ultimate fate. Epilogue centuries later."
+    },
+    "bounded_accuracy_solutions": [
+      "Mythic bonuses apply to damage/healing more than attack rolls",
+      "Mythic abilities qualitative not quantitative",
+      "Opposed mythic checks (Tier 3 vs Tier 3 = mythic pool vs mythic pool, normal NPCs irrelevant)",
+      "Legendary resistance uses Mythic Power (spend 1 point = auto-succeed)"
+    ],
+    "homebrew_integration": {
+      "glory_points": "Continue normally. Mythic ≠ infinite luck.",
+      "shadow_points": "Mythic amplifies corruption. Dark path = accumulate Shadow. Light path requires Shadow 0-2.",
+      "relationships": "Tier 3+ makes mortal relationships harder. Must work to stay grounded.",
+      "exhaustion": "Tier 1-2 still vulnerable. Tier 3+ immune to mundane exhaustion but mythic exhaustion possible.",
+      "equipment": "Tier 3+ needs legendary/artifact gear to match power level."
+    }
+  }
+}

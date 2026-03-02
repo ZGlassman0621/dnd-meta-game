@@ -7,6 +7,10 @@ import NPCCodexPanel from './NPCCodexPanel';
 import PlotThreadPanel from './PlotThreadPanel';
 import CampaignPrepScreen from './CampaignPrepScreen';
 import PrepReferencePanel from './PrepReferencePanel';
+import EquipmentReferencePanel from './EquipmentReferencePanel';
+import SpellReferencePanel from './SpellReferencePanel';
+import RulesReferencePanel from './RulesReferencePanel';
+import EffectTracker from './EffectTracker';
 
 const CHAR_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
 
@@ -50,6 +54,13 @@ export default function DMMode({ onBack }) {
   const [showNpcCodex, setShowNpcCodex] = useState(false);
   const [showPlotThreads, setShowPlotThreads] = useState(false);
   const [showPrepRef, setShowPrepRef] = useState(false);
+  const [showEquipRef, setShowEquipRef] = useState(false);
+  const [showSpellRef, setShowSpellRef] = useState(false);
+  const [showRulesRef, setShowRulesRef] = useState(false);
+
+  // Effect/Duration Tracker
+  const [activeEffects, setActiveEffects] = useState([]);
+  const [combatRound, setCombatRound] = useState(1);
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -636,6 +647,40 @@ export default function DMMode({ onBack }) {
     setShowNpcCodex(panel === 'npcs');
     setShowPlotThreads(panel === 'threads');
     setShowPrepRef(panel === 'prep');
+    setShowEquipRef(panel === 'equip');
+    setShowSpellRef(panel === 'spells');
+    setShowRulesRef(panel === 'rules');
+  };
+
+  // ============================================================
+  // EFFECT TRACKER HANDLERS
+  // ============================================================
+
+  const handleAddEffect = (effect) => {
+    // Concentration check: only one concentration per caster
+    if (effect.concentration && effect.casterName) {
+      const existing = activeEffects.find(e => e.concentration && e.casterName === effect.casterName);
+      if (existing) {
+        if (!confirm(`${effect.casterName} is already concentrating on "${existing.name}". Drop it to concentrate on "${effect.name}"?`)) {
+          return;
+        }
+        setActiveEffects(prev => prev.filter(e => e.id !== existing.id));
+      }
+    }
+    setActiveEffects(prev => [...prev, { ...effect, id: Date.now() + Math.random() }]);
+  };
+
+  const handleRemoveEffect = (effectId) => {
+    setActiveEffects(prev => prev.filter(e => e.id !== effectId));
+  };
+
+  const handleAdvanceRound = () => {
+    setCombatRound(prev => prev + 1);
+    setActiveEffects(prev =>
+      prev
+        .map(e => e.roundsRemaining === null ? e : { ...e, roundsRemaining: e.roundsRemaining - 1 })
+        .filter(e => e.roundsRemaining === null || e.roundsRemaining > 0)
+    );
   };
 
   // ============================================================
@@ -1133,6 +1178,8 @@ export default function DMMode({ onBack }) {
               setMessages([]);
               setPendingRolls([]);
               setSessionSummary('');
+              setActiveEffects([]);
+              setCombatRound(1);
               loadParties();
             }}
             style={{
@@ -1295,6 +1342,24 @@ export default function DMMode({ onBack }) {
             onClick={() => openPanel(showPrepRef ? null : 'prep')}
             color="#10b981"
           />
+          <ToolbarButton
+            label="Equip"
+            active={showEquipRef}
+            onClick={() => openPanel(showEquipRef ? null : 'equip')}
+            color="#d4af37"
+          />
+          <ToolbarButton
+            label="Spells"
+            active={showSpellRef}
+            onClick={() => openPanel(showSpellRef ? null : 'spells')}
+            color="#6366f1"
+          />
+          <ToolbarButton
+            label="Rules"
+            active={showRulesRef}
+            onClick={() => openPanel(showRulesRef ? null : 'rules')}
+            color="#f59e0b"
+          />
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)', margin: '0 0.25rem' }} />
           <button
             onClick={handleEndSession}
@@ -1312,6 +1377,16 @@ export default function DMMode({ onBack }) {
           </button>
         </div>
       </div>
+
+      {/* Effect/Duration Tracker */}
+      <EffectTracker
+        effects={activeEffects}
+        characters={selectedParty?.characters?.map(c => c.name) || []}
+        onAddEffect={handleAddEffect}
+        onRemoveEffect={handleRemoveEffect}
+        onAdvanceRound={handleAdvanceRound}
+        roundNumber={combatRound}
+      />
 
       {/* Messages Area */}
       <div style={{
@@ -1557,6 +1632,15 @@ export default function DMMode({ onBack }) {
           partyId={selectedParty.id}
           onClose={() => setShowPrepRef(false)}
         />
+      )}
+      {showEquipRef && (
+        <EquipmentReferencePanel onClose={() => setShowEquipRef(false)} />
+      )}
+      {showSpellRef && (
+        <SpellReferencePanel onClose={() => setShowSpellRef(false)} />
+      )}
+      {showRulesRef && (
+        <RulesReferencePanel onClose={() => setShowRulesRef(false)} />
       )}
     </div>
   );

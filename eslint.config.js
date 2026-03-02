@@ -33,7 +33,6 @@ export default [
     ignores: [
       'node_modules/**',
       'client/**',
-      'character-builder/**',
       'dist/**',
       'backups/**',
     ]

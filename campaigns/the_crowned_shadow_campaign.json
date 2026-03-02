@@ -1,0 +1,768 @@
+{
+  "campaign": {
+    "name": "The Crowned Shadow",
+    "description": "Four kingdoms bound by a peace treaty built on genocide are unraveling as a Saelori survivor network called the Remnant exposes the continent's darkest secrets. The players are intelligence operatives caught between loyalty, conscience, and a world that's burning.",
+    "setting": "Valdren, a war-scarred continent of four rival kingdoms",
+    "tone": "Dark fantasy espionage with moral complexity, paranoia, and political intrigue",
+    "starting_location": "Harren's Gate",
+    "time_ratio": "normal"
+  },
+
+  "campaign_plan": {
+    "main_quest": {
+      "title": "The New Accord",
+      "summary": "Eleven years ago, four warring kingdoms signed the Accord of Still Waters to end a devastating war — but the treaty's secret annex authorized the coordinated genocide of a fifth nation, the Saelori Reach. Now survivors called the Remnant are systematically exposing every kingdom's darkest secrets, destabilizing the continent. The players must navigate shifting loyalties, uncover the full truth, survive the collapse, and ultimately decide what kind of world replaces the one that's falling apart.",
+      "hook": "A Draemiri trade envoy is found murdered in the neutral city of Harren's Gate, framed to look like a Kaelrathi assassination. Every intelligence service sends agents to investigate. The murder is a distraction — but for what?",
+      "stakes": "If the players fail or choose inaction, the continent descends into total war as four kingdoms turn on each other and themselves, the Saelori genocide remains buried or is weaponized for revenge rather than justice, and tens of thousands of civilians die in the crossfire of conflicts engineered by people who were never held accountable.",
+      "acts": [
+        {
+          "act_number": 1,
+          "title": "The Four Knives",
+          "level_range": "1-5",
+          "summary": "Players are dispatched as intelligence operatives to investigate the murder of Draemiri envoy Cosiel Danterre in the neutral city of Harren's Gate. The investigation peels back layers of deception: a planted frame job, a criminal syndicate used as cutouts, a shadowy intermediary called the Collector, and ultimately the discovery that the Accord of Still Waters contains a secret annex authorizing the genocide of the Saelori Reach — and that the killer is Saelori.",
+          "key_events": [
+            "Players arrive in Harren's Gate under cover, begin investigating the Danterre murder scene while encountering rival kingdom agents doing the same",
+            "Investigation into the Thornhand criminal syndicate reveals the murder was a hired job with planted Kaelrathi evidence — someone framed an entire kingdom",
+            "Tracking the intermediary known as the Collector reveals a years-long infrastructure of coded communications and dead drops far too sophisticated for a simple frame job",
+            "Discovery that a stolen document from Danterre's body is a page from the Accord's secret annex — proof that all four kingdoms conspired to destroy the Saelori Reach",
+            "Confrontation with a Remnant agent reveals the killer is Saelori, and the murder was the opening move in a plan decades in the making"
+          ],
+          "climax": "Players learn the full truth about the secret annex and the Saelori genocide, and must make their first major choice: report to handlers, go public, contact the Remnant, leverage the information, or bury it. Each choice cascades into Act II."
+        },
+        {
+          "act_number": 2,
+          "title": "The Mirror War",
+          "level_range": "5-10",
+          "summary": "An emergency diplomatic summit at Harren's Gate brings all four kingdoms together to reaffirm the crumbling Accord. The players provide security and intelligence while discovering that the Remnant has deployed Mirror Agents — operatives physically transformed into copies of real people through a horrific magical process called Soulpressing. One of the four lead diplomats has been replaced. As the players hunt the imposter, the summit collapses under the weight of engineered mistrust, and the Accord of Still Waters effectively dies.",
+          "key_events": [
+            "Players are assigned to the Harren's Gate diplomatic summit in various intelligence capacities, navigating a district saturated with competing spy operations",
+            "A defector from a rival intelligence service reveals that someone within the summit delegations has been replaced by an imposter, but doesn't know who or how",
+            "Discovery of encrypted Remnant communications using old Saelori language and the phrase 'The mirror remembers what the face forgets' — first evidence of the Soulpressing operation",
+            "An assassination attempt on a lead diplomat is traced back to the Collector's network from Act I, confirming Remnant involvement at the summit",
+            "Lord Gavren Hale of Kaelrath reveals the deeper truth: the Saelori were targeted because they possessed the Pale Registry, and the four kingdoms wanted it destroyed",
+            "Players identify and confront the Mirror Agent, who delivers a devastating account of what was done to them and to the Saelori people",
+            "The summit collapses through a cascade of engineered misunderstandings as delegations withdraw and military mobilizations begin"
+          ],
+          "climax": "Players must decide what to do with the captured Mirror Agent and the intelligence they've gathered — report to handlers, go public, contact the Remnant directly, play all sides, or bury everything. The Accord dies regardless, and the continent begins sliding toward war."
+        },
+        {
+          "act_number": 3,
+          "title": "The Pale Registry",
+          "level_range": "10-15",
+          "summary": "The continent fractures into overlapping conflicts as the Remnant executes its master plan: the Bloodletting, a simultaneous release of devastating secrets from the Pale Registry targeting all four kingdoms. Players receive increasingly ruthless orders from handlers while the Remnant's leader, Vasara Kael, reveals herself and the full scope of her eleven-year plan to demolish the continental power structure through controlled informational warfare. Players must choose between serving their crumbling kingdoms, joining the Remnant's revolution, or forging their own path.",
+          "key_events": [
+            "Players receive escalating missions from handlers that force choices between operational effectiveness and moral conscience",
+            "Remnant lieutenant Edrin Solace contacts the players directly, offering intelligence about the coming Bloodletting and requesting extraction of a deteriorating Mirror Agent",
+            "The Bloodletting detonates: curated Registry secrets released simultaneously destabilize all four kingdoms — military coup in Kaelrath, political purges in Draemiri, religious schism in Thyrsia, civil war in Fenmarch",
+            "Handlers contact players with desperate, often morally indefensible orders as their institutions collapse around them",
+            "Players locate and meet Vasara Kael, who reveals the full plan including the existence of Tablet 13 — the Final Mirror that records current intent and could end institutional secrecy permanently",
+            "Players choose their path: restoration, revolution, a third way, or seizing power for themselves"
+          ],
+          "climax": "The confrontation with Vasara Kael — not a battle but a moral reckoning where she asks the players whether her plan is right, and they must decide what they believe after three acts of accumulated evidence, relationships, and compromises."
+        },
+        {
+          "act_number": 4,
+          "title": "The New Accord",
+          "level_range": "15-20",
+          "summary": "Six months after the Bloodletting, the continent is in freefall. Magistrate Asha Maeven of Harren's Gate calls a gathering of anyone willing to build something new from the wreckage. The players become the connective tissue of an improbable coalition — mediating between kingdom reformers, surviving intelligence professionals, Remnant representatives, and displaced civilians. They must defend the gathering against a coordinated counterattack by hardline remnants of all four kingdoms, then help design and ratify a New Accord that addresses the Saelori genocide, the Pale Registry, justice, governance, and the question of what kind of continent Valdren becomes.",
+          "key_events": [
+            "Asha Maeven's invitation draws faction representatives to Harren's Gate — who comes depends entirely on the players' relationships across three acts",
+            "The Opening Circle: someone must publicly acknowledge the Saelori genocide before any negotiation can proceed",
+            "Discovery and exposure of an active saboteur working to collapse the gathering from within",
+            "Negotiations over impossible demands: security, trade, religious freedom, sovereignty, Saelori recognition and reparations",
+            "The critical Registry decision: destroy it, create a custodial institution, release everything, or maintain selective control",
+            "Coordinated counterattack by hardline factions: economic blockade, military threat, religious propaganda, political forgery, and assassination attempt by a rogue Mirror Agent",
+            "Final confrontation with the rogue Mirror Agent — a broken person who mirrors what the players could have become",
+            "Drafting and signing the New Accord, with Vasara Kael's signature as the emotional climax if the players earned her trust"
+          ],
+          "climax": "The signing of the New Accord — or its failure. Each faction representative signs or refuses based on the full history of the players' choices. The campaign ends with personal epilogues: what each character does now, who they've become, and what their choices cost."
+        }
+      ]
+    },
+
+    "side_quests": [
+      {
+        "title": "The Thornhand Debt",
+        "description": "The Thornhand criminal syndicate in Harren's Gate was used as cutouts for Cosiel's murder. Investigating their operations reveals a sprawling underworld network with ties to all four kingdoms' intelligence services. Players can dismantle, infiltrate, or co-opt the syndicate.",
+        "connection_to_main_quest": "The Thornhands are connected to the Collector's intermediary network, which is Remnant infrastructure. Following the money reveals layers of the conspiracy.",
+        "level_range": "1-5",
+        "location": "Harren's Gate underworld",
+        "reward": "Criminal contacts, intelligence on Remnant operations, potential underworld allies"
+      },
+      {
+        "title": "The Thirteenth Lamp",
+        "description": "The thirteenth seat on Draemiri's Council of Lamps has changed hands four times in two years, each holder dying within months. Something — or someone — doesn't want that seat filled. Investigation reveals connections to both Thyrsian infiltration and Remnant operations.",
+        "connection_to_main_quest": "The Thirteenth Lamp mystery connects to the Bloodletting revelation that three Council seats are Thyrsian puppets. Understanding why the thirteenth seat is cursed provides early warning of the Communion's infiltration campaign.",
+        "level_range": "3-8",
+        "location": "Draemiri canal cities",
+        "reward": "Draemiri political contacts, evidence of Thyrsian infiltration, potential Council ally"
+      },
+      {
+        "title": "The Unbound Truth",
+        "description": "A splinter sect in Thyrsia's southern provinces preaches that the Bound Saints were prisoners, not heroes. The Penitents are suppressing them. Players can investigate whether the Unbound are right — and what happens when heretics turn out to be correct.",
+        "connection_to_main_quest": "The Unbound are right. The Bound Saints were Saelori. This discovery foreshadows the Bloodletting's theological revelation and provides potential Thyrsian reform allies for Act IV.",
+        "level_range": "5-10",
+        "location": "Thyrsian southern provinces",
+        "reward": "Theological evidence, Unbound movement contacts, leverage against the Hallowed Senate"
+      },
+      {
+        "title": "The Exiled Prince",
+        "description": "Drevek, son of the Voivode Maren killed in her challenge, lives in Kaelrathi exile gathering Fenmarch dissidents. Is he a legitimate heir with a grievance or a puppet being used by the Ashmark to destabilize Fenmarch?",
+        "connection_to_main_quest": "Drevek's claim becomes weaponized during the Bloodletting when the Remnant provides legitimacy evidence. Players who investigated early can influence whether the Fenmarch civil war happens, how severe it is, or whether Drevek can be turned into an ally.",
+        "level_range": "5-12",
+        "location": "Kaelrath and Fenmarch border regions",
+        "reward": "Fenmarch political intelligence, potential alliance with Drevek or leverage against him, influence over Fenmarch civil war"
+      },
+      {
+        "title": "The Soulpress Extraction",
+        "description": "A Mirror Agent stationed in a Thyrsian border fortress is losing their identity — the Soulpressing is degrading and the original person's memories are overwriting the agent's. The Remnant needs the agent extracted before the Penitents capture and study them, potentially reverse-engineering Soulpressing as a weapon.",
+        "connection_to_main_quest": "Direct exposure to the human cost of the Remnant's methods. The extracted agent provides intelligence on Mirror Agent positions and the Soulpressing process. Failure means the Penitents gain access to body-duplication magic.",
+        "level_range": "8-12",
+        "location": "Thyrsian border fortress",
+        "reward": "Remnant trust, Mirror Agent intelligence, prevention of Soulpressing proliferation"
+      },
+      {
+        "title": "The Civilian Thread",
+        "description": "A displaced family encountered during the chaos of Act III keeps appearing — at refugee camps, closed borders, burned villages. They're not a quest. They're a mirror. Helping them is never required and always costly, but their fate tracks the human consequences of every grand strategic decision.",
+        "connection_to_main_quest": "The family's survival and wellbeing serve as a ground-level measure of the players' choices. Their presence at Act IV's gathering — or their absence — is a powerful narrative beat.",
+        "level_range": "10-20",
+        "location": "Various — refugee routes across Valdren",
+        "reward": "No mechanical reward. Narrative weight and moral grounding."
+      }
+    ],
+
+    "npcs": [
+      {
+        "id": "npc_vasara_kael",
+        "name": "Vasara Kael",
+        "role": "antagonist",
+        "alignment": "chaotic_neutral",
+        "description": "Fifty-three years old, thin and weathered with prematurely white hair and steady dark eyes that miss nothing. Moves with the economy of someone who has been hunted for decades. Speaks with absolute precision — no wasted words, no emotional manipulation, just truth delivered without cushioning.",
+        "motivation": "Controlled demolition of the four kingdoms' power structures to prevent them from ever again possessing the capacity for coordinated genocide. Not revenge — engineering. She views the current continental order as a flawed system that produces atrocity as a natural output.",
+        "secrets": [
+          "Possesses all thirteen bone tablets of the Pale Registry, including Tablet 13 which records current intent",
+          "Has deployed eight Mirror Agents across the continent in positions of moderate influence",
+          "Watched her mother burned alive by Kaelrathi soldiers at age nineteen during the Saelori genocide",
+          "Is dying — a long-term consequence of exposure to the Soulpressing magic she helped develop. She has approximately two years left.",
+          "The Bloodletting's cascade has exceeded her projections and she's losing control of Remnant cells acting independently"
+        ],
+        "location": "Hidden, mobile — communicates through dead drops. Located at Remnant safehouses that shift regularly.",
+        "faction_affiliations": ["The Remnant"],
+        "relationship_to_player": "The campaign's central moral mirror. Neither villain nor ally until the players' choices define the relationship. She asks the hardest questions and accepts the answers.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_lenne_caskwell",
+        "name": "Lenne Caskwell",
+        "role": "quest_giver",
+        "alignment": "lawful_neutral",
+        "description": "Mid-forties, looks like a provincial accountant — forgettable face, unremarkable clothes, reading glasses she doesn't need. Speaks in dry, precise sentences. Has personally killed eleven people and shows no outward sign of it.",
+        "motivation": "Preservation of Kaelrathi intelligence infrastructure and national security, which she views as synonymous with civilization itself. Genuinely believes the hard choices she's made were necessary.",
+        "secrets": [
+          "Knows about the secret annex and helped bury evidence of it fifteen years ago as a junior analyst",
+          "Has a contingency plan to assassinate Lord Marshal Blackwall if she ever becomes a threat to Kaelrath's stability — which she now has",
+          "Communicates through dead drops written in lemon juice"
+        ],
+        "location": "Kaelrath — various safehouses and intelligence facilities",
+        "faction_affiliations": ["The Ashmark"],
+        "relationship_to_player": "Handler for Ashmark-aligned players. Professional, demanding, and protective of her agents in a cold, institutional way. Will burn them if operational necessity demands it, and will lose sleep over it afterward.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_marise_callero",
+        "name": "Marise Callero",
+        "role": "quest_giver",
+        "alignment": "neutral_evil",
+        "description": "Late thirties, stunningly beautiful in a way she deploys with surgical precision. Dark hair, sharp features, clothes that cost more than most people earn in a year. Smiles constantly. The smile never reaches her eyes.",
+        "motivation": "Draemiri commercial dominance and personal advancement within the Glassmakers. Views morality as a luxury financed by economic stability — and she controls the financing.",
+        "secrets": [
+          "Has been selling weapons to both Kaelrath and Thyrsia simultaneously through shell trading houses",
+          "Maintains a private intelligence network separate from official Glassmaker channels",
+          "Genuinely believes that economic interdependence prevents more suffering than moral posturing ever could"
+        ],
+        "location": "Draemiri canal cities — primarily operates from the capital",
+        "faction_affiliations": ["The Glassmakers"],
+        "relationship_to_player": "Handler for Glassmaker-aligned players. Treats agents as investments — high-performing assets receive extraordinary support, underperformers are liquidated without sentiment.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_brother_oram",
+        "name": "Brother Oram",
+        "role": "quest_giver",
+        "alignment": "lawful_good",
+        "description": "Massive man, shaved head, hands that could crush skulls but hold prayer beads with surprising delicacy. Speaks softly, moves slowly, radiates the contained intensity of someone constantly wrestling with themselves.",
+        "motivation": "Service to the Communion and genuine belief that faith can redeem even terrible acts — including his own. A former soldier who committed atrocities in the last war and found religion as both salvation and penance.",
+        "secrets": [
+          "His faith is more fragile than he lets anyone see — the Unbound movement's claims terrify him because he suspects they might be right",
+          "Keeps a list of everyone who died because of orders he gave, both as a soldier and as a Penitent handler",
+          "Is the handler most likely to defect if shown a different path — and the most dangerous if he retreats into rigid dogma instead"
+        ],
+        "location": "Thyrsia — cathedral-fortress complexes and Penitent operational centers",
+        "faction_affiliations": ["The Penitents"],
+        "relationship_to_player": "Handler for Penitent-aligned players. The most morally complex handler — orders terrible things and then prays for forgiveness. Treats agents with genuine pastoral concern that coexists uncomfortably with operational ruthlessness.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_whistle",
+        "name": "Whistle",
+        "role": "quest_giver",
+        "alignment": "neutral_good",
+        "description": "Age indeterminate — could be thirty or fifty. Weather-beaten, lean, moves through cities like a forest animal in a cage. Communicates primarily through bird calls, hand signs, and terse sentences carved into birch bark. Real name unknown.",
+        "motivation": "Protection of Fenmarch and its people. No ideology beyond that. Will do whatever it takes to keep the forests safe, and views everything else as noise.",
+        "secrets": [
+          "Is actually one of Voivode Maren's clan-sisters — their loyalty is personal, not institutional",
+          "Has killed more enemy intelligence agents than any other Rootwork operative by using folk magic detection methods the other kingdoms don't understand",
+          "Despises cities and is slowly deteriorating psychologically the longer they operate in urban environments"
+        ],
+        "location": "Fenmarch borders and, reluctantly, wherever the mission requires",
+        "faction_affiliations": ["The Rootwork"],
+        "relationship_to_player": "Handler for Rootwork-aligned players. Terrifyingly competent in the field, no patience for politics or people who talk too much. Delivers missions on birch bark and expects results, not explanations.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_asha_maeven",
+        "name": "Asha Maeven",
+        "role": "neutral",
+        "alignment": "lawful_good",
+        "description": "Harren's Gate chief magistrate. Mid-fifties, sharp-featured, perpetually overworked. Wears judicial robes with ink stains she doesn't bother hiding. Radiates the exhausted fury of a competent person surrounded by institutional failure.",
+        "motivation": "Justice and functional governance. Increasingly radicalized by watching four kingdoms' spy services trample her jurisdiction while the people she's sworn to protect suffer.",
+        "secrets": [
+          "Has been quietly documenting every intelligence operation she's detected in Harren's Gate for fifteen years — a private archive that would embarrass every spy service on the continent",
+          "Her call for the Act IV gathering is not spontaneous — she's been planning it since the summit collapsed, quietly building the logistical framework while everyone else fought"
+        ],
+        "location": "Harren's Gate",
+        "faction_affiliations": ["Harren's Gate magistracy (independent)"],
+        "relationship_to_player": "Potential ally or obstacle in Act I depending on how players treat her jurisdiction. Becomes the catalyst for the Act IV gathering — the only person with both the neutral authority and the moral clarity to call everyone to the table.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_edrin_solace",
+        "name": "Edrin Solace",
+        "role": "neutral",
+        "alignment": "neutral_good",
+        "description": "Former Kaelrathi army surgeon who deserted after discovering the Saelori genocide. Late forties, gentle hands, tired eyes. Speaks with the careful precision of someone used to delivering bad news.",
+        "motivation": "Justice for the Saelori and prevention of further atrocity. Increasingly uncertain about whether Vasara's methods achieve either goal.",
+        "secrets": [
+          "Developed the medical protocols that make Soulpressing survivable — and carries enormous guilt about it",
+          "Has been quietly building contacts outside the Remnant as a contingency in case Vasara's plan spirals beyond control",
+          "Believes Vasara is dying and hasn't told anyone else in the Remnant"
+        ],
+        "location": "Mobile — Remnant logistics network across the continent",
+        "faction_affiliations": ["The Remnant"],
+        "relationship_to_player": "Primary Remnant contact from Act III onward. The human face of an organization that operates through inhuman methods. Offers information and asks for help with genuine vulnerability.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_lord_gavren_hale",
+        "name": "Lord Gavren Hale",
+        "role": "neutral",
+        "alignment": "neutral_good",
+        "description": "Veteran Kaelrathi diplomat, late sixties. Silver-haired, impeccably dressed, carries himself with the weight of someone who's been keeping terrible secrets for too long. Hands shake slightly when he thinks no one is watching.",
+        "motivation": "Peace — genuine, lasting peace, not the performative kind. Haunted by his role in drafting the secret annex eleven years ago and desperate to undo the damage before he dies.",
+        "secrets": [
+          "Helped write the Accord's secret annex as a junior aide and has carried the guilt for eleven years",
+          "Knows the Saelori were targeted for the Pale Registry, not just territorial gain",
+          "Is a secret dove in a kingdom preparing for war — his own military would consider him a traitor"
+        ],
+        "location": "Kaelrath capital, diplomatic missions",
+        "faction_affiliations": ["Kaelrath diplomatic corps"],
+        "relationship_to_player": "Critical exposition source in Act II. His private confession about the secret annex and the Pale Registry is one of the campaign's pivotal scenes.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_princess_isabeau",
+        "name": "Princess Isabeau of Kaelrath",
+        "role": "neutral",
+        "alignment": "neutral_good",
+        "description": "Twenty-two years old, dark-haired, carries herself with the studied composure of someone who learned court politics as a survival skill. Eyes are older than her face. Exhausted but refusing to show it.",
+        "motivation": "Reforming Kaelrath and breaking the cycle of militarism and deception that killed her brother and hollowed out her father. Willing to acknowledge hard truths that every previous Kaelrathi leader buried.",
+        "secrets": [
+          "Her contact with Draemiri diplomats was genuine peacemaking, not treason — but Blackwall used it to frame her as a traitor and control the narrative",
+          "Has read the secret annex evidence and is the only head of state willing to publicly acknowledge the Saelori genocide",
+          "Is quietly terrified and managing a fractured kingdom through sheer will"
+        ],
+        "location": "Kaelrath capital",
+        "faction_affiliations": ["Kaelrath reformist faction"],
+        "relationship_to_player": "Potential Act IV ally. Young, untested, and genuine — the closest thing to a clean slate in Kaelrathi leadership.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_orenthal_voss",
+        "name": "Orenthal Voss",
+        "role": "antagonist",
+        "alignment": "neutral_evil",
+        "description": "Draemiri First Speaker. Sixty years old, immaculately groomed, smells perpetually of jasmine and formaldehyde. Smiles like a man who has never been surprised by anything and finds this faintly amusing.",
+        "motivation": "Power and profit, maintained through the appearance of civic virtue. Has poisoned his way through six rivals and considers this normal statecraft.",
+        "secrets": [
+          "His Council seat was obtained through a Thyrsian influence operation — he may or may not know this",
+          "Has contingency plans to flee Draemiri with a fortune if the political situation deteriorates",
+          "Is less intelligent than he appears — his success is primarily due to ruthlessness and timing rather than strategic brilliance"
+        ],
+        "location": "Draemiri capital — Council chambers and trading house offices",
+        "faction_affiliations": ["Council of Lamps"],
+        "relationship_to_player": "Obstacle and potential target. Represents the corruption at the heart of Draemiri governance.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_hierophant_cael",
+        "name": "Hierophant Cael",
+        "role": "neutral",
+        "alignment": "lawful_neutral",
+        "description": "Blind old man whose sermons can make soldiers weep. Thin, frail-looking, moves with the careful precision of someone who has memorized every room he enters. His political instincts are razor-sharp despite — or because of — his apparent frailty.",
+        "motivation": "The Communion's survival and expansion of its spiritual influence. Genuinely believes suffering has transcendent value. Pragmatic enough to make concessions he finds theologically distasteful.",
+        "secrets": [
+          "Knows the Bound Saints revelation is likely true and has known for years — found evidence in restricted Communion archives",
+          "His health is genuinely failing and the succession battle is already underway",
+          "Authorized Canoness Avra to make concessions at the summit that he would publicly deny if exposed"
+        ],
+        "location": "Thyrsia — the Grand Cathedral",
+        "faction_affiliations": ["The Hallowed Senate", "The Communion"],
+        "relationship_to_player": "Distant power figure. Players interact with his policies and agents rather than the man himself — until the schism forces direct engagement.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_canoness_avra",
+        "name": "Canoness Avra",
+        "role": "neutral",
+        "alignment": "lawful_good",
+        "description": "Thyrsian high theologian with gentle demeanor that conceals a mind like a steel trap. Middle-aged, wears simple Communion robes, speaks with the measured cadence of someone who weighs every word for theological precision.",
+        "motivation": "Truth and spiritual integrity. Believes the Communion can survive the Bound Saints revelation if it chooses reform over denial.",
+        "secrets": [
+          "Has been secretly corresponding with Unbound leaders and believes they are theologically correct",
+          "Authorized by Cael to make concessions at the summit — but went further than Cael intended",
+          "Represents the kernel of a reformed Communion that acknowledges the Saelori truth"
+        ],
+        "location": "Thyrsia, later Harren's Gate",
+        "faction_affiliations": ["The Communion (Reformist faction)"],
+        "relationship_to_player": "Potential Act IV ally. The spiritual conscience of the gathering — if the players help her find the courage to break fully with the Senate.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_voivode_maren",
+        "name": "Voivode Maren Ashwild",
+        "role": "neutral",
+        "alignment": "chaotic_neutral",
+        "description": "Forty years old, former ranger, built like someone who has spent her life in forests and fights. Scars across both arms. Eyes that evaluate everyone as either threat or tool. Carries herself with the coiled readiness of a predator.",
+        "motivation": "Fenmarch's survival and independence. Will play the diplomatic game when necessary and nail enemy spies' hands to trees when expedient.",
+        "secrets": [
+          "Her challenge against the previous Voivode was technically legal but violated clan custom — a fact three elder chiefs covered up because they wanted the old Voivode gone",
+          "Is building alliances with disaffected border communities in all three neighboring kingdoms to create buffer zones",
+          "Respects strength and directness above all — players who try to manipulate her will be identified and punished"
+        ],
+        "location": "Fenmarch — the Wild Court",
+        "faction_affiliations": ["Fenmarch Sovereignty"],
+        "relationship_to_player": "Distant power figure. Players interact through her brother Jorik or through Whistle. Earning her personal attention requires either exceptional service or exceptional threat.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_jorik_ashwild",
+        "name": "Jorik Ashwild",
+        "role": "neutral",
+        "alignment": "chaotic_good",
+        "description": "Maren's younger brother and most trusted diplomat. Speaks four languages, drinks everyone under the table, uses his 'barbarian' reputation to make people underestimate him. Broad-shouldered, quick-smiling, with sharp intelligence behind the jovial exterior.",
+        "motivation": "Fenmarch's interests and his sister's survival. Pragmatic enough to negotiate and fierce enough to fight — sometimes in the same conversation.",
+        "secrets": [
+          "Is privately worried that Maren's isolationism will doom Fenmarch in the long run",
+          "Wounded badly during the Fenmarch civil war — his participation in Act IV depends on player choices",
+          "The only member of Maren's inner circle who believes continental cooperation might be necessary"
+        ],
+        "location": "Diplomatic missions, later Harren's Gate",
+        "faction_affiliations": ["Fenmarch Sovereignty"],
+        "relationship_to_player": "Fenmarch's face at the summit and gathering. Personable, competent, and wrestling with loyalty to his sister versus his own assessment of what Fenmarch needs.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_tessara_morvaine",
+        "name": "Tessara Morvaine",
+        "role": "neutral",
+        "alignment": "true_neutral",
+        "description": "Draemiri Council of Lamps representative. Controls sixty percent of the continent's grain imports. Treats diplomacy as a business negotiation where the product is the absence of war. Sharp-featured, expensively dressed, radiates controlled competence.",
+        "motivation": "Economic stability and personal survival. Genuinely understands that trade networks feed millions of people and that their collapse means famine.",
+        "secrets": [
+          "Has been selling weapons to multiple kingdoms simultaneously through shell companies",
+          "Lost her Council seat, fortune, and network in the purges — arrives at Act IV with nothing but expertise",
+          "Her pragmatism makes her invaluable for rebuilding trade infrastructure and deeply suspect to everyone with principles"
+        ],
+        "location": "Draemiri canal cities, later Harren's Gate",
+        "faction_affiliations": ["Council of Lamps (former)"],
+        "relationship_to_player": "Potential Act IV ally. The person who understands that no political settlement holds without functioning economics.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_sevra_blackwall",
+        "name": "Lord Marshal Sevra Blackwall",
+        "role": "antagonist",
+        "alignment": "lawful_evil",
+        "description": "Kaelrathi Lord Marshal who actually runs the kingdom while King Aldren deteriorates. Military bearing, iron-grey hair, projects absolute authority. Every word is calculated for political effect.",
+        "motivation": "Kaelrathi dominance and personal power. Genuinely believes military strength is the only guarantor of national survival and that she is the only person competent enough to wield it.",
+        "secrets": [
+          "Has been embezzling military funds to build a private army loyal to her personally",
+          "Arranged Princess Isabeau's Draemiri contacts to frame her as a traitor and control the narrative",
+          "Orchestrated the king's eldest son's death in a hunting 'accident' six years ago to consolidate her position"
+        ],
+        "location": "Kaelrath capital — military command",
+        "faction_affiliations": ["Kaelrathi military junta"],
+        "relationship_to_player": "Major antagonist. Represents institutional militarism and the willingness to sacrifice anything — including truth — for national power.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_torvin_graal",
+        "name": "Torvin Graal",
+        "role": "neutral",
+        "alignment": "true_neutral",
+        "description": "Thornhand syndicate enforcer who carried out Cosiel Danterre's murder. Professional killer with no ideology — works for money, period. Thick-set, scarred hands, flat affect.",
+        "motivation": "Money and survival. Has no loyalty to anyone or anything beyond the next payment.",
+        "secrets": [
+          "Doesn't know who ultimately hired the Thornhands — only dealt with intermediaries",
+          "Is surprisingly cooperative when captured if the alternative is worse than talking",
+          "Has killed people for all four kingdoms' intelligence services at various points in his career"
+        ],
+        "location": "Harren's Gate underworld",
+        "faction_affiliations": ["Thornhand Syndicate"],
+        "relationship_to_player": "Investigation target in Act I. First real challenge is finding him; second is making him talk.",
+        "from_backstory": false
+      },
+      {
+        "id": "npc_drevek",
+        "name": "Drevek Ashwild",
+        "role": "antagonist",
+        "alignment": "chaotic_neutral",
+        "description": "Son of the previous Voivode. Living in Kaelrathi exile, gathering Fenmarch dissidents. Young, angry, with the entitled fury of someone who believes what was taken from him was stolen rather than lost.",
+        "motivation": "Reclaiming the Voivode title and avenging his father. Whether he's a legitimate heir with a grievance or a puppet depends on how deeply Kaelrath has its hooks in him.",
+        "secrets": [
+          "His claim is technically legitimate — Maren's challenge violated clan custom",
+          "Is being supported by Ashmark intelligence, though he may not fully understand how thoroughly they're using him",
+          "Becomes a major destabilizing force during the Bloodletting when the Remnant provides his legitimacy evidence to all parties"
+        ],
+        "location": "Kaelrath (exile), later Fenmarch border regions",
+        "faction_affiliations": ["Fenmarch loyalist faction", "The Ashmark (unwitting asset)"],
+        "relationship_to_player": "Complication and potential tool. Can be allied with, neutralized, or turned depending on player approach.",
+        "from_backstory": false
+      }
+    ],
+
+    "potential_companions": [
+      {
+        "id": "comp_edrin_solace",
+        "name": "Edrin Solace",
+        "race": "Human",
+        "class": "Cleric",
+        "level": 8,
+        "subclass": "Life Domain",
+        "description": "Former Kaelrathi army surgeon turned Remnant operative. Gentle hands, tired eyes, carries medical supplies and guilt in equal measure.",
+        "personality": "Careful, empathetic, quietly haunted. Speaks with the measured precision of someone used to delivering bad news. Deeply committed to the Saelori cause but increasingly uncertain about Vasara's methods.",
+        "motivation": "Justice for the Saelori and prevention of further atrocity. Joins the party if they demonstrate both competence and conscience.",
+        "combat_style": "Support and healing. Avoids violence when possible but is ruthlessly efficient when it isn't. Uses medical knowledge for both healing allies and identifying enemy vulnerabilities.",
+        "recruitment_conditions": "Players must maintain Remnant contact through Act III and demonstrate willingness to help beyond factional loyalty. The Mirror Agent extraction mission is the trust test.",
+        "location": "Remnant logistics network, mobile"
+      },
+      {
+        "id": "comp_defector",
+        "name": "The Defector",
+        "race": "Human",
+        "class": "Rogue",
+        "level": 6,
+        "subclass": "Inquisitive",
+        "description": "A mid-level operative from a rival intelligence service who wants out. Identity and nationality depend on the player party's faction alignment — always from a rival service. Nervous, observant, carrying information worth killing for.",
+        "personality": "Paranoid, intelligent, desperate for trust but unable to give it easily. Uses humor to deflect and observation to protect. Gradually becomes loyal to people rather than institutions if given reason.",
+        "motivation": "Survival and the growing realization that the system they served is fundamentally broken. Approaches the players because they've noticed the wrongnesses — Mirror Agent behavioral deviations — and need help understanding what they've seen.",
+        "combat_style": "Infiltration and intelligence gathering. Prefers avoiding fights entirely. When cornered, fights dirty and runs.",
+        "recruitment_conditions": "Appears during Act II Phase 2. Players must decide whether to trust, turn, or report them. Trust leads to recruitment.",
+        "location": "Harren's Gate (Act II), then mobile with the party"
+      }
+    ],
+
+    "factions": [
+      {
+        "name": "The Ashmark",
+        "description": "Kaelrath's intelligence service — the oldest spy network on the continent. Bureaucratic, hierarchical, well-funded, and arrogant. Specializes in long-term infiltration and patient intelligence gathering. Will spend five years placing an agent as a bookkeeper to access one ledger.",
+        "alignment": "lawful_neutral",
+        "scope": "regional",
+        "primary_values": "Kaelrathi national security, institutional continuity, operational discipline",
+        "motto": "The crown sees all.",
+        "power_level": "strong",
+        "influence_areas": "Kaelrath, border regions, diplomatic missions worldwide",
+        "leadership_structure": "Hierarchical command structure mirroring military organization. Handler-agent cells with strict compartmentalization.",
+        "notable_members": "Lenne Caskwell (handler), Lord Marshal Sevra Blackwall (political patron)",
+        "typical_methods": "Long-term infiltration, patient intelligence gathering, document analysis, political manipulation. Slow but thorough.",
+        "public_reputation": "Officially doesn't exist. Unofficially, everyone knows. Feared for competence, mocked for bureaucracy."
+      },
+      {
+        "name": "The Glassmakers",
+        "description": "Draemiri's intelligence service — named for the Confederation's famous mirror artisans. Decentralized, competitive, and ruthless. Specializes in economic warfare, blackmail, and turning enemy assets through bribery. Individual handlers run independent cells and sometimes sabotage each other for promotion.",
+        "alignment": "neutral_evil",
+        "scope": "global",
+        "primary_values": "Draemiri commercial dominance, profit, information as commodity",
+        "motto": "Every reflection tells a price.",
+        "power_level": "strong",
+        "influence_areas": "Trade routes, port cities, banking houses across the continent",
+        "leadership_structure": "Decentralized — competing handler cells answering to Council of Lamps patrons. Internal competition is considered healthy.",
+        "notable_members": "Marise Callero (handler), Orenthal Voss (political patron)",
+        "typical_methods": "Economic warfare, blackmail, debt exploitation, bribery, commercial intelligence. Will buy what others try to steal.",
+        "public_reputation": "An open secret. Draemiri merchants are assumed to be intelligence assets until proven otherwise. Respected for effectiveness, despised for amorality."
+      },
+      {
+        "name": "The Penitents",
+        "description": "Thyrsia's intelligence service — officially a monastic order dedicated to rooting out heresy. The most feared intelligence service on the continent. Specializes in interrogation, theological manipulation, and creating true believers who genuinely think their missions are divine mandate.",
+        "alignment": "lawful_evil",
+        "scope": "regional",
+        "primary_values": "Communion theological dominance, spiritual purity, obedience to divine will as interpreted by the Hallowed Senate",
+        "motto": "Through suffering, truth.",
+        "power_level": "strong",
+        "influence_areas": "Thyrsia, Communion missions abroad, heresy investigation networks",
+        "leadership_structure": "Monastic hierarchy with regional inquisitors answering to the Hallowed Senate. Post-schism, fragmented into faction-aligned cells.",
+        "notable_members": "Brother Oram (handler), Hierophant Cael (supreme authority), Canoness Avra (reformist)",
+        "typical_methods": "Interrogation, theological manipulation, ideological conversion, true believer agent creation. Inflexible when operations don't match ideological framework.",
+        "public_reputation": "Feared. Officially respected as defenders of the faith. Unofficially, people avoid their attention at all costs."
+      },
+      {
+        "name": "The Rootwork",
+        "description": "Fenmarch's intelligence network — not a formal service but a loose collection of rangers, hedge witches, smugglers, and clan scouts maintained by the Voivode. Poorly organized and badly funded but compensated by terrain knowledge, folk magic, and willingness to do profoundly unsettling things to enemy agents.",
+        "alignment": "chaotic_neutral",
+        "scope": "local",
+        "primary_values": "Fenmarch sovereignty, clan loyalty, survival",
+        "motto": "The forest knows.",
+        "power_level": "moderate",
+        "influence_areas": "Fenmarch forests, border regions, smuggling routes",
+        "leadership_structure": "Loose network coordinated by the Voivode's trusted operatives. No formal hierarchy — effectiveness determines authority.",
+        "notable_members": "Whistle (handler), Voivode Maren Ashwild (supreme authority), Jorik Ashwild (diplomatic wing)",
+        "typical_methods": "Counterintelligence, terrain exploitation, folk magic detection, guerrilla tactics, psychological warfare. Specialize in knowing when you're there, not what you're planning.",
+        "public_reputation": "Barely acknowledged to exist by Fenmarch officials. Other kingdoms' agents tell horror stories about what happens in the forests."
+      },
+      {
+        "name": "The Remnant",
+        "description": "A network of Saelori survivors and sympathizers built over eleven years by Vasara Kael. Not a government-in-exile or a resistance movement — a precision instrument designed to demolish the continental power structures that enabled the Saelori genocide through controlled release of devastating secrets.",
+        "alignment": "chaotic_neutral",
+        "scope": "global",
+        "primary_values": "Saelori justice, accountability for genocide, destruction of the system that produced it",
+        "motto": "The mirror remembers what the face forgets.",
+        "power_level": "moderate",
+        "influence_areas": "Hidden cells across all four kingdoms, Mirror Agent positions, information networks",
+        "leadership_structure": "Centralized around Vasara Kael with cell-based operations. Deteriorating as the Bloodletting creates independent action by radicalized cells.",
+        "notable_members": "Vasara Kael (architect), Edrin Solace (logistics/medical), The Collector (intermediary network), eight Mirror Agents",
+        "typical_methods": "Information warfare, Soulpressing infiltration, intermediary networks, long-term strategic patience, curated truth as weapon.",
+        "public_reputation": "Unknown to the public. Intelligence services are only beginning to understand its scope during the campaign."
+      },
+      {
+        "name": "Thornhand Syndicate",
+        "description": "Harren's Gate's dominant criminal organization. Professional, apolitical, and available to the highest bidder. Used as cutouts by the Remnant for the Danterre murder.",
+        "alignment": "neutral_evil",
+        "scope": "local",
+        "primary_values": "Profit, territorial control, professional reputation",
+        "motto": "Business is business.",
+        "power_level": "moderate",
+        "influence_areas": "Harren's Gate underworld, smuggling routes, mercenary contacts",
+        "leadership_structure": "Traditional criminal hierarchy with enforcers, lieutenants, and a boss.",
+        "notable_members": "Torvin Graal (enforcer who carried out Danterre murder)",
+        "typical_methods": "Contract killing, smuggling, protection rackets, serving as intermediaries for intelligence operations they don't fully understand.",
+        "public_reputation": "Known criminal element. Tolerated by Harren's Gate authorities because they maintain a certain order in the underworld."
+      }
+    ],
+
+    "locations": [
+      {
+        "id": "loc_harrens_gate",
+        "name": "Harren's Gate",
+        "type": "city",
+        "description": "A neutral trading hub where all four kingdoms maintain embassies. Built around an ancient stone gatehouse spanning a river crossing. Prosperous, cosmopolitan, and saturated with competing intelligence operations. The Amber Quarter diplomatic district has its own walls and a long history of espionage — every room has been bugged at least twice by at least three services.",
+        "significance": "Campaign hub. Site of Cosiel's murder (Act I), the diplomatic summit (Act II), and the gathering that produces the New Accord (Act IV). The only functioning neutral jurisdiction on the continent.",
+        "notable_features": [
+          "The Amber Quarter — walled diplomatic district with embassy compounds",
+          "The Old Gate — ancient stone gatehouse, now a market and meeting place",
+          "The Underbelly — criminal district controlled by the Thornhand syndicate",
+          "Magistrate Asha Maeven's courthouse — center of neutral governance"
+        ],
+        "dangers": [
+          "Saturated with competing intelligence operations",
+          "Thornhand syndicate controls the underworld",
+          "Refugee crisis overwhelms infrastructure in later acts",
+          "Every conversation may be monitored by multiple services"
+        ],
+        "connections": ["Kaelrath border", "Draemiri trade routes", "Thyrsian pilgrimage roads", "Fenmarch forest approaches"]
+      },
+      {
+        "id": "loc_kaelrath_capital",
+        "name": "Kaelrath — The Ashen Throne",
+        "type": "city",
+        "description": "Kaelrath's capital — crumbling imperial grandeur. Faded gold leaf on rotting wood. Grand boulevards lined with monuments to victories that increasingly ring hollow. The palace is magnificent and decaying. Military presence is visible everywhere.",
+        "significance": "Seat of Kaelrathi power. Site of Blackwall's arrest, Isabeau's ascension, and the civil war between reformists and junta loyalists.",
+        "notable_features": [
+          "The Ashen Palace — seat of King Aldren IV, increasingly a gilded prison",
+          "Ashmark headquarters — unmarked building in the administrative district",
+          "Military quarter — barracks, training grounds, Blackwall's power base",
+          "The Monument District — grand statues of past glories gathering moss"
+        ],
+        "dangers": [
+          "Military junta controls most of the city",
+          "Ashmark surveillance is pervasive",
+          "Nationalist preachers incite violence against foreign-looking individuals",
+          "Civil war fighting in later acts"
+        ],
+        "connections": ["Harren's Gate", "Disputed border with Draemiri", "Fenmarch border"]
+      },
+      {
+        "id": "loc_draemiri_capital",
+        "name": "Draemiri — The Canal Cities",
+        "type": "city",
+        "description": "Draemiri's capital — Venice rendered in dark fantasy. Canal cities connected by bridges and boat traffic. Masked balls, merchant palaces, stiletto knives in silk sleeves. Beauty deployed as weapon and currency.",
+        "significance": "Center of continental commerce and Glassmaker operations. Site of the Council of Lamps purges and economic collapse.",
+        "notable_features": [
+          "The Hall of Lamps — Council chamber with thirteen ornate seats",
+          "The Glass Market — luxury trade hub and intelligence exchange",
+          "Canal network — transportation and escape routes throughout the city",
+          "Merchant palaces — fortified residences of the trading houses"
+        ],
+        "dangers": [
+          "Glassmaker surveillance through commercial networks",
+          "Political assassinations are routine statecraft",
+          "Economic manipulation can trap unwary visitors in debt",
+          "Post-purge paranoia makes everyone suspect"
+        ],
+        "connections": ["Harren's Gate", "Amberlain Straits", "Trade routes to all kingdoms"]
+      },
+      {
+        "id": "loc_thyrsia",
+        "name": "Thyrsia — The Iron Communion",
+        "type": "city",
+        "description": "Thyrsian territories — cathedral-fortresses rising from austere landscapes. Stained glass and iron manacles. Communities built around places of worship that double as military installations. Beautiful and terrifying.",
+        "significance": "Center of Communion faith and Penitent operations. Site of the Bound Saints schism and three-way theological civil war.",
+        "notable_features": [
+          "The Grand Cathedral — seat of the Hierophant and the Hallowed Senate",
+          "Penitent chapter houses — monastic complexes that are actually intelligence facilities",
+          "The Suffering Halls — theological libraries and 'reeducation' centers",
+          "Border fortresses — military-religious installations garrisoning the frontiers"
+        ],
+        "dangers": [
+          "Penitent surveillance through confessional networks",
+          "Heresy accusations used as political weapons",
+          "Religious violence between Orthodox, Reformist, and Penitential factions",
+          "Folk magic practitioners face persecution"
+        ],
+        "connections": ["Harren's Gate", "Draemiri border", "Fenmarch border", "Southern provinces (Unbound territory)"]
+      },
+      {
+        "id": "loc_fenmarch",
+        "name": "Fenmarch — The Wild Court",
+        "type": "wilderness",
+        "description": "Deep forests, ancient standing stones, mud and blood and bone charms. Clan settlements hidden in valleys and clearings connected by paths only locals know. Folk horror with teeth. The forest itself seems to watch outsiders.",
+        "significance": "Fenmarch sovereignty and Rootwork operations. Site of the civil war between Maren and Drevek's factions.",
+        "notable_features": [
+          "The Voivode's Hall — seat of power, more lodge than palace",
+          "Standing stone circles — sites of folk magic and clan gatherings",
+          "The Deep Forest — interior wilderness where outsiders simply disappear",
+          "Border marches — contested territory where clans and kingdoms collide"
+        ],
+        "dangers": [
+          "Terrain that has swallowed invading armies",
+          "Folk magic detection makes covert operations nearly impossible",
+          "Clan politics can turn violent without warning",
+          "Wildlife and wilderness hazards — this is not a tamed land"
+        ],
+        "connections": ["Harren's Gate forest approaches", "Kaelrath border", "Thyrsia border"]
+      }
+    ],
+
+    "merchants": [
+      {
+        "name": "Valeska the Broker",
+        "location": "Harren's Gate — The Underbelly",
+        "shop_name": "No shop — operates from a rotating series of tavern back rooms",
+        "specialty": "Intelligence equipment: disguise kits, forgery supplies, cipher tools, dead drop materials, poisons, and information itself",
+        "personality": "Utterly amoral, scrupulously fair in transactions, remembers every deal and every slight. Sells to all four kingdoms' services and keeps everyone's secrets because betraying one client would destroy her business with all of them.",
+        "inventory_style": "general"
+      },
+      {
+        "name": "Aldous Fenwick",
+        "location": "Harren's Gate — Amber Quarter periphery",
+        "shop_name": "Fenwick's Curios & Sundries",
+        "specialty": "Magical detection items, protective charms, anti-divination equipment. Overpriced but genuine. The only reliable source of counter-surveillance magic in the neutral zone.",
+        "personality": "Fussy, paranoid, charges double for anything he thinks is being used for espionage (which is everything). Secretly an excellent source of local gossip if flattered appropriately.",
+        "inventory_style": "magic"
+      }
+    ],
+
+    "world_state": {
+      "political_situation": "The Accord of Still Waters has maintained an uneasy peace for eleven years following a devastating continental war. The peace is fracturing — border skirmishes are escalating, trade agreements are collapsing, and every kingdom's intelligence service is preparing for the next war while publicly maintaining commitment to diplomacy. Beneath the surface, the Accord was built on a secret agreement to destroy the Saelori Reach, and the survivors are preparing to expose everything.",
+      "major_threats": [
+        "The Remnant's systematic destabilization campaign threatens to collapse all four kingdoms simultaneously",
+        "Kaelrathi military buildup under Lord Marshal Blackwall is pushing toward aggressive war",
+        "Thyrsian religious expansionism through Penitent infiltration of rival kingdoms",
+        "Draemiri economic manipulation creating dependence that functions as soft imperialism",
+        "Fenmarch instability as the exiled prince Drevek gathers support for a challenge",
+        "The Pale Registry — thirteen bone tablets containing enough secrets to destroy every power structure on the continent"
+      ],
+      "faction_tensions": [
+        "Kaelrath vs Draemiri: Territorial disputes, trade war, mutual suspicion of aggressive intent",
+        "Thyrsia vs Fenmarch: Religious persecution of folk magic practitioners, cultural imperialism vs fierce independence",
+        "All four kingdoms vs The Remnant: Saelori survivors with the means and motivation to expose the genocide that founded the peace",
+        "Within each kingdom: Internal power struggles, succession crises, ideological fractures that the Bloodletting will shatter wide open"
+      ],
+      "regional_news": [
+        "Draemiri trade envoy found dead in Harren's Gate under suspicious circumstances",
+        "Kaelrathi cavalry regiments repositioning along the River Senn — officially 'training exercises'",
+        "Thyrsian Communion reports a heretical sect called the Unbound growing in southern provinces",
+        "Fenmarch has gone quiet — trade delegations cancelled, border patrols doubled",
+        "Refugee numbers increasing along all borders as rural communities flee escalating tensions"
+      ]
+    },
+
+    "world_timeline": {
+      "description": "Events that unfold on the continental stage regardless of player action, though players can influence timing, severity, and outcomes.",
+      "events": [
+        {
+          "day_range": [1, 14],
+          "description": "Investigation of Cosiel Danterre's murder draws intelligence operatives from all four kingdoms to Harren's Gate. Rival agents begin interfering with each other's operations.",
+          "consequences": "Harren's Gate becomes a pressure cooker of competing intelligence operations. Magistrate Maeven's authority is undermined."
+        },
+        {
+          "day_range": [15, 30],
+          "description": "Diplomatic summit announced at Harren's Gate. Delegations begin arriving. The Remnant activates Mirror Agent placements across the continent.",
+          "consequences": "Eight real people are abducted, copied through Soulpressing, and killed. Eight Remnant agents assume their identities in positions of moderate influence."
+        },
+        {
+          "day_range": [30, 60],
+          "description": "Summit negotiations stall. Tensions escalate. The Mirror Agent within the summit begins positioning for the Accord's collapse.",
+          "consequences": "Trust between delegations erodes. Military posturing increases. Border skirmishes begin."
+        },
+        {
+          "day_range": [60, 90],
+          "description": "Summit collapses. Accord of Still Waters effectively dies. Military mobilizations begin across all four kingdoms.",
+          "consequences": "Diplomatic channels close. Trade routes disrupted. Intelligence services shift from espionage to active sabotage operations."
+        },
+        {
+          "day_range": [90, 150],
+          "description": "The Bloodletting: Vasara executes Phase Three. Curated Pale Registry contents released simultaneously to all four kingdoms.",
+          "consequences": "Kaelrath: Blackwall arrested, civil war begins. Draemiri: Council purges, economic collapse. Thyrsia: Bound Saints revelation, religious schism. Fenmarch: Drevek's legitimacy evidence, clan war."
+        },
+        {
+          "day_range": [150, 300],
+          "description": "Continental freefall. Four simultaneous civil conflicts, refugee crisis, economic collapse. Remnant cells begin acting independently as Vasara loses centralized control.",
+          "consequences": "Massive civilian displacement. Supply chain collapse. Religious violence in Thyrsia. Clan warfare in Fenmarch. No functioning continental diplomacy."
+        },
+        {
+          "day_range": [300, 365],
+          "description": "Asha Maeven issues her invitation. The Harren's Gate gathering begins. Hardline remnants of all kingdoms coordinate a counterattack.",
+          "consequences": "Last chance for a negotiated continental settlement. Success or failure depends on the players."
+        }
+      ]
+    },
+
+    "themes": [
+      "Trust and betrayal in a world where deception is professional",
+      "Institutional corruption and the cost of complicity",
+      "Justice vs. stability — can you have both?",
+      "Identity erosion through sustained deception",
+      "The architecture of atrocity — how systems produce genocide",
+      "Accountability for historical crimes vs. pragmatic governance",
+      "Building something new vs. reforming what exists",
+      "The personal cost of espionage and moral compromise",
+      "Who do you serve when every cause is compromised?"
+    ],
+
+    "dm_notes": {
+      "tone_guidance": "Dark, morally complex, and grounded. This is not a campaign about heroes and villains — it's about systems, institutions, and the people trapped within them. Every faction has valid perspectives and genuine sins. Humor exists but is dry and character-driven, never undercutting the stakes. Violence is consequential, not theatrical. The tone is closer to le Carré than Tolkien.",
+      "pacing_notes": "Act I is investigative and methodical — let players develop tradecraft and paranoia. Act II accelerates with political urgency and the Mirror Agent hunt. Act III is the emotional gauntlet — rapid escalation, moral compromise, and the Bloodletting's devastating consequences. Act IV slows for diplomatic complexity and character resolution. The campaign should feel like a slow burn that becomes a wildfire that becomes a rebuilding effort.",
+      "player_agency": "This campaign is defined by player choice. Every act presents genuine decisions with cascading consequences — there are no correct answers, only trade-offs. Players who choose differently should experience genuinely different campaigns. NPCs and factions respond to player actions with their own agency. The ending is not predetermined — the New Accord's shape, success, or failure depends entirely on what the players build across forty sessions of accumulated choices."
+    }
+  }
+}
