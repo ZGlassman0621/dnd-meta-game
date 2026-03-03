@@ -7,7 +7,7 @@ import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { generateParty } from '../services/partyGeneratorService.js';
 import { createDMModeSystemPrompt } from '../services/dmModePromptBuilder.js';
-import { detectSkillChecks, detectAttacks, detectSpellCasts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
+import { detectSkillChecks, detectAttacks, detectSpellCasts, detectBondShifts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
 import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
 import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
@@ -287,6 +287,37 @@ router.post('/:sessionId/message', async (req, res) => {
     const skillChecks = isOOC ? [] : detectSkillChecks(narrative);
     const attacks = isOOC ? [] : detectAttacks(narrative);
     const spellCasts = isOOC ? [] : detectSpellCasts(narrative);
+    const bondShifts = isOOC ? [] : detectBondShifts(narrative);
+
+    // Apply bond shifts to party_data immediately
+    let updatedCharacters = null;
+    if (bondShifts.length > 0) {
+      const party = await dbGet('SELECT party_data FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+      if (party) {
+        const characters = JSON.parse(party.party_data || '[]');
+        const sessionNum = parseInt(session.title?.match(/\d+/)?.[0] || '0');
+        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+        for (const shift of bondShifts) {
+          const fromChar = characters.find(c => c.name === shift.from);
+          if (!fromChar?.party_relationships) continue;
+          const rel = fromChar.party_relationships[shift.to];
+          if (!rel) continue;
+          rel.warmth = clamp((rel.warmth || 0) + shift.warmthDelta, -5, 5);
+          rel.trust = clamp((rel.trust || 0) + shift.trustDelta, -5, 5);
+          if (!rel.history) rel.history = [];
+          const deltas = [];
+          if (shift.warmthDelta) deltas.push(`warmth${shift.warmthDelta > 0 ? '+' : ''}${shift.warmthDelta}`);
+          if (shift.trustDelta) deltas.push(`trust${shift.trustDelta > 0 ? '+' : ''}${shift.trustDelta}`);
+          rel.history.push({ session: sessionNum, shift: deltas.join(', '), reason: shift.reason });
+          if (rel.history.length > 10) rel.history = rel.history.slice(-10);
+        }
+        await dbRun(
+          'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [JSON.stringify(characters), session.dm_mode_party_id]
+        );
+        updatedCharacters = characters;
+      }
+    }
 
     // Clean narrative
     const cleanedNarrative = cleanDMModeNarrative(narrative);
@@ -310,7 +341,9 @@ router.post('/:sessionId/message', async (req, res) => {
         skillChecks,
         attacks,
         spellCasts
-      }
+      },
+      bondShifts: bondShifts.length > 0 ? bondShifts : undefined,
+      updatedCharacters: updatedCharacters || undefined
     });
   } catch (error) {
     console.error('Error in DM mode message:', error);
@@ -909,6 +942,54 @@ router.post('/party/:partyId/game-day', async (req, res) => {
   } catch (error) {
     console.error('Error updating game day:', error);
     res.status(500).json({ error: 'Failed to update game day' });
+  }
+});
+
+// ============================================================
+// RELATIONSHIP (manual DM adjustments)
+// ============================================================
+
+// PUT /api/dm-mode/party/:partyId/relationship — Manually adjust warmth/trust between characters
+router.put('/party/:partyId/relationship', async (req, res) => {
+  try {
+    const partyId = parseInt(req.params.partyId);
+    const { fromCharacter, toCharacter, warmthDelta = 0, trustDelta = 0, note = '' } = req.body;
+    if (!fromCharacter || !toCharacter) return res.status(400).json({ error: 'fromCharacter and toCharacter are required' });
+
+    const party = await dbGet('SELECT party_data FROM dm_mode_parties WHERE id = ?', [partyId]);
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const characters = JSON.parse(party.party_data || '[]');
+    const fromChar = characters.find(c => c.name === fromCharacter);
+    if (!fromChar?.party_relationships) return res.status(404).json({ error: 'Character not found' });
+    const rel = fromChar.party_relationships[toCharacter];
+    if (!rel) return res.status(404).json({ error: 'Relationship not found' });
+
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const wd = Math.max(-2, Math.min(2, parseInt(warmthDelta) || 0));
+    const td = Math.max(-2, Math.min(2, parseInt(trustDelta) || 0));
+
+    rel.warmth = clamp((rel.warmth || 0) + wd, -5, 5);
+    rel.trust = clamp((rel.trust || 0) + td, -5, 5);
+
+    if (!rel.history) rel.history = [];
+    const deltas = [];
+    if (wd) deltas.push(`warmth${wd > 0 ? '+' : ''}${wd}`);
+    if (td) deltas.push(`trust${td > 0 ? '+' : ''}${td}`);
+    if (deltas.length > 0) {
+      rel.history.push({ session: 'dm', shift: deltas.join(', '), reason: note || 'Manual adjustment' });
+      if (rel.history.length > 10) rel.history = rel.history.slice(-10);
+    }
+
+    await dbRun(
+      'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(characters), partyId]
+    );
+
+    res.json({ characters });
+  } catch (error) {
+    console.error('Error updating relationship:', error);
+    res.status(500).json({ error: 'Failed to update relationship' });
   }
 });
 

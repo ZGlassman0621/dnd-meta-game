@@ -7,6 +7,7 @@ import {
   detectSkillChecks,
   detectAttacks,
   detectSpellCasts,
+  detectBondShifts,
   parseCharacterSegments,
   cleanDMModeNarrative
 } from '../server/services/dmModeService.js';
@@ -396,6 +397,67 @@ console.log('\nparsePartyResponse:');
 
   const result = parsePartyResponse(json);
   assertEqual(result.characters[1].current_hp, 22, 'Missing current_hp (falsy 0) defaults to max_hp');
+}
+
+// ===== detectBondShifts =====
+console.log('\ndetectBondShifts:');
+
+{
+  const text = '[BOND_SHIFT: From="Kael Ironfist" To="Lyra Dawnwhisper" Warmth=+1 Trust=+1 Reason="Kael thanked Lyra for revealing the location"]';
+  const result = detectBondShifts(text);
+  assertEqual(result.length, 1, 'Detects single bond shift');
+  assertEqual(result[0].from, 'Kael Ironfist', 'Parses From field');
+  assertEqual(result[0].to, 'Lyra Dawnwhisper', 'Parses To field');
+  assertEqual(result[0].warmthDelta, 1, 'Parses Warmth delta');
+  assertEqual(result[0].trustDelta, 1, 'Parses Trust delta');
+  assertEqual(result[0].reason, 'Kael thanked Lyra for revealing the location', 'Parses Reason');
+}
+
+{
+  const text = 'Great scene! [BOND_SHIFT: From="Kael Ironfist" To="Lyra Dawnwhisper" Warmth=+1 Trust=+1 Reason="bond"] Narrative continues. [BOND_SHIFT: From="Lyra Dawnwhisper" To="Kael Ironfist" Trust=-1 Reason="suspicious"]';
+  const result = detectBondShifts(text);
+  assertEqual(result.length, 2, 'Detects multiple bond shifts');
+  assertEqual(result[0].from, 'Kael Ironfist', 'First shift from correct');
+  assertEqual(result[1].from, 'Lyra Dawnwhisper', 'Second shift from correct');
+  assertEqual(result[1].trustDelta, -1, 'Parses negative Trust delta');
+}
+
+{
+  const text = '[BOND_SHIFT: From="Aria" To="Brom" Warmth=0 Trust=0 Reason="nothing"]';
+  const result = detectBondShifts(text);
+  assertEqual(result.length, 0, 'Skips no-op shifts (both 0)');
+}
+
+{
+  const text = '[BOND_SHIFT: From="Aria" To="Brom" Trust=+2 Reason="saved from death"]';
+  const result = detectBondShifts(text);
+  assertEqual(result.length, 1, 'Handles marker without Warmth field');
+  assertEqual(result[0].warmthDelta, 0, 'WarmthDelta defaults to 0 when omitted');
+  assertEqual(result[0].trustDelta, 2, 'Trust delta parsed correctly');
+}
+
+{
+  const result = detectBondShifts(null);
+  assertEqual(result.length, 0, 'Handles null input');
+}
+
+{
+  const result = detectBondShifts('No markers here at all.');
+  assertEqual(result.length, 0, 'Returns empty array when no markers');
+}
+
+{
+  const text = '[bond_shift: From="Aria" To="Brom" Warmth=+1 Trust=+1 Reason="test"]';
+  const result = detectBondShifts(text);
+  assertEqual(result.length, 1, 'Case-insensitive detection');
+}
+
+// BOND_SHIFT markers are stripped by cleanDMModeNarrative
+{
+  const text = 'Great teamwork today. [BOND_SHIFT: From="Kael Ironfist" To="Lyra Dawnwhisper" Warmth=+1 Trust=+1 Reason="trust"] More narrative.';
+  const result = cleanDMModeNarrative(text);
+  assert(!result.includes('[BOND_SHIFT'), 'cleanDMModeNarrative strips BOND_SHIFT markers');
+  assert(result.includes('Great teamwork today'), 'Preserves surrounding narrative');
 }
 
 // ===== Summary =====

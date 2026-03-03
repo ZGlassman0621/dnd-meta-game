@@ -11,6 +11,7 @@ import EquipmentReferencePanel from './EquipmentReferencePanel';
 import SpellReferencePanel from './SpellReferencePanel';
 import RulesReferencePanel from './RulesReferencePanel';
 import EffectTracker from './EffectTracker';
+import BondsPanel from './BondsPanel';
 
 const CHAR_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
 
@@ -57,6 +58,8 @@ export default function DMMode({ onBack }) {
   const [showEquipRef, setShowEquipRef] = useState(false);
   const [showSpellRef, setShowSpellRef] = useState(false);
   const [showRulesRef, setShowRulesRef] = useState(false);
+  const [showBonds, setShowBonds] = useState(false);
+  const [lastBondShifts, setLastBondShifts] = useState([]);
 
   // Effect/Duration Tracker
   const [activeEffects, setActiveEffects] = useState([]);
@@ -347,6 +350,13 @@ export default function DMMode({ onBack }) {
         setShowDiceRoller(true);
       }
 
+      // Apply bond shifts — update local party state and notify BondsPanel
+      if (data.bondShifts?.length > 0 && data.updatedCharacters) {
+        setLastBondShifts(data.bondShifts);
+        setSelectedParty(prev => prev ? { ...prev, characters: data.updatedCharacters } : prev);
+        setShowBonds(true);
+      }
+
       setMessages(prev => [...prev, {
         role: 'party',
         content: data.narrative,
@@ -539,6 +549,23 @@ export default function DMMode({ onBack }) {
     }
   };
 
+  const handleRelationshipUpdate = async (fromCharacter, toCharacter, warmthDelta, trustDelta, note) => {
+    if (!selectedParty) return;
+    try {
+      const res = await fetch(`/api/dm-mode/party/${selectedParty.id}/relationship`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromCharacter, toCharacter, warmthDelta, trustDelta, note })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedParty(prev => prev ? { ...prev, characters: data.characters } : prev);
+      }
+    } catch (err) {
+      console.error('Relationship update error:', err);
+    }
+  };
+
   const handleGameDayChange = async (delta) => {
     if (!selectedParty) return;
     try {
@@ -650,6 +677,7 @@ export default function DMMode({ onBack }) {
     setShowEquipRef(panel === 'equip');
     setShowSpellRef(panel === 'spells');
     setShowRulesRef(panel === 'rules');
+    setShowBonds(panel === 'bonds');
   };
 
   // ============================================================
@@ -1360,6 +1388,13 @@ export default function DMMode({ onBack }) {
             onClick={() => openPanel(showRulesRef ? null : 'rules')}
             color="#f59e0b"
           />
+          <ToolbarButton
+            label="Bonds"
+            active={showBonds}
+            onClick={() => openPanel(showBonds ? null : 'bonds')}
+            color="#e11d48"
+            badge={lastBondShifts.length > 0 && !showBonds ? lastBondShifts.length : null}
+          />
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)', margin: '0 0.25rem' }} />
           <button
             onClick={handleEndSession}
@@ -1641,6 +1676,15 @@ export default function DMMode({ onBack }) {
       )}
       {showRulesRef && (
         <RulesReferencePanel onClose={() => setShowRulesRef(false)} />
+      )}
+      {showBonds && selectedParty && (
+        <BondsPanel
+          party={selectedParty}
+          partyId={selectedParty.id}
+          lastShifts={lastBondShifts}
+          onRelationshipUpdate={handleRelationshipUpdate}
+          onClose={() => setShowBonds(false)}
+        />
       )}
     </div>
   );

@@ -479,6 +479,31 @@ SECRETS:
   }
 
   // ==========================================
+  // RELATIONSHIP TRACKING (BOND_SHIFT marker)
+  // ==========================================
+  sections.push(`
+=== RELATIONSHIP TRACKING — BOND_SHIFT MARKER ===
+
+When a moment meaningfully changes how one character feels toward another, emit this marker at the END of your response:
+[BOND_SHIFT: From="Character Full Name" To="Character Full Name" Warmth=+1 Trust=+1 Reason="1-sentence reason"]
+
+- Warmth: emotional closeness/affection. Range -2 to +2 per event (most are +/-1).
+- Trust: reliability and faith in that person. Range -2 to +2 per event (most are +/-1).
+- Omit Warmth or Trust if unchanged (or use 0).
+- DIRECTIONAL: A's feelings toward B are tracked separately from B's feelings toward A.
+- You can emit multiple BOND_SHIFT markers in one response for different pairs.
+- MOST messages will have ZERO bond shifts. Only emit when the moment genuinely matters.
+
+Examples of when to emit:
+- A character thanks another for saving their life → Trust +1 from thanker toward the savior
+- A character lies to their companion and gets caught → Trust -2 from the betrayed toward the liar
+- Two characters share a private moment of vulnerability → Warmth +1 (both directions = two markers)
+- A character steals from another → Warmth -1, Trust -2 from the victim toward the thief
+- A hostile rival begrudgingly acknowledges someone's competence → Warmth +1 (from rival outward)
+
+Do NOT emit for: routine conversation, standard combat cooperation, minor interactions, or situations where feelings clearly haven't changed.`);
+
+  // ==========================================
   // FINAL REMINDER — Point 3 of 3-point reinforcement
   // ==========================================
   sections.push(`
@@ -503,6 +528,8 @@ SECRETS:
 8. PLAYER INITIATIVE: These are REAL PLAYERS — curious, proactive, and engaged. They ask questions, investigate things, propose plans, and drive the story forward. They do NOT passively wait for the DM to tell them what to do next.
 
 9. NO ECHOING: NEVER repeat, quote, or parrot phrases from the DM's narration. Characters react with THEIR OWN words filtered through THEIR OWN voice — not by restating what they just heard.
+
+10. BOND_SHIFT: Emit [BOND_SHIFT] only for genuine relationship-changing moments. Most messages have none. Place at the end of your response.
 
 ========================================`);
 

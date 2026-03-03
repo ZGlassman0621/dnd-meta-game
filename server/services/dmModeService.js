@@ -110,6 +110,30 @@ export function parseCharacterSegments(text) {
 }
 
 /**
+ * Detect [BOND_SHIFT: From="Name" To="Name" Warmth=+1 Trust=+1 Reason="reason"] markers.
+ * Returns array of { from, to, warmthDelta, trustDelta, reason }
+ */
+export function detectBondShifts(text) {
+  if (!text) return [];
+  const shifts = [];
+  const pattern = /\[BOND_SHIFT:\s*From="([^"]+)"\s+To="([^"]+)"(?:\s+Warmth=([+-]?\d+))?(?:\s+Trust=([+-]?\d+))?(?:\s+Reason="([^"]*)")?\]/gi;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const warmthDelta = parseInt(match[3] || '0');
+    const trustDelta = parseInt(match[4] || '0');
+    if (warmthDelta === 0 && trustDelta === 0) continue; // skip no-ops
+    shifts.push({
+      from: match[1],
+      to: match[2],
+      warmthDelta,
+      trustDelta,
+      reason: match[5] || ''
+    });
+  }
+  return shifts;
+}
+
+/**
  * Strip all DM Mode markers from narrative text for display.
  */
 export function cleanDMModeNarrative(text) {
@@ -119,6 +143,7 @@ export function cleanDMModeNarrative(text) {
     .replace(/\[ATTACK:[^\]]*\]/gi, '')
     .replace(/\[CAST_SPELL:[^\]]*\]/gi, '')
     .replace(/\[PARTY_ARGUMENT:[^\]]*\]/gi, '')
+    .replace(/\[BOND_SHIFT:[^\]]*\]/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
