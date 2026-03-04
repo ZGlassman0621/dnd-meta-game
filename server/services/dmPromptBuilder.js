@@ -1577,7 +1577,7 @@ ${char2 ? '\n' + char2.text : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"
@@ -1684,6 +1684,18 @@ When the player makes a promise to an NPC or fulfills one, use these markers for
 - Weighted consequences: Breaking promises has cascading effects proportional to weight. Trivial broken promises barely register; critical broken promises spread as rumors to nearby NPCs, damage faction standings, and affect merchant prices. Fulfilling promises has equivalent positive effects.
 - Do NOT use PROMISE_MADE for routine quest acceptance — only for personal commitments the NPC will remember and hold the player to.
 - When an NPC has an overdue promise (shown in their relationship data above), they should bring it up naturally: disappointed, hurt, or angry depending on disposition.
+
+NOTORIETY & HEAT MARKERS:
+When the player's actions would logically draw attention from authorities, factions, or the underworld, emit these markers:
+- Notoriety gain: [NOTORIETY_GAIN: source=City Watch, amount=15, category=criminal]
+  source = the faction or authority tracking the player (City Watch, Thieves' Guild, Temple of Helm, etc.)
+  amount = heat gained (5=minor infraction, 10=moderate, 15=serious, 25=major crime, 40=extreme)
+  category = criminal, political, arcane, religious, or military
+  Examples: stealing in public (criminal 10), insulting a noble at court (political 10), unauthorized necromancy (arcane 20), desecrating a shrine (religious 15), desertion (military 25)
+- Notoriety reduction: [NOTORIETY_LOSS: source=City Watch, amount=10]
+  Use when the player actively clears their name, does a favor for the authority, pays a fine, or completes a redemptive act.
+- When the player has high notoriety (shown in NOTORIETY section above), NPCs affiliated with that source should react accordingly: guards watch more carefully, contacts become nervous, prices may rise.
+- Do NOT emit NOTORIETY_GAIN for normal adventuring or sanctioned activities — only for actions that would reasonably draw negative attention.
 
 CONVERSATION FLOW:
 - SHORT RESPONSES ARE GOOD. You do not need to fill space. 1-3 sentences is often perfect.
@@ -2183,6 +2195,8 @@ WEATHER & SURVIVAL: Reference current weather in descriptions. Enforce exposure 
 CRAFTING: Use [RECIPE_FOUND] when players discover existing recipes, [MATERIAL_FOUND] for raw materials found, [CRAFT_PROGRESS] for crafting time, and [RECIPE_GIFT] when an NPC shares a unique personal recipe. Materials come from foraging, looting, merchants, and exploration.
 
 MYTHIC: If the character has mythic abilities, reference them naturally — their presence affects how NPCs react, their surge die adds to dramatic moments, and path abilities should feel like natural extensions of who they are. Use [MYTHIC_TRIAL] for extraordinary achievements, [PIETY_CHANGE] for deity-relevant choices, [ITEM_AWAKEN] for legendary item milestones, [MYTHIC_SURGE] for power usage tracking.
+
+NOTORIETY: When the player commits acts that draw unwanted attention (crimes, unauthorized magic, political provocations, military transgressions), emit [NOTORIETY_GAIN: source=X, amount=N, category=Y]. When they clear their name or do favors for those tracking them, emit [NOTORIETY_LOSS: source=X, amount=N]. High notoriety NPCs react with suspicion, guards are more aggressive, and entanglements occur. Reference the NOTORIETY section above for current heat levels.
 
 ACTIVE QUESTS = WEAVE NATURALLY:
 When ACTIVE QUESTS are listed in the world state, incorporate them organically into the narrative:

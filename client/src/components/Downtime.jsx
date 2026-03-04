@@ -55,6 +55,14 @@ function Downtime({ character, onCharacterUpdated }) {
   const [history, setHistory] = useState([])
   const [showHistory, setShowHistory] = useState(false)
 
+  // New activity selections
+  const [factions, setFactions] = useState([])
+  const [selectedFactionId, setSelectedFactionId] = useState(null)
+  const [activeProjects, setActiveProjects] = useState([])
+  const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [inProgressUpgrades, setInProgressUpgrades] = useState([])
+  const [selectedUpgradeId, setSelectedUpgradeId] = useState(null)
+
   useEffect(() => {
     loadData()
     const interval = setInterval(checkStatus, 2000) // Check every 2 seconds
@@ -67,7 +75,8 @@ function Downtime({ character, onCharacterUpdated }) {
       fetchActivities(),
       fetchWorkOptions(),
       checkStatus(),
-      fetchHistory()
+      fetchHistory(),
+      fetchExtras()
     ])
     setLoading(false)
   }
@@ -135,10 +144,46 @@ function Downtime({ character, onCharacterUpdated }) {
     }
   }
 
+  const fetchExtras = async () => {
+    // Load factions for faction_work/gather_intel
+    try {
+      const res = await fetch(`/api/faction/standings/${character.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setFactions(data.filter(f => f.standing > -50))
+      }
+    } catch (_e) { /* ignore */ }
+    // Load active projects for long_project
+    if (character.campaign_id) {
+      try {
+        const res = await fetch(`/api/projects/${character.id}/${character.campaign_id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setActiveProjects(data.filter(p => p.status === 'active'))
+        }
+      } catch (_e) { /* ignore */ }
+    }
+    // Load in-progress upgrades for base_upgrade
+    if (character.campaign_id) {
+      try {
+        const res = await fetch(`/api/base/${character.id}/${character.campaign_id}`)
+        if (res.ok) {
+          const base = await res.json()
+          if (base?.upgrades) {
+            setInProgressUpgrades(base.upgrades.filter(u => u.status === 'in_progress'))
+          }
+        }
+      } catch (_e) { /* ignore */ }
+    }
+  }
+
   const startActivity = async () => {
     if (!selectedActivity) return
     if (selectedActivity.id === 'work' && !selectedWorkType) return
     if (selectedActivity.id === 'rest' && !selectedRestType) return
+    if ((selectedActivity.id === 'faction_work' || selectedActivity.id === 'gather_intel') && !selectedFactionId) return
+    if (selectedActivity.id === 'long_project' && !selectedProjectId) return
+    if (selectedActivity.id === 'base_upgrade' && !selectedUpgradeId) return
 
     setStarting(true)
     setError('')
@@ -159,6 +204,17 @@ function Downtime({ character, onCharacterUpdated }) {
       if (selectedActivity.id === 'rest' && selectedRestType) {
         payload.restType = selectedRestType.id
         payload.durationHours = selectedRestType.duration
+      }
+
+      // Add new activity selection IDs
+      if (selectedActivity.id === 'faction_work' || selectedActivity.id === 'gather_intel') {
+        payload.factionId = selectedFactionId
+      }
+      if (selectedActivity.id === 'long_project') {
+        payload.projectId = selectedProjectId
+      }
+      if (selectedActivity.id === 'base_upgrade') {
+        payload.upgradeId = selectedUpgradeId
       }
 
       const response = await fetch('/api/downtime/start', {
@@ -183,6 +239,9 @@ function Downtime({ character, onCharacterUpdated }) {
       setSelectedActivity(null)
       setSelectedWorkType(null)
       setSelectedRestType(null)
+      setSelectedFactionId(null)
+      setSelectedProjectId(null)
+      setSelectedUpgradeId(null)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -571,6 +630,69 @@ function Downtime({ character, onCharacterUpdated }) {
             </>
           ) : (
             <>
+              {/* Faction selection for faction_work / gather_intel */}
+              {(selectedActivity.id === 'faction_work' || selectedActivity.id === 'gather_intel') && !selectedFactionId && (
+                <div>
+                  <h3 style={{ marginBottom: '0.5rem' }}>Select a Faction</h3>
+                  {factions.length === 0 ? (
+                    <p style={{ color: '#888' }}>No known factions. Discover factions during your adventures.</p>
+                  ) : (
+                    <div className="work-options-grid">
+                      {factions.map(f => (
+                        <div key={f.faction_id} className="work-option-card" onClick={() => setSelectedFactionId(f.faction_id)}>
+                          <div className="work-option-info">
+                            <h4>{f.faction_name || f.name}</h4>
+                            <p className="work-option-desc">Standing: {f.standing}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Project selection for long_project */}
+              {selectedActivity.id === 'long_project' && !selectedProjectId && (
+                <div>
+                  <h3 style={{ marginBottom: '0.5rem' }}>Select a Project</h3>
+                  {activeProjects.length === 0 ? (
+                    <p style={{ color: '#888' }}>No active projects. Create one from the Party Base page.</p>
+                  ) : (
+                    <div className="work-options-grid">
+                      {activeProjects.map(p => (
+                        <div key={p.id} className="work-option-card" onClick={() => setSelectedProjectId(p.id)}>
+                          <div className="work-option-info">
+                            <h4>{p.name}</h4>
+                            <p className="work-option-desc">{p.project_type} — {p.segments_filled}/{p.total_segments} segments — {p.skill_used || 'any'} DC {p.dc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Upgrade selection for base_upgrade */}
+              {selectedActivity.id === 'base_upgrade' && !selectedUpgradeId && (
+                <div>
+                  <h3 style={{ marginBottom: '0.5rem' }}>Select an Upgrade</h3>
+                  {inProgressUpgrades.length === 0 ? (
+                    <p style={{ color: '#888' }}>No upgrades in progress. Start one from the Party Base page.</p>
+                  ) : (
+                    <div className="work-options-grid">
+                      {inProgressUpgrades.map(u => (
+                        <div key={u.id} className="work-option-card" onClick={() => setSelectedUpgradeId(u.id)}>
+                          <div className="work-option-info">
+                            <h4>{u.name}</h4>
+                            <p className="work-option-desc">{Math.floor((u.hours_invested / u.hours_required) * 100)}% complete ({u.hours_invested.toFixed(1)}/{u.hours_required} hours)</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Show selected activity or work type */}
               <div className="selected-activity-card">
                 <span className="activity-icon-large">

@@ -720,6 +720,72 @@ export function detectPromiseFulfilled(narrative) {
   return results;
 }
 
+/**
+ * Detect [NOTORIETY_GAIN: source=City Watch, amount=15, category=criminal]
+ * Returns array of { source, amount, category } or empty array.
+ */
+export function detectNotorietyGain(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[NOTORIETY_GAIN:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerKeyValue(match[1]);
+    if (data.source && data.amount) {
+      results.push({
+        source: data.source.trim(),
+        amount: Math.abs(parseInt(data.amount)) || 10,
+        category: (data.category || 'criminal').trim().toLowerCase()
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Detect [NOTORIETY_LOSS: source=City Watch, amount=10]
+ * Returns array of { source, amount } or empty array.
+ */
+export function detectNotorietyLoss(narrative) {
+  if (!narrative) return [];
+  const results = [];
+  const regex = /\[NOTORIETY_LOSS:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerKeyValue(match[1]);
+    if (data.source && data.amount) {
+      results.push({
+        source: data.source.trim(),
+        amount: Math.abs(parseInt(data.amount)) || 10
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Parse key=value pairs from a marker string (comma-separated, values may be unquoted).
+ * Handles format: source=City Watch, amount=15, category=criminal
+ */
+function parseMarkerKeyValue(str) {
+  const result = {};
+  // Split on comma, then parse key=value
+  const parts = str.split(',');
+  for (const part of parts) {
+    const eqIndex = part.indexOf('=');
+    if (eqIndex > 0) {
+      const key = part.substring(0, eqIndex).trim().toLowerCase();
+      let value = part.substring(eqIndex + 1).trim();
+      // Strip quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // ============================================================
 // SESSION ANALYSIS & REWARDS
 // ============================================================

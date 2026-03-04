@@ -31,6 +31,7 @@ const GenerationControlsPage = lazy(() => import('./components/GenerationControl
 const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
 const DMMode = lazy(() => import('./components/DMMode'))
 const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
+const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 
 // Global fetch interceptor — adds auth token to all /api requests automatically.
 // This avoids touching every fetch call across all components.
@@ -464,6 +465,11 @@ function App() {
             loadCharacters()
           }}
         />
+      ) : activeView === 'showPartyBase' && selectedCharacter ? (
+        <PartyBasePage
+          characterId={selectedCharacter.id}
+          campaignId={selectedCharacter.campaign_id}
+        />
       ) : activeView === 'showGeneration' && selectedCharacter ? (
         <GenerationControlsPage
           character={selectedCharacter}
@@ -539,6 +545,7 @@ function App() {
                 { key: 'showDMMode', label: 'DM Mode', desc: 'You DM for 4 AI player characters', color: '#e67e22' },
                 { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
                 { key: 'showMythicProgression', label: 'Mythic Progression', desc: 'Mythic tiers, paths, piety, epic boons, and legendary items', color: '#ff6b35' },
+                { key: 'showPartyBase', label: 'Stronghold', desc: 'Manage your base, upgrades, staff, projects, and notoriety', color: '#b45309' },
                 { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
               ].map(card => (
                 <div

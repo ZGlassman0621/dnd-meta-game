@@ -20,6 +20,7 @@ import {
   detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
   detectMythicTrial, detectPietyChange, detectItemAwaken, detectMythicSurge,
   detectPromiseMade, detectPromiseFulfilled,
+  detectNotorietyGain, detectNotorietyLoss,
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -49,6 +50,9 @@ import { adjustPiety } from '../services/pietyService.js';
 import { FULFILL_WEIGHTS, spreadReputationRipple, spreadFactionStanding, calculatePriceModifier } from '../services/consequenceService.js';
 import { getActiveQuests as getCharacterActiveQuests } from '../services/questService.js';
 import { calculateEconomyModifiers, getItemEconomyMultiplier, recordTransaction, getBulkDiscount } from '../services/economyService.js';
+import { getBaseForPrompt } from '../services/partyBaseService.js';
+import { getNotorietyForPrompt, addNotoriety as addNotorietyScore } from '../services/notorietyService.js';
+import { getProjectsForPrompt } from '../services/longTermProjectService.js';
 
 const router = express.Router();
 
@@ -767,6 +771,26 @@ router.post('/start', async (req, res) => {
       console.error('Error gathering mythic context:', e);
     }
 
+    // Gather party base, notoriety, and long-term project context
+    let partyBaseContext = '';
+    let notorietyContext = '';
+    let projectsContext = '';
+    try {
+      partyBaseContext = await getBaseForPrompt(characterId, character.campaign_id) || '';
+    } catch (e) {
+      console.error('Error gathering party base context:', e);
+    }
+    try {
+      notorietyContext = await getNotorietyForPrompt(characterId, character.campaign_id) || '';
+    } catch (e) {
+      console.error('Error gathering notoriety context:', e);
+    }
+    try {
+      projectsContext = await getProjectsForPrompt(characterId, character.campaign_id) || '';
+    } catch (e) {
+      console.error('Error gathering projects context:', e);
+    }
+
     // Fetch ALL chronicle summaries (richer 300-500 word AI-generated recaps)
     let chronicleSummaries = [];
     if (character.campaign_id) {
@@ -804,7 +828,10 @@ router.post('/start', async (req, res) => {
       weatherContext,
       survivalContext,
       craftingContext,
-      mythicContext
+      mythicContext,
+      partyBaseContext,
+      notorietyContext,
+      projectsContext
     };
 
     // Check which LLM provider is available (respects user preference)
@@ -1713,6 +1740,48 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('Error processing promise markers:', e);
     }
 
+    // Notoriety gain/loss detection
+    const notorietyEvents = [];
+    try {
+      const character = session.character_id
+        ? await dbGet('SELECT id, campaign_id, game_day FROM characters WHERE id = ?', [session.character_id])
+        : null;
+
+      if (character) {
+        const notorietyGains = detectNotorietyGain(result.narrative);
+        for (const ng of notorietyGains) {
+          try {
+            await addNotorietyScore(character.id, character.campaign_id, {
+              source: ng.source,
+              amount: ng.amount,
+              category: ng.category,
+              reason: `Session event (game day ${character.game_day || 0})`
+            });
+            notorietyEvents.push({ type: 'notoriety_gain', ...ng });
+          } catch (e) {
+            console.error(`Error processing NOTORIETY_GAIN for ${ng.source}:`, e.message);
+          }
+        }
+
+        const notorietyLosses = detectNotorietyLoss(result.narrative);
+        for (const nl of notorietyLosses) {
+          try {
+            await addNotorietyScore(character.id, character.campaign_id, {
+              source: nl.source,
+              amount: -nl.amount,
+              category: 'criminal',
+              reason: `Cleared name (game day ${character.game_day || 0})`
+            });
+            notorietyEvents.push({ type: 'notoriety_loss', ...nl });
+          } catch (e) {
+            console.error(`Error processing NOTORIETY_LOSS for ${nl.source}:`, e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error processing notoriety markers:', e);
+    }
+
     res.json({
       narrative: cleanNarrative,
       messageCount: result.messages.length,
@@ -1727,7 +1796,8 @@ router.post('/:sessionId/message', async (req, res) => {
       survivalEvents: survivalEvents.length > 0 ? survivalEvents : undefined,
       craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined,
       mythicEvents: mythicEvents.length > 0 ? mythicEvents : undefined,
-      promiseEvents: promiseEvents.length > 0 ? promiseEvents : undefined
+      promiseEvents: promiseEvents.length > 0 ? promiseEvents : undefined,
+      notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined
     });
   } catch (error) {
     handleServerError(res, error, 'process DM session message');

@@ -10,6 +10,8 @@ import { generateNpcMail } from './npcMailService.js';
 import { advanceWeather, getWeather } from './weatherService.js';
 import { processDayChange as processSurvivalDayChange } from './survivalService.js';
 import { processConsequences } from './consequenceService.js';
+import * as partyBaseService from './partyBaseService.js';
+import * as notorietyService from './notorietyService.js';
 import { getSeason } from '../config/harptos.js';
 
 /**
@@ -93,6 +95,31 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       results.errors.push(`Companion activities: ${e.message}`);
     }
 
+    // 3.6. Base income and upkeep
+    try {
+      const charRowBase = await dbGet(
+        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
+        [campaignId]
+      );
+      if (charRowBase) {
+        const base = await partyBaseService.getBase(charRowBase.id, campaignId);
+        if (base && base.status === 'active') {
+          const maxDayRowBase = await dbGet(
+            'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+            [campaignId]
+          );
+          const baseGameDay = maxDayRowBase?.max_day || 1;
+          const baseResults = await partyBaseService.processIncomeAndUpkeep(
+            base.id, baseGameDay, gameDaysPassed
+          );
+          results.base_income = baseResults;
+        }
+      }
+    } catch (e) {
+      console.error('Error processing base income/upkeep:', e);
+      results.errors.push(`Base income: ${e.message}`);
+    }
+
     // 3.75. Generate NPC mail
     try {
       const maxDayRow2 = await dbGet(
@@ -134,6 +161,28 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     } catch (e) {
       console.error('Error processing consequences:', e);
       results.errors.push(`Consequences: ${e.message}`);
+    }
+
+    // 3.85. Notoriety decay and entanglement checks
+    try {
+      const charRowNotoriety = await dbGet(
+        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
+        [campaignId]
+      );
+      const maxDayRowNotoriety = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const notorietyGameDay = maxDayRowNotoriety?.max_day || 0;
+      if (charRowNotoriety && notorietyGameDay > 0) {
+        const notorietyResults = await notorietyService.processNotorietyTick(
+          campaignId, charRowNotoriety.id, notorietyGameDay
+        );
+        results.notoriety = notorietyResults;
+      }
+    } catch (e) {
+      console.error('Error processing notoriety tick:', e);
+      results.errors.push(`Notoriety: ${e.message}`);
     }
 
     // 4. Record the tick in campaign metadata

@@ -29,6 +29,7 @@ import weatherRoutes from './routes/weather.js';
 import survivalRoutes from './routes/survival.js';
 import craftingRoutes from './routes/crafting.js';
 import mythicRoutes from './routes/mythic.js';
+import partyBaseRoutes from './routes/partyBase.js';
 import authRoutes from './routes/auth.js';
 import authMiddleware from './middleware/auth.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
@@ -94,6 +95,7 @@ app.use('/api/weather', weatherRoutes);
 app.use('/api/survival', survivalRoutes);
 app.use('/api/crafting', craftingRoutes);
 app.use('/api/mythic', mythicRoutes);
+app.use('/api', partyBaseRoutes);
 
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {

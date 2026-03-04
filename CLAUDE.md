@@ -20,7 +20,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Claude model aliases (no date suffix): `claude-opus-4-6`, `claude-sonnet-4-6`
 - Opus handles ALL generation (campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world)
 - Sonnet handles ONLY interactive DM sessions (except first session opening which uses Opus)
-- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`, `[PROMISE_MADE]`, `[PROMISE_FULFILLED]`
+- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`, `[PROMISE_MADE]`, `[PROMISE_FULFILLED]`, `[NOTORIETY_GAIN]`, `[NOTORIETY_LOSS]`
 - DM prompt uses primacy/recency reinforcement — critical rules at top (ABSOLUTE RULES) and bottom (FINAL REMINDER)
 - Event bus (`server/services/eventEmitter.js`) connects game systems
 - Error handling via `server/utils/errorHandler.js` (handleServerError, notFound, validationError)
@@ -66,6 +66,12 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Economy config: `server/config/economyConfig.js` — EVENT_PRICE_EFFECTS (5 event types × 3 stages), REGIONAL_MODIFIERS (11 region types), BULK_DISCOUNT_TIERS, MERCHANT_MEMORY constants
 - Economy service: `server/services/economyService.js` — calculates per-category price modifiers from events + region + memory, combined with reputation modifier multiplicatively, clamped [0.50, 2.00]
 - Transaction history: `transaction_history` JSON column on `merchant_inventories` (migration 011), records bought/sold per merchant per character, drives loyalty discounts and smart restocking
+- Party Base system (Blades in the Dark port): 6 base types (tavern/guild_hall/wizard_tower/temple/thieves_den/manor), levels 1-5 via renown thresholds (0/25/60/120/200), upgrades with hours-invested progress, staff with salary/morale, treasury, income/upkeep processed in living world tick step 3.6
+- Party Base upgrades: shared (fortifications/guest_quarters/storage_vault/training_ground/garden_kitchen) + type-specific, perk system grants mechanical bonuses (training_bonus_xp, crafting_speed, spy_network, etc.)
+- Notoriety/heat system: 0-100 score per source (City Watch, Thieves' Guild, etc.), 5 categories (criminal/political/arcane/religious/military), decays 1-2/day, entanglement checks at thresholds (21-40 10%/day, 41-60 20%, 61-80 35%, 81-100 50%), processed in living world tick step 3.85
+- Notoriety markers: `[NOTORIETY_GAIN: source=X, amount=N, category=Y]` and `[NOTORIETY_LOSS: source=X, amount=N]` detected in DM session responses
+- Long-term projects: Blades-style clock system with 4/6/8/12 segments, skill check advancement (d20 + mod vs DC → 0/1/2 segments), max 3 active per character
+- Downtime v2: 6 new activity types (faction_work, gather_intel, base_upgrade, long_project, recruit, network) extending existing 9 activities, perk bonuses applied during downtime
 - Authentication: JWT-based user accounts, bcryptjs password hashing, auto-generated JWT secret stored in `_app_settings` table
 - Auth middleware: `server/middleware/auth.js` verifies Bearer token on all `/api/*` routes except `/api/auth/*` and `/api/health`
 - Campaign ownership: `user_id` column on `campaigns` table, campaign list/create operations scoped to authenticated user
@@ -165,6 +171,13 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `client/src/components/DMCoachingPanel.jsx` — DM coaching tips panel
 - `client/src/components/DMSession.jsx` — Main Player Mode DM session UI (~4300 lines)
 - `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)
+- `server/migrations/019_party_base_system.js` — Party base, upgrades, events, long-term projects, notoriety tables
+- `server/config/partyBaseConfig.js` — Base types, upgrade catalog, level thresholds, perk effects, entanglement tables
+- `server/services/partyBaseService.js` — Base CRUD, upgrades, income/upkeep, renown, staff, treasury, perks
+- `server/services/longTermProjectService.js` — Long-term project clock CRUD, progress rolls
+- `server/services/notorietyService.js` — Heat tracking, decay, entanglement generation
+- `server/routes/partyBase.js` — Party base REST API (base, projects, notoriety)
+- `client/src/components/PartyBasePage.jsx` — Party base management UI (6 tabs, Blades-style clocks)
 
 ## Coding Conventions
 - No TypeScript — pure JavaScript throughout

@@ -3,6 +3,9 @@ import { dbAll, dbGet, dbRun } from '../database.js';
 import { handleServerError } from '../utils/errorHandler.js';
 import { advanceProject, getProjectStatus } from '../services/craftingService.js';
 import { autoConsumeRations } from '../services/survivalService.js';
+import * as partyBaseService from '../services/partyBaseService.js';
+import * as longTermProjectService from '../services/longTermProjectService.js';
+import * as factionService from '../services/factionService.js';
 
 const router = express.Router();
 
@@ -108,6 +111,72 @@ const ACTIVITIES = {
     },
     requirements: null, // Can maintain anywhere with basic supplies
     allowedHours: [2, 4] // Only allow 2 or 4 hour sessions
+  },
+  faction_work: {
+    name: 'Faction Work',
+    description: 'Perform duties for your faction to increase standing',
+    maxHours: 8,
+    icon: '⚔️',
+    benefits: {
+      base: 'Advance your faction standing',
+      perHour: '+faction standing, possible intel'
+    },
+    requirements: { inSettlement: true }
+  },
+  gather_intel: {
+    name: 'Gather Intel',
+    description: 'Investigate faction goals and uncover secrets',
+    maxHours: 6,
+    icon: '🔍',
+    benefits: {
+      base: 'Discover faction goals and NPC secrets',
+      perHour: 'Reveal hidden information'
+    },
+    requirements: { inSettlement: true }
+  },
+  base_upgrade: {
+    name: 'Base Work',
+    description: 'Work on upgrading your stronghold',
+    maxHours: 8,
+    icon: '🏗️',
+    benefits: {
+      base: 'Progress on active base upgrade',
+      perHour: 'Advance upgrade construction'
+    },
+    requirements: { hasBase: true }
+  },
+  long_project: {
+    name: 'Project Work',
+    description: 'Advance a long-term project clock',
+    maxHours: 6,
+    icon: '📋',
+    benefits: {
+      base: 'Advance project clock segments',
+      perHour: 'Skill check per 2 hours for segment progress'
+    },
+    requirements: {}
+  },
+  recruit: {
+    name: 'Recruit',
+    description: 'Find and hire staff for your base',
+    maxHours: 4,
+    icon: '📢',
+    benefits: {
+      base: 'Find potential hires for your stronghold',
+      perHour: 'Better candidates with more time'
+    },
+    requirements: { inSettlement: true, hasBase: true }
+  },
+  network: {
+    name: 'Network',
+    description: 'Build contacts and discover opportunities',
+    maxHours: 6,
+    icon: '🤝',
+    benefits: {
+      base: 'Build useful contacts',
+      perHour: 'Discover opportunities and gain contacts'
+    },
+    requirements: { inSettlement: true }
   }
 };
 
@@ -588,7 +657,8 @@ router.get('/available/:characterId', async (req, res) => {
 
     const locationContext = analyzeLocation(character.current_location);
     const inventoryContext = analyzeInventory(character.inventory);
-    const context = { ...locationContext, ...inventoryContext };
+    const hasBase = !!(character.has_base);
+    const context = { ...locationContext, ...inventoryContext, hasBase };
 
     const available = [];
     const unavailable = [];
@@ -622,6 +692,9 @@ router.get('/available/:characterId', async (req, res) => {
                 break;
               case 'hasTools':
                 activityData.unavailableReason = 'Need appropriate tools';
+                break;
+              case 'hasBase':
+                activityData.unavailableReason = 'Requires an established base';
                 break;
               default:
                 activityData.unavailableReason = 'Requirements not met';
@@ -764,7 +837,8 @@ router.get('/status/:characterId', async (req, res) => {
 // Start a downtime activity
 router.post('/start', async (req, res) => {
   try {
-    const { characterId, activityType, durationHours, workType, restType } = req.body;
+    const { characterId, activityType, durationHours, workType, restType,
+            factionId, projectId, upgradeId } = req.body;
 
     // Validate activity exists
     const activity = ACTIVITIES[activityType];
@@ -855,10 +929,20 @@ router.post('/start', async (req, res) => {
     const realMilliseconds = actualDuration * realMinutesPerInGameHour * 60 * 1000;
     const endTime = new Date(now.getTime() + realMilliseconds);
 
+    // For new base/project activities, encode the selection ID into work_type
+    let effectiveWorkType = workType || null;
+    if (activityType === 'faction_work' || activityType === 'gather_intel') {
+      effectiveWorkType = factionId ? `faction:${factionId}` : null;
+    } else if (activityType === 'base_upgrade') {
+      effectiveWorkType = upgradeId ? `upgrade:${upgradeId}` : null;
+    } else if (activityType === 'long_project') {
+      effectiveWorkType = projectId ? `project:${projectId}` : null;
+    }
+
     const result = await dbRun(`
       INSERT INTO downtime (character_id, activity_type, work_type, rest_type, duration_hours, start_time, end_time, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-    `, [characterId, activityType, workType || null, restType || null, actualDuration, now.toISOString(), endTime.toISOString()]);
+    `, [characterId, activityType, effectiveWorkType, restType || null, actualDuration, now.toISOString(), endTime.toISOString()]);
 
     const newDowntime = await dbGet('SELECT * FROM downtime WHERE id = ?', [result.lastInsertRowid]);
 
@@ -1321,6 +1405,215 @@ async function calculateBenefits(downtime, character, activity) {
 
       benefits.description = `Maintained equipment for ${hours} hours - ${benefits.events[0]}`;
       break;
+
+    case 'faction_work': {
+      // Work for a faction to gain standing
+      const factionId = downtime.work_type?.startsWith('faction:') ? parseInt(downtime.work_type.split(':')[1]) : null;
+      if (!factionId) {
+        benefits.description = `Faction work for ${hours} hours — no faction selected`;
+        break;
+      }
+      try {
+        const standing = await factionService.getOrCreateStanding(character.id, factionId);
+        const faction = await factionService.getFactionById(factionId);
+        // 2-5 standing per hour based on work quality
+        const standingPerHour = Math.floor(Math.random() * 4) + 2;
+        const totalStanding = standingPerHour * hours;
+        await factionService.adjustStanding(character.id, factionId, totalStanding);
+        benefits.xpGained = Math.floor(hours * 3);
+        benefits.factionStandingGained = totalStanding;
+        benefits.factionName = faction?.name || 'Unknown';
+        // 15% chance per hour to discover a faction goal
+        for (let h = 0; h < hours; h++) {
+          if (Math.random() < 0.15) {
+            benefits.events.push(`Discovered intel about ${faction?.name || 'the faction'}'s operations`);
+            benefits.xpGained += 5;
+            break;
+          }
+        }
+        benefits.description = `Worked for ${faction?.name || 'faction'} for ${hours} hours (+${totalStanding} standing, ${benefits.xpGained} XP)`;
+      } catch (e) {
+        benefits.xpGained = Math.floor(hours * 2);
+        benefits.description = `Faction work for ${hours} hours (${benefits.xpGained} XP)`;
+      }
+      break;
+    }
+
+    case 'gather_intel': {
+      // Investigate faction secrets
+      const intelFactionId = downtime.work_type?.startsWith('faction:') ? parseInt(downtime.work_type.split(':')[1]) : null;
+      benefits.xpGained = Math.floor(hours * 3);
+      // Check for spy_network perk (advantage on intel)
+      let hasSpyNetwork = false;
+      try {
+        hasSpyNetwork = await partyBaseService.hasPerk(character.id, character.campaign_id, 'spy_network');
+      } catch (_e) { /* no base */ }
+      // DC based on faction — default 14, spy network gives bonus
+      const intelDC = 14;
+      const intelBonus = hasSpyNetwork ? 3 : 0;
+      const intelRoll = Math.floor(Math.random() * 20) + 1 + intelBonus;
+      if (intelRoll >= intelDC) {
+        benefits.events.push('You uncovered valuable intelligence');
+        benefits.xpGained += 10;
+        if (intelFactionId) {
+          try {
+            const goals = await factionService.getGoalsVisibleToCharacter(character.id);
+            const undiscovered = goals.filter(g => g.faction_id === parseInt(intelFactionId) && g.visibility === 'secret');
+            if (undiscovered.length > 0) {
+              benefits.events.push(`Discovered a hidden faction goal`);
+            }
+          } catch (_e) { /* ignore */ }
+        }
+      } else {
+        benefits.events.push('Your investigation turned up nothing useful');
+      }
+      if (hasSpyNetwork) benefits.events.push('Your spy network provided an edge');
+      benefits.description = `Gathered intel for ${hours} hours — ${benefits.events[0]}`;
+      break;
+    }
+
+    case 'base_upgrade': {
+      // Work on base upgrade
+      const upgradeId = downtime.work_type?.startsWith('upgrade:') ? parseInt(downtime.work_type.split(':')[1]) : null;
+      if (!upgradeId) {
+        benefits.description = `Base work for ${hours} hours — no active upgrade selected`;
+        break;
+      }
+      try {
+        // Check for crafting_speed perk
+        let speedBonus = 1.0;
+        try {
+          const hasCraftingSpeed = await partyBaseService.hasPerk(character.id, character.campaign_id, 'crafting_speed');
+          if (hasCraftingSpeed) speedBonus = 1.25;
+        } catch (_e) { /* no perk */ }
+        const effectiveHours = hours * speedBonus;
+        const result = await partyBaseService.advanceUpgrade(upgradeId, effectiveHours);
+        benefits.upgradeProgress = {
+          upgradeName: result.upgrade?.name || 'Unknown',
+          hoursAdded: effectiveHours,
+          totalHours: result.upgrade?.hours_invested,
+          required: result.upgrade?.hours_required,
+          completed: result.completed
+        };
+        if (result.completed) {
+          benefits.events.push(`Upgrade "${result.upgrade?.name}" completed!`);
+          benefits.xpGained = 25;
+        }
+        const pctDone = result.upgrade ? Math.floor((result.upgrade.hours_invested / result.upgrade.hours_required) * 100) : 0;
+        benefits.description = `Worked on base upgrade for ${hours} hours (${pctDone}% complete)`;
+        if (speedBonus > 1) benefits.description += ' (crafting speed bonus)';
+      } catch (e) {
+        benefits.description = `Base work for ${hours} hours — ${e.message}`;
+      }
+      break;
+    }
+
+    case 'long_project': {
+      // Advance a long-term project clock via skill rolls
+      const projectId = downtime.work_type?.startsWith('project:') ? parseInt(downtime.work_type.split(':')[1]) : null;
+      if (!projectId) {
+        benefits.description = `Project work for ${hours} hours — no project selected`;
+        break;
+      }
+      try {
+        // Get skill modifier from ability scores
+        let skillMod = 0;
+        try {
+          const project = await longTermProjectService.getProjectById(projectId);
+          const abilityScores = typeof character.ability_scores === 'string'
+            ? JSON.parse(character.ability_scores) : character.ability_scores;
+          if (project?.skill_used && abilityScores) {
+            const skillToAbility = {
+              arcana: 'int', history: 'int', investigation: 'int', nature: 'int', religion: 'int',
+              athletics: 'str', acrobatics: 'dex', stealth: 'dex', sleight_of_hand: 'dex',
+              persuasion: 'cha', deception: 'cha', intimidation: 'cha', performance: 'cha',
+              perception: 'wis', insight: 'wis', medicine: 'wis', survival: 'wis', animal_handling: 'wis'
+            };
+            const ability = skillToAbility[project.skill_used] || 'int';
+            const score = abilityScores[ability] || 10;
+            skillMod = Math.floor((score - 10) / 2);
+          }
+        } catch (_e) { /* use 0 */ }
+
+        // Check for faction_work_bonus perk
+        let bonusSegments = 0;
+        try {
+          const hasBonus = await partyBaseService.hasPerk(character.id, character.campaign_id, 'faction_work_bonus');
+          if (hasBonus) bonusSegments = 1;
+        } catch (_e) { /* no perk */ }
+
+        const result = await longTermProjectService.workOnProject(projectId, hours, skillMod);
+        const totalGained = result.totalSegmentsGained + bonusSegments;
+        if (bonusSegments > 0 && result.project.status === 'active') {
+          await longTermProjectService.advanceProject(projectId, bonusSegments);
+        }
+        benefits.xpGained = Math.floor(hours * 2);
+        benefits.projectProgress = {
+          projectName: result.project?.name,
+          segmentsGained: totalGained,
+          segmentsFilled: (result.project?.segments_filled || 0) + bonusSegments,
+          totalSegments: result.project?.total_segments,
+          completed: result.project?.status === 'completed',
+          rolls: result.rolls
+        };
+        if (result.project?.status === 'completed') {
+          benefits.events.push(`Project "${result.project.name}" completed!`);
+          benefits.xpGained += 50;
+        }
+        benefits.description = `Worked on "${result.project?.name}" for ${hours} hours (+${totalGained} segments)`;
+        if (bonusSegments > 0) benefits.description += ' (faction work bonus)';
+      } catch (e) {
+        benefits.description = `Project work for ${hours} hours — ${e.message}`;
+      }
+      break;
+    }
+
+    case 'recruit': {
+      // Find staff candidates for base
+      benefits.xpGained = Math.floor(hours * 1);
+      // Generate 1-3 candidates based on hours + CHA mod
+      let chaMod = 0;
+      try {
+        const abilityScores = typeof character.ability_scores === 'string'
+          ? JSON.parse(character.ability_scores) : character.ability_scores;
+        if (abilityScores?.cha) chaMod = Math.floor((abilityScores.cha - 10) / 2);
+      } catch (_e) { /* 0 */ }
+      const candidateCount = Math.min(3, Math.max(1, Math.floor(hours / 2) + (chaMod > 0 ? 1 : 0)));
+      const roles = ['cook', 'guard', 'servant', 'stablehand', 'bartender', 'scribe', 'healer', 'entertainer', 'spy', 'messenger'];
+      const firstNames = ['Bran', 'Elara', 'Tomas', 'Mira', 'Jorn', 'Syla', 'Dren', 'Kael', 'Wynn', 'Asha'];
+      const candidates = [];
+      for (let i = 0; i < candidateCount; i++) {
+        const name = firstNames[Math.floor(Math.random() * firstNames.length)];
+        const role = roles[Math.floor(Math.random() * roles.length)];
+        const salary = Math.floor(Math.random() * 5) + 3 + (hours > 2 ? -1 : 0);
+        candidates.push({ name, role, salary_gp: Math.max(2, salary) });
+      }
+      benefits.recruitCandidates = candidates;
+      const names = candidates.map(c => `${c.name} (${c.role}, ${c.salary_gp}gp/month)`).join(', ');
+      benefits.description = `Recruited for ${hours} hours — found ${candidateCount} candidate${candidateCount !== 1 ? 's' : ''}: ${names}`;
+      break;
+    }
+
+    case 'network': {
+      // Build contacts and discover opportunities
+      benefits.xpGained = Math.floor(hours * 2);
+      // 25% chance per 2 hours to gain a named contact
+      const contactChances = Math.floor(hours / 2);
+      const contactSpecialties = ['merchant', 'informant', 'noble', 'guard captain', 'fence', 'scholar', 'priest', 'smuggler'];
+      for (let i = 0; i < contactChances; i++) {
+        if (Math.random() < 0.25) {
+          const specialty = contactSpecialties[Math.floor(Math.random() * contactSpecialties.length)];
+          benefits.events.push(`Made a useful contact: a ${specialty}`);
+          benefits.xpGained += 5;
+        }
+      }
+      if (Math.random() < 0.15 * hours) {
+        benefits.events.push('Discovered a business opportunity');
+      }
+      const eventsSummary = benefits.events.length > 0 ? ' — ' + benefits.events.join('; ') : '';
+      benefits.description = `Networked for ${hours} hours (${benefits.xpGained} XP)${eventsSummary}`;
+      break;
+    }
   }
 
   return benefits;
