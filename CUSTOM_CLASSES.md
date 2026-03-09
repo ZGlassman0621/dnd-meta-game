@@ -194,5 +194,6 @@ Features at L6/L11/L15. Keepers who skip subclass gain Polymath instead.
 - [x] Server: character.js level-up route handles keeperSecondGenre, keeperGenreMastery, keeperSubclassText
 - [x] Server: Subclass texts merged with player-chosen texts in DB update
 
-### Keeper — Still Needs Development
-- [ ] Subclass flavor/identity deepening (deferred)
+### Keeper — Subclass Flavor (Done)
+- [x] All 4 subclasses have flavor, quote, and archetypeFeels fields
+- [x] Flavor text uses generic fantasy archetypes (knights, scouts, monks, spymasters) — no deep FR proper nouns
