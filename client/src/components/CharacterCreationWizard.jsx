@@ -6,6 +6,7 @@ import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
+import { STANDARD_TEXTS, RECITATIONS } from '../data/keeperTexts.js'
 
 function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
   // Check if we're in edit mode
@@ -94,7 +95,10 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         feat_choices: {}, // For feats with choices (e.g., Magic Initiate class selection)
         ability_score_method: 'standard_array',
         selected_languages: [],
-        selected_tool_proficiencies: []
+        selected_tool_proficiencies: [],
+        keeper_texts: [],
+        keeper_recitations: [],
+        keeper_genre_domain: ''
       }
     }
 
@@ -716,7 +720,11 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         ),
         // User-selected tool proficiencies
         ...(formData.selected_tool_proficiencies || []).filter(t => t)
-      ])
+      ]),
+      // Keeper class fields
+      keeper_texts: formData.class === 'keeper' ? JSON.stringify(formData.keeper_texts || []) : '[]',
+      keeper_recitations: formData.class === 'keeper' ? JSON.stringify(formData.keeper_recitations || []) : '[]',
+      keeper_genre_domain: formData.class === 'keeper' ? (formData.keeper_genre_domain || null) : null
     }
 
     if (isEditMode) {
@@ -960,7 +968,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         </select>
       </div>
 
-      {hasSubclasses && (
+      {hasSubclasses && formData.class !== 'keeper' && (
         <div className="form-group">
           <label>Subclass</label>
           <select
@@ -979,6 +987,17 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               {selectedClassData.subclasses.find(sc => sc.name === formData.subclass).description}
             </small>
           )}
+        </div>
+      )}
+
+      {formData.class === 'keeper' && (
+        <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+          <small style={{ color: '#a78bfa', display: 'block', marginBottom: '0.5rem' }}>
+            Keepers choose a <strong>Genre Domain</strong> at Level 3 and an optional <strong>Specialization</strong> (subclass) or <strong>Polymath</strong> path at Level 6. These choices are made during level-up, not at character creation.
+          </small>
+          <small style={{ color: '#888' }}>
+            Available Specializations: Lorewarden (tank), Mythslinger (ranged), Rhetorician (control), Versebinder (healer) — or stay a pure Keeper (Polymath)
+          </small>
         </div>
       )}
 
@@ -1736,6 +1755,107 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Keeper Text Selection */}
+        {formData.class === 'keeper' && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '1rem',
+            background: 'rgba(139, 92, 246, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid rgba(139, 92, 246, 0.3)'
+          }}>
+            <h4 style={{ marginBottom: '0.25rem', color: '#a78bfa' }}>Keeper's Library — Choose 3 Starting Texts</h4>
+            <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.75rem' }}>
+              Each text grants a manifested weapon and a once-per-short-rest Passage ability.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {STANDARD_TEXTS.map(text => {
+                const isSelected = formData.keeper_texts.includes(text.name)
+                const isDisabled = !isSelected && formData.keeper_texts.length >= 3
+                return (
+                  <div
+                    key={text.name}
+                    onClick={() => {
+                      if (isSelected) {
+                        handleChange('keeper_texts', formData.keeper_texts.filter(t => t !== text.name))
+                      } else if (formData.keeper_texts.length < 3) {
+                        handleChange('keeper_texts', [...formData.keeper_texts, text.name])
+                      }
+                    }}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '6px',
+                      border: `1px solid ${isSelected ? '#a78bfa' : 'rgba(255,255,255,0.15)'}`,
+                      background: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      opacity: isDisabled ? 0.4 : 1,
+                      minWidth: '200px',
+                      flex: '1 1 280px'
+                    }}
+                    title={text.description}
+                  >
+                    <div style={{ fontSize: '0.85rem', color: isSelected ? '#c4b5fd' : '#ccc', fontWeight: 'bold' }}>
+                      {text.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.15rem' }}>
+                      Weapon: {text.weapon} ({text.weaponType}) | Passage: {text.passage.name}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.15rem' }}>
+                      {text.passage.description}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem' }}>
+              Selected: {formData.keeper_texts.length}/3
+            </p>
+
+            <h4 style={{ marginTop: '1rem', marginBottom: '0.25rem', color: '#a78bfa' }}>Recitations — Choose 2</h4>
+            <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.75rem' }}>
+              Cantrip-like abilities usable at will. 1d8 damage at L1, scaling at L5/11/17.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {RECITATIONS.map(rec => {
+                const isSelected = formData.keeper_recitations.includes(rec.name)
+                const isDisabled = !isSelected && formData.keeper_recitations.length >= 2
+                return (
+                  <div
+                    key={rec.name}
+                    onClick={() => {
+                      if (isSelected) {
+                        handleChange('keeper_recitations', formData.keeper_recitations.filter(r => r !== rec.name))
+                      } else if (formData.keeper_recitations.length < 2) {
+                        handleChange('keeper_recitations', [...formData.keeper_recitations, rec.name])
+                      }
+                    }}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '6px',
+                      border: `1px solid ${isSelected ? '#a78bfa' : 'rgba(255,255,255,0.15)'}`,
+                      background: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      opacity: isDisabled ? 0.4 : 1,
+                      minWidth: '200px',
+                      flex: '1 1 280px'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.85rem', color: isSelected ? '#c4b5fd' : '#ccc', fontWeight: 'bold' }}>
+                      {rec.name}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.15rem' }}>
+                      {rec.description}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem' }}>
+              Selected: {formData.keeper_recitations.length}/2
+            </p>
           </div>
         )}
 

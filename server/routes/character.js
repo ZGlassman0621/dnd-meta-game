@@ -111,7 +111,10 @@ router.post('/', async (req, res) => {
       known_spells = '[]',
       feats = '[]',
       languages = '[]',
-      tool_proficiencies = '[]'
+      tool_proficiencies = '[]',
+      keeper_texts = '[]',
+      keeper_recitations = '[]',
+      keeper_genre_domain = null
     } = req.body;
 
     const sql = `
@@ -127,8 +130,9 @@ router.post('/', async (req, res) => {
         hair_color, skin_color, eye_color, height, weight, age,
         personality_traits, ideals, bonds, flaws,
         organizations, allies, enemies, backstory, other_notes,
-        known_cantrips, known_spells, feats, languages, tool_proficiencies
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        known_cantrips, known_spells, feats, languages, tool_proficiencies,
+        keeper_texts, keeper_recitations, keeper_genre_domain
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await dbRun(sql, [
@@ -143,7 +147,8 @@ router.post('/', async (req, res) => {
       hair_color, skin_color, eye_color, height, weight, age,
       personality_traits, ideals, bonds, flaws,
       organizations, allies, enemies, backstory, other_notes,
-      known_cantrips, known_spells, feats, languages, tool_proficiencies
+      known_cantrips, known_spells, feats, languages, tool_proficiencies,
+      keeper_texts, keeper_recitations, keeper_genre_domain
     ]);
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [result.lastInsertRowid]);
@@ -172,7 +177,9 @@ router.put('/:id', async (req, res) => {
       'organizations', 'allies', 'enemies', 'backstory', 'other_notes',
       'known_cantrips', 'known_spells', 'prepared_spells', 'feats',
       'class_levels', 'hit_dice',
-      'campaign_config', 'languages', 'tool_proficiencies'
+      'campaign_config', 'languages', 'tool_proficiencies',
+      'keeper_texts', 'keeper_recitations', 'keeper_genre_domain',
+      'keeper_genre_domain_2', 'keeper_genre_mastery', 'keeper_specialization'
     ];
 
     for (const [key, value] of Object.entries(req.body)) {
@@ -895,6 +902,44 @@ router.post('/level-up/:id', async (req, res) => {
       await dbRun('UPDATE characters SET known_spells = ? WHERE id = ?', [
         JSON.stringify(updatedSpells), req.params.id
       ]);
+    }
+
+    // Handle Keeper-specific level-up data
+    if (targetClassName === 'keeper') {
+      const { keeperGenreDomain, keeperNewTexts, keeperNewRecitations, keeperSpecialization,
+              keeperSecondGenre, keeperGenreMastery, keeperSubclassText } = req.body;
+
+      if (keeperGenreDomain) {
+        await dbRun('UPDATE characters SET keeper_genre_domain = ? WHERE id = ?', [keeperGenreDomain, req.params.id]);
+      }
+
+      if (keeperSecondGenre) {
+        await dbRun('UPDATE characters SET keeper_genre_domain_2 = ? WHERE id = ?', [keeperSecondGenre, req.params.id]);
+      }
+
+      if (keeperGenreMastery) {
+        await dbRun('UPDATE characters SET keeper_genre_mastery = 1 WHERE id = ?', [req.params.id]);
+      }
+
+      // Collect all new texts (player-chosen + subclass-granted)
+      const allNewTexts = [...(keeperNewTexts || [])];
+      if (keeperSubclassText) allNewTexts.push(keeperSubclassText);
+
+      if (allNewTexts.length > 0) {
+        const existingTexts = safeParse(character.keeper_texts, []);
+        const updatedTexts = [...new Set([...existingTexts, ...allNewTexts])];
+        await dbRun('UPDATE characters SET keeper_texts = ? WHERE id = ?', [JSON.stringify(updatedTexts), req.params.id]);
+      }
+
+      if (keeperNewRecitations && Array.isArray(keeperNewRecitations) && keeperNewRecitations.length > 0) {
+        const existingRec = safeParse(character.keeper_recitations, []);
+        const updatedRec = [...new Set([...existingRec, ...keeperNewRecitations])];
+        await dbRun('UPDATE characters SET keeper_recitations = ? WHERE id = ?', [JSON.stringify(updatedRec), req.params.id]);
+      }
+
+      if (keeperSpecialization) {
+        await dbRun('UPDATE characters SET keeper_specialization = ? WHERE id = ?', [keeperSpecialization, req.params.id]);
+      }
     }
 
     // Calculate new XP to next level (based on total level)

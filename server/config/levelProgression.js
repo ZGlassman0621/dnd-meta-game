@@ -329,6 +329,28 @@ const CLASS_FEATURES = {
     18: ['Magic Item Master'],
     19: ['Ability Score Improvement'],
     20: ['Soul of Artifice']
+  },
+  keeper: {
+    1: ['Recitation', 'Manifest Weapon', "Keeper's Library", "Keeper's Insight"],
+    2: ['Literary Recall', "Keeper's Study"],
+    3: ['Genre Domain'],
+    4: ['Ability Score Improvement'],
+    5: ['Extra Attack', 'Eidetic Memory'],
+    6: ['Keeper Specialization or Polymath'],
+    7: ['Annotated Texts'],
+    8: ['Ability Score Improvement'],
+    9: ['Expanded Library'],
+    10: ['Compelling Rhetoric'],
+    11: ['Specialization Feature / Polymath: Broad Study', 'Manifest Weapon Improvement'],
+    12: ['Ability Score Improvement'],
+    13: ['Living Text'],
+    14: ['Unwritten Knowledge'],
+    15: ['Specialization Feature / Polymath: Renaissance Scholar', 'Second Genre Domain or Genre Mastery'],
+    16: ['Ability Score Improvement'],
+    17: ['Masterwork Manifest'],
+    18: ["Keeper's Authority"],
+    19: ['Ability Score Improvement'],
+    20: ['Living Library']
   }
 }
 
@@ -346,7 +368,8 @@ const SUBCLASS_LEVELS = {
   sorcerer: 1,
   warlock: 1,
   wizard: 2,
-  artificer: 3
+  artificer: 3,
+  keeper: 6
 }
 
 // Spell slots by level for full casters (Bard, Cleric, Druid, Sorcerer, Wizard)
@@ -478,7 +501,21 @@ const HIT_DICE = {
   sorcerer: 6,
   warlock: 8,
   wizard: 6,
-  artificer: 8
+  artificer: 8,
+  keeper: 8
+}
+
+// Keeper texts known and recitations by level
+const KEEPER_PROGRESSION = {
+  textsKnown: [3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 14],
+  genreBonusTexts: [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2],
+  recitations: [2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6],
+  recitationDamage: ['1d8', '1d8', '1d8', '1d8', '2d8', '2d8', '2d8', '2d8', '2d8', '2d8', '3d8', '3d8', '3d8', '3d8', '3d8', '3d8', '4d8', '4d8', '4d8', '4d8'],
+  manifestBonusDie: [null, null, null, null, null, null, null, null, null, null, '1d6', '1d6', '1d6', '1d6', '1d6', '1d6', '1d6', '1d6', '1d6', '1d6'],
+  keeperStudyDie: [null, '1d4', '1d4', '1d4', '1d4', '1d4', '1d4', '1d4', '1d6', '1d6', '1d6', '1d6', '1d6', '1d6', '1d8', '1d8', '1d8', '1d8', '1d8', '1d8'],
+  genreDomainLevel: 3,
+  specializationLevel: 6,
+  secondGenreLevel: 15
 }
 
 // Martial arts die progression for monks
@@ -546,7 +583,8 @@ const MULTICLASS_REQUIREMENTS = {
   sorcerer: { cha: 13 },
   warlock: { cha: 13 },
   wizard: { int: 13 },
-  artificer: { int: 13 }
+  artificer: { int: 13 },
+  keeper: { cha: 13, int: 13 }
 }
 
 // Caster type for multiclass spell slot calculation
@@ -563,7 +601,8 @@ const CASTER_TYPE = {
   fighter: 'third', // Eldritch Knight (when subclass selected)
   rogue: 'third', // Arcane Trickster (when subclass selected)
   barbarian: 'none',
-  monk: 'none'
+  monk: 'none',
+  keeper: 'none'
 }
 
 // Subclasses that grant spellcasting to martial classes
@@ -781,6 +820,7 @@ export {
   KI_POINTS,
   SORCERY_POINTS,
   ARTIFICER_INFUSIONS,
+  KEEPER_PROGRESSION,
   MULTICLASS_REQUIREMENTS,
   CASTER_TYPE,
   SPELLCASTING_SUBCLASSES,

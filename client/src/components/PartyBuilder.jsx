@@ -27,9 +27,9 @@ const LIFESTYLES = [
 ]
 
 const ALL_CLASSES = [
-  'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter',
-  'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer',
-  'Warlock', 'Wizard', 'Artificer'
+  'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
+  'Fighter', 'Keeper', 'Monk', 'Paladin', 'Ranger', 'Rogue',
+  'Sorcerer', 'Warlock', 'Wizard'
 ]
 
 const BACKGROUNDS = [

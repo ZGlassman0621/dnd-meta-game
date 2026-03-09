@@ -1,27 +1,29 @@
 import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
+import { STANDARD_TEXTS, RARE_TEXTS, RECITATIONS, SUBCLASS_TEXTS } from '../data/keeperTexts.js'
 
 const ALL_CLASSES = [
-  'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter',
-  'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer',
-  'Warlock', 'Wizard', 'Artificer'
+  'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
+  'Fighter', 'Keeper', 'Monk', 'Paladin', 'Ranger', 'Rogue',
+  'Sorcerer', 'Warlock', 'Wizard'
 ]
 
 const HIT_DICE = {
+  artificer: 8,
   barbarian: 12,
   bard: 8,
   cleric: 8,
   druid: 8,
   fighter: 10,
+  keeper: 8,
   monk: 8,
   paladin: 10,
   ranger: 10,
   rogue: 8,
   sorcerer: 6,
   warlock: 8,
-  wizard: 6,
-  artificer: 8
+  wizard: 6
 }
 
 function LevelUpPage({ character, onLevelUp, onBack }) {
@@ -50,6 +52,14 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   const [showSwapPanel, setShowSwapPanel] = useState(false)
   const [spellFilterLevel, setSpellFilterLevel] = useState('all')
   const [spellSearchText, setSpellSearchText] = useState('')
+
+  // Keeper-specific state
+  const [selectedGenreDomain, setSelectedGenreDomain] = useState('')
+  const [selectedKeeperTexts, setSelectedKeeperTexts] = useState([])
+  const [selectedKeeperRecitations, setSelectedKeeperRecitations] = useState([])
+  const [keeperSpecialization, setKeeperSpecialization] = useState('') // subclass name or 'polymath'
+  const [selectedSecondGenre, setSelectedSecondGenre] = useState('')
+  const [genreMasteryChoice, setGenreMasteryChoice] = useState('') // 'second_genre' or 'mastery'
 
   useEffect(() => {
     fetchLevelUpInfo()
@@ -358,6 +368,30 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
       if (activeChoices.needsSubclass && selectedSubclass) {
         body.subclass = selectedSubclass
+      }
+
+      // Keeper-specific data
+      const isKeeper = selectedClassOption.class.toLowerCase() === 'keeper'
+      if (isKeeper) {
+        if (selectedGenreDomain) body.keeperGenreDomain = selectedGenreDomain
+        if (selectedKeeperTexts.length > 0) body.keeperNewTexts = selectedKeeperTexts
+        if (selectedKeeperRecitations.length > 0) body.keeperNewRecitations = selectedKeeperRecitations
+        if (keeperSpecialization) body.keeperSpecialization = keeperSpecialization
+        if (genreMasteryChoice === 'second_genre' && selectedSecondGenre) {
+          body.keeperSecondGenre = selectedSecondGenre
+        } else if (genreMasteryChoice === 'mastery') {
+          body.keeperGenreMastery = true
+        }
+        // Auto-grant subclass texts at L6/L11/L15
+        const subKey = (keeperSpecialization || character.subclass || '').toLowerCase()
+        const subTexts = SUBCLASS_TEXTS[subKey]
+        if (subTexts) {
+          const newLevel = selectedClassOption.newLevel
+          const grantedText = subTexts.find(t => t.unlockedAt === newLevel)
+          if (grantedText) {
+            body.keeperSubclassText = grantedText.name
+          }
+        }
       }
 
       // Spell selections
@@ -692,6 +726,376 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 )}
               </section>
             )}
+
+            {/* Keeper: Genre Domain Selection (Level 3) */}
+            {selectedClassOption.class.toLowerCase() === 'keeper' && selectedClassOption.newLevel === 3 && (
+              <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
+                <h3 style={{ color: '#a78bfa' }}>Choose Your Genre Domain</h3>
+                <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                  Your genre defines your scholarly specialization. You'll gain a passive benefit and a bonus text.
+                </p>
+                {classesData.keeper?.genreDomains?.map(genre => (
+                  <div
+                    key={genre.name}
+                    onClick={() => setSelectedGenreDomain(genre.name)}
+                    style={{
+                      padding: '0.75rem',
+                      marginBottom: '0.5rem',
+                      borderRadius: '6px',
+                      border: `2px solid ${selectedGenreDomain === genre.name ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
+                      background: selectedGenreDomain === genre.name ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ fontWeight: 'bold', color: selectedGenreDomain === genre.name ? '#c4b5fd' : '#ccc' }}>
+                      {genre.name}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>{genre.description}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.25rem' }}>
+                      <strong>Passive:</strong> {genre.passive}
+                    </div>
+                    {genre.bonusText && (
+                      <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
+                        <strong>Bonus Text:</strong> {genre.bonusText.name} ({genre.bonusText.weapon})
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {/* Keeper: Specialization or Polymath (Level 6) */}
+            {selectedClassOption.class.toLowerCase() === 'keeper' && selectedClassOption.newLevel === 6 && (
+              <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
+                <h3 style={{ color: '#a78bfa' }}>Specialization or Polymath</h3>
+                <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                  Choose a combat specialization or embrace the Polymath path for breadth over depth.
+                </p>
+                <div
+                  onClick={() => { setKeeperSpecialization('polymath'); setSelectedSubclass('') }}
+                  style={{
+                    padding: '0.75rem',
+                    marginBottom: '0.5rem',
+                    borderRadius: '6px',
+                    border: `2px solid ${keeperSpecialization === 'polymath' ? '#10b981' : 'rgba(255,255,255,0.1)'}`,
+                    background: keeperSpecialization === 'polymath' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', color: keeperSpecialization === 'polymath' ? '#6ee7b7' : '#ccc' }}>
+                    Polymath (Pure Keeper)
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
+                    +2 skill proficiencies, +2 Literary Recall uses, manifest weapons as a free action. Further improvements at L11 and L15.
+                  </div>
+                </div>
+                {classesData.keeper?.subclasses?.map(sub => {
+                  // Get genre interaction for current genre domain
+                  const currentGenre = character.keeper_genre_domain || selectedGenreDomain || ''
+                  const genreKey = currentGenre.toLowerCase().replace(/ /g, '_')
+                  const interaction = sub.genreInteractions?.[genreKey]
+                  const ratingColors = { 'A+': '#22c55e', 'A': '#4ade80', 'B+': '#86efac', 'B': '#94a3b8', 'B-': '#9ca3af', 'C': '#ef4444' }
+
+                  return (
+                    <div
+                      key={sub.name}
+                      onClick={() => { setKeeperSpecialization(sub.name); setSelectedSubclass(sub.name) }}
+                      style={{
+                        padding: '0.75rem',
+                        marginBottom: '0.5rem',
+                        borderRadius: '6px',
+                        border: `2px solid ${keeperSpecialization === sub.name ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
+                        background: keeperSpecialization === sub.name ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 'bold', color: keeperSpecialization === sub.name ? '#c4b5fd' : '#ccc' }}>
+                          {sub.name}
+                        </div>
+                        {interaction && (
+                          <span style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            padding: '0.15rem 0.5rem',
+                            borderRadius: '4px',
+                            background: `${ratingColors[interaction.rating] || '#888'}22`,
+                            color: ratingColors[interaction.rating] || '#888',
+                            border: `1px solid ${ratingColors[interaction.rating] || '#888'}44`
+                          }}>
+                            {currentGenre} Synergy: {interaction.rating}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>{sub.description}</div>
+                      {interaction && (
+                        <div style={{ fontSize: '0.75rem', color: '#aaa', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                          {interaction.synergy}
+                        </div>
+                      )}
+                      {/* Show subclass text they'll get */}
+                      {(() => {
+                        const subKey = sub.name.toLowerCase()
+                        const subText = SUBCLASS_TEXTS[subKey]?.find(t => t.unlockedAt === 6)
+                        if (!subText) return null
+                        return (
+                          <div style={{ fontSize: '0.75rem', color: '#c084fc', marginTop: '0.35rem', padding: '0.3rem 0.5rem', background: 'rgba(192,132,252,0.08)', borderRadius: '4px' }}>
+                            <strong>Bonus Text:</strong> {subText.name} ({subText.weapon}) — {subText.passage.name}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )
+                })}
+              </section>
+            )}
+
+            {/* Keeper: Second Genre Domain or Genre Mastery (Level 15) */}
+            {selectedClassOption.class.toLowerCase() === 'keeper' && selectedClassOption.newLevel === 15 && (
+              <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
+                <h3 style={{ color: '#a78bfa' }}>Second Genre Domain or Genre Mastery</h3>
+                <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                  Deepen your primary Genre ({character.keeper_genre_domain}) with Genre Mastery, or broaden your knowledge with a second Genre Domain.
+                </p>
+
+                {/* Genre Mastery option */}
+                <div
+                  onClick={() => { setGenreMasteryChoice('mastery'); setSelectedSecondGenre('') }}
+                  style={{
+                    padding: '0.75rem',
+                    marginBottom: '0.5rem',
+                    borderRadius: '6px',
+                    border: `2px solid ${genreMasteryChoice === 'mastery' ? '#f59e0b' : 'rgba(255,255,255,0.1)'}`,
+                    background: genreMasteryChoice === 'mastery' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.03)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', color: genreMasteryChoice === 'mastery' ? '#fbbf24' : '#ccc' }}>
+                    Genre Mastery — Deepen {character.keeper_genre_domain}
+                  </div>
+                  {(() => {
+                    const genre = classesData.keeper?.genreDomains?.find(g => g.name === character.keeper_genre_domain)
+                    return genre ? (
+                      <>
+                        <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
+                          <strong>Mastery Capstone:</strong> {genre.masteryCapstone}
+                        </div>
+                      </>
+                    ) : null
+                  })()}
+                </div>
+
+                {/* Second Genre option */}
+                <div
+                  onClick={() => setGenreMasteryChoice('second_genre')}
+                  style={{
+                    padding: '0.75rem',
+                    marginBottom: '0.5rem',
+                    borderRadius: '6px',
+                    border: `2px solid ${genreMasteryChoice === 'second_genre' ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
+                    background: genreMasteryChoice === 'second_genre' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', color: genreMasteryChoice === 'second_genre' ? '#c4b5fd' : '#ccc' }}>
+                    Second Genre Domain
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
+                    Choose a second Genre for its passive benefit and bonus text. More breadth, less depth.
+                  </div>
+                </div>
+
+                {/* Genre picker (only if second genre selected) */}
+                {genreMasteryChoice === 'second_genre' && (
+                  <div style={{ marginTop: '0.75rem', paddingLeft: '0.5rem', borderLeft: '2px solid rgba(167, 139, 250, 0.3)' }}>
+                    {classesData.keeper?.genreDomains
+                      ?.filter(g => g.name !== character.keeper_genre_domain)
+                      .map(genre => (
+                        <div
+                          key={genre.name}
+                          onClick={() => setSelectedSecondGenre(genre.name)}
+                          style={{
+                            padding: '0.6rem',
+                            marginBottom: '0.4rem',
+                            borderRadius: '6px',
+                            border: `1px solid ${selectedSecondGenre === genre.name ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
+                            background: selectedSecondGenre === genre.name ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: selectedSecondGenre === genre.name ? '#c4b5fd' : '#ccc' }}>
+                            {genre.name}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.15rem' }}>{genre.passive}</div>
+                          {genre.bonusText && (
+                            <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.15rem' }}>
+                              Bonus Text: {genre.bonusText.name} ({genre.bonusText.weapon})
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Keeper: Subclass Text Notification (L6/L11/L15) */}
+            {selectedClassOption.class.toLowerCase() === 'keeper' && (() => {
+              const subKey = (keeperSpecialization || character.subclass || '').toLowerCase()
+              const subTexts = SUBCLASS_TEXTS[subKey]
+              if (!subTexts) return null
+              const newLevel = selectedClassOption.newLevel
+              const grantedText = subTexts.find(t => t.unlockedAt === newLevel)
+              if (!grantedText) return null
+              // Don't show at L6 — already shown in the picker above
+              if (newLevel === 6 && keeperSpecialization) return null
+
+              return (
+                <section className="choice-section" style={{ borderLeft: '3px solid #c084fc' }}>
+                  <h3 style={{ color: '#c084fc' }}>New Subclass Text Unlocked</h3>
+                  <div style={{
+                    padding: '0.75rem',
+                    borderRadius: '6px',
+                    background: 'rgba(192, 132, 252, 0.1)',
+                    border: '1px solid rgba(192, 132, 252, 0.3)'
+                  }}>
+                    <div style={{ fontWeight: 'bold', color: '#c4b5fd' }}>{grantedText.name}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>{grantedText.description}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.25rem' }}>
+                      <strong>Weapon:</strong> {grantedText.weapon} | <strong>Passage:</strong> {grantedText.passage.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>
+                      {grantedText.passage.description}
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.5rem' }}>
+                    This text is automatically added to your Library as a {subKey.charAt(0).toUpperCase() + subKey.slice(1)} exclusive.
+                  </p>
+                </section>
+              )
+            })()}
+
+            {/* Keeper: New Texts Selection */}
+            {selectedClassOption.class.toLowerCase() === 'keeper' && (() => {
+              const keeperData = classesData.keeper?.keeperAbilities
+              if (!keeperData) return null
+              const oldLevel = selectedClassOption.currentLevel || 0
+              const newLevel = selectedClassOption.newLevel
+              const oldTexts = keeperData.textsKnown[oldLevel - 1] || 0
+              const newTexts = keeperData.textsKnown[newLevel - 1] || 0
+              const textsToChoose = newTexts - oldTexts
+              if (textsToChoose <= 0) return null
+
+              const existingTexts = JSON.parse(character.keeper_texts || '[]')
+              const availableTexts = newLevel >= 9
+                ? [...STANDARD_TEXTS, ...RARE_TEXTS].filter(t => !existingTexts.includes(t.name))
+                : STANDARD_TEXTS.filter(t => !existingTexts.includes(t.name))
+
+              return (
+                <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
+                  <h3 style={{ color: '#a78bfa' }}>Learn New Text{textsToChoose > 1 ? 's' : ''}</h3>
+                  <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                    Choose {textsToChoose} new text{textsToChoose > 1 ? 's' : ''} for your Library.
+                    {newLevel >= 9 && <span style={{ color: '#c084fc' }}> Rare texts are now available!</span>}
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {availableTexts.map(text => {
+                      const isSelected = selectedKeeperTexts.includes(text.name)
+                      const isDisabled = !isSelected && selectedKeeperTexts.length >= textsToChoose
+                      return (
+                        <div
+                          key={text.name}
+                          onClick={() => {
+                            if (isSelected) setSelectedKeeperTexts(prev => prev.filter(t => t !== text.name))
+                            else if (selectedKeeperTexts.length < textsToChoose) setSelectedKeeperTexts(prev => [...prev, text.name])
+                          }}
+                          style={{
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `1px solid ${isSelected ? '#a78bfa' : text.rare ? 'rgba(192, 132, 252, 0.3)' : 'rgba(255,255,255,0.15)'}`,
+                            background: isSelected ? 'rgba(139, 92, 246, 0.25)' : text.rare ? 'rgba(192, 132, 252, 0.05)' : 'rgba(255,255,255,0.05)',
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isDisabled ? 0.4 : 1,
+                            flex: '1 1 280px',
+                            minWidth: '200px'
+                          }}
+                        >
+                          <div style={{ fontSize: '0.85rem', color: isSelected ? '#c4b5fd' : text.rare ? '#c084fc' : '#ccc', fontWeight: 'bold' }}>
+                            {text.name} {text.rare && '(Rare)'}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                            Weapon: {text.weapon} | Passage: {text.passage.name}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.15rem' }}>
+                            {text.passage.description}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem' }}>
+                    Selected: {selectedKeeperTexts.length}/{textsToChoose}
+                  </p>
+                </section>
+              )
+            })()}
+
+            {/* Keeper: New Recitations */}
+            {selectedClassOption.class.toLowerCase() === 'keeper' && (() => {
+              const keeperData = classesData.keeper?.keeperAbilities
+              if (!keeperData) return null
+              const oldLevel = selectedClassOption.currentLevel || 0
+              const newLevel = selectedClassOption.newLevel
+              const oldRec = keeperData.recitations[oldLevel - 1] || 0
+              const newRec = keeperData.recitations[newLevel - 1] || 0
+              const recToChoose = newRec - oldRec
+              if (recToChoose <= 0) return null
+
+              const existingRec = JSON.parse(character.keeper_recitations || '[]')
+              const availableRec = RECITATIONS.filter(r => !existingRec.includes(r.name))
+
+              return (
+                <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
+                  <h3 style={{ color: '#a78bfa' }}>Learn New Recitation{recToChoose > 1 ? 's' : ''}</h3>
+                  <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                    Choose {recToChoose} new recitation{recToChoose > 1 ? 's' : ''}.
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {availableRec.map(rec => {
+                      const isSelected = selectedKeeperRecitations.includes(rec.name)
+                      const isDisabled = !isSelected && selectedKeeperRecitations.length >= recToChoose
+                      return (
+                        <div
+                          key={rec.name}
+                          onClick={() => {
+                            if (isSelected) setSelectedKeeperRecitations(prev => prev.filter(r => r !== rec.name))
+                            else if (selectedKeeperRecitations.length < recToChoose) setSelectedKeeperRecitations(prev => [...prev, rec.name])
+                          }}
+                          style={{
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `1px solid ${isSelected ? '#a78bfa' : 'rgba(255,255,255,0.15)'}`,
+                            background: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isDisabled ? 0.4 : 1,
+                            flex: '1 1 280px',
+                            minWidth: '200px'
+                          }}
+                        >
+                          <div style={{ fontSize: '0.85rem', color: isSelected ? '#c4b5fd' : '#ccc', fontWeight: 'bold' }}>
+                            {rec.name}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#666' }}>{rec.description}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem' }}>
+                    Selected: {selectedKeeperRecitations.length}/{recToChoose}
+                  </p>
+                </section>
+              )
+            })()}
 
             {/* HP Gain */}
             <section className="choice-section hp-section">
@@ -1222,6 +1626,72 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         <span className="review-value">{selectedSubclass}</span>
                       </div>
                     </div>
+                  )}
+
+                  {/* Keeper Summary */}
+                  {selectedClassOption.class.toLowerCase() === 'keeper' && (
+                    (() => {
+                      const hasGenre = !!selectedGenreDomain
+                      const hasSpec = !!keeperSpecialization
+                      const hasTexts = selectedKeeperTexts.length > 0
+                      const hasRec = selectedKeeperRecitations.length > 0
+                      const hasL15Genre = genreMasteryChoice === 'mastery' || (genreMasteryChoice === 'second_genre' && selectedSecondGenre)
+                      const subKey = (keeperSpecialization || character.subclass || '').toLowerCase()
+                      const subTexts = SUBCLASS_TEXTS[subKey]
+                      const grantedText = subTexts?.find(t => t.unlockedAt === selectedClassOption.newLevel)
+
+                      if (!hasGenre && !hasSpec && !hasTexts && !hasRec && !hasL15Genre && !grantedText) return null
+
+                      return (
+                        <div className="review-card">
+                          <h3 style={{ color: '#a78bfa' }}>Keeper Choices</h3>
+                          {hasGenre && (
+                            <div className="review-row">
+                              <span className="review-label">Genre Domain</span>
+                              <span className="review-value" style={{ color: '#c4b5fd' }}>{selectedGenreDomain}</span>
+                            </div>
+                          )}
+                          {hasSpec && (
+                            <div className="review-row">
+                              <span className="review-label">Specialization</span>
+                              <span className="review-value" style={{ color: keeperSpecialization === 'polymath' ? '#6ee7b7' : '#c4b5fd' }}>
+                                {keeperSpecialization === 'polymath' ? 'Polymath (Pure Keeper)' : keeperSpecialization}
+                              </span>
+                            </div>
+                          )}
+                          {genreMasteryChoice === 'mastery' && (
+                            <div className="review-row">
+                              <span className="review-label">Genre Mastery</span>
+                              <span className="review-value" style={{ color: '#fbbf24' }}>Deepened {character.keeper_genre_domain}</span>
+                            </div>
+                          )}
+                          {genreMasteryChoice === 'second_genre' && selectedSecondGenre && (
+                            <div className="review-row">
+                              <span className="review-label">Second Genre</span>
+                              <span className="review-value" style={{ color: '#c4b5fd' }}>{selectedSecondGenre}</span>
+                            </div>
+                          )}
+                          {grantedText && (
+                            <div className="review-row">
+                              <span className="review-label">Subclass Text</span>
+                              <span className="review-value" style={{ color: '#c084fc' }}>{grantedText.name}</span>
+                            </div>
+                          )}
+                          {hasTexts && (
+                            <div className="review-row">
+                              <span className="review-label">New Texts</span>
+                              <span className="review-value">{selectedKeeperTexts.join(', ')}</span>
+                            </div>
+                          )}
+                          {hasRec && (
+                            <div className="review-row">
+                              <span className="review-label">New Recitations</span>
+                              <span className="review-value">{selectedKeeperRecitations.join(', ')}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()
                   )}
 
                   {/* New Features Summary */}

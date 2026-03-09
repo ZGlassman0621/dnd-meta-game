@@ -235,6 +235,26 @@ function formatCharacterBlock(char, allCharacters) {
     }
   }
 
+  // Keeper abilities (if applicable)
+  if (char.class?.toLowerCase() === 'keeper') {
+    parts.push('');
+    parts.push('KEEPER ABILITIES:');
+    if (char.keeper_recitations && char.keeper_recitations.length > 0) {
+      parts.push(`Recitations (at-will cantrip equivalents): ${char.keeper_recitations.join(', ')}`);
+    }
+    if (char.keeper_texts && char.keeper_texts.length > 0) {
+      parts.push(`Library Texts (each = weapon + Passage): ${char.keeper_texts.join(', ')}`);
+    }
+    if (char.keeper_genre_domain) {
+      parts.push(`Genre Domain: ${char.keeper_genre_domain}`);
+    }
+    if (char.keeper_specialization) {
+      parts.push(`Specialization: ${char.keeper_specialization === 'polymath' ? 'Polymath (pure Keeper)' : char.keeper_specialization}`);
+    }
+    parts.push('Manifest Weapon: bonus action, uses CHA for attack/damage, magical. Each text has a Passage (1/short rest).');
+    parts.push("Keeper's Study: bonus action to mark a creature as Studied (PB/long rest) — extra damage to Studied creatures + learn one fact about them.");
+  }
+
   // Inventory
   if (char.inventory && char.inventory.length > 0) {
     parts.push(`Inventory: ${char.inventory.join(', ')}`);

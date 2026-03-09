@@ -1,4 +1,506 @@
 {
+  "artificer": {
+    "name": "Artificer",
+    "description": "A master of magical invention, blending magic and craftsmanship",
+    "hitDie": 8,
+    "primaryAbility": [
+      "int"
+    ],
+    "dumpStat": "str",
+    "savingThrows": [
+      "con",
+      "int"
+    ],
+    "skillChoices": 2,
+    "skillOptions": [
+      "arcana",
+      "history",
+      "investigation",
+      "medicine",
+      "nature",
+      "perception",
+      "sleight_of_hand"
+    ],
+    "armorProficiencies": [
+      "light",
+      "medium",
+      "shields"
+    ],
+    "weaponProficiencies": [
+      "simple"
+    ],
+    "toolProficiencies": [
+      "Thieves' Tools",
+      "Tinker's Tools",
+      "One type of artisan's tools of your choice"
+    ],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Light Crossbow and 20 Bolts",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Studded Leather Armor",
+            "Scale Mail"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": [
+        "Thieves' Tools",
+        "Tinker's Tools"
+      ]
+    },
+    "startingGold": {
+      "dice": "5d4",
+      "multiplier": 10,
+      "average": 125
+    },
+    "spellcasting": {
+      "ability": "int",
+      "spellsKnown": "All prepared",
+      "cantripsKnown": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ]
+    },
+    "features": [
+      "Magical Tinkering - You can imbue mundane objects with minor magical effects",
+      "Spellcasting - You can cast artificer spells using Intelligence as your spellcasting ability",
+      "Infuse Item - You can imbue mundane items with magical infusions",
+      "The Right Tool for the Job - You can create artisan's tools with 1 hour of work"
+    ],
+    "subclasses": [
+      {
+        "name": "Alchemist",
+        "description": "Master of potions and experimental elixirs",
+        "bonusProficiencies": [
+          "Alchemist's supplies"
+        ],
+        "subclassSpells": {
+          "3": [
+            "Healing Word",
+            "Ray of Sickness"
+          ],
+          "5": [
+            "Flaming Sphere",
+            "Melf's Acid Arrow"
+          ],
+          "9": [
+            "Gaseous Form",
+            "Mass Healing Word"
+          ],
+          "13": [
+            "Blight",
+            "Death Ward"
+          ],
+          "17": [
+            "Cloudkill",
+            "Raise Dead"
+          ]
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tool Proficiency",
+              "description": "You gain proficiency with alchemist's supplies. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
+            },
+            {
+              "name": "Alchemist Spells",
+              "description": "You always have certain spells prepared based on your artificer level. These spells count as artificer spells for you but don't count against your number of prepared spells."
+            },
+            {
+              "name": "Experimental Elixir",
+              "description": "When you finish a long rest, you can magically produce one experimental elixir in an empty flask you touch. Roll on the Experimental Elixir table or choose the effect. As an action, a creature can drink the elixir or administer it. Creating an elixir requires a 1st-level spell slot. Effects: Healing (2d4+Int HP), Swiftness (+10 speed for 1 hour), Resilience (+1 AC for 10 minutes), Boldness (1d4 to attack and saves for 1 minute), Flight (10 ft flying for 10 minutes), Transformation (alter self for 10 minutes). Elixirs last until your next long rest."
+            }
+          ],
+          "5": [
+            {
+              "name": "Alchemical Savant",
+              "description": "When you cast a spell using your alchemist's supplies as the spellcasting focus, you gain a bonus to one roll of the spell. That roll must restore HP or deal acid, fire, necrotic, or poison damage. The bonus equals your Intelligence modifier (minimum +1)."
+            }
+          ],
+          "9": [
+            {
+              "name": "Restorative Reagents",
+              "description": "You can cast Lesser Restoration without expending a spell slot, doing so a number of times equal to your Intelligence modifier (minimum once). You regain all uses when you finish a long rest. Additionally, when a creature drinks an Experimental Elixir you created, the creature gains temporary HP equal to 2d6 + your Intelligence modifier."
+            }
+          ],
+          "15": [
+            {
+              "name": "Chemical Mastery",
+              "description": "You have resistance to acid and poison damage, and you are immune to the poisoned condition. You can cast Greater Restoration and Heal without expending a spell slot, without having the spell prepared, and without providing the material component. Once you cast either spell with this feature, you can't cast that spell again until you finish a long rest."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Armorer",
+        "description": "Magical armor specialist who becomes one with their suit",
+        "bonusProficiencies": [
+          "Heavy armor",
+          "Smith's tools"
+        ],
+        "subclassSpells": {
+          "3": [
+            "Magic Missile",
+            "Thunderwave"
+          ],
+          "5": [
+            "Mirror Image",
+            "Shatter"
+          ],
+          "9": [
+            "Hypnotic Pattern",
+            "Lightning Bolt"
+          ],
+          "13": [
+            "Fire Shield",
+            "Greater Invisibility"
+          ],
+          "17": [
+            "Passwall",
+            "Wall of Force"
+          ]
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tools of the Trade",
+              "description": "You gain proficiency with heavy armor and smith's tools. If you already have a proficiency, you gain proficiency with another artisan's tool of your choice."
+            },
+            {
+              "name": "Armorer Spells",
+              "description": "You always have certain spells prepared based on your artificer level. These count as artificer spells for you but don't count against your prepared spells."
+            },
+            {
+              "name": "Arcane Armor",
+              "description": "As an action, you turn a suit of armor into Arcane Armor. It expands to cover your entire body, you can use it as a spellcasting focus, it attaches armor gauntlets, the armor can't be removed against your will, it replaces missing limbs, and you ignore Strength requirements."
+            },
+            {
+              "name": "Armor Model",
+              "description": "Choose a model: Guardian (Thunder Gauntlets: melee 1d8 thunder, target has disadvantage attacking others; Defensive Field: gain temp HP equal to artificer level as bonus action, uses = proficiency bonus per long rest) or Infiltrator (Lightning Launcher: ranged 90ft 1d6 lightning, +1d6 once per turn; 5 ft walking speed boost; advantage on Stealth). You can change model on short or long rest."
+            }
+          ],
+          "5": [
+            {
+              "name": "Extra Attack",
+              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn."
+            }
+          ],
+          "9": [
+            {
+              "name": "Armor Modifications",
+              "description": "Your Arcane Armor now counts as separate items for infusion purposes: armor (chest), boots, helmet, and the armor's special weapon. Each piece can bear one of your infusions, and the infusions transfer when you change armor. You can also infuse a new item with no limit to how many items you can infuse at once."
+            }
+          ],
+          "15": [
+            {
+              "name": "Perfected Armor",
+              "description": "Guardian gains Perfected: when a Huge or smaller creature you can see ends its turn within 30 feet, you can use your reaction to magically force it to make a Strength save. On failure, pull it up to 30 feet toward you, and if it ends within 5 feet, deal lightning damage equal to your Intelligence modifier. Infiltrator gains Perfected: any creature that takes lightning damage from your Lightning Launcher glimmers until the start of your next turn. While glimmering, it can't benefit from invisibility, and the next attack against it has advantage."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Artillerist",
+        "description": "Master of magical cannons and explosives",
+        "bonusProficiencies": [
+          "Woodcarver's tools"
+        ],
+        "subclassSpells": {
+          "3": [
+            "Shield",
+            "Thunderwave"
+          ],
+          "5": [
+            "Scorching Ray",
+            "Shatter"
+          ],
+          "9": [
+            "Fireball",
+            "Wind Wall"
+          ],
+          "13": [
+            "Ice Storm",
+            "Wall of Fire"
+          ],
+          "17": [
+            "Cone of Cold",
+            "Wall of Force"
+          ]
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tool Proficiency",
+              "description": "You gain proficiency with woodcarver's tools. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
+            },
+            {
+              "name": "Artillerist Spells",
+              "description": "You always have certain spells prepared based on your artificer level. These count as artificer spells for you but don't count against your prepared spells."
+            },
+            {
+              "name": "Eldritch Cannon",
+              "description": "As an action, you create a Small or Tiny magical cannon in an unoccupied space within 5 feet. It has AC 18 and HP equal to 5× your artificer level. It is immune to poison and psychic damage. Choose its type when created: Flamethrower (15 ft cone, Dex save, 2d8 fire), Force Ballista (ranged attack, 2d8 force, push 5 ft), or Protector (10 ft radius, 1d8+Int temp HP). Activate as bonus action; lasts 1 hour. You can create one cannon for free per long rest; additional cannons cost a spell slot."
+            }
+          ],
+          "5": [
+            {
+              "name": "Arcane Firearm",
+              "description": "Using woodcarver's tools, you turn a wand, staff, or rod into an arcane firearm, your spellcasting focus. When you cast an artificer spell through the firearm, roll a d8 and add the result to one of the spell's damage rolls."
+            }
+          ],
+          "9": [
+            {
+              "name": "Explosive Cannon",
+              "description": "Your Eldritch Cannon's damage increases: Flamethrower deals 3d8 fire, Force Ballista deals 3d8 force. Additionally, as an action, you can command the cannon to detonate. Each creature within 20 feet makes a Dex save, taking 3d8 force damage on a failed save (half on success). The cannon is destroyed."
+            }
+          ],
+          "15": [
+            {
+              "name": "Fortified Position",
+              "description": "You and your allies have half cover while within 10 feet of an Eldritch Cannon you created. You can now have two cannons at the same time. If you create a third, one you choose is destroyed. Activating both uses a single bonus action, and each can be a different type."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Battle Smith",
+        "description": "Warrior artificer with a mechanical companion",
+        "bonusProficiencies": [
+          "Martial weapons",
+          "Smith's tools"
+        ],
+        "subclassSpells": {
+          "3": [
+            "Heroism",
+            "Shield"
+          ],
+          "5": [
+            "Branding Smite",
+            "Warding Bond"
+          ],
+          "9": [
+            "Aura of Vitality",
+            "Conjure Barrage"
+          ],
+          "13": [
+            "Aura of Purity",
+            "Fire Shield"
+          ],
+          "17": [
+            "Banishing Smite",
+            "Mass Cure Wounds"
+          ]
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tool Proficiency",
+              "description": "You gain proficiency with smith's tools. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
+            },
+            {
+              "name": "Battle Smith Spells",
+              "description": "You always have certain spells prepared based on your artificer level. These count as artificer spells for you but don't count against your prepared spells."
+            },
+            {
+              "name": "Battle Ready",
+              "description": "You gain proficiency with martial weapons. When you attack with a magic weapon, you can use your Intelligence modifier instead of Strength or Dexterity for the attack and damage rolls."
+            },
+            {
+              "name": "Steel Defender",
+              "description": "You create a Steel Defender, a loyal construct that accompanies you. It uses your proficiency bonus, has HP equal to 5× your artificer level + your Int modifier + the defender's Con modifier × your artificer level. In combat, it shares your initiative and takes its turn immediately after yours. It can take the Dodge action on its own, but requires your bonus action to command it to take another action (Attack, Dash, Disengage, Help, or Repair - 2d8+proficiency HP healed). If it dies, you can revive it after 1 minute or create a new one during a long rest."
+            }
+          ],
+          "5": [
+            {
+              "name": "Extra Attack",
+              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn."
+            }
+          ],
+          "9": [
+            {
+              "name": "Arcane Jolt",
+              "description": "Your magic strikes and your Steel Defender become more powerful. When you or your Steel Defender hits with a magic weapon attack or the defender's Force-Empowered Rend, you can channel magical energy to cause extra effects. The target takes an extra 2d6 force damage, OR one creature or object you choose within 30 feet of the target regains 2d6 hit points. You can use this a number of times equal to your Intelligence modifier (minimum once) per long rest."
+            }
+          ],
+          "15": [
+            {
+              "name": "Improved Defender",
+              "description": "Your Arcane Jolt damage and healing increase to 4d6. Your Steel Defender gains a +2 bonus to AC. Additionally, when your Steel Defender uses its Deflect Attack reaction, the attacker takes force damage equal to 1d4 + your Intelligence modifier."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Forgewright",
+        "description": "A master of the eternal forge, blending arcane power with blacksmithing mastery to craft weapons, armor, and jewelry of legendary quality",
+        "bonusProficiencies": [
+          "Smith's tools",
+          "Jeweler's tools"
+        ],
+        "subclassSpells": {
+          "3": [
+            "Searing Smite",
+            "Identify"
+          ],
+          "5": [
+            "Heat Metal",
+            "Magic Weapon"
+          ],
+          "9": [
+            "Elemental Weapon",
+            "Protection from Energy"
+          ],
+          "13": [
+            "Fabricate",
+            "Stoneskin"
+          ],
+          "17": [
+            "Creation",
+            "Animate Objects"
+          ]
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tool Proficiency",
+              "description": "You gain proficiency with smith's tools and jeweler's tools. If you already have either proficiency, you gain proficiency with one other type of artisan's tools of your choice."
+            },
+            {
+              "name": "Forgewright Spells",
+              "description": "You always have certain spells prepared based on your artificer level. These spells count as artificer spells for you but don't count against your number of prepared spells."
+            },
+            {
+              "name": "Masterwork Crafting",
+              "description": "During a long rest using smith's tools, you can enhance one nonmagical weapon, suit of armor, or shield, turning it into a Masterwork item until your next long rest. A Masterwork weapon gains +1 to damage rolls. Masterwork armor or a shield grants +1 to AC. You can maintain one Masterwork item at a time (two at level 9). Additionally, you can use your smith's tools as a spellcasting focus for your artificer spells."
+            }
+          ],
+          "5": [
+            {
+              "name": "Tempered Artistry",
+              "description": "When you cast a spell that deals fire, force, or thunder damage while using smith's tools or jeweler's tools as your spellcasting focus, you add your Intelligence modifier (minimum +1) to one damage roll of the spell. Additionally, your Masterwork items count as magical for the purpose of overcoming resistance and immunity to nonmagical attacks."
+            }
+          ],
+          "9": [
+            {
+              "name": "Runeforge Adept",
+              "description": "You learn to inscribe arcane runes onto your creations. You can now maintain two Masterwork items simultaneously. When you create a Masterwork item, choose one rune to inscribe upon it: Rune of Flame (weapon: +1d4 fire damage on hit; armor/shield: grants fire resistance), Rune of Frost (weapon: +1d4 cold damage on hit; armor/shield: grants cold resistance), Rune of Thunder (weapon: +1d4 thunder damage on hit; armor/shield: grants thunder resistance), or Rune of Warding (+1 to saving throws on any item). You can change a rune when you recreate a Masterwork item during a long rest. Additionally, you can spend 8 hours of work and 100 gp of materials to craft a nonmagical piece of jewelry (ring, amulet, or circlet) that functions as a spellcasting focus and can hold one of your artificer infusions."
+            }
+          ],
+          "15": [
+            {
+              "name": "Legendary Artifice",
+              "description": "Your mastery of the forge reaches mythic proportions. Your Masterwork items now grant +2 instead of +1 to their respective bonuses. Your rune inscriptions deal 1d6 instead of 1d4 extra damage, and armor/shield runes grant immunity instead of resistance. Once per long rest, you can spend 1 minute working your tools to create a Magnum Opus — choose one effect: Unbreakable Edge (one weapon gains +3 to attack and damage rolls for 1 hour), Adamantine Aegis (one suit of armor becomes immune to critical hits and grants resistance to bludgeoning, piercing, and slashing damage for 1 hour), or Crown Jewel (one piece of jewelry you crafted becomes a concentration-free focus — the next artificer spell you cast through it within 1 hour requires no concentration)."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Warsmith",
+        "description": "A warrior who forges their own weapons and fights with them, channeling the heat of the forge into devastating strikes",
+        "bonusProficiencies": [
+          "Martial weapons",
+          "Smith's tools"
+        ],
+        "subclassSpells": {
+          "3": [
+            "Searing Smite",
+            "Shield"
+          ],
+          "5": [
+            "Heat Metal",
+            "Branding Smite"
+          ],
+          "9": [
+            "Elemental Weapon",
+            "Blinding Smite"
+          ],
+          "13": [
+            "Fire Shield",
+            "Staggering Smite"
+          ],
+          "17": [
+            "Steel Wind Strike",
+            "Destructive Wave"
+          ]
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tool Proficiency",
+              "description": "You gain proficiency with smith's tools. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
+            },
+            {
+              "name": "Warsmith Spells",
+              "description": "You always have certain spells prepared based on your artificer level. These spells count as artificer spells for you but don't count against your number of prepared spells."
+            },
+            {
+              "name": "Soulforged Weapon",
+              "description": "During a long rest using smith's tools, you forge a bond with one weapon you touch, making it your Soulforged Weapon. It becomes magical if it isn't already, you can use Intelligence instead of Strength or Dexterity for its attack and damage rolls, and it returns to your hand if it is within 60 feet when you use a bonus action to recall it. You can bond with one weapon at a time. You can use the bonded weapon as your spellcasting focus for your artificer spells."
+            },
+            {
+              "name": "Battle Ready",
+              "description": "You gain proficiency with martial weapons. Your training at the forge has made you equally skilled at wielding the weapons you create."
+            }
+          ],
+          "5": [
+            {
+              "name": "Extra Attack",
+              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn."
+            },
+            {
+              "name": "Forge Strike",
+              "description": "When you hit a creature with your Soulforged Weapon, you can expend one spell slot to deal extra fire damage to the target. The extra damage is 2d6 for a 1st-level spell slot, plus 1d6 for each spell level higher than 1st, to a maximum of 5d6. The fire damage represents the lingering heat of the forge channeled through your bonded weapon."
+            }
+          ],
+          "9": [
+            {
+              "name": "Tempered in Battle",
+              "description": "You gain resistance to fire damage. When you take damage from a creature within 5 feet of you, you can use your reaction to make one weapon attack with your Soulforged Weapon against that creature, dealing an additional 1d6 fire damage on a hit (Retaliation Strike). You can use this reaction a number of times equal to your Intelligence modifier (minimum 1), regaining all uses on a long rest. Additionally, your Soulforged Weapon gains a +1 bonus to attack and damage rolls. This bonus doesn't stack with existing magical bonuses — use the higher value."
+            }
+          ],
+          "15": [
+            {
+              "name": "Avatar of the Forge",
+              "description": "Your Soulforged Weapon gains a +2 bonus to attack and damage rolls (doesn't stack with existing bonuses — use the higher value). Your Forge Strike deals an additional 1d6 fire damage per spell slot level expended. Once per long rest, as a bonus action, you can enter Living Forge form for 1 minute: you are wreathed in forge-fire (creatures that hit you with melee attacks take 1d8 fire damage), your Soulforged Weapon attacks deal an extra 1d8 fire damage, you are immune to fire damage, and you shed bright light in a 30-foot radius and dim light for an additional 30 feet."
+            }
+          ]
+        }
+      }
+    ]
+  },
   "barbarian": {
     "name": "Barbarian",
     "description": "A fierce warrior of primitive background who can enter a battle rage",
@@ -801,6 +1303,263 @@
             {
               "name": "Perfect Reflection",
               "description": "When a creature you can see targets you with an attack, you can use your reaction to swap places with one of your Mirror Image duplicates. The attack targets the duplicate instead. Additionally, when your last Mirror Image duplicate is destroyed, you can use your reaction to cast Mirror Image without expending a spell slot. You can use this feature a number of times equal to your Charisma modifier, and you regain all expended uses when you finish a long rest."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "blood_hunter": {
+    "name": "Blood Hunter",
+    "description": "A fanatical slayer that uses forbidden blood magic to hunt down monstrous foes",
+    "hitDie": 10,
+    "primaryAbility": [
+      "int"
+    ],
+    "dumpStat": "cha",
+    "savingThrows": [
+      "dex",
+      "int"
+    ],
+    "skillChoices": 3,
+    "skillOptions": [
+      "acrobatics",
+      "arcana",
+      "athletics",
+      "history",
+      "insight",
+      "investigation",
+      "religion",
+      "survival"
+    ],
+    "armorProficiencies": [
+      "light",
+      "medium",
+      "shields"
+    ],
+    "weaponProficiencies": [
+      "simple",
+      "martial"
+    ],
+    "toolProficiencies": [
+      "Alchemist's supplies"
+    ],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "A Martial Weapon",
+            "Two Simple Weapons"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Light Crossbow and 20 Bolts",
+            "Hand Crossbow and 20 Bolts"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": [
+        "Studded Leather Armor"
+      ]
+    },
+    "startingGold": {
+      "dice": "4d4",
+      "multiplier": 10,
+      "average": 100
+    },
+    "features": [
+      "Hunter's Bane - You have advantage on Survival checks to track fey, fiends, and undead, and on Intelligence checks to recall information about them",
+      "Blood Maledict - You can channel your vital essence to curse enemies through hemocraft magic. You learn blood curses as you gain levels",
+      "Crimson Rite - You can imbue your weapon with elemental energy at the cost of your own vitality, dealing extra rite damage on each hit",
+      "Fighting Style - You adopt a particular style of fighting as your specialty",
+      "Extra Attack - You can attack twice whenever you take the Attack action",
+      "Brand of Castigation - You brand a creature with hemocraft magic, dealing psychic damage when it harms you",
+      "Dark Augmentation - Your speed increases by 5 feet and you gain a bonus to Intelligence, Wisdom, and Charisma saving throws",
+      "Brand of Tethering - Your brand prevents creatures from using the Dash action or teleporting",
+      "Sanguine Mastery - You can reroll your hemocraft die and regain Blood Maledict uses on critical hits"
+    ],
+    "subclasses": [
+      {
+        "name": "Order of the Ghostslayer",
+        "description": "Ghostslayers seek to destroy undead wherever they lurk, channeling the power of their hemocraft to create radiant rites",
+        "source": "Critical Role",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Rite of the Dawn",
+              "description": "Your Crimson Rite damage type becomes radiant. While active, your weapon sheds bright light in a 20-foot radius. You gain resistance to necrotic damage and deal an additional hemocraft die of damage against undead."
+            },
+            {
+              "name": "Curse Specialist",
+              "description": "Your blood curses can affect any creature type, regardless of whether it has blood."
+            }
+          ],
+          "7": [
+            {
+              "name": "Aether Walk",
+              "description": "As a bonus action, you can step into the Ethereal Plane. You can move through creatures and objects as difficult terrain, and can see into the Material Plane within 30 feet. You take 1d10 force damage if you end your turn inside an object. You can use this feature once per short or long rest, twice at 15th level."
+            }
+          ],
+          "11": [
+            {
+              "name": "Brand of Sundering",
+              "description": "When you hit a branded creature with a weapon for which you have an active Crimson Rite, you deal an additional hemocraft die of rite damage. The brand also prevents the creature from moving through creatures or objects."
+            }
+          ],
+          "15": [
+            {
+              "name": "Blood Curse of the Exorcist",
+              "description": "You learn the Blood Curse of the Exorcist. You can end the charmed, frightened, or possessed condition on a creature. When amplified, the creature imposing the condition takes 3d6 psychic damage and must save or be stunned until the end of your next turn."
+            }
+          ],
+          "18": [
+            {
+              "name": "Rite Revival",
+              "description": "When you are reduced to 0 hit points while you have an active Crimson Rite, you can end all your active rites to drop to 1 hit point instead. You can use this feature once per long rest."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Order of the Lycan",
+        "description": "Lycans embrace a controlled form of lycanthropy, transforming into fearsome hybrid forms to tear apart their enemies",
+        "source": "Critical Role",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Heightened Senses",
+              "description": "You gain advantage on Wisdom (Perception) checks that rely on hearing or smell."
+            },
+            {
+              "name": "Hybrid Transformation",
+              "description": "As a bonus action, you can transform into a hybrid lycanthropic form for up to 1 hour (once per short rest). While transformed: Feral Might gives advantage on Strength checks and saves and +1 to melee damage; Resilient Hide grants resistance to nonmagical bludgeoning, piercing, and slashing damage (except silver) and +1 AC without heavy armor; Predatory Strikes lets you apply Crimson Rite to unarmed strikes (1d6 base) and make a bonus unarmed strike; Bloodlust forces a DC 8 Wisdom save when below half HP or you must attack the nearest creature."
+            }
+          ],
+          "7": [
+            {
+              "name": "Stalker's Prowess",
+              "description": "Your speed increases by 10 feet. Your long jump distance increases by 10 feet and high jump by 3 feet. Your unarmed strikes in hybrid form gain a +1 bonus to attack rolls."
+            }
+          ],
+          "11": [
+            {
+              "name": "Advanced Transformation",
+              "description": "You can use Hybrid Transformation twice per short rest. While transformed and below half HP, you regenerate hit points equal to 1 + your Constitution modifier at the start of each turn. Your Feral Might melee damage bonus increases to +2."
+            }
+          ],
+          "15": [
+            {
+              "name": "Brand of the Voracious",
+              "description": "You have advantage on Bloodlust saving throws. While in hybrid form, you have advantage on attack rolls against branded creatures."
+            }
+          ],
+          "18": [
+            {
+              "name": "Hybrid Transformation Mastery",
+              "description": "You can use Hybrid Transformation an unlimited number of times per rest and the form lasts indefinitely. Your Feral Might melee damage bonus increases to +3. You learn the Blood Curse of the Howl: creatures within 30 feet must succeed on a Wisdom save or become frightened of you."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Order of the Mutant",
+        "description": "Mutants use forbidden alchemy to create mutagenic formulas that grant them powerful—but dangerous—physical enhancements",
+        "source": "Critical Role",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Mutagencraft",
+              "description": "You learn four mutagen formulas that you can create and consume as a bonus action. Each mutagen grants a benefit and imposes a drawback for 1 hour. Formulas include options like: Celerity (+DEX, -WIS), Potency (+STR, -DEX), Sagacity (+INT, -CHA), and others. You learn additional formulas at levels 7, 11, 15, and 18. You can create one mutagen per short rest."
+            }
+          ],
+          "7": [
+            {
+              "name": "Strange Metabolism",
+              "description": "You are immune to the poisoned condition and poison damage. As a bonus action, you can ignore the negative effects of one active mutagen for 1 minute. You can use this feature once per long rest."
+            }
+          ],
+          "11": [
+            {
+              "name": "Brand of Axiom",
+              "description": "Branded creatures cannot benefit from invisibility or illusion magic. If a branded creature is in an alternate form (such as from polymorph), it must succeed on a Wisdom save or revert to its true form and be stunned until the end of your next turn."
+            }
+          ],
+          "15": [
+            {
+              "name": "Blood Curse of Corrosion",
+              "description": "You learn the Blood Curse of Corrosion. As a bonus action, you force a creature to make a Constitution save or become poisoned. When amplified, the target takes 4d6 necrotic damage at the start of each turn while poisoned this way."
+            }
+          ],
+          "18": [
+            {
+              "name": "Exalted Mutation",
+              "description": "As a bonus action, you can end one active mutagen and activate a different one you know without expending a use of Mutagencraft. You can use this a number of times equal to your Hemocraft modifier per long rest."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Order of the Profane Soul",
+        "description": "Profane Soul blood hunters forge pacts with lesser otherworldly beings, gaining warlock-like spellcasting alongside their hemocraft abilities",
+        "source": "Critical Role",
+        "bonusProficiencies": [],
+        "spellcasting": {
+          "ability": "int"
+        },
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Otherworldly Patron",
+              "description": "You forge a pact with a lesser patron. Choose from The Archfey, The Fiend, The Great Old One, The Undying, The Celestial, or The Hexblade. Your patron grants you specific rite focus benefits when your Crimson Rite is active."
+            },
+            {
+              "name": "Pact Magic",
+              "description": "You gain the ability to cast warlock spells using Intelligence as your spellcasting ability. You learn two cantrips and have pact magic spell slots that recharge on a short rest. Spell progression is slower than a full warlock, reaching 4th-level spells at most."
+            },
+            {
+              "name": "Rite Focus",
+              "description": "While your Crimson Rite is active on a weapon, it serves as your spellcasting focus. Your patron grants a unique benefit: Archfey — charm resistance; Fiend — bonus fire damage; Great Old One — psychic messaging; Undying — spare the dying at range; Celestial — bonus healing; Hexblade — critical hits on 19-20."
+            }
+          ],
+          "7": [
+            {
+              "name": "Mystic Frenzy",
+              "description": "When you use your action to cast a cantrip, you can make one weapon attack as a bonus action."
+            },
+            {
+              "name": "Revealed Arcana",
+              "description": "Your patron grants you a spell you can cast once per long rest without expending a spell slot: Archfey — Blur; Fiend — Scorching Ray; Great Old One — Detect Thoughts; Undying — Silence; Celestial — Lesser Restoration; Hexblade — Branding Smite."
+            }
+          ],
+          "11": [
+            {
+              "name": "Brand of the Sapping Scar",
+              "description": "Branded creatures have disadvantage on saving throws against your warlock spells."
+            }
+          ],
+          "15": [
+            {
+              "name": "Unsealed Arcana",
+              "description": "Your patron grants an additional spell you can cast once per long rest without expending a slot: Archfey — Slow; Fiend — Fireball; Great Old One — Hunger of Hadar; Undying — Bestow Curse; Celestial — Revivify; Hexblade — Blink."
+            }
+          ],
+          "18": [
+            {
+              "name": "Blood Curse of the Soul Eater",
+              "description": "You learn the Blood Curse of the Soul Eater. When a creature within 30 feet drops to 0 HP, you gain advantage on attack rolls and resistance to all damage until the end of your next turn. When amplified, you also regain one expended warlock spell slot."
             }
           ]
         }
@@ -2902,6 +3661,444 @@
       }
     ]
   },
+  "keeper": {
+    "name": "Keeper",
+    "description": "A scholar who draws power from literature, language, and myth — manifesting weapons from the stories they've studied and invoking Passages of power through sheer force of personality",
+    "hitDie": 8,
+    "primaryAbility": [
+      "cha"
+    ],
+    "secondaryAbility": "int",
+    "dumpStat": "str",
+    "savingThrows": [
+      "cha",
+      "int"
+    ],
+    "skillChoices": 3,
+    "skillOptions": [
+      "arcana",
+      "deception",
+      "history",
+      "insight",
+      "investigation",
+      "perception",
+      "performance",
+      "persuasion"
+    ],
+    "armorProficiencies": [
+      "light"
+    ],
+    "weaponProficiencies": [
+      "simple"
+    ],
+    "toolProficiencies": [
+      "Calligrapher's Supplies"
+    ],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Shortsword",
+            "Any Simple Weapon"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Scholar's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": [
+        "Leather Armor",
+        "Calligrapher's Supplies",
+        "A Worn Leather-Bound Journal",
+        "Two Daggers"
+      ]
+    },
+    "startingGold": {
+      "dice": "4d4",
+      "multiplier": 10,
+      "average": 100
+    },
+    "keeperAbilities": {
+      "ability": "cha",
+      "secondaryAbility": "int",
+      "textsKnown": [3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 14],
+      "genreBonusTexts": [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2],
+      "recitations": [2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6],
+      "recitationDamage": ["1d8", "1d8", "1d8", "1d8", "2d8", "2d8", "2d8", "2d8", "2d8", "2d8", "3d8", "3d8", "3d8", "3d8", "3d8", "3d8", "4d8", "4d8", "4d8", "4d8"],
+      "manifestWeaponBonusDie": [null, null, null, null, null, null, null, null, null, null, "1d6", "1d6", "1d6", "1d6", "1d6", "1d6", "1d6", "1d6", "1d6", "1d6"]
+    },
+    "features": [
+      "Recitation - Short verbal invocations (cantrip equivalent). Deal 1d8 psychic/force damage, grant temp HP, or force a WIS save. Scales at L5/11/17",
+      "Manifest Weapon - Bonus action: summon a weapon from a text you know. Uses CHA for attack and damage. Counts as magical. Lasts 1 minute or until dismissed",
+      "Keeper's Library - You know texts that each grant a weapon type and a once-per-short-rest Passage (spell-like effect). Learn more texts as you level",
+      "Keeper's Insight - Proficiency in History (expertise if already proficient)"
+    ],
+    "featuresByLevel": {
+      "1": [
+        {
+          "name": "Recitation",
+          "description": "You learn 2 Recitations — short verbal invocations that function like cantrips. They require no material components and can be used at will. Recitations deal 1d8 damage (psychic, force, or radiant — chosen when learned), grant temporary hit points, or force saving throws. Damage scales: 2d8 at L5, 3d8 at L11, 4d8 at L17. Range: 60 feet for attacks, 30 feet for buffs."
+        },
+        {
+          "name": "Manifest Weapon",
+          "description": "As a bonus action, you manifest a weapon from a text in your Library. The weapon appears in your hand, shimmering with narrative energy. You use your Charisma modifier for attack and damage rolls with manifested weapons. The weapon counts as magical, lasts 1 minute or until dismissed (no action required), and takes the form appropriate to its source text. You can only have one manifested weapon at a time (until L17). At L11, manifested weapons deal an extra 1d6 force, radiant, or psychic damage (chosen when you learn the text)."
+        },
+        {
+          "name": "Keeper's Library",
+          "description": "You maintain a Library of studied texts. You know 3 texts at L1, gaining more as you level. Each text grants two things: (1) A specific weapon type you can manifest, and (2) A Passage — a powerful effect you can invoke once per short rest by reciting a key line from the text. Passages use your Keeper save DC (8 + proficiency bonus + CHA modifier). When you gain a Keeper level, you can replace one text you know with a different one."
+        },
+        {
+          "name": "Keeper's Insight",
+          "description": "You gain proficiency in History. If you are already proficient in History, you gain expertise instead (double your proficiency bonus for History checks)."
+        }
+      ],
+      "2": [
+        {
+          "name": "Literary Recall",
+          "description": "You can draw upon deep reserves of knowledge to re-invoke Passages you've already used. A number of times equal to your Charisma modifier (minimum 1) per long rest, you can use a Passage from one of your texts even if you've already expended it since your last short rest."
+        },
+        {
+          "name": "Keeper's Study",
+          "description": "As a bonus action, you can focus your scholarly knowledge on one creature you can see within 60 feet, marking it as 'Studied' (proficiency bonus times per long rest, lasts 1 minute or until you study a different creature). While a creature is Studied: your Recitations and manifested weapon attacks deal an extra 1d4 damage to it (increases to 1d6 at L9, 1d8 at L15), and you learn one fact about it — its creature type, one resistance/vulnerability/immunity, or its highest ability score."
+        }
+      ],
+      "3": [
+        {
+          "name": "Genre Domain",
+          "description": "You choose a Genre Domain — a literary genre that defines your scholarly specialization. Your Genre grants a passive benefit and one bonus text (added to your Texts Known, not counting against your limit). Choose from: History, Tactics, Romance, Poetry, Mythology, Political Science, Natural Philosophy, or Forbidden Texts. At L15, you choose a second Genre Domain or deepen your first with Genre Mastery."
+        }
+      ],
+      "5": [
+        {
+          "name": "Extra Attack",
+          "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn."
+        },
+        {
+          "name": "Eidetic Memory",
+          "description": "Your mind becomes a perfect archive. You no longer need physical books to access your Library — all texts are perfectly recalled. You cannot be disarmed of your scholarly focus, your Library cannot be destroyed or stolen, and you have advantage on Intelligence checks to recall information from any text you have ever read (not just Library texts)."
+        }
+      ],
+      "6": [
+        {
+          "name": "Keeper Specialization or Polymath",
+          "description": "You choose one of two paths. SPECIALIZATION: Choose a subclass (Lorewarden, Mythslinger, Rhetorician, or Versebinder) that defines your combat role, gaining its L6 feature. OR POLYMATH: You embrace breadth over depth — gain proficiency in 2 additional skills, increase your Literary Recall uses by 2, and you can manifest weapons as a free action instead of a bonus action. A pure Keeper who chooses Polymath gains further improvements at L11 and L15."
+        }
+      ],
+      "7": [
+        {
+          "name": "Annotated Texts",
+          "description": "Your deep study of your texts reveals hidden power. Once per turn when you hit a creature with a manifested weapon, you can add your Intelligence modifier to the damage roll."
+        }
+      ],
+      "9": [
+        {
+          "name": "Expanded Library",
+          "description": "You unlock access to Rare texts — ancient, powerful works with stronger Passages and exotic weapon manifestations. When you learn a new text from this level onward, you can choose from the Rare text list in addition to the standard list."
+        }
+      ],
+      "10": [
+        {
+          "name": "Compelling Rhetoric",
+          "description": "Once per short rest, you can use an action to speak with such authority that a creature within 60 feet that can hear and understand you must make a Wisdom saving throw against your Keeper save DC. On a failure, the creature is charmed or frightened (your choice) for 1 minute. The creature can repeat the saving throw at the end of each of its turns, ending the effect on a success."
+        }
+      ],
+      "11": [
+        {
+          "name": "Manifest Weapon Improvement",
+          "description": "Your manifested weapons now deal an extra 1d6 damage on each hit. The damage type is force, radiant, or psychic (chosen when you learn the text that grants the weapon)."
+        }
+      ],
+      "13": [
+        {
+          "name": "Living Text",
+          "description": "Your manifested weapons take on a life of their own. Once per short rest, you can use one of the following: (1) Your manifested weapon makes an opportunity attack on its own when a hostile creature moves within its reach, using your attack modifier. (2) Your manifested weapon hovers defensively around you, granting you +1 AC until the start of your next turn."
+        }
+      ],
+      "14": [
+        {
+          "name": "Unwritten Knowledge",
+          "description": "When you defeat a notable enemy (CR equal to or greater than your level) or discover a site of significant lore (DM's discretion), you can learn a new text inspired by the experience. This text is added to your Library and does not count against your Texts Known limit. You can hold a number of Unwritten texts equal to your Intelligence modifier (minimum 1)."
+        }
+      ],
+      "17": [
+        {
+          "name": "Masterwork Manifest",
+          "description": "You can manifest TWO weapons simultaneously from different texts. Both weapons are active and you have access to both of their Passages. When you take the Attack action, you can attack once with each weapon. You can dismiss either weapon independently."
+        }
+      ],
+      "18": [
+        {
+          "name": "Keeper's Authority",
+          "description": "Your knowledge commands respect. You have advantage on all Charisma checks related to knowledge, lore, intellectual discourse, or asserting authority through expertise. Additionally, creatures you are conversing with have disadvantage on Insight checks to determine if you are lying about scholarly or historical matters."
+        }
+      ],
+      "20": [
+        {
+          "name": "Living Library",
+          "description": "Once per long rest, you can become the Library incarnate for 1 minute. During this time: you can switch your manifested weapon to any text in your Library without using an action; all of your expended Passages are immediately restored; your Recitations deal double damage; and you have resistance to psychic and force damage."
+        }
+      ]
+    },
+    "genreDomains": [
+      {
+        "name": "History",
+        "description": "You specialize in chronicles, timelines, and the rise and fall of civilizations",
+        "passive": "You have advantage on Intelligence checks to recall historical events, people, and places. When you use a Passage that targets an enemy, you can learn one piece of information about them (creature type, a resistance, or a vulnerability).",
+        "masteryCapstone": "Once per long rest, you can declare a 'Lesson of the Past' — choose one creature you can see. For 1 minute, you and your allies have advantage on attack rolls against it as you recite its historical weaknesses.",
+        "bonusText": {
+          "name": "Chronicle of Fallen Empires",
+          "weapon": "Warhammer",
+          "passage": "Declare one creature type (humanoid, undead, fiend, etc.). For 1 minute, your manifested weapons deal an extra 1d6 damage to creatures of that type."
+        }
+      },
+      {
+        "name": "Tactics",
+        "description": "You specialize in military treatises, battle formations, and the art of war",
+        "passive": "You add your Intelligence modifier to your initiative rolls. On the first round of combat, your manifested weapon attacks deal an extra 1d6 damage.",
+        "masteryCapstone": "Once per long rest, you can issue a 'Battle Plan' — for 1 minute, up to 4 allies who can hear you add your Intelligence modifier to their initiative rolls (retroactively reordering if in combat) and gain advantage on their first attack each turn.",
+        "bonusText": {
+          "name": "The Art of the Decisive Blow",
+          "weapon": "Longsword",
+          "passage": "Choose up to 3 allies within 30 feet. Until the end of your next turn, those allies can add your Charisma modifier to their next attack roll."
+        }
+      },
+      {
+        "name": "Romance",
+        "description": "You specialize in love epics, tragedies, and courtly tales of devotion and sacrifice",
+        "passive": "You add your Charisma modifier as a bonus to Persuasion and Deception checks. When an ally within 30 feet is reduced to 0 HP, you can use your reaction to give them temporary HP equal to your Keeper level (once per short rest).",
+        "masteryCapstone": "Once per long rest, you invoke a 'Lover's Vow' — choose one ally. For 1 minute, whenever that ally takes damage, you can choose to take half of it instead (no action required), and whenever you take damage, that ally can choose to take half of it instead.",
+        "bonusText": {
+          "name": "The Ballad of Twin Hearts",
+          "weapon": "Rapier",
+          "passage": "Choose one ally within 60 feet. For 1 minute, whenever you hit with a manifested weapon attack, that ally regains HP equal to your Charisma modifier."
+        }
+      },
+      {
+        "name": "Poetry",
+        "description": "You specialize in verse, meter, rhythm, and the power of spoken word",
+        "passive": "Your Recitations have their range doubled (120 feet for attacks, 60 feet for buffs). When you use the same Recitation on consecutive turns, its damage increases by 1d8 on the second use (resets if you switch or skip).",
+        "masteryCapstone": "Once per long rest, you perform a 'Magnum Opus' — for 1 minute, all your Recitations deal maximum damage and their save DCs increase by 2.",
+        "bonusText": {
+          "name": "Verses of the First Song",
+          "weapon": "Quarterstaff",
+          "passage": "You speak a cascading verse. Each creature of your choice within 30 feet must make a Wisdom save or be stunned until the end of your next turn."
+        }
+      },
+      {
+        "name": "Mythology",
+        "description": "You specialize in creation myths, divine tales, and prophecy",
+        "passive": "Choose a damage type when you select this Genre: fire, cold, lightning, or radiant. You gain resistance to that damage type. Your Passages that deal damage can deal that type instead of their normal type.",
+        "masteryCapstone": "Once per long rest, you invoke a 'Mythic Invocation' — for 1 minute, your manifested weapons deal an extra 2d6 damage of your chosen type, and you gain immunity (instead of resistance) to that damage type.",
+        "bonusText": {
+          "name": "The Genesis Codex",
+          "weapon": "Greataxe",
+          "passage": "You invoke a creation myth. Choose a point within 60 feet. A 20-foot radius burst of primordial energy erupts — each creature in the area makes a DEX save, taking 3d8 damage of your chosen type on a failure (half on success)."
+        }
+      },
+      {
+        "name": "Political Science",
+        "description": "You specialize in treatises on power, law, governance, and manipulation",
+        "passive": "You gain expertise in Insight (double proficiency bonus). When you use Compelling Rhetoric (L10), the target has disadvantage on its initial saving throw.",
+        "masteryCapstone": "Once per long rest, you issue an 'Edict of Authority' — choose up to 6 creatures within 60 feet that can hear you. Each must make a Wisdom save or be compelled to follow a one-sentence command (as the Command spell, but lasting 1 minute). Creatures can repeat the save at the end of each of their turns.",
+        "bonusText": {
+          "name": "Machiavelli's Treatise on Power",
+          "weapon": "Shortsword",
+          "passage": "Choose one creature within 60 feet that can hear you. It must make a Wisdom save or regard one other creature of your choice as a trusted ally for 1 minute (redirecting its hostility if in combat)."
+        }
+      },
+      {
+        "name": "Natural Philosophy",
+        "description": "You specialize in bestiaries, herbalism, and elemental theory",
+        "passive": "Your manifested weapons can deal fire, cold, lightning, or acid damage instead of their normal type (chosen each time you manifest). You have advantage on Nature and Survival checks.",
+        "masteryCapstone": "Once per long rest, you invoke a 'Theorem of Elements' — for 1 minute, each time you hit with a manifested weapon, the target must make a CON save or suffer an elemental affliction: fire (ongoing 1d6 fire), cold (speed halved), lightning (can't take reactions), or acid (AC reduced by 2). Your choice each hit.",
+        "bonusText": {
+          "name": "Linnaeus's Bestiary of the Wild",
+          "weapon": "Handaxe",
+          "passage": "Choose a creature you can see. You recall everything about its kind — for 1 minute, you know its AC, HP, resistances, vulnerabilities, and immunities. Your attacks against it score a critical hit on 19-20."
+        }
+      },
+      {
+        "name": "Forbidden Texts",
+        "description": "You specialize in banned works, heretical writings, and truths too dangerous to be spoken freely",
+        "passive": "Your Recitations and Passages can deal necrotic or psychic damage instead of their normal type. When you use a Passage, you can choose to take 1d6 necrotic damage (which can't be reduced) to increase the Passage's damage by 2d6 or its healing by 2d6.",
+        "masteryCapstone": "Once per long rest, you open the 'Forbidden Chapter' — for 1 minute, your Passages cost no action to use (you can invoke one as part of an attack), but each Passage used deals 1d6 necrotic damage to you. Your Recitations deal an additional 2d8 necrotic damage.",
+        "bonusText": {
+          "name": "The Unnamed Codex",
+          "weapon": "Flail",
+          "passage": "You speak a forbidden truth. Choose one creature within 60 feet — it must make an Intelligence save or take 4d8 psychic damage and be stunned until the end of your next turn. On a success, it takes half damage and isn't stunned."
+        }
+      }
+    ],
+    "subclasses": [
+      {
+        "name": "Lorewarden",
+        "description": "Tank and melee specialist who draws from protective texts and guardian myths, manifesting shields, wards, and heavy weapons to stand between danger and allies",
+        "flavor": "The Lorewarden is the scholar who read every account of every siege, every last stand, every oath kept unto death — and made those stories into armor. Where other Keepers recite from a distance, the Lorewarden steps forward, manifesting shields of narrative force and weapons heavy with the weight of legend. They are the ones who read about the three hundred at Thermopylae and thought: 'I can do that.' Often former soldiers, temple guardians, or bodyguards who turned to scholarship, Lorewardens carry themselves with quiet authority. They don't need to raise their voice — the shield they conjure from the Fall of Myth Drannor speaks for them.",
+        "quote": "I have read how empires fall. I will not let this party be one of them.",
+        "archetypeFeels": "Captain America with a library card. Brienne of Tarth quoting military history. The professor who is also somehow the toughest person in the room.",
+        "genreInteractions": {
+          "history": { "rating": "B+", "synergy": "Learning enemy facts feeds your defensive positioning — know what's coming before it hits." },
+          "tactics": { "rating": "A+", "synergy": "When you use Guardian's Manifest reaction on the first round of combat, your Tactics first-round bonus damage applies to the next ally attack against that attacker." },
+          "romance": { "rating": "A", "synergy": "Your protective reaction stacks with Romance's temp HP on ally drop — you prevent death and cushion the blow." },
+          "poetry": { "rating": "B", "synergy": "Doubled Recitation range is less useful for a melee defender, though consecutive bonus damage helps." },
+          "mythology": { "rating": "A", "synergy": "Resistance to a damage type plus your +2 AC shield makes you exceptionally durable against that element." },
+          "political_science": { "rating": "B", "synergy": "Insight expertise and Compelling Rhetoric help control enemies, but you're better at tanking than talking." },
+          "natural_philosophy": { "rating": "B+", "synergy": "Elemental weapon types plus Guardian's Manifest — when you use Theorem of Elements, afflictions last 1 additional round while your shield is active." },
+          "forbidden_texts": { "rating": "C", "synergy": "Self-damage to boost Passages directly contradicts your role as the party's durable frontliner." }
+        },
+        "featuresByLevel": {
+          "6": [
+            {
+              "name": "Guardian's Manifest",
+              "description": "When you manifest a weapon, you can also manifest a shield of narrative energy, gaining +2 AC while the weapon is active. Additionally, when a creature within 5 feet of you hits an ally with an attack, you can use your reaction to impose disadvantage on the attack roll (before the DM says whether it hits). You can use this reaction a number of times equal to your proficiency bonus per long rest."
+            }
+          ],
+          "11": [
+            {
+              "name": "Bastion of Lore",
+              "description": "While you have a manifested weapon, you and each ally within 10 feet of you gain a bonus to saving throws equal to your Intelligence modifier (minimum +1). Additionally, when you use Extra Attack, you can replace one attack with a Passage invocation."
+            }
+          ],
+          "15": [
+            {
+              "name": "Saga of the Unbreakable",
+              "description": "Once per long rest, when you or an ally within 30 feet would be reduced to 0 HP, you can invoke a legendary guardian tale. The target instead drops to 1 HP, gains temporary HP equal to your Keeper level + your Charisma modifier, and has resistance to all damage until the start of your next turn."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Mythslinger",
+        "description": "Ranged striker who draws from hunter legends and marksman epics, manifesting legendary bows, crossbows, and thrown weapons to fight from a distance",
+        "flavor": "The Mythslinger read every story about the impossible shot — the arrow that split the moon, the bolt that pinned a dragon's shadow to the ground, the stone that felled a giant — and decided those stories were instruction manuals. Where other Keepers recite up close, the Mythslinger stands on a ridge half a mile away and lets the legends do the talking. They manifest bows strung with epic tension and crossbows loaded with narrative inevitability. Every shot carries the weight of a thousand hunting tales, and when a Mythslinger draws back, even the target knows — somewhere in a story, this already happened. Often former rangers, scouts, or competitive archers who discovered that the best marksmanship guides were actually mythology, Mythslingers are patient, precise, and absolutely lethal at distances that shouldn't be possible.",
+        "quote": "I read about an archer who shot an arrow into next week. Hold still — I want to try something.",
+        "archetypeFeels": "Hawkeye if he studied folklore instead of going to the circus. Legolas with a bibliography. The sniper who quotes poetry before pulling the trigger.",
+        "genreInteractions": {
+          "history": { "rating": "B+", "synergy": "Learning enemy info at range helps you pick high-value targets and exploit vulnerabilities from safety." },
+          "tactics": { "rating": "A+", "synergy": "On the first round of combat, Legendary Aim bonus damage applies to ALL attacks, not just one — devastating opening volley." },
+          "romance": { "rating": "C", "synergy": "Temp HP on ally drop and social bonuses don't help a ranged damage dealer fighting from 150 feet away." },
+          "poetry": { "rating": "A", "synergy": "Doubled Recitation range (120 ft) plus Legendary Aim range (150/600 ft) gives you unmatched reach for both attacks and utility." },
+          "mythology": { "rating": "A+", "synergy": "When The Shot That Echoes crits, the AoE damage uses your Mythology chosen type instead of thunder. Mythic Invocation's +2d6 applies to every Legendary Aim shot." },
+          "political_science": { "rating": "C", "synergy": "Insight expertise and social debuffs don't help you shoot things from 600 feet away." },
+          "natural_philosophy": { "rating": "A+", "synergy": "Elemental arrows at 150 ft range. Theorem of Elements afflictions on every hit creates a field of elemental devastation." },
+          "forbidden_texts": { "rating": "A", "synergy": "Self-damage is SAFE at 150 ft range — burn 1d6 HP for +2d6 Passage damage with nothing able to retaliate." }
+        },
+        "featuresByLevel": {
+          "6": [
+            {
+              "name": "Legendary Aim",
+              "description": "When you manifest a ranged weapon, its normal range becomes 150 feet and its long range becomes 600 feet. Once per turn, when you hit a creature with a manifested ranged weapon, you can deal an extra 1d8 damage. This extra damage increases to 2d8 at L11 and 3d8 at L15."
+            }
+          ],
+          "11": [
+            {
+              "name": "Volley of Legends",
+              "description": "Once per short rest, you can invoke the tales of legendary archers. As an action, you make a ranged manifested weapon attack against each creature of your choice within a 30-foot radius of a point you can see within your weapon's range. Make a separate attack roll for each target."
+            }
+          ],
+          "15": [
+            {
+              "name": "The Shot That Echoes",
+              "description": "Once per long rest, you fire a shot pulled from a myth so powerful it echoes through reality. Make a ranged manifested weapon attack against one creature. This attack has advantage and scores a critical hit on a roll of 17-20. On a hit, it deals an extra 6d8 force damage. Hit or miss, each creature within 15 feet of the target must make a DEX save against your Keeper DC or take 3d8 thunder damage."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Rhetorician",
+        "description": "Controller and debuffer who draws from political texts and forbidden histories, using rhetoric to frighten, command, and compel",
+        "flavor": "The Rhetorician understood something the other Keepers missed: the most dangerous weapon in any story isn't the sword — it's the speech that starts the war. They studied the orations that toppled kingdoms, the arguments that broke treaties, the whispered words that turned allies into enemies. Where a Lorewarden uses stories as a shield and a Mythslinger uses them as ammunition, the Rhetorician uses them as a crowbar — prying open minds, wedging doubt into certainty, and leveraging fear into paralysis. They don't need to hurt you. They just need to make you hesitate, and hesitation in combat is death. Often former lawyers, politicians, diplomats, or professors of rhetoric who realized their words could literally reshape reality, Rhetoricians speak softly and carry the collected works of every tyrant, demagogue, and silver-tongued devil who ever lived.",
+        "quote": "I'm not going to kill you. I'm going to convince you that you were never alive to begin with.",
+        "archetypeFeels": "Tyrion Lannister with eldritch powers. Hannibal Lecter's therapist voice weaponized. The lawyer from hell — literally.",
+        "genreInteractions": {
+          "history": { "rating": "B-", "synergy": "Learning enemy facts is nice but your debuffs work indiscriminately — you don't need to know weaknesses to exploit them." },
+          "tactics": { "rating": "B", "synergy": "Going first helps you lock enemies down before they act, but your control doesn't need the damage bonus." },
+          "romance": { "rating": "C", "synergy": "Temp HP on ally drop is reactive — a good controller prevents damage in the first place. Social bonuses are redundant with your existing rhetoric." },
+          "poetry": { "rating": "A+", "synergy": "Bonus action Recitations at doubled range with consecutive stacking damage. Magnum Opus plus Words as Weapons is the ultimate control combo." },
+          "mythology": { "rating": "B", "synergy": "Resistance is nice for survivability but elemental damage doesn't serve your controller identity." },
+          "political_science": { "rating": "A", "synergy": "Insight expertise plus Compelling Rhetoric disadvantage. Creatures that fail Compelling Rhetoric also have disadvantage on their next save against your Rhetorician features." },
+          "natural_philosophy": { "rating": "C", "synergy": "Elemental weapon types and Nature/Survival are physical outdoor themes that don't serve a words-based controller." },
+          "forbidden_texts": { "rating": "B+", "synergy": "Necrotic/psychic Recitations with self-damage boost. Risky for a squishy controller but the burst potential is real." }
+        },
+        "featuresByLevel": {
+          "6": [
+            {
+              "name": "Words as Weapons",
+              "description": "A number of times equal to your Charisma modifier per long rest, you can use a Recitation as a bonus action instead of an action. When a creature fails a saving throw against your Recitation or Passage, it has disadvantage on the next attack roll it makes before the end of its next turn. You also learn one additional Recitation."
+            }
+          ],
+          "11": [
+            {
+              "name": "Subjugating Rhetoric",
+              "description": "Once per short rest, when you hit a creature with a manifested weapon or a creature fails a save against your Recitation, you can impose one of the following for 1 minute (WIS save at end of each turn to end): the creature's speed is halved; the creature cannot take reactions; or the creature must use its action to Dash away from you on its turn."
+            }
+          ],
+          "15": [
+            {
+              "name": "Forbidden Oration",
+              "description": "Once per long rest, you deliver a speech so devastating it rewrites the battlefield. As an action, choose up to 3 hostile creatures within 60 feet that can hear you. Each must make a Wisdom save. On a failure, a creature is either paralyzed for 1 minute (can repeat save at end of each turn), or permanently loses the ability to speak for 24 hours (your choice per creature). Creatures immune to being charmed have advantage on this save."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Versebinder",
+        "description": "Healer and support specialist who draws from sacred covenants and restoration myths, speaking binding words that mend wounds and bolster spirits",
+        "flavor": "The Versebinder found the stories that end with 'and they were healed.' Every culture has them — the prayer that closed the wound, the hymn that cured the plague, the lullaby that called the dying back from the threshold. Where other Keepers weaponize narrative, the Versebinder remembers that the oldest stories were medicines, spoken over the sick and the broken to make them whole again. They manifest not swords but sutures, not shields but salves, weaving prose so restorative it literally knits flesh and mends bone. Often former healers, clerics who lost their faith but not their compassion, or poets who discovered their words could do more than move hearts — they could restart them. Versebinders are the ones the party doesn't appreciate until they're bleeding out and hearing a gentle voice reciting the only story that matters: the one where you survive.",
+        "quote": "Every story about death has a sequel. Let me read you the one where you get back up.",
+        "archetypeFeels": "Samwise Gamgee with a medical degree. The combat medic who quotes scripture while saving your life. Mother Teresa if she could literally heal with words.",
+        "genreInteractions": {
+          "history": { "rating": "B", "synergy": "Learning enemy info helps you advise the party but doesn't directly boost your healing output." },
+          "tactics": { "rating": "B+", "synergy": "Going first lets you pre-buff with Passages before enemies act. First-round damage is wasted on a healer, but initiative matters." },
+          "romance": { "rating": "A+", "synergy": "When Mending Verse heals an ally at or below half HP, they also gain temp HP equal to your CHA mod. Lover's Vow damage sharing plus your revive makes allies nearly unkillable." },
+          "poetry": { "rating": "B", "synergy": "Doubled Recitation range helps you buff from safety, but you're spending turns healing, not stacking consecutive damage." },
+          "mythology": { "rating": "B", "synergy": "Resistance helps you survive, but elemental damage doesn't serve your support role." },
+          "political_science": { "rating": "B", "synergy": "Insight expertise helps read situations but Compelling Rhetoric competes with your action economy for healing." },
+          "natural_philosophy": { "rating": "B+", "synergy": "Advantage on Nature/Survival helps with exploration. Elemental weapon switching gives combat versatility when you're not healing." },
+          "forbidden_texts": { "rating": "C", "synergy": "Spending HP to boost Passages directly contradicts your role as the party's healer — you can't heal others if you're killing yourself." }
+        },
+        "featuresByLevel": {
+          "6": [
+            {
+              "name": "Mending Verse",
+              "description": "When you use a Passage, you can also heal one creature within 30 feet for 1d8 + your Charisma modifier HP. This healing increases to 2d8 + CHA at L11 and 3d8 + CHA at L15. Additionally, when you use Literary Recall to re-invoke a Passage, the creature healed by Mending Verse also gains temporary HP equal to your Keeper level."
+            }
+          ],
+          "11": [
+            {
+              "name": "Covenant of Restoration",
+              "description": "Once per long rest, you recite a binding covenant. Choose up to 6 creatures within 30 feet. Each regains HP equal to 2d8 + your Charisma modifier and is cured of one condition (blinded, deafened, frightened, poisoned, or stunned). For the next minute, those creatures have advantage on saving throws against being frightened or charmed."
+            }
+          ],
+          "15": [
+            {
+              "name": "The Verse That Cannot Be Unwritten",
+              "description": "Once per long rest, when a creature within 60 feet that you can see dies (drops to 0 HP and fails all death saves, or is killed outright), you can use your reaction to speak a verse of such power that it binds the creature's soul to their body. The creature is restored to 1 HP and gains temporary HP equal to your Keeper level + your Charisma modifier. This cannot bring back a creature that has been dead for more than 1 round."
+            }
+          ]
+        }
+      }
+    ],
+    "polymathTrack": {
+      "6": {
+        "name": "Polymath",
+        "description": "You gain proficiency in 2 additional skills of your choice. Your Literary Recall uses per long rest increase by 2. You can manifest weapons as a free action instead of a bonus action."
+      },
+      "11": {
+        "name": "Polymath: Broad Study",
+        "description": "You learn 2 additional texts from any Genre (even Genres you haven't chosen as your Genre Domain). These don't count against your Texts Known. Once per short rest, you can switch your manifested weapon to a different text's weapon without dismissing it first (no action required)."
+      },
+      "15": {
+        "name": "Polymath: Renaissance Scholar",
+        "description": "Once per long rest, you can invoke any Genre Domain's passive benefit for 1 minute, even if you haven't chosen that Genre. Additionally, all your Passages gain a bonus to their damage, healing, or save DCs equal to your Charisma modifier."
+      }
+    }
+  },
   "monk": {
     "name": "Monk",
     "description": "A master of martial arts, harnessing the power of the body in pursuit of physical and spiritual perfection",
@@ -3998,6 +5195,327 @@
             {
               "name": "Avatar of Resolve",
               "description": "As an action, you become an embodiment of unwavering determination for 1 minute. During this time: you are immune to the charmed, frightened, paralyzed, and stunned conditions; you have resistance to all damage; at the start of each of your turns, you regain hit points equal to your Charisma modifier if you have no more than half your hit points remaining. Once you use this feature, you can't use it again until you finish a long rest."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "pugilist": {
+    "name": "Pugilist",
+    "description": "A scrappy brawler who relies on fists, grit, and street smarts to overcome any challenge",
+    "hitDie": 8,
+    "primaryAbility": [
+      "str",
+      "con"
+    ],
+    "dumpStat": "int",
+    "savingThrows": [
+      "str",
+      "con"
+    ],
+    "skillChoices": 2,
+    "skillOptions": [
+      "acrobatics",
+      "athletics",
+      "insight",
+      "intimidation",
+      "perception",
+      "persuasion",
+      "sleight_of_hand",
+      "stealth",
+      "survival"
+    ],
+    "armorProficiencies": [
+      "light"
+    ],
+    "weaponProficiencies": [
+      "simple"
+    ],
+    "toolProficiencies": [
+      "One artisan's tool, gaming set, or thieves' tools of your choice"
+    ],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Dungeoneer's Pack",
+            "Explorer's Pack"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "A Light Crossbow and 20 Bolts",
+            "Any Simple Weapon"
+          ]
+        }
+      ],
+      "given": [
+        "Leather Armor"
+      ]
+    },
+    "startingGold": {
+      "dice": "2d4",
+      "multiplier": 10,
+      "average": 50
+    },
+    "source": "Sterling Vermin Adventuring Co.",
+    "features": [
+      "Fisticuffs - Your unarmed strikes deal 1d6 damage (scaling with level: 1d8 at 5th, 1d10 at 11th, 1d12 at 17th). You can use Strength or Dexterity for unarmed attack and damage rolls",
+      "Iron Chin - While unarmored, your AC equals 10 + your Dexterity modifier + your Constitution modifier",
+      "Moxie - You have moxie points that fuel special abilities. You regain all moxie on a short or long rest",
+      "Street Smart - You gain proficiency in one skill or tool of your choice. Your experience on the streets grants you insight others lack",
+      "Bloodied but Unbowed - When you are reduced to half your hit point maximum or less, you can use your reaction to gain temporary hit points equal to your pugilist level",
+      "Extra Attack - You can attack twice whenever you take the Attack action on your turn",
+      "Haymaker - Once per turn when you hit with an unarmed strike, you can spend 1 moxie point to deal an extra 1d6 damage and push the target 5 feet",
+      "Moxie-Fueled Fists - Your unarmed strikes count as magical for the purpose of overcoming resistance and immunity",
+      "Fancy Footwork - Opportunity attacks against you are made with disadvantage",
+      "Dig Deep - When you have no moxie points remaining, you can use a bonus action to regain 2 moxie points. You can use this once per long rest"
+    ],
+    "subclasses": [
+      {
+        "name": "Arena Royale",
+        "description": "Gladiators and showfighters who turn combat into performance art",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Theatrical Flourish",
+              "description": "When you hit with an unarmed strike, you can spend 1 moxie point to add your Charisma modifier to the damage roll and force the target to make a Wisdom save or be frightened of you until the end of your next turn."
+            },
+            {
+              "name": "Crowd Favorite",
+              "description": "You gain proficiency in Performance. When you reduce a creature to 0 HP with an unarmed strike, you gain temporary hit points equal to your Charisma modifier + your pugilist level."
+            }
+          ],
+          "6": [
+            {
+              "name": "Showmanship",
+              "description": "You can use your bonus action to make a Performance check contested by a creature's Insight. On success, you have advantage on your next attack against that creature and it has disadvantage on its next attack against you."
+            }
+          ],
+          "11": [
+            {
+              "name": "Grand Spectacle",
+              "description": "When you score a critical hit or reduce a creature to 0 HP, each ally that can see you gains temporary hit points equal to your Charisma modifier and advantage on their next attack roll."
+            }
+          ],
+          "17": [
+            {
+              "name": "Final Act",
+              "description": "When you are reduced to 0 HP, you can use your reaction to make one unarmed strike against a creature within reach. If this attack reduces the creature to 0 HP, you drop to 1 HP instead."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Bloodhound Bruisers",
+        "description": "Street detectives and bounty hunters who combine investigative skill with brutal efficiency",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Street Investigator",
+              "description": "You gain proficiency in Investigation and Perception. You can add your Constitution modifier to Investigation and Insight checks."
+            },
+            {
+              "name": "Trained Eye",
+              "description": "As a bonus action, you can spend 1 moxie point to study a creature you can see. You learn its AC, remaining hit points (approximate), and any damage resistances or immunities."
+            }
+          ],
+          "6": [
+            {
+              "name": "Keen Instinct",
+              "description": "You have advantage on initiative rolls and cannot be surprised while conscious. You also gain proficiency in Wisdom saving throws."
+            }
+          ],
+          "11": [
+            {
+              "name": "Relentless Pursuit",
+              "description": "You can spend 2 moxie points to cast Locate Creature without material components. Additionally, your movement speed increases by 10 feet when moving toward a creature you have studied with Trained Eye."
+            }
+          ],
+          "17": [
+            {
+              "name": "Master Manhunter",
+              "description": "When you hit a creature you have studied with Trained Eye, you deal an extra 2d6 damage. This creature also cannot hide from you — you know its location within 120 feet regardless of invisibility or cover."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Dog & Hound",
+        "description": "Pugilists bonded with a loyal canine companion who fights by their side",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Loyal Companion",
+              "description": "You gain a canine companion that fights alongside you. It uses your proficiency bonus, has HP equal to 4 times your pugilist level + your Constitution modifier, and AC equal to 12 + your proficiency bonus. In combat, it shares your initiative and can take the Dodge action freely, but requires your bonus action to command it to Attack, Dash, or Disengage. Its bite attack deals 1d6 + your proficiency bonus piercing damage."
+            },
+            {
+              "name": "Pack Tactics",
+              "description": "You and your companion have advantage on attack rolls against a creature if the other is within 5 feet of that creature and isn't incapacitated."
+            }
+          ],
+          "6": [
+            {
+              "name": "Hound's Tenacity",
+              "description": "Your companion gains temporary hit points equal to your pugilist level at the start of each combat. When your companion takes damage that would reduce it to 0 HP, you can spend 2 moxie points to have it drop to 1 HP instead."
+            }
+          ],
+          "11": [
+            {
+              "name": "Coordinated Assault",
+              "description": "When you hit a creature with an unarmed strike, your companion can use its reaction to make a bite attack against the same creature. Your companion's bite damage increases to 2d6 + your proficiency bonus."
+            }
+          ],
+          "17": [
+            {
+              "name": "Alpha Bond",
+              "description": "Your companion gains resistance to all damage while within 10 feet of you. When either you or your companion scores a critical hit, the other gains advantage on their next attack roll."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Hand of Dread",
+        "description": "Pugilists who channel dark eldritch power through a monstrous transformed limb",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Dread Appendage",
+              "description": "One of your arms transforms into a monstrous limb of dark power. Your unarmed strikes with this arm deal an additional 1d4 necrotic damage. You learn the Eldritch Blast cantrip (using Constitution as your spellcasting ability) and can cast it through your dread appendage."
+            },
+            {
+              "name": "Unsettling Presence",
+              "description": "You gain proficiency in Intimidation. Creatures that start their turn within 5 feet of you and can see your dread appendage must succeed on a Wisdom save or be frightened until the start of their next turn (once per creature per combat)."
+            }
+          ],
+          "6": [
+            {
+              "name": "Feed the Darkness",
+              "description": "When you reduce a creature to 0 HP with your dread appendage, you regain hit points equal to your Constitution modifier + your pugilist level. You can also spend 1 moxie point to cast Darkness centered on yourself (you can see through this darkness)."
+            }
+          ],
+          "11": [
+            {
+              "name": "Consuming Strike",
+              "description": "When you hit with your dread appendage, you can spend 3 moxie points to force the target to make a Constitution save. On failure, the target is paralyzed until the end of your next turn and you gain temporary hit points equal to twice your pugilist level."
+            }
+          ],
+          "17": [
+            {
+              "name": "Avatar of Dread",
+              "description": "As a bonus action, you can spend 5 moxie points to fully unleash your dread power for 1 minute. Your reach increases by 5 feet, your unarmed strikes deal an additional 2d6 necrotic damage, and you gain a flying speed of 30 feet. While active, creatures within 10 feet of you have disadvantage on saving throws against being frightened."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Piss & Vinegar",
+        "description": "Dirty fighters who use insults, cheap shots, and underhanded tactics to win at any cost",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Low Blow",
+              "description": "When you hit with an unarmed strike, you can spend 1 moxie point to force the target to make a Constitution save. On failure, the target's speed is halved and it has disadvantage on attack rolls until the end of your next turn."
+            },
+            {
+              "name": "Cutting Words",
+              "description": "As a bonus action, you can spend 1 moxie point to hurl insults at a creature within 30 feet. It must succeed on a Wisdom save or take 1d6 psychic damage and have disadvantage on the next ability check or attack roll it makes before the end of its next turn."
+            }
+          ],
+          "6": [
+            {
+              "name": "Cheap Shot",
+              "description": "When a creature misses you with a melee attack, you can use your reaction to make one unarmed strike against it. If this attack hits, the target is blinded until the end of your next turn."
+            }
+          ],
+          "11": [
+            {
+              "name": "Below the Belt",
+              "description": "When you use Low Blow and the target fails its save, the target is also stunned until the end of your next turn (instead of just slowed). Additionally, your Cutting Words damage increases to 2d6."
+            }
+          ],
+          "17": [
+            {
+              "name": "Underhanded Champion",
+              "description": "When you have advantage on an attack roll and hit, you deal an extra 3d6 damage. You always have advantage on the first attack you make against a creature that hasn't acted yet in combat."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Squared Circle",
+        "description": "Masters of grappling who control the battlefield through holds, throws, and submission techniques",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Grappling Expert",
+              "description": "You have advantage on grapple checks. When you successfully grapple a creature, it takes bludgeoning damage equal to your Strength modifier. As a bonus action, you can attempt to grapple a creature or move a grappled creature to any space within your reach."
+            },
+            {
+              "name": "Submission Hold",
+              "description": "While you have a creature grappled, you can spend 1 moxie point to apply a submission hold. The creature takes 2d6 bludgeoning damage and must make a Strength save or be restrained until the grapple ends."
+            }
+          ],
+          "6": [
+            {
+              "name": "Body Slam",
+              "description": "When you move while grappling a creature of your size or smaller, you can throw it up to 15 feet in any direction. The thrown creature takes 2d6 + your Strength modifier bludgeoning damage and falls prone. If thrown into another creature, both must make Dexterity saves or take the damage and fall prone."
+            }
+          ],
+          "11": [
+            {
+              "name": "Choke Hold",
+              "description": "While a creature is restrained by your Submission Hold, it cannot breathe, speak, or cast spells with verbal components. At the start of each of its turns, it takes 3d6 bludgeoning damage. Your grapple checks gain a bonus equal to your proficiency bonus."
+            }
+          ],
+          "17": [
+            {
+              "name": "Pile Driver",
+              "description": "When you throw a creature using Body Slam, the damage increases to 4d6 + your Strength modifier and the target must make a Constitution save or be stunned until the end of your next turn. If you slam it into the ground directly below you, the damage is doubled."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Sweet Science",
+        "description": "Disciplined boxers who turn fighting into an art form of precision, timing, and devastating counterattacks",
+        "source": "Sterling Vermin Adventuring Co.",
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Bob and Weave",
+              "description": "When a creature misses you with a melee attack, you can use your reaction to move 5 feet without provoking opportunity attacks and gain +2 AC against subsequent attacks until the start of your next turn."
+            },
+            {
+              "name": "One-Two Combo",
+              "description": "When you hit a creature with an unarmed strike, your next unarmed strike against the same creature before the end of your turn gains a +2 bonus to the attack roll and deals an extra 1d6 damage."
+            }
+          ],
+          "6": [
+            {
+              "name": "Counter Punch",
+              "description": "When you use Bob and Weave to avoid an attack, you can spend 1 moxie point to make an unarmed strike against the attacker as part of the same reaction. This counter attack scores a critical hit on a roll of 19 or 20."
+            }
+          ],
+          "11": [
+            {
+              "name": "Knockout Artist",
+              "description": "Your unarmed strikes score a critical hit on a roll of 19 or 20. When you score a critical hit with an unarmed strike, the target must make a Constitution save or be stunned until the end of your next turn."
+            }
+          ],
+          "17": [
+            {
+              "name": "Championship Form",
+              "description": "At the start of each of your turns, you gain temporary hit points equal to your Constitution modifier. Your One-Two Combo extra damage increases to 2d6, and when you score a critical hit, you regain 2 moxie points."
             }
           ]
         }
@@ -6250,6 +7768,303 @@
       }
     ]
   },
+  "warlord": {
+    "name": "Warlord",
+    "description": "A charismatic battlefield leader who inspires allies and commands the tide of battle through tactical brilliance",
+    "hitDie": 8,
+    "primaryAbility": [
+      "cha"
+    ],
+    "dumpStat": "int",
+    "savingThrows": [
+      "wis",
+      "cha"
+    ],
+    "skillChoices": 3,
+    "skillOptions": [
+      "athletics",
+      "deception",
+      "history",
+      "insight",
+      "intimidation",
+      "investigation",
+      "medicine",
+      "performance",
+      "persuasion"
+    ],
+    "armorProficiencies": [
+      "light",
+      "medium",
+      "shields"
+    ],
+    "weaponProficiencies": [
+      "simple"
+    ],
+    "toolProficiencies": [],
+    "startingEquipment": {
+      "choices": [
+        {
+          "choose": 1,
+          "from": [
+            "Chain Shirt",
+            "Leather Armor"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "A Simple Weapon and Shield",
+            "Two Simple Weapons"
+          ]
+        },
+        {
+          "choose": 1,
+          "from": [
+            "Diplomat's Pack",
+            "Explorer's Pack"
+          ]
+        }
+      ],
+      "given": []
+    },
+    "startingGold": {
+      "dice": "4d4",
+      "multiplier": 10,
+      "average": 100
+    },
+    "source": "KibblesTasty Homebrew",
+    "features": [
+      "Battlefield Presence - You exert a commanding presence that empowers your allies. You gain Leadership Dice that fuel your warlord abilities",
+      "Leadership Dice - You have a pool of d6 Leadership Dice (increasing in number and size with level) that fuel your core abilities. You regain all expended dice on a short or long rest",
+      "Rallying Mark - As a bonus action, you mark a creature within 60 feet. The next time an ally hits the marked creature, the ally adds your Leadership Die to the damage roll",
+      "Helpful Word - As a bonus action, you can expend a Leadership Die to restore hit points to an ally within 60 feet equal to the die roll plus your Charisma modifier",
+      "Battlefield Presence Feature - At higher levels, your presence on the battlefield grows, allowing you to use more Leadership Dice per turn",
+      "Warlord's Expertise - You gain expertise in two skills from your class skill list",
+      "Turning the Tide - When you roll initiative and have no Leadership Dice remaining, you regain one Leadership Die",
+      "Warlord's Resolve - You can use your action to end one condition on yourself or an ally within 60 feet"
+    ],
+    "subclasses": [
+      {
+        "name": "Commander",
+        "description": "A front-line battle commander who leads from the thick of combat, directing allies with precision",
+        "source": "KibblesTasty Homebrew",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Keen Pointer",
+              "description": "When you take the Help action, you can target an ally within 30 feet rather than 5 feet. The helped ally can add your Leadership Die to their attack roll instead of gaining advantage."
+            },
+            {
+              "name": "Commanding Presence",
+              "description": "You gain proficiency with martial weapons and heavy armor. When you take the Attack action, you can forgo one of your attacks to allow an ally within 60 feet who can hear you to use their reaction to make one weapon attack."
+            }
+          ],
+          "7": [
+            {
+              "name": "On Your Feet",
+              "description": "As a bonus action, you can expend a Leadership Die and choose an ally within 30 feet who is prone, grappled, or restrained. That ally can use their reaction to stand up, escape a grapple, or attempt to break free of a restraining effect, adding the Leadership Die to the check."
+            }
+          ],
+          "11": [
+            {
+              "name": "Coordinated Offensive",
+              "description": "When you use Commanding Presence to direct an ally to attack, you can expend a Leadership Die. If the ally hits, they add the Leadership Die to the damage roll and can move up to half their speed without provoking opportunity attacks."
+            }
+          ],
+          "18": [
+            {
+              "name": "Supreme Commander",
+              "description": "When you roll initiative, choose a number of allies equal to your Charisma modifier who can see or hear you. Those allies add your Charisma modifier to their initiative rolls. Once per turn when an ally hits a creature you have marked with Rallying Mark, you can allow another ally to use their reaction to make a weapon attack against the same creature."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Chieftain",
+        "description": "A primal leader who emboldens allies through fierce war cries and savage determination",
+        "source": "KibblesTasty Homebrew",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Warcry",
+              "description": "As a bonus action, you can expend a Leadership Die and let out a warcry. You and each ally within 30 feet who can hear you gain temporary hit points equal to the Leadership Die roll + your Charisma modifier."
+            },
+            {
+              "name": "Savage Momentum",
+              "description": "When you or an ally within 30 feet reduces a creature to 0 HP, you can use your reaction to grant one ally within 30 feet advantage on their next attack roll before the end of their next turn."
+            }
+          ],
+          "7": [
+            {
+              "name": "Ferocious Fortitude",
+              "description": "While you have temporary hit points, you have advantage on Strength and Constitution saving throws. Allies within 30 feet who have temporary hit points from your Warcry also gain this benefit."
+            }
+          ],
+          "11": [
+            {
+              "name": "Overwhelming Assault",
+              "description": "When you use Warcry, allies who receive temporary hit points also gain a bonus to their next damage roll equal to your Charisma modifier. Additionally, the first time each turn that you or an ally hits while they have these temporary hit points, the target must make a Strength save or be knocked prone."
+            }
+          ],
+          "18": [
+            {
+              "name": "Primal Dominance",
+              "description": "Your Warcry's range increases to 60 feet. When you use Warcry, you can choose to also cast Fear (no spell slot required) targeting all hostile creatures within 30 feet. You can use this fear effect once per long rest. Additionally, allies affected by your Warcry gain resistance to bludgeoning, piercing, and slashing damage for 1 minute."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Noble",
+        "description": "An aristocratic leader who commands through authority, charisma, and the divine right of their station",
+        "source": "KibblesTasty Homebrew",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Divine Right",
+              "description": "You can expend a Leadership Die to cast Command as a 1st-level spell without using a spell slot. The target subtracts the Leadership Die roll from its saving throw. At 7th level, you can expend two dice to cast it as a 2nd-level spell."
+            },
+            {
+              "name": "Charismatic Leadership",
+              "description": "You add your Charisma modifier to Persuasion and Intimidation checks. When you use Helpful Word, the target also gains advantage on the next ability check they make within 1 minute."
+            }
+          ],
+          "7": [
+            {
+              "name": "Inspiring Decree",
+              "description": "When you use the Help action or Helpful Word, you can grant the ally immunity to the frightened and charmed conditions for 1 minute. Additionally, you can use your reaction to expend a Leadership Die when an ally within 30 feet fails a Wisdom saving throw, adding the die roll to their save."
+            }
+          ],
+          "11": [
+            {
+              "name": "Regal Bearing",
+              "description": "You have advantage on all Charisma checks. When you use Divine Right, you can target a number of creatures equal to your Charisma modifier (minimum 2) with a single casting. Creatures that fail the save also have disadvantage on attack rolls against you until the end of your next turn."
+            }
+          ],
+          "18": [
+            {
+              "name": "Sovereign's Authority",
+              "description": "Once per long rest, you can use your action to issue a Sovereign's Decree: each creature of your choice within 60 feet that can hear you must make a Wisdom save or be charmed by you for 1 minute. Charmed creatures regard you as a trusted authority and follow reasonable requests. Allies within 60 feet who hear the decree regain hit points equal to 3 × your Charisma modifier and gain advantage on all attack rolls and saving throws for 1 minute."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Packleader",
+        "description": "A wilderness-savvy leader who draws on natural instincts to guide their pack through any terrain",
+        "source": "KibblesTasty Homebrew",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Nature's Gift",
+              "description": "You learn the Mold Earth cantrip. You can expend a Leadership Die to cast Entangle without a spell slot (save DC = 8 + proficiency + Charisma). You gain proficiency in Nature and Survival."
+            },
+            {
+              "name": "Pack Formation",
+              "description": "While you are within 5 feet of at least one ally, both you and that ally gain +1 to AC. Allies within 30 feet who can hear you ignore difficult terrain when they move toward a creature you have marked with Rallying Mark."
+            }
+          ],
+          "7": [
+            {
+              "name": "Predator's Instinct",
+              "description": "You and allies within 30 feet cannot be surprised. You gain advantage on Wisdom (Perception) checks and add your Leadership Die to initiative rolls."
+            }
+          ],
+          "11": [
+            {
+              "name": "Alpha Strike",
+              "description": "When you use Rallying Mark, you can choose to make it a Pack Mark instead. When an ally hits a creature with your Pack Mark, every other ally within 5 feet of the marked creature can use their reaction to make a weapon attack against it."
+            }
+          ],
+          "18": [
+            {
+              "name": "Apex Predator",
+              "description": "Your Pack Formation AC bonus increases to +2. When an ally within 60 feet drops to 0 HP, you can use your reaction to move up to your speed toward them without provoking opportunity attacks and grant them temporary hit points equal to 3 × your Leadership Die maximum, preventing them from falling unconscious if this brings them above 0."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Paragon",
+        "description": "A warrior-leader who leads by example, inspiring allies through personal martial prowess and heroic deeds",
+        "source": "KibblesTasty Homebrew",
+        "bonusProficiencies": [
+          "Martial weapons",
+          "Heavy armor"
+        ],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Fighting Style",
+              "description": "You adopt a particular style of fighting as your specialty. Choose one: Defense (+1 AC while wearing armor), Dueling (+2 damage with one-handed weapon), Great Weapon Fighting (reroll 1s and 2s on damage with two-handed weapons), or Two-Weapon Fighting (add ability modifier to off-hand damage)."
+            },
+            {
+              "name": "Heroic Strike",
+              "description": "When you take the Attack action and hit, you can apply your Rallying Mark to the target as part of the attack (no bonus action required). Additionally, when you hit a marked creature, you can expend a Leadership Die to add it to the damage roll."
+            }
+          ],
+          "7": [
+            {
+              "name": "Lead from the Front",
+              "description": "When you score a critical hit or reduce a creature to 0 HP, each ally within 30 feet who can see you gains temporary hit points equal to your Charisma modifier + your proficiency bonus and advantage on the next attack they make before the end of their next turn."
+            }
+          ],
+          "11": [
+            {
+              "name": "Extra Attack",
+              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn. Additionally, once per turn when you hit a creature, allies within 5 feet of that creature can add your Charisma modifier to their next damage roll against it."
+            }
+          ],
+          "18": [
+            {
+              "name": "Legendary Presence",
+              "description": "When you hit a creature with a weapon attack, you can expend 3 Leadership Dice to perform a Legendary Strike. The target takes extra damage equal to the sum of all three dice rolls plus your Charisma modifier, and each ally who can see you within 60 feet can use their reaction to make one weapon attack or move up to half their speed."
+            }
+          ]
+        }
+      },
+      {
+        "name": "Tactician",
+        "description": "A brilliant strategist who controls the battlefield through superior positioning, information, and tactical direction",
+        "source": "KibblesTasty Homebrew",
+        "bonusProficiencies": [],
+        "featuresByLevel": {
+          "3": [
+            {
+              "name": "Tactical Insight",
+              "description": "When a creature you can see within 60 feet makes an attack roll, you can use your reaction and expend a Leadership Die to impose disadvantage on the attack. Alternatively, you can reduce the creature's movement by 10 feet or prevent it from taking reactions until the start of its next turn."
+            },
+            {
+              "name": "Tactical Flexibility",
+              "description": "You can use Rallying Mark and Helpful Word as either an action or a bonus action, giving you flexibility in how you use your turn."
+            }
+          ],
+          "7": [
+            {
+              "name": "Prepared Positions",
+              "description": "When you roll initiative, you can move up to two willing allies who can hear you up to half their movement speed. These allies also gain half cover (+2 AC) until they move from their position."
+            }
+          ],
+          "11": [
+            {
+              "name": "Stratagem",
+              "description": "At the start of your turn, you can expend a Leadership Die to declare a Stratagem. Choose one: Flanking Maneuver (two allies can immediately move up to half their speed without provoking attacks), Focused Fire (the next three attacks against a creature you designate add your Charisma modifier to damage), or Defensive Formation (allies within 30 feet gain +2 AC until the start of your next turn)."
+            }
+          ],
+          "18": [
+            {
+              "name": "Grand Strategy",
+              "description": "When you roll initiative, you can designate a number of allies equal to your Charisma modifier. For the first round of combat, those allies act on your initiative, and you can choose the order in which they take their turns. Once per long rest, you can use your action to declare a Grand Strategy: for 1 minute, all allies within 60 feet add your Charisma modifier to attack rolls, damage rolls, and saving throws."
+            }
+          ]
+        }
+      }
+    ]
+  },
   "wizard": {
     "name": "Wizard",
     "description": "A scholarly magic-user capable of manipulating the structures of reality",
@@ -6843,1383 +8658,6 @@
             {
               "name": "Arcane High Priest",
               "description": "You gain your chosen domain's 17th-level capstone feature, achieving divine mastery earlier than any cleric. If the feature references your cleric level, use your wizard level. If it references your Wisdom modifier, you can use your Intelligence modifier instead. You can use Channel Arcana four times per short or long rest."
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "artificer": {
-    "name": "Artificer",
-    "description": "A master of magical invention, blending magic and craftsmanship",
-    "hitDie": 8,
-    "primaryAbility": [
-      "int"
-    ],
-    "dumpStat": "str",
-    "savingThrows": [
-      "con",
-      "int"
-    ],
-    "skillChoices": 2,
-    "skillOptions": [
-      "arcana",
-      "history",
-      "investigation",
-      "medicine",
-      "nature",
-      "perception",
-      "sleight_of_hand"
-    ],
-    "armorProficiencies": [
-      "light",
-      "medium",
-      "shields"
-    ],
-    "weaponProficiencies": [
-      "simple"
-    ],
-    "toolProficiencies": [
-      "Thieves' Tools",
-      "Tinker's Tools",
-      "One type of artisan's tools of your choice"
-    ],
-    "startingEquipment": {
-      "choices": [
-        {
-          "choose": 1,
-          "from": [
-            "Light Crossbow and 20 Bolts",
-            "Any Simple Weapon"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "Studded Leather Armor",
-            "Scale Mail"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "Dungeoneer's Pack",
-            "Explorer's Pack"
-          ]
-        }
-      ],
-      "given": [
-        "Thieves' Tools",
-        "Tinker's Tools"
-      ]
-    },
-    "startingGold": {
-      "dice": "5d4",
-      "multiplier": 10,
-      "average": 125
-    },
-    "spellcasting": {
-      "ability": "int",
-      "spellsKnown": "All prepared",
-      "cantripsKnown": [
-        2,
-        2,
-        2,
-        2,
-        2,
-        2,
-        2,
-        2,
-        2,
-        3,
-        3,
-        3,
-        3,
-        4,
-        4,
-        4,
-        4,
-        4,
-        4,
-        4
-      ]
-    },
-    "features": [
-      "Magical Tinkering - You can imbue mundane objects with minor magical effects",
-      "Spellcasting - You can cast artificer spells using Intelligence as your spellcasting ability",
-      "Infuse Item - You can imbue mundane items with magical infusions",
-      "The Right Tool for the Job - You can create artisan's tools with 1 hour of work"
-    ],
-    "subclasses": [
-      {
-        "name": "Alchemist",
-        "description": "Master of potions and experimental elixirs",
-        "bonusProficiencies": [
-          "Alchemist's supplies"
-        ],
-        "subclassSpells": {
-          "3": [
-            "Healing Word",
-            "Ray of Sickness"
-          ],
-          "5": [
-            "Flaming Sphere",
-            "Melf's Acid Arrow"
-          ],
-          "9": [
-            "Gaseous Form",
-            "Mass Healing Word"
-          ],
-          "13": [
-            "Blight",
-            "Death Ward"
-          ],
-          "17": [
-            "Cloudkill",
-            "Raise Dead"
-          ]
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tool Proficiency",
-              "description": "You gain proficiency with alchemist's supplies. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
-            },
-            {
-              "name": "Alchemist Spells",
-              "description": "You always have certain spells prepared based on your artificer level. These spells count as artificer spells for you but don't count against your number of prepared spells."
-            },
-            {
-              "name": "Experimental Elixir",
-              "description": "When you finish a long rest, you can magically produce one experimental elixir in an empty flask you touch. Roll on the Experimental Elixir table or choose the effect. As an action, a creature can drink the elixir or administer it. Creating an elixir requires a 1st-level spell slot. Effects: Healing (2d4+Int HP), Swiftness (+10 speed for 1 hour), Resilience (+1 AC for 10 minutes), Boldness (1d4 to attack and saves for 1 minute), Flight (10 ft flying for 10 minutes), Transformation (alter self for 10 minutes). Elixirs last until your next long rest."
-            }
-          ],
-          "5": [
-            {
-              "name": "Alchemical Savant",
-              "description": "When you cast a spell using your alchemist's supplies as the spellcasting focus, you gain a bonus to one roll of the spell. That roll must restore HP or deal acid, fire, necrotic, or poison damage. The bonus equals your Intelligence modifier (minimum +1)."
-            }
-          ],
-          "9": [
-            {
-              "name": "Restorative Reagents",
-              "description": "You can cast Lesser Restoration without expending a spell slot, doing so a number of times equal to your Intelligence modifier (minimum once). You regain all uses when you finish a long rest. Additionally, when a creature drinks an Experimental Elixir you created, the creature gains temporary HP equal to 2d6 + your Intelligence modifier."
-            }
-          ],
-          "15": [
-            {
-              "name": "Chemical Mastery",
-              "description": "You have resistance to acid and poison damage, and you are immune to the poisoned condition. You can cast Greater Restoration and Heal without expending a spell slot, without having the spell prepared, and without providing the material component. Once you cast either spell with this feature, you can't cast that spell again until you finish a long rest."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Armorer",
-        "description": "Magical armor specialist who becomes one with their suit",
-        "bonusProficiencies": [
-          "Heavy armor",
-          "Smith's tools"
-        ],
-        "subclassSpells": {
-          "3": [
-            "Magic Missile",
-            "Thunderwave"
-          ],
-          "5": [
-            "Mirror Image",
-            "Shatter"
-          ],
-          "9": [
-            "Hypnotic Pattern",
-            "Lightning Bolt"
-          ],
-          "13": [
-            "Fire Shield",
-            "Greater Invisibility"
-          ],
-          "17": [
-            "Passwall",
-            "Wall of Force"
-          ]
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tools of the Trade",
-              "description": "You gain proficiency with heavy armor and smith's tools. If you already have a proficiency, you gain proficiency with another artisan's tool of your choice."
-            },
-            {
-              "name": "Armorer Spells",
-              "description": "You always have certain spells prepared based on your artificer level. These count as artificer spells for you but don't count against your prepared spells."
-            },
-            {
-              "name": "Arcane Armor",
-              "description": "As an action, you turn a suit of armor into Arcane Armor. It expands to cover your entire body, you can use it as a spellcasting focus, it attaches armor gauntlets, the armor can't be removed against your will, it replaces missing limbs, and you ignore Strength requirements."
-            },
-            {
-              "name": "Armor Model",
-              "description": "Choose a model: Guardian (Thunder Gauntlets: melee 1d8 thunder, target has disadvantage attacking others; Defensive Field: gain temp HP equal to artificer level as bonus action, uses = proficiency bonus per long rest) or Infiltrator (Lightning Launcher: ranged 90ft 1d6 lightning, +1d6 once per turn; 5 ft walking speed boost; advantage on Stealth). You can change model on short or long rest."
-            }
-          ],
-          "5": [
-            {
-              "name": "Extra Attack",
-              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn."
-            }
-          ],
-          "9": [
-            {
-              "name": "Armor Modifications",
-              "description": "Your Arcane Armor now counts as separate items for infusion purposes: armor (chest), boots, helmet, and the armor's special weapon. Each piece can bear one of your infusions, and the infusions transfer when you change armor. You can also infuse a new item with no limit to how many items you can infuse at once."
-            }
-          ],
-          "15": [
-            {
-              "name": "Perfected Armor",
-              "description": "Guardian gains Perfected: when a Huge or smaller creature you can see ends its turn within 30 feet, you can use your reaction to magically force it to make a Strength save. On failure, pull it up to 30 feet toward you, and if it ends within 5 feet, deal lightning damage equal to your Intelligence modifier. Infiltrator gains Perfected: any creature that takes lightning damage from your Lightning Launcher glimmers until the start of your next turn. While glimmering, it can't benefit from invisibility, and the next attack against it has advantage."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Artillerist",
-        "description": "Master of magical cannons and explosives",
-        "bonusProficiencies": [
-          "Woodcarver's tools"
-        ],
-        "subclassSpells": {
-          "3": [
-            "Shield",
-            "Thunderwave"
-          ],
-          "5": [
-            "Scorching Ray",
-            "Shatter"
-          ],
-          "9": [
-            "Fireball",
-            "Wind Wall"
-          ],
-          "13": [
-            "Ice Storm",
-            "Wall of Fire"
-          ],
-          "17": [
-            "Cone of Cold",
-            "Wall of Force"
-          ]
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tool Proficiency",
-              "description": "You gain proficiency with woodcarver's tools. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
-            },
-            {
-              "name": "Artillerist Spells",
-              "description": "You always have certain spells prepared based on your artificer level. These count as artificer spells for you but don't count against your prepared spells."
-            },
-            {
-              "name": "Eldritch Cannon",
-              "description": "As an action, you create a Small or Tiny magical cannon in an unoccupied space within 5 feet. It has AC 18 and HP equal to 5× your artificer level. It is immune to poison and psychic damage. Choose its type when created: Flamethrower (15 ft cone, Dex save, 2d8 fire), Force Ballista (ranged attack, 2d8 force, push 5 ft), or Protector (10 ft radius, 1d8+Int temp HP). Activate as bonus action; lasts 1 hour. You can create one cannon for free per long rest; additional cannons cost a spell slot."
-            }
-          ],
-          "5": [
-            {
-              "name": "Arcane Firearm",
-              "description": "Using woodcarver's tools, you turn a wand, staff, or rod into an arcane firearm, your spellcasting focus. When you cast an artificer spell through the firearm, roll a d8 and add the result to one of the spell's damage rolls."
-            }
-          ],
-          "9": [
-            {
-              "name": "Explosive Cannon",
-              "description": "Your Eldritch Cannon's damage increases: Flamethrower deals 3d8 fire, Force Ballista deals 3d8 force. Additionally, as an action, you can command the cannon to detonate. Each creature within 20 feet makes a Dex save, taking 3d8 force damage on a failed save (half on success). The cannon is destroyed."
-            }
-          ],
-          "15": [
-            {
-              "name": "Fortified Position",
-              "description": "You and your allies have half cover while within 10 feet of an Eldritch Cannon you created. You can now have two cannons at the same time. If you create a third, one you choose is destroyed. Activating both uses a single bonus action, and each can be a different type."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Battle Smith",
-        "description": "Warrior artificer with a mechanical companion",
-        "bonusProficiencies": [
-          "Martial weapons",
-          "Smith's tools"
-        ],
-        "subclassSpells": {
-          "3": [
-            "Heroism",
-            "Shield"
-          ],
-          "5": [
-            "Branding Smite",
-            "Warding Bond"
-          ],
-          "9": [
-            "Aura of Vitality",
-            "Conjure Barrage"
-          ],
-          "13": [
-            "Aura of Purity",
-            "Fire Shield"
-          ],
-          "17": [
-            "Banishing Smite",
-            "Mass Cure Wounds"
-          ]
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tool Proficiency",
-              "description": "You gain proficiency with smith's tools. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
-            },
-            {
-              "name": "Battle Smith Spells",
-              "description": "You always have certain spells prepared based on your artificer level. These count as artificer spells for you but don't count against your prepared spells."
-            },
-            {
-              "name": "Battle Ready",
-              "description": "You gain proficiency with martial weapons. When you attack with a magic weapon, you can use your Intelligence modifier instead of Strength or Dexterity for the attack and damage rolls."
-            },
-            {
-              "name": "Steel Defender",
-              "description": "You create a Steel Defender, a loyal construct that accompanies you. It uses your proficiency bonus, has HP equal to 5× your artificer level + your Int modifier + the defender's Con modifier × your artificer level. In combat, it shares your initiative and takes its turn immediately after yours. It can take the Dodge action on its own, but requires your bonus action to command it to take another action (Attack, Dash, Disengage, Help, or Repair - 2d8+proficiency HP healed). If it dies, you can revive it after 1 minute or create a new one during a long rest."
-            }
-          ],
-          "5": [
-            {
-              "name": "Extra Attack",
-              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn."
-            }
-          ],
-          "9": [
-            {
-              "name": "Arcane Jolt",
-              "description": "Your magic strikes and your Steel Defender become more powerful. When you or your Steel Defender hits with a magic weapon attack or the defender's Force-Empowered Rend, you can channel magical energy to cause extra effects. The target takes an extra 2d6 force damage, OR one creature or object you choose within 30 feet of the target regains 2d6 hit points. You can use this a number of times equal to your Intelligence modifier (minimum once) per long rest."
-            }
-          ],
-          "15": [
-            {
-              "name": "Improved Defender",
-              "description": "Your Arcane Jolt damage and healing increase to 4d6. Your Steel Defender gains a +2 bonus to AC. Additionally, when your Steel Defender uses its Deflect Attack reaction, the attacker takes force damage equal to 1d4 + your Intelligence modifier."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Forgewright",
-        "description": "A master of the eternal forge, blending arcane power with blacksmithing mastery to craft weapons, armor, and jewelry of legendary quality",
-        "bonusProficiencies": [
-          "Smith's tools",
-          "Jeweler's tools"
-        ],
-        "subclassSpells": {
-          "3": [
-            "Searing Smite",
-            "Identify"
-          ],
-          "5": [
-            "Heat Metal",
-            "Magic Weapon"
-          ],
-          "9": [
-            "Elemental Weapon",
-            "Protection from Energy"
-          ],
-          "13": [
-            "Fabricate",
-            "Stoneskin"
-          ],
-          "17": [
-            "Creation",
-            "Animate Objects"
-          ]
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tool Proficiency",
-              "description": "You gain proficiency with smith's tools and jeweler's tools. If you already have either proficiency, you gain proficiency with one other type of artisan's tools of your choice."
-            },
-            {
-              "name": "Forgewright Spells",
-              "description": "You always have certain spells prepared based on your artificer level. These spells count as artificer spells for you but don't count against your number of prepared spells."
-            },
-            {
-              "name": "Masterwork Crafting",
-              "description": "During a long rest using smith's tools, you can enhance one nonmagical weapon, suit of armor, or shield, turning it into a Masterwork item until your next long rest. A Masterwork weapon gains +1 to damage rolls. Masterwork armor or a shield grants +1 to AC. You can maintain one Masterwork item at a time (two at level 9). Additionally, you can use your smith's tools as a spellcasting focus for your artificer spells."
-            }
-          ],
-          "5": [
-            {
-              "name": "Tempered Artistry",
-              "description": "When you cast a spell that deals fire, force, or thunder damage while using smith's tools or jeweler's tools as your spellcasting focus, you add your Intelligence modifier (minimum +1) to one damage roll of the spell. Additionally, your Masterwork items count as magical for the purpose of overcoming resistance and immunity to nonmagical attacks."
-            }
-          ],
-          "9": [
-            {
-              "name": "Runeforge Adept",
-              "description": "You learn to inscribe arcane runes onto your creations. You can now maintain two Masterwork items simultaneously. When you create a Masterwork item, choose one rune to inscribe upon it: Rune of Flame (weapon: +1d4 fire damage on hit; armor/shield: grants fire resistance), Rune of Frost (weapon: +1d4 cold damage on hit; armor/shield: grants cold resistance), Rune of Thunder (weapon: +1d4 thunder damage on hit; armor/shield: grants thunder resistance), or Rune of Warding (+1 to saving throws on any item). You can change a rune when you recreate a Masterwork item during a long rest. Additionally, you can spend 8 hours of work and 100 gp of materials to craft a nonmagical piece of jewelry (ring, amulet, or circlet) that functions as a spellcasting focus and can hold one of your artificer infusions."
-            }
-          ],
-          "15": [
-            {
-              "name": "Legendary Artifice",
-              "description": "Your mastery of the forge reaches mythic proportions. Your Masterwork items now grant +2 instead of +1 to their respective bonuses. Your rune inscriptions deal 1d6 instead of 1d4 extra damage, and armor/shield runes grant immunity instead of resistance. Once per long rest, you can spend 1 minute working your tools to create a Magnum Opus — choose one effect: Unbreakable Edge (one weapon gains +3 to attack and damage rolls for 1 hour), Adamantine Aegis (one suit of armor becomes immune to critical hits and grants resistance to bludgeoning, piercing, and slashing damage for 1 hour), or Crown Jewel (one piece of jewelry you crafted becomes a concentration-free focus — the next artificer spell you cast through it within 1 hour requires no concentration)."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Warsmith",
-        "description": "A warrior who forges their own weapons and fights with them, channeling the heat of the forge into devastating strikes",
-        "bonusProficiencies": [
-          "Martial weapons",
-          "Smith's tools"
-        ],
-        "subclassSpells": {
-          "3": [
-            "Searing Smite",
-            "Shield"
-          ],
-          "5": [
-            "Heat Metal",
-            "Branding Smite"
-          ],
-          "9": [
-            "Elemental Weapon",
-            "Blinding Smite"
-          ],
-          "13": [
-            "Fire Shield",
-            "Staggering Smite"
-          ],
-          "17": [
-            "Steel Wind Strike",
-            "Destructive Wave"
-          ]
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tool Proficiency",
-              "description": "You gain proficiency with smith's tools. If you already have this proficiency, you gain proficiency with one other type of artisan's tools of your choice."
-            },
-            {
-              "name": "Warsmith Spells",
-              "description": "You always have certain spells prepared based on your artificer level. These spells count as artificer spells for you but don't count against your number of prepared spells."
-            },
-            {
-              "name": "Soulforged Weapon",
-              "description": "During a long rest using smith's tools, you forge a bond with one weapon you touch, making it your Soulforged Weapon. It becomes magical if it isn't already, you can use Intelligence instead of Strength or Dexterity for its attack and damage rolls, and it returns to your hand if it is within 60 feet when you use a bonus action to recall it. You can bond with one weapon at a time. You can use the bonded weapon as your spellcasting focus for your artificer spells."
-            },
-            {
-              "name": "Battle Ready",
-              "description": "You gain proficiency with martial weapons. Your training at the forge has made you equally skilled at wielding the weapons you create."
-            }
-          ],
-          "5": [
-            {
-              "name": "Extra Attack",
-              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn."
-            },
-            {
-              "name": "Forge Strike",
-              "description": "When you hit a creature with your Soulforged Weapon, you can expend one spell slot to deal extra fire damage to the target. The extra damage is 2d6 for a 1st-level spell slot, plus 1d6 for each spell level higher than 1st, to a maximum of 5d6. The fire damage represents the lingering heat of the forge channeled through your bonded weapon."
-            }
-          ],
-          "9": [
-            {
-              "name": "Tempered in Battle",
-              "description": "You gain resistance to fire damage. When you take damage from a creature within 5 feet of you, you can use your reaction to make one weapon attack with your Soulforged Weapon against that creature, dealing an additional 1d6 fire damage on a hit (Retaliation Strike). You can use this reaction a number of times equal to your Intelligence modifier (minimum 1), regaining all uses on a long rest. Additionally, your Soulforged Weapon gains a +1 bonus to attack and damage rolls. This bonus doesn't stack with existing magical bonuses — use the higher value."
-            }
-          ],
-          "15": [
-            {
-              "name": "Avatar of the Forge",
-              "description": "Your Soulforged Weapon gains a +2 bonus to attack and damage rolls (doesn't stack with existing bonuses — use the higher value). Your Forge Strike deals an additional 1d6 fire damage per spell slot level expended. Once per long rest, as a bonus action, you can enter Living Forge form for 1 minute: you are wreathed in forge-fire (creatures that hit you with melee attacks take 1d8 fire damage), your Soulforged Weapon attacks deal an extra 1d8 fire damage, you are immune to fire damage, and you shed bright light in a 30-foot radius and dim light for an additional 30 feet."
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "blood_hunter": {
-    "name": "Blood Hunter",
-    "description": "A fanatical slayer that uses forbidden blood magic to hunt down monstrous foes",
-    "hitDie": 10,
-    "primaryAbility": [
-      "int"
-    ],
-    "dumpStat": "cha",
-    "savingThrows": [
-      "dex",
-      "int"
-    ],
-    "skillChoices": 3,
-    "skillOptions": [
-      "acrobatics",
-      "arcana",
-      "athletics",
-      "history",
-      "insight",
-      "investigation",
-      "religion",
-      "survival"
-    ],
-    "armorProficiencies": [
-      "light",
-      "medium",
-      "shields"
-    ],
-    "weaponProficiencies": [
-      "simple",
-      "martial"
-    ],
-    "toolProficiencies": [
-      "Alchemist's supplies"
-    ],
-    "startingEquipment": {
-      "choices": [
-        {
-          "choose": 1,
-          "from": [
-            "A Martial Weapon",
-            "Two Simple Weapons"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "Light Crossbow and 20 Bolts",
-            "Hand Crossbow and 20 Bolts"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "Dungeoneer's Pack",
-            "Explorer's Pack"
-          ]
-        }
-      ],
-      "given": [
-        "Studded Leather Armor"
-      ]
-    },
-    "startingGold": {
-      "dice": "4d4",
-      "multiplier": 10,
-      "average": 100
-    },
-    "features": [
-      "Hunter's Bane - You have advantage on Survival checks to track fey, fiends, and undead, and on Intelligence checks to recall information about them",
-      "Blood Maledict - You can channel your vital essence to curse enemies through hemocraft magic. You learn blood curses as you gain levels",
-      "Crimson Rite - You can imbue your weapon with elemental energy at the cost of your own vitality, dealing extra rite damage on each hit",
-      "Fighting Style - You adopt a particular style of fighting as your specialty",
-      "Extra Attack - You can attack twice whenever you take the Attack action",
-      "Brand of Castigation - You brand a creature with hemocraft magic, dealing psychic damage when it harms you",
-      "Dark Augmentation - Your speed increases by 5 feet and you gain a bonus to Intelligence, Wisdom, and Charisma saving throws",
-      "Brand of Tethering - Your brand prevents creatures from using the Dash action or teleporting",
-      "Sanguine Mastery - You can reroll your hemocraft die and regain Blood Maledict uses on critical hits"
-    ],
-    "subclasses": [
-      {
-        "name": "Order of the Ghostslayer",
-        "description": "Ghostslayers seek to destroy undead wherever they lurk, channeling the power of their hemocraft to create radiant rites",
-        "source": "Critical Role",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Rite of the Dawn",
-              "description": "Your Crimson Rite damage type becomes radiant. While active, your weapon sheds bright light in a 20-foot radius. You gain resistance to necrotic damage and deal an additional hemocraft die of damage against undead."
-            },
-            {
-              "name": "Curse Specialist",
-              "description": "Your blood curses can affect any creature type, regardless of whether it has blood."
-            }
-          ],
-          "7": [
-            {
-              "name": "Aether Walk",
-              "description": "As a bonus action, you can step into the Ethereal Plane. You can move through creatures and objects as difficult terrain, and can see into the Material Plane within 30 feet. You take 1d10 force damage if you end your turn inside an object. You can use this feature once per short or long rest, twice at 15th level."
-            }
-          ],
-          "11": [
-            {
-              "name": "Brand of Sundering",
-              "description": "When you hit a branded creature with a weapon for which you have an active Crimson Rite, you deal an additional hemocraft die of rite damage. The brand also prevents the creature from moving through creatures or objects."
-            }
-          ],
-          "15": [
-            {
-              "name": "Blood Curse of the Exorcist",
-              "description": "You learn the Blood Curse of the Exorcist. You can end the charmed, frightened, or possessed condition on a creature. When amplified, the creature imposing the condition takes 3d6 psychic damage and must save or be stunned until the end of your next turn."
-            }
-          ],
-          "18": [
-            {
-              "name": "Rite Revival",
-              "description": "When you are reduced to 0 hit points while you have an active Crimson Rite, you can end all your active rites to drop to 1 hit point instead. You can use this feature once per long rest."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Order of the Lycan",
-        "description": "Lycans embrace a controlled form of lycanthropy, transforming into fearsome hybrid forms to tear apart their enemies",
-        "source": "Critical Role",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Heightened Senses",
-              "description": "You gain advantage on Wisdom (Perception) checks that rely on hearing or smell."
-            },
-            {
-              "name": "Hybrid Transformation",
-              "description": "As a bonus action, you can transform into a hybrid lycanthropic form for up to 1 hour (once per short rest). While transformed: Feral Might gives advantage on Strength checks and saves and +1 to melee damage; Resilient Hide grants resistance to nonmagical bludgeoning, piercing, and slashing damage (except silver) and +1 AC without heavy armor; Predatory Strikes lets you apply Crimson Rite to unarmed strikes (1d6 base) and make a bonus unarmed strike; Bloodlust forces a DC 8 Wisdom save when below half HP or you must attack the nearest creature."
-            }
-          ],
-          "7": [
-            {
-              "name": "Stalker's Prowess",
-              "description": "Your speed increases by 10 feet. Your long jump distance increases by 10 feet and high jump by 3 feet. Your unarmed strikes in hybrid form gain a +1 bonus to attack rolls."
-            }
-          ],
-          "11": [
-            {
-              "name": "Advanced Transformation",
-              "description": "You can use Hybrid Transformation twice per short rest. While transformed and below half HP, you regenerate hit points equal to 1 + your Constitution modifier at the start of each turn. Your Feral Might melee damage bonus increases to +2."
-            }
-          ],
-          "15": [
-            {
-              "name": "Brand of the Voracious",
-              "description": "You have advantage on Bloodlust saving throws. While in hybrid form, you have advantage on attack rolls against branded creatures."
-            }
-          ],
-          "18": [
-            {
-              "name": "Hybrid Transformation Mastery",
-              "description": "You can use Hybrid Transformation an unlimited number of times per rest and the form lasts indefinitely. Your Feral Might melee damage bonus increases to +3. You learn the Blood Curse of the Howl: creatures within 30 feet must succeed on a Wisdom save or become frightened of you."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Order of the Mutant",
-        "description": "Mutants use forbidden alchemy to create mutagenic formulas that grant them powerful—but dangerous—physical enhancements",
-        "source": "Critical Role",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Mutagencraft",
-              "description": "You learn four mutagen formulas that you can create and consume as a bonus action. Each mutagen grants a benefit and imposes a drawback for 1 hour. Formulas include options like: Celerity (+DEX, -WIS), Potency (+STR, -DEX), Sagacity (+INT, -CHA), and others. You learn additional formulas at levels 7, 11, 15, and 18. You can create one mutagen per short rest."
-            }
-          ],
-          "7": [
-            {
-              "name": "Strange Metabolism",
-              "description": "You are immune to the poisoned condition and poison damage. As a bonus action, you can ignore the negative effects of one active mutagen for 1 minute. You can use this feature once per long rest."
-            }
-          ],
-          "11": [
-            {
-              "name": "Brand of Axiom",
-              "description": "Branded creatures cannot benefit from invisibility or illusion magic. If a branded creature is in an alternate form (such as from polymorph), it must succeed on a Wisdom save or revert to its true form and be stunned until the end of your next turn."
-            }
-          ],
-          "15": [
-            {
-              "name": "Blood Curse of Corrosion",
-              "description": "You learn the Blood Curse of Corrosion. As a bonus action, you force a creature to make a Constitution save or become poisoned. When amplified, the target takes 4d6 necrotic damage at the start of each turn while poisoned this way."
-            }
-          ],
-          "18": [
-            {
-              "name": "Exalted Mutation",
-              "description": "As a bonus action, you can end one active mutagen and activate a different one you know without expending a use of Mutagencraft. You can use this a number of times equal to your Hemocraft modifier per long rest."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Order of the Profane Soul",
-        "description": "Profane Soul blood hunters forge pacts with lesser otherworldly beings, gaining warlock-like spellcasting alongside their hemocraft abilities",
-        "source": "Critical Role",
-        "bonusProficiencies": [],
-        "spellcasting": {
-          "ability": "int"
-        },
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Otherworldly Patron",
-              "description": "You forge a pact with a lesser patron. Choose from The Archfey, The Fiend, The Great Old One, The Undying, The Celestial, or The Hexblade. Your patron grants you specific rite focus benefits when your Crimson Rite is active."
-            },
-            {
-              "name": "Pact Magic",
-              "description": "You gain the ability to cast warlock spells using Intelligence as your spellcasting ability. You learn two cantrips and have pact magic spell slots that recharge on a short rest. Spell progression is slower than a full warlock, reaching 4th-level spells at most."
-            },
-            {
-              "name": "Rite Focus",
-              "description": "While your Crimson Rite is active on a weapon, it serves as your spellcasting focus. Your patron grants a unique benefit: Archfey — charm resistance; Fiend — bonus fire damage; Great Old One — psychic messaging; Undying — spare the dying at range; Celestial — bonus healing; Hexblade — critical hits on 19-20."
-            }
-          ],
-          "7": [
-            {
-              "name": "Mystic Frenzy",
-              "description": "When you use your action to cast a cantrip, you can make one weapon attack as a bonus action."
-            },
-            {
-              "name": "Revealed Arcana",
-              "description": "Your patron grants you a spell you can cast once per long rest without expending a spell slot: Archfey — Blur; Fiend — Scorching Ray; Great Old One — Detect Thoughts; Undying — Silence; Celestial — Lesser Restoration; Hexblade — Branding Smite."
-            }
-          ],
-          "11": [
-            {
-              "name": "Brand of the Sapping Scar",
-              "description": "Branded creatures have disadvantage on saving throws against your warlock spells."
-            }
-          ],
-          "15": [
-            {
-              "name": "Unsealed Arcana",
-              "description": "Your patron grants an additional spell you can cast once per long rest without expending a slot: Archfey — Slow; Fiend — Fireball; Great Old One — Hunger of Hadar; Undying — Bestow Curse; Celestial — Revivify; Hexblade — Blink."
-            }
-          ],
-          "18": [
-            {
-              "name": "Blood Curse of the Soul Eater",
-              "description": "You learn the Blood Curse of the Soul Eater. When a creature within 30 feet drops to 0 HP, you gain advantage on attack rolls and resistance to all damage until the end of your next turn. When amplified, you also regain one expended warlock spell slot."
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "pugilist": {
-    "name": "Pugilist",
-    "description": "A scrappy brawler who relies on fists, grit, and street smarts to overcome any challenge",
-    "hitDie": 8,
-    "primaryAbility": [
-      "str",
-      "con"
-    ],
-    "dumpStat": "int",
-    "savingThrows": [
-      "str",
-      "con"
-    ],
-    "skillChoices": 2,
-    "skillOptions": [
-      "acrobatics",
-      "athletics",
-      "insight",
-      "intimidation",
-      "perception",
-      "persuasion",
-      "sleight_of_hand",
-      "stealth",
-      "survival"
-    ],
-    "armorProficiencies": [
-      "light"
-    ],
-    "weaponProficiencies": [
-      "simple"
-    ],
-    "toolProficiencies": [
-      "One artisan's tool, gaming set, or thieves' tools of your choice"
-    ],
-    "startingEquipment": {
-      "choices": [
-        {
-          "choose": 1,
-          "from": [
-            "Dungeoneer's Pack",
-            "Explorer's Pack"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "A Light Crossbow and 20 Bolts",
-            "Any Simple Weapon"
-          ]
-        }
-      ],
-      "given": [
-        "Leather Armor"
-      ]
-    },
-    "startingGold": {
-      "dice": "2d4",
-      "multiplier": 10,
-      "average": 50
-    },
-    "source": "Sterling Vermin Adventuring Co.",
-    "features": [
-      "Fisticuffs - Your unarmed strikes deal 1d6 damage (scaling with level: 1d8 at 5th, 1d10 at 11th, 1d12 at 17th). You can use Strength or Dexterity for unarmed attack and damage rolls",
-      "Iron Chin - While unarmored, your AC equals 10 + your Dexterity modifier + your Constitution modifier",
-      "Moxie - You have moxie points that fuel special abilities. You regain all moxie on a short or long rest",
-      "Street Smart - You gain proficiency in one skill or tool of your choice. Your experience on the streets grants you insight others lack",
-      "Bloodied but Unbowed - When you are reduced to half your hit point maximum or less, you can use your reaction to gain temporary hit points equal to your pugilist level",
-      "Extra Attack - You can attack twice whenever you take the Attack action on your turn",
-      "Haymaker - Once per turn when you hit with an unarmed strike, you can spend 1 moxie point to deal an extra 1d6 damage and push the target 5 feet",
-      "Moxie-Fueled Fists - Your unarmed strikes count as magical for the purpose of overcoming resistance and immunity",
-      "Fancy Footwork - Opportunity attacks against you are made with disadvantage",
-      "Dig Deep - When you have no moxie points remaining, you can use a bonus action to regain 2 moxie points. You can use this once per long rest"
-    ],
-    "subclasses": [
-      {
-        "name": "Arena Royale",
-        "description": "Gladiators and showfighters who turn combat into performance art",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Theatrical Flourish",
-              "description": "When you hit with an unarmed strike, you can spend 1 moxie point to add your Charisma modifier to the damage roll and force the target to make a Wisdom save or be frightened of you until the end of your next turn."
-            },
-            {
-              "name": "Crowd Favorite",
-              "description": "You gain proficiency in Performance. When you reduce a creature to 0 HP with an unarmed strike, you gain temporary hit points equal to your Charisma modifier + your pugilist level."
-            }
-          ],
-          "6": [
-            {
-              "name": "Showmanship",
-              "description": "You can use your bonus action to make a Performance check contested by a creature's Insight. On success, you have advantage on your next attack against that creature and it has disadvantage on its next attack against you."
-            }
-          ],
-          "11": [
-            {
-              "name": "Grand Spectacle",
-              "description": "When you score a critical hit or reduce a creature to 0 HP, each ally that can see you gains temporary hit points equal to your Charisma modifier and advantage on their next attack roll."
-            }
-          ],
-          "17": [
-            {
-              "name": "Final Act",
-              "description": "When you are reduced to 0 HP, you can use your reaction to make one unarmed strike against a creature within reach. If this attack reduces the creature to 0 HP, you drop to 1 HP instead."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Bloodhound Bruisers",
-        "description": "Street detectives and bounty hunters who combine investigative skill with brutal efficiency",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Street Investigator",
-              "description": "You gain proficiency in Investigation and Perception. You can add your Constitution modifier to Investigation and Insight checks."
-            },
-            {
-              "name": "Trained Eye",
-              "description": "As a bonus action, you can spend 1 moxie point to study a creature you can see. You learn its AC, remaining hit points (approximate), and any damage resistances or immunities."
-            }
-          ],
-          "6": [
-            {
-              "name": "Keen Instinct",
-              "description": "You have advantage on initiative rolls and cannot be surprised while conscious. You also gain proficiency in Wisdom saving throws."
-            }
-          ],
-          "11": [
-            {
-              "name": "Relentless Pursuit",
-              "description": "You can spend 2 moxie points to cast Locate Creature without material components. Additionally, your movement speed increases by 10 feet when moving toward a creature you have studied with Trained Eye."
-            }
-          ],
-          "17": [
-            {
-              "name": "Master Manhunter",
-              "description": "When you hit a creature you have studied with Trained Eye, you deal an extra 2d6 damage. This creature also cannot hide from you — you know its location within 120 feet regardless of invisibility or cover."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Dog & Hound",
-        "description": "Pugilists bonded with a loyal canine companion who fights by their side",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Loyal Companion",
-              "description": "You gain a canine companion that fights alongside you. It uses your proficiency bonus, has HP equal to 4 times your pugilist level + your Constitution modifier, and AC equal to 12 + your proficiency bonus. In combat, it shares your initiative and can take the Dodge action freely, but requires your bonus action to command it to Attack, Dash, or Disengage. Its bite attack deals 1d6 + your proficiency bonus piercing damage."
-            },
-            {
-              "name": "Pack Tactics",
-              "description": "You and your companion have advantage on attack rolls against a creature if the other is within 5 feet of that creature and isn't incapacitated."
-            }
-          ],
-          "6": [
-            {
-              "name": "Hound's Tenacity",
-              "description": "Your companion gains temporary hit points equal to your pugilist level at the start of each combat. When your companion takes damage that would reduce it to 0 HP, you can spend 2 moxie points to have it drop to 1 HP instead."
-            }
-          ],
-          "11": [
-            {
-              "name": "Coordinated Assault",
-              "description": "When you hit a creature with an unarmed strike, your companion can use its reaction to make a bite attack against the same creature. Your companion's bite damage increases to 2d6 + your proficiency bonus."
-            }
-          ],
-          "17": [
-            {
-              "name": "Alpha Bond",
-              "description": "Your companion gains resistance to all damage while within 10 feet of you. When either you or your companion scores a critical hit, the other gains advantage on their next attack roll."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Hand of Dread",
-        "description": "Pugilists who channel dark eldritch power through a monstrous transformed limb",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Dread Appendage",
-              "description": "One of your arms transforms into a monstrous limb of dark power. Your unarmed strikes with this arm deal an additional 1d4 necrotic damage. You learn the Eldritch Blast cantrip (using Constitution as your spellcasting ability) and can cast it through your dread appendage."
-            },
-            {
-              "name": "Unsettling Presence",
-              "description": "You gain proficiency in Intimidation. Creatures that start their turn within 5 feet of you and can see your dread appendage must succeed on a Wisdom save or be frightened until the start of their next turn (once per creature per combat)."
-            }
-          ],
-          "6": [
-            {
-              "name": "Feed the Darkness",
-              "description": "When you reduce a creature to 0 HP with your dread appendage, you regain hit points equal to your Constitution modifier + your pugilist level. You can also spend 1 moxie point to cast Darkness centered on yourself (you can see through this darkness)."
-            }
-          ],
-          "11": [
-            {
-              "name": "Consuming Strike",
-              "description": "When you hit with your dread appendage, you can spend 3 moxie points to force the target to make a Constitution save. On failure, the target is paralyzed until the end of your next turn and you gain temporary hit points equal to twice your pugilist level."
-            }
-          ],
-          "17": [
-            {
-              "name": "Avatar of Dread",
-              "description": "As a bonus action, you can spend 5 moxie points to fully unleash your dread power for 1 minute. Your reach increases by 5 feet, your unarmed strikes deal an additional 2d6 necrotic damage, and you gain a flying speed of 30 feet. While active, creatures within 10 feet of you have disadvantage on saving throws against being frightened."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Piss & Vinegar",
-        "description": "Dirty fighters who use insults, cheap shots, and underhanded tactics to win at any cost",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Low Blow",
-              "description": "When you hit with an unarmed strike, you can spend 1 moxie point to force the target to make a Constitution save. On failure, the target's speed is halved and it has disadvantage on attack rolls until the end of your next turn."
-            },
-            {
-              "name": "Cutting Words",
-              "description": "As a bonus action, you can spend 1 moxie point to hurl insults at a creature within 30 feet. It must succeed on a Wisdom save or take 1d6 psychic damage and have disadvantage on the next ability check or attack roll it makes before the end of its next turn."
-            }
-          ],
-          "6": [
-            {
-              "name": "Cheap Shot",
-              "description": "When a creature misses you with a melee attack, you can use your reaction to make one unarmed strike against it. If this attack hits, the target is blinded until the end of your next turn."
-            }
-          ],
-          "11": [
-            {
-              "name": "Below the Belt",
-              "description": "When you use Low Blow and the target fails its save, the target is also stunned until the end of your next turn (instead of just slowed). Additionally, your Cutting Words damage increases to 2d6."
-            }
-          ],
-          "17": [
-            {
-              "name": "Underhanded Champion",
-              "description": "When you have advantage on an attack roll and hit, you deal an extra 3d6 damage. You always have advantage on the first attack you make against a creature that hasn't acted yet in combat."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Squared Circle",
-        "description": "Masters of grappling who control the battlefield through holds, throws, and submission techniques",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Grappling Expert",
-              "description": "You have advantage on grapple checks. When you successfully grapple a creature, it takes bludgeoning damage equal to your Strength modifier. As a bonus action, you can attempt to grapple a creature or move a grappled creature to any space within your reach."
-            },
-            {
-              "name": "Submission Hold",
-              "description": "While you have a creature grappled, you can spend 1 moxie point to apply a submission hold. The creature takes 2d6 bludgeoning damage and must make a Strength save or be restrained until the grapple ends."
-            }
-          ],
-          "6": [
-            {
-              "name": "Body Slam",
-              "description": "When you move while grappling a creature of your size or smaller, you can throw it up to 15 feet in any direction. The thrown creature takes 2d6 + your Strength modifier bludgeoning damage and falls prone. If thrown into another creature, both must make Dexterity saves or take the damage and fall prone."
-            }
-          ],
-          "11": [
-            {
-              "name": "Choke Hold",
-              "description": "While a creature is restrained by your Submission Hold, it cannot breathe, speak, or cast spells with verbal components. At the start of each of its turns, it takes 3d6 bludgeoning damage. Your grapple checks gain a bonus equal to your proficiency bonus."
-            }
-          ],
-          "17": [
-            {
-              "name": "Pile Driver",
-              "description": "When you throw a creature using Body Slam, the damage increases to 4d6 + your Strength modifier and the target must make a Constitution save or be stunned until the end of your next turn. If you slam it into the ground directly below you, the damage is doubled."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Sweet Science",
-        "description": "Disciplined boxers who turn fighting into an art form of precision, timing, and devastating counterattacks",
-        "source": "Sterling Vermin Adventuring Co.",
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Bob and Weave",
-              "description": "When a creature misses you with a melee attack, you can use your reaction to move 5 feet without provoking opportunity attacks and gain +2 AC against subsequent attacks until the start of your next turn."
-            },
-            {
-              "name": "One-Two Combo",
-              "description": "When you hit a creature with an unarmed strike, your next unarmed strike against the same creature before the end of your turn gains a +2 bonus to the attack roll and deals an extra 1d6 damage."
-            }
-          ],
-          "6": [
-            {
-              "name": "Counter Punch",
-              "description": "When you use Bob and Weave to avoid an attack, you can spend 1 moxie point to make an unarmed strike against the attacker as part of the same reaction. This counter attack scores a critical hit on a roll of 19 or 20."
-            }
-          ],
-          "11": [
-            {
-              "name": "Knockout Artist",
-              "description": "Your unarmed strikes score a critical hit on a roll of 19 or 20. When you score a critical hit with an unarmed strike, the target must make a Constitution save or be stunned until the end of your next turn."
-            }
-          ],
-          "17": [
-            {
-              "name": "Championship Form",
-              "description": "At the start of each of your turns, you gain temporary hit points equal to your Constitution modifier. Your One-Two Combo extra damage increases to 2d6, and when you score a critical hit, you regain 2 moxie points."
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "warlord": {
-    "name": "Warlord",
-    "description": "A charismatic battlefield leader who inspires allies and commands the tide of battle through tactical brilliance",
-    "hitDie": 8,
-    "primaryAbility": [
-      "cha"
-    ],
-    "dumpStat": "int",
-    "savingThrows": [
-      "wis",
-      "cha"
-    ],
-    "skillChoices": 3,
-    "skillOptions": [
-      "athletics",
-      "deception",
-      "history",
-      "insight",
-      "intimidation",
-      "investigation",
-      "medicine",
-      "performance",
-      "persuasion"
-    ],
-    "armorProficiencies": [
-      "light",
-      "medium",
-      "shields"
-    ],
-    "weaponProficiencies": [
-      "simple"
-    ],
-    "toolProficiencies": [],
-    "startingEquipment": {
-      "choices": [
-        {
-          "choose": 1,
-          "from": [
-            "Chain Shirt",
-            "Leather Armor"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "A Simple Weapon and Shield",
-            "Two Simple Weapons"
-          ]
-        },
-        {
-          "choose": 1,
-          "from": [
-            "Diplomat's Pack",
-            "Explorer's Pack"
-          ]
-        }
-      ],
-      "given": []
-    },
-    "startingGold": {
-      "dice": "4d4",
-      "multiplier": 10,
-      "average": 100
-    },
-    "source": "KibblesTasty Homebrew",
-    "features": [
-      "Battlefield Presence - You exert a commanding presence that empowers your allies. You gain Leadership Dice that fuel your warlord abilities",
-      "Leadership Dice - You have a pool of d6 Leadership Dice (increasing in number and size with level) that fuel your core abilities. You regain all expended dice on a short or long rest",
-      "Rallying Mark - As a bonus action, you mark a creature within 60 feet. The next time an ally hits the marked creature, the ally adds your Leadership Die to the damage roll",
-      "Helpful Word - As a bonus action, you can expend a Leadership Die to restore hit points to an ally within 60 feet equal to the die roll plus your Charisma modifier",
-      "Battlefield Presence Feature - At higher levels, your presence on the battlefield grows, allowing you to use more Leadership Dice per turn",
-      "Warlord's Expertise - You gain expertise in two skills from your class skill list",
-      "Turning the Tide - When you roll initiative and have no Leadership Dice remaining, you regain one Leadership Die",
-      "Warlord's Resolve - You can use your action to end one condition on yourself or an ally within 60 feet"
-    ],
-    "subclasses": [
-      {
-        "name": "Commander",
-        "description": "A front-line battle commander who leads from the thick of combat, directing allies with precision",
-        "source": "KibblesTasty Homebrew",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Keen Pointer",
-              "description": "When you take the Help action, you can target an ally within 30 feet rather than 5 feet. The helped ally can add your Leadership Die to their attack roll instead of gaining advantage."
-            },
-            {
-              "name": "Commanding Presence",
-              "description": "You gain proficiency with martial weapons and heavy armor. When you take the Attack action, you can forgo one of your attacks to allow an ally within 60 feet who can hear you to use their reaction to make one weapon attack."
-            }
-          ],
-          "7": [
-            {
-              "name": "On Your Feet",
-              "description": "As a bonus action, you can expend a Leadership Die and choose an ally within 30 feet who is prone, grappled, or restrained. That ally can use their reaction to stand up, escape a grapple, or attempt to break free of a restraining effect, adding the Leadership Die to the check."
-            }
-          ],
-          "11": [
-            {
-              "name": "Coordinated Offensive",
-              "description": "When you use Commanding Presence to direct an ally to attack, you can expend a Leadership Die. If the ally hits, they add the Leadership Die to the damage roll and can move up to half their speed without provoking opportunity attacks."
-            }
-          ],
-          "18": [
-            {
-              "name": "Supreme Commander",
-              "description": "When you roll initiative, choose a number of allies equal to your Charisma modifier who can see or hear you. Those allies add your Charisma modifier to their initiative rolls. Once per turn when an ally hits a creature you have marked with Rallying Mark, you can allow another ally to use their reaction to make a weapon attack against the same creature."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Chieftain",
-        "description": "A primal leader who emboldens allies through fierce war cries and savage determination",
-        "source": "KibblesTasty Homebrew",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Warcry",
-              "description": "As a bonus action, you can expend a Leadership Die and let out a warcry. You and each ally within 30 feet who can hear you gain temporary hit points equal to the Leadership Die roll + your Charisma modifier."
-            },
-            {
-              "name": "Savage Momentum",
-              "description": "When you or an ally within 30 feet reduces a creature to 0 HP, you can use your reaction to grant one ally within 30 feet advantage on their next attack roll before the end of their next turn."
-            }
-          ],
-          "7": [
-            {
-              "name": "Ferocious Fortitude",
-              "description": "While you have temporary hit points, you have advantage on Strength and Constitution saving throws. Allies within 30 feet who have temporary hit points from your Warcry also gain this benefit."
-            }
-          ],
-          "11": [
-            {
-              "name": "Overwhelming Assault",
-              "description": "When you use Warcry, allies who receive temporary hit points also gain a bonus to their next damage roll equal to your Charisma modifier. Additionally, the first time each turn that you or an ally hits while they have these temporary hit points, the target must make a Strength save or be knocked prone."
-            }
-          ],
-          "18": [
-            {
-              "name": "Primal Dominance",
-              "description": "Your Warcry's range increases to 60 feet. When you use Warcry, you can choose to also cast Fear (no spell slot required) targeting all hostile creatures within 30 feet. You can use this fear effect once per long rest. Additionally, allies affected by your Warcry gain resistance to bludgeoning, piercing, and slashing damage for 1 minute."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Noble",
-        "description": "An aristocratic leader who commands through authority, charisma, and the divine right of their station",
-        "source": "KibblesTasty Homebrew",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Divine Right",
-              "description": "You can expend a Leadership Die to cast Command as a 1st-level spell without using a spell slot. The target subtracts the Leadership Die roll from its saving throw. At 7th level, you can expend two dice to cast it as a 2nd-level spell."
-            },
-            {
-              "name": "Charismatic Leadership",
-              "description": "You add your Charisma modifier to Persuasion and Intimidation checks. When you use Helpful Word, the target also gains advantage on the next ability check they make within 1 minute."
-            }
-          ],
-          "7": [
-            {
-              "name": "Inspiring Decree",
-              "description": "When you use the Help action or Helpful Word, you can grant the ally immunity to the frightened and charmed conditions for 1 minute. Additionally, you can use your reaction to expend a Leadership Die when an ally within 30 feet fails a Wisdom saving throw, adding the die roll to their save."
-            }
-          ],
-          "11": [
-            {
-              "name": "Regal Bearing",
-              "description": "You have advantage on all Charisma checks. When you use Divine Right, you can target a number of creatures equal to your Charisma modifier (minimum 2) with a single casting. Creatures that fail the save also have disadvantage on attack rolls against you until the end of your next turn."
-            }
-          ],
-          "18": [
-            {
-              "name": "Sovereign's Authority",
-              "description": "Once per long rest, you can use your action to issue a Sovereign's Decree: each creature of your choice within 60 feet that can hear you must make a Wisdom save or be charmed by you for 1 minute. Charmed creatures regard you as a trusted authority and follow reasonable requests. Allies within 60 feet who hear the decree regain hit points equal to 3 × your Charisma modifier and gain advantage on all attack rolls and saving throws for 1 minute."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Packleader",
-        "description": "A wilderness-savvy leader who draws on natural instincts to guide their pack through any terrain",
-        "source": "KibblesTasty Homebrew",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Nature's Gift",
-              "description": "You learn the Mold Earth cantrip. You can expend a Leadership Die to cast Entangle without a spell slot (save DC = 8 + proficiency + Charisma). You gain proficiency in Nature and Survival."
-            },
-            {
-              "name": "Pack Formation",
-              "description": "While you are within 5 feet of at least one ally, both you and that ally gain +1 to AC. Allies within 30 feet who can hear you ignore difficult terrain when they move toward a creature you have marked with Rallying Mark."
-            }
-          ],
-          "7": [
-            {
-              "name": "Predator's Instinct",
-              "description": "You and allies within 30 feet cannot be surprised. You gain advantage on Wisdom (Perception) checks and add your Leadership Die to initiative rolls."
-            }
-          ],
-          "11": [
-            {
-              "name": "Alpha Strike",
-              "description": "When you use Rallying Mark, you can choose to make it a Pack Mark instead. When an ally hits a creature with your Pack Mark, every other ally within 5 feet of the marked creature can use their reaction to make a weapon attack against it."
-            }
-          ],
-          "18": [
-            {
-              "name": "Apex Predator",
-              "description": "Your Pack Formation AC bonus increases to +2. When an ally within 60 feet drops to 0 HP, you can use your reaction to move up to your speed toward them without provoking opportunity attacks and grant them temporary hit points equal to 3 × your Leadership Die maximum, preventing them from falling unconscious if this brings them above 0."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Paragon",
-        "description": "A warrior-leader who leads by example, inspiring allies through personal martial prowess and heroic deeds",
-        "source": "KibblesTasty Homebrew",
-        "bonusProficiencies": [
-          "Martial weapons",
-          "Heavy armor"
-        ],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Fighting Style",
-              "description": "You adopt a particular style of fighting as your specialty. Choose one: Defense (+1 AC while wearing armor), Dueling (+2 damage with one-handed weapon), Great Weapon Fighting (reroll 1s and 2s on damage with two-handed weapons), or Two-Weapon Fighting (add ability modifier to off-hand damage)."
-            },
-            {
-              "name": "Heroic Strike",
-              "description": "When you take the Attack action and hit, you can apply your Rallying Mark to the target as part of the attack (no bonus action required). Additionally, when you hit a marked creature, you can expend a Leadership Die to add it to the damage roll."
-            }
-          ],
-          "7": [
-            {
-              "name": "Lead from the Front",
-              "description": "When you score a critical hit or reduce a creature to 0 HP, each ally within 30 feet who can see you gains temporary hit points equal to your Charisma modifier + your proficiency bonus and advantage on the next attack they make before the end of their next turn."
-            }
-          ],
-          "11": [
-            {
-              "name": "Extra Attack",
-              "description": "You can attack twice, rather than once, whenever you take the Attack action on your turn. Additionally, once per turn when you hit a creature, allies within 5 feet of that creature can add your Charisma modifier to their next damage roll against it."
-            }
-          ],
-          "18": [
-            {
-              "name": "Legendary Presence",
-              "description": "When you hit a creature with a weapon attack, you can expend 3 Leadership Dice to perform a Legendary Strike. The target takes extra damage equal to the sum of all three dice rolls plus your Charisma modifier, and each ally who can see you within 60 feet can use their reaction to make one weapon attack or move up to half their speed."
-            }
-          ]
-        }
-      },
-      {
-        "name": "Tactician",
-        "description": "A brilliant strategist who controls the battlefield through superior positioning, information, and tactical direction",
-        "source": "KibblesTasty Homebrew",
-        "bonusProficiencies": [],
-        "featuresByLevel": {
-          "3": [
-            {
-              "name": "Tactical Insight",
-              "description": "When a creature you can see within 60 feet makes an attack roll, you can use your reaction and expend a Leadership Die to impose disadvantage on the attack. Alternatively, you can reduce the creature's movement by 10 feet or prevent it from taking reactions until the start of its next turn."
-            },
-            {
-              "name": "Tactical Flexibility",
-              "description": "You can use Rallying Mark and Helpful Word as either an action or a bonus action, giving you flexibility in how you use your turn."
-            }
-          ],
-          "7": [
-            {
-              "name": "Prepared Positions",
-              "description": "When you roll initiative, you can move up to two willing allies who can hear you up to half their movement speed. These allies also gain half cover (+2 AC) until they move from their position."
-            }
-          ],
-          "11": [
-            {
-              "name": "Stratagem",
-              "description": "At the start of your turn, you can expend a Leadership Die to declare a Stratagem. Choose one: Flanking Maneuver (two allies can immediately move up to half their speed without provoking attacks), Focused Fire (the next three attacks against a creature you designate add your Charisma modifier to damage), or Defensive Formation (allies within 30 feet gain +2 AC until the start of your next turn)."
-            }
-          ],
-          "18": [
-            {
-              "name": "Grand Strategy",
-              "description": "When you roll initiative, you can designate a number of allies equal to your Charisma modifier. For the first round of combat, those allies act on your initiative, and you can choose the order in which they take their turns. Once per long rest, you can use your action to declare a Grand Strategy: for 1 minute, all allies within 60 feet add your Charisma modifier to attack rolls, damage rolls, and saving throws."
             }
           ]
         }

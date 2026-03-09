@@ -813,9 +813,9 @@ function ConvertToClassModal({ companion, onClose, onConvert }) {
   const [error, setError] = useState(null)
 
   const classes = [
-    'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter',
-    'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer',
-    'Warlock', 'Wizard', 'Artificer'
+    'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
+    'Fighter', 'Keeper', 'Monk', 'Paladin', 'Ranger', 'Rogue',
+    'Sorcerer', 'Warlock', 'Wizard'
   ]
 
   const handleConvert = async () => {

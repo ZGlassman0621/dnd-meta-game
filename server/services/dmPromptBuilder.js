@@ -239,20 +239,45 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     spellSection = `\n- Spellcasting: ${spellParts.join('; ')}`;
   }
 
+  // Build Keeper abilities section
+  let keeperSection = '';
+  if (character.class?.toLowerCase() === 'keeper') {
+    const keeperParts = [];
+    const keeperTexts = typeof character.keeper_texts === 'string' ? JSON.parse(character.keeper_texts || '[]') : (character.keeper_texts || []);
+    const keeperRecitations = typeof character.keeper_recitations === 'string' ? JSON.parse(character.keeper_recitations || '[]') : (character.keeper_recitations || []);
+
+    if (keeperRecitations.length > 0) {
+      keeperParts.push(`Recitations (at-will): ${keeperRecitations.join(', ')}`);
+    }
+    if (keeperTexts.length > 0) {
+      keeperParts.push(`Library Texts (weapon + Passage each): ${keeperTexts.join(', ')}`);
+    }
+    if (character.keeper_genre_domain) {
+      keeperParts.push(`Genre Domain: ${character.keeper_genre_domain}`);
+    }
+    if (character.keeper_specialization) {
+      keeperParts.push(`Specialization: ${character.keeper_specialization}`);
+    }
+    if (keeperParts.length > 0) {
+      keeperSection = `\n- Keeper Abilities: ${keeperParts.join('; ')}`;
+      keeperSection += `\n  KEEPER RULES: Uses CHA for manifested weapon attacks. Manifest Weapon = bonus action to summon weapon from a text. Each text has a Passage (once per short rest special effect). Recitations are cantrip equivalents (at will). Keeper save DC = 8 + proficiency + CHA mod.${character.level >= 2 ? ' Keeper\'s Study = bonus action to mark a creature as Studied (PB/long rest) — Recitations and weapon attacks deal extra damage to Studied creatures, and Keeper learns one fact about them.' : ''}`;
+    }
+  }
+
   return {
     text: `${label}:
 - Full Name: ${fullName}
 - First Name: ${firstName}${nickname ? `\n- Nickname: ${nickname} (only close friends or those the character has shared this with would use it)` : ''}
 - Gender: ${character.gender || 'unspecified'} - USE ${pronouns.toUpperCase()} PRONOUNS FOR THIS CHARACTER
 - Race: ${character.race}
-- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}
+- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}
 - Level: ${character.level}
 - Background: ${character.background || 'Unknown'}
 - Current HP: ${character.current_hp}/${character.max_hp}
 - Armor Class: ${ac}
 - Weapon: ${weaponStr}
 - Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}
-- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}
+- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}${keeperSection}
 - Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}
 - Current Location: ${character.current_location || 'Unknown'}
 - Current Quest: ${character.current_quest || 'None'}
