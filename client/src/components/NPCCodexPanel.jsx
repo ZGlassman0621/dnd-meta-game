@@ -36,7 +36,7 @@ function NpcEditForm({ data, onChange, accent }) {
             fontSize: '0.8rem', outline: 'none'
           }}
         >
-          {opts.options.map(o => <option key={o} value={o}>{o}</option>)}
+          {opts.options.map(o => <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
         </select>
       ) : opts.type === 'textarea' ? (
         <textarea

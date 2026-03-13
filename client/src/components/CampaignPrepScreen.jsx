@@ -860,13 +860,13 @@ function NpcCodexEditForm({ data, onChange, onSave, onCancel, color }) {
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Status</label>
             <select value={data.status || 'alive'} onChange={e => update('status', e.target.value)} style={inputStyle}>
-              {['alive', 'dead', 'missing', 'unknown'].map(s => <option key={s} value={s}>{s}</option>)}
+              {['alive', 'dead', 'missing', 'unknown'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </select>
           </div>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Disposition</label>
             <select value={data.disposition || 'neutral'} onChange={e => update('disposition', e.target.value)} style={inputStyle}>
-              {['friendly', 'neutral', 'wary', 'hostile'].map(d => <option key={d} value={d}>{d}</option>)}
+              {['friendly', 'neutral', 'wary', 'hostile'].map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
             </select>
           </div>
         </div>
