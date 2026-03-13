@@ -10,7 +10,7 @@ import { createDMModeSystemPrompt } from '../services/dmModePromptBuilder.js';
 import { detectSkillChecks, detectAttacks, detectSpellCasts, detectBondShifts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
 import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
-import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
+import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, updateNpc, createNpc, deleteNpc, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
 import { getPrep, getPrepItem, createPrep, updatePrep, archivePrep, deletePrep, duplicatePrep, getPrepCounts, reorderPrep } from '../services/dmModePrepService.js';
 import * as claude from '../services/claude.js';
 
@@ -161,6 +161,14 @@ router.post('/start', async (req, res) => {
       [partyId]
     );
 
+    // Load enriched NPC codex from DB (includes manual edits from prep)
+    let dbNpcs = [];
+    try {
+      dbNpcs = await getNpcsForParty(partyId, { sort: 'frequency' });
+    } catch (e) {
+      console.error('[DM Mode] Failed to load NPC codex:', e.message);
+    }
+
     // Build system prompt
     const partyForPrompt = {
       party_name: party.name,
@@ -173,7 +181,8 @@ router.post('/start', async (req, res) => {
     const systemPrompt = createDMModeSystemPrompt(partyForPrompt, {
       previousSummaries: previousSessions,
       sessionCount: previousSessions.length,
-      chronicles
+      chronicles,
+      dbNpcs
     });
 
     // Build opening prompt
@@ -773,6 +782,44 @@ router.get('/npcs/:partyId', async (req, res) => {
   } catch (error) {
     console.error('Error getting NPCs:', error);
     res.status(500).json({ error: 'Failed to get NPCs' });
+  }
+});
+
+// POST /api/dm-mode/npcs/:partyId — Create a new NPC manually
+router.post('/npcs/:partyId', async (req, res) => {
+  try {
+    if (!req.body.name) return res.status(400).json({ error: 'NPC name is required' });
+    const npc = await createNpc(parseInt(req.params.partyId), req.body);
+    res.status(201).json(npc);
+  } catch (error) {
+    console.error('Error creating NPC:', error);
+    if (error.message?.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'An NPC with that name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create NPC' });
+  }
+});
+
+// PUT /api/dm-mode/npcs/:npcId — Update an existing NPC
+router.put('/npcs/:npcId', async (req, res) => {
+  try {
+    const npc = await updateNpc(parseInt(req.params.npcId), req.body);
+    if (!npc) return res.status(404).json({ error: 'NPC not found' });
+    res.json(npc);
+  } catch (error) {
+    console.error('Error updating NPC:', error);
+    res.status(500).json({ error: 'Failed to update NPC' });
+  }
+});
+
+// DELETE /api/dm-mode/npcs/:npcId — Delete an NPC
+router.delete('/npcs/:npcId', async (req, res) => {
+  try {
+    await deleteNpc(parseInt(req.params.npcId));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting NPC:', error);
+    res.status(500).json({ error: 'Failed to delete NPC' });
   }
 });
 

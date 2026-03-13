@@ -31,24 +31,41 @@ export async function syncNpcsFromChronicle(partyId, chronicleData, sessionNumbe
     );
 
     if (existing) {
-      // Merge: keep longer role, fill-not-overwrite description, append session
+      // Merge: keep longer role, fill-not-overwrite for most fields, append session
       const sessions = JSON.parse(existing.sessions_appeared || '[]');
       if (!sessions.includes(sessionNumber)) sessions.push(sessionNumber);
 
       const role = (npc.role && npc.role.length > (existing.role || '').length) ? npc.role : existing.role;
       const description = existing.description || npc.description || null;
+      // Fill-not-overwrite for enrichment fields
+      const location = npc.location || existing.location || null;
+      const race = existing.race || npc.race || null;
+      const classProfession = (npc.class_profession && npc.class_profession.length > (existing.class_profession || '').length) ? npc.class_profession : existing.class_profession;
+      const ageDescription = existing.age_description || npc.age_description || null;
+      const personality = existing.personality || npc.personality || null;
+      // Status and disposition always update to latest
+      const status = npc.status || existing.status || 'alive';
+      const disposition = npc.disposition || existing.disposition || 'neutral';
+      const connections = npc.connections || existing.connections || null;
 
       await dbRun(
-        `UPDATE dm_mode_npcs SET role = ?, description = ?, sessions_appeared = ?, last_seen_session = ?, updated_at = CURRENT_TIMESTAMP
+        `UPDATE dm_mode_npcs SET role = ?, description = ?, sessions_appeared = ?, last_seen_session = ?,
+         location = ?, race = ?, class_profession = ?, age_description = ?, personality = ?,
+         status = ?, disposition = ?, connections = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [role, description, JSON.stringify(sessions), sessionNumber, existing.id]
+        [role, description, JSON.stringify(sessions), sessionNumber,
+         location, race, classProfession, ageDescription, personality,
+         status, disposition, connections, existing.id]
       );
     } else {
       // Insert new NPC
       await dbRun(
-        `INSERT INTO dm_mode_npcs (dm_mode_party_id, name, role, description, sessions_appeared, first_seen_session, last_seen_session)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [partyId, npc.name, npc.role || null, npc.description || null, JSON.stringify([sessionNumber]), sessionNumber, sessionNumber]
+        `INSERT INTO dm_mode_npcs (dm_mode_party_id, name, role, description, sessions_appeared, first_seen_session, last_seen_session,
+         location, race, class_profession, age_description, personality, status, disposition, connections)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [partyId, npc.name, npc.role || null, npc.description || null, JSON.stringify([sessionNumber]), sessionNumber, sessionNumber,
+         npc.location || null, npc.race || null, npc.class_profession || null, npc.age_description || null, npc.personality || null,
+         npc.status || 'alive', npc.disposition || 'neutral', npc.connections || null]
       );
     }
   }
@@ -90,6 +107,50 @@ export async function getNpcsForParty(partyId, { search = '', sort = 'name' } = 
   // 'name' is default from SQL ORDER BY
 
   return npcs;
+}
+
+/**
+ * Update an existing NPC's fields (for manual editing in prep/codex).
+ */
+export async function updateNpc(npcId, fields) {
+  const allowedFields = ['name', 'role', 'description', 'location', 'race', 'class_profession',
+    'age_description', 'personality', 'status', 'disposition', 'connections', 'voice_notes'];
+  const updates = [];
+  const params = [];
+  for (const [key, value] of Object.entries(fields)) {
+    if (allowedFields.includes(key)) {
+      updates.push(`${key} = ?`);
+      params.push(value);
+    }
+  }
+  if (updates.length === 0) return null;
+  updates.push('updated_at = CURRENT_TIMESTAMP');
+  params.push(npcId);
+  await dbRun(`UPDATE dm_mode_npcs SET ${updates.join(', ')} WHERE id = ?`, params);
+  return dbGet('SELECT * FROM dm_mode_npcs WHERE id = ?', [npcId]);
+}
+
+/**
+ * Manually create an NPC (from prep system, not from chronicle sync).
+ */
+export async function createNpc(partyId, fields) {
+  const result = await dbRun(
+    `INSERT INTO dm_mode_npcs (dm_mode_party_id, name, role, description, sessions_appeared, first_seen_session,
+     location, race, class_profession, age_description, personality, status, disposition, connections)
+     VALUES (?, ?, ?, ?, '[]', NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [partyId, fields.name, fields.role || null, fields.description || null,
+     fields.location || null, fields.race || null, fields.class_profession || null,
+     fields.age_description || null, fields.personality || null,
+     fields.status || 'alive', fields.disposition || 'neutral', fields.connections || null]
+  );
+  return dbGet('SELECT * FROM dm_mode_npcs WHERE id = ?', [Number(result.lastInsertRowid)]);
+}
+
+/**
+ * Delete an NPC from the codex.
+ */
+export async function deleteNpc(npcId) {
+  await dbRun('DELETE FROM dm_mode_npcs WHERE id = ?', [npcId]);
 }
 
 // ============================================================

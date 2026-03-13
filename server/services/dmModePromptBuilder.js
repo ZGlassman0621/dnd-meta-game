@@ -32,11 +32,30 @@ function aggregateNpcs(chronicles) {
         existing.sessions.add(c.session_number);
         if (npc.role && npc.role.length > (existing.role || '').length) existing.role = npc.role;
         if (npc.description && !existing.description) existing.description = npc.description;
+        // Update location to latest encounter
+        if (npc.location) existing.location = npc.location;
+        // Fill-not-overwrite for stable traits
+        if (npc.race && !existing.race) existing.race = npc.race;
+        if (npc.class_profession && npc.class_profession.length > (existing.class_profession || '').length) existing.class_profession = npc.class_profession;
+        if (npc.age_description && !existing.age_description) existing.age_description = npc.age_description;
+        if (npc.personality && !existing.personality) existing.personality = npc.personality;
+        // Status and disposition always update to latest
+        if (npc.status) existing.status = npc.status;
+        if (npc.disposition) existing.disposition = npc.disposition;
+        if (npc.connections) existing.connections = npc.connections;
       } else {
         npcMap.set(key, {
           name: npc.name,
           role: npc.role || 'Unknown',
           description: npc.description || null,
+          location: npc.location || null,
+          race: npc.race || null,
+          class_profession: npc.class_profession || null,
+          age_description: npc.age_description || null,
+          personality: npc.personality || null,
+          status: npc.status || 'alive',
+          disposition: npc.disposition || 'neutral',
+          connections: npc.connections || null,
           sessions: new Set([c.session_number])
         });
       }
@@ -88,7 +107,7 @@ function aggregatePlotThreads(chronicles) {
  * @param {Array} chronicles - Structured chronicle records
  * @param {Array} uncoveredSummaries - Plain summaries from sessions that predate the chronicle system
  */
-function formatCampaignHistory(chronicles, uncoveredSummaries = []) {
+function formatCampaignHistory(chronicles, uncoveredSummaries = [], dbNpcs = null) {
   if (!chronicles || chronicles.length === 0) return '';
 
   const parts = [];
@@ -103,14 +122,28 @@ function formatCampaignHistory(chronicles, uncoveredSummaries = []) {
     }
   }
 
-  // 1. Aggregated NPC reference
-  const allNpcs = aggregateNpcs(chronicles);
-  if (allNpcs.length > 0) {
+  // 1. Aggregated NPC reference — prefer DB NPCs (includes manual edits) over chronicle aggregation
+  const npcList = dbNpcs && dbNpcs.length > 0 ? dbNpcs : aggregateNpcs(chronicles);
+  if (npcList.length > 0) {
     parts.push('=== NPCs ENCOUNTERED ===');
-    parts.push('These NPCs have appeared in the campaign. The party remembers interacting with them.\n');
-    for (const npc of allNpcs) {
+    parts.push('These NPCs have appeared in the campaign. The party remembers interacting with them.');
+    parts.push('IMPORTANT: When referencing an NPC, use the correct location and session context listed here. Do NOT confuse where NPCs were encountered.\n');
+    for (const npc of npcList) {
+      const details = [];
+      if (npc.race) details.push(npc.race);
+      if (npc.age_description) details.push(npc.age_description);
+      if (npc.class_profession || npc.role) details.push(npc.class_profession || npc.role);
+      if (npc.personality) details.push(`personality: ${npc.personality}`);
+      if (npc.location) details.push(`location: ${npc.location}`);
+      if (npc.disposition && npc.disposition !== 'neutral') details.push(`disposition: ${npc.disposition}`);
+      if (npc.status && npc.status !== 'alive') details.push(`status: ${npc.status}`);
+      if (npc.connections) details.push(`connections: ${npc.connections}`);
+      const sessions = npc.sessions_appeared
+        ? (typeof npc.sessions_appeared === 'string' ? JSON.parse(npc.sessions_appeared) : npc.sessions_appeared)
+        : npc.sessions || [];
+      if (sessions.length > 0) details.push(`sessions: ${sessions.join(', ')}`);
       const desc = npc.description ? ` — ${npc.description}` : '';
-      parts.push(`- ${npc.name}: ${npc.role}${desc} (Sessions: ${npc.sessions.join(', ')})`);
+      parts.push(`- ${npc.name}${desc} [${details.join('; ')}]`);
     }
     parts.push('');
   }
@@ -313,7 +346,7 @@ function formatCharacterBlock(char, allCharacters) {
  * @param {Object} context - { previousSummaries, sessionCount, chronicles }
  */
 export function createDMModeSystemPrompt(party, context = {}) {
-  const { previousSummaries, sessionCount = 0, chronicles = [] } = context;
+  const { previousSummaries, sessionCount = 0, chronicles = [], dbNpcs = null } = context;
   const chars = party.characters || [];
   const tensions = party.tensions || [];
   const dynamics = party.party_dynamics;
@@ -485,7 +518,7 @@ SECRETS:
     const chronicleSessionIds = new Set(chronicles.map(c => c.session_id));
     const uncoveredSummaries = (previousSummaries || []).filter(s => !chronicleSessionIds.has(s.id));
 
-    sections.push(formatCampaignHistory(chronicles, uncoveredSummaries));
+    sections.push(formatCampaignHistory(chronicles, uncoveredSummaries, dbNpcs));
   } else if (previousSummaries && previousSummaries.length > 0) {
     // Fallback: plain summaries for pre-chronicle sessions
     sections.push('\n=== PREVIOUS SESSIONS ===');

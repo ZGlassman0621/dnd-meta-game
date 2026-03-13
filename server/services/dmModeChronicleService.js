@@ -22,7 +22,7 @@ Respond in EXACTLY this JSON format (no markdown, no code fences):
     {"decision": "what was decided", "who_decided": "character name or 'the party'", "context": "why it mattered", "consequence": "what happened as a result"}
   ],
   "npcs_involved": [
-    {"name": "NPC name", "role": "their role in this session", "description": "brief physical or personality description if first appearance, or null"}
+    {"name": "NPC name", "role": "their role in this session", "description": "brief physical or personality description if first appearance, or null", "location": "where they were encountered (tavern name, city, region)", "race": "human/elf/dwarf/etc or null if unknown", "class_profession": "specific occupation like 'blacksmith' or 'city guard captain'", "age_description": "young/middle-aged/elderly/ancient or null if unclear", "personality": "1-2 word personality traits like 'gruff but kind' or 'suspicious and secretive'", "status": "alive/dead/missing/unknown", "disposition": "friendly/neutral/wary/hostile toward the party", "connections": "relationships to other NPCs like 'brother of Tormund' or null"}
   ],
   "locations_visited": [
     {"name": "location name", "events": "what happened there"}
@@ -42,7 +42,7 @@ Respond in EXACTLY this JSON format (no markdown, no code fences):
 }
 
 Guidelines:
-- npcs_involved: ONLY include NPCs controlled by the DM — NOT the 4 player characters. Include every named NPC who appeared, spoke, or was mentioned significantly.
+- npcs_involved: ONLY include NPCs controlled by the DM — NOT the 4 player characters. Include every named NPC who appeared, spoke, or was mentioned significantly. Always include location (where they were encountered), disposition (how they feel about the party), and status (alive/dead/missing). Use null for fields you genuinely cannot determine from the transcript.
 - plot_threads: "new" = introduced this session, "ongoing" = was already active and continued, "resolved" = concluded this session. Extract 0-5 threads focusing on named storylines, not individual actions.
 - key_decisions: Note WHICH character(s) drove the decision. Include 2-5 major choices.
 - character_moments: Track moments where individual party members showed growth, revealed something about themselves, clashed with others, or had a significant personal moment. Include 1-4 moments.
