@@ -45,27 +45,48 @@ export default function CampaignPrepScreen({ party, onBack }) {
 
   const partyId = party.id;
 
-  // Load items for active type
+  const isNpcCodex = activeType === 'npc';
+
+  // Load items for active type (NPC codex uses different API)
   const loadItems = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.set('type', activeType);
-      if (search) params.set('search', search);
-      const res = await fetch(`/api/dm-mode/prep/${partyId}?${params}`);
-      if (res.ok) setItems(await res.json());
+      if (isNpcCodex) {
+        const params = new URLSearchParams();
+        if (search) params.set('search', search);
+        const res = await fetch(`/api/dm-mode/npcs/${partyId}?${params}`);
+        if (res.ok) {
+          const npcs = await res.json();
+          // Normalize: parse sessions_appeared if string
+          setItems(npcs.map(n => ({
+            ...n,
+            sessions_appeared: typeof n.sessions_appeared === 'string' ? JSON.parse(n.sessions_appeared) : n.sessions_appeared || []
+          })));
+        }
+      } else {
+        const params = new URLSearchParams();
+        params.set('type', activeType);
+        if (search) params.set('search', search);
+        const res = await fetch(`/api/dm-mode/prep/${partyId}?${params}`);
+        if (res.ok) setItems(await res.json());
+      }
     } catch (err) {
-      console.error('Failed to load prep items:', err);
+      console.error('Failed to load items:', err);
     } finally {
       setLoading(false);
     }
-  }, [partyId, activeType, search]);
+  }, [partyId, activeType, search, isNpcCodex]);
 
-  // Load counts for badges
+  // Load counts for badges (includes NPC codex count)
   const loadCounts = useCallback(async () => {
     try {
-      const res = await fetch(`/api/dm-mode/prep/${partyId}/counts`);
-      if (res.ok) setCounts(await res.json());
+      const [prepRes, npcRes] = await Promise.all([
+        fetch(`/api/dm-mode/prep/${partyId}/counts`),
+        fetch(`/api/dm-mode/npcs/${partyId}`)
+      ]);
+      const prepCounts = prepRes.ok ? await prepRes.json() : {};
+      const npcList = npcRes.ok ? await npcRes.json() : [];
+      setCounts({ ...prepCounts, npc: npcList.length });
     } catch (err) {
       console.error('Failed to load counts:', err);
     }
@@ -79,21 +100,41 @@ export default function CampaignPrepScreen({ party, onBack }) {
     const name = prompt('Enter name:');
     if (!name?.trim()) return;
     try {
-      const res = await fetch(`/api/dm-mode/prep/${partyId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: activeType, name: name.trim(), content: getDefaultContent(activeType) })
-      });
-      if (res.ok) {
-        const item = await res.json();
-        setItems(prev => [...prev, item]);
-        setCounts(prev => ({ ...prev, [activeType]: (prev[activeType] || 0) + 1 }));
-        setSelectedItem(item);
-        setEditing(true);
-        setEditData({ name: item.name, content: item.content });
+      if (isNpcCodex) {
+        const res = await fetch(`/api/dm-mode/npcs/${partyId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim() })
+        });
+        if (res.ok) {
+          const npc = await res.json();
+          npc.sessions_appeared = [];
+          setItems(prev => [...prev, npc]);
+          setCounts(prev => ({ ...prev, npc: (prev.npc || 0) + 1 }));
+          setSelectedItem(npc);
+          setEditing(true);
+          setEditData({ ...npc });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Failed to create NPC');
+        }
       } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to create');
+        const res = await fetch(`/api/dm-mode/prep/${partyId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: activeType, name: name.trim(), content: getDefaultContent(activeType) })
+        });
+        if (res.ok) {
+          const item = await res.json();
+          setItems(prev => [...prev, item]);
+          setCounts(prev => ({ ...prev, [activeType]: (prev[activeType] || 0) + 1 }));
+          setSelectedItem(item);
+          setEditing(true);
+          setEditData({ name: item.name, content: item.content });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Failed to create');
+        }
       }
     } catch (err) {
       console.error('Create error:', err);
@@ -103,20 +144,37 @@ export default function CampaignPrepScreen({ party, onBack }) {
   const handleSave = async () => {
     if (!selectedItem || !editData) return;
     try {
-      const res = await fetch(`/api/dm-mode/prep-item/${selectedItem.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editData.name, content: editData.content })
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
-        setSelectedItem(updated);
-        setEditing(false);
-        setEditData(null);
+      if (isNpcCodex) {
+        const res = await fetch(`/api/dm-mode/npcs/${selectedItem.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editData)
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          updated.sessions_appeared = typeof updated.sessions_appeared === 'string'
+            ? JSON.parse(updated.sessions_appeared) : updated.sessions_appeared || [];
+          setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+          setSelectedItem(updated);
+          setEditing(false);
+          setEditData(null);
+        }
       } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to save');
+        const res = await fetch(`/api/dm-mode/prep-item/${selectedItem.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: editData.name, content: editData.content })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+          setSelectedItem(updated);
+          setEditing(false);
+          setEditData(null);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Failed to save');
+        }
       }
     } catch (err) {
       console.error('Save error:', err);
@@ -126,9 +184,10 @@ export default function CampaignPrepScreen({ party, onBack }) {
   const handleDelete = async (id) => {
     if (!confirm('Delete this item permanently?')) return;
     try {
-      await fetch(`/api/dm-mode/prep-item/${id}`, { method: 'DELETE' });
+      const endpoint = isNpcCodex ? `/api/dm-mode/npcs/${id}` : `/api/dm-mode/prep-item/${id}`;
+      await fetch(endpoint, { method: 'DELETE' });
       setItems(prev => prev.filter(i => i.id !== id));
-      setCounts(prev => ({ ...prev, [activeType]: Math.max(0, (prev[activeType] || 0) - 1) }));
+      setCounts(prev => ({ ...prev, [isNpcCodex ? 'npc' : activeType]: Math.max(0, (prev[isNpcCodex ? 'npc' : activeType] || 0) - 1) }));
       if (selectedItem?.id === id) {
         setSelectedItem(null);
         setEditing(false);
@@ -140,6 +199,7 @@ export default function CampaignPrepScreen({ party, onBack }) {
   };
 
   const handleDuplicate = async (id) => {
+    if (isNpcCodex) return; // NPC codex doesn't support duplicate
     try {
       const res = await fetch(`/api/dm-mode/prep-item/${id}/duplicate`, { method: 'POST' });
       if (res.ok) {
@@ -156,7 +216,11 @@ export default function CampaignPrepScreen({ party, onBack }) {
   const startEdit = (item) => {
     setSelectedItem(item);
     setEditing(true);
-    setEditData({ name: item.name, content: { ...item.content } });
+    if (isNpcCodex) {
+      setEditData({ ...item });
+    } else {
+      setEditData({ name: item.name, content: { ...item.content } });
+    }
   };
 
   const cancelEdit = () => {
@@ -272,25 +336,50 @@ export default function CampaignPrepScreen({ party, onBack }) {
                 No {activeCat?.label?.toLowerCase()} yet. Create one to get started.
               </div>
             ) : (
-              items.map(item => (
-                <div
-                  key={item.id}
-                  onClick={() => { setSelectedItem(item); setEditing(false); setEditData(null); }}
-                  style={{
-                    padding: '0.5rem 0.6rem', margin: '0.15rem 0',
-                    background: selectedItem?.id === item.id ? `${activeCat?.color}12` : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${selectedItem?.id === item.id ? `${activeCat?.color}40` : 'rgba(255,255,255,0.06)'}`,
-                    borderRadius: '4px', cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ color: selectedItem?.id === item.id ? activeCat?.color : '#ddd', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                    {item.name}
+              items.map(item => {
+                const isSel = selectedItem?.id === item.id;
+                const sessions = item.sessions_appeared || [];
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => { setSelectedItem(item); setEditing(false); setEditData(null); }}
+                    style={{
+                      padding: '0.5rem 0.6rem', margin: '0.15rem 0',
+                      background: isSel ? `${activeCat?.color}12` : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${isSel ? `${activeCat?.color}40` : 'rgba(255,255,255,0.06)'}`,
+                      borderRadius: '4px', cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ color: isSel ? activeCat?.color : '#ddd', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        {item.name}
+                      </div>
+                      {isNpcCodex && item.status && item.status !== 'alive' && (
+                        <span style={{
+                          padding: '0.05rem 0.3rem', fontSize: '0.55rem', borderRadius: '3px', textTransform: 'uppercase',
+                          background: item.status === 'dead' ? '#ef444422' : '#f59e0b22',
+                          color: item.status === 'dead' ? '#ef4444' : '#f59e0b',
+                          border: `1px solid ${item.status === 'dead' ? '#ef444444' : '#f59e0b44'}`
+                        }}>{item.status}</span>
+                      )}
+                    </div>
+                    <div style={{ color: '#777', fontSize: '0.7rem', marginTop: '0.15rem' }}>
+                      {getItemPreview(item)}
+                    </div>
+                    {isNpcCodex && sessions.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.15rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
+                        {sessions.map(s => (
+                          <span key={s} style={{
+                            padding: '0 0.25rem', background: `${activeCat?.color}15`,
+                            border: `1px solid ${activeCat?.color}30`, borderRadius: '2px',
+                            color: activeCat?.color, fontSize: '0.55rem'
+                          }}>S{s}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ color: '#777', fontSize: '0.7rem', marginTop: '0.15rem' }}>
-                    {getItemPreview(item)}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -302,6 +391,23 @@ export default function CampaignPrepScreen({ party, onBack }) {
               <div style={{ fontSize: '2rem', marginBottom: '0.5rem', opacity: 0.3 }}>{activeCat?.icon}</div>
               <div style={{ fontSize: '0.9rem' }}>Select an item or create a new one</div>
             </div>
+          ) : isNpcCodex ? (
+            editing && editData ? (
+              <NpcCodexEditForm
+                data={editData}
+                onChange={setEditData}
+                onSave={handleSave}
+                onCancel={cancelEdit}
+                color={activeCat?.color}
+              />
+            ) : (
+              <NpcCodexDetail
+                npc={selectedItem}
+                onEdit={() => startEdit(selectedItem)}
+                onDelete={() => handleDelete(selectedItem.id)}
+                color={activeCat?.color}
+              />
+            )
           ) : editing && editData ? (
             <EditForm
               type={activeType}
@@ -353,7 +459,7 @@ function getDefaultContent(type) {
 function getItemPreview(item) {
   const c = item.content || {};
   switch (item.type) {
-    case 'npc': return [c.race, c.location].filter(Boolean).join(' | ') || 'No details';
+    case 'npc': return [item.race || c.race, item.class_profession || c.location, item.location || c.location].filter(Boolean).join(' · ') || 'No details';
     case 'enemy': return [c.size, c.type, c.cr ? `CR ${c.cr}` : ''].filter(Boolean).join(' ') || 'No details';
     case 'location': return c.type || c.atmosphere || 'No details';
     case 'lore': return c.category || 'No details';
@@ -665,6 +771,112 @@ function NpcEditFields({ content: c, update }) {
       <FormTextarea label="Motivations" value={c.motivations} onChange={v => update('motivations', v)} rows={2} />
       <FormTextarea label="Secrets" value={c.secrets} onChange={v => update('secrets', v)} rows={2} />
       <FormTextarea label="Connections" value={c.connections} onChange={v => update('connections', v)} rows={2} />
+    </div>
+  );
+}
+
+// ---- NPC Codex (from dm_mode_npcs table) ----
+
+const STATUS_COLORS = { alive: '#10b981', dead: '#ef4444', missing: '#f59e0b', unknown: '#6b7280' };
+const DISPOSITION_COLORS = { friendly: '#10b981', neutral: '#6b7280', wary: '#f59e0b', hostile: '#ef4444' };
+
+function NpcCodexDetail({ npc, onEdit, onDelete, color }) {
+  const sessions = Array.isArray(npc.sessions_appeared) ? npc.sessions_appeared : [];
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+        <div>
+          <h3 style={{ color, margin: 0, fontSize: '1.2rem' }}>{npc.name}</h3>
+          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
+            {npc.status && (
+              <span style={{
+                padding: '0.1rem 0.4rem', fontSize: '0.65rem', borderRadius: '3px', textTransform: 'uppercase',
+                background: `${STATUS_COLORS[npc.status] || '#6b7280'}22`, color: STATUS_COLORS[npc.status] || '#6b7280',
+                border: `1px solid ${STATUS_COLORS[npc.status] || '#6b7280'}44`
+              }}>{npc.status}</span>
+            )}
+            {npc.disposition && (
+              <span style={{
+                padding: '0.1rem 0.4rem', fontSize: '0.65rem', borderRadius: '3px',
+                background: `${DISPOSITION_COLORS[npc.disposition] || '#6b7280'}22`, color: DISPOSITION_COLORS[npc.disposition] || '#6b7280',
+                border: `1px solid ${DISPOSITION_COLORS[npc.disposition] || '#6b7280'}44`
+              }}>{npc.disposition}</span>
+            )}
+            {sessions.length > 0 && sessions.map(s => (
+              <span key={s} style={{
+                padding: '0.1rem 0.3rem', fontSize: '0.6rem', borderRadius: '3px',
+                background: `${color}15`, color, border: `1px solid ${color}30`
+              }}>S{s}</span>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <button onClick={onEdit} style={actionBtnStyle(ACCENT)}>Edit</button>
+          <button onClick={onDelete} style={actionBtnStyle('#e74c3c')}>Delete</button>
+        </div>
+      </div>
+      {/* Fields */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {npc.race && <Field label="Race" value={npc.race} />}
+        {npc.age_description && <Field label="Age" value={npc.age_description} />}
+        {npc.class_profession && <Field label="Profession" value={npc.class_profession} />}
+        {npc.role && <Field label="Role in Story" value={npc.role} />}
+        {npc.location && <Field label="Location" value={npc.location} />}
+        {npc.personality && <Field label="Personality" value={npc.personality} />}
+        {npc.description && <Field label="Description" value={npc.description} />}
+        {npc.connections && <Field label="Connections" value={npc.connections} />}
+        {npc.voice_notes && (
+          <div>
+            <div style={{ color: '#aaa', fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.2rem', textTransform: 'uppercase' }}>Voice Notes</div>
+            <div style={{
+              color: '#d4af37', fontSize: '0.82rem', padding: '0.5rem 0.6rem',
+              background: 'rgba(212,175,55,0.08)', borderRadius: '4px',
+              lineHeight: '1.5', whiteSpace: 'pre-wrap'
+            }}>{npc.voice_notes}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NpcCodexEditForm({ data, onChange, onSave, onCancel, color }) {
+  const update = (key, value) => onChange({ ...data, [key]: value });
+  return (
+    <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <FormRow label="Name" value={data.name} onChange={v => update('name', v)} />
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ flex: 1 }}><FormRow label="Race" value={data.race || ''} onChange={v => update('race', v)} placeholder="Human, Elf, Dwarf..." /></div>
+          <div style={{ flex: 1 }}><FormRow label="Age" value={data.age_description || ''} onChange={v => update('age_description', v)} placeholder="Young, Middle-aged..." /></div>
+        </div>
+        <FormRow label="Profession" value={data.class_profession || ''} onChange={v => update('class_profession', v)} placeholder="Blacksmith, Guard Captain..." />
+        <FormRow label="Role in Story" value={data.role || ''} onChange={v => update('role', v)} placeholder="Quest giver, merchant..." />
+        <FormRow label="Location" value={data.location || ''} onChange={v => update('location', v)} placeholder="Where they reside or were met" />
+        <FormRow label="Personality" value={data.personality || ''} onChange={v => update('personality', v)} placeholder="Gruff but kind, suspicious..." />
+        <FormTextarea label="Description" value={data.description || ''} onChange={v => update('description', v)} rows={2} />
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Status</label>
+            <select value={data.status || 'alive'} onChange={e => update('status', e.target.value)} style={inputStyle}>
+              {['alive', 'dead', 'missing', 'unknown'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Disposition</label>
+            <select value={data.disposition || 'neutral'} onChange={e => update('disposition', e.target.value)} style={inputStyle}>
+              {['friendly', 'neutral', 'wary', 'hostile'].map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+        <FormTextarea label="Connections" value={data.connections || ''} onChange={v => update('connections', v)} rows={2} placeholder="Brother of Tormund, works for the guild..." />
+        <FormTextarea label="Voice Notes" value={data.voice_notes || ''} onChange={v => update('voice_notes', v)} rows={2} />
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <button onClick={onSave} style={{ ...actionBtnStyle(ACCENT), padding: '0.5rem 1.5rem', fontSize: '0.9rem', fontWeight: 'bold' }}>Save</button>
+        <button onClick={onCancel} style={{ ...actionBtnStyle('#888'), padding: '0.5rem 1rem', fontSize: '0.85rem' }}>Cancel</button>
+      </div>
     </div>
   );
 }
