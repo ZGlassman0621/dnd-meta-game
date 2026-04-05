@@ -44,6 +44,7 @@ export default function SessionSetup({
   onSelectedNpcIdsChange,
   // Actions
   onStartSession,
+  onStartPrelude,
   onOpenCampaignNotes,
   // Loading/error
   isLoading,
@@ -453,6 +454,47 @@ export default function SessionSetup({
                 <p style={{ margin: '0.75rem 0 0', fontSize: '0.8rem', opacity: 0.6 }}>
                   World, NPCs, factions, and quest arc will be loaded from your campaign plan.
                 </p>
+              </div>
+            )}
+
+            {/* Prelude option - only show if character hasn't completed one and has no sessions */}
+            {onStartPrelude && !character.prelude_completed && !campaignContext?.hasPreviousSessions && (
+              <div style={{
+                marginBottom: '1.5rem',
+                padding: '1rem 1.25rem',
+                borderRadius: '8px',
+                background: 'rgba(192, 132, 252, 0.08)',
+                border: '1px solid rgba(192, 132, 252, 0.25)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.3rem' }}>📖</span>
+                  <div>
+                    <h4 style={{ margin: 0, color: '#c084fc' }}>Play a Prelude?</h4>
+                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#aaa' }}>
+                      Tell {character.nickname || character.name}'s origin story before the adventure begins.
+                    </p>
+                  </div>
+                </div>
+                <p style={{ fontSize: '0.82rem', color: '#999', lineHeight: '1.5', margin: '0.5rem 0 0.75rem' }}>
+                  Play through formative moments, meet the people who shaped them, and make decisions that define
+                  who they are. Everything that happens becomes part of their backstory.
+                </p>
+                <button
+                  type="button"
+                  onClick={onStartPrelude}
+                  style={{
+                    padding: '0.6rem 1.25rem',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(192, 132, 252, 0.5)',
+                    background: 'rgba(192, 132, 252, 0.15)',
+                    color: '#c084fc',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Begin Origin Story
+                </button>
               </div>
             )}
 

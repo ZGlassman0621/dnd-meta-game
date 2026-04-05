@@ -53,6 +53,7 @@ import { calculateEconomyModifiers, getItemEconomyMultiplier, recordTransaction,
 import { getBaseForPrompt } from '../services/partyBaseService.js';
 import { getNotorietyForPrompt, addNotoriety as addNotorietyScore } from '../services/notorietyService.js';
 import { getProjectsForPrompt } from '../services/longTermProjectService.js';
+import { createPreludeSystemPrompt, createPreludeOpeningPrompt } from '../services/preludePromptBuilder.js';
 
 const router = express.Router();
 
@@ -1041,6 +1042,137 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
     });
   } catch (error) {
     handleServerError(res, error, 'start DM session');
+  }
+});
+
+// Start a prelude (origin story) session
+router.post('/start-prelude', async (req, res) => {
+  try {
+    const { characterId, preludeConfig, model, providerPreference } = req.body;
+
+    if (!characterId) {
+      return res.status(400).json({ error: 'characterId is required' });
+    }
+
+    // Check for existing active session
+    const existingSession = await dbGet(`
+      SELECT id FROM dm_sessions
+      WHERE character_id = ? AND (status = 'active' OR status = 'paused')
+    `, [characterId]);
+
+    if (existingSession) {
+      return res.status(400).json({
+        error: 'Character already has an active or paused DM session',
+        sessionId: existingSession.id
+      });
+    }
+
+    // Check for unclaimed rewards
+    const unclaimedSession = await dbGet(`
+      SELECT id FROM dm_sessions
+      WHERE character_id = ? AND status = 'completed' AND rewards_claimed = 0
+    `, [characterId]);
+
+    if (unclaimedSession) {
+      return res.status(400).json({
+        error: 'Character has unclaimed rewards from a previous session',
+        sessionId: unclaimedSession.id
+      });
+    }
+
+    // Get character data
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
+    if (!character) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // Build prelude system prompt and opening prompt
+    const systemPrompt = createPreludeSystemPrompt(character, preludeConfig);
+    const openingPrompt = createPreludeOpeningPrompt(character, preludeConfig);
+
+    // Check LLM availability
+    const { provider, status: llmStatus } = await getLLMProvider(providerPreference);
+    if (!provider) {
+      return res.status(503).json({
+        error: 'No LLM provider available',
+        details: llmStatus.error
+      });
+    }
+
+    let result;
+    if (provider === 'claude') {
+      // Preludes always use Opus — this is origin story generation
+      const claudeResult = await claude.startSession(systemPrompt, openingPrompt, 'opus');
+      result = {
+        systemPrompt,
+        openingNarrative: claudeResult.response,
+        model: claudeResult.model,
+        messages: claudeResult.messages
+      };
+    } else {
+      // Ollama fallback — build messages array and call chat
+      const ollamaMessages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: openingPrompt }
+      ];
+      const ollamaResponse = await ollama.chat(ollamaMessages, model || 'gemma3:12b');
+      result = {
+        systemPrompt,
+        openingNarrative: ollamaResponse,
+        model: model || 'gemma3:12b',
+        messages: [
+          ...ollamaMessages,
+          { role: 'assistant', content: ollamaResponse }
+        ]
+      };
+    }
+
+    const charName = character.nickname || character.name;
+    const title = `Prelude: The Story of ${charName}`;
+    const locationName = preludeConfig.preludeLocation || 'Unknown';
+
+    // Pick a starting day — preludes happen before the character's adventure,
+    // so we set it before any existing game_day
+    const gameStartDay = 1; // Day 1 of their prelude timeline
+    const gameStartYear = character.game_year || 1492;
+
+    const sessionConfig = {
+      sessionType: 'prelude',
+      preludeConfig
+    };
+
+    const info = await dbRun(`
+      INSERT INTO dm_sessions (character_id, title, setting, tone, model, status, messages, start_time, session_config, session_type, game_start_day, game_start_year)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'), ?, 'prelude', ?, ?)
+    `, [
+      characterId,
+      title,
+      locationName,
+      preludeConfig.tone || 'heroic',
+      model || 'opus',
+      JSON.stringify(result.messages),
+      JSON.stringify(sessionConfig),
+      gameStartDay,
+      gameStartYear
+    ]);
+
+    const sessionId = Number(info.lastInsertRowid);
+
+    // Save prelude config to character for reference
+    await dbRun(`
+      UPDATE characters SET prelude_config = ? WHERE id = ?
+    `, [JSON.stringify(preludeConfig), characterId]);
+
+    const gameDate = dayToDate(gameStartDay, gameStartYear);
+
+    res.json({
+      sessionId,
+      title,
+      openingNarrative: result.openingNarrative,
+      gameDate
+    });
+  } catch (error) {
+    handleServerError(res, error, 'start prelude session');
   }
 });
 
@@ -2480,6 +2612,27 @@ router.post('/:sessionId/end', async (req, res) => {
       }
     } catch (e) {
       console.error('Error generating story chronicle:', e);
+    }
+
+    // If this was a prelude session, mark the character's prelude as completed
+    // and enrich their backstory with the prelude summary
+    const sessionConfig = safeParse(session.session_config, {});
+    if (session.session_type === 'prelude' || sessionConfig.sessionType === 'prelude') {
+      try {
+        await dbRun(`
+          UPDATE characters SET prelude_completed = 1 WHERE id = ?
+        `, [session.character_id]);
+        // Append prelude summary to backstory if summary was generated
+        if (summary && character.backstory) {
+          const enrichedBackstory = `${character.backstory}\n\n[Prelude — played through origin story]: ${summary}`;
+          await dbRun(`UPDATE characters SET backstory = ? WHERE id = ?`, [enrichedBackstory, session.character_id]);
+        } else if (summary && !character.backstory) {
+          await dbRun(`UPDATE characters SET backstory = ? WHERE id = ?`, [`[Origin Story]: ${summary}`, session.character_id]);
+        }
+        console.log(`Prelude completed for character ${session.character_id}`);
+      } catch (e) {
+        console.error('Error marking prelude completed:', e);
+      }
     }
 
     // Update the session

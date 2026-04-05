@@ -826,6 +826,7 @@ function NpcCodexDetail({ npc, onEdit, onDelete, color }) {
         {npc.personality && <Field label="Personality" value={npc.personality} />}
         {npc.description && <Field label="Description" value={npc.description} />}
         {npc.connections && <Field label="Connections" value={npc.connections} />}
+        {npc.first_seen_session && <Field label="First Encountered" value={`Session ${npc.first_seen_session}`} />}
         {npc.voice_notes && (
           <div>
             <div style={{ color: '#aaa', fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.2rem', textTransform: 'uppercase' }}>Voice Notes</div>
@@ -872,6 +873,7 @@ function NpcCodexEditForm({ data, onChange, onSave, onCancel, color }) {
         </div>
         <FormTextarea label="Connections" value={data.connections || ''} onChange={v => update('connections', v)} rows={2} placeholder="Brother of Tormund, works for the guild..." />
         <FormTextarea label="Voice Notes" value={data.voice_notes || ''} onChange={v => update('voice_notes', v)} rows={2} />
+        <FormRow label="Session Encountered" value={data.first_seen_session != null ? String(data.first_seen_session) : ''} onChange={v => update('first_seen_session', v ? parseInt(v, 10) || null : null)} placeholder="Session number when first met" />
       </div>
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
         <button onClick={onSave} style={{ ...actionBtnStyle(ACCENT), padding: '0.5rem 1.5rem', fontSize: '0.9rem', fontWeight: 'bold' }}>Save</button>

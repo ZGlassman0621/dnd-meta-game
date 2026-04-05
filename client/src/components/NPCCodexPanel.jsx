@@ -83,6 +83,7 @@ function NpcEditForm({ data, onChange, accent }) {
       </div>
       {field('Connections', 'connections', { placeholder: 'Brother of Tormund, works for the guild...' })}
       {field('Voice Notes', 'voice_notes', { type: 'textarea' })}
+      {field('Session Encountered', 'first_seen_session', { placeholder: 'Session number when first met' })}
     </div>
   );
 }
@@ -117,10 +118,13 @@ export default function NPCCodexPanel({ partyId, onClose }) {
   const handleSave = async () => {
     if (!editData || !editingId) return;
     try {
+      const payload = { ...editData };
+      if (payload.first_seen_session) payload.first_seen_session = parseInt(payload.first_seen_session, 10) || null;
+      else payload.first_seen_session = null;
       const res = await fetch(`/api/dm-mode/npcs/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editData)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         const updated = await res.json();
@@ -179,7 +183,7 @@ export default function NPCCodexPanel({ partyId, onClose }) {
       class_profession: npc.class_profession || '', age_description: npc.age_description || '',
       personality: npc.personality || '', status: npc.status || 'alive',
       disposition: npc.disposition || 'neutral', connections: npc.connections || '',
-      voice_notes: npc.voice_notes || ''
+      voice_notes: npc.voice_notes || '', first_seen_session: npc.first_seen_session || ''
     });
     setExpandedId(npc.id);
   };
@@ -344,6 +348,11 @@ export default function NPCCodexPanel({ partyId, onClose }) {
                     {npc.connections && (
                       <div style={{ color: '#a8b', fontSize: '0.75rem', marginBottom: '0.3rem' }}>
                         <span style={{ color: '#888', fontSize: '0.7rem' }}>Connections: </span>{npc.connections}
+                      </div>
+                    )}
+                    {npc.first_seen_session != null && (
+                      <div style={{ color: '#7ab', fontSize: '0.75rem', marginBottom: '0.3rem' }}>
+                        <span style={{ color: '#888', fontSize: '0.7rem' }}>First Encountered: </span>Session {npc.first_seen_session}
                       </div>
                     )}
                     {npc.voice_notes && (

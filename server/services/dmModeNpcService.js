@@ -114,7 +114,7 @@ export async function getNpcsForParty(partyId, { search = '', sort = 'name' } = 
  */
 export async function updateNpc(npcId, fields) {
   const allowedFields = ['name', 'role', 'description', 'location', 'race', 'class_profession',
-    'age_description', 'personality', 'status', 'disposition', 'connections', 'voice_notes'];
+    'age_description', 'personality', 'status', 'disposition', 'connections', 'voice_notes', 'first_seen_session'];
   const updates = [];
   const params = [];
   for (const [key, value] of Object.entries(fields)) {
