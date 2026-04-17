@@ -1246,6 +1246,230 @@ async function testLevelUpFeatMissingFeatKey() {
   await dbRun('DELETE FROM characters WHERE id = ?', [id]);
 }
 
+async function testLevelUpInfoSurfacesProgressionDecisions() {
+  console.log('\n  -- Level-up-info: progression decisions surfaced at correct thresholds --');
+  // Create a Fighter at L2 (ancestry feat tier threshold is L3) with Soldier theme
+  // and a dwarf L1 ancestry feat — so progression machinery knows the theme and list.
+  const themesRes = await api('GET', '/api/progression/themes');
+  assert(themesRes.status === 200, 'Themes API alive');
+
+  const dwarfFeatsRes = await api('GET', '/api/progression/ancestry-feats/dwarf?tier=1');
+  const l1Feat = dwarfFeatsRes.body[0];
+
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_ProgressionLevelUp',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Dwarf',
+    subrace: 'Hill Dwarf',
+    level: 2,
+    current_hp: 20, max_hp: 20,
+    armor_class: 16, speed: 25,
+    current_location: 'X', current_quest: null,
+    experience: 900, experience_to_next_level: 2700,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 16, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]), equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]), languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]), tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST', gender: 'male', alignment: 'Lawful Good',
+    theme_id: 'soldier',
+    ancestry_feat_id: l1Feat.id,
+    ancestry_list_id: 'dwarf'
+  });
+  const id = created.id;
+
+  // Check level-up info at L2 → L3 (ancestry feat threshold)
+  const info = await api('GET', `/api/character/level-up-info/${id}`);
+  assert(info.status === 200, `Info returns 200 (got ${info.status})`);
+  assert(info.body.progression, 'Response includes progression section');
+  assert(info.body.progression.theme_tier_unlock === null, 'No theme unlock at L3 (theme tiers are L5/L11/L17)');
+  assert(info.body.progression.ancestry_feat_tier, 'Ancestry feat tier decision present at L3');
+  assert(info.body.progression.ancestry_feat_tier.tier === 3, 'Tier is 3');
+  assert(info.body.progression.ancestry_feat_tier.options.length === 3, `3 options offered (got ${info.body.progression.ancestry_feat_tier.options.length})`);
+  assert(info.body.progression.ancestry_feat_tier.list_id === 'dwarf', 'Options are from dwarf list');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
+async function testLevelUpRequiresAncestryFeatId() {
+  console.log('\n  -- Level-up: missing ancestryFeatId at tier threshold returns 422 --');
+  const dwarfFeatsRes = await api('GET', '/api/progression/ancestry-feats/dwarf?tier=1');
+  const l1Feat = dwarfFeatsRes.body[0];
+
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_AncestryFeatRequired',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Dwarf',
+    level: 2,
+    current_hp: 20, max_hp: 20,
+    armor_class: 16, speed: 25,
+    current_location: 'X', current_quest: null,
+    experience: 900, experience_to_next_level: 2700,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 16, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]), equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]), languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]), tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST', gender: 'female', alignment: 'Neutral',
+    theme_id: 'soldier',
+    ancestry_feat_id: l1Feat.id,
+    ancestry_list_id: 'dwarf'
+  });
+  const id = created.id;
+
+  // Level up from L2 to L3 WITHOUT ancestryFeatId — should return 422
+  const bad = await api('POST', `/api/character/level-up/${id}`, { hpRoll: 'average' });
+  assert(bad.status === 422, `Missing ancestryFeatId returns 422 (got ${bad.status})`);
+  assert(bad.body.error && bad.body.error.includes('Ancestry feat selection required'), 'Error message correct');
+
+  // Character unchanged
+  const check = await api('GET', `/api/character/${id}`);
+  assert(check.body.level === 2, `Character level unchanged (got ${check.body.level})`);
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
+async function testLevelUpPersistsAncestryFeatAndThemeTier() {
+  console.log('\n  -- Level-up: ancestry feat + theme tier auto-unlock at L5 --');
+  const dwarfFeatsRes = await api('GET', '/api/progression/ancestry-feats/dwarf?tier=1');
+  const l1Feat = dwarfFeatsRes.body[0];
+
+  // Create a Fighter at L4 with Soldier theme. Level-up to L5 = theme tier unlock.
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_ThemeTierUnlock',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Dwarf',
+    level: 4,
+    current_hp: 36, max_hp: 36,
+    armor_class: 16, speed: 25,
+    current_location: 'X', current_quest: null,
+    experience: 6500, experience_to_next_level: 14000,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 16, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]), equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]), languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]), tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST', gender: 'male', alignment: 'Neutral',
+    theme_id: 'soldier',
+    ancestry_feat_id: l1Feat.id,
+    ancestry_list_id: 'dwarf'
+  });
+  const id = created.id;
+
+  // Level up to L5 — theme tier unlock should fire (no ancestry feat at L5)
+  const res = await api('POST', `/api/character/level-up/${id}`, { hpRoll: 'average' });
+  assert(res.status === 200, `Level-up to L5 succeeds (got ${res.status})`);
+  assert(res.body.levelUpSummary.themeTierUnlocked, 'Theme tier unlock reported in summary');
+  assert(res.body.levelUpSummary.themeTierUnlocked.tier === 5, 'Tier is 5');
+  assert(res.body.levelUpSummary.themeTierUnlocked.ability_name === 'Field Discipline',
+    `L5 ability is Field Discipline (got ${res.body.levelUpSummary.themeTierUnlocked.ability_name})`);
+  assert(res.body.levelUpSummary.ancestryFeatSelected === null, 'No ancestry feat at L5 (tiers are L3/L7/L13/L18)');
+
+  // Verify persisted in character_theme_unlocks
+  const prog = await api('GET', `/api/character/${id}/progression`);
+  const l5Unlock = prog.body.theme_unlocks.find(u => u.tier === 5);
+  assert(l5Unlock, 'L5 theme unlock persisted');
+  assert(l5Unlock.ability_name === 'Field Discipline', 'Correct ability persisted');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
+async function testLevelUpWithAncestryFeatChoice() {
+  console.log('\n  -- Level-up: picking an ancestry feat at L3 persists the choice --');
+  const dwarfL1 = await api('GET', '/api/progression/ancestry-feats/dwarf?tier=1');
+  const dwarfL3 = await api('GET', '/api/progression/ancestry-feats/dwarf?tier=3');
+  const pickedFeat = dwarfL3.body[1]; // second option
+
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_FeatPick',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Dwarf',
+    level: 2,
+    current_hp: 20, max_hp: 20,
+    armor_class: 16, speed: 25,
+    current_location: 'X', current_quest: null,
+    experience: 900, experience_to_next_level: 2700,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 16, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]), equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]), languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]), tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST', gender: 'female', alignment: 'Neutral',
+    theme_id: 'soldier',
+    ancestry_feat_id: dwarfL1.body[0].id,
+    ancestry_list_id: 'dwarf'
+  });
+  const id = created.id;
+
+  // Level-up L2→L3 with feat pick
+  const res = await api('POST', `/api/character/level-up/${id}`, {
+    hpRoll: 'average',
+    ancestryFeatId: pickedFeat.id
+  });
+  assert(res.status === 200, `Level-up succeeds with feat pick (got ${res.status})`);
+  assert(res.body.levelUpSummary.ancestryFeatSelected, 'Feat reported in summary');
+  assert(res.body.levelUpSummary.ancestryFeatSelected.id === pickedFeat.id, 'Correct feat id in summary');
+
+  // Verify persisted
+  const prog = await api('GET', `/api/character/${id}/progression`);
+  const l3Feat = prog.body.ancestry_feats.find(f => f.tier === 3);
+  assert(l3Feat, 'L3 ancestry feat persisted');
+  assert(l3Feat.feat_name === pickedFeat.feat_name, 'Correct feat name persisted');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
+async function testLevelUpRejectsInvalidAncestryFeatId() {
+  console.log('\n  -- Level-up: invalid ancestryFeatId returns 400 --');
+  const dwarfL1 = await api('GET', '/api/progression/ancestry-feats/dwarf?tier=1');
+  const elfL3 = await api('GET', '/api/progression/ancestry-feats/elf?tier=3');
+  const elfFeatId = elfL3.body[0].id; // an elf feat — not valid for a dwarf character
+
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_InvalidFeat',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Dwarf',
+    level: 2,
+    current_hp: 20, max_hp: 20,
+    armor_class: 16, speed: 25,
+    current_location: 'X', current_quest: null,
+    experience: 900, experience_to_next_level: 2700,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 16, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]), equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]), languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]), tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST', gender: 'female', alignment: 'Neutral',
+    theme_id: 'soldier',
+    ancestry_feat_id: dwarfL1.body[0].id,
+    ancestry_list_id: 'dwarf'
+  });
+  const id = created.id;
+
+  const res = await api('POST', `/api/character/level-up/${id}`, {
+    hpRoll: 'average',
+    ancestryFeatId: elfFeatId  // invalid — this is an elf feat, character is a dwarf
+  });
+  assert(res.status === 400, `Returns 400 for invalid feat id (got ${res.status})`);
+  assert(res.body.error && res.body.error.includes('not a valid option'), 'Error mentions invalid option');
+
+  // Character unchanged
+  const check = await api('GET', `/api/character/${id}`);
+  assert(check.body.level === 2, 'Character unchanged after invalid feat');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
 async function testCreateKnightInitializesMoralPath() {
   console.log('\n  -- Progression: Creating Knight theme initializes moral path to "true" --');
   const { status, body } = await api('POST', '/api/character', {
@@ -1369,6 +1593,11 @@ async function runTests() {
     await testLevelUpRequiresSubclassForMulticlass();
     await testLevelUpFeatInsteadOfASI();
     await testLevelUpFeatMissingFeatKey();
+    await testLevelUpInfoSurfacesProgressionDecisions();
+    await testLevelUpRequiresAncestryFeatId();
+    await testLevelUpPersistsAncestryFeatAndThemeTier();
+    await testLevelUpWithAncestryFeatChoice();
+    await testLevelUpRejectsInvalidAncestryFeatId();
     await testCreateKnightInitializesMoralPath();
 
   } catch (err) {

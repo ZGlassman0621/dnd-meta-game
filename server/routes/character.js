@@ -985,10 +985,12 @@ router.post('/level-up/:id', async (req, res) => {
     const newClassLevel = isMulticlass ? 1 : classLevels[existingClassIndex].level + 1;
 
     // Validate subclass is provided when the target class requires one at this
-    // level (e.g., multiclassing into Cleric/Sorcerer/Warlock at L1 requires
-    // picking a domain/origin/patron). Without this check, `subclass: null`
-    // would be silently persisted, leaving the character in a broken state.
-    if (needsSubclassSelection(targetClassName, newClassLevel) && !subclass) {
+    // level AND the character doesn't already have one for this class. This
+    // catches the multiclass case (e.g., multiclassing into Cleric at L1
+    // requires picking a domain) without spuriously firing when a Fighter
+    // at L2 levels to L3 — they already picked Champion at character creation.
+    const existingSubclass = isMulticlass ? null : classLevels[existingClassIndex].subclass;
+    if (needsSubclassSelection(targetClassName, newClassLevel) && !subclass && !existingSubclass) {
       return res.status(422).json({
         error: `Subclass selection required: ${targetClass} must choose a subclass at level ${newClassLevel}`,
         targetClass,
