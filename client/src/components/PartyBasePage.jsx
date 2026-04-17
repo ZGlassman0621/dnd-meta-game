@@ -13,12 +13,53 @@ const ACCENT_DIM = '#92400e'
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
-  { key: 'upgrades', label: 'Upgrades' },
+  { key: 'buildings', label: 'Buildings' },
   { key: 'staff', label: 'Staff' },
   { key: 'projects', label: 'Projects' },
   { key: 'events', label: 'Events' },
   { key: 'notoriety', label: 'Notoriety' }
 ]
+
+// F1: category + subtype picker options (authoritative list)
+const BASE_CATEGORY_OPTIONS = {
+  martial: {
+    name: 'Martial', icon: '🏰',
+    description: 'Fortifications and strongholds. Built for defense and garrison.',
+    subtypes: [
+      { key: 'watchtower', name: 'Watchtower', icon: '🗼', slots: 3 },
+      { key: 'outpost', name: 'Outpost', icon: '⛺', slots: 5 },
+      { key: 'keep', name: 'Keep', icon: '🏯', slots: 8 },
+      { key: 'fortress', name: 'Fortress', icon: '🏰', slots: 14 },
+      { key: 'castle', name: 'Castle', icon: '🏰', slots: 20 }
+    ]
+  },
+  civilian: {
+    name: 'Civilian', icon: '🏛️',
+    description: 'Halls, manors, and trade houses.',
+    subtypes: [
+      { key: 'tavern', name: 'Tavern', icon: '🍺', slots: 3 },
+      { key: 'hall', name: 'Hall', icon: '🏛️', slots: 6 },
+      { key: 'manor', name: 'Manor', icon: '🏡', slots: 10 }
+    ]
+  },
+  arcane: {
+    name: 'Arcane', icon: '🔮',
+    description: 'Towers and academies of magical study.',
+    subtypes: [
+      { key: 'wizard_tower', name: 'Wizard Tower', icon: '🗼', slots: 5 },
+      { key: 'academy', name: 'Academy', icon: '📚', slots: 10 }
+    ]
+  },
+  sanctified: {
+    name: 'Sanctified', icon: '⛪',
+    description: 'Temples, chapels, and monasteries.',
+    subtypes: [
+      { key: 'chapel', name: 'Chapel', icon: '⛪', slots: 4 },
+      { key: 'temple', name: 'Temple', icon: '⛪', slots: 8 },
+      { key: 'sanctuary', name: 'Sanctuary', icon: '🛕', slots: 12 }
+    ]
+  }
+}
 
 const BASE_TYPE_INFO = {
   tavern: { icon: '🍺', label: 'Tavern' },
@@ -231,14 +272,16 @@ export default function PartyBasePage({ characterId, campaignId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Establish form
+  // Establish form (F1: category + subtype)
   const [showEstablish, setShowEstablish] = useState(false)
   const [newBaseName, setNewBaseName] = useState('')
-  const [newBaseType, setNewBaseType] = useState('tavern')
+  const [newBaseCategory, setNewBaseCategory] = useState('martial')
+  const [newBaseSubtype, setNewBaseSubtype] = useState('watchtower')
   const [newBaseDesc, setNewBaseDesc] = useState('')
+  const [catalogs, setCatalogs] = useState({ categories: {}, subtypes: {} })
 
-  // Upgrades
-  const [availableUpgrades, setAvailableUpgrades] = useState([])
+  // Buildings (F1: replaces the old base-level upgrades catalog)
+  const [availableBuildings, setAvailableBuildings] = useState({ buildings: [], slotsUsed: 0, slotsTotal: 0 })
 
   // Staff hire form
   const [showHireForm, setShowHireForm] = useState(false)
@@ -306,14 +349,14 @@ export default function PartyBasePage({ characterId, campaignId }) {
     }
   }, [base, showResolved])
 
-  const loadUpgrades = useCallback(async () => {
+  const loadAvailableBuildings = useCallback(async () => {
     if (!base) return
     try {
-      const res = await fetch(`/api/base/${base.id}/upgrades/available`)
+      const res = await fetch(`/api/base/${base.id}/buildings/available`)
       const data = await res.json()
-      setAvailableUpgrades(data)
+      setAvailableBuildings(data || { buildings: [], slotsUsed: 0, slotsTotal: 0 })
     } catch (e) {
-      console.error('Error loading upgrades:', e)
+      console.error('Error loading available buildings:', e)
     }
   }, [base])
 
@@ -324,7 +367,7 @@ export default function PartyBasePage({ characterId, campaignId }) {
   }, [loadBase, loadProjects, loadNotoriety])
 
   useEffect(() => { loadEvents() }, [loadEvents])
-  useEffect(() => { loadUpgrades() }, [loadUpgrades])
+  useEffect(() => { loadAvailableBuildings() }, [loadAvailableBuildings])
 
   // ─── ACTIONS ───────────────────────────────────────────
 
@@ -336,7 +379,9 @@ export default function PartyBasePage({ characterId, campaignId }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           characterId, campaignId,
-          name: newBaseName, base_type: newBaseType,
+          name: newBaseName,
+          category: newBaseCategory,
+          subtype: newBaseSubtype,
           description: newBaseDesc
         })
       })
@@ -345,22 +390,46 @@ export default function PartyBasePage({ characterId, campaignId }) {
         setNewBaseName('')
         setNewBaseDesc('')
         await loadBase()
+      } else {
+        const err = await res.json()
+        setError(err.error || 'Failed to create base')
+        setTimeout(() => setError(null), 4000)
       }
     } catch (e) {
       setError(e.message)
     }
   }
 
-  const startUpgrade = async (upgradeKey, level) => {
+  const installBuilding = async (building_type) => {
     try {
-      const res = await fetch(`/api/base/${base.id}/upgrades`, {
+      const res = await fetch(`/api/base/${base.id}/buildings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ upgradeKey, level })
+        body: JSON.stringify({ building_type })
       })
       if (res.ok) {
         await loadBase()
-        await loadUpgrades()
+        await loadAvailableBuildings()
+      } else {
+        const err = await res.json()
+        setError(err.error || 'Failed to install building')
+        setTimeout(() => setError(null), 4000)
+      }
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const advanceBuildingConstruction = async (buildingId, hours) => {
+    try {
+      const res = await fetch(`/api/base/${base.id}/buildings/${buildingId}/advance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hours })
+      })
+      if (res.ok) {
+        await loadBase()
+        await loadAvailableBuildings()
       } else {
         const err = await res.json()
         setError(err.error)
@@ -470,8 +539,11 @@ export default function PartyBasePage({ characterId, campaignId }) {
 
   const staff = base ? (typeof base.staff === 'string' ? JSON.parse(base.staff || '[]') : base.staff || []) : []
   const perks = base ? (typeof base.active_perks === 'string' ? JSON.parse(base.active_perks || '[]') : base.active_perks || []) : []
-  const upgrades = base?.upgrades || []
-  const typeInfo = base ? BASE_TYPE_INFO[base.base_type] || { icon: '🏠', label: base.base_type } : null
+  const buildings = base?.buildings || []
+  const typeInfo = base ? {
+    icon: base.subtypeInfo?.icon || '🏠',
+    label: base.subtypeInfo?.name || base.subtype || 'Base'
+  } : null
 
   const renownPct = base ? (() => {
     const thresholds = [0, 25, 60, 120, 200, 999]
@@ -494,51 +566,75 @@ export default function PartyBasePage({ characterId, campaignId }) {
   // ─── ESTABLISH BASE FORM ──────────────────────────────
 
   if (!base || showEstablish) {
+    const selectedCategory = BASE_CATEGORY_OPTIONS[newBaseCategory]
+    const selectedSubtype = selectedCategory?.subtypes.find(s => s.key === newBaseSubtype)
     return (
       <div style={styles.page}>
         <div style={styles.header}>
           <div style={styles.title}>Establish Your Stronghold</div>
-          <div style={styles.subtitle}>Choose a base type and name to begin building your operations center</div>
+          <div style={styles.subtitle}>Choose a category → subtype. Buildings get installed inside after establishment.</div>
         </div>
 
         {error && <div style={{ ...styles.card, borderColor: '#ef4444', color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
 
-        <div style={styles.grid}>
-          {Object.entries(BASE_TYPE_INFO).map(([key, info]) => (
+        {/* Step 1: Category */}
+        <div style={{ fontSize: '0.85rem', color: '#999', marginBottom: '0.5rem' }}>Category</div>
+        <div style={{ ...styles.grid, marginBottom: '1rem' }}>
+          {Object.entries(BASE_CATEGORY_OPTIONS).map(([key, cat]) => (
             <div
               key={key}
-              onClick={() => setNewBaseType(key)}
+              onClick={() => {
+                setNewBaseCategory(key)
+                setNewBaseSubtype(cat.subtypes[0].key)
+              }}
               style={{
                 ...styles.card,
-                borderColor: newBaseType === key ? ACCENT : '#333',
-                cursor: 'pointer',
-                transition: 'border-color 0.2s'
+                borderColor: newBaseCategory === key ? ACCENT : '#333',
+                cursor: 'pointer', transition: 'border-color 0.2s'
               }}
             >
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{info.icon}</div>
-              <div style={{ fontWeight: '700', color: newBaseType === key ? ACCENT_LIGHT : '#e0e0e0', marginBottom: '0.25rem' }}>
-                {info.label}
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{cat.icon}</div>
+              <div style={{ fontWeight: '700', color: newBaseCategory === key ? ACCENT_LIGHT : '#e0e0e0', marginBottom: '0.25rem' }}>
+                {cat.name}
               </div>
-              <div style={{ fontSize: '0.8rem', color: '#888' }}>
-                {key === 'tavern' && 'Social hub — passive gold from patrons, rumor network'}
-                {key === 'guild_hall' && 'Adventurer HQ — quest board fees, training bonuses'}
-                {key === 'wizard_tower' && 'Arcane study — spell component sales, research'}
-                {key === 'temple' && 'Divine sanctuary — donations, healing ward'}
-                {key === 'thieves_den' && 'Criminal ops — fencing goods, spy network'}
-                {key === 'manor' && 'Noble prestige — tenant rent, political influence'}
+              <div style={{ fontSize: '0.78rem', color: '#888' }}>{cat.description}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Step 2: Subtype */}
+        <div style={{ fontSize: '0.85rem', color: '#999', marginBottom: '0.5rem' }}>Subtype — determines building slot capacity and upkeep</div>
+        <div style={{ ...styles.grid, marginBottom: '1rem' }}>
+          {selectedCategory?.subtypes.map(sub => (
+            <div
+              key={sub.key}
+              onClick={() => setNewBaseSubtype(sub.key)}
+              style={{
+                ...styles.card,
+                borderColor: newBaseSubtype === sub.key ? ACCENT : '#333',
+                cursor: 'pointer', transition: 'border-color 0.2s',
+                padding: '0.75rem'
+              }}
+            >
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.35rem' }}>{sub.icon}</div>
+              <div style={{ fontWeight: '600', color: newBaseSubtype === sub.key ? ACCENT_LIGHT : '#e0e0e0' }}>
+                {sub.name}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '0.2rem' }}>
+                {sub.slots} building slot{sub.slots === 1 ? '' : 's'}
               </div>
             </div>
           ))}
         </div>
 
-        <div style={{ ...styles.card, marginTop: '1rem' }}>
+        <div style={styles.card}>
           <div style={styles.row}>
             <span style={styles.label}>Name:</span>
             <input
               style={{ ...styles.input, flex: 1 }}
               value={newBaseName}
               onChange={e => setNewBaseName(e.target.value)}
-              placeholder="e.g. The Silver Stag Tavern"
+              placeholder={`e.g. Greywatch ${selectedSubtype?.name || 'Hold'}`}
             />
           </div>
           <div style={{ ...styles.row, marginTop: '0.5rem' }}>
@@ -552,7 +648,7 @@ export default function PartyBasePage({ characterId, campaignId }) {
           </div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
             <button style={styles.btn('primary')} onClick={createBase} disabled={!newBaseName.trim()}>
-              Establish {BASE_TYPE_INFO[newBaseType]?.label || 'Base'}
+              Establish {selectedSubtype?.name || 'Base'}
             </button>
             {base && <button style={styles.btn('secondary')} onClick={() => setShowEstablish(false)}>Cancel</button>}
           </div>
@@ -591,7 +687,7 @@ export default function PartyBasePage({ characterId, campaignId }) {
 
       {/* Tab Content */}
       {activeTab === 'overview' && renderOverview()}
-      {activeTab === 'upgrades' && renderUpgrades()}
+      {activeTab === 'buildings' && renderBuildings()}
       {activeTab === 'staff' && renderStaff()}
       {activeTab === 'projects' && renderProjects()}
       {activeTab === 'events' && renderEvents()}
@@ -633,9 +729,9 @@ export default function PartyBasePage({ characterId, campaignId }) {
           </div>
 
           <div style={styles.card}>
-            <div style={{ color: '#999', fontSize: '0.8rem' }}>Upgrades</div>
+            <div style={{ color: '#999', fontSize: '0.8rem' }}>Buildings</div>
             <div style={{ fontSize: '1.5rem', fontWeight: '700' }}>
-              {upgrades.filter(u => u.status === 'completed').length} / {upgrades.length}
+              {buildings.filter(b => b.status === 'completed').length} / {buildings.length}
             </div>
           </div>
         </div>
@@ -678,30 +774,55 @@ export default function PartyBasePage({ characterId, campaignId }) {
 
   // ─── TAB: UPGRADES ─────────────────────────────────────
 
-  function renderUpgrades() {
-    const inProgress = upgrades.filter(u => u.status === 'in_progress')
-    const completed = upgrades.filter(u => u.status === 'completed')
-    const planned = upgrades.filter(u => u.status === 'planned')
+  function renderBuildings() {
+    const inProgress = buildings.filter(b => b.status === 'in_progress')
+    const completed = buildings.filter(b => b.status === 'completed')
+    const damaged = buildings.filter(b => b.status === 'damaged')
 
     return (
       <div>
+        {/* Slot usage header */}
+        <div style={{ ...styles.card, marginBottom: '1rem' }}>
+          <div style={styles.row}>
+            <span style={styles.label}>Building Slots:</span>
+            <strong style={{ color: ACCENT_LIGHT }}>
+              {availableBuildings.slotsUsed}/{availableBuildings.slotsTotal}
+            </strong>
+            <span style={{ flex: 1 }} />
+            <span style={{ color: '#888', fontSize: '0.8rem' }}>
+              {base.category} · {base.subtypeInfo?.name || base.subtype}
+            </span>
+          </div>
+        </div>
+
         {/* In Progress */}
         {inProgress.length > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>
-            <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>In Progress</div>
-            {inProgress.map(u => {
-              const pct = Math.floor((u.hours_invested / u.hours_required) * 100)
+            <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Under Construction</div>
+            {inProgress.map(b => {
+              const pct = Math.max(0, Math.min(100, Math.floor((b.hours_invested / (b.hours_required || 1)) * 100)))
               return (
-                <div key={u.id} style={styles.card}>
+                <div key={b.id} style={styles.card}>
                   <div style={{ ...styles.row, justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: '700' }}>{u.name}</span>
+                    <span style={{ fontWeight: '700' }}>{b.typeInfo?.icon || '🏗'} {b.name || b.building_type}</span>
                     <span style={{ color: '#999', fontSize: '0.85rem' }}>{pct}%</span>
                   </div>
                   <div style={{ color: '#888', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-                    {u.category} — {u.hours_invested.toFixed(1)} / {u.hours_required} hours
+                    {b.hours_invested} / {b.hours_required} hours invested
                   </div>
                   <div style={styles.progressBar(pct)}>
                     <div style={styles.progressFill(pct, '#22c55e')} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    {[8, 16, 32].map(h => (
+                      <button
+                        key={h}
+                        style={{ ...styles.btn('secondary'), padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
+                        onClick={() => advanceBuildingConstruction(b.id, h)}
+                      >
+                        +{h} hours
+                      </button>
+                    ))}
                   </div>
                 </div>
               )
@@ -712,62 +833,74 @@ export default function PartyBasePage({ characterId, campaignId }) {
         {/* Completed */}
         {completed.length > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>
-            <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Completed</div>
-            {completed.map(u => (
-              <div key={u.id} style={{ ...styles.card, borderColor: '#22c55e44' }}>
-                <div style={{ ...styles.row, justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: '700' }}>{u.name}</span>
-                  <span style={styles.badge('#22c55e')}>Completed</span>
-                </div>
-                {u.perk_granted && (
-                  <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                    Perk: {u.perk_granted.replace(/_/g, ' ')}
+            <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Built</div>
+            <div style={styles.grid}>
+              {completed.map(b => (
+                <div key={b.id} style={{ ...styles.card, borderColor: '#22c55e44' }}>
+                  <div style={{ fontWeight: '700', marginBottom: '0.2rem' }}>
+                    {b.typeInfo?.icon || '🏛'} {b.name || b.building_type}
                   </div>
-                )}
+                  {b.typeInfo?.description && (
+                    <div style={{ color: '#888', fontSize: '0.78rem', marginBottom: '0.35rem' }}>
+                      {b.typeInfo.description}
+                    </div>
+                  )}
+                  {(b.perks_granted || []).length > 0 && (
+                    <div style={{ color: ACCENT, fontSize: '0.75rem' }}>
+                      Perks: {(b.perks_granted || []).map(p => p.replace(/_/g, ' ')).join(', ')}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {damaged.length > 0 && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Damaged</div>
+            {damaged.map(b => (
+              <div key={b.id} style={{ ...styles.card, borderColor: '#ef444444' }}>
+                <div style={{ fontWeight: '700' }}>
+                  {b.typeInfo?.icon} {b.name || b.building_type}
+                </div>
+                <div style={{ color: '#ef4444', fontSize: '0.78rem' }}>Damaged — needs repair</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Available */}
-        <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Available Upgrades</div>
-        {availableUpgrades.length === 0 ? (
-          <div style={styles.empty}>No upgrades available (check level/gold requirements)</div>
+        {/* Install new building */}
+        <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Install New Building</div>
+        {availableBuildings.slotsUsed >= availableBuildings.slotsTotal ? (
+          <div style={styles.empty}>All building slots are used. Expand to a larger subtype or demolish an existing building.</div>
+        ) : availableBuildings.buildings.length === 0 ? (
+          <div style={styles.empty}>No buildings available for this category.</div>
         ) : (
           <div style={styles.grid}>
-            {availableUpgrades.map((u, i) => (
-              <div key={i} style={styles.card}>
-                <div style={{ fontWeight: '700', marginBottom: '0.25rem' }}>{u.name}</div>
-                <div style={{ color: '#888', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-                  {u.category} — Level {u.level || 1}
+            {availableBuildings.buildings.filter(b => !b.installed).map(b => (
+              <div key={b.key} style={styles.card}>
+                <div style={{ fontWeight: '700', marginBottom: '0.2rem' }}>
+                  {b.icon} {b.name}
                 </div>
-                <div style={{ color: '#fbbf24', fontSize: '0.85rem' }}>{u.gold_cost} gp — {u.hours_required} hours</div>
-                {u.perk_granted && (
-                  <div style={{ color: ACCENT, fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                    Grants: {u.perk_granted.replace(/_/g, ' ')}
+                <div style={{ color: '#888', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+                  {b.description}
+                </div>
+                <div style={{ color: '#fbbf24', fontSize: '0.82rem' }}>
+                  {b.baseGoldCost} gp · {b.baseHoursRequired} hours · {b.slots} slot{b.slots === 1 ? '' : 's'}
+                </div>
+                {(b.perks || []).length > 0 && (
+                  <div style={{ color: ACCENT, fontSize: '0.76rem', marginTop: '0.25rem' }}>
+                    Grants: {b.perks.map(p => p.replace(/_/g, ' ')).join(', ')}
                   </div>
                 )}
                 <button
                   style={{ ...styles.btn('primary'), marginTop: '0.5rem', width: '100%' }}
-                  onClick={() => startUpgrade(u.upgrade_key, u.level)}
+                  onClick={() => installBuilding(b.key)}
+                  disabled={base.gold_treasury < b.baseGoldCost}
                 >
-                  Start Upgrade
+                  {base.gold_treasury < b.baseGoldCost ? `Need ${b.baseGoldCost}gp` : 'Install'}
                 </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Planned */}
-        {planned.length > 0 && (
-          <div style={{ marginTop: '1.5rem' }}>
-            <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Planned</div>
-            {planned.map(u => (
-              <div key={u.id} style={{ ...styles.card, opacity: 0.7 }}>
-                <span style={{ fontWeight: '700' }}>{u.name}</span>
-                <span style={{ color: '#888', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                  ({u.gold_cost} gp, {u.hours_required} hours)
-                </span>
               </div>
             ))}
           </div>

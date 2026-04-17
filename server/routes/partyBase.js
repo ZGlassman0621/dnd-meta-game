@@ -8,7 +8,7 @@ const router = express.Router();
 
 // ─── Party Base ───────────────────────────────────────────
 
-// GET /api/base/:characterId/:campaignId — fetch base with upgrades
+// GET /api/base/:characterId/:campaignId — primary base (back-compat single)
 router.get('/base/:characterId/:campaignId', async (req, res) => {
   try {
     const { characterId, campaignId } = req.params;
@@ -20,22 +20,43 @@ router.get('/base/:characterId/:campaignId', async (req, res) => {
   }
 });
 
-// POST /api/base — create a new base
+// GET /api/bases/:characterId/:campaignId — ALL bases (F1b)
+router.get('/bases/:characterId/:campaignId', async (req, res) => {
+  try {
+    const { characterId, campaignId } = req.params;
+    const bases = await partyBaseService.getBases(characterId, campaignId);
+    res.json({ bases });
+  } catch (err) {
+    handleServerError(res, err, 'fetch party bases');
+  }
+});
+
+// POST /api/base — create a new base (F1 signature: category + subtype)
 router.post('/base', async (req, res) => {
   try {
-    const { characterId, campaignId, name, base_type, location_id, description } = req.body;
-    if (!characterId || !campaignId || !name || !base_type) {
-      return res.status(400).json({ error: 'characterId, campaignId, name, and base_type are required' });
+    const { characterId, campaignId, name, category, subtype, location_id, description, is_primary } = req.body;
+    if (!characterId || !campaignId || !name || !category || !subtype) {
+      return res.status(400).json({ error: 'characterId, campaignId, name, category, and subtype are required' });
     }
     const base = await partyBaseService.createBase(characterId, campaignId, {
-      name, base_type, location_id, description
+      name, category, subtype, location_id, description, is_primary
     });
     res.status(201).json(base);
   } catch (err) {
-    if (err.message?.includes('already has a base')) {
-      return res.status(409).json({ error: err.message });
+    if (err.message?.includes('Invalid') || err.message?.includes("doesn't belong")) {
+      return res.status(400).json({ error: err.message });
     }
     handleServerError(res, err, 'create party base');
+  }
+});
+
+// POST /api/base/:baseId/set-primary — promote a satellite to primary
+router.post('/base/:baseId/set-primary', async (req, res) => {
+  try {
+    const base = await partyBaseService.setPrimaryBase(Number(req.params.baseId));
+    res.json(base);
+  } catch (err) {
+    handleServerError(res, err, 'set primary base');
   }
 });
 
@@ -72,40 +93,73 @@ router.post('/base/:baseId/establish', async (req, res) => {
 
 // ─── Upgrades ─────────────────────────────────────────────
 
-// GET /api/base/:baseId/upgrades/available — available upgrade catalog
-router.get('/base/:baseId/upgrades/available', async (req, res) => {
+// ─── Buildings (F1) — replaces the old base-level upgrade endpoints ──
+
+// GET /api/base/:baseId/buildings/available — which building types can be
+// installed in this base (filtered by the subtype's allowed categories)
+router.get('/base/:baseId/buildings/available', async (req, res) => {
   try {
-    const upgrades = await partyBaseService.getAvailableUpgrades(req.params.baseId);
-    res.json(upgrades);
+    const base = await partyBaseService.getBaseById(Number(req.params.baseId));
+    if (!base) return res.status(404).json({ error: 'Base not found' });
+    const { getAvailableBuildingsForSubtype } = await import('../config/partyBaseConfig.js');
+    const catalog = getAvailableBuildingsForSubtype(base.subtype);
+
+    // Filter out already-installed types (simple heuristic: one of each)
+    const installedTypes = new Set((base.buildings || []).map(b => b.building_type));
+
+    const out = Object.entries(catalog).map(([key, b]) => ({
+      key,
+      ...b,
+      installed: installedTypes.has(key)
+    }));
+    res.json({ buildings: out, slotsUsed: (base.buildings || [])
+      .filter(b => b.status !== 'damaged')
+      .reduce((n, b) => n + ((catalog[b.building_type]?.slots) || 1), 0),
+      slotsTotal: base.building_slots });
   } catch (err) {
-    handleServerError(res, err, 'fetch available upgrades');
+    handleServerError(res, err, 'fetch available buildings');
   }
 });
 
-// POST /api/base/:baseId/upgrades — start an upgrade
-router.post('/base/:baseId/upgrades', async (req, res) => {
+// POST /api/base/:baseId/buildings — install a new building
+router.post('/base/:baseId/buildings', async (req, res) => {
   try {
-    const { upgradeKey, level } = req.body;
-    if (!upgradeKey) return res.status(400).json({ error: 'upgradeKey is required' });
-    const upgrade = await partyBaseService.startUpgrade(req.params.baseId, upgradeKey, level);
-    res.status(201).json(upgrade);
+    const { building_type, name, currentGameDay } = req.body || {};
+    if (!building_type) return res.status(400).json({ error: 'building_type is required' });
+    const building = await partyBaseService.addBuilding(Number(req.params.baseId), {
+      building_type, name, currentGameDay
+    });
+    res.status(201).json(building);
   } catch (err) {
-    if (err.message?.includes('Not enough') || err.message?.includes('No upgrade slot') || err.message?.includes('not found')) {
+    if (err.message?.includes('Not enough') || err.message?.includes('Unknown') ||
+        err.message?.includes('cannot be installed') || err.message?.includes('Insufficient')) {
       return res.status(400).json({ error: err.message });
     }
-    handleServerError(res, err, 'start upgrade');
+    handleServerError(res, err, 'install building');
   }
 });
 
-// POST /api/base/:baseId/upgrades/:upgradeId/advance — add hours to upgrade
-router.post('/base/:baseId/upgrades/:upgradeId/advance', async (req, res) => {
+// POST /api/base/:baseId/buildings/:buildingId/advance — add hours to construction
+router.post('/base/:baseId/buildings/:buildingId/advance', async (req, res) => {
   try {
-    const { hours } = req.body;
+    const { hours, currentGameDay } = req.body || {};
     if (!hours || hours <= 0) return res.status(400).json({ error: 'hours must be a positive number' });
-    const result = await partyBaseService.advanceUpgrade(req.params.upgradeId, hours);
+    const result = await partyBaseService.advanceBuildingConstruction(
+      Number(req.params.buildingId), hours, currentGameDay
+    );
     res.json(result);
   } catch (err) {
-    handleServerError(res, err, 'advance upgrade');
+    handleServerError(res, err, 'advance building construction');
+  }
+});
+
+// DELETE /api/base/:baseId/buildings/:buildingId — demolish / remove a building
+router.delete('/base/:baseId/buildings/:buildingId', async (req, res) => {
+  try {
+    const removed = await partyBaseService.removeBuilding(Number(req.params.buildingId));
+    res.json({ success: true, removed });
+  } catch (err) {
+    handleServerError(res, err, 'remove building');
   }
 });
 
