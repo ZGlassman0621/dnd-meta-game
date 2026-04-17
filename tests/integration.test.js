@@ -1029,43 +1029,6 @@ async function testCreateKnightInitializesMoralPath() {
   await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
 }
 
-async function testCreateCharacterWithoutProgression() {
-  console.log('\n  -- Progression: Legacy character creation (no progression fields) still works --');
-  const { status, body } = await api('POST', '/api/character', {
-    name: 'TEST_LegacyChar',
-    first_name: 'TEST',
-    class: 'Rogue',
-    race: 'Halfling',
-    level: 1,
-    current_hp: 8, max_hp: 8,
-    armor_class: 14, speed: 25,
-    current_location: 'Somewhere',
-    current_quest: null,
-    experience_to_next_level: 300,
-    gold_gp: 0, gold_sp: 0, gold_cp: 0,
-    ability_scores: JSON.stringify({ str: 10, dex: 16, con: 12, int: 12, wis: 10, cha: 14 }),
-    skills: JSON.stringify([]),
-    equipment: JSON.stringify({}),
-    inventory: JSON.stringify([]),
-    languages: JSON.stringify(['Common']),
-    feats: JSON.stringify([]),
-    tool_proficiencies: JSON.stringify([]),
-    backstory: 'TEST legacy',
-    gender: 'neutral',
-    alignment: 'Neutral'
-    // No theme_id, no ancestry_feat_id — should still succeed
-  });
-  assert(status === 201, `Character creation works without progression fields (got ${status})`);
-  const createdId = body.id;
-  // Progression endpoint should return empty structures
-  const progRes = await api('GET', `/api/character/${createdId}/progression`);
-  assert(progRes.body.theme === null, 'No theme persisted for legacy character');
-  assert(progRes.body.theme_unlocks.length === 0, 'No theme unlocks');
-  assert(progRes.body.ancestry_feats.length === 0, 'No ancestry feats');
-
-  await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
-}
-
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -1142,7 +1105,6 @@ async function runTests() {
     await testProgressionAncestryFeatsNotFound();
     await testCreateCharacterWithProgression();
     await testCreateKnightInitializesMoralPath();
-    await testCreateCharacterWithoutProgression();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

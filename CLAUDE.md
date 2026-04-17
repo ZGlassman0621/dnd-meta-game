@@ -96,12 +96,20 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - DM Mode effect tracker: EffectTracker component (orange #f97316) — inline bar between top bar and messages, tracks spell/condition durations with round countdown, concentration management (one per caster), auto-decrement on Advance Round, color-coded pills (green 3+, yellow 2, red 1, blue indefinite)
 - DM Mode sessions use `dm_sessions` table with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is NULL)
 - Migration 014: `dm_sessions.character_id` made nullable for DM Mode compatibility
+- Progression system (Themes / Ancestry Feats / Synergies): Phase 1 foundation shipped in v1.0.3, Phase 2 character creation shipped in v1.0.4. See IMPLEMENTATION_PLAN.md for remaining phases
+- Progression tables (migrations 023-027): `themes`, `theme_abilities`, `character_themes`, `character_theme_unlocks`, `knight_moral_paths` (6-path tracker), `ancestry_feats`, `character_ancestry_feats`, `team_tactics`, `character_team_tactics`, `subclass_theme_synergies`, `mythic_theme_amplifications`, `mythic_arcs`, `mentor_imprints`, `prelude_unlock_flags`, `downtime_periods`, `downtime_activities`, `downtime_vignettes`
+- Progression seed data (`server/data/`): `themes.js` (21 themes × 4 tiers = 84 abilities), `ancestryFeats.js` (195 feats across 13 lists), `teamTactics.js` (20), `subclassThemeSynergies.js` (50), `mythicThemeAmplifications.js` (17) — loaded on startup via `progressionSeedService.js`, idempotent upsert
+- Progression API (`/api/progression/*`): read-only endpoints — themes, theme details, ancestry feats by race (optional tier filter), team tactics, subclass×theme synergies, mythic×theme amplifications. Character-specific progression state exposed via `GET /api/character/:id/progression`
+- Character creation persists theme_id / theme_path_choice / ancestry_feat_id on POST /api/character. Theme L1 ability auto-unlocked; Knight theme auto-inits knight_moral_paths row to 'true' path
+- Design docs for progression system: THEME_DESIGNS.md, PARTY_SYNERGIES.md, ANCESTRY_FEATS.md, SUBCLASS_THEME_SYNERGIES.md, MYTHIC_THEME_AMPLIFICATIONS.md, DOWNTIME_DESIGN.md — source of truth for all mechanical content; seed data files are the code implementations
 
 ## Key Files
 - `server/index.js` — Express entry, route mounting
 - `server/database.js` — Schema (imports migrationRunner, ~35 lines)
 - `server/migrationRunner.js` — Numbered migration system with up/down
 - `server/services/claude.js` — Claude API client
+- `server/routes/progression.js` — Read-only progression API (themes, ancestry feats, team tactics, synergies, amplifications)
+- `server/services/progressionSeedService.js` — Idempotent seed runner; wired into initDatabase()
 - `server/services/dmPromptBuilder.js` — DM system prompt (~600 lines)
 - `server/services/dmSessionService.js` — Session logic, marker detection
 - `server/services/storyChronicleService.js` — Canon fact database, session chronicles, context retrieval, NPC conversation + mood extraction

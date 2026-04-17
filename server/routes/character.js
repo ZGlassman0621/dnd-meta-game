@@ -209,8 +209,9 @@ router.post('/', async (req, res) => {
 
     const characterId = result.lastInsertRowid;
 
-    // Persist progression selections (if provided). Silent no-op for legacy
-    // character creation that doesn't pass these fields.
+    // Persist progression selections. Guards are defensive against non-wizard
+    // code paths that may create characters without these fields (e.g., tests,
+    // imports, or internal seed utilities).
     if (theme_id) {
       await persistThemeSelection(characterId, theme_id, theme_path_choice, level);
     }
