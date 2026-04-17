@@ -54,6 +54,57 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Get character progression — theme + ancestry feats + unlocked tier abilities
+router.get('/:id/progression', async (req, res) => {
+  try {
+    const characterId = req.params.id;
+    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [characterId]);
+    if (!character) return notFound(res, 'Character');
+
+    const themeRow = await dbGet(
+      `SELECT ct.theme_id, ct.path_choice, ct.path_data, t.name as theme_name
+       FROM character_themes ct JOIN themes t ON ct.theme_id = t.id
+       WHERE ct.character_id = ?`,
+      [characterId]
+    );
+
+    const unlocks = await dbAll(
+      `SELECT ctu.tier, ctu.unlocked_at_level, ctu.narrative_delivery,
+              ta.ability_name, ta.ability_description, ta.mechanics, ta.flavor_text
+       FROM character_theme_unlocks ctu
+       LEFT JOIN theme_abilities ta ON ctu.tier_ability_id = ta.id
+       WHERE ctu.character_id = ?
+       ORDER BY ctu.tier`,
+      [characterId]
+    );
+
+    const ancestryFeats = await dbAll(
+      `SELECT caf.tier, caf.selected_at_level, caf.narrative_delivery, af.list_id,
+              af.feat_name, af.description, af.mechanics, af.flavor_text
+       FROM character_ancestry_feats caf
+       JOIN ancestry_feats af ON caf.feat_id = af.id
+       WHERE caf.character_id = ?
+       ORDER BY caf.tier`,
+      [characterId]
+    );
+
+    const knightPath = await dbGet(
+      `SELECT current_path, last_path_change_reason
+       FROM knight_moral_paths WHERE character_id = ?`,
+      [characterId]
+    );
+
+    res.json({
+      theme: themeRow || null,
+      theme_unlocks: unlocks,
+      ancestry_feats: ancestryFeats,
+      knight_moral_path: knightPath || null
+    });
+  } catch (error) {
+    handleServerError(res, error, 'fetch character progression');
+  }
+});
+
 // Create new character
 router.post('/', async (req, res) => {
   try {
@@ -114,7 +165,12 @@ router.post('/', async (req, res) => {
       tool_proficiencies = '[]',
       keeper_texts = '[]',
       keeper_recitations = '[]',
-      keeper_genre_domain = null
+      keeper_genre_domain = null,
+      // Progression system — Phase 2 additions
+      theme_id = null,
+      theme_path_choice = null,
+      ancestry_feat_id = null,
+      ancestry_list_id = null
     } = req.body;
 
     const sql = `
@@ -151,12 +207,73 @@ router.post('/', async (req, res) => {
       keeper_texts, keeper_recitations, keeper_genre_domain
     ]);
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [result.lastInsertRowid]);
+    const characterId = result.lastInsertRowid;
+
+    // Persist progression selections (if provided). Silent no-op for legacy
+    // character creation that doesn't pass these fields.
+    if (theme_id) {
+      await persistThemeSelection(characterId, theme_id, theme_path_choice, level);
+    }
+    if (ancestry_feat_id) {
+      await persistAncestryFeatSelection(characterId, ancestry_feat_id, 1, level);
+    }
+
+    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
     res.status(201).json(character);
   } catch (error) {
     handleServerError(res, error, 'create character');
   }
 });
+
+/**
+ * Persist a theme selection for a newly-created character.
+ * Inserts into character_themes + character_theme_unlocks (L1 ability).
+ * Also initializes knight_moral_paths if theme is knight_of_the_order.
+ */
+async function persistThemeSelection(characterId, themeId, pathChoice, level) {
+  // Upsert character_themes
+  await dbRun(
+    `INSERT OR REPLACE INTO character_themes (character_id, theme_id, path_choice)
+     VALUES (?, ?, ?)`,
+    [characterId, themeId, pathChoice]
+  );
+
+  // Grant the L1 theme ability automatically (no choice for L1 — it IS the
+  // existing Background feature; higher tiers have choices but L1 does not)
+  const l1Ability = await dbGet(
+    `SELECT id FROM theme_abilities WHERE theme_id = ? AND tier = 1 LIMIT 1`,
+    [themeId]
+  );
+  if (l1Ability) {
+    await dbRun(
+      `INSERT OR REPLACE INTO character_theme_unlocks
+       (character_id, theme_id, tier, tier_ability_id, unlocked_at_level, narrative_delivery)
+       VALUES (?, ?, 1, ?, ?, ?)`,
+      [characterId, themeId, l1Ability.id, level || 1, 'Granted at character creation.']
+    );
+  }
+
+  // Initialize Knight moral path tracker if applicable
+  if (themeId === 'knight_of_the_order') {
+    await dbRun(
+      `INSERT OR REPLACE INTO knight_moral_paths (character_id, current_path)
+       VALUES (?, 'true')`,
+      [characterId]
+    );
+  }
+}
+
+/**
+ * Persist an L1 ancestry feat selection for a newly-created character.
+ */
+async function persistAncestryFeatSelection(characterId, featId, tier, selectedAtLevel) {
+  await dbRun(
+    `INSERT OR REPLACE INTO character_ancestry_feats
+     (character_id, feat_id, tier, selected_at_level, narrative_delivery)
+     VALUES (?, ?, ?, ?, ?)`,
+    [characterId, featId, tier, selectedAtLevel || 1, 'Chosen at character creation.']
+  );
+}
 
 // Update character
 router.put('/:id', async (req, res) => {

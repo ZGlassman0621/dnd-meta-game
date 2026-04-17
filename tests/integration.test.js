@@ -33,6 +33,7 @@ import travelRoutes from '../server/routes/travel.js';
 import npcRelationshipRoutes from '../server/routes/npcRelationship.js';
 import livingWorldRoutes from '../server/routes/livingWorld.js';
 import dmModeRoutes from '../server/routes/dmMode.js';
+import progressionRoutes from '../server/routes/progression.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -109,6 +110,7 @@ async function startServer() {
   app.use('/api/npc-relationship', npcRelationshipRoutes);
   app.use('/api/living-world', livingWorldRoutes);
   app.use('/api/dm-mode', dmModeRoutes);
+  app.use('/api/progression', progressionRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
@@ -861,6 +863,209 @@ async function testDmModeGetPartyNotFound() {
   assert(status === 404, `Returns 404 (got ${status})`);
 }
 
+// ===== GROUP 10: Progression System (Themes, Ancestry Feats) =====
+
+async function testProgressionListThemes() {
+  console.log('\n  -- Progression: List themes --');
+  const { status, body } = await api('GET', '/api/progression/themes');
+  assert(status === 200, `GET /api/progression/themes returns 200 (got ${status})`);
+  assert(Array.isArray(body), 'Returns array');
+  assert(body.length === 21, `Returns 21 themes (got ${body.length})`);
+  assert(body.every(t => t.id && t.name && t.l1_ability), 'Each theme has id, name, and l1_ability');
+  // Internal "any" sentinel theme should NOT be in the list
+  assert(!body.some(t => t.id === 'any'), "Internal 'any' sentinel is excluded");
+  // Outlander should have a creation choice for biome
+  const outlander = body.find(t => t.id === 'outlander');
+  assert(outlander?.creation_choice_label === 'Chosen Biome', 'Outlander has Chosen Biome creation choice');
+  assert(Array.isArray(outlander?.creation_choice_options), 'Outlander has biome options array');
+}
+
+async function testProgressionGetThemeById() {
+  console.log('\n  -- Progression: Get theme by id --');
+  const { status, body } = await api('GET', '/api/progression/themes/soldier');
+  assert(status === 200, `GET /api/progression/themes/soldier returns 200 (got ${status})`);
+  assert(body.id === 'soldier', 'Returns soldier theme');
+  assert(Array.isArray(body.abilities), 'Returns abilities array');
+  assert(body.abilities.length === 4, `Soldier has 4 tier abilities (got ${body.abilities.length})`);
+  const tiers = body.abilities.map(a => a.tier).sort((a, b) => a - b);
+  assert(JSON.stringify(tiers) === '[1,5,11,17]', 'All four tiers (L1/L5/L11/L17) present');
+}
+
+async function testProgressionGetThemeNotFound() {
+  console.log('\n  -- Progression: Get nonexistent theme returns 404 --');
+  const { status } = await api('GET', '/api/progression/themes/nonexistent_theme');
+  assert(status === 404, `Returns 404 (got ${status})`);
+}
+
+async function testProgressionAncestryFeatsByRace() {
+  console.log('\n  -- Progression: Get dwarf ancestry feats --');
+  const { status, body } = await api('GET', '/api/progression/ancestry-feats/dwarf');
+  assert(status === 200, `Returns 200 (got ${status})`);
+  assert(Array.isArray(body), 'Returns array');
+  assert(body.length === 15, `Dwarf has 15 feats total (got ${body.length})`);
+  const tiers = [...new Set(body.map(f => f.tier))].sort((a, b) => a - b);
+  assert(JSON.stringify(tiers) === '[1,3,7,13,18]', 'All five tiers present');
+}
+
+async function testProgressionAncestryFeatsTierFilter() {
+  console.log('\n  -- Progression: Get elf L1 ancestry feats only --');
+  const { status, body } = await api('GET', '/api/progression/ancestry-feats/elf?tier=1');
+  assert(status === 200, `Returns 200 (got ${status})`);
+  assert(body.length === 3, `Exactly 3 L1 elf feats (got ${body.length})`);
+  assert(body.every(f => f.tier === 1), 'All returned feats are tier 1');
+  assert(body.every(f => f.list_id === 'elf'), 'All returned feats are for elf list');
+}
+
+async function testProgressionAncestryFeatsNotFound() {
+  console.log('\n  -- Progression: Nonexistent race returns 404 --');
+  const { status } = await api('GET', '/api/progression/ancestry-feats/not_a_race');
+  assert(status === 404, `Returns 404 (got ${status})`);
+}
+
+async function testCreateCharacterWithProgression() {
+  console.log('\n  -- Progression: Create character with theme + ancestry feat --');
+  // Fetch Soldier's theme L1 ability ID and Human's first L1 ancestry feat ID from the catalog
+  const themesRes = await api('GET', '/api/progression/themes');
+  const soldier = themesRes.body.find(t => t.id === 'soldier');
+  assert(soldier && soldier.l1_ability, 'Soldier theme loaded from API');
+
+  const humanFeatsRes = await api('GET', '/api/progression/ancestry-feats/human?tier=1');
+  assert(humanFeatsRes.body.length === 3, '3 human L1 feats available');
+  const pickedFeat = humanFeatsRes.body[0];
+
+  // Create a character that selects Soldier theme and the first Human L1 feat
+  const { status, body } = await api('POST', '/api/character', {
+    name: 'TEST_ProgressionChar',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Human',
+    level: 1,
+    current_hp: 12, max_hp: 12,
+    armor_class: 15, speed: 30,
+    current_location: 'Neverwinter',
+    current_quest: null,
+    experience_to_next_level: 300,
+    gold_gp: 50, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 12, con: 14, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify(['Athletics', 'Intimidation']),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST character for progression integration test',
+    gender: 'female',
+    alignment: 'Lawful Good',
+    // Progression fields
+    theme_id: 'soldier',
+    theme_path_choice: null,
+    ancestry_feat_id: pickedFeat.id,
+    ancestry_list_id: 'human'
+  });
+
+  assert(status === 201, `Character creation returns 201 (got ${status})`);
+  assert(body && typeof body.id === 'number', 'Response has character id');
+  const createdId = body.id;
+
+  // Verify progression persisted
+  const progRes = await api('GET', `/api/character/${createdId}/progression`);
+  assert(progRes.status === 200, `GET progression returns 200 (got ${progRes.status})`);
+  assert(progRes.body.theme?.theme_id === 'soldier', `Theme persisted as soldier (got ${progRes.body.theme?.theme_id})`);
+  assert(progRes.body.theme?.theme_name === 'Soldier', 'Theme name resolved from join');
+  assert(Array.isArray(progRes.body.theme_unlocks), 'theme_unlocks is array');
+  assert(progRes.body.theme_unlocks.length === 1, `One L1 unlock recorded (got ${progRes.body.theme_unlocks.length})`);
+  assert(progRes.body.theme_unlocks[0].tier === 1, 'Unlock is tier 1');
+  assert(progRes.body.theme_unlocks[0].ability_name === 'Military Rank', `L1 ability is Military Rank (got ${progRes.body.theme_unlocks[0].ability_name})`);
+
+  assert(Array.isArray(progRes.body.ancestry_feats), 'ancestry_feats is array');
+  assert(progRes.body.ancestry_feats.length === 1, `One ancestry feat recorded (got ${progRes.body.ancestry_feats.length})`);
+  assert(progRes.body.ancestry_feats[0].feat_name === pickedFeat.feat_name, 'Feat name matches');
+
+  // Cleanup
+  await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
+}
+
+async function testCreateKnightInitializesMoralPath() {
+  console.log('\n  -- Progression: Creating Knight theme initializes moral path to "true" --');
+  const { status, body } = await api('POST', '/api/character', {
+    name: 'TEST_KnightChar',
+    first_name: 'TEST',
+    class: 'Paladin',
+    subclass: 'Oath of Devotion',
+    race: 'Human',
+    level: 1,
+    current_hp: 12, max_hp: 12,
+    armor_class: 16, speed: 30,
+    current_location: 'Baldurs Gate',
+    current_quest: null,
+    experience_to_next_level: 300,
+    gold_gp: 50, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 10, con: 14, int: 10, wis: 13, cha: 15 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST knight',
+    gender: 'male',
+    alignment: 'Lawful Good',
+    theme_id: 'knight_of_the_order',
+    theme_path_choice: 'chivalric',
+    ancestry_feat_id: null,
+    ancestry_list_id: null
+  });
+
+  assert(status === 201, `Character creation returns 201 (got ${status})`);
+  const createdId = body.id;
+
+  const progRes = await api('GET', `/api/character/${createdId}/progression`);
+  assert(progRes.status === 200, 'Progression GET returns 200');
+  assert(progRes.body.theme?.theme_id === 'knight_of_the_order', 'Knight theme persisted');
+  assert(progRes.body.theme?.path_choice === 'chivalric', `Path choice saved as chivalric (got ${progRes.body.theme?.path_choice})`);
+  assert(progRes.body.knight_moral_path?.current_path === 'true', `Moral path initialized to "true" (got ${progRes.body.knight_moral_path?.current_path})`);
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
+}
+
+async function testCreateCharacterWithoutProgression() {
+  console.log('\n  -- Progression: Legacy character creation (no progression fields) still works --');
+  const { status, body } = await api('POST', '/api/character', {
+    name: 'TEST_LegacyChar',
+    first_name: 'TEST',
+    class: 'Rogue',
+    race: 'Halfling',
+    level: 1,
+    current_hp: 8, max_hp: 8,
+    armor_class: 14, speed: 25,
+    current_location: 'Somewhere',
+    current_quest: null,
+    experience_to_next_level: 300,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 10, dex: 16, con: 12, int: 12, wis: 10, cha: 14 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST legacy',
+    gender: 'neutral',
+    alignment: 'Neutral'
+    // No theme_id, no ancestry_feat_id — should still succeed
+  });
+  assert(status === 201, `Character creation works without progression fields (got ${status})`);
+  const createdId = body.id;
+  // Progression endpoint should return empty structures
+  const progRes = await api('GET', `/api/character/${createdId}/progression`);
+  assert(progRes.body.theme === null, 'No theme persisted for legacy character');
+  assert(progRes.body.theme_unlocks.length === 0, 'No theme unlocks');
+  assert(progRes.body.ancestry_feats.length === 0, 'No ancestry feats');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -927,6 +1132,17 @@ async function runTests() {
     await testDmModeUpdateHpRequiresSession();
     await testDmModeRetireParty();
     await testDmModeGetPartyNotFound();
+
+    console.log('\n=== Group 10: Progression System ===');
+    await testProgressionListThemes();
+    await testProgressionGetThemeById();
+    await testProgressionGetThemeNotFound();
+    await testProgressionAncestryFeatsByRace();
+    await testProgressionAncestryFeatsTierFilter();
+    await testProgressionAncestryFeatsNotFound();
+    await testCreateCharacterWithProgression();
+    await testCreateKnightInitializesMoralPath();
+    await testCreateCharacterWithoutProgression();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

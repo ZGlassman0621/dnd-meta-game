@@ -2,6 +2,35 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.4] - 2026-04-17 — Implementation Phase 2: Character Creation Theme Selection
+
+### Added
+- **Progression API** (`server/routes/progression.js`): Read-only endpoints exposing the reference catalog for the character creation wizard, level-up wizard, and character sheet:
+  - `GET /api/progression/themes` — All 21 themes with metadata and L1 abilities
+  - `GET /api/progression/themes/:id` — Full theme with all tier abilities (L1/L5/L11/L17)
+  - `GET /api/progression/ancestry-feats/:listId` — Feats for a race, optionally filtered by tier
+  - `GET /api/progression/team-tactics` — All 20 team tactics
+  - `GET /api/progression/subclass-theme-synergies` — All 50 resonant pairings
+  - `GET /api/progression/mythic-amplifications` — All 17 path × theme combos
+- **Character Progression GET endpoint**: `GET /api/character/:id/progression` — Returns a character's theme, tier unlocks, ancestry feats, and Knight moral path state.
+- **Theme + Ancestry Feat selection in Character Creation Wizard**:
+  - Background dropdown replaced with Theme picker (maps 1:1 to old Backgrounds — downstream Step 3 personality suggestions still work via the legacy `background` field auto-synced from theme)
+  - Conditional creation-time path choice for Outlander (biome) and Knight of the Order (order type)
+  - L1 Ancestry Feat picker renders after race (and subrace, if applicable) is chosen — shows 3 feat options with descriptions, pick one
+  - Selected theme L1 ability shown as preview in the wizard
+  - Review step (Step 5) displays selected Theme, path choice, and Ancestry Feat
+- **Character creation persistence**: `POST /api/character` now accepts `theme_id`, `theme_path_choice`, `ancestry_feat_id`, and `ancestry_list_id`. On character creation:
+  - Inserts into `character_themes` (theme + path choice)
+  - Inserts L1 ability into `character_theme_unlocks`
+  - Inserts into `character_ancestry_feats` (the chosen L1 feat)
+  - Initializes `knight_moral_paths` row if theme is knight_of_the_order (default path: 'true')
+
+### Testing
+- **Group 10 in integration tests** (9 new tests): theme/feat catalog lookups, 404 handling, character creation with progression fields, Knight moral-path initialization, legacy character creation without progression fields (graceful no-op)
+- All 201 integration tests passing
+- All 55 character-memory, 64 moral-diversity, 26 combat-tracker tests passing
+- Client builds cleanly
+
 ## [1.0.0.3] - 2026-04-17 — Implementation Phase 1: Foundation
 
 ### Fixed

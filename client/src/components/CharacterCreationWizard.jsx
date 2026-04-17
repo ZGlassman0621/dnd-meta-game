@@ -50,6 +50,10 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         race: '',
         subrace: '',
         background: '',
+        theme_id: '',
+        theme_path_choice: '',
+        ancestry_feat_id: null,
+        ancestry_list_id: '',
         class: '',
         subclass: '',
         level: 1,
@@ -180,6 +184,11 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       race: raceKey,
       subrace: subraceValue,
       background: backgroundKey,
+      // Theme fields will be loaded from progression API on mount (if character has them)
+      theme_id: '',
+      theme_path_choice: '',
+      ancestry_feat_id: null,
+      ancestry_list_id: '',
       class: classKey,
       subclass: subclassValue,
       level: editCharacter.level || 1,
@@ -264,6 +273,21 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState(buildInitialFormData)
 
+  // Progression system state (themes + ancestry feats loaded from API)
+  const [themes, setThemes] = useState([])
+  const [ancestryFeats, setAncestryFeats] = useState([]) // L1 feats for current race/subrace
+  const [progressionLoadError, setProgressionLoadError] = useState(null)
+
+  // Load themes catalog once on mount
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/progression/themes')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => { if (!cancelled) setThemes(data) })
+      .catch(err => { if (!cancelled) setProgressionLoadError(err.message) })
+    return () => { cancelled = true }
+  }, [])
+
   const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
   const backgrounds = Object.keys(backgroundsData)
   const classes = Object.keys(classesData)
@@ -297,6 +321,52 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   const selectedClassData = formData.class ? classesData[formData.class] : null
   const hasSubraces = selectedRaceData && selectedRaceData.subraces && selectedRaceData.subraces.length > 0
   const hasSubclasses = selectedClassData && selectedClassData.subclasses && selectedClassData.subclasses.length > 0
+
+  // Helper: derive ancestry list ID from race + subrace. Drow and Aasimar paths
+  // have their own separate lists; all other subraces share the parent race's list.
+  const computeAncestryListId = (race, subrace) => {
+    if (!race) return ''
+    const lowerSub = (subrace || '').toLowerCase()
+    if (race === 'elf' && (lowerSub.includes('drow') || lowerSub.includes('dark elf'))) return 'drow'
+    if (race === 'aasimar') {
+      if (lowerSub.includes('protector')) return 'aasimar_protector'
+      if (lowerSub.includes('scourge')) return 'aasimar_scourge'
+      if (lowerSub.includes('fallen')) return 'aasimar_fallen'
+    }
+    // Convert 'half-elf' key → 'half_elf' list_id; hyphens become underscores
+    return race.replace(/-/g, '_')
+  }
+
+  // Selected theme lookup (derived from the loaded themes catalog)
+  const selectedThemeData = formData.theme_id ? themes.find(t => t.id === formData.theme_id) : null
+
+  // Fetch ancestry feats (L1 only) when race/subrace changes
+  useEffect(() => {
+    const listId = computeAncestryListId(formData.race, formData.subrace)
+    if (!listId) {
+      setAncestryFeats([])
+      if (formData.ancestry_list_id) handleChange('ancestry_list_id', '')
+      return
+    }
+    if (listId === formData.ancestry_list_id && ancestryFeats.length > 0) return
+    let cancelled = false
+    fetch(`/api/progression/ancestry-feats/${listId}?tier=1`)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => {
+        if (cancelled) return
+        setAncestryFeats(data)
+        handleChange('ancestry_list_id', listId)
+        // Reset selection if the previously chosen feat isn't in the new list
+        if (formData.ancestry_feat_id && !data.some(f => f.id === formData.ancestry_feat_id)) {
+          handleChange('ancestry_feat_id', null)
+        }
+      })
+      .catch(err => {
+        if (!cancelled) console.error('Failed to load ancestry feats:', err)
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.race, formData.subrace])
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -724,7 +794,13 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       // Keeper class fields
       keeper_texts: formData.class === 'keeper' ? JSON.stringify(formData.keeper_texts || []) : '[]',
       keeper_recitations: formData.class === 'keeper' ? JSON.stringify(formData.keeper_recitations || []) : '[]',
-      keeper_genre_domain: formData.class === 'keeper' ? (formData.keeper_genre_domain || null) : null
+      keeper_genre_domain: formData.class === 'keeper' ? (formData.keeper_genre_domain || null) : null,
+
+      // Progression system — Phase 2 additions
+      theme_id: formData.theme_id || null,
+      theme_path_choice: formData.theme_path_choice || null,
+      ancestry_feat_id: formData.ancestry_feat_id || null,
+      ancestry_list_id: formData.ancestry_list_id || null
     }
 
     if (isEditMode) {
@@ -931,20 +1007,110 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       )}
 
       <div className="form-group">
-        <label>Background</label>
+        <label>Theme (formerly Background)</label>
         <select
-          value={formData.background}
-          onChange={(e) => handleChange('background', e.target.value)}
+          value={formData.theme_id}
+          onChange={(e) => {
+            const themeId = e.target.value
+            handleChange('theme_id', themeId)
+            // Keep the legacy `background` field in sync — theme IDs align with
+            // backgrounds.json keys so downstream Step 3 / personality suggestions keep working.
+            const bgKey = themeId && backgroundsData[themeId] ? themeId : ''
+            handleChange('background', bgKey)
+            // Reset path choice when switching themes
+            handleChange('theme_path_choice', '')
+          }}
           required
         >
-          <option value="">Select background</option>
-          {backgrounds.map(bgKey => (
-            <option key={bgKey} value={bgKey}>
-              {backgroundsData[bgKey].name}
-            </option>
+          <option value="">Select theme</option>
+          {themes.map(t => (
+            <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
+        {selectedThemeData && selectedThemeData.l1_ability && (
+          <div style={{
+            marginTop: '0.5rem', padding: '0.75rem',
+            background: 'rgba(139,92,246,0.08)',
+            border: '1px solid rgba(139,92,246,0.3)',
+            borderRadius: '6px', fontSize: '0.85rem'
+          }}>
+            <div style={{ fontWeight: 'bold', color: '#a78bfa', marginBottom: '0.25rem' }}>
+              L1: {selectedThemeData.l1_ability.ability_name}
+            </div>
+            <div style={{ opacity: 0.9 }}>{selectedThemeData.l1_ability.ability_description}</div>
+          </div>
+        )}
+        {selectedThemeData && selectedThemeData.creation_choice_label && (
+          <div style={{ marginTop: '0.75rem' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.9 }}>
+              {selectedThemeData.creation_choice_label}:
+            </label>
+            <select
+              value={formData.theme_path_choice}
+              onChange={(e) => handleChange('theme_path_choice', e.target.value)}
+              required
+              style={{ marginTop: '0.25rem' }}
+            >
+              <option value="">Select one</option>
+              {(selectedThemeData.creation_choice_options || []).map(opt => (
+                <option key={opt} value={opt}>
+                  {opt.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
+      {/* L1 Ancestry Feat — only shown once race (and subrace if applicable) is set */}
+      {formData.race && (!hasSubraces || formData.subrace) && (
+        <div className="form-group">
+          <label>Ancestry Feat (L1)</label>
+          {ancestryFeats.length === 0 ? (
+            <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>Loading feats...</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {ancestryFeats.map(feat => {
+                  const isSelected = formData.ancestry_feat_id === feat.id
+                  return (
+                    <div
+                      key={feat.id}
+                      onClick={() => handleChange('ancestry_feat_id', feat.id)}
+                      style={{
+                        padding: '0.75rem',
+                        border: isSelected
+                          ? '2px solid #8b5cf6'
+                          : '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        background: isSelected
+                          ? 'rgba(139,92,246,0.15)'
+                          : 'rgba(255,255,255,0.03)',
+                        cursor: 'pointer',
+                        fontSize: '0.88rem'
+                      }}
+                    >
+                      <div style={{
+                        fontWeight: 'bold',
+                        color: isSelected ? '#a78bfa' : '#ddd',
+                        marginBottom: '0.2rem'
+                      }}>
+                        {feat.feat_name}
+                      </div>
+                      <div style={{ opacity: 0.9, lineHeight: 1.4 }}>
+                        {feat.description}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.4rem' }}>
+                Choose one. You'll gain additional Ancestry Feats at levels 3, 7, 13, and 18.
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="form-group">
         <label>Class</label>
@@ -3070,8 +3236,21 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             {formData.subrace || racesData[formData.race].name} {formData.class}
           </p>
           <p style={{ color: '#bbb', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            <strong>Background:</strong> {backgroundsData[formData.background].name}
+            <strong>Theme:</strong> {selectedThemeData?.name || backgroundsData[formData.background]?.name || '—'}
+            {formData.theme_path_choice && (
+              <span style={{ color: '#a78bfa', marginLeft: '0.5rem' }}>
+                ({formData.theme_path_choice.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')})
+              </span>
+            )}
           </p>
+          {(() => {
+            const selectedFeat = ancestryFeats.find(f => f.id === formData.ancestry_feat_id)
+            return selectedFeat ? (
+              <p style={{ color: '#bbb', fontSize: '0.9rem' }}>
+                <strong>Ancestry Feat (L1):</strong> {selectedFeat.feat_name}
+              </p>
+            ) : null
+          })()}
           {formData.subclass && (
             <p style={{ color: '#bbb', fontSize: '0.9rem' }}>
               <strong>Subclass:</strong> {formData.subclass}
