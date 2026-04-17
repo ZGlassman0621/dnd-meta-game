@@ -66,6 +66,9 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   const [selectedSecondGenre, setSelectedSecondGenre] = useState('')
   const [genreMasteryChoice, setGenreMasteryChoice] = useState('') // 'second_genre' or 'mastery'
 
+  // Progression (Phase 5): ancestry feat choice at L3/L7/L13/L18
+  const [selectedAncestryFeatId, setSelectedAncestryFeatId] = useState(null)
+
   useEffect(() => {
     fetchLevelUpInfo()
   }, [character.id])
@@ -83,6 +86,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
       setShowSwapPanel(false)
       setSpellFilterLevel('all')
       setSpellSearchText('')
+      setSelectedAncestryFeatId(null)
     }
   }, [selectedClassOption])
 
@@ -383,6 +387,11 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
       if (activeChoices.needsSubclass && selectedSubclass) {
         body.subclass = selectedSubclass
+      }
+
+      // Progression (Phase 5): include ancestry feat pick when an L3/L7/L13/L18 tier crossed
+      if (levelUpInfo?.progression?.ancestry_feat_tier && selectedAncestryFeatId) {
+        body.ancestryFeatId = selectedAncestryFeatId
       }
 
       // Keeper-specific data
@@ -1320,6 +1329,103 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               </section>
             )}
 
+            {/* Progression: Theme tier unlock (auto — no choice) */}
+            {levelUpInfo?.progression?.theme_tier_unlock && (
+              <section className="choice-section" style={{
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                background: 'rgba(139, 92, 246, 0.08)',
+                borderRadius: '6px',
+                padding: '1rem'
+              }}>
+                <h3 style={{ color: '#a78bfa' }}>
+                  Theme Tier Unlock — L{levelUpInfo.progression.theme_tier_unlock.tier}
+                </h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.5rem' }}>
+                  Your <strong>{levelUpInfo.progression.theme_tier_unlock.theme_name}</strong> theme
+                  awakens to a new tier. This ability will be granted automatically when you complete this level-up.
+                </p>
+                <div style={{
+                  padding: '0.75rem',
+                  background: 'rgba(139, 92, 246, 0.12)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ fontWeight: 'bold', color: '#c4b5fd', marginBottom: '0.3rem' }}>
+                    {levelUpInfo.progression.theme_tier_unlock.ability_name}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#ddd', lineHeight: 1.5 }}>
+                    {levelUpInfo.progression.theme_tier_unlock.ability_description}
+                  </div>
+                  {levelUpInfo.progression.theme_tier_unlock.flavor_text && (
+                    <div style={{
+                      fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem',
+                      fontStyle: 'italic'
+                    }}>
+                      {levelUpInfo.progression.theme_tier_unlock.flavor_text}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Progression: Ancestry feat choice (L3/L7/L13/L18) */}
+            {levelUpInfo?.progression?.ancestry_feat_tier && (
+              <section className="choice-section" style={{
+                border: '1px solid rgba(20, 184, 166, 0.4)',
+                background: 'rgba(20, 184, 166, 0.06)',
+                borderRadius: '6px',
+                padding: '1rem'
+              }}>
+                <h3 style={{ color: '#14b8a6' }}>
+                  Ancestry Feat — L{levelUpInfo.progression.ancestry_feat_tier.tier}
+                </h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.75rem' }}>
+                  Your heritage deepens. Choose one feat from your ancestry's tier {levelUpInfo.progression.ancestry_feat_tier.tier} options:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {levelUpInfo.progression.ancestry_feat_tier.options.map(opt => {
+                    const isSelected = selectedAncestryFeatId === opt.id
+                    return (
+                      <div
+                        key={opt.id}
+                        onClick={() => setSelectedAncestryFeatId(opt.id)}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          border: isSelected
+                            ? '2px solid #14b8a6'
+                            : '1px solid rgba(255,255,255,0.15)',
+                          background: isSelected
+                            ? 'rgba(20, 184, 166, 0.15)'
+                            : 'rgba(255,255,255,0.03)'
+                        }}
+                      >
+                        <div style={{
+                          fontWeight: 'bold',
+                          color: isSelected ? '#2dd4bf' : '#ddd',
+                          marginBottom: '0.25rem'
+                        }}>
+                          {opt.feat_name}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: 1.5 }}>
+                          {opt.description}
+                        </div>
+                        {opt.mechanics && (
+                          <div style={{
+                            fontSize: '0.78rem', opacity: 0.75,
+                            fontStyle: 'italic', marginTop: '0.35rem'
+                          }}>
+                            {opt.mechanics}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
             {/* Spells preview (details on next step) */}
             {(activeChoices.newCantrips > 0 || activeChoices.newSpellsKnown > 0) && (
               <section className="choice-section notification-section">
@@ -1355,7 +1461,9 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                   (activeChoices.needsASI && asiOrFeat === 'feat' && selectedFeatKey &&
                     featsData[selectedFeatKey]?.abilityIncrease && !selectedFeatAbility) ||
                   (activeChoices.needsSubclass && !selectedSubclass) ||
-                  (hpChoice === 'roll' && hpRoll === null)
+                  (hpChoice === 'roll' && hpRoll === null) ||
+                  // Progression: ancestry feat pick required when tier crossed
+                  (levelUpInfo?.progression?.ancestry_feat_tier && !selectedAncestryFeatId)
                 }
               >
                 {needsSpellsStep() ? 'Choose Spells →' : 'Review Level Up →'}
@@ -1778,6 +1886,37 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                       <div className="review-row">
                         <span className="review-label">Chosen</span>
                         <span className="review-value">{selectedSubclass}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Progression Summary (Theme tier + Ancestry feat) */}
+                  {levelUpInfo?.progression?.theme_tier_unlock && (
+                    <div className="review-card">
+                      <h3 style={{ color: '#a78bfa' }}>Theme Tier Unlock</h3>
+                      <div className="review-row">
+                        <span className="review-label">Theme</span>
+                        <span className="review-value">{levelUpInfo.progression.theme_tier_unlock.theme_name}</span>
+                      </div>
+                      <div className="review-row">
+                        <span className="review-label">New ability (L{levelUpInfo.progression.theme_tier_unlock.tier})</span>
+                        <span className="review-value">{levelUpInfo.progression.theme_tier_unlock.ability_name}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {levelUpInfo?.progression?.ancestry_feat_tier && selectedAncestryFeatId && (
+                    <div className="review-card">
+                      <h3 style={{ color: '#14b8a6' }}>Ancestry Feat</h3>
+                      <div className="review-row">
+                        <span className="review-label">Tier</span>
+                        <span className="review-value">L{levelUpInfo.progression.ancestry_feat_tier.tier}</span>
+                      </div>
+                      <div className="review-row">
+                        <span className="review-label">Chosen</span>
+                        <span className="review-value">
+                          {levelUpInfo.progression.ancestry_feat_tier.options.find(o => o.id === selectedAncestryFeatId)?.feat_name}
+                        </span>
                       </div>
                     </div>
                   )}
