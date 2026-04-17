@@ -195,3 +195,54 @@ Inspired by Pathfinder 2e. Gives the Medicine skill a meaningful out-of-combat h
 - Previous characters' actions reflected in world state
 - Items left behind can be found by new characters
 - Legends and stories about previous characters circulate among NPCs
+
+---
+
+## Mobile Companion App (PWA)
+
+**Priority:** Medium
+**Status:** Scoped — ready to implement after core progression systems ship
+
+Turn the existing React client into an installable Progressive Web App so key notifications and decisions can reach the player on their phone — especially useful for **downtime decision moments** (companion requests, critical choices, crafting completions) that the AI DM wants to surface between sessions.
+
+### Why PWA over native
+
+- Uses existing React codebase (no Xcode, no Android Studio, no native rewrites)
+- No App Store or Play Store submission required
+- No Apple Developer Program ($99/year) or Play Console ($25) fees
+- Installs to home screen, runs in its own window, receives push notifications
+- iOS 16.4+ and all modern Android support the Web Push API
+
+### Phase 1 — Install to home screen (~2 hours)
+- Add `manifest.json` to the client
+- Add a service worker for offline shell
+- Home screen install prompt appears on supported browsers
+
+### Phase 2 — Basic push notifications (~4 hours)
+- Generate VAPID keys for Web Push
+- Add `web-push` npm package to server
+- Store device push subscriptions in a new `push_subscriptions` table
+- Fire test notification: "Downtime complete — Tormund has a question for you"
+
+### Phase 3 — Interactive decision flow (~1-2 days)
+- Notifications include deep links to a decision page
+- Decision page: "Tormund wants to visit his family. Approve / Redirect / Discuss"
+- Response syncs to server and is consumed by AI DM at next session
+- Primary use case: companion requests during downtime
+
+### Phase 4 — Broader notification surface
+- Crafting project completions
+- Companion relationship milestones ("Sera has grown close enough that the Mentor's Imprint is available")
+- Narrative queue alerts (faction events, political shifts)
+- Mentor's Imprint thresholds
+- Any AI DM `[NOTIFY]` marker can fire a push
+
+### iOS gotchas (manageable)
+- Push requires iOS 16.4+ and the PWA must be installed first
+- Install UX on iOS hides behind Safari's share menu — needs an onboarding screen explaining the install steps
+- Android is significantly easier — install prompt works on first visit
+
+### Open questions (for when we implement)
+- Should notifications be per-campaign or global per-user?
+- Do we want a mobile-first alternate layout for the Downtime Planning screen, or reuse the desktop layout?
+- Should this work for DM Mode too (e.g., "Your party of AI characters has made a decision that needs review"), or is it Player Mode only?
