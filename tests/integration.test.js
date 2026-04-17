@@ -1145,6 +1145,107 @@ async function testLevelUpRequiresSubclassForMulticlass() {
   await dbRun('DELETE FROM characters WHERE id = ?', [id]);
 }
 
+async function testLevelUpFeatInsteadOfASI() {
+  console.log('\n  -- Level-up: feat-instead-of-ASI appends to feats array + applies half-ASI bump --');
+  // Create a Fighter at L3 with enough XP to level up to L4 (ASI level)
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_FeatLevelUp',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Human',
+    level: 3,
+    current_hp: 28, max_hp: 28,
+    armor_class: 16, speed: 30,
+    current_location: 'X',
+    current_quest: null,
+    experience: 2700,
+    experience_to_next_level: 6500,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 14, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST',
+    gender: 'male',
+    alignment: 'Neutral'
+  });
+  const id = created.id;
+
+  // Level up with feat choice (Resilient with +1 CON — a half-ASI feat)
+  const { status, body } = await api('POST', `/api/character/level-up/${id}`, {
+    hpRoll: 'average',
+    asiChoice: {
+      type: 'feat',
+      feat: 'resilient',
+      featName: 'Resilient',
+      featAbilityChoice: 'con'
+    }
+  });
+  assert(status === 200, `Level-up with feat returns 200 (got ${status})`);
+  assert(body.character.level === 4, `Character is now L4 (got ${body.character.level})`);
+
+  // Verify feat was persisted
+  const feats = parseJSON(body.character.feats);
+  assert(Array.isArray(feats) && feats.length === 1, `Feats array has 1 entry (got ${feats.length})`);
+  assert(feats[0].key === 'resilient', `Feat key is resilient (got ${feats[0].key})`);
+  assert(feats[0].abilityChoice === 'con', 'Feat abilityChoice captured');
+  assert(feats[0].acquiredAtLevel === 4, 'acquiredAtLevel recorded');
+
+  // Verify CON was bumped from 14 to 15 (half-ASI)
+  const scores = parseJSON(body.character.ability_scores);
+  assert(scores.con === 15, `CON bumped to 15 (got ${scores.con})`);
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
+async function testLevelUpFeatMissingFeatKey() {
+  console.log('\n  -- Level-up: feat choice without feat key should still succeed but add nothing --');
+  // Edge case: asiChoice.type === 'feat' but no feat name provided.
+  // Current behavior: the condition `asiChoice.feat` guards the feat path;
+  // with no feat key, nothing is persisted. Character still levels up.
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_EmptyFeatLevelUp',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Human',
+    level: 3,
+    current_hp: 28, max_hp: 28,
+    armor_class: 16, speed: 30,
+    current_location: 'X',
+    current_quest: null,
+    experience: 2700,
+    experience_to_next_level: 6500,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 14, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST',
+    gender: 'male',
+    alignment: 'Neutral'
+  });
+  const id = created.id;
+
+  const { status, body } = await api('POST', `/api/character/level-up/${id}`, {
+    hpRoll: 'average',
+    asiChoice: { type: 'feat' } // intentionally missing 'feat' key
+  });
+  assert(status === 200, `Level-up with no feat key still returns 200 (got ${status})`);
+  const feats = parseJSON(body.character.feats);
+  assert(feats.length === 0, `No feat appended when key missing (got ${feats.length})`);
+  assert(body.character.level === 4, 'Character still leveled up');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
 async function testCreateKnightInitializesMoralPath() {
   console.log('\n  -- Progression: Creating Knight theme initializes moral path to "true" --');
   const { status, body } = await api('POST', '/api/character', {
@@ -1266,6 +1367,8 @@ async function runTests() {
     await testProgressionReturnsUpcomingTiersAndSynergy();
     await testProgressionNoSynergyForNonResonantPair();
     await testLevelUpRequiresSubclassForMulticlass();
+    await testLevelUpFeatInsteadOfASI();
+    await testLevelUpFeatMissingFeatKey();
     await testCreateKnightInitializesMoralPath();
 
   } catch (err) {

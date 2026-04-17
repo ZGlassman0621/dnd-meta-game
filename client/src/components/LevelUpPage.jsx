@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
+import featsData from '../data/feats.json'
 import { STANDARD_TEXTS, RARE_TEXTS, RECITATIONS, SUBCLASS_TEXTS } from '../data/keeperTexts.js'
 
 const ALL_CLASSES = [
@@ -43,6 +44,10 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   const [asiDistribution, setAsiDistribution] = useState({
     str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0
   })
+  // 'asi' (default) or 'feat' — selected when the character reaches an ASI level
+  const [asiOrFeat, setAsiOrFeat] = useState('asi')
+  const [selectedFeatKey, setSelectedFeatKey] = useState('')
+  const [selectedFeatAbility, setSelectedFeatAbility] = useState('')
   const [selectedSubclass, setSelectedSubclass] = useState('')
 
   // Spell selection state (for spells step)
@@ -357,13 +362,23 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
       const activeChoices = selectedClassOption.choices || {}
 
       if (activeChoices.needsASI) {
-        const increases = {}
-        for (const [ability, value] of Object.entries(asiDistribution)) {
-          if (value > 0) {
-            increases[ability] = value
+        if (asiOrFeat === 'feat' && selectedFeatKey) {
+          const feat = featsData[selectedFeatKey]
+          body.asiChoice = {
+            type: 'feat',
+            feat: selectedFeatKey,
+            featName: feat?.name || selectedFeatKey,
+            featAbilityChoice: selectedFeatAbility || null
           }
+        } else {
+          const increases = {}
+          for (const [ability, value] of Object.entries(asiDistribution)) {
+            if (value > 0) {
+              increases[ability] = value
+            }
+          }
+          body.asiChoice = { type: 'asi', increases }
         }
-        body.asiChoice = { type: 'asi', increases }
       }
 
       if (activeChoices.needsSubclass && selectedSubclass) {
@@ -1140,52 +1155,168 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               <p className="current-hp">Current HP: {character.current_hp}/{character.max_hp}</p>
             </section>
 
-            {/* ASI */}
+            {/* ASI or Feat choice */}
             {activeChoices.needsASI && (
               <section className="choice-section asi-section">
-                <h3>Ability Score Improvement</h3>
-                <p>Increase your ability scores by a total of 2 points. No ability can exceed 20.</p>
+                <h3>Ability Score Improvement or Feat</h3>
+                <p>At this level, choose either to increase your ability scores by 2 points total, or to take a feat instead.</p>
 
-                <div className="asi-points-remaining" data-complete={asiPoints === 0}>
-                  Points remaining: {asiPoints}
+                {/* Toggle between ASI and Feat */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAsiOrFeat('asi')}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '6px',
+                      border: asiOrFeat === 'asi' ? '2px solid #f39c12' : '1px solid rgba(255,255,255,0.15)',
+                      background: asiOrFeat === 'asi' ? 'rgba(243,156,18,0.15)' : 'rgba(255,255,255,0.03)',
+                      color: asiOrFeat === 'asi' ? '#f39c12' : '#ccc',
+                      cursor: 'pointer',
+                      fontWeight: asiOrFeat === 'asi' ? 'bold' : 'normal'
+                    }}
+                  >
+                    Increase Ability Scores (+2 total)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAsiOrFeat('feat')}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '6px',
+                      border: asiOrFeat === 'feat' ? '2px solid #f39c12' : '1px solid rgba(255,255,255,0.15)',
+                      background: asiOrFeat === 'feat' ? 'rgba(243,156,18,0.15)' : 'rgba(255,255,255,0.03)',
+                      color: asiOrFeat === 'feat' ? '#f39c12' : '#ccc',
+                      cursor: 'pointer',
+                      fontWeight: asiOrFeat === 'feat' ? 'bold' : 'normal'
+                    }}
+                  >
+                    Take a Feat
+                  </button>
                 </div>
 
-                <div className="asi-grid">
-                  {['str', 'dex', 'con', 'int', 'wis', 'cha'].map(ability => {
-                    const currentScore = currentAbilityScores[ability] || 10
-                    const increase = asiDistribution[ability]
-                    const newScore = currentScore + increase
-                    const atMax = newScore >= 20
+                {asiOrFeat === 'asi' ? (
+                  <>
+                    <div className="asi-points-remaining" data-complete={asiPoints === 0}>
+                      Points remaining: {asiPoints}
+                    </div>
 
-                    return (
-                      <div key={ability} className="asi-ability">
-                        <div className="asi-ability-name">{ability.toUpperCase()}</div>
-                        <div className={`asi-ability-score ${increase > 0 ? 'increased' : ''}`}>
-                          {newScore}
-                          {increase > 0 && <span className="increase-badge">+{increase}</span>}
+                    <div className="asi-grid">
+                      {['str', 'dex', 'con', 'int', 'wis', 'cha'].map(ability => {
+                        const currentScore = currentAbilityScores[ability] || 10
+                        const increase = asiDistribution[ability]
+                        const newScore = currentScore + increase
+                        const atMax = newScore >= 20
+
+                        return (
+                          <div key={ability} className="asi-ability">
+                            <div className="asi-ability-name">{ability.toUpperCase()}</div>
+                            <div className={`asi-ability-score ${increase > 0 ? 'increased' : ''}`}>
+                              {newScore}
+                              {increase > 0 && <span className="increase-badge">+{increase}</span>}
+                            </div>
+                            <div className="asi-ability-mod">{getModifier(newScore)}</div>
+                            <div className="asi-controls">
+                              <button
+                                onClick={() => handleAsiChange(ability, -1)}
+                                disabled={increase <= 0}
+                                className="asi-button decrease"
+                              >
+                                -
+                              </button>
+                              <button
+                                onClick={() => handleAsiChange(ability, 1)}
+                                disabled={asiPoints <= 0 || atMax || increase >= 2}
+                                className="asi-button increase"
+                              >
+                                +
+                              </button>
+                            </div>
+                            {atMax && increase === 0 && <span className="at-max-label">Max</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.9rem', color: '#ccc' }}>
+                        Choose a feat:
+                      </label>
+                      <select
+                        value={selectedFeatKey}
+                        onChange={e => {
+                          setSelectedFeatKey(e.target.value)
+                          setSelectedFeatAbility('')
+                        }}
+                        style={{
+                          width: '100%', padding: '0.5rem',
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          borderRadius: '4px', color: '#ddd'
+                        }}
+                      >
+                        <option value="">Select a feat...</option>
+                        {Object.entries(featsData).map(([key, f]) => (
+                          <option key={key} value={key}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedFeatKey && featsData[selectedFeatKey] && (
+                      <div style={{
+                        padding: '0.75rem', background: 'rgba(243,156,18,0.08)',
+                        border: '1px solid rgba(243,156,18,0.3)', borderRadius: '4px'
+                      }}>
+                        <div style={{ fontWeight: 'bold', color: '#f39c12', marginBottom: '0.3rem' }}>
+                          {featsData[selectedFeatKey].name}
                         </div>
-                        <div className="asi-ability-mod">{getModifier(newScore)}</div>
-                        <div className="asi-controls">
-                          <button
-                            onClick={() => handleAsiChange(ability, -1)}
-                            disabled={increase <= 0}
-                            className="asi-button decrease"
-                          >
-                            -
-                          </button>
-                          <button
-                            onClick={() => handleAsiChange(ability, 1)}
-                            disabled={asiPoints <= 0 || atMax || increase >= 2}
-                            className="asi-button increase"
-                          >
-                            +
-                          </button>
+                        <div style={{ fontSize: '0.85rem', color: '#ddd', marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                          {featsData[selectedFeatKey].description}
                         </div>
-                        {atMax && increase === 0 && <span className="at-max-label">Max</span>}
+                        {featsData[selectedFeatKey].prerequisites && (
+                          <div style={{ fontSize: '0.8rem', color: '#f59e0b' }}>
+                            <strong>Prerequisite:</strong> {featsData[selectedFeatKey].prerequisites}
+                          </div>
+                        )}
+                        {featsData[selectedFeatKey].benefits && (
+                          <ul style={{ fontSize: '0.82rem', color: '#bbb', marginTop: '0.4rem', paddingLeft: '1.2rem' }}>
+                            {featsData[selectedFeatKey].benefits.map((b, i) => (
+                              <li key={i} style={{ marginBottom: '0.2rem' }}>{b}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {featsData[selectedFeatKey].abilityIncrease && (
+                          <div style={{ marginTop: '0.75rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#f39c12' }}>
+                              This feat grants +1 to one ability. Choose:
+                            </label>
+                            <select
+                              value={selectedFeatAbility}
+                              onChange={e => setSelectedFeatAbility(e.target.value)}
+                              style={{
+                                padding: '0.4rem', background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                borderRadius: '4px', color: '#ddd'
+                              }}
+                            >
+                              <option value="">Select ability...</option>
+                              {(Array.isArray(featsData[selectedFeatKey].abilityIncrease)
+                                ? featsData[selectedFeatKey].abilityIncrease
+                                : Object.keys(featsData[selectedFeatKey].abilityIncrease || {})
+                              ).map(ab => (
+                                <option key={ab} value={ab}>{ab.toUpperCase()}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
-                    )
-                  })}
-                </div>
+                    )}
+                  </div>
+                )}
               </section>
             )}
 
@@ -1216,7 +1347,13 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 className="button"
                 onClick={handleProceedFromChoices}
                 disabled={
-                  (activeChoices.needsASI && asiPoints > 0) ||
+                  // ASI validation: if user chose 'asi', must spend all 2 points.
+                  // If user chose 'feat', must select a feat AND (if the feat needs
+                  // an ability pick) have selected that ability.
+                  (activeChoices.needsASI && asiOrFeat === 'asi' && asiPoints > 0) ||
+                  (activeChoices.needsASI && asiOrFeat === 'feat' && !selectedFeatKey) ||
+                  (activeChoices.needsASI && asiOrFeat === 'feat' && selectedFeatKey &&
+                    featsData[selectedFeatKey]?.abilityIncrease && !selectedFeatAbility) ||
                   (activeChoices.needsSubclass && !selectedSubclass) ||
                   (hpChoice === 'roll' && hpRoll === null)
                 }
@@ -1602,7 +1739,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                   </div>
 
                   {/* ASI Summary */}
-                  {activeChoices.needsASI && finalStats.asiChanges.length > 0 && (
+                  {activeChoices.needsASI && asiOrFeat === 'asi' && finalStats.asiChanges.length > 0 && (
                     <div className="review-card">
                       <h3>Ability Score Improvements</h3>
                       {finalStats.asiChanges.map(([ability, increase]) => (
@@ -1614,6 +1751,23 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                           </span>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Feat Summary */}
+                  {activeChoices.needsASI && asiOrFeat === 'feat' && selectedFeatKey && (
+                    <div className="review-card">
+                      <h3>New Feat</h3>
+                      <div className="review-row">
+                        <span className="review-label">Feat</span>
+                        <span className="review-value">{featsData[selectedFeatKey]?.name || selectedFeatKey}</span>
+                      </div>
+                      {selectedFeatAbility && (
+                        <div className="review-row">
+                          <span className="review-label">+1 Ability</span>
+                          <span className="review-value">{selectedFeatAbility.toUpperCase()}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 

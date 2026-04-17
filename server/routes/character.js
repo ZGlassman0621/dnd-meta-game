@@ -955,8 +955,38 @@ router.post('/level-up/:id', async (req, res) => {
             hpGain += (newConMod - conMod) * newTotalLevel;
           }
         }
+      } else if (asiChoice.type === 'feat' && asiChoice.feat) {
+        // Feat-instead-of-ASI: append the chosen feat to the character's feats
+        // JSON array using the same shape as the character creation wizard
+        // (so downstream consumers — character sheet, DM prompt — see a unified list).
+        const existingFeats = safeParse(character.feats, []);
+        existingFeats.push({
+          key: asiChoice.feat,
+          name: asiChoice.featName || asiChoice.feat,
+          abilityChoice: asiChoice.featAbilityChoice || null,
+          choices: asiChoice.featChoices || null,
+          acquiredAtLevel: newTotalLevel
+        });
+
+        // Some feats grant +1 to a chosen ability score (half-ASI feats like
+        // Resilient/Actor/Observant). If the feat provides one, apply it now.
+        if (asiChoice.featAbilityChoice && newAbilityScores[asiChoice.featAbilityChoice] !== undefined) {
+          const ab = asiChoice.featAbilityChoice;
+          newAbilityScores[ab] = Math.min(20, newAbilityScores[ab] + 1);
+          // Same CON retroactivity rule as the ASI path
+          if (ab === 'con') {
+            const newConMod = Math.floor((newAbilityScores.con - 10) / 2);
+            if (newConMod > conMod) {
+              hpGain += (newConMod - conMod) * newTotalLevel;
+            }
+          }
+        }
+
+        // Persist the updated feats array
+        await dbRun('UPDATE characters SET feats = ? WHERE id = ?', [
+          JSON.stringify(existingFeats), req.params.id
+        ]);
       }
-      // Note: feat-instead-of-ASI handling is added in the next commit.
     }
 
     // Handle subclass selection for the target class
