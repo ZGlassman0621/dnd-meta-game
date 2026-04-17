@@ -1078,7 +1078,8 @@ UPDATED:
 /**
  * Parse extraction response and update character memories.
  * Handles both NEW additions and UPDATED replacements for evolving states.
- * Soft cap at 3KB — never trims existing memories, just stops adding when full.
+ * No storage cap — memories grow unbounded on disk. The chronicle system
+ * handles what the AI sees in the prompt.
  */
 export async function updateCharacterMemories(characterId, existingMemories, extractionResponse) {
   const existing = (existingMemories || '').trim();

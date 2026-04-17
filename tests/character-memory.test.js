@@ -134,7 +134,7 @@ console.log('\n=== Test 3: Memory Update Logic (NEW + UPDATED) ===\n');
   assert(source.includes('NEW:'), 'Parser looks for NEW section');
   assert(source.includes('UPDATED:'), 'Parser looks for UPDATED section');
   assert(source.includes('OLD:'), 'Parser handles OLD→NEW replacement');
-  assert(source.includes('3000'), 'Soft cap at 3KB');
+  assert(source.includes('No cap') || source.includes('unbounded') || source.includes('unlimited'), 'No storage cap (memories grow unbounded)');
   assert(source.includes('fuzzy'), 'Uses fuzzy matching for updates');
 
   // Test that NO_NEW_MEMORIES response is handled
