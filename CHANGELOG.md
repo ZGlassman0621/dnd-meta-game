@@ -2,6 +2,45 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.19] - 2026-04-17 — M3: Bargaining / Haggle
+
+Any party member can roll Persuasion, Deception, or Intimidation
+against a merchant to haggle a discount on the current cart.
+Well-placed companion skills and theme bonuses genuinely matter —
+send your Bard to the market, keep the Barbarian at the door.
+
+### Added
+- **`server/services/bargainingService.js`** — pure math:
+  - `calculateHaggleDC`: base DC by disposition (hostile 20 → allied
+    10), rarity mod (+0 to +8), prosperity mod (-2 to +2)
+  - `resolveHaggle`: d20 + ability + proficiency + theme vs. DC
+  - Discount tiers: margin 0-4 → 5%, 5-9 → 10%, 10-14 → 15%, 15+ → 20%
+  - Nat 20 = auto-success at max tier; nat 1 = auto-fail with
+    disposition hit
+  - Theme bonuses (+2): Guild Artisan / Noble on Persuasion,
+    Charlatan on Deception, Criminal / Mercenary Veteran on
+    Intimidation
+- **`POST /api/merchant/:id/haggle`** — rolls for the character or
+  any active companion. Body: `{ characterId, rollerType, companionId?,
+  skill, itemRarity?, attemptNumber?, rollValue? }`. Returns the full
+  result including `discountPercent` and `dispositionChange`.
+- **Transaction integration** — `/dm-session/:id/merchant-transaction`
+  accepts optional `haggleDiscountPercent` (clamped server-side to
+  [0, 20]); applied to the total after the bulk discount.
+- **In-shop UI** — new inline Haggle card in the merchant shop panel
+  with roller dropdown (character + companions), skill dropdown, Roll
+  button, and result display. Discount auto-applies to the cart's net
+  cost and rides along to the transaction endpoint. Resets after each
+  transaction.
+
+### Tests
+- 9 new integration tests (Group 18, 20 assertions): nat 20 max
+  discount, low-roll failure, nat 1 crit-fail disposition hit,
+  Intimidation failure penalty, repeat-attempt penalty, invalid skill
+  rejected, companion as roller, discount applied in transaction,
+  server-side clamp to 20%.
+- Full suite: 427 passing (up from 407).
+
 ## [1.0.0.18] - 2026-04-17 — M2: Merchant Commissions / Custom Orders
 
 Players can now commission custom items from merchants — the feature
