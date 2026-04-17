@@ -23,6 +23,9 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
   const [activeConditions, setActiveConditions] = useState([])
   const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0, at_zero_hp: false })
   const [conditionToAdd, setConditionToAdd] = useState('')
+  // Phase 8: inventory / transfer state
+  const [inventoryView, setInventoryView] = useState(null) // live copy of companion.inventory
+  const [transferring, setTransferring] = useState(false)
 
   const isClassBased = companion.progression_type === 'class_based'
 
@@ -147,6 +150,44 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
       setDeathSaves({ successes: 0, failures: 0, at_zero_hp: true })
       if (onUpdate) onUpdate()
     } catch (err) { setError(err.message) }
+  }
+
+  // Phase 8: parse companion inventory into state for display (accepts stringified or already-parsed)
+  useEffect(() => {
+    if (!companion) { setInventoryView(null); return }
+    let inv = companion.companion_inventory ?? companion.inventory
+    if (typeof inv === 'string') {
+      try { inv = JSON.parse(inv) } catch { inv = [] }
+    }
+    setInventoryView(Array.isArray(inv) ? inv : [])
+  }, [companion.id, companion.inventory, companion.companion_inventory])
+
+  const handBackItem = async (itemName, quantity = 1) => {
+    if (!companion.recruited_by_character_id) {
+      setError('Companion has no recruiting character — cannot transfer')
+      return
+    }
+    setTransferring(true)
+    setError(null)
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/take-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterId: companion.recruited_by_character_id,
+          itemName,
+          quantity
+        })
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Transfer failed')
+      setInventoryView(data.companion_inventory || [])
+      if (onUpdate) onUpdate()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setTransferring(false)
+    }
   }
 
   const handleRest = async (restType) => {
@@ -391,6 +432,98 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
             )}
           </div>
         )}
+
+        {/* Phase 8: Inventory & Equipment quick view */}
+        {(() => {
+          const inv = inventoryView || []
+          let eq = companion.equipment
+          if (typeof eq === 'string') {
+            try { eq = JSON.parse(eq) } catch { eq = {} }
+          }
+          eq = eq || {}
+          const hasEquipped = eq.mainHand?.name || eq.offHand?.name || eq.armor?.name
+          const hasItems = inv.length > 0
+          const gold = (companion.gold_gp || 0) + 'gp'
+            + (companion.gold_sp ? ` ${companion.gold_sp}sp` : '')
+            + (companion.gold_cp ? ` ${companion.gold_cp}cp` : '')
+          if (!hasItems && !hasEquipped && !(companion.gold_gp || companion.gold_sp || companion.gold_cp)) return null
+          return (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid #10b981',
+              borderRadius: '8px',
+              padding: '1rem',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ color: '#10b981', fontSize: '1rem', margin: 0 }}>Inventory & Equipment</h3>
+                <span style={{ color: '#f1c40f', fontSize: '0.85rem', fontWeight: 600 }}>{gold}</span>
+              </div>
+
+              {hasEquipped && (
+                <div style={{ marginBottom: '0.6rem' }}>
+                  <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Equipped</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {eq.mainHand?.name && (
+                      <span style={{ background: '#2a2a2a', color: '#ddd', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem' }}>
+                        🗡 {eq.mainHand.name}
+                      </span>
+                    )}
+                    {eq.offHand?.name && (
+                      <span style={{ background: '#2a2a2a', color: '#ddd', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem' }}>
+                        🛡 {eq.offHand.name}
+                      </span>
+                    )}
+                    {eq.armor?.name && (
+                      <span style={{ background: '#2a2a2a', color: '#ddd', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem' }}>
+                        🥼 {eq.armor.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {hasItems ? (
+                <div>
+                  <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '0.35rem' }}>Carried</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    {inv.map((item, i) => (
+                      <div key={i} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '4px', fontSize: '0.85rem'
+                      }}>
+                        <span style={{ color: '#ddd' }}>
+                          {item.name}
+                          {item.quantity > 1 && <span style={{ color: '#888', marginLeft: '0.35rem' }}>×{item.quantity}</span>}
+                        </span>
+                        {companion.recruited_by_character_id && (
+                          <button
+                            onClick={() => handBackItem(item.name, 1)}
+                            disabled={transferring}
+                            style={{
+                              background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px',
+                              padding: '2px 8px', fontSize: '0.72rem',
+                              cursor: transferring ? 'not-allowed' : 'pointer',
+                              opacity: transferring ? 0.5 : 1
+                            }}
+                            title="Hand back to the recruiting character"
+                          >Hand back</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: '#888', fontSize: '0.82rem', fontStyle: 'italic' }}>No items carried</div>
+              )}
+
+              <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#666' }}>
+                Use Edit Details for full inventory + equipment management.
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Phase 7: Active Conditions (persistent across sessions) */}
         <div style={{

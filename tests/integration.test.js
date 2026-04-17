@@ -1989,6 +1989,160 @@ async function testCompanionLongRestResetsDeathSaves() {
   await cleanupTestCompanion(companionId, npcId);
 }
 
+// ===== GROUP 14: Companion Item Transfer (Phase 8) =====
+//
+// Characters and companions each hold their own inventory. These tests cover
+// the give-item / take-item transfer endpoints, including partial stacks,
+// merging into existing stacks, and error paths.
+
+async function setCharInventory(charId, items) {
+  await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(items), charId]);
+}
+async function setCompanionInventory(compId, items) {
+  await dbRun('UPDATE companions SET inventory = ? WHERE id = ?', [JSON.stringify(items), compId]);
+}
+async function getCharInventory(charId) {
+  const row = await dbGet('SELECT inventory FROM characters WHERE id = ?', [charId]);
+  return parseJSON(row?.inventory || '[]');
+}
+async function getCompanionInventory(compId) {
+  const row = await dbGet('SELECT inventory FROM companions WHERE id = ?', [compId]);
+  return parseJSON(row?.inventory || '[]');
+}
+
+async function testGiveItemToCompanion() {
+  console.log('\n  -- Character gives item to companion --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, [{ name: 'Potion of Healing', quantity: 3 }]);
+
+  const r = await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId,
+    itemName: 'Potion of Healing',
+    quantity: 2
+  });
+  assert(r.status === 200, `give-item returns 200 (got ${r.status})`);
+
+  const charInv = await getCharInventory(testCharId);
+  const compInv = await getCompanionInventory(companionId);
+  assert(charInv[0].quantity === 1, `Character has 1 potion left (got ${charInv[0]?.quantity})`);
+  assert(compInv[0].name === 'Potion of Healing' && compInv[0].quantity === 2,
+    'Companion has 2 potions');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await setCharInventory(testCharId, []);
+}
+
+async function testTakeItemFromCompanion() {
+  console.log('\n  -- Character takes item back from companion --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCompanionInventory(companionId, [{ name: 'Torch', quantity: 5 }]);
+  await setCharInventory(testCharId, []);
+
+  const r = await api('POST', `/api/companion/${companionId}/take-item`, {
+    characterId: testCharId,
+    itemName: 'Torch',
+    quantity: 2
+  });
+  assert(r.status === 200, 'take-item returns 200');
+
+  const charInv = await getCharInventory(testCharId);
+  const compInv = await getCompanionInventory(companionId);
+  assert(charInv[0].quantity === 2, 'Character gained 2 torches');
+  assert(compInv[0].quantity === 3, 'Companion has 3 torches left');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await setCharInventory(testCharId, []);
+}
+
+async function testTransferMergesIntoExistingStack() {
+  console.log('\n  -- Transfer merges into an existing stack on the destination --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, [{ name: 'Arrow', quantity: 10 }]);
+  await setCompanionInventory(companionId, [{ name: 'Arrow', quantity: 3 }]);
+
+  await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId,
+    itemName: 'Arrow',
+    quantity: 5
+  });
+
+  const compInv = await getCompanionInventory(companionId);
+  assert(compInv.length === 1 && compInv[0].quantity === 8, `Merged to 8 arrows (got ${compInv[0]?.quantity})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await setCharInventory(testCharId, []);
+}
+
+async function testTransferFullStackRemovesSourceEntry() {
+  console.log('\n  -- Transferring full stack removes entry from source --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, [
+    { name: 'Rope', quantity: 1 },
+    { name: 'Lantern', quantity: 1 }
+  ]);
+
+  await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId,
+    itemName: 'Rope',
+    quantity: 1
+  });
+
+  const charInv = await getCharInventory(testCharId);
+  assert(charInv.length === 1 && charInv[0].name === 'Lantern',
+    'Rope removed from character inventory; Lantern remains');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await setCharInventory(testCharId, []);
+}
+
+async function testTransferRejectsMissingItem() {
+  console.log('\n  -- Transfer rejects when item not in source --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, []);
+
+  const r = await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId,
+    itemName: 'Dragonbone Dagger',
+    quantity: 1
+  });
+  assert(r.status === 400, `Returns 400 when item missing (got ${r.status})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testTransferRejectsOverdraw() {
+  console.log('\n  -- Transfer rejects when quantity exceeds available --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, [{ name: 'Dagger', quantity: 1 }]);
+
+  const r = await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId,
+    itemName: 'Dagger',
+    quantity: 5
+  });
+  assert(r.status === 400, 'Returns 400 when requesting more than available');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await setCharInventory(testCharId, []);
+}
+
+async function testTransferRejectsBadQuantity() {
+  console.log('\n  -- Transfer rejects non-positive quantity --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  const r1 = await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId, itemName: 'Anything', quantity: 0
+  });
+  assert(r1.status === 400, 'Quantity 0 returns 400');
+
+  const r2 = await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId, itemName: 'Anything', quantity: -1
+  });
+  assert(r2.status === 400, 'Negative quantity returns 400');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2108,6 +2262,15 @@ async function runTests() {
     await testCompanionDeathSaveCriticalFailureCountsTwo();
     await testCompanionStabilizeEndpoint();
     await testCompanionLongRestResetsDeathSaves();
+
+    console.log('\n=== Group 14: Companion Item Transfer (Phase 8) ===');
+    await testGiveItemToCompanion();
+    await testTakeItemFromCompanion();
+    await testTransferMergesIntoExistingStack();
+    await testTransferFullStackRemovesSourceEntry();
+    await testTransferRejectsMissingItem();
+    await testTransferRejectsOverdraw();
+    await testTransferRejectsBadQuantity();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

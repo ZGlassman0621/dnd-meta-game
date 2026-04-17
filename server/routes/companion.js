@@ -1120,6 +1120,139 @@ router.post('/:id/stabilize', async (req, res) => {
   }
 });
 
+// ============================================================================
+// Phase 8: Item Transfer (Character ↔ Companion)
+//
+// Characters and companions both store their `inventory` as a JSON array of
+// `{ name, quantity }` objects (matching the merchant-transaction pattern in
+// dmSession.js). These endpoints move items between the two without opening
+// the full CompanionEditor.
+//
+// `quantity` is optional on transfer — defaults to all available. Partial
+// quantities are supported: give/take N of the M total, split stacks.
+// ============================================================================
+
+// Shared helper — add an item (name + quantity) to an inventory array,
+// merging with an existing stack if present.
+function inventoryAddItem(inventory, item, quantity) {
+  const existing = inventory.find(i => (i.name || '').toLowerCase() === item.name.toLowerCase());
+  if (existing) {
+    existing.quantity = (existing.quantity || 1) + quantity;
+  } else {
+    inventory.push({ ...item, quantity });
+  }
+  return inventory;
+}
+
+// Shared helper — remove `quantity` of itemName from an inventory array.
+// Returns { ok, removed, remainingStack } or { ok:false, error }.
+function inventoryRemoveItem(inventory, itemName, quantity) {
+  const idx = inventory.findIndex(i => (i.name || '').toLowerCase() === itemName.toLowerCase());
+  if (idx === -1) return { ok: false, error: `Item '${itemName}' not found in source inventory` };
+
+  const item = inventory[idx];
+  const have = item.quantity || 1;
+  if (quantity > have) return { ok: false, error: `Only ${have} of '${itemName}' available (asked for ${quantity})` };
+
+  if (quantity === have) {
+    inventory.splice(idx, 1);
+    return { ok: true, removed: { ...item }, remainingStack: null };
+  } else {
+    item.quantity = have - quantity;
+    return { ok: true, removed: { ...item, quantity }, remainingStack: item };
+  }
+}
+
+// Give an item from a character to this companion
+router.post('/:id/give-item', async (req, res) => {
+  try {
+    const { characterId, itemName, quantity = 1 } = req.body || {};
+    if (!characterId || !itemName) {
+      return res.status(400).json({ error: 'characterId and itemName are required' });
+    }
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return res.status(400).json({ error: 'quantity must be a positive integer' });
+    }
+
+    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [characterId]);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+
+    const companion = await dbGet('SELECT id, inventory FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    const charInv = safeParse(character.inventory, []);
+    const compInv = safeParse(companion.inventory, []);
+
+    const remove = inventoryRemoveItem(charInv, itemName, quantity);
+    if (!remove.ok) return res.status(400).json({ error: remove.error });
+
+    inventoryAddItem(compInv, remove.removed, quantity);
+
+    await dbRun(
+      'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(charInv), characterId]
+    );
+    await dbRun(
+      'UPDATE companions SET inventory = ? WHERE id = ?',
+      [JSON.stringify(compInv), req.params.id]
+    );
+
+    res.json({
+      success: true,
+      message: `Gave ${quantity} × ${itemName} to the companion`,
+      character_inventory: charInv,
+      companion_inventory: compInv
+    });
+  } catch (error) {
+    handleServerError(res, error, 'give item to companion');
+  }
+});
+
+// Take an item from this companion back to a character
+router.post('/:id/take-item', async (req, res) => {
+  try {
+    const { characterId, itemName, quantity = 1 } = req.body || {};
+    if (!characterId || !itemName) {
+      return res.status(400).json({ error: 'characterId and itemName are required' });
+    }
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return res.status(400).json({ error: 'quantity must be a positive integer' });
+    }
+
+    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [characterId]);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+
+    const companion = await dbGet('SELECT id, inventory FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    const charInv = safeParse(character.inventory, []);
+    const compInv = safeParse(companion.inventory, []);
+
+    const remove = inventoryRemoveItem(compInv, itemName, quantity);
+    if (!remove.ok) return res.status(400).json({ error: remove.error });
+
+    inventoryAddItem(charInv, remove.removed, quantity);
+
+    await dbRun(
+      'UPDATE companions SET inventory = ? WHERE id = ?',
+      [JSON.stringify(compInv), req.params.id]
+    );
+    await dbRun(
+      'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(charInv), characterId]
+    );
+
+    res.json({
+      success: true,
+      message: `Took ${quantity} × ${itemName} from the companion`,
+      character_inventory: charInv,
+      companion_inventory: compInv
+    });
+  } catch (error) {
+    handleServerError(res, error, 'take item from companion');
+  }
+});
+
 // Dismiss companion - removes from party and makes NPC available for re-recruitment
 router.post('/:id/dismiss', async (req, res) => {
   try {
