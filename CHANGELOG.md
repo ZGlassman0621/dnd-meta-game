@@ -2,6 +2,41 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.13] - 2026-04-17 — Phase 8: Companion Item Transfer + Inventory Quick-View
+
+Closes the last major daily-use gap in the companion system: handing a
+potion to your companion and taking it back now takes two clicks,
+without opening the full CompanionEditor. Also surfaces companion gold
+and equipped gear on CompanionSheet so you don't have to hunt for it.
+
+### Added
+- **Two new endpoints** on `/api/companion/:id/`:
+  - `POST give-item`  `{ characterId, itemName, quantity? }` — moves
+    items from the character's inventory into the companion's
+  - `POST take-item`  `{ characterId, itemName, quantity? }` — moves
+    items in the opposite direction
+  Both merge into an existing stack on the destination (case-insensitive
+  name match), split partial stacks (quantity < total), and fully remove
+  the source entry when quantity == total. Reject missing items,
+  overdraws, and non-positive quantities with 400.
+- **Shared helpers** `inventoryAddItem` / `inventoryRemoveItem` in
+  `server/routes/companion.js` keep merge/split logic in one place.
+- **CompanionSheet UI**: new green-accented "Inventory & Equipment"
+  card. Displays:
+  - Gold total (gp/sp/cp) in the header
+  - Equipped gear as emoji chips (🗡 weapon, 🛡 shield, 🥼 armor)
+  - Carried items with quantities
+  - A "Hand back" button per inventory row that invokes take-item with
+    quantity=1
+  The card hides itself entirely when the companion has nothing
+  (no gold, no items, no equipment).
+
+### Tests
+- 7 new integration tests in Group 14: both transfer directions, merge
+  into existing stack, full-stack source removal, missing item
+  rejection, overdraw rejection, non-positive quantity rejection.
+- Full suite: 349 passing (up from 337).
+
 ## [1.0.0.12] - 2026-04-17 — Phase 7: Companion Combat Safety
 
 Adds persistent condition tracking and full 5e death save mechanics for
