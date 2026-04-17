@@ -2,6 +2,43 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.14] - 2026-04-17 — Phase 9: Companion Merchant Transactions
+
+Companions can now buy and sell from merchants using their own purse.
+Spellcasters can buy components, fighters can sell salvage, etc. The
+companion's own `gold_gp` / `gold_sp` / `gold_cp` columns (already on
+the table since migration 001) are the wallet.
+
+### Added
+- **POST /api/companion/:id/merchant-transaction**
+  `{ merchantId?, bought: [...], sold: [...] }`
+  - Mirrors the character-side transaction endpoint in dmSession.js but
+    uses companion's own inventory and gold columns.
+  - Same bulk-discount math via `getBulkDiscount()`.
+  - Same optimistic-locking merchant update via
+    `updateMerchantAfterTransaction()`.
+  - Skips NPC disposition ripple (companions aren't independent NPC
+    relationship holders — route reputation through the recruiting
+    character's transaction instead).
+  - 400 on insufficient gold.
+  - 400 on selling an item the companion doesn't hold (via the Phase 8
+    `inventoryRemoveItem` helper).
+  - 409 on merchant optimistic-lock conflict, with companion state
+    rolled back to pre-transaction snapshot.
+
+### Known (UI gap, deferred)
+- The existing in-session MerchantShop panel in DMSession.jsx is
+  character-only. Wiring a "shop as companion" toggle into that panel
+  is a separate substantial UI change. Today the endpoint is callable
+  via API or (future) AI-driven markers like `[COMPANION_SHOP]`. Will
+  surface during playtest and can be addressed then.
+
+### Tests
+- 5 new integration tests (13 assertions) in Group 15 — buy, sell,
+  insufficient gold, bulk discount threshold, sell-without-owning
+  rejection.
+- Full suite: 362 passing (up from 349).
+
 ## [1.0.0.13] - 2026-04-17 — Phase 8: Companion Item Transfer + Inventory Quick-View
 
 Closes the last major daily-use gap in the companion system: handing a
