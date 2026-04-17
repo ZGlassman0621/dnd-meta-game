@@ -2,6 +2,71 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.8] - 2026-04-17 — Implementation Phase 5: Level-Up Wizard Progression
+
+Extends the level-up wizard to support Theme tier unlocks (L5/L11/L17) and
+Ancestry Feat selection (L3/L7/L13/L18) for player characters. The wizard now
+surfaces these decisions at the right tier thresholds, validates inputs
+server-side, and persists everything inside the same transaction as the
+existing level-up writes.
+
+### Added
+- **Theme tier auto-unlock at L5/L11/L17**: When a character with a theme
+  crosses one of these levels, the corresponding L5/L11/L17 theme ability
+  is automatically granted. Surfaced in the wizard as a purple-accented
+  notification card showing the new ability's name, description, and flavor
+  text. No player choice — themes have exactly one ability per tier.
+- **Ancestry Feat pick at L3/L7/L13/L18**: When crossing these levels, the
+  wizard shows 3 feat options from the character's race list and requires
+  one pick before allowing completion. Teal-accented selectable cards.
+- **`computeProgressionDecisions(characterId, newTotalLevel)`** helper in
+  `server/routes/character.js` — determines whether a tier threshold is
+  crossed and returns the unlock/pick details. Skips silently if the
+  character has no theme, no prior ancestry feat, or has already unlocked
+  at that tier.
+- **`GET /api/character/level-up-info/:id`** now returns a `progression`
+  object with `theme_tier_unlock` and `ancestry_feat_tier`, each null when
+  not applicable.
+- **`POST /api/character/level-up/:id`** accepts optional `ancestryFeatId`.
+  Validates that it's provided when a tier threshold is crossed (422 if
+  missing, 400 if not one of the offered options). Response payload's
+  `levelUpSummary` now includes `themeTierUnlocked` and `ancestryFeatSelected`
+  for UI celebration.
+- **Review step** in LevelUpPage shows both theme tier unlock and ancestry
+  feat selection when applicable.
+
+### Fixed
+- **Subclass validation regression from 4.5**: The multiclass subclass
+  validation was firing spuriously for single-class level-ups (e.g., a
+  Fighter leveling L2→L3 has subclass=Champion in the DB but the request
+  body doesn't re-send it). Now checks `existingSubclass` from
+  `classLevels` before demanding a new pick. Multiclass case still
+  returns 422 correctly when no existing subclass + no payload subclass.
+
+### Deferred (Phase 5.5)
+- **Companion theme/ancestry progression**: Companions don't currently have
+  theme or ancestry feat assignments (character creation wizard only sets
+  these for player characters), and their level-up path is separate. Adding
+  this requires companion theme assignment at recruitment, companion-specific
+  progression tracking, and AI personality-based auto-pick logic. Scoped as
+  its own phase.
+
+### Testing
+- 5 new integration tests (Group 10):
+  - `testLevelUpInfoSurfacesProgressionDecisions`: L2→L3 returns ancestry
+    feat tier with 3 options, no theme unlock
+  - `testLevelUpRequiresAncestryFeatId`: 422 when missing; character
+    unchanged
+  - `testLevelUpPersistsAncestryFeatAndThemeTier`: L4→L5 unlocks Soldier's
+    "Field Discipline"
+  - `testLevelUpWithAncestryFeatChoice`: feat pick persists via transaction,
+    surfaces in `/progression` endpoint
+  - `testLevelUpRejectsInvalidAncestryFeatId`: 400 for elf feat on dwarf
+    character
+- 258/258 integration tests pass (up from 232)
+- 55/64/26/43 unit tests all green
+- Client builds cleanly
+
 ## [1.0.0.7] - 2026-04-17 — Phase 4.5: Level-Up Flow Cleanup
 
 Foundation pass on the level-up flow before Phase 5 layers Theme tier unlocks
