@@ -4,6 +4,9 @@ All notable changes to the D&D Meta Game project will be documented in this file
 
 ## [1.0.0.3] - 2026-04-17 — Implementation Phase 1: Foundation
 
+### Fixed
+- **Character memory test**: Removed stale assertion for a 3KB soft cap that no longer exists. The cap was removed long ago (per the design decision that character_memories grows unbounded on disk), but the test and doc comment still referenced it. Updated both to accurately describe unbounded behavior. All 55 character-memory tests now pass.
+
 ### Added (Database + Seed Data)
 - **Migrations 023-027**: Complete schema for the progression system
   - `023_themes_schema.js`: themes, theme_abilities, character_themes, character_theme_unlocks, knight_moral_paths (6-path tracker for True/Reformer/Martyr/Complicit/Fallen/Redemption)
