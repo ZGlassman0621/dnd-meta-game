@@ -2,6 +2,63 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.18] - 2026-04-17 — M2: Merchant Commissions / Custom Orders
+
+Players can now commission custom items from merchants — the feature
+you tried to build organically once and it didn't stick because the
+mechanism wasn't there. Now it is.
+
+Full lifecycle: player asks merchant to craft something → merchant
+quotes price + lead time → player pays a deposit → world time advances
+→ item becomes ready on the game-day deadline → player collects and
+pays the balance.
+
+### Added
+- **Migration 033** — `merchant_orders` table with status state
+  machine: pending → ready → collected (happy path); pending →
+  cancelled (deposit forfeit); ready → expired (30 game days
+  unclaimed).
+- **Service layer** — `server/services/merchantOrderService.js`:
+  - `placeCommission` — deducts deposit from party purse, credits
+    merchant, inserts pending order
+  - `collectOrder` — pays balance, adds item to party inventory
+    (stack-merges on name)
+  - `cancelOrder` — pending only; deposit forfeit
+  - `processDueOrders` — flips pending → ready at deadline
+  - `expireStaleReadyOrders` — 30-day hold before resell
+- **REST endpoints** — `server/routes/merchant.js` (new file):
+  - `POST /api/merchant/:id/commission`
+  - `GET  /api/merchant/orders/character/:id`
+  - `GET  /api/merchant/orders/:id`
+  - `POST /api/merchant/orders/:id/collect`
+  - `POST /api/merchant/orders/:id/cancel`
+- **Living-world tick step 3.9** — runs `processDueOrders` and
+  `expireStaleReadyOrders` every tick; queues narrative-queue
+  entries so the DM can mention pickups / abandonments naturally
+  next session.
+- **AI marker** — `[MERCHANT_COMMISSION: Merchant=X Item=Y Price_GP=N
+  Deposit_GP=M Lead_Time_Days=D Quality=Q Hook=...]`:
+  - `detectMerchantCommission()` in `dmSessionService.js`
+  - `dmSession.js` finds/creates the merchant, places the order,
+    feeds a `[SYSTEM]` note back to the AI (confirming or reporting
+    why the order was rejected)
+- **DM prompt** — new CUSTOM ORDERS / COMMISSIONS section with
+  guidance on when to use the marker, price ranges, lead times, and
+  a worked example (masterwork dagger, 400gp, 150gp deposit, 7 days).
+- **CommissionsPanel** — teal-accented slide-in panel with Active
+  (pending + ready) and History (collected / cancelled / expired)
+  sections. Collect + Cancel buttons per-order. New toolbar button
+  alongside Inventory/Conditions.
+
+### Tests
+- 8 new integration tests (Group 17, 26 assertions): happy path,
+  insufficient-deposit rejection, bad-input rejection (deposit >
+  quoted, zero lead time), living-world tick flips pending to
+  ready, collect pays balance + adds to inventory, collect blocked
+  while pending, cancel + forfeit semantics, list orders for
+  character.
+- Full suite: 407 passing (up from 381).
+
 ## [1.0.0.17] - 2026-04-17 — M1 polish: Ultima-style inventory + equipped-by badges
 
 Follow-on polish to M1 (v1.0.16). The in-session InventoryPanel
