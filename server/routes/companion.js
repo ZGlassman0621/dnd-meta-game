@@ -24,8 +24,6 @@ import {
   ensureCompanionProgressionInitialized
 } from '../services/progressionCompanionService.js';
 import { CONDITION_NAMES } from '../data/conditions.js';
-import { updateMerchantAfterTransaction } from '../services/merchantService.js';
-import { getBulkDiscount } from '../services/economyService.js';
 
 // Phase 10: parse `companion_class_levels` (multiclass breakdown) with a
 // fallback to the legacy single-class columns. Returns an array of
@@ -1266,249 +1264,127 @@ function inventoryRemoveItem(inventory, itemName, quantity) {
   }
 }
 
-// Give an item from a character to this companion
-router.post('/:id/give-item', async (req, res) => {
+const VALID_EQUIP_SLOTS = new Set(['mainHand', 'offHand', 'armor']);
+
+// Equip an item from the party pool onto this companion
+router.post('/:id/equip', async (req, res) => {
   try {
-    const { characterId, itemName, quantity = 1 } = req.body || {};
-    if (!characterId || !itemName) {
-      return res.status(400).json({ error: 'characterId and itemName are required' });
+    const { slot, itemName } = req.body || {};
+    if (!slot || !VALID_EQUIP_SLOTS.has(slot)) {
+      return res.status(400).json({ error: `slot must be one of: ${[...VALID_EQUIP_SLOTS].join(', ')}` });
     }
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return res.status(400).json({ error: 'quantity must be a positive integer' });
-    }
+    if (!itemName) return res.status(400).json({ error: 'itemName is required' });
 
-    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [characterId]);
-    if (!character) return res.status(404).json({ error: 'Character not found' });
-
-    const companion = await dbGet('SELECT id, inventory FROM companions WHERE id = ?', [req.params.id]);
+    const companion = await dbGet(
+      'SELECT id, recruited_by_character_id, equipment FROM companions WHERE id = ?',
+      [req.params.id]
+    );
     if (!companion) return res.status(404).json({ error: 'Companion not found' });
 
-    const charInv = safeParse(character.inventory, []);
-    const compInv = safeParse(companion.inventory, []);
+    const character = await dbGet(
+      'SELECT id, inventory FROM characters WHERE id = ?',
+      [companion.recruited_by_character_id]
+    );
+    if (!character) return res.status(404).json({ error: 'Recruiting character not found' });
 
-    const remove = inventoryRemoveItem(charInv, itemName, quantity);
+    const partyInv = safeParse(character.inventory, []);
+    const equipment = safeParse(companion.equipment, {});
+
+    const remove = inventoryRemoveItem(partyInv, itemName, 1);
     if (!remove.ok) return res.status(400).json({ error: remove.error });
 
-    inventoryAddItem(compInv, remove.removed, quantity);
+    // If something was already in that slot, return it to the party pool
+    const previous = equipment[slot];
+    if (previous && previous.name) {
+      inventoryAddItem(partyInv, { name: previous.name }, 1);
+    }
+
+    // Equipment shape stays minimal (just { name }). Callers that need
+    // mechanical detail (damage, AC bonus) update via PUT /companion/:id.
+    equipment[slot] = { name: remove.removed.name };
 
     await dbRun(
       'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(charInv), characterId]
+      [JSON.stringify(partyInv), character.id]
     );
     await dbRun(
-      'UPDATE companions SET inventory = ? WHERE id = ?',
-      [JSON.stringify(compInv), req.params.id]
+      'UPDATE companions SET equipment = ? WHERE id = ?',
+      [JSON.stringify(equipment), req.params.id]
     );
 
     res.json({
       success: true,
-      message: `Gave ${quantity} × ${itemName} to the companion`,
-      character_inventory: charInv,
-      companion_inventory: compInv
+      slot,
+      equipped: equipment[slot],
+      returned_to_pool: previous || null,
+      party_inventory: partyInv
     });
   } catch (error) {
-    handleServerError(res, error, 'give item to companion');
+    handleServerError(res, error, 'equip companion item');
   }
 });
 
-// Take an item from this companion back to a character
-router.post('/:id/take-item', async (req, res) => {
+// Unequip an item from this companion back to the party pool
+router.post('/:id/unequip', async (req, res) => {
   try {
-    const { characterId, itemName, quantity = 1 } = req.body || {};
-    if (!characterId || !itemName) {
-      return res.status(400).json({ error: 'characterId and itemName are required' });
-    }
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return res.status(400).json({ error: 'quantity must be a positive integer' });
+    const { slot } = req.body || {};
+    if (!slot || !VALID_EQUIP_SLOTS.has(slot)) {
+      return res.status(400).json({ error: `slot must be one of: ${[...VALID_EQUIP_SLOTS].join(', ')}` });
     }
 
-    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [characterId]);
-    if (!character) return res.status(404).json({ error: 'Character not found' });
-
-    const companion = await dbGet('SELECT id, inventory FROM companions WHERE id = ?', [req.params.id]);
+    const companion = await dbGet(
+      'SELECT id, recruited_by_character_id, equipment FROM companions WHERE id = ?',
+      [req.params.id]
+    );
     if (!companion) return res.status(404).json({ error: 'Companion not found' });
 
-    const charInv = safeParse(character.inventory, []);
-    const compInv = safeParse(companion.inventory, []);
+    const equipment = safeParse(companion.equipment, {});
+    const current = equipment[slot];
+    if (!current || !current.name) {
+      return res.status(400).json({ error: `No item equipped in ${slot}` });
+    }
 
-    const remove = inventoryRemoveItem(compInv, itemName, quantity);
-    if (!remove.ok) return res.status(400).json({ error: remove.error });
-
-    inventoryAddItem(charInv, remove.removed, quantity);
-
-    await dbRun(
-      'UPDATE companions SET inventory = ? WHERE id = ?',
-      [JSON.stringify(compInv), req.params.id]
+    const character = await dbGet(
+      'SELECT id, inventory FROM characters WHERE id = ?',
+      [companion.recruited_by_character_id]
     );
+    if (!character) return res.status(404).json({ error: 'Recruiting character not found' });
+
+    const partyInv = safeParse(character.inventory, []);
+    inventoryAddItem(partyInv, { name: current.name }, 1);
+    equipment[slot] = null;
+
     await dbRun(
       'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(charInv), characterId]
+      [JSON.stringify(partyInv), character.id]
     );
-
-    res.json({
-      success: true,
-      message: `Took ${quantity} × ${itemName} from the companion`,
-      character_inventory: charInv,
-      companion_inventory: compInv
-    });
-  } catch (error) {
-    handleServerError(res, error, 'take item from companion');
-  }
-});
-
-// ============================================================================
-// Phase 9: Companion Merchant Transactions
-//
-// Companions now have their own merchant flow — distinct from the party
-// character's flow in dmSession.js. Spellcaster companions can buy their
-// own components, fighter companions can sell scavenged gear. The
-// companion's own gold (gold_gp/gold_sp/gold_cp columns on `companions`)
-// is the purse.
-//
-// Simpler than the character flow:
-//  - No reputation ripple (companions aren't independent NPC relationship
-//    holders; if that matters, route through the recruiting character's
-//    transaction instead)
-//  - Same bulk discount + price math as character side
-//  - Same optimistic-locking pattern for merchant inventory updates via
-//    updateMerchantAfterTransaction()
-// ============================================================================
-
-router.post('/:id/merchant-transaction', async (req, res) => {
-  try {
-    const { merchantId, bought = [], sold = [] } = req.body || {};
-
-    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
-    if (!companion) return res.status(404).json({ error: 'Companion not found' });
-
-    let inventory = safeParse(companion.inventory, []);
-
-    // Calculate totals in copper
-    let totalSpentCp = 0;
-    let totalEarnedCp = 0;
-
-    for (const item of bought) {
-      const costCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
-      totalSpentCp += costCp;
-      inventoryAddItem(inventory, { name: item.name }, item.quantity);
-    }
-
-    // Bulk discount: same tier math as the character flow
-    const totalBuyQty = bought.reduce((sum, i) => sum + (i.quantity || 1), 0);
-    const bulkDiscount = getBulkDiscount(totalBuyQty);
-    if (bulkDiscount > 0) {
-      totalSpentCp = Math.round(totalSpentCp * (1 - bulkDiscount));
-    }
-
-    for (const item of sold) {
-      const earnCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
-      totalEarnedCp += earnCp;
-
-      const removeResult = inventoryRemoveItem(inventory, item.name, item.quantity);
-      if (!removeResult.ok) {
-        return res.status(400).json({
-          error: `Cannot sell ${item.quantity} × ${item.name}: ${removeResult.error}`
-        });
-      }
-    }
-
-    // Validate companion has enough gold for the net cost
-    let companionCp = (companion.gold_gp || 0) * 100 + (companion.gold_sp || 0) * 10 + (companion.gold_cp || 0);
-    const netCostCp = totalSpentCp - totalEarnedCp;
-
-    if (netCostCp > companionCp) {
-      return res.status(400).json({
-        error: 'Companion does not have enough gold for this transaction'
-      });
-    }
-
-    companionCp -= netCostCp;
-    const newGp = Math.floor(companionCp / 100);
-    const remainCp = companionCp % 100;
-    const newSp = Math.floor(remainCp / 10);
-    const newCp = remainCp % 10;
-
     await dbRun(
-      `UPDATE companions
-       SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?
-       WHERE id = ?`,
-      [JSON.stringify(inventory), newGp, newSp, newCp, req.params.id]
+      'UPDATE companions SET equipment = ? WHERE id = ?',
+      [JSON.stringify(equipment), req.params.id]
     );
 
-    // Update merchant inventory with optimistic locking (mirrors the
-    // character-side dmSession flow).
-    if (merchantId) {
-      const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
-      if (merchant) {
-        let merchInv = safeParse(merchant.inventory, []);
-
-        for (const item of bought) {
-          const idx = merchInv.findIndex(i => (i.name || '').toLowerCase() === item.name.toLowerCase());
-          if (idx !== -1) {
-            merchInv[idx].quantity = (merchInv[idx].quantity || 1) - item.quantity;
-            if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
-          }
-        }
-
-        for (const item of sold) {
-          const existing = merchInv.find(i => (i.name || '').toLowerCase() === item.name.toLowerCase());
-          if (existing) {
-            existing.quantity = (existing.quantity || 1) + item.quantity;
-          } else {
-            merchInv.push({
-              name: item.name,
-              price_gp: (item.price_gp || 0) * 2,
-              price_sp: (item.price_sp || 0) * 2,
-              price_cp: (item.price_cp || 0) * 2,
-              category: 'misc',
-              description: 'Acquired from a companion',
-              quantity: item.quantity,
-              rarity: 'common'
-            });
-          }
-        }
-
-        const originalMerchGold = merchant.gold_gp || 0;
-        const newMerchGold = originalMerchGold
-          - Math.floor(totalEarnedCp / 100)
-          + Math.floor(totalSpentCp / 100);
-        const originalInventoryHash = merchant.inventory_version || 0;
-        try {
-          await updateMerchantAfterTransaction(
-            merchantId, merchInv, newMerchGold, originalMerchGold, originalInventoryHash
-          );
-        } catch (mErr) {
-          // If the optimistic-lock fails, the companion has already been
-          // mutated. Roll back by restoring the prior companion state.
-          await dbRun(
-            `UPDATE companions
-             SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?
-             WHERE id = ?`,
-            [
-              companion.inventory,
-              companion.gold_gp, companion.gold_sp, companion.gold_cp,
-              req.params.id
-            ]
-          );
-          return res.status(409).json({
-            error: 'Merchant inventory changed while transaction was in flight — retry'
-          });
-        }
-      }
-    }
-
-    const updated = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
     res.json({
       success: true,
-      companion: updated,
-      bulk_discount: bulkDiscount,
-      total_spent_cp: totalSpentCp,
-      total_earned_cp: totalEarnedCp
+      slot,
+      returned_to_pool: current,
+      party_inventory: partyInv
     });
   } catch (error) {
-    handleServerError(res, error, 'companion merchant transaction');
+    handleServerError(res, error, 'unequip companion item');
   }
 });
+
+// Retired Phase 8 / Phase 9 endpoints — return 410 so stale integrations
+// fail loudly. Inventory + gold are party-wide now; equip/unequip replaces
+// give-item/take-item.
+const retiredHandler = (reason) => (_req, res) => res.status(410).json({
+  error: 'Endpoint retired in M1',
+  reason,
+  replacement: 'Party inventory is now shared via the recruiting character. Use /equip + /unequip for slot management.'
+});
+router.post('/:id/give-item', retiredHandler('Carried inventory is party-wide; items no longer need explicit transfer.'));
+router.post('/:id/take-item', retiredHandler('Carried inventory is party-wide; items no longer need explicit transfer.'));
+router.post('/:id/merchant-transaction', retiredHandler('Gold is party-wide; merchants transact via /api/dm-session/:id/merchant-transaction.'));
 
 // Dismiss companion - removes from party and makes NPC available for re-recruitment
 router.post('/:id/dismiss', async (req, res) => {
@@ -1641,6 +1517,7 @@ router.post('/create-party-member', async (req, res) => {
       relationship_to_party,
       // Starting equipment and gold
       starting_equipment,
+      starting_inventory, // M1: merges into party bucket (character) on create
       starting_gold_gp,
       starting_gold_sp,
       starting_gold_cp,
@@ -1806,13 +1683,42 @@ router.post('/create-party-member', async (req, res) => {
       calculatedSpeed,
       subrace || null,
       background || null,
-      // Equipment and gold
+      // Equipment stays per-entity; carried inventory + gold go to party bucket (M1)
       equipmentJson,
-      inventoryJson,
-      starting_gold_gp || 0,
-      starting_gold_sp || 0,
-      starting_gold_cp || 0
+      '[]', // companion.inventory stays empty — party bucket is on the recruiting character
+      0, 0, 0 // companion gold stays zero — gold pooled on the character
     ]);
+
+    // M1: merge the party member's "starting" inventory + gold into the
+    // recruiting character's bucket (carried items + purse are now party-wide)
+    const startingItems = Array.isArray(starting_inventory) ? starting_inventory : [];
+    if (startingItems.length > 0 || (starting_gold_gp || 0) + (starting_gold_sp || 0) + (starting_gold_cp || 0) > 0) {
+      const charRow = await dbGet(
+        'SELECT inventory, gold_gp, gold_sp, gold_cp FROM characters WHERE id = ?',
+        [recruited_by_character_id]
+      );
+      const charInv = safeParse(charRow?.inventory, []);
+      for (const it of startingItems) {
+        if (!it || !it.name) continue;
+        const existing = charInv.find(i => (i.name || '').toLowerCase() === it.name.toLowerCase());
+        if (existing) existing.quantity = (existing.quantity || 1) + (it.quantity || 1);
+        else charInv.push({ name: it.name, quantity: it.quantity || 1 });
+      }
+      await dbRun(
+        `UPDATE characters SET
+           inventory = ?,
+           gold_gp = ?, gold_sp = ?, gold_cp = ?,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          JSON.stringify(charInv),
+          (charRow?.gold_gp || 0) + (starting_gold_gp || 0),
+          (charRow?.gold_sp || 0) + (starting_gold_sp || 0),
+          (charRow?.gold_cp || 0) + (starting_gold_cp || 0),
+          recruited_by_character_id
+        ]
+      );
+    }
 
     // Fetch the created companion with NPC details
     const companion = await dbGet(`

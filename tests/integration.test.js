@@ -1989,284 +1989,154 @@ async function testCompanionLongRestResetsDeathSaves() {
   await cleanupTestCompanion(companionId, npcId);
 }
 
-// ===== GROUP 14: Companion Item Transfer (Phase 8) =====
-//
-// Characters and companions each hold their own inventory. These tests cover
-// the give-item / take-item transfer endpoints, including partial stacks,
-// merging into existing stacks, and error paths.
+
+// ===== GROUP 14: Party Inventory + Equip/Unequip (M1) =====
 
 async function setCharInventory(charId, items) {
   await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(items), charId]);
-}
-async function setCompanionInventory(compId, items) {
-  await dbRun('UPDATE companions SET inventory = ? WHERE id = ?', [JSON.stringify(items), compId]);
 }
 async function getCharInventory(charId) {
   const row = await dbGet('SELECT inventory FROM characters WHERE id = ?', [charId]);
   return parseJSON(row?.inventory || '[]');
 }
-async function getCompanionInventory(compId) {
-  const row = await dbGet('SELECT inventory FROM companions WHERE id = ?', [compId]);
-  return parseJSON(row?.inventory || '[]');
+
+async function testM1RetiredEndpointsReturn410() {
+  console.log('\n  -- Retired Phase 8/9 endpoints return 410 --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  const give = await api('POST', `/api/companion/${companionId}/give-item`, {
+    characterId: testCharId, itemName: 'Anything', quantity: 1
+  });
+  assert(give.status === 410, `give-item returns 410 (got ${give.status})`);
+
+  const take = await api('POST', `/api/companion/${companionId}/take-item`, {
+    characterId: testCharId, itemName: 'Anything', quantity: 1
+  });
+  assert(take.status === 410, 'take-item returns 410');
+
+  const merchant = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
+    bought: [{ name: 'Thing', quantity: 1, price_gp: 1 }]
+  });
+  assert(merchant.status === 410, 'companion merchant-transaction returns 410');
+
+  await cleanupTestCompanion(companionId, npcId);
 }
 
-async function testGiveItemToCompanion() {
-  console.log('\n  -- Character gives item to companion --');
+async function testM1EquipItemFromPartyPool() {
+  console.log('\n  -- Companion equips an item from the party pool --');
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await setCharInventory(testCharId, [{ name: 'Potion of Healing', quantity: 3 }]);
+  await setCharInventory(testCharId, [{ name: 'Longsword', quantity: 1 }]);
 
-  const r = await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId,
-    itemName: 'Potion of Healing',
-    quantity: 2
+  const r = await api('POST', `/api/companion/${companionId}/equip`, {
+    slot: 'mainHand', itemName: 'Longsword'
   });
-  assert(r.status === 200, `give-item returns 200 (got ${r.status})`);
+  assert(r.status === 200, `equip returns 200 (got ${r.status})`);
+  assert(r.body.equipped?.name === 'Longsword', 'equipped field reports Longsword');
 
   const charInv = await getCharInventory(testCharId);
-  const compInv = await getCompanionInventory(companionId);
-  assert(charInv[0].quantity === 1, `Character has 1 potion left (got ${charInv[0]?.quantity})`);
-  assert(compInv[0].name === 'Potion of Healing' && compInv[0].quantity === 2,
-    'Companion has 2 potions');
+  assert(charInv.length === 0, 'Longsword removed from party pool');
+
+  const compRow = await dbGet('SELECT equipment FROM companions WHERE id = ?', [companionId]);
+  const eq = parseJSON(compRow.equipment);
+  assert(eq.mainHand?.name === 'Longsword', 'companion.equipment.mainHand is Longsword');
 
   await cleanupTestCompanion(companionId, npcId);
   await setCharInventory(testCharId, []);
 }
 
-async function testTakeItemFromCompanion() {
-  console.log('\n  -- Character takes item back from companion --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await setCompanionInventory(companionId, [{ name: 'Torch', quantity: 5 }]);
-  await setCharInventory(testCharId, []);
-
-  const r = await api('POST', `/api/companion/${companionId}/take-item`, {
-    characterId: testCharId,
-    itemName: 'Torch',
-    quantity: 2
-  });
-  assert(r.status === 200, 'take-item returns 200');
-
-  const charInv = await getCharInventory(testCharId);
-  const compInv = await getCompanionInventory(companionId);
-  assert(charInv[0].quantity === 2, 'Character gained 2 torches');
-  assert(compInv[0].quantity === 3, 'Companion has 3 torches left');
-
-  await cleanupTestCompanion(companionId, npcId);
-  await setCharInventory(testCharId, []);
-}
-
-async function testTransferMergesIntoExistingStack() {
-  console.log('\n  -- Transfer merges into an existing stack on the destination --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await setCharInventory(testCharId, [{ name: 'Arrow', quantity: 10 }]);
-  await setCompanionInventory(companionId, [{ name: 'Arrow', quantity: 3 }]);
-
-  await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId,
-    itemName: 'Arrow',
-    quantity: 5
-  });
-
-  const compInv = await getCompanionInventory(companionId);
-  assert(compInv.length === 1 && compInv[0].quantity === 8, `Merged to 8 arrows (got ${compInv[0]?.quantity})`);
-
-  await cleanupTestCompanion(companionId, npcId);
-  await setCharInventory(testCharId, []);
-}
-
-async function testTransferFullStackRemovesSourceEntry() {
-  console.log('\n  -- Transferring full stack removes entry from source --');
+async function testM1EquipReturnsPreviousItemToPool() {
+  console.log('\n  -- Equipping a second item returns the previous to the pool --');
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
   await setCharInventory(testCharId, [
-    { name: 'Rope', quantity: 1 },
-    { name: 'Lantern', quantity: 1 }
+    { name: 'Dagger', quantity: 1 },
+    { name: 'Mace', quantity: 1 }
   ]);
 
-  await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId,
-    itemName: 'Rope',
-    quantity: 1
-  });
+  await api('POST', `/api/companion/${companionId}/equip`, { slot: 'mainHand', itemName: 'Dagger' });
+  const r = await api('POST', `/api/companion/${companionId}/equip`, { slot: 'mainHand', itemName: 'Mace' });
+  assert(r.status === 200, 'swap equip returns 200');
+  assert(r.body.returned_to_pool?.name === 'Dagger', 'previous item returned to pool');
 
   const charInv = await getCharInventory(testCharId);
-  assert(charInv.length === 1 && charInv[0].name === 'Lantern',
-    'Rope removed from character inventory; Lantern remains');
+  assert(charInv.find(i => i.name === 'Dagger')?.quantity === 1, 'Dagger back in party pool');
+  assert(!charInv.find(i => i.name === 'Mace'), 'Mace removed from party pool (now equipped)');
 
   await cleanupTestCompanion(companionId, npcId);
   await setCharInventory(testCharId, []);
 }
 
-async function testTransferRejectsMissingItem() {
-  console.log('\n  -- Transfer rejects when item not in source --');
+async function testM1UnequipToPool() {
+  console.log('\n  -- Unequip returns the item to the party pool --');
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await setCharInventory(testCharId, []);
+  await setCharInventory(testCharId, [{ name: 'Shield', quantity: 1 }]);
 
-  const r = await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId,
-    itemName: 'Dragonbone Dagger',
-    quantity: 1
-  });
-  assert(r.status === 400, `Returns 400 when item missing (got ${r.status})`);
+  await api('POST', `/api/companion/${companionId}/equip`, { slot: 'offHand', itemName: 'Shield' });
+  const r = await api('POST', `/api/companion/${companionId}/unequip`, { slot: 'offHand' });
+  assert(r.status === 200, 'unequip returns 200');
+  assert(r.body.returned_to_pool?.name === 'Shield', 'Shield returned to pool');
 
-  await cleanupTestCompanion(companionId, npcId);
-}
+  const charInv = await getCharInventory(testCharId);
+  assert(charInv.find(i => i.name === 'Shield')?.quantity === 1, 'Shield back in party pool');
 
-async function testTransferRejectsOverdraw() {
-  console.log('\n  -- Transfer rejects when quantity exceeds available --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await setCharInventory(testCharId, [{ name: 'Dagger', quantity: 1 }]);
-
-  const r = await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId,
-    itemName: 'Dagger',
-    quantity: 5
-  });
-  assert(r.status === 400, 'Returns 400 when requesting more than available');
+  const compRow = await dbGet('SELECT equipment FROM companions WHERE id = ?', [companionId]);
+  const eq = parseJSON(compRow.equipment);
+  assert(!eq.offHand || !eq.offHand.name, 'offHand slot cleared');
 
   await cleanupTestCompanion(companionId, npcId);
   await setCharInventory(testCharId, []);
 }
 
-async function testTransferRejectsBadQuantity() {
-  console.log('\n  -- Transfer rejects non-positive quantity --');
+async function testM1EquipRejectsMissingItem() {
+  console.log('\n  -- Equip rejects when item is not in the pool --');
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, []);
 
-  const r1 = await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId, itemName: 'Anything', quantity: 0
+  const r = await api('POST', `/api/companion/${companionId}/equip`, {
+    slot: 'mainHand', itemName: 'Phantom Blade'
   });
-  assert(r1.status === 400, 'Quantity 0 returns 400');
-
-  const r2 = await api('POST', `/api/companion/${companionId}/give-item`, {
-    characterId: testCharId, itemName: 'Anything', quantity: -1
-  });
-  assert(r2.status === 400, 'Negative quantity returns 400');
+  assert(r.status === 400, `Returns 400 when item missing from pool (got ${r.status})`);
 
   await cleanupTestCompanion(companionId, npcId);
 }
 
-// ===== GROUP 15: Companion Merchant Transactions (Phase 9) =====
+async function testM1EquipRejectsInvalidSlot() {
+  console.log('\n  -- Equip rejects unknown slot names --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await setCharInventory(testCharId, [{ name: 'Hat', quantity: 1 }]);
 
-async function createTestMerchant(items, goldGp = 500) {
-  const result = await dbRun(
-    `INSERT INTO merchant_inventories (campaign_id, merchant_name, merchant_type, inventory, gold_gp, prosperity)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [testCampaignId, `TEST_CompMerchant_${Date.now()}`, 'general', JSON.stringify(items), goldGp, 'modest']
+  const r = await api('POST', `/api/companion/${companionId}/equip`, {
+    slot: 'helmet', itemName: 'Hat'
+  });
+  assert(r.status === 400, `Unknown slot returns 400 (got ${r.status})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await setCharInventory(testCharId, []);
+}
+
+async function testM1UnequipRejectsEmptySlot() {
+  console.log('\n  -- Unequip rejects when the slot is already empty --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  const r = await api('POST', `/api/companion/${companionId}/unequip`, { slot: 'mainHand' });
+  assert(r.status === 400, 'Empty slot unequip returns 400');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testM1RecruitStartsCompanionWithEmptyCarry() {
+  console.log('\n  -- Recruit leaves companion inventory + gold empty (party bucket absorbs) --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  const row = await dbGet(
+    'SELECT inventory, gold_gp, gold_sp, gold_cp FROM companions WHERE id = ?',
+    [companionId]
   );
-  return Number(result.lastInsertRowid);
-}
-
-async function cleanupTestMerchant(merchantId) {
-  if (merchantId) await dbRun('DELETE FROM merchant_inventories WHERE id = ?', [merchantId]);
-}
-
-async function testCompanionMerchantBuy() {
-  console.log('\n  -- Companion buys from a merchant --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Wizard', 1);
-  await dbRun('UPDATE companions SET gold_gp = 50 WHERE id = ?', [companionId]);
-  const merchantId = await createTestMerchant([
-    { name: 'Component Pouch', quantity: 3, price_gp: 25, price_sp: 0, price_cp: 0 }
-  ]);
-
-  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
-    merchantId,
-    bought: [{ name: 'Component Pouch', quantity: 1, price_gp: 25, price_sp: 0, price_cp: 0 }]
-  });
-  assert(r.status === 200, `Buy returns 200 (got ${r.status})`);
-  assert(r.body.companion.gold_gp === 25, `Gold reduced to 25gp (got ${r.body.companion.gold_gp})`);
-
-  const inv = parseJSON(r.body.companion.inventory);
-  assert(inv.find(i => i.name === 'Component Pouch'), 'Component Pouch now in companion inventory');
-
-  const merchRow = await dbGet('SELECT inventory FROM merchant_inventories WHERE id = ?', [merchantId]);
-  const merchInv = parseJSON(merchRow.inventory);
-  const stock = merchInv.find(i => i.name === 'Component Pouch');
-  assert(stock.quantity === 2, `Merchant stock decremented to 2 (got ${stock?.quantity})`);
+  const inv = parseJSON(row.inventory || '[]');
+  assert(Array.isArray(inv) && inv.length === 0, 'companion.inventory is empty');
+  assert((row.gold_gp || 0) === 0 && (row.gold_sp || 0) === 0 && (row.gold_cp || 0) === 0,
+    'companion gold columns are all zero');
 
   await cleanupTestCompanion(companionId, npcId);
-  await cleanupTestMerchant(merchantId);
-}
-
-async function testCompanionMerchantSell() {
-  console.log('\n  -- Companion sells to a merchant --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await dbRun(
-    `UPDATE companions SET inventory = ?, gold_gp = 0 WHERE id = ?`,
-    [JSON.stringify([{ name: 'Battleaxe', quantity: 1 }]), companionId]
-  );
-  const merchantId = await createTestMerchant([]);
-
-  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
-    merchantId,
-    sold: [{ name: 'Battleaxe', quantity: 1, price_gp: 5, price_sp: 0, price_cp: 0 }]
-  });
-  assert(r.status === 200, 'Sell returns 200');
-  assert(r.body.companion.gold_gp === 5, `Gold increased to 5gp (got ${r.body.companion.gold_gp})`);
-
-  const inv = parseJSON(r.body.companion.inventory);
-  assert(!inv.find(i => i.name === 'Battleaxe'), 'Battleaxe removed from companion inventory');
-
-  const merchRow = await dbGet('SELECT inventory FROM merchant_inventories WHERE id = ?', [merchantId]);
-  const merchInv = parseJSON(merchRow.inventory);
-  assert(merchInv.find(i => i.name === 'Battleaxe'), 'Merchant now stocks Battleaxe');
-
-  await cleanupTestCompanion(companionId, npcId);
-  await cleanupTestMerchant(merchantId);
-}
-
-async function testCompanionMerchantInsufficientGold() {
-  console.log('\n  -- Companion blocked from buying without enough gold --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Wizard', 1);
-  await dbRun('UPDATE companions SET gold_gp = 5 WHERE id = ?', [companionId]);
-  const merchantId = await createTestMerchant([
-    { name: 'Wand', quantity: 1, price_gp: 100, price_sp: 0, price_cp: 0 }
-  ]);
-
-  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
-    merchantId,
-    bought: [{ name: 'Wand', quantity: 1, price_gp: 100, price_sp: 0, price_cp: 0 }]
-  });
-  assert(r.status === 400, `Returns 400 when companion gold insufficient (got ${r.status})`);
-
-  // Companion state should be unchanged
-  const c = await dbGet('SELECT gold_gp, inventory FROM companions WHERE id = ?', [companionId]);
-  assert(c.gold_gp === 5, 'Companion gold unchanged after rejected transaction');
-
-  await cleanupTestCompanion(companionId, npcId);
-  await cleanupTestMerchant(merchantId);
-}
-
-async function testCompanionMerchantBulkDiscount() {
-  console.log('\n  -- Companion bulk purchase triggers discount --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  await dbRun('UPDATE companions SET gold_gp = 100 WHERE id = ?', [companionId]);
-  const merchantId = await createTestMerchant([
-    { name: 'Arrow', quantity: 100, price_gp: 0, price_sp: 1, price_cp: 0 }
-  ]);
-
-  // 10 arrows at 1sp each = 10sp base. Bulk tier triggers at 10+.
-  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
-    merchantId,
-    bought: [{ name: 'Arrow', quantity: 10, price_gp: 0, price_sp: 1, price_cp: 0 }]
-  });
-  assert(r.status === 200, 'Bulk buy returns 200');
-  assert(r.body.bulk_discount > 0, `Bulk discount applied (got ${r.body.bulk_discount})`);
-
-  await cleanupTestCompanion(companionId, npcId);
-  await cleanupTestMerchant(merchantId);
-}
-
-async function testCompanionMerchantCannotSellItemsNotOwned() {
-  console.log('\n  -- Rejects selling items companion does not have --');
-  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
-  const merchantId = await createTestMerchant([]);
-
-  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
-    merchantId,
-    sold: [{ name: 'Phantom Sword', quantity: 1, price_gp: 10, price_sp: 0, price_cp: 0 }]
-  });
-  assert(r.status === 400, `Returns 400 when companion does not have the item (got ${r.status})`);
-
-  await cleanupTestCompanion(companionId, npcId);
-  await cleanupTestMerchant(merchantId);
 }
 
 // ===== GROUP 16: Companion Multiclass (Phase 10) =====
@@ -2503,21 +2373,15 @@ async function runTests() {
     await testCompanionStabilizeEndpoint();
     await testCompanionLongRestResetsDeathSaves();
 
-    console.log('\n=== Group 14: Companion Item Transfer (Phase 8) ===');
-    await testGiveItemToCompanion();
-    await testTakeItemFromCompanion();
-    await testTransferMergesIntoExistingStack();
-    await testTransferFullStackRemovesSourceEntry();
-    await testTransferRejectsMissingItem();
-    await testTransferRejectsOverdraw();
-    await testTransferRejectsBadQuantity();
-
-    console.log('\n=== Group 15: Companion Merchant Transactions (Phase 9) ===');
-    await testCompanionMerchantBuy();
-    await testCompanionMerchantSell();
-    await testCompanionMerchantInsufficientGold();
-    await testCompanionMerchantBulkDiscount();
-    await testCompanionMerchantCannotSellItemsNotOwned();
+    console.log('\n=== Group 14: Party Inventory + Equip/Unequip (M1) ===');
+    await testM1RetiredEndpointsReturn410();
+    await testM1EquipItemFromPartyPool();
+    await testM1EquipReturnsPreviousItemToPool();
+    await testM1UnequipToPool();
+    await testM1EquipRejectsMissingItem();
+    await testM1EquipRejectsInvalidSlot();
+    await testM1UnequipRejectsEmptySlot();
+    await testM1RecruitStartsCompanionWithEmptyCarry();
 
     console.log('\n=== Group 16: Companion Multiclass (Phase 10) ===');
     await testCompanionRecruitSeedsClassLevels();

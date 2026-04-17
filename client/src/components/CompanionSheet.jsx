@@ -23,9 +23,11 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
   const [activeConditions, setActiveConditions] = useState([])
   const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0, at_zero_hp: false })
   const [conditionToAdd, setConditionToAdd] = useState('')
-  // Phase 8: inventory / transfer state
-  const [inventoryView, setInventoryView] = useState(null) // live copy of companion.inventory
-  const [transferring, setTransferring] = useState(false)
+  // M1: party inventory (pool) + equipped gear for this companion
+  const [partyInventory, setPartyInventory] = useState([]) // the recruiting character's shared pool
+  const [equipping, setEquipping] = useState(false)
+  const [equipSlot, setEquipSlot] = useState('mainHand')
+  const [selectedPoolItem, setSelectedPoolItem] = useState('')
 
   const isClassBased = companion.progression_type === 'class_based'
 
@@ -152,41 +154,65 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
     } catch (err) { setError(err.message) }
   }
 
-  // Phase 8: parse companion inventory into state for display (accepts stringified or already-parsed)
-  useEffect(() => {
-    if (!companion) { setInventoryView(null); return }
-    let inv = companion.companion_inventory ?? companion.inventory
-    if (typeof inv === 'string') {
-      try { inv = JSON.parse(inv) } catch { inv = [] }
-    }
-    setInventoryView(Array.isArray(inv) ? inv : [])
-  }, [companion.id, companion.inventory, companion.companion_inventory])
+  // M1: load the party pool (recruiting character's inventory)
+  const refetchPartyInventory = async () => {
+    if (!companion.recruited_by_character_id) return
+    try {
+      const r = await fetch(`/api/character/${companion.recruited_by_character_id}`)
+      if (!r.ok) return
+      const data = await r.json()
+      let inv = data.inventory
+      if (typeof inv === 'string') {
+        try { inv = JSON.parse(inv) } catch { inv = [] }
+      }
+      setPartyInventory(Array.isArray(inv) ? inv : [])
+    } catch {}
+  }
 
-  const handBackItem = async (itemName, quantity = 1) => {
-    if (!companion.recruited_by_character_id) {
-      setError('Companion has no recruiting character — cannot transfer')
-      return
-    }
-    setTransferring(true)
+  useEffect(() => {
+    refetchPartyInventory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companion.id, companion.recruited_by_character_id])
+
+  const equipFromPool = async () => {
+    if (!selectedPoolItem) return
+    setEquipping(true)
     setError(null)
     try {
-      const r = await fetch(`/api/companion/${companion.id}/take-item`, {
+      const r = await fetch(`/api/companion/${companion.id}/equip`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId: companion.recruited_by_character_id,
-          itemName,
-          quantity
-        })
+        body: JSON.stringify({ slot: equipSlot, itemName: selectedPoolItem })
       })
       const data = await r.json()
-      if (!r.ok) throw new Error(data.error || 'Transfer failed')
-      setInventoryView(data.companion_inventory || [])
+      if (!r.ok) throw new Error(data.error || 'Equip failed')
+      setPartyInventory(data.party_inventory || [])
+      setSelectedPoolItem('')
       if (onUpdate) onUpdate()
     } catch (err) {
       setError(err.message)
     } finally {
-      setTransferring(false)
+      setEquipping(false)
+    }
+  }
+
+  const unequipToPool = async (slot) => {
+    setEquipping(true)
+    setError(null)
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/unequip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot })
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Unequip failed')
+      setPartyInventory(data.party_inventory || [])
+      if (onUpdate) onUpdate()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setEquipping(false)
     }
   }
 
@@ -433,20 +459,14 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
           </div>
         )}
 
-        {/* Phase 8: Inventory & Equipment quick view */}
+        {/* M1: Equipped gear (per-companion) + equip-from-party-pool UI.
+            Carried inventory is party-wide and lives on the character side. */}
         {(() => {
-          const inv = inventoryView || []
           let eq = companion.equipment
           if (typeof eq === 'string') {
             try { eq = JSON.parse(eq) } catch { eq = {} }
           }
           eq = eq || {}
-          const hasEquipped = eq.mainHand?.name || eq.offHand?.name || eq.armor?.name
-          const hasItems = inv.length > 0
-          const gold = (companion.gold_gp || 0) + 'gp'
-            + (companion.gold_sp ? ` ${companion.gold_sp}sp` : '')
-            + (companion.gold_cp ? ` ${companion.gold_cp}cp` : '')
-          if (!hasItems && !hasEquipped && !(companion.gold_gp || companion.gold_sp || companion.gold_cp)) return null
           return (
             <div style={{
               background: 'rgba(16, 185, 129, 0.08)',
@@ -455,72 +475,90 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
               padding: '1rem',
               marginBottom: '1rem'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <h3 style={{ color: '#10b981', fontSize: '1rem', margin: 0 }}>Inventory & Equipment</h3>
-                <span style={{ color: '#f1c40f', fontSize: '0.85rem', fontWeight: 600 }}>{gold}</span>
+              <h3 style={{ color: '#10b981', fontSize: '1rem', margin: 0, marginBottom: '0.5rem' }}>
+                Equipment
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem' }}>
+                {[
+                  { slot: 'mainHand', icon: '🗡', label: 'Main hand' },
+                  { slot: 'offHand', icon: '🛡', label: 'Off hand' },
+                  { slot: 'armor', icon: '🥼', label: 'Armor' }
+                ].map(({ slot, icon, label }) => {
+                  const item = eq[slot]
+                  return (
+                    <div key={slot} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                      padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '4px', fontSize: '0.85rem'
+                    }}>
+                      <span style={{ minWidth: '80px', color: '#888', fontSize: '0.75rem' }}>
+                        {icon} {label}
+                      </span>
+                      <span style={{ color: item?.name ? '#ddd' : '#666', flex: 1, fontStyle: item?.name ? 'normal' : 'italic' }}>
+                        {item?.name || '(empty)'}
+                      </span>
+                      {item?.name && (
+                        <button
+                          onClick={() => unequipToPool(slot)}
+                          disabled={equipping}
+                          style={{
+                            background: '#7f8c8d', color: '#fff', border: 'none', borderRadius: '4px',
+                            padding: '2px 8px', fontSize: '0.72rem',
+                            cursor: equipping ? 'not-allowed' : 'pointer', opacity: equipping ? 0.5 : 1
+                          }}
+                          title="Return to the party pool"
+                        >Unequip</button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
-              {hasEquipped && (
-                <div style={{ marginBottom: '0.6rem' }}>
-                  <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Equipped</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                    {eq.mainHand?.name && (
-                      <span style={{ background: '#2a2a2a', color: '#ddd', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem' }}>
-                        🗡 {eq.mainHand.name}
-                      </span>
-                    )}
-                    {eq.offHand?.name && (
-                      <span style={{ background: '#2a2a2a', color: '#ddd', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem' }}>
-                        🛡 {eq.offHand.name}
-                      </span>
-                    )}
-                    {eq.armor?.name && (
-                      <span style={{ background: '#2a2a2a', color: '#ddd', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem' }}>
-                        🥼 {eq.armor.name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {hasItems ? (
-                <div>
-                  <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '0.35rem' }}>Carried</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    {inv.map((item, i) => (
-                      <div key={i} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.03)',
-                        borderRadius: '4px', fontSize: '0.85rem'
-                      }}>
-                        <span style={{ color: '#ddd' }}>
-                          {item.name}
-                          {item.quantity > 1 && <span style={{ color: '#888', marginLeft: '0.35rem' }}>×{item.quantity}</span>}
-                        </span>
-                        {companion.recruited_by_character_id && (
-                          <button
-                            onClick={() => handBackItem(item.name, 1)}
-                            disabled={transferring}
-                            style={{
-                              background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px',
-                              padding: '2px 8px', fontSize: '0.72rem',
-                              cursor: transferring ? 'not-allowed' : 'pointer',
-                              opacity: transferring ? 0.5 : 1
-                            }}
-                            title="Hand back to the recruiting character"
-                          >Hand back</button>
-                        )}
-                      </div>
+              {companion.recruited_by_character_id && partyInventory.length > 0 && (
+                <div style={{
+                  display: 'flex', gap: '0.35rem', alignItems: 'center',
+                  paddingTop: '0.5rem', borderTop: '1px solid rgba(16,185,129,0.15)'
+                }}>
+                  <select
+                    value={equipSlot}
+                    onChange={(e) => setEquipSlot(e.target.value)}
+                    style={{
+                      padding: '0.25rem', background: '#2a2a2a', border: '1px solid #444',
+                      borderRadius: '4px', color: '#fff', fontSize: '0.78rem'
+                    }}
+                  >
+                    <option value="mainHand">Main hand</option>
+                    <option value="offHand">Off hand</option>
+                    <option value="armor">Armor</option>
+                  </select>
+                  <select
+                    value={selectedPoolItem}
+                    onChange={(e) => setSelectedPoolItem(e.target.value)}
+                    style={{
+                      flex: 1, padding: '0.25rem', background: '#2a2a2a', border: '1px solid #444',
+                      borderRadius: '4px', color: '#fff', fontSize: '0.78rem'
+                    }}
+                  >
+                    <option value="">Pick from party pool…</option>
+                    {partyInventory.map((item, i) => (
+                      <option key={i} value={item.name}>
+                        {item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
+                      </option>
                     ))}
-                  </div>
+                  </select>
+                  <button
+                    onClick={equipFromPool}
+                    disabled={!selectedPoolItem || equipping}
+                    style={{
+                      background: selectedPoolItem ? '#10b981' : '#555', color: '#fff',
+                      border: 'none', borderRadius: '4px', padding: '0.25rem 0.7rem',
+                      fontSize: '0.78rem',
+                      cursor: (selectedPoolItem && !equipping) ? 'pointer' : 'not-allowed'
+                    }}
+                  >Equip</button>
                 </div>
-              ) : (
-                <div style={{ color: '#888', fontSize: '0.82rem', fontStyle: 'italic' }}>No items carried</div>
               )}
-
-              <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#666' }}>
-                Use Edit Details for full inventory + equipment management.
-              </div>
             </div>
           )
         })()}
