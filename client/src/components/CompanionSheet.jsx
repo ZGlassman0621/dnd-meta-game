@@ -669,6 +669,59 @@ function CompanionLevelUpModal({ companion, levelUpInfo, onClose, onLevelUp }) {
           )}
         </div>
 
+        {/* Phase 5.5: Theme Tier Auto-Unlock (L5/L11/L17) */}
+        {levelUpInfo.progression?.theme_tier_unlock && (
+          <div style={{
+            background: 'rgba(155, 89, 182, 0.1)',
+            border: '1px solid #9b59b6',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ color: '#c084fc', fontSize: '1rem', marginTop: 0 }}>
+              Theme Ability Unlocks · Tier {levelUpInfo.progression.theme_tier_unlock.tier}
+            </h3>
+            <div style={{ color: '#bbb', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
+              {levelUpInfo.progression.theme_tier_unlock.theme_name}
+            </div>
+            <div style={{ color: '#fff', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+              {levelUpInfo.progression.theme_tier_unlock.ability_name}
+            </div>
+            <div style={{ color: '#ddd', fontSize: '0.85rem' }}>
+              {levelUpInfo.progression.theme_tier_unlock.ability_description}
+            </div>
+            {levelUpInfo.progression.theme_tier_unlock.flavor_text && (
+              <div style={{ color: '#999', fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.4rem' }}>
+                {levelUpInfo.progression.theme_tier_unlock.flavor_text}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Phase 5.5: Ancestry Feat Auto-Pick (L3/L7/L13/L18) */}
+        {levelUpInfo.progression?.ancestry_feat_auto_pick && (
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid #10b981',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ color: '#34d399', fontSize: '1rem', marginTop: 0 }}>
+              Ancestry Feat · Tier {levelUpInfo.progression.ancestry_feat_auto_pick.tier}
+            </h3>
+            <div style={{ color: '#bbb', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
+              Auto-picked (companions don't choose)
+            </div>
+            <div style={{ color: '#fff', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+              {levelUpInfo.progression.ancestry_feat_auto_pick.feat_name}
+            </div>
+            <div style={{ color: '#ddd', fontSize: '0.85rem' }}>
+              {levelUpInfo.progression.ancestry_feat_auto_pick.description}
+            </div>
+          </div>
+        )}
+
         {/* Subclass Section */}
         {levelUpInfo.choices.needsSubclass && (
           <div style={{
