@@ -302,7 +302,7 @@ export function getItemEconomyMultiplier(itemCategory, economyModifiers) {
  * @param {Array} sold - Items sold: [{ name, category, quantity }]
  * @param {number|null} gameDay - Current game day
  */
-export async function recordTransaction(merchantId, characterId, bought, sold, gameDay) {
+export async function recordTransaction(merchantId, characterId, bought, sold, gameDay, totals = {}) {
   const merchant = await dbGet(
     'SELECT transaction_history FROM merchant_inventories WHERE id = ?',
     [merchantId]
@@ -315,6 +315,9 @@ export async function recordTransaction(merchantId, characterId, bought, sold, g
     character_id: characterId,
     game_day: gameDay || null,
     date: new Date().toISOString(),
+    at: new Date().toISOString(), // M4: alias used by merchantRelationshipService
+    total_spent_cp: totals.total_spent_cp || 0, // M4
+    total_earned_cp: totals.total_earned_cp || 0, // M4
     bought: (bought || []).map(i => ({
       name: i.name,
       category: i.category || 'misc',

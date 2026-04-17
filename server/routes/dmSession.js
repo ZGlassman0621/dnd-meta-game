@@ -2345,10 +2345,14 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
       }
     }
 
-    // Record transaction in merchant memory for loyalty/economy tracking
+    // Record transaction in merchant memory for loyalty/economy tracking.
+    // M4: pass totals so the relationship panel can surface lifetime spent/earned.
     if (merchantId) {
       try {
-        await recordTransaction(merchantId, session.character_id, bought, sold, character.game_day);
+        await recordTransaction(
+          merchantId, session.character_id, bought, sold, character.game_day,
+          { total_spent_cp: totalSpentCp, total_earned_cp: totalEarnedCp }
+        );
       } catch (e) {
         console.warn('Recording transaction history failed:', e.message);
       }

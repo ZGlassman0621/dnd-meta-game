@@ -11,6 +11,7 @@ import Downtime from './Downtime';
 import MetaGameDashboard from './MetaGameDashboard';
 import InventoryPanel from './InventoryPanel';
 import CommissionsPanel from './CommissionsPanel';
+import MerchantRelationshipsPanel from './MerchantRelationshipsPanel';
 import CombatTracker from './CombatTracker';
 import SessionSetup from './SessionSetup';
 import SessionRewards from './SessionRewards';
@@ -120,6 +121,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [companionConditions, setCompanionConditions] = useState({});
   const [showConditionPanel, setShowConditionPanel] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
+  const [showMerchants, setShowMerchants] = useState(false);
 
   // Weather & Survival state
   const [weatherState, setWeatherState] = useState(null);
@@ -1801,7 +1803,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               )}
             </button>
             <button
-              onClick={() => { setShowCommissions(!showCommissions); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); }}
+              onClick={() => { setShowCommissions(!showCommissions); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); setShowMerchants(false); }}
               style={{
                 background: showCommissions ? 'rgba(52, 211, 153, 0.4)' : 'rgba(52, 211, 153, 0.2)',
                 border: '1px solid rgba(52, 211, 153, 0.4)',
@@ -1814,6 +1816,21 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               title="View merchant commissions"
             >
               Commissions
+            </button>
+            <button
+              onClick={() => { setShowMerchants(!showMerchants); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); setShowCommissions(false); }}
+              style={{
+                background: showMerchants ? 'rgba(212, 175, 55, 0.4)' : 'rgba(212, 175, 55, 0.2)',
+                border: '1px solid rgba(212, 175, 55, 0.4)',
+                color: '#d4af37',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+              title="View merchants you've traded with"
+            >
+              Merchants
             </button>
             <button className="end-session-btn" onClick={() => setShowEndOptions(true)} disabled={isLoading}>
               End Adventure
@@ -1930,6 +1947,14 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             currentGameDay={character.game_day}
             onClose={() => setShowCommissions(false)}
             onCharacterUpdated={onCharacterUpdated}
+          />
+        )}
+
+        {showMerchants && (
+          <MerchantRelationshipsPanel
+            character={character}
+            currentGameDay={character.game_day}
+            onClose={() => setShowMerchants(false)}
           />
         )}
 

@@ -25,6 +25,10 @@ import {
 import { PROFICIENCY_BONUS } from '../config/levelProgression.js';
 import { getCharacterProgression } from '../services/progressionService.js';
 import { getCompanionProgression } from '../services/progressionCompanionService.js';
+import {
+  getRelationshipsForCharacter,
+  upsertRelationship
+} from '../services/merchantRelationshipService.js';
 
 // Persuasion = CHA, Deception = CHA, Intimidation = CHA (5e default mapping)
 const SKILL_ABILITY = {
@@ -139,6 +143,37 @@ router.post('/orders/:orderId/cancel', async (req, res) => {
     res.json(result);
   } catch (error) {
     handleServerError(res, error, 'cancel order');
+  }
+});
+
+// ============================================================================
+// M4: Merchant Relationships — surfaces the merchant-memory data that's been
+// persisted in merchant_inventories.transaction_history (since migration 011)
+// plus per-character notes and the favorite flag (migration 034).
+// ============================================================================
+
+router.get('/relationships/character/:characterId', async (req, res) => {
+  try {
+    const relationships = await getRelationshipsForCharacter(Number(req.params.characterId));
+    res.json({ relationships });
+  } catch (error) {
+    handleServerError(res, error, 'fetch merchant relationships');
+  }
+});
+
+router.put('/relationships/:merchantId', async (req, res) => {
+  try {
+    const { characterId, notes, favorited } = req.body || {};
+    if (!characterId) return res.status(400).json({ error: 'characterId is required' });
+
+    const result = await upsertRelationship(
+      Number(characterId),
+      Number(req.params.merchantId),
+      { notes, favorited }
+    );
+    res.json(result);
+  } catch (error) {
+    handleServerError(res, error, 'update merchant relationship');
   }
 });
 

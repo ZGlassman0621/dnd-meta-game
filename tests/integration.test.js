@@ -2629,6 +2629,97 @@ async function testHaggleDiscountClampedServerSide() {
   await cleanupTestOrderMerchant(merchantId);
 }
 
+// ===== GROUP 19: Merchant Relationships (M4) =====
+
+async function testRelationshipsEmptyByDefault() {
+  console.log('\n  -- Character with no transactions has no relationships --');
+  const r = await api('GET', `/api/merchant/relationships/character/${testCharId}`);
+  assert(r.status === 200, `returns 200 (got ${r.status})`);
+  assert(Array.isArray(r.body.relationships), 'returns array');
+}
+
+async function testRelationshipAppearsAfterTransaction() {
+  console.log('\n  -- Relationship appears after a transaction is recorded --');
+  const merchantId = await createTestMerchantForCommission();
+  // Seed a fake transaction history entry directly to avoid needing a full session flow
+  await dbRun(
+    `UPDATE merchant_inventories SET transaction_history = ? WHERE id = ?`,
+    [JSON.stringify([{
+      character_id: testCharId, game_day: 5, date: new Date().toISOString(),
+      at: new Date().toISOString(),
+      total_spent_cp: 5000, total_earned_cp: 0,
+      bought: [{ name: 'Sword', category: 'weapon', qty: 1 }], sold: []
+    }]), merchantId]
+  );
+
+  const r = await api('GET', `/api/merchant/relationships/character/${testCharId}`);
+  const rel = r.body.relationships.find(x => x.merchant_id === merchantId);
+  assert(rel, 'relationship row present for our merchant');
+  assert(rel.visit_count === 1, `visit_count = 1 (got ${rel?.visit_count})`);
+  assert(rel.total_spent_cp === 5000, `total_spent_cp = 5000 (got ${rel?.total_spent_cp})`);
+  assert(rel.last_visit_game_day === 5, 'last visit day = 5');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testRelationshipNotesUpsert() {
+  console.log('\n  -- Notes are upserted per character/merchant pair --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun(
+    `UPDATE merchant_inventories SET transaction_history = ? WHERE id = ?`,
+    [JSON.stringify([{ character_id: testCharId, game_day: 1, bought: [], sold: [] }]), merchantId]
+  );
+
+  const r1 = await api('PUT', `/api/merchant/relationships/${merchantId}`, {
+    characterId: testCharId,
+    notes: 'Great source of rare potions, always has component pouches'
+  });
+  assert(r1.status === 200, 'initial notes set returns 200');
+  assert(r1.body.notes.includes('rare potions'), 'notes persisted');
+
+  // Update just the favorited flag — notes should be preserved
+  const r2 = await api('PUT', `/api/merchant/relationships/${merchantId}`, {
+    characterId: testCharId, favorited: true
+  });
+  assert(r2.body.favorited === true, 'favorited toggled on');
+  assert(r2.body.notes.includes('rare potions'), 'notes preserved across favorite update');
+
+  await dbRun('DELETE FROM character_merchant_relationships WHERE merchant_id = ?', [merchantId]);
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testRelationshipFavoritesSortFirst() {
+  console.log('\n  -- Favorited merchants sort first in the list --');
+  const m1 = await createTestMerchantForCommission();
+  const m2 = await createTestMerchantForCommission();
+
+  // Seed both with a transaction
+  const tx = [{ character_id: testCharId, game_day: 1, bought: [], sold: [] }];
+  await dbRun('UPDATE merchant_inventories SET transaction_history = ? WHERE id = ?', [JSON.stringify(tx), m1]);
+  await dbRun('UPDATE merchant_inventories SET transaction_history = ? WHERE id = ?', [JSON.stringify(tx), m2]);
+
+  // Favorite m2
+  await api('PUT', `/api/merchant/relationships/${m2}`, { characterId: testCharId, favorited: true });
+
+  const r = await api('GET', `/api/merchant/relationships/character/${testCharId}`);
+  const indices = r.body.relationships.map((x, i) => ({ id: x.merchant_id, favorited: x.favorited, i }));
+  const m2Idx = indices.find(x => x.id === m2)?.i;
+  const m1Idx = indices.find(x => x.id === m1)?.i;
+  assert(m2Idx < m1Idx, `favorited merchant ${m2} sorts before non-favorite ${m1}`);
+
+  await dbRun('DELETE FROM character_merchant_relationships WHERE merchant_id IN (?, ?)', [m1, m2]);
+  await cleanupTestOrderMerchant(m1);
+  await cleanupTestOrderMerchant(m2);
+}
+
+async function testRelationshipRequiresCharacterId() {
+  console.log('\n  -- PUT /relationships/:merchantId requires characterId --');
+  const merchantId = await createTestMerchantForCommission();
+  const r = await api('PUT', `/api/merchant/relationships/${merchantId}`, { notes: 'no charId' });
+  assert(r.status === 400, 'returns 400 without characterId');
+  await cleanupTestOrderMerchant(merchantId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2787,6 +2878,13 @@ async function runTests() {
     await testHaggleCompanionRoller();
     await testHaggleDiscountAppliesToTransaction();
     await testHaggleDiscountClampedServerSide();
+
+    console.log('\n=== Group 19: Merchant Relationships (M4) ===');
+    await testRelationshipsEmptyByDefault();
+    await testRelationshipAppearsAfterTransaction();
+    await testRelationshipNotesUpsert();
+    await testRelationshipFavoritesSortFirst();
+    await testRelationshipRequiresCharacterId();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);
