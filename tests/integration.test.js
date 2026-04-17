@@ -1678,6 +1678,150 @@ async function testCompanionLevelUpLazyBackfill() {
   await cleanupTestCompanion(companionId, npcId);
 }
 
+// ===== GROUP 12: Companion Rest + Spell Slots (Phase 6) =====
+
+async function testCompanionSpellSlotsForCaster() {
+  console.log('\n  -- Spellcasting companion reports non-empty spell slots --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Wizard', 5);
+
+  const res = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(res.status === 200, `GET spell-slots returns 200 (got ${res.status})`);
+  assert(res.body.max && Object.keys(res.body.max).length > 0, 'Wizard L5 has non-empty max slots');
+  assert(res.body.max['1'] === 4, `L1 slot count is 4 (got ${res.body.max['1']})`);
+  assert(res.body.max['3'] === 2, `L3 slot count is 2 (got ${res.body.max['3']})`);
+  assert(Object.keys(res.body.used || {}).length === 0, 'No slots used at recruit');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionSpellSlotsForNonCaster() {
+  console.log('\n  -- Non-caster (fighter) reports empty spell slot maps --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 5);
+
+  const res = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(res.status === 200, 'GET spell-slots returns 200 for non-caster');
+  assert(Object.keys(res.body.max || {}).length === 0, 'Fighter has no spell slots');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionUseAndRestoreSlot() {
+  console.log('\n  -- Use + restore a spell slot round-trip --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Cleric', 3);
+
+  const useRes = await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  assert(useRes.status === 200, `Use L1 slot returns 200 (got ${useRes.status})`);
+  assert(useRes.body.remaining === 3, `L1 remaining is 3 (got ${useRes.body.remaining})`);
+
+  const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(statusRes.body.used['1'] === 1, 'used[1] persisted as 1');
+
+  const restoreRes = await api('POST', `/api/companion/${companionId}/spell-slots/restore`, { level: 1 });
+  assert(restoreRes.status === 200, 'Restore L1 slot returns 200');
+  assert(restoreRes.body.remaining === 4, `L1 remaining restored to 4 (got ${restoreRes.body.remaining})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionUseSlotRejectsWhenEmpty() {
+  console.log('\n  -- Use rejects when slots exhausted or non-existent --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Cleric', 1);
+
+  // L1 cleric has 2 L1 slots, 0 L2 slots
+  const deepRes = await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 5 });
+  assert(deepRes.status === 400, `Reject L5 slot (has none) with 400 (got ${deepRes.status})`);
+
+  await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  const thirdRes = await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  assert(thirdRes.status === 400, 'Rejects when all L1 slots used');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLongRest() {
+  console.log('\n  -- Long rest restores HP and clears spell slot usage --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Druid', 3);
+
+  // Use a slot
+  await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  // Damage the companion
+  await dbRun('UPDATE companions SET companion_current_hp = 1 WHERE id = ?', [companionId]);
+
+  const restRes = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
+  assert(restRes.status === 200, `Long rest returns 200 (got ${restRes.status})`);
+  assert(restRes.body.spell_slots_restored === true, 'Long rest reports slots restored');
+  assert(restRes.body.newHp === restRes.body.companion.companion_max_hp, 'HP restored to max');
+
+  const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(Object.keys(statusRes.body.used || {}).every(k => statusRes.body.used[k] === 0 || !statusRes.body.used[k]),
+    'All slot usage cleared after long rest');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionShortRestHealsButKeepsSlots() {
+  console.log('\n  -- Short rest heals 50% HP but keeps non-warlock slots used --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Cleric', 3);
+
+  await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  await dbRun('UPDATE companions SET companion_current_hp = 10, companion_max_hp = 30 WHERE id = ?', [companionId]);
+
+  const restRes = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'short' });
+  assert(restRes.status === 200, 'Short rest returns 200');
+  assert(restRes.body.newHp === 20, `Short rest heals 50% of missing 20 → newHp=20 (got ${restRes.body.newHp})`);
+  assert(restRes.body.spell_slots_restored === false, 'Non-warlock does not restore slots on short rest');
+
+  const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(statusRes.body.used['1'] === 1, 'Cleric still has 1 used L1 slot after short rest');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionShortRestWarlockSlots() {
+  console.log('\n  -- Warlock short rest restores pact slots --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Warlock', 3);
+
+  await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 2 });
+  const restRes = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'short' });
+  assert(restRes.status === 200, 'Warlock short rest returns 200');
+  assert(restRes.body.spell_slots_restored === true, 'Warlock reports slots restored on short rest');
+
+  const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(!statusRes.body.used || Object.keys(statusRes.body.used).length === 0 || statusRes.body.used['2'] === 0,
+    'Warlock pact slots cleared after short rest');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionSpellSlotRejectsNpcStatsCompanion() {
+  console.log('\n  -- npc_stats companion /spell-slots/use returns 400 --');
+  // Create an npc_stats companion directly
+  const npcRes = await api('POST', '/api/npc', {
+    name: `TEST_NpcStats_${Date.now()}`, race: 'Human', stat_block: 'commoner',
+    campaign_availability: 'companion'
+  });
+  assert(npcRes.status === 201, 'NPC create OK');
+  const npcId = npcRes.body.id;
+
+  const recRes = await api('POST', '/api/companion/recruit', {
+    npc_id: npcId,
+    recruited_by_character_id: testCharId,
+    progression_type: 'npc_stats'
+  });
+  assert(recRes.status === 201, 'Recruit npc_stats OK');
+  const companionId = recRes.body.companion.id;
+
+  const getRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(getRes.status === 200, 'GET returns 200 with empty shape for npc_stats');
+  assert(Object.keys(getRes.body.max || {}).length === 0, 'max is empty for npc_stats');
+
+  const useRes = await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
+  assert(useRes.status === 400, `POST /use returns 400 for npc_stats (got ${useRes.status})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -1772,6 +1916,16 @@ async function runTests() {
     await testCompanionLevelUpAutoPicksAncestryFeat();
     await testCompanionProgressionEndpoint();
     await testCompanionLevelUpLazyBackfill();
+
+    console.log('\n=== Group 12: Companion Rest + Spell Slots (Phase 6) ===');
+    await testCompanionSpellSlotsForCaster();
+    await testCompanionSpellSlotsForNonCaster();
+    await testCompanionUseAndRestoreSlot();
+    await testCompanionUseSlotRejectsWhenEmpty();
+    await testCompanionLongRest();
+    await testCompanionShortRestHealsButKeepsSlots();
+    await testCompanionShortRestWarlockSlots();
+    await testCompanionSpellSlotRejectsNpcStatsCompanion();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
 import CompanionEditor from './CompanionEditor'
 
@@ -15,8 +15,84 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [loadingLevelUp, setLoadingLevelUp] = useState(false)
   const [error, setError] = useState(null)
+  // Phase 6: spell slot + rest state
+  const [spellSlots, setSpellSlots] = useState(null)
+  const [resting, setResting] = useState(false)
 
   const isClassBased = companion.progression_type === 'class_based'
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isClassBased || !companion.id) {
+      setSpellSlots(null)
+      return
+    }
+    fetch(`/api/companion/${companion.id}/spell-slots`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setSpellSlots(data) })
+      .catch(() => { if (!cancelled) setSpellSlots(null) })
+    return () => { cancelled = true }
+  }, [companion.id, isClassBased, companion.companion_level])
+
+  const refetchSpellSlots = async () => {
+    if (!isClassBased) return
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/spell-slots`)
+      if (r.ok) setSpellSlots(await r.json())
+    } catch {}
+  }
+
+  const useSpellSlot = async (level) => {
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/spell-slots/use`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level })
+      })
+      if (!r.ok) {
+        const data = await r.json()
+        setError(data.error || 'Failed to use spell slot')
+        return
+      }
+      await refetchSpellSlots()
+    } catch (err) { setError(err.message) }
+  }
+
+  const restoreSpellSlot = async (level) => {
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/spell-slots/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level })
+      })
+      if (!r.ok) {
+        const data = await r.json()
+        setError(data.error || 'Failed to restore spell slot')
+        return
+      }
+      await refetchSpellSlots()
+    } catch (err) { setError(err.message) }
+  }
+
+  const handleRest = async (restType) => {
+    setResting(true)
+    setError(null)
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/rest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restType })
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Failed to rest')
+      await refetchSpellSlots()
+      if (onUpdate) onUpdate()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setResting(false)
+    }
+  }
 
   const abilityScores = isClassBased && companion.companion_ability_scores
     ? JSON.parse(companion.companion_ability_scores)
@@ -232,6 +308,77 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
           </div>
         )}
 
+        {/* Phase 6: Spell Slots — only render for class-based spellcasting companions */}
+        {isClassBased && spellSlots && Object.keys(spellSlots.max || {}).filter(k => spellSlots.max[k] > 0).length > 0 && (
+          <div style={{
+            background: 'rgba(108, 99, 255, 0.1)',
+            border: '1px solid #6c63ff',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ color: '#6c63ff', marginBottom: '0.75rem', fontSize: '1rem' }}>
+              {companion.companion_class?.toLowerCase() === 'warlock' ? 'Pact Magic Slots' : 'Spell Slots'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {Object.entries(spellSlots.max)
+                .filter(([, max]) => max > 0)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([level, max]) => {
+                  const used = spellSlots.used?.[level] || 0
+                  const remaining = max - used
+                  return (
+                    <div key={level} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.6rem',
+                      padding: '0.3rem 0.5rem', background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '6px'
+                    }}>
+                      <span style={{ minWidth: '28px', fontWeight: 600, fontSize: '0.85rem', color: '#b0b0b0' }}>
+                        L{level}
+                      </span>
+                      <div style={{ display: 'flex', gap: '3px', flex: 1 }}>
+                        {Array.from({ length: max }, (_, i) => (
+                          <div key={i} style={{
+                            width: '16px', height: '16px', borderRadius: '50%',
+                            border: '2px solid ' + (i < remaining ? '#6c63ff' : '#444'),
+                            background: i < remaining ? '#6c63ff' : 'transparent'
+                          }} />
+                        ))}
+                      </div>
+                      <span style={{ fontSize: '0.78rem', color: '#888', minWidth: '30px', textAlign: 'center' }}>
+                        {remaining}/{max}
+                      </span>
+                      <div style={{ display: 'flex', gap: '3px' }}>
+                        <button
+                          onClick={() => useSpellSlot(Number(level))}
+                          disabled={remaining <= 0}
+                          style={{
+                            background: remaining > 0 ? '#c0392b' : '#555',
+                            color: '#fff', border: 'none', borderRadius: '4px',
+                            padding: '2px 8px', fontSize: '0.72rem',
+                            cursor: remaining > 0 ? 'pointer' : 'not-allowed',
+                            opacity: remaining > 0 ? 1 : 0.5
+                          }}
+                        >Use</button>
+                        <button
+                          onClick={() => restoreSpellSlot(Number(level))}
+                          disabled={used <= 0}
+                          style={{
+                            background: used > 0 ? '#27ae60' : '#555',
+                            color: '#fff', border: 'none', borderRadius: '4px',
+                            padding: '2px 8px', fontSize: '0.72rem',
+                            cursor: used > 0 ? 'pointer' : 'not-allowed',
+                            opacity: used > 0 ? 1 : 0.5
+                          }}
+                        >+1</button>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{
           display: 'flex',
@@ -247,6 +394,30 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
               style={{ flex: 1 }}
             >
               {loadingLevelUp ? 'Loading...' : 'Level Up'}
+            </button>
+          )}
+
+          {isClassBased && (
+            <button
+              className="button"
+              onClick={() => handleRest('long')}
+              disabled={resting}
+              style={{ flex: 1, background: '#16a085' }}
+              title="Restore full HP and all spell slots"
+            >
+              {resting ? 'Resting...' : 'Long Rest'}
+            </button>
+          )}
+
+          {isClassBased && (
+            <button
+              className="button"
+              onClick={() => handleRest('short')}
+              disabled={resting}
+              style={{ flex: 1, background: '#2980b9' }}
+              title="Restore 50% missing HP (+pact slots for warlocks)"
+            >
+              {resting ? 'Resting...' : 'Short Rest'}
             </button>
           )}
 
