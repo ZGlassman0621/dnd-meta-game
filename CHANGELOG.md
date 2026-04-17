@@ -2,6 +2,54 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.10] - 2026-04-17 — Phase 5.6: DM Prompt Parity + Critical Bug Fix
+
+Two fixes surfaced during the Phase 5.5 audit: one long-standing bug that
+was silently disabling companion backstory generation on recruit, and one
+parity gap between companion and player-character progression in the DM
+system prompt.
+
+### Fixed
+- **Critical typo in `narrativeIntegration.js:202`** — `onCompanionRecruited`
+  was calling `companionBackstoryService.getBackstoryByCompanion`, which
+  doesn't exist. The real function name is `getBackstoryByCompanionId`.
+  Every companion recruit has been throwing `TypeError: ... is not a function`
+  since before Phase 5.5 (caught by `.catch`, so non-fatal but silently
+  disabling backstory generation). Fix restores backstory generation on
+  recruit.
+
+### Added
+- **DM prompt parity with Phase 4**: companion theme abilities + ancestry
+  feats are now rendered in the DM system prompt, matching the treatment
+  player characters got via `formatProgression()`. Previously the DM saw
+  a companion's class and stats but had no awareness of their Phase 5.5
+  theme or tier abilities.
+- **`getCompanionProgression(companionId)`** in
+  `progressionCompanionService.js` — slim mirror of `getCharacterProgression()`
+  returning theme + unlocks + ancestry feats. Single source of truth for
+  pulling a companion's progression snapshot.
+- **`formatCompanionProgressionLines(progression)`** in `dmPromptBuilder.js`
+  — exported helper that renders the snapshot as indented lines (theme,
+  unlocked abilities, ancestry feats). Plugged into each companion's block
+  inside `formatCompanions()`.
+- **dmSession.js** loads and attaches progression to each class-based
+  companion at session start (with lazy backfill + silent failure, so a
+  progression hiccup never blocks a session).
+
+### Tests
+- 13 new unit tests for `formatCompanionProgressionLines` in
+  `tests/companion-skill-checks.test.js` — null/empty/missing-theme edge
+  cases, full snapshot rendering, path_choice rendering, mechanics
+  inclusion, orphaned-unlock handling.
+- Integration suite still green at 280 passing.
+
+### Known (out of scope)
+- Fixing the typo unblocks the real backstory-generation flow, which
+  surfaces two pre-existing latent bugs previously masked by the crash:
+  a foreign-key constraint failure and an AI response parse failure.
+  Both are still swallowed by the `.catch` in `onCompanionRecruited` and
+  are left for a future pass.
+
 ## [1.0.0.9] - 2026-04-17 — Implementation Phase 5.5: Companion Progression
 
 Extends the Themes + Ancestry Feats progression system to companions. At
