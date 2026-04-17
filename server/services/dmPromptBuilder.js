@@ -405,6 +405,46 @@ function formatCompanionMood(companion) {
  * DM prompt: "Spell slots: L1 2/4, L2 0/3" (used/max). Returns '' when the
  * companion has no slots (non-casters, npc-stats companions, or pre-rest).
  */
+/**
+ * Render a companion's persistent active conditions as an indented line:
+ *   "Active conditions: Poisoned, Prone, Exhaustion 2"
+ * Pulls from the `active_conditions` JSON column (Phase 7). Returns '' when
+ * there's nothing to show. Distinct from the session-transient ConditionPanel
+ * state, which the DM session also injects via formatConditionsForAI().
+ */
+export function formatCompanionActiveConditionsLine(activeConditions) {
+  if (!activeConditions) return '';
+  let arr = activeConditions;
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr); } catch { return ''; }
+  }
+  if (!Array.isArray(arr) || arr.length === 0) return '';
+  const display = arr.map(k =>
+    String(k).replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  );
+  return `  Active conditions: ${display.join(', ')}`;
+}
+
+/**
+ * Render a dying companion's death save tally as an indented line:
+ *   "Death saves: 2 successes, 1 failure (at 0 HP — one more failure = dead)"
+ * Only rendered when the companion is at 0 HP. Returns '' otherwise.
+ */
+export function formatCompanionDeathSavesLine(companion) {
+  const hp = companion?.companion_current_hp;
+  if (hp === undefined || hp === null || hp > 0) return '';
+  const s = companion.death_save_successes || 0;
+  const f = companion.death_save_failures || 0;
+  const sLabel = s === 1 ? 'success' : 'successes';
+  const fLabel = f === 1 ? 'failure' : 'failures';
+  const edge = f >= 2
+    ? ' — one more failure = dead'
+    : s >= 2
+      ? ' — one more success stabilizes'
+      : '';
+  return `  Death saves: ${s} ${sLabel}, ${f} ${fLabel} (at 0 HP${edge})`;
+}
+
 export function formatCompanionSpellSlotsLine(max, used) {
   if (!max || typeof max !== 'object') return '';
   const levels = Object.keys(max)
@@ -588,7 +628,9 @@ function formatCompanions(companions, awayCompanions = []) {
       companion.notes ? `  Player Notes: ${companion.notes}` : null,
       formatCompanionMood(companion),
       formatCompanionProgressionLines(companion.progression),
-      formatCompanionSpellSlotsLine(companion.spell_slots_max, companion.spell_slots_used)
+      formatCompanionSpellSlotsLine(companion.spell_slots_max, companion.spell_slots_used),
+      formatCompanionActiveConditionsLine(companion.active_conditions),
+      formatCompanionDeathSavesLine(companion)
     ].filter(Boolean);
 
     return parts.join('\n');

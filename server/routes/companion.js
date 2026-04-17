@@ -21,6 +21,22 @@ import {
   computeCompanionProgressionDecisions,
   ensureCompanionProgressionInitialized
 } from '../services/progressionCompanionService.js';
+import { CONDITION_NAMES } from '../data/conditions.js';
+
+// Phase 7: normalized set of condition keys we'll accept. Same casing the
+// detectConditionChanges pipeline uses (lowercase_underscore).
+const VALID_CONDITION_KEYS = new Set(
+  CONDITION_NAMES.map(n => n.toLowerCase().replace(/\s+/g, '_'))
+);
+const EXHAUSTION_KEYS = new Set(
+  ['exhaustion_1', 'exhaustion_2', 'exhaustion_3', 'exhaustion_4', 'exhaustion_5', 'exhaustion_6']
+);
+// Conditions that 5e rules clear when combat ends (not a full rest)
+const COMBAT_END_CLEAR = new Set([
+  'grappled', 'prone', 'restrained', 'stunned', 'charmed', 'frightened'
+]);
+// Conditions that persist across a long rest (not cleared by it): petrified.
+// Everything else is cleared by long rest per typical table practice.
 
 const router = express.Router();
 
@@ -809,11 +825,31 @@ router.post('/:id/rest', async (req, res) => {
     if (restType === 'long') {
       healAmount = (companion.companion_max_hp || 0) - (companion.companion_current_hp || 0);
       newHp = companion.companion_max_hp;
+
+      // Phase 7: long rest clears most conditions (petrified persists) and
+      // decrements exhaustion by 1 per 5e rules; also resets death saves.
+      const currentConditions = safeParse(companion.active_conditions, []);
+      const newConditions = [];
+      for (const c of currentConditions) {
+        if (c === 'petrified') {
+          newConditions.push(c); // persists across rest
+        } else if (EXHAUSTION_KEYS.has(c)) {
+          const level = parseInt(c.split('_')[1], 10);
+          if (level > 1) newConditions.push(`exhaustion_${level - 1}`);
+          // exhaustion_1 → cleared
+        }
+        // all other conditions cleared
+      }
+
       await dbRun(
         `UPDATE companions
-         SET companion_current_hp = ?, companion_spell_slots_used = '{}'
+         SET companion_current_hp = ?,
+             companion_spell_slots_used = '{}',
+             active_conditions = ?,
+             death_save_successes = 0,
+             death_save_failures = 0
          WHERE id = ?`,
-        [newHp, req.params.id]
+        [newHp, JSON.stringify(newConditions), req.params.id]
       );
       spellSlotsRestored = true;
     } else {
@@ -821,18 +857,29 @@ router.post('/:id/rest', async (req, res) => {
       healAmount = Math.max(1, Math.floor(missing * 0.5));
       newHp = Math.min(companion.companion_max_hp, (companion.companion_current_hp || 0) + healAmount);
 
+      // Phase 7: any HP gain above 0 resets death saves (5e rules)
+      const wasDown = (companion.companion_current_hp || 0) <= 0;
+      const savesReset = wasDown && newHp > 0;
+
       const classKey = companion.companion_class?.toLowerCase();
       if (classKey === 'warlock') {
         await dbRun(
           `UPDATE companions
-           SET companion_current_hp = ?, companion_spell_slots_used = '{}'
+           SET companion_current_hp = ?,
+               companion_spell_slots_used = '{}',
+               death_save_successes = ${savesReset ? 0 : 'death_save_successes'},
+               death_save_failures  = ${savesReset ? 0 : 'death_save_failures'}
            WHERE id = ?`,
           [newHp, req.params.id]
         );
         spellSlotsRestored = true;
       } else {
         await dbRun(
-          'UPDATE companions SET companion_current_hp = ? WHERE id = ?',
+          `UPDATE companions
+           SET companion_current_hp = ?,
+               death_save_successes = ${savesReset ? 0 : 'death_save_successes'},
+               death_save_failures  = ${savesReset ? 0 : 'death_save_failures'}
+           WHERE id = ?`,
           [newHp, req.params.id]
         );
       }
@@ -856,6 +903,220 @@ router.post('/:id/rest', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'rest companion');
+  }
+});
+
+// ============================================================================
+// Phase 7: Combat Safety — Conditions + Death Saves
+//
+// Persistent condition tracking (previously session-only client state) and
+// full death save tracking (previously nonexistent). Conditions use the same
+// lowercase_underscore keys as the session ConditionPanel, stored as a JSON
+// array on `companions.active_conditions`. Exhaustion is mutually exclusive
+// (at most one `exhaustion_N` key at a time) — adding exhaustion_N strips
+// other exhaustion levels automatically.
+//
+// Death saves: classic 5e rules. Three successes → stabilized. Three failures
+// → dead. A d20 roll of 20 revives the companion at 1 HP. A roll of 1 counts
+// as two failures. Any positive HP change resets the save tallies.
+// ============================================================================
+
+// Get the companion's active conditions
+router.get('/:id/conditions', async (req, res) => {
+  try {
+    const companion = await dbGet('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    const conditions = safeParse(companion.active_conditions, []);
+    res.json({ conditions });
+  } catch (error) {
+    handleServerError(res, error, 'fetch companion conditions');
+  }
+});
+
+// Add a condition
+router.post('/:id/conditions/add', async (req, res) => {
+  try {
+    const { condition } = req.body || {};
+    if (!condition || typeof condition !== 'string') {
+      return res.status(400).json({ error: 'condition is required' });
+    }
+    const key = condition.toLowerCase().replace(/\s+/g, '_');
+    if (!VALID_CONDITION_KEYS.has(key)) {
+      return res.status(400).json({ error: `Unknown condition: ${condition}` });
+    }
+
+    const companion = await dbGet('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    let conditions = safeParse(companion.active_conditions, []);
+    if (EXHAUSTION_KEYS.has(key)) {
+      // Exhaustion is mutually exclusive — strip other exhaustion levels
+      conditions = conditions.filter(c => !EXHAUSTION_KEYS.has(c));
+    }
+    if (!conditions.includes(key)) conditions.push(key);
+
+    await dbRun(
+      'UPDATE companions SET active_conditions = ? WHERE id = ?',
+      [JSON.stringify(conditions), req.params.id]
+    );
+    res.json({ conditions });
+  } catch (error) {
+    handleServerError(res, error, 'add companion condition');
+  }
+});
+
+// Remove a condition
+router.post('/:id/conditions/remove', async (req, res) => {
+  try {
+    const { condition } = req.body || {};
+    if (!condition || typeof condition !== 'string') {
+      return res.status(400).json({ error: 'condition is required' });
+    }
+    const key = condition.toLowerCase().replace(/\s+/g, '_');
+
+    const companion = await dbGet('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    const conditions = safeParse(companion.active_conditions, []).filter(c => c !== key);
+    await dbRun(
+      'UPDATE companions SET active_conditions = ? WHERE id = ?',
+      [JSON.stringify(conditions), req.params.id]
+    );
+    res.json({ conditions });
+  } catch (error) {
+    handleServerError(res, error, 'remove companion condition');
+  }
+});
+
+// Get death save state
+router.get('/:id/death-saves', async (req, res) => {
+  try {
+    const companion = await dbGet(
+      'SELECT death_save_successes, death_save_failures, companion_current_hp FROM companions WHERE id = ?',
+      [req.params.id]
+    );
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    res.json({
+      successes: companion.death_save_successes || 0,
+      failures: companion.death_save_failures || 0,
+      at_zero_hp: (companion.companion_current_hp || 0) <= 0
+    });
+  } catch (error) {
+    handleServerError(res, error, 'fetch companion death saves');
+  }
+});
+
+// Roll / record a death save.
+//   Body options:
+//     { roll: <1..20> }                — server interprets roll per 5e rules
+//     { outcome: 'success'|'failure'|'crit_success'|'crit_failure' }
+//                                      — caller resolved the dice already
+//   Response: { successes, failures, stabilized, dead, hp, message }
+router.post('/:id/death-save', async (req, res) => {
+  try {
+    const { roll, outcome } = req.body || {};
+    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    if ((companion.companion_current_hp || 0) > 0) {
+      return res.status(400).json({ error: 'Companion is not at 0 HP — no death save needed' });
+    }
+
+    let resolved = outcome;
+    let rolledValue = null;
+    if (!resolved) {
+      rolledValue = (typeof roll === 'number') ? roll : (1 + Math.floor(Math.random() * 20));
+      if (rolledValue < 1 || rolledValue > 20) {
+        return res.status(400).json({ error: 'roll must be between 1 and 20' });
+      }
+      if (rolledValue === 20) resolved = 'crit_success';
+      else if (rolledValue === 1) resolved = 'crit_failure';
+      else if (rolledValue >= 10) resolved = 'success';
+      else resolved = 'failure';
+    }
+
+    let successes = companion.death_save_successes || 0;
+    let failures = companion.death_save_failures || 0;
+    let hp = companion.companion_current_hp || 0;
+    let stabilized = false;
+    let dead = false;
+    let message = '';
+
+    if (resolved === 'crit_success') {
+      // Natural 20: regain 1 HP and wake up
+      hp = 1;
+      successes = 0;
+      failures = 0;
+      message = `${companion.id} regains consciousness at 1 HP (natural 20).`;
+    } else if (resolved === 'success') {
+      successes = Math.min(3, successes + 1);
+      if (successes >= 3) {
+        stabilized = true;
+        successes = 0;
+        failures = 0;
+        message = 'Stabilized after three successful death saves.';
+      } else {
+        message = `Death save succeeded (${successes}/3).`;
+      }
+    } else if (resolved === 'crit_failure') {
+      failures = Math.min(3, failures + 2);
+      if (failures >= 3) {
+        dead = true;
+        message = 'Companion has died (critical failure → 3 failures).';
+      } else {
+        message = `Critical failure — 2 failures counted (${failures}/3).`;
+      }
+    } else if (resolved === 'failure') {
+      failures = Math.min(3, failures + 1);
+      if (failures >= 3) {
+        dead = true;
+        message = 'Companion has died (3 failed death saves).';
+      } else {
+        message = `Death save failed (${failures}/3).`;
+      }
+    } else {
+      return res.status(400).json({ error: 'Unknown outcome (expected success/failure/crit_success/crit_failure)' });
+    }
+
+    await dbRun(
+      `UPDATE companions
+       SET death_save_successes = ?, death_save_failures = ?, companion_current_hp = ?
+       WHERE id = ?`,
+      [successes, failures, hp, req.params.id]
+    );
+
+    res.json({
+      successes,
+      failures,
+      stabilized,
+      dead,
+      hp,
+      roll: rolledValue,
+      outcome: resolved,
+      message
+    });
+  } catch (error) {
+    handleServerError(res, error, 'record companion death save');
+  }
+});
+
+// Stabilize a dying companion (e.g., Medicine DC 10 check succeeds)
+router.post('/:id/stabilize', async (req, res) => {
+  try {
+    const companion = await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    if ((companion.companion_current_hp || 0) > 0) {
+      return res.status(400).json({ error: 'Companion is not at 0 HP — nothing to stabilize' });
+    }
+    await dbRun(
+      `UPDATE companions
+       SET death_save_successes = 0, death_save_failures = 0
+       WHERE id = ?`,
+      [req.params.id]
+    );
+    res.json({ stabilized: true, successes: 0, failures: 0 });
+  } catch (error) {
+    handleServerError(res, error, 'stabilize companion');
   }
 });
 

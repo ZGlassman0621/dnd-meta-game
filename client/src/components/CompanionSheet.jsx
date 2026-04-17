@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
 import CompanionEditor from './CompanionEditor'
+import { CONDITIONS } from '../data/conditions.js'
 
 // XP thresholds for each level (same as character progression)
 const XP_THRESHOLDS = [
@@ -18,6 +19,10 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
   // Phase 6: spell slot + rest state
   const [spellSlots, setSpellSlots] = useState(null)
   const [resting, setResting] = useState(false)
+  // Phase 7: conditions + death saves
+  const [activeConditions, setActiveConditions] = useState([])
+  const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0, at_zero_hp: false })
+  const [conditionToAdd, setConditionToAdd] = useState('')
 
   const isClassBased = companion.progression_type === 'class_based'
 
@@ -74,6 +79,76 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
     } catch (err) { setError(err.message) }
   }
 
+  // Phase 7: load conditions + death saves on mount
+  useEffect(() => {
+    if (!companion.id) return
+    let cancelled = false
+    Promise.all([
+      fetch(`/api/companion/${companion.id}/conditions`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/companion/${companion.id}/death-saves`).then(r => r.ok ? r.json() : null)
+    ]).then(([cData, dData]) => {
+      if (cancelled) return
+      if (cData?.conditions) setActiveConditions(cData.conditions)
+      if (dData) setDeathSaves(dData)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [companion.id, companion.companion_current_hp])
+
+  const addCondition = async (key) => {
+    if (!key) return
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/conditions/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condition: key })
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error)
+      setActiveConditions(data.conditions)
+      setConditionToAdd('')
+    } catch (err) { setError(err.message) }
+  }
+
+  const removeCondition = async (key) => {
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/conditions/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condition: key })
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error)
+      setActiveConditions(data.conditions)
+    } catch (err) { setError(err.message) }
+  }
+
+  const rollDeathSave = async () => {
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/death-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error)
+      setDeathSaves({
+        successes: data.successes,
+        failures: data.failures,
+        at_zero_hp: data.hp <= 0 && !data.dead
+      })
+      if (onUpdate) onUpdate()
+    } catch (err) { setError(err.message) }
+  }
+
+  const stabilizeCompanion = async () => {
+    try {
+      const r = await fetch(`/api/companion/${companion.id}/stabilize`, { method: 'POST' })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error)
+      setDeathSaves({ successes: 0, failures: 0, at_zero_hp: true })
+      if (onUpdate) onUpdate()
+    } catch (err) { setError(err.message) }
+  }
+
   const handleRest = async (restType) => {
     setResting(true)
     setError(null)
@@ -86,6 +161,15 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Failed to rest')
       await refetchSpellSlots()
+      // Phase 7: rest may have cleared conditions / reset death saves
+      try {
+        const [cRes, dRes] = await Promise.all([
+          fetch(`/api/companion/${companion.id}/conditions`).then(r => r.ok ? r.json() : null),
+          fetch(`/api/companion/${companion.id}/death-saves`).then(r => r.ok ? r.json() : null)
+        ])
+        if (cRes?.conditions) setActiveConditions(cRes.conditions)
+        if (dRes) setDeathSaves(dRes)
+      } catch {}
       if (onUpdate) onUpdate()
     } catch (err) {
       setError(err.message)
@@ -305,6 +389,131 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
                 Voice: {companion.voice}
               </p>
             )}
+          </div>
+        )}
+
+        {/* Phase 7: Active Conditions (persistent across sessions) */}
+        <div style={{
+          background: 'rgba(249, 115, 22, 0.08)',
+          border: '1px solid #f97316',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1rem'
+        }}>
+          <h3 style={{ color: '#f97316', marginBottom: '0.5rem', fontSize: '1rem' }}>
+            Active Conditions
+          </h3>
+          {activeConditions.length === 0 && (
+            <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 0.5rem 0' }}>None</p>
+          )}
+          {activeConditions.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+              {activeConditions.map(key => {
+                const meta = CONDITIONS[key] || { name: key.replace(/_/g, ' '), color: '#6b7280', description: '' }
+                return (
+                  <span
+                    key={key}
+                    title={meta.description || ''}
+                    style={{
+                      background: meta.color + '22', border: `1px solid ${meta.color}`,
+                      color: meta.color, padding: '2px 8px', borderRadius: '12px',
+                      fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                    }}
+                  >
+                    {meta.name}
+                    <button
+                      onClick={() => removeCondition(key)}
+                      style={{
+                        background: 'transparent', border: 'none', color: meta.color,
+                        cursor: 'pointer', padding: 0, fontSize: '0.9rem', lineHeight: 1
+                      }}
+                      title="Remove condition"
+                    >×</button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <select
+              value={conditionToAdd}
+              onChange={(e) => setConditionToAdd(e.target.value)}
+              style={{
+                flex: 1, padding: '0.3rem', background: '#2a2a2a',
+                border: '1px solid #444', borderRadius: '4px', color: '#fff', fontSize: '0.8rem'
+              }}
+            >
+              <option value="">Add condition…</option>
+              {Object.entries(CONDITIONS)
+                .filter(([key]) => !activeConditions.includes(key))
+                .map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.name}</option>
+                ))}
+            </select>
+            <button
+              onClick={() => addCondition(conditionToAdd)}
+              disabled={!conditionToAdd}
+              style={{
+                background: conditionToAdd ? '#f97316' : '#555', color: '#fff',
+                border: 'none', borderRadius: '4px', padding: '0.3rem 0.7rem',
+                fontSize: '0.78rem', cursor: conditionToAdd ? 'pointer' : 'not-allowed'
+              }}
+            >Add</button>
+          </div>
+        </div>
+
+        {/* Phase 7: Death Saves — only shown when companion is at 0 HP */}
+        {(companion.companion_current_hp || 0) <= 0 && deathSaves.at_zero_hp && (
+          <div style={{
+            background: 'rgba(231, 76, 60, 0.1)',
+            border: '2px solid #e74c3c',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ color: '#e74c3c', marginBottom: '0.5rem', fontSize: '1rem' }}>
+              Death Saves — At 0 HP
+            </h3>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <div>
+                <div style={{ color: '#2ecc71', fontSize: '0.78rem', marginBottom: '4px' }}>Successes</div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                      width: '20px', height: '20px', borderRadius: '50%',
+                      border: '2px solid #2ecc71',
+                      background: i < deathSaves.successes ? '#2ecc71' : 'transparent'
+                    }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#e74c3c', fontSize: '0.78rem', marginBottom: '4px' }}>Failures</div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                      width: '20px', height: '20px', borderRadius: '50%',
+                      border: '2px solid #e74c3c',
+                      background: i < deathSaves.failures ? '#e74c3c' : 'transparent'
+                    }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className="button"
+                onClick={rollDeathSave}
+                style={{ flex: 1, background: '#e74c3c' }}
+                title="Server rolls d20. 10+ = success, 20 = revive at 1 HP, 1 = 2 failures"
+              >Roll Death Save (d20)</button>
+              <button
+                className="button"
+                onClick={stabilizeCompanion}
+                style={{ flex: 1, background: '#7f8c8d' }}
+                title="Reset both tallies to 0 (e.g., Medicine DC 10)"
+              >Stabilize</button>
+            </div>
           </div>
         )}
 

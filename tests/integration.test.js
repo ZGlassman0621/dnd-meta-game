@@ -1822,6 +1822,173 @@ async function testCompanionSpellSlotRejectsNpcStatsCompanion() {
   await cleanupTestCompanion(companionId, npcId);
 }
 
+// ===== GROUP 13: Companion Combat Safety — Conditions + Death Saves (Phase 7) =====
+
+async function testCompanionConditionsInitialState() {
+  console.log('\n  -- New companion starts with empty conditions array --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  const res = await api('GET', `/api/companion/${companionId}/conditions`);
+  assert(res.status === 200, `GET conditions returns 200 (got ${res.status})`);
+  assert(Array.isArray(res.body.conditions) && res.body.conditions.length === 0, 'conditions is empty array');
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionConditionAddRemove() {
+  console.log('\n  -- Add + remove conditions round-trip --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  const addRes = await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'poisoned' });
+  assert(addRes.status === 200, 'add poisoned returns 200');
+  assert(addRes.body.conditions.includes('poisoned'), 'conditions includes poisoned after add');
+
+  const add2 = await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'Prone' });
+  assert(add2.body.conditions.includes('prone'), 'Case insensitive — Prone normalized to prone');
+  assert(add2.body.conditions.length === 2, 'conditions has 2 entries');
+
+  const dup = await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'poisoned' });
+  assert(dup.body.conditions.length === 2, 'Duplicate add is idempotent (still 2)');
+
+  const remRes = await api('POST', `/api/companion/${companionId}/conditions/remove`, { condition: 'poisoned' });
+  assert(!remRes.body.conditions.includes('poisoned'), 'conditions no longer includes poisoned');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionExhaustionMutuallyExclusive() {
+  console.log('\n  -- Exhaustion levels are mutually exclusive --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'exhaustion_2' });
+  const addRes = await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'exhaustion_4' });
+  const exhaustion = addRes.body.conditions.filter(c => c.startsWith('exhaustion_'));
+  assert(exhaustion.length === 1, `Only one exhaustion level at a time (got ${exhaustion.length})`);
+  assert(exhaustion[0] === 'exhaustion_4', 'Latest exhaustion level replaces prior');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionUnknownConditionRejected() {
+  console.log('\n  -- Unknown condition returns 400 --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  const res = await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'radiant_bloom' });
+  assert(res.status === 400, `Unknown condition returns 400 (got ${res.status})`);
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLongRestClearsConditionsAndDecrementsExhaustion() {
+  console.log('\n  -- Long rest clears conditions and decrements exhaustion --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+
+  await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'poisoned' });
+  await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'exhaustion_3' });
+  await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'petrified' });
+
+  await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
+
+  const res = await api('GET', `/api/companion/${companionId}/conditions`);
+  assert(!res.body.conditions.includes('poisoned'), 'poisoned cleared by long rest');
+  assert(res.body.conditions.includes('petrified'), 'petrified persists through long rest');
+  assert(res.body.conditions.includes('exhaustion_2'), `exhaustion_3 decremented to exhaustion_2 (got ${res.body.conditions})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionDeathSaveBlockedWhenAbove0Hp() {
+  console.log('\n  -- Death save blocked when HP > 0 --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  const res = await api('POST', `/api/companion/${companionId}/death-save`, { roll: 15 });
+  assert(res.status === 400, `Returns 400 when HP > 0 (got ${res.status})`);
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionDeathSaveSuccess() {
+  console.log('\n  -- Death save success increments successes --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun('UPDATE companions SET companion_current_hp = 0 WHERE id = ?', [companionId]);
+
+  const r = await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'success' });
+  assert(r.status === 200, 'success outcome returns 200');
+  assert(r.body.successes === 1 && r.body.failures === 0, 'successes=1, failures=0');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionDeathSaveStabilizesAtThreeSuccesses() {
+  console.log('\n  -- Three successes = stabilized --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun('UPDATE companions SET companion_current_hp = 0 WHERE id = ?', [companionId]);
+
+  await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'success' });
+  await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'success' });
+  const r = await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'success' });
+  assert(r.body.stabilized === true, 'stabilized=true after third success');
+  assert(r.body.successes === 0 && r.body.failures === 0, 'tallies reset to 0 after stabilize');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionDeathSaveDiesAtThreeFailures() {
+  console.log('\n  -- Three failures = dead --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun('UPDATE companions SET companion_current_hp = 0 WHERE id = ?', [companionId]);
+
+  await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'failure' });
+  await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'failure' });
+  const r = await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'failure' });
+  assert(r.body.dead === true, 'dead=true after third failure');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionDeathSaveCriticalSuccessRevives() {
+  console.log('\n  -- Natural 20 revives at 1 HP --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun('UPDATE companions SET companion_current_hp = 0, death_save_successes = 2 WHERE id = ?', [companionId]);
+
+  const r = await api('POST', `/api/companion/${companionId}/death-save`, { roll: 20 });
+  assert(r.body.hp === 1, `HP revives to 1 (got ${r.body.hp})`);
+  assert(r.body.successes === 0 && r.body.failures === 0, 'tallies reset after revive');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionDeathSaveCriticalFailureCountsTwo() {
+  console.log('\n  -- Natural 1 counts as two failures --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun('UPDATE companions SET companion_current_hp = 0 WHERE id = ?', [companionId]);
+
+  const r = await api('POST', `/api/companion/${companionId}/death-save`, { roll: 1 });
+  assert(r.body.failures === 2, `failures=2 after nat 1 (got ${r.body.failures})`);
+  assert(r.body.dead === false, 'Not dead at 2 failures');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionStabilizeEndpoint() {
+  console.log('\n  -- Stabilize resets death save tallies --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun('UPDATE companions SET companion_current_hp = 0, death_save_successes = 1, death_save_failures = 2 WHERE id = ?', [companionId]);
+
+  const r = await api('POST', `/api/companion/${companionId}/stabilize`);
+  assert(r.status === 200, 'stabilize returns 200');
+  assert(r.body.successes === 0 && r.body.failures === 0, 'tallies reset to 0');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLongRestResetsDeathSaves() {
+  console.log('\n  -- Long rest resets death save tallies --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  await dbRun(
+    'UPDATE companions SET death_save_successes = 2, death_save_failures = 1 WHERE id = ?',
+    [companionId]
+  );
+  await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
+  const c = await dbGet('SELECT death_save_successes, death_save_failures FROM companions WHERE id = ?', [companionId]);
+  assert(c.death_save_successes === 0 && c.death_save_failures === 0, 'Long rest clears both tallies');
+  await cleanupTestCompanion(companionId, npcId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -1926,6 +2093,21 @@ async function runTests() {
     await testCompanionShortRestHealsButKeepsSlots();
     await testCompanionShortRestWarlockSlots();
     await testCompanionSpellSlotRejectsNpcStatsCompanion();
+
+    console.log('\n=== Group 13: Companion Combat Safety (Phase 7) ===');
+    await testCompanionConditionsInitialState();
+    await testCompanionConditionAddRemove();
+    await testCompanionExhaustionMutuallyExclusive();
+    await testCompanionUnknownConditionRejected();
+    await testCompanionLongRestClearsConditionsAndDecrementsExhaustion();
+    await testCompanionDeathSaveBlockedWhenAbove0Hp();
+    await testCompanionDeathSaveSuccess();
+    await testCompanionDeathSaveStabilizesAtThreeSuccesses();
+    await testCompanionDeathSaveDiesAtThreeFailures();
+    await testCompanionDeathSaveCriticalSuccessRevives();
+    await testCompanionDeathSaveCriticalFailureCountsTwo();
+    await testCompanionStabilizeEndpoint();
+    await testCompanionLongRestResetsDeathSaves();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);
