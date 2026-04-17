@@ -1842,6 +1842,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         {showInventory && (
           <InventoryPanel
             character={character}
+            companions={companions}
             itemsGainedThisSession={itemsGainedThisSession}
             onDiscard={discardItem}
             onClose={() => setShowInventory(false)}

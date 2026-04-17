@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 const RARITY_COLORS = {
   common: '#9ca3af',
@@ -16,10 +16,124 @@ const RARITY_LABELS = {
   legendary: 'Legendary'
 };
 
-export default function InventoryPanel({ character, itemsGainedThisSession, onDiscard, onClose, onRefreshCharacter }) {
+// Ultima-style sectioned layout: all items visible at once, grouped.
+// Order matters — this is the display order in the panel.
+const CATEGORY_ORDER = ['weapons', 'armor', 'consumables', 'quest', 'misc'];
+
+const CATEGORY_LABELS = {
+  weapons: 'Weapons',
+  armor: 'Armor',
+  consumables: 'Consumables',
+  quest: 'Quest Items',
+  misc: 'Misc'
+};
+
+const CATEGORY_COLORS = {
+  weapons: '#ef4444',
+  armor: '#60a5fa',
+  consumables: '#34d399',
+  quest: '#f59e0b',
+  misc: '#9ca3af'
+};
+
+// Non-weapon religious / focus items that accidentally match weapon heuristics
+const NON_WEAPON_ITEMS = [
+  'signet', 'insignia', 'holy symbol', 'druidic focus', 'arcane focus',
+  'component pouch', 'emblem', 'amulet', 'reliquary', 'totem',
+  'ring', 'badge', 'seal', 'medallion', 'vestments', 'banner', 'symbol'
+];
+
+// Consumable name heuristics
+const CONSUMABLE_KEYWORDS = [
+  'potion', 'elixir', 'philter', 'scroll', 'ration', 'trail ration',
+  'water', 'wine', 'ale', 'food', 'bread', 'cheese', 'meat',
+  'antitoxin', 'oil', 'poison', 'acid', 'alchemist', 'holy water'
+];
+
+// Quest item heuristics — kept narrow so we don't mis-label mundane items.
+// An item is "quest" only if explicitly flagged or the name contains one of
+// these words. Most items shouldn't land here.
+const QUEST_KEYWORDS = [
+  'quest', 'relic', 'artifact', 'heirloom', 'sacred', 'ancient',
+  'prophecy', 'token of', 'letter from', 'sealed letter',
+  'key to', 'map to'
+];
+
+function getItemCategory(item, rarityData) {
+  const name = (item.name || item || '').toString();
+  const lower = name.toLowerCase();
+
+  // Explicit flags win
+  if (item.quest === true || item.category === 'quest' || item.category === 'quest_item') return 'quest';
+
+  // Quest heuristic — name-based. Narrow, so only obvious ones get tagged.
+  if (QUEST_KEYWORDS.some(kw => lower.includes(kw))) return 'quest';
+
+  const rd = rarityData[lower];
+
+  // Consumables — by explicit category first, then name heuristics
+  if (item.category === 'consumable' || rd?.category === 'consumable' || rd?.category === 'potion') return 'consumables';
+  if (CONSUMABLE_KEYWORDS.some(kw => lower.includes(kw))) return 'consumables';
+
+  const isNonWeapon = NON_WEAPON_ITEMS.some(nw => lower.includes(nw));
+
+  // Weapons
+  if (!isNonWeapon && (item.type === 'weapon' || item.damage || item.category?.includes('weapon'))) return 'weapons';
+  if (!isNonWeapon && (rd?.category === 'weapon' || rd?.category === 'weapons')) return 'weapons';
+
+  // Armor
+  if (item.type === 'armor' || item.category?.includes('armor') || item.ac) return 'armor';
+  if (rd?.category === 'armor' || rd?.category === 'shield') return 'armor';
+
+  return 'misc';
+}
+
+// Collect equipment from character + all active companions into a map of
+// { itemName_lower → [{ holder, slot, color }] } for fast lookup during render.
+function buildEquippedByMap(character, companions) {
+  const map = new Map();
+  const add = (itemName, holder, slot, color) => {
+    if (!itemName) return;
+    const key = itemName.toLowerCase();
+    const list = map.get(key) || [];
+    list.push({ holder, slot, color });
+    map.set(key, list);
+  };
+
+  const parseEq = (raw) => {
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw) || {}; } catch { return {}; }
+    }
+    return raw;
+  };
+
+  const charEq = parseEq(character?.equipment);
+  ['mainHand', 'offHand', 'armor'].forEach(slot => {
+    const item = charEq[slot];
+    if (item?.name) add(item.name, character.name || 'You', slot, '#10b981');
+  });
+
+  (companions || []).forEach(c => {
+    const compEq = parseEq(c.equipment);
+    ['mainHand', 'offHand', 'armor'].forEach(slot => {
+      const item = compEq[slot];
+      if (item?.name) add(item.name, c.name || c.nickname || 'Companion', slot, '#a78bfa');
+    });
+  });
+
+  return map;
+}
+
+const SLOT_LABEL = {
+  mainHand: 'main',
+  offHand: 'off',
+  armor: 'armor'
+};
+
+export default function InventoryPanel({ character, companions, itemsGainedThisSession, onDiscard, onClose, onRefreshCharacter }) {
   const [rarityData, setRarityData] = useState({});
   const [discarding, setDiscarding] = useState(null);
-  const [filter, setFilter] = useState('all'); // all, weapons, armor, misc
 
   const inventory = typeof character.inventory === 'string'
     ? JSON.parse(character.inventory || '[]')
@@ -53,33 +167,138 @@ export default function InventoryPanel({ character, itemsGainedThisSession, onDi
     return rarityData[key]?.rarity || null;
   };
 
-  const getItemCategory = (item) => {
-    // Exclude non-weapon items that might match weapon heuristics
-    const NON_WEAPON_ITEMS = [
-      'signet', 'insignia', 'holy symbol', 'druidic focus', 'arcane focus',
-      'component pouch', 'emblem', 'amulet', 'reliquary', 'totem',
-      'ring', 'badge', 'seal', 'medallion', 'vestments', 'banner', 'symbol'
-    ];
-    const lower = (item.name || '').toLowerCase();
-    const isNonWeapon = NON_WEAPON_ITEMS.some(nw => lower.includes(nw));
-
-    // Check item properties first
-    if (!isNonWeapon && (item.type === 'weapon' || item.damage || item.category?.includes('weapon'))) return 'weapons';
-    if (item.type === 'armor' || item.category?.includes('armor') || item.ac) return 'armor';
-    // Check rarity data category
-    const key = lower;
-    const rd = rarityData[key];
-    if (!isNonWeapon && (rd?.category === 'weapon' || rd?.category === 'weapons')) return 'weapons';
-    if (rd?.category === 'armor') return 'armor';
-    return 'misc';
-  };
-
-  const filteredInventory = filter === 'all'
-    ? inventory
-    : inventory.filter(item => getItemCategory(item) === filter);
-
   const isNewItem = (itemName) => {
     return itemsGainedThisSession.some(n => n.toLowerCase() === (itemName || '').toLowerCase());
+  };
+
+  // Precompute equipped-by map (recomputes only when companions / character.equipment change)
+  const equippedByMap = useMemo(
+    () => buildEquippedByMap(character, companions),
+    [character?.equipment, character?.name, companions]
+  );
+
+  // Group items into the five sections
+  const grouped = useMemo(() => {
+    const out = { weapons: [], armor: [], consumables: [], quest: [], misc: [] };
+    for (const item of inventory) {
+      const cat = getItemCategory(item, rarityData);
+      out[cat].push(item);
+    }
+    return out;
+  }, [inventory, rarityData]);
+
+  const renderItem = (item, idx) => {
+    const itemName = item.name || item;
+    const quantity = item.quantity || 1;
+    const rarity = getItemRarity(itemName);
+    const isNew = isNewItem(itemName);
+    const rarityColor = rarity ? RARITY_COLORS[rarity] : '#ccc';
+    const equippedBy = equippedByMap.get((itemName || '').toLowerCase()) || [];
+
+    return (
+      <div
+        key={idx}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.5rem 0.75rem',
+          background: isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+          borderRadius: '4px',
+          border: isNew ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+          transition: 'background 0.2s'
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            color: rarityColor,
+            fontWeight: rarity && rarity !== 'common' ? 'bold' : 'normal',
+            fontSize: '0.9rem',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>
+            {itemName}
+          </div>
+          {rarity && rarity !== 'common' && (
+            <div style={{ fontSize: '0.7rem', color: rarityColor, opacity: 0.8 }}>
+              {RARITY_LABELS[rarity]}
+            </div>
+          )}
+          {/* Equipped-by badges. Multiple if the same-named item is equipped by
+              multiple party members. Clicking would be nice-to-have later. */}
+          {equippedBy.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
+              {equippedBy.map((eq, i) => (
+                <span
+                  key={i}
+                  title={`Equipped by ${eq.holder} (${eq.slot})`}
+                  style={{
+                    background: `${eq.color}22`,
+                    border: `1px solid ${eq.color}`,
+                    color: eq.color,
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    fontSize: '0.65rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {eq.holder} · {SLOT_LABEL[eq.slot] || eq.slot}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isNew && (
+          <span style={{
+            padding: '0.1rem 0.4rem',
+            background: 'rgba(16, 185, 129, 0.3)',
+            border: '1px solid rgba(16, 185, 129, 0.5)',
+            borderRadius: '3px',
+            color: '#10b981',
+            fontSize: '0.65rem',
+            fontWeight: 'bold',
+            letterSpacing: '0.05em'
+          }}>
+            NEW
+          </span>
+        )}
+
+        {quantity > 1 && (
+          <span style={{
+            padding: '0.1rem 0.4rem',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '3px',
+            color: '#ccc',
+            fontSize: '0.75rem',
+            fontWeight: 'bold'
+          }}>
+            ×{quantity}
+          </span>
+        )}
+
+        <button
+          onClick={() => handleDiscard(itemName)}
+          disabled={discarding === itemName}
+          title="Discard item"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#666',
+            cursor: discarding === itemName ? 'wait' : 'pointer',
+            padding: '0.2rem',
+            fontSize: '1rem',
+            lineHeight: 1,
+            opacity: discarding === itemName ? 0.5 : 1
+          }}
+          onMouseEnter={(e) => e.target.style.color = '#ef4444'}
+          onMouseLeave={(e) => e.target.style.color = '#666'}
+        >
+          ×
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -106,7 +325,7 @@ export default function InventoryPanel({ character, itemsGainedThisSession, onDi
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <h3 style={{ margin: 0, color: '#10b981' }}>Inventory</h3>
+        <h3 style={{ margin: 0, color: '#10b981' }}>Party Inventory</h3>
         <button
           onClick={onClose}
           style={{
@@ -151,148 +370,40 @@ export default function InventoryPanel({ character, itemsGainedThisSession, onDi
         )}
       </div>
 
-      {/* Filter Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        padding: '0 0.5rem'
-      }}>
-        {[
-          { id: 'all', label: 'All' },
-          { id: 'weapons', label: 'Weapons' },
-          { id: 'armor', label: 'Armor' },
-          { id: 'misc', label: 'Misc' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id)}
-            style={{
-              flex: 1,
-              padding: '0.5rem',
-              background: filter === tab.id ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-              border: 'none',
-              borderBottom: filter === tab.id ? '2px solid #10b981' : '2px solid transparent',
-              color: filter === tab.id ? '#10b981' : '#888',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              fontWeight: filter === tab.id ? 'bold' : 'normal'
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Item List */}
+      {/* Item List — Ultima-style sectioned layout, all categories visible */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
         padding: '0.75rem'
       }}>
-        {filteredInventory.length === 0 ? (
+        {inventory.length === 0 ? (
           <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
-            {filter === 'all' ? 'No items in inventory' : `No ${filter} items`}
+            No items in inventory
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {filteredInventory.map((item, idx) => {
-              const itemName = item.name || item;
-              const quantity = item.quantity || 1;
-              const rarity = getItemRarity(itemName);
-              const isNew = isNewItem(itemName);
-              const rarityColor = rarity ? RARITY_COLORS[rarity] : '#ccc';
-
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.5rem 0.75rem',
-                    background: isNew
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '4px',
-                    border: isNew
-                      ? '1px solid rgba(16, 185, 129, 0.4)'
-                      : '1px solid rgba(255, 255, 255, 0.05)',
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  {/* Item Name + Rarity */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      color: rarityColor,
-                      fontWeight: rarity && rarity !== 'common' ? 'bold' : 'normal',
-                      fontSize: '0.9rem',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}>
-                      {itemName}
-                    </div>
-                    {rarity && rarity !== 'common' && (
-                      <div style={{ fontSize: '0.7rem', color: rarityColor, opacity: 0.8 }}>
-                        {RARITY_LABELS[rarity]}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* NEW badge */}
-                  {isNew && (
-                    <span style={{
-                      padding: '0.1rem 0.4rem',
-                      background: 'rgba(16, 185, 129, 0.3)',
-                      border: '1px solid rgba(16, 185, 129, 0.5)',
-                      borderRadius: '3px',
-                      color: '#10b981',
-                      fontSize: '0.65rem',
-                      fontWeight: 'bold',
-                      letterSpacing: '0.05em'
-                    }}>
-                      NEW
-                    </span>
-                  )}
-
-                  {/* Quantity */}
-                  {quantity > 1 && (
-                    <span style={{
-                      padding: '0.1rem 0.4rem',
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      borderRadius: '3px',
-                      color: '#ccc',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold'
-                    }}>
-                      ×{quantity}
-                    </span>
-                  )}
-
-                  {/* Discard Button */}
-                  <button
-                    onClick={() => handleDiscard(itemName)}
-                    disabled={discarding === itemName}
-                    title="Discard item"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#666',
-                      cursor: discarding === itemName ? 'wait' : 'pointer',
-                      padding: '0.2rem',
-                      fontSize: '1rem',
-                      lineHeight: 1,
-                      opacity: discarding === itemName ? 0.5 : 1
-                    }}
-                    onMouseEnter={(e) => e.target.style.color = '#ef4444'}
-                    onMouseLeave={(e) => e.target.style.color = '#666'}
-                  >
-                    ×
-                  </button>
+          CATEGORY_ORDER.map(cat => {
+            const items = grouped[cat];
+            if (items.length === 0) return null;
+            return (
+              <div key={cat} style={{ marginBottom: '1rem' }}>
+                <div style={{
+                  color: CATEGORY_COLORS[cat],
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  marginBottom: '0.35rem',
+                  paddingBottom: '0.25rem',
+                  borderBottom: `1px solid ${CATEGORY_COLORS[cat]}33`
+                }}>
+                  {CATEGORY_LABELS[cat]} <span style={{ opacity: 0.6, fontWeight: 'normal' }}>({items.length})</span>
                 </div>
-              );
-            })}
-          </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {items.map((item, idx) => renderItem(item, `${cat}-${idx}`))}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
