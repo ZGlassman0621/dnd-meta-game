@@ -1513,6 +1513,171 @@ async function testCreateKnightInitializesMoralPath() {
   await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
 }
 
+// ===== GROUP 11: Companion Progression (Phase 5.5) =====
+//
+// Every test here creates its own test NPC + companion and cleans them up
+// at the end, so they don't depend on each other or interact with the
+// testCharId cleanup done for Group 1.
+
+async function createTestNpcAndRecruit(race, companionClass, startingLevel = 1) {
+  const npcRes = await api('POST', '/api/npc', {
+    name: `TEST_Companion_${race}_${Date.now()}`,
+    race,
+    stat_block: 'commoner',
+    campaign_availability: 'companion',
+    ability_scores: { str: 14, dex: 12, con: 14, int: 10, wis: 10, cha: 10 }
+  });
+  if (npcRes.status !== 201) throw new Error(`NPC create failed: ${JSON.stringify(npcRes.body)}`);
+  const npcId = npcRes.body.id;
+
+  const recruitRes = await api('POST', '/api/companion/recruit', {
+    npc_id: npcId,
+    recruited_by_character_id: testCharId,
+    progression_type: 'class_based',
+    companion_class: companionClass,
+    starting_level: startingLevel
+  });
+  if (recruitRes.status !== 201) throw new Error(`Recruit failed: ${JSON.stringify(recruitRes.body)}`);
+  return { npcId, companionId: recruitRes.body.companion.id };
+}
+
+async function cleanupTestCompanion(companionId, npcId) {
+  if (companionId) {
+    await dbRun('DELETE FROM companion_ancestry_feats WHERE companion_id = ?', [companionId]);
+    await dbRun('DELETE FROM companion_theme_unlocks WHERE companion_id = ?', [companionId]);
+    await dbRun('DELETE FROM companion_themes WHERE companion_id = ?', [companionId]);
+    await dbRun('DELETE FROM companions WHERE id = ?', [companionId]);
+  }
+  if (npcId) await dbRun('DELETE FROM npcs WHERE id = ?', [npcId]);
+}
+
+async function testCompanionRecruitAutoAssignsThemeAndAncestryFeat() {
+  console.log('\n  -- Companion recruit auto-assigns theme + L1 ancestry feat --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Wood Elf', 'Fighter', 1);
+
+  const theme = await dbGet('SELECT theme_id FROM companion_themes WHERE companion_id = ?', [companionId]);
+  assert(theme?.theme_id === 'soldier', `Fighter companion gets soldier theme (got ${theme?.theme_id})`);
+
+  const unlock = await dbGet(
+    'SELECT tier, unlocked_at_level FROM companion_theme_unlocks WHERE companion_id = ? AND tier = 1',
+    [companionId]
+  );
+  assert(unlock, 'L1 theme ability is unlocked');
+
+  const feat = await dbGet(
+    `SELECT af.list_id FROM companion_ancestry_feats caf
+     JOIN ancestry_feats af ON caf.feat_id = af.id
+     WHERE caf.companion_id = ? AND caf.tier = 1`,
+    [companionId]
+  );
+  assert(feat?.list_id === 'elf', `Wood Elf companion gets 'elf' ancestry list (got ${feat?.list_id})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionRaceNormalizationSkipsUnmapped() {
+  console.log('\n  -- Unmapped race (Goblin) silently skips ancestry feat --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Goblin', 'Rogue', 1);
+
+  const theme = await dbGet('SELECT theme_id FROM companion_themes WHERE companion_id = ?', [companionId]);
+  assert(theme?.theme_id === 'criminal', `Rogue companion still gets criminal theme (got ${theme?.theme_id})`);
+
+  const feat = await dbGet('SELECT id FROM companion_ancestry_feats WHERE companion_id = ?', [companionId]);
+  assert(!feat, 'No ancestry feat seeded for unmapped race');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpTriggersThemeTierUnlock() {
+  console.log('\n  -- Companion L4→L5 triggers theme tier auto-unlock --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 4);
+
+  const infoRes = await api('GET', `/api/companion/${companionId}/level-up-info`);
+  assert(infoRes.status === 200, `level-up-info returns 200 (got ${infoRes.status})`);
+  assert(
+    infoRes.body.progression?.theme_tier_unlock?.tier === 5,
+    'level-up-info previews theme_tier_unlock at tier 5'
+  );
+
+  const upRes = await api('POST', `/api/companion/${companionId}/level-up`, { hpRoll: 'average' });
+  assert(upRes.status === 200, `level-up returns 200 (got ${upRes.status})`);
+  assert(
+    upRes.body.levelUpSummary?.themeTierUnlocked?.tier === 5,
+    'level-up response includes themeTierUnlocked'
+  );
+
+  const unlock = await dbGet(
+    'SELECT tier FROM companion_theme_unlocks WHERE companion_id = ? AND tier = 5',
+    [companionId]
+  );
+  assert(unlock, 'Theme tier 5 unlock persisted to DB');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpAutoPicksAncestryFeat() {
+  console.log('\n  -- Companion L2→L3 auto-picks ancestry feat --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Mountain Dwarf', 'Cleric', 2);
+
+  const upRes = await api('POST', `/api/companion/${companionId}/level-up`, { hpRoll: 'average' });
+  assert(upRes.status === 200, `level-up returns 200 (got ${upRes.status})`);
+  assert(
+    upRes.body.levelUpSummary?.ancestryFeatSelected?.tier === 3,
+    'level-up response includes ancestryFeatSelected at tier 3'
+  );
+
+  const feat = await dbGet(
+    `SELECT af.list_id FROM companion_ancestry_feats caf
+     JOIN ancestry_feats af ON caf.feat_id = af.id
+     WHERE caf.companion_id = ? AND caf.tier = 3`,
+    [companionId]
+  );
+  assert(feat?.list_id === 'dwarf', `Auto-picked dwarf feat at tier 3 (got ${feat?.list_id})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionProgressionEndpoint() {
+  console.log('\n  -- GET /companion/:id/progression returns full snapshot --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Tiefling', 'Wizard', 1);
+
+  const res = await api('GET', `/api/companion/${companionId}/progression`);
+  assert(res.status === 200, `progression GET returns 200 (got ${res.status})`);
+  assert(res.body.theme?.theme_id === 'sage', `Wizard gets sage theme (got ${res.body.theme?.theme_id})`);
+  assert(Array.isArray(res.body.theme_all_tiers), 'theme_all_tiers is an array');
+  assert(res.body.theme_all_tiers.length >= 4, 'theme_all_tiers has at least 4 tiers');
+  assert(res.body.theme_unlocks.length === 1, 'One tier unlocked at L1');
+  assert(res.body.ancestry_feats.length === 1, 'One L1 ancestry feat seeded');
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpLazyBackfill() {
+  console.log('\n  -- Pre-5.5 companion gets lazy-backfilled at level-up --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Half-Elf', 'Bard', 1);
+
+  // Simulate a pre-5.5 companion: wipe the auto-assigned rows
+  await dbRun('DELETE FROM companion_ancestry_feats WHERE companion_id = ?', [companionId]);
+  await dbRun('DELETE FROM companion_theme_unlocks WHERE companion_id = ?', [companionId]);
+  await dbRun('DELETE FROM companion_themes WHERE companion_id = ?', [companionId]);
+
+  const infoRes = await api('GET', `/api/companion/${companionId}/level-up-info`);
+  assert(infoRes.status === 200, 'level-up-info triggers backfill successfully');
+
+  const theme = await dbGet('SELECT theme_id FROM companion_themes WHERE companion_id = ?', [companionId]);
+  assert(theme?.theme_id === 'entertainer', `Backfilled bard theme (got ${theme?.theme_id})`);
+
+  const feat = await dbGet(
+    `SELECT af.list_id FROM companion_ancestry_feats caf
+     JOIN ancestry_feats af ON caf.feat_id = af.id
+     WHERE caf.companion_id = ? AND caf.tier = 1`,
+    [companionId]
+  );
+  assert(feat?.list_id === 'half_elf', `Backfilled half_elf feat (got ${feat?.list_id})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -1599,6 +1764,14 @@ async function runTests() {
     await testLevelUpWithAncestryFeatChoice();
     await testLevelUpRejectsInvalidAncestryFeatId();
     await testCreateKnightInitializesMoralPath();
+
+    console.log('\n=== Group 11: Companion Progression (Phase 5.5) ===');
+    await testCompanionRecruitAutoAssignsThemeAndAncestryFeat();
+    await testCompanionRaceNormalizationSkipsUnmapped();
+    await testCompanionLevelUpTriggersThemeTierUnlock();
+    await testCompanionLevelUpAutoPicksAncestryFeat();
+    await testCompanionProgressionEndpoint();
+    await testCompanionLevelUpLazyBackfill();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);
