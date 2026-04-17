@@ -791,6 +791,10 @@ router.get('/level-up-info/:id', async (req, res) => {
     // Calculate multiclass spell slots if applicable
     const multiclassSpellSlots = getMulticlassSpellSlots(classLevels);
 
+    // Progression decisions (Phase 5): theme tier auto-unlocks + ancestry feat choices
+    // gated on TOTAL character level (not per-class level).
+    const progressionDecisions = await computeProgressionDecisions(req.params.id, newTotalLevel);
+
     res.json({
       currentLevel: totalLevel,
       newLevel: newTotalLevel,
@@ -803,6 +807,7 @@ router.get('/level-up-info/:id', async (req, res) => {
         new: newProficiency,
         increased: proficiencyIncreased
       },
+      progression: progressionDecisions,
       // Legacy fields for backward compatibility
       className: character.class,
       subclass: character.subclass,
@@ -815,6 +820,103 @@ router.get('/level-up-info/:id', async (req, res) => {
     handleServerError(res, error, 'get level-up info');
   }
 });
+
+/**
+ * Helper for /level-up-info — returns the progression decisions that need to
+ * happen (or auto-apply) when the character crosses to `newTotalLevel`.
+ *
+ * Theme tier thresholds: L5, L11, L17 — auto-unlock (1 ability per tier per
+ * theme, no player choice). Returned as { tier, ability } for UI display.
+ *
+ * Ancestry feat thresholds: L3, L7, L13, L18 — require a player pick from
+ * 3 options. Returned as { tier, options[] } so the UI can render a picker.
+ *
+ * Returns null-valued fields if the character has no theme/ancestry set,
+ * or if the threshold isn't crossed / an unlock already exists at that tier.
+ */
+async function computeProgressionDecisions(characterId, newTotalLevel) {
+  const themeTierThresholds = { 5: 5, 11: 11, 17: 17 };
+  const ancestryFeatThresholds = { 3: 3, 7: 7, 13: 13, 18: 18 };
+
+  const result = {
+    theme_tier_unlock: null,
+    ancestry_feat_tier: null
+  };
+
+  // Theme tier (auto-unlock): only fires at exactly L5, L11, or L17.
+  if (themeTierThresholds[newTotalLevel]) {
+    const tier = newTotalLevel;
+    const charTheme = await dbGet(
+      'SELECT theme_id FROM character_themes WHERE character_id = ?',
+      [characterId]
+    );
+    if (charTheme) {
+      // Already unlocked at this tier? Skip.
+      const existing = await dbGet(
+        'SELECT id FROM character_theme_unlocks WHERE character_id = ? AND tier = ?',
+        [characterId, tier]
+      );
+      if (!existing) {
+        const ability = await dbGet(
+          `SELECT ta.id, ta.ability_name, ta.ability_description, ta.mechanics, ta.flavor_text, t.name as theme_name
+           FROM theme_abilities ta JOIN themes t ON ta.theme_id = t.id
+           WHERE ta.theme_id = ? AND ta.tier = ? AND ta.path_variant IS NULL
+           LIMIT 1`,
+          [charTheme.theme_id, tier]
+        );
+        if (ability) {
+          result.theme_tier_unlock = {
+            tier,
+            theme_id: charTheme.theme_id,
+            theme_name: ability.theme_name,
+            tier_ability_id: ability.id,
+            ability_name: ability.ability_name,
+            ability_description: ability.ability_description,
+            mechanics: ability.mechanics,
+            flavor_text: ability.flavor_text
+          };
+        }
+      }
+    }
+  }
+
+  // Ancestry feat (player choice of 3): fires at L3, L7, L13, L18.
+  if (ancestryFeatThresholds[newTotalLevel]) {
+    const tier = newTotalLevel;
+    // Find the character's ancestry list from their existing L1 feat (set at creation)
+    const existingAnyFeat = await dbGet(
+      `SELECT af.list_id FROM character_ancestry_feats caf
+       JOIN ancestry_feats af ON caf.feat_id = af.id
+       WHERE caf.character_id = ? LIMIT 1`,
+      [characterId]
+    );
+    if (existingAnyFeat) {
+      const listId = existingAnyFeat.list_id;
+      const tierExisting = await dbGet(
+        'SELECT id FROM character_ancestry_feats WHERE character_id = ? AND tier = ?',
+        [characterId, tier]
+      );
+      if (!tierExisting) {
+        const options = await dbAll(
+          `SELECT id, choice_index, feat_name, description, mechanics, flavor_text
+           FROM ancestry_feats
+           WHERE list_id = ? AND tier = ?
+           ORDER BY choice_index`,
+          [listId, tier]
+        );
+        if (options.length > 0) {
+          result.ancestry_feat_tier = {
+            tier,
+            list_id: listId,
+            options
+          };
+        }
+      }
+    }
+  }
+
+  return result;
+}
 
 // Execute level up with choices
 router.post('/level-up/:id', async (req, res) => {
@@ -859,7 +961,9 @@ router.post('/level-up/:id', async (req, res) => {
       asiChoice, // { type: 'asi', increases: { str: 1, dex: 1 } } or { type: 'feat', feat: 'Alert' }
       newCantrips, // array of cantrip names to learn
       newSpells, // array of spell names to learn
-      swapSpell // { old: string, new: string } - swap one known spell (Bard, Sorcerer, Warlock, Ranger)
+      swapSpell, // { old: string, new: string } - swap one known spell (Bard, Sorcerer, Warlock, Ranger)
+      // Phase 5: progression choices at level-up
+      ancestryFeatId // L3/L7/L13/L18 — the feat.id chosen from the 3 options
     } = req.body;
 
     // Determine which class we're leveling up
@@ -890,6 +994,31 @@ router.post('/level-up/:id', async (req, res) => {
         targetClass,
         newClassLevel
       });
+    }
+
+    // Progression decisions at this level-up (Phase 5):
+    //   - Theme tier auto-unlock at L5/L11/L17 (no choice, just inserts a row)
+    //   - Ancestry feat pick at L3/L7/L13/L18 (requires ancestryFeatId from payload)
+    // If the character has no theme (shouldn't happen for post-v1.0.4 characters)
+    // or no prior ancestry feat, these decisions silently skip.
+    const progressionDecisions = await computeProgressionDecisions(req.params.id, newTotalLevel);
+
+    // Validate that ancestryFeatId was provided when a tier crossing demands one,
+    // AND that the provided feat ID is actually one of the offered options.
+    if (progressionDecisions.ancestry_feat_tier) {
+      if (!ancestryFeatId) {
+        return res.status(422).json({
+          error: `Ancestry feat selection required at level ${newTotalLevel}`,
+          ancestryFeatTier: progressionDecisions.ancestry_feat_tier
+        });
+      }
+      const validIds = new Set(progressionDecisions.ancestry_feat_tier.options.map(o => o.id));
+      if (!validIds.has(ancestryFeatId)) {
+        return res.status(400).json({
+          error: 'Provided ancestryFeatId is not a valid option for this tier',
+          validOptions: progressionDecisions.ancestry_feat_tier.options.map(o => o.id)
+        });
+      }
     }
 
     // Apply class level / subclass mutations now that validation has passed
@@ -1137,6 +1266,38 @@ router.post('/level-up/:id', async (req, res) => {
         ]
       });
 
+      // Phase 5: progression unlocks (theme tier + ancestry feat)
+      if (progressionDecisions.theme_tier_unlock) {
+        const unlock = progressionDecisions.theme_tier_unlock;
+        await tx.execute({
+          sql: `INSERT OR REPLACE INTO character_theme_unlocks
+                (character_id, theme_id, tier, tier_ability_id, unlocked_at_level, narrative_delivery)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [
+            req.params.id,
+            unlock.theme_id,
+            unlock.tier,
+            unlock.tier_ability_id,
+            newTotalLevel,
+            `Unlocked at level ${newTotalLevel} during level-up.`
+          ]
+        });
+      }
+      if (progressionDecisions.ancestry_feat_tier && ancestryFeatId) {
+        await tx.execute({
+          sql: `INSERT OR REPLACE INTO character_ancestry_feats
+                (character_id, feat_id, tier, selected_at_level, narrative_delivery)
+                VALUES (?, ?, ?, ?, ?)`,
+          args: [
+            req.params.id,
+            ancestryFeatId,
+            progressionDecisions.ancestry_feat_tier.tier,
+            newTotalLevel,
+            `Selected during level-up at level ${newTotalLevel}.`
+          ]
+        });
+      }
+
       await tx.commit();
     } catch (txErr) {
       await tx.rollback();
@@ -1168,7 +1329,11 @@ router.post('/level-up/:id', async (req, res) => {
         newFeatures,
         proficiencyBonus: PROFICIENCY_BONUS[newTotalLevel],
         abilityScoreChanges: asiChoice?.type === 'asi' ? asiChoice.increases : null,
-        newSubclass: subclass || null
+        newSubclass: subclass || null,
+        themeTierUnlocked: progressionDecisions.theme_tier_unlock || null,
+        ancestryFeatSelected: (progressionDecisions.ancestry_feat_tier && ancestryFeatId)
+          ? progressionDecisions.ancestry_feat_tier.options.find(o => o.id === ancestryFeatId) || null
+          : null
       }
     });
   } catch (error) {
