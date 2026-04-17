@@ -2155,6 +2155,25 @@ Rules for ADD_ITEM:
 
 After emitting ADD_ITEM, the system adds it to the merchant's real inventory. Narrate the merchant presenting the item naturally, including its price. The marker and narrative work together — emit the marker, then describe the merchant offering the item in-character.
 
+CUSTOM ORDERS / COMMISSIONS (M2):
+When the player asks a merchant to CRAFT or COMMISSION a custom item — one that isn't in stock and needs time to make — emit:
+
+[MERCHANT_COMMISSION: Merchant="Exact Name" Item="item description" Price_GP=X Deposit_GP=Y Lead_Time_Days=N Quality="standard/fine/superior/masterwork" Hook="distinguishing detail"]
+
+Rules for commissions:
+- Only use when the player is ORDERING something not on the shelf — masterwork weapons, custom armor, enchanted accessories, bespoke alchemy
+- Merchant type must match: a blacksmith crafts weapons/armor, an alchemist brews potions, a tailor sews clothes
+- Price must be reasonable for D&D 5e — masterwork weapons typically 300-500gp, custom plate 2000-5000gp, bespoke spell components 50-200gp
+- Deposit_GP is the up-front payment (typically 30-50% of total); the balance is paid on pickup
+- Lead_Time_Days should reflect the item's complexity — 3 days for fine leather goods, 7 for masterwork weapons, 14+ for full plate or enchanted items
+- The system deducts the deposit from the party purse, records the order, and sets a game-day deadline
+- On the deadline, the item auto-flips to "ready" and the narrative queue reminds the player
+- If the party doesn't have enough coin for the deposit, the marker is rejected and you'll get a [SYSTEM: MERCHANT_COMMISSION failed] note — narrate the merchant withdrawing or the player lacking funds
+- After emitting the marker, narrate the merchant agreeing, mentioning the delivery time, and making small talk about the work ahead
+
+Example: player wants a masterwork dagger etched with a crescent moon. The blacksmith quotes 400gp with 150gp deposit, 7 days. Emit:
+[MERCHANT_COMMISSION: Merchant="Goren Ironhand" Item="masterwork dagger" Price_GP=400 Deposit_GP=150 Lead_Time_Days=7 Quality="masterwork" Hook="crescent moon etched into the blade"]
+
 NPC NAMING - CRITICAL:
 AVOID THESE OVERUSED NAMES (use sparingly if at all):
 - First names: Marcus, Elena, Lyra, Aldric, Garrett, Marta, Alaric, Liora, Elara, Cedric, Viktor

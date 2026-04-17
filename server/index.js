@@ -31,6 +31,7 @@ import craftingRoutes from './routes/crafting.js';
 import mythicRoutes from './routes/mythic.js';
 import partyBaseRoutes from './routes/partyBase.js';
 import progressionRoutes from './routes/progression.js';
+import merchantRoutes from './routes/merchant.js';
 import authRoutes from './routes/auth.js';
 import authMiddleware from './middleware/auth.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
@@ -98,6 +99,7 @@ app.use('/api/crafting', craftingRoutes);
 app.use('/api/mythic', mythicRoutes);
 app.use('/api', partyBaseRoutes);
 app.use('/api/progression', progressionRoutes);
+app.use('/api/merchant', merchantRoutes);
 
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {

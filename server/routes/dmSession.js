@@ -13,9 +13,10 @@ import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter, addPro
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
+import { placeCommission } from '../services/merchantOrderService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
-  detectMerchantRefer, detectAddItem, detectLootDrop, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
+  detectMerchantRefer, detectAddItem, detectLootDrop, detectMerchantCommission, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
   detectWeatherChange, detectShelterFound, detectSwim, detectEat, detectDrink,
   detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
   detectMythicTrial, detectPietyChange, detectItemAwaken, detectMythicSurge,
@@ -1489,6 +1490,66 @@ router.post('/:sessionId/message', async (req, res) => {
         }
       } catch (e) {
         console.error('Error ensuring item at referred merchant:', e);
+      }
+    }
+
+    // M2: Handle MERCHANT_COMMISSION — player commissions a custom item from
+    // the current merchant. The marker emits item + price + deposit + lead
+    // time; we create a merchant_orders row, deduct the deposit from the
+    // party purse, and surface the order back to the AI so it can narrate
+    // the hand-off ("come back in 7 days").
+    const commissions = detectMerchantCommission(result.narrative);
+    if (commissions.length > 0) {
+      try {
+        const character = await dbGet(
+          'SELECT campaign_id, game_day FROM characters WHERE id = ?',
+          [session.character_id]
+        );
+        if (character?.campaign_id) {
+          for (const c of commissions) {
+            // Find or create the merchant
+            let dbMerchant = await getMerchantInventory(character.campaign_id, c.merchant);
+            if (!dbMerchant) {
+              dbMerchant = await createMerchantOnTheFly(
+                character.campaign_id, c.merchant,
+                'general', null, 1
+              );
+            }
+
+            const quotedCp = (c.price_gp || 0) * 100 + (c.price_sp || 0) * 10 + (c.price_cp || 0);
+            const depositCp = (c.deposit_gp || 0) * 100 + (c.deposit_sp || 0) * 10 + (c.deposit_cp || 0);
+
+            const result2 = await placeCommission({
+              merchantId: dbMerchant.id,
+              characterId: session.character_id,
+              itemName: c.item,
+              itemSpec: { quality: c.quality, description: c.description, hook: c.hook },
+              quotedPriceCp: quotedCp,
+              depositCp,
+              leadTimeDays: c.lead_time_days,
+              currentGameDay: character.game_day || 0,
+              narrativeHook: c.hook
+            });
+
+            if (!result2.ok) {
+              // Surface the reason back to the AI as a system note — it can
+              // narrate the merchant changing their mind or the player
+              // backing out ("you don't have enough coin for the deposit").
+              result.messages.push({
+                role: 'user',
+                content: `[SYSTEM: MERCHANT_COMMISSION failed — ${result2.error}. Narrate the merchant withdrawing the offer or the player lacking funds. Do NOT tell the player the order was placed.]`
+              });
+            } else {
+              result.messages.push({
+                role: 'user',
+                content: `[SYSTEM: Commission recorded. Order #${result2.order.id}: ${c.item} from ${c.merchant}, ready in ${c.lead_time_days} game days (day ${character.game_day + c.lead_time_days}). Deposit: ${Math.ceil(depositCp / 100)} gp. Balance due on pickup: ${Math.ceil((quotedCp - depositCp) / 100)} gp.]`
+              });
+            }
+            await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+          }
+        }
+      } catch (e) {
+        console.error('Error processing merchant commission:', e);
       }
     }
 

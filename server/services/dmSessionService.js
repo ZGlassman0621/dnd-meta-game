@@ -141,6 +141,44 @@ export function detectAddItem(narrative) {
 }
 
 /**
+ * Detect MERCHANT_COMMISSION markers in AI narrative (M2).
+ * [MERCHANT_COMMISSION: Merchant="Barnabus" Item="masterwork longsword with gold inlay"
+ *    Price_GP=150 Deposit_GP=75 Lead_Time_Days=7 Quality="masterwork" Hook="etched with crescent moon"]
+ *
+ * Emitted when the player successfully commissions a custom item from a
+ * merchant NPC. Parsed by the DM session handler, which creates a
+ * merchant_orders row via placeCommission().
+ */
+export function detectMerchantCommission(narrative) {
+  if (!narrative) return [];
+  const markers = [];
+  const regex = /\[MERCHANT_COMMISSION:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.merchant && data.item) {
+      markers.push({
+        merchant: data.merchant,
+        item: data.item,
+        price_gp: parseFloat(data.price_gp) || 0,
+        price_sp: parseFloat(data.price_sp) || 0,
+        price_cp: parseFloat(data.price_cp) || 0,
+        deposit_gp: parseFloat(data.deposit_gp) || 0,
+        deposit_sp: parseFloat(data.deposit_sp) || 0,
+        deposit_cp: parseFloat(data.deposit_cp) || 0,
+        lead_time_days: Math.max(1, parseInt(data.lead_time_days, 10) || 7),
+        quality: data.quality || 'standard',
+        hook: data.hook || null,
+        description: data.description || null
+      });
+    } else {
+      console.warn('[Marker] MERCHANT_COMMISSION detected but missing Merchant or Item:', match[0]);
+    }
+  }
+  return markers;
+}
+
+/**
  * Detect LOOT_DROP markers in AI narrative.
  * [LOOT_DROP: Item="item name" Source="where it came from"]
  * Can appear multiple times in one response.

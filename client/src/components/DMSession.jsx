@@ -10,6 +10,7 @@ import { SEASON_ICONS } from '../data/harptos';
 import Downtime from './Downtime';
 import MetaGameDashboard from './MetaGameDashboard';
 import InventoryPanel from './InventoryPanel';
+import CommissionsPanel from './CommissionsPanel';
 import CombatTracker from './CombatTracker';
 import SessionSetup from './SessionSetup';
 import SessionRewards from './SessionRewards';
@@ -118,6 +119,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [playerConditions, setPlayerConditions] = useState([]);
   const [companionConditions, setCompanionConditions] = useState({});
   const [showConditionPanel, setShowConditionPanel] = useState(false);
+  const [showCommissions, setShowCommissions] = useState(false);
 
   // Weather & Survival state
   const [weatherState, setWeatherState] = useState(null);
@@ -1741,6 +1743,21 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                 </span>
               )}
             </button>
+            <button
+              onClick={() => { setShowCommissions(!showCommissions); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); }}
+              style={{
+                background: showCommissions ? 'rgba(52, 211, 153, 0.4)' : 'rgba(52, 211, 153, 0.2)',
+                border: '1px solid rgba(52, 211, 153, 0.4)',
+                color: '#34d399',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+              title="View merchant commissions"
+            >
+              Commissions
+            </button>
             <button className="end-session-btn" onClick={() => setShowEndOptions(true)} disabled={isLoading}>
               End Adventure
             </button>
@@ -1847,6 +1864,15 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             onDiscard={discardItem}
             onClose={() => setShowInventory(false)}
             onRefreshCharacter={onCharacterUpdated}
+          />
+        )}
+
+        {showCommissions && (
+          <CommissionsPanel
+            character={character}
+            currentGameDay={character.game_day}
+            onClose={() => setShowCommissions(false)}
+            onCharacterUpdated={onCharacterUpdated}
           />
         )}
 

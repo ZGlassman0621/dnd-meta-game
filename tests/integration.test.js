@@ -34,6 +34,7 @@ import npcRelationshipRoutes from '../server/routes/npcRelationship.js';
 import livingWorldRoutes from '../server/routes/livingWorld.js';
 import dmModeRoutes from '../server/routes/dmMode.js';
 import progressionRoutes from '../server/routes/progression.js';
+import merchantRoutes from '../server/routes/merchant.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -111,6 +112,7 @@ async function startServer() {
   app.use('/api/living-world', livingWorldRoutes);
   app.use('/api/dm-mode', dmModeRoutes);
   app.use('/api/progression', progressionRoutes);
+  app.use('/api/merchant', merchantRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
@@ -2253,6 +2255,200 @@ async function testCompanionLevelUpInfoExposesClassLevels() {
   await cleanupTestCompanion(companionId, npcId);
 }
 
+// ===== GROUP 17: Merchant Commissions (M2) =====
+//
+// Custom-order lifecycle: commission → pending → ready (via tick) →
+// collected. Plus cancel/expire edge cases.
+
+async function createTestMerchantForCommission(goldGp = 1000) {
+  const result = await dbRun(
+    `INSERT INTO merchant_inventories (campaign_id, merchant_name, merchant_type, inventory, gold_gp, prosperity)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [testCampaignId, `TEST_OrderMerchant_${Date.now()}`, 'blacksmith', '[]', goldGp, 'comfortable']
+  );
+  return Number(result.lastInsertRowid);
+}
+
+async function cleanupTestOrderMerchant(merchantId) {
+  if (merchantId) {
+    await dbRun('DELETE FROM merchant_orders WHERE merchant_id = ?', [merchantId]);
+    await dbRun('DELETE FROM merchant_inventories WHERE id = ?', [merchantId]);
+  }
+}
+
+async function testPlaceCommissionHappyPath() {
+  console.log('\n  -- Place commission deducts deposit and records pending order --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500, gold_sp = 0, gold_cp = 0 WHERE id = ?', [testCharId]);
+
+  const r = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId,
+    itemName: 'Masterwork Longsword',
+    itemSpec: { quality: 'masterwork', description: 'etched with crescent moon' },
+    quotedPriceGp: 400,
+    depositGp: 150,
+    leadTimeDays: 7,
+    currentGameDay: 10,
+    narrativeHook: 'crescent moon etched into the blade'
+  });
+  assert(r.status === 201, `commission returns 201 (got ${r.status})`);
+  assert(r.body.order.status === 'pending', 'order status is pending');
+  assert(r.body.order.deadline_game_day === 17, `deadline = 10 + 7 = 17 (got ${r.body.order.deadline_game_day})`);
+  assert(r.body.order.balance_cp === 25000, `balance = 400-150 = 250gp = 25000cp (got ${r.body.order.balance_cp})`);
+
+  const char = await dbGet('SELECT gold_gp FROM characters WHERE id = ?', [testCharId]);
+  assert(char.gold_gp === 350, `Character gold reduced to 350gp (got ${char.gold_gp})`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testCommissionRejectsInsufficientDeposit() {
+  console.log('\n  -- Commission rejected when party can\'t afford deposit --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 5, gold_sp = 0, gold_cp = 0 WHERE id = ?', [testCharId]);
+
+  const r = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId,
+    itemName: 'Magic Wand',
+    quotedPriceGp: 500,
+    depositGp: 200,
+    leadTimeDays: 14
+  });
+  assert(r.status === 400, 'returns 400 on insufficient gold');
+
+  const char = await dbGet('SELECT gold_gp FROM characters WHERE id = ?', [testCharId]);
+  assert(char.gold_gp === 5, 'Character gold unchanged after rejected commission');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testCommissionRejectsBadInput() {
+  console.log('\n  -- Commission rejects bad inputs (deposit > quoted, zero lead time) --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500 WHERE id = ?', [testCharId]);
+
+  const r1 = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Thing', quotedPriceGp: 50, depositGp: 100, leadTimeDays: 3
+  });
+  assert(r1.status === 400, 'deposit > quoted price rejected');
+
+  const r2 = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Thing', quotedPriceGp: 50, depositGp: 10, leadTimeDays: 0
+  });
+  assert(r2.status === 400, 'zero lead time rejected');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testCommissionProcessDueOrders() {
+  console.log('\n  -- Living-world tick flips due orders from pending to ready --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500 WHERE id = ?', [testCharId]);
+
+  const c = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Test Blade', quotedPriceGp: 100, depositGp: 50,
+    leadTimeDays: 3, currentGameDay: 10
+  });
+  assert(c.status === 201, 'commission placed');
+  const orderId = c.body.order.id;
+
+  // Import the service directly and simulate a tick at game day 13
+  const { processDueOrders } = await import('../server/services/merchantOrderService.js');
+  const readied = await processDueOrders(13);
+  assert(Array.isArray(readied), 'processDueOrders returns an array');
+  assert(readied.find(o => o.id === orderId), 'our order was flipped to ready');
+
+  const after = await api('GET', `/api/merchant/orders/${orderId}`);
+  assert(after.body.order.status === 'ready', 'order status is now ready');
+  assert(after.body.order.ready_game_day === 13, 'ready_game_day stamped');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testCollectOrder() {
+  console.log('\n  -- Collect ready order: pays balance, adds item to party inventory --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500, inventory = ? WHERE id = ?', [JSON.stringify([]), testCharId]);
+
+  const c = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Silver Dagger', quotedPriceGp: 100, depositGp: 50,
+    leadTimeDays: 2, currentGameDay: 10
+  });
+  const orderId = c.body.order.id;
+
+  const { processDueOrders } = await import('../server/services/merchantOrderService.js');
+  await processDueOrders(12);
+
+  const r = await api('POST', `/api/merchant/orders/${orderId}/collect`, { characterId: testCharId });
+  assert(r.status === 200, `collect returns 200 (got ${r.status})`);
+  assert(r.body.order.status === 'collected', 'status = collected');
+
+  const char = await dbGet('SELECT gold_gp, inventory FROM characters WHERE id = ?', [testCharId]);
+  assert(char.gold_gp === 400, `Balance 50gp deducted (got ${char.gold_gp})`);
+  const inv = parseJSON(char.inventory);
+  assert(inv.find(i => i.name === 'Silver Dagger'), 'Silver Dagger added to inventory');
+
+  await cleanupTestOrderMerchant(merchantId);
+  await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify([]), testCharId]);
+}
+
+async function testCollectBlockedWhenNotReady() {
+  console.log('\n  -- Collect rejected while order is still pending --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500 WHERE id = ?', [testCharId]);
+
+  const c = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Pending Item', quotedPriceGp: 50, depositGp: 25, leadTimeDays: 10
+  });
+  const orderId = c.body.order.id;
+
+  const r = await api('POST', `/api/merchant/orders/${orderId}/collect`, { characterId: testCharId });
+  assert(r.status === 400, 'pending collect returns 400');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testCancelOrderForfeitsDeposit() {
+  console.log('\n  -- Cancel pending order: deposit is forfeit --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500 WHERE id = ?', [testCharId]);
+
+  const c = await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Cancelled Order', quotedPriceGp: 100, depositGp: 40, leadTimeDays: 5
+  });
+  const orderId = c.body.order.id;
+
+  const r = await api('POST', `/api/merchant/orders/${orderId}/cancel`, { characterId: testCharId });
+  assert(r.status === 200, 'cancel returns 200');
+  assert(r.body.order.status === 'cancelled', 'status = cancelled');
+  assert(r.body.deposit_forfeit_cp === 4000, 'deposit_forfeit_cp = 40gp = 4000cp');
+
+  const char = await dbGet('SELECT gold_gp FROM characters WHERE id = ?', [testCharId]);
+  assert(char.gold_gp === 460, `Gold unchanged after cancel (deposit already deducted at placement) — got ${char.gold_gp}`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testListOrdersForCharacter() {
+  console.log('\n  -- List orders for character returns all statuses --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500 WHERE id = ?', [testCharId]);
+
+  await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Order 1', quotedPriceGp: 50, depositGp: 20, leadTimeDays: 5
+  });
+  await api('POST', `/api/merchant/${merchantId}/commission`, {
+    characterId: testCharId, itemName: 'Order 2', quotedPriceGp: 80, depositGp: 30, leadTimeDays: 10
+  });
+
+  const r = await api('GET', `/api/merchant/orders/character/${testCharId}`);
+  assert(r.status === 200, 'list returns 200');
+  assert(Array.isArray(r.body.orders) && r.body.orders.length >= 2, 'returned at least 2 orders');
+  assert(r.body.orders.every(o => o.character_id === testCharId), 'all orders belong to our character');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2390,6 +2586,16 @@ async function runTests() {
     await testCompanionLevelUpAdvancesSecondary();
     await testCompanionMulticlassSpellSlots();
     await testCompanionLevelUpInfoExposesClassLevels();
+
+    console.log('\n=== Group 17: Merchant Commissions (M2) ===');
+    await testPlaceCommissionHappyPath();
+    await testCommissionRejectsInsufficientDeposit();
+    await testCommissionRejectsBadInput();
+    await testCommissionProcessDueOrders();
+    await testCollectOrder();
+    await testCollectBlockedWhenNotReady();
+    await testCancelOrderForfeitsDeposit();
+    await testListOrdersForCharacter();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

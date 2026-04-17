@@ -12,6 +12,7 @@ import { processDayChange as processSurvivalDayChange } from './survivalService.
 import { processConsequences } from './consequenceService.js';
 import * as partyBaseService from './partyBaseService.js';
 import * as notorietyService from './notorietyService.js';
+import { processDueOrders, expireStaleReadyOrders } from './merchantOrderService.js';
 import { getSeason } from '../config/harptos.js';
 
 /**
@@ -183,6 +184,57 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     } catch (e) {
       console.error('Error processing notoriety tick:', e);
       results.errors.push(`Notoriety: ${e.message}`);
+    }
+
+    // 3.9. Merchant commissions: flip due orders to 'ready', expire stale
+    //      ones. Queue a narrative queue entry for each so the DM can mention
+    //      the pickup next session.
+    try {
+      const charRowOrders = await dbGet(
+        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
+        [campaignId]
+      );
+      const maxDayRowOrders = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const ordersGameDay = maxDayRowOrders?.max_day || 0;
+      if (charRowOrders && ordersGameDay > 0) {
+        const readied = await processDueOrders(ordersGameDay);
+        for (const o of readied) {
+          if (o.character_id !== charRowOrders.id) continue;
+          try {
+            await narrativeQueueService.addToQueue({
+              campaign_id: campaignId,
+              character_id: o.character_id,
+              event_type: 'merchant_order_ready',
+              priority: 'normal',
+              title: `Commission ready: ${o.item_name}`,
+              description: `${o.merchant_name || 'A merchant'} has finished your commissioned ${o.item_name}. It's ready for pickup. Balance due: ${Math.ceil(o.balance_cp / 100)} gp.`,
+              context: { order_id: o.id, merchant_id: o.merchant_id, balance_cp: o.balance_cp }
+            });
+          } catch (e) { /* narrative queue is best-effort */ }
+        }
+        const expired = await expireStaleReadyOrders(ordersGameDay);
+        for (const o of expired) {
+          if (o.character_id !== charRowOrders.id) continue;
+          try {
+            await narrativeQueueService.addToQueue({
+              campaign_id: campaignId,
+              character_id: o.character_id,
+              event_type: 'merchant_order_expired',
+              priority: 'low',
+              title: `Commission abandoned: ${o.item_name}`,
+              description: `${o.merchant_name || 'A merchant'} has given up holding your ${o.item_name} — it's been sold to another buyer. Your deposit is forfeit.`,
+              context: { order_id: o.id, merchant_id: o.merchant_id }
+            });
+          } catch (e) { /* best-effort */ }
+        }
+        results.merchant_orders = { readied: readied.length, expired: expired.length };
+      }
+    } catch (e) {
+      console.error('Error processing merchant orders:', e);
+      results.errors.push(`Merchant orders: ${e.message}`);
     }
 
     // 4. Record the tick in campaign metadata
