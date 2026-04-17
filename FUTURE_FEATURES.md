@@ -11,28 +11,99 @@ Feature ideas for future implementation.
 
 Inspired by Starfinder's Themes. The concept is to take D&D's existing backgrounds and expand them into a progression system that grants new abilities at milestone levels (1, 5, 11, 17), giving characters a "concept layer" that evolves alongside class and subclass rather than being a static L1 choice.
 
-**Core design:**
+**Core design (locked-in decisions in 2026):**
 - Each standard D&D background becomes a Theme with 4 tiers of abilities
 - L1: Skill/tool proficiencies + a passive flavor trait (same as current backgrounds)
 - L5: A small active or always-on ability tied to the theme's identity
-- L11: Expertise Die (d6 → d8 → d10 scaling by tier) on the theme's key skills — unlocked here so it feels earned
-- L17: A capstone that makes the concept feel legendary
+- L11: Expertise Die (**d4** at L11, scaling to **d6** by L17) on the theme's key skills — unlocked here so it feels earned
+- L17: A capstone that makes the concept feel legendary, plus the Expertise Die scaling step
 
-**Expertise Die** is the signature mechanic of this system — an extra die added to certain skill checks, tied to theme identity rather than class. A Knowledge Cleric + Acolyte Theme gets it on Religion/Insight; a Criminal rogue gets it on Deception/Stealth; a Sage wizard gets it on two Intelligence skills. Any class can access any theme's Expertise Die by choosing that theme, which creates interesting cross-class flavor (a Fighter + Sage Theme is a military historian).
+**Progression model — automatic, narratively delivered.** Themes unlock automatically at the milestone levels — no choice menus. The unlock is delivered through narrative, picked by the AI DM based on current scene context:
+- **Story-driven** (preferred when context fits): An in-fiction NPC initiates the unlock — a mentor recognizes the character is ready, a temple elder bestows new training, a guild master entrusts a deeper secret.
+- **Passive narrative** (when no story-appropriate moment exists): Delivered post-long-rest, Oblivion-style — a short reflective beat where the character realizes something has shifted, followed by a clean "You've gained: [ability]" card.
+This keeps progression as part of the story rather than a menu, while still being predictable and clearly communicated.
+
+**Expertise Die** is the signature mechanic — an extra die added to certain skill checks, tied to theme identity rather than class. A Knowledge Cleric + Acolyte Theme gets it on Religion/Insight; a Criminal rogue gets it on Deception/Stealth; a Sage wizard gets it on two Intelligence skills. Any class can access any theme's Expertise Die by choosing that theme, which creates interesting cross-class flavor (a Fighter + Sage Theme is a military historian).
+
+**Why d4 → d6 instead of d6 → d10:** Themes grant an *edge*, not dominance. A small die avoids stacking absurdly with Bardic Inspiration, Bless, Guidance, and the Help action — and leaves room for Mythic-tier abilities to be the actual "god-like" mechanics. A consequence of the smaller die: it can apply more often without breaking the math.
 
 **Ancestry Feats (companion concept, design in progress):**
 Inspired by Pathfinder 2e, where racial/ancestry traits aren't just a L1 dump but a progression — feats unlocked at levels 1, 5, 9, 13, 17 from a race-specific list. A dwarf might unlock tremorsense at L9, magic stonecunning at L13, and stone giant resilience at L17. An elf might unlock fey step, trance mastery, or elven weapon training at different milestones.
 
 The Themes System and Ancestry Feats should be designed together since they occupy the same conceptual space — both are "progression layers that aren't class or subclass." The goal is that a character's identity emerges from the intersection of all three: class, theme, and ancestry, each evolving in parallel.
 
-**Open design questions:**
-- Does Theme replace Background entirely, or sit alongside it?
-- Should the Expertise Die scale with proficiency bonus or with tier (5/11/17)?
-- How do the 2024 PHB Origin Feats interact — does Theme replace the Origin Feat, or grant an additional one?
-- Custom Themes: should the character creator allow players to define a custom Theme with DM approval?
-- How does this interact with the existing Mythic Paths system? (A Hierophant + Acolyte Theme combo should feel very different from a Hierophant + Soldier Theme)
-- For Ancestry Feats: do all races get the same number of feats, or do more complex races (half-elf, tiefling) get more options at the cost of weaker individual feats?
-- Should Ancestry Feats and Theme abilities ever interact/combo? (e.g. a dwarf with the Soldier theme at L11 might unlock something neither grants alone)
+**Theme Interactions (party-level synergies — confirmed in scope):**
+D&D 5e doesn't have party feats the way Pathfinder 1e did with Teamwork Feats (Outflank, Coordinated Maneuvers, etc.) — the closest things in 5e are the Help action, Bardic Inspiration, and a few class features like Battle Master's Commander's Strike. Themes is a chance to introduce genuine party-level mechanics where character identities reinforce each other, rather than each character existing as a self-contained build.
+
+**Synergies apply across the full party — including all-AI parties.** Even though companions and DM Mode characters are AI-driven, each has their own personality, voice, and decision-making. AI characters *choose* whether to invoke a synergy based on their personality and current goals — a loyal cleric companion might reliably set up a Soldier-Cleric coordinated attack, while a reckless barbarian companion might never play into flanking synergies because they prefer to charge alone. This makes companion personality mechanically meaningful: the player learns over time which companions reliably play into synergies, and absences hurt more because losing a Synergy partner removes options the party had become accustomed to.
+
+Four directions worth exploring:
+
+1. **Party Synergies** — Specific Theme pairings unlock collaborative bonuses when both characters participate in an activity together. Examples:
+   - Sage + Acolyte researching a relic: combined check uses higher modifier + d4 bonus from shared expertise
+   - Soldier + Criminal planning a heist or ambush: both get advantage on the next attack roll after a successful prep scene
+   - Folk Hero + Outlander rallying a community: combined Persuasion check counts as one degree of success higher
+   - Noble + Charlatan working a social gathering: can swap Insight and Deception modifiers for one round
+   These could be unlocked at L5 (when each character's first Theme ability comes online) and grow more potent at L11 and L17.
+
+2. **Theme Resonance** — Themes have implicit compatibility tiers that the AI DM can surface during play:
+   - **Kindred** (Sage + Hermit, Soldier + Soldier): natural understanding, conversations flow easily, NPCs perceive them as a unit
+   - **Complementary** (Soldier + Acolyte, Noble + Sage): different strengths that fit together
+   - **Friction** (Noble + Criminal, Acolyte + Charlatan): built-in dramatic tension that the DM can lean into for roleplay scenes
+   This isn't mechanical — it's a flag the AI uses to generate character moments, party tensions, and downtime conversations.
+
+3. **Cross-Theme Training** — At higher tiers, characters who travel together long enough can pick up a single L1 ability from a party member's Theme via extended downtime. The Fighter who spends a year alongside a Sage gains the Sage's L1 trait. This rewards long campaigns and deepening interconnection — and pairs naturally with the Downtime v2 system already in place.
+
+4. **Group Activations** — At L11+, a party member can spend their reaction (or a downtime hour) to **share** their Theme's Expertise Die with an adjacent ally for one check. The Sage lends their d6 to the Fighter making a critical Religion check; the Soldier lends their d6 to the Bard's Intimidation roll. This creates active party-level decisions instead of passive "everyone has their own die" play.
+
+**Locked-in decisions (2026):**
+- **Theme replaces Background entirely.** "Background" becomes "Theme" everywhere in the UI. Existing characters auto-convert at their current tier. The L1 Theme tier preserves the existing Background's skills, equipment, and feature.
+- **21 distinct Themes, one per Background.** Acolyte, Charlatan, City Watch, Clan Crafter, Criminal, Entertainer, Far Traveler, Folk Hero, Guild Artisan, Haunted One, Hermit, Investigator, Knight of the Order, Mercenary Veteran, Noble, Outlander, Sage, Sailor, Soldier, Urban Bounty Hunter, Urchin. Each gets a unique L5/L11/L17 progression — no clustering. Similar Themes (Soldier vs Mercenary Veteran vs Knight of the Order) must be designed with meaningful mechanical differences so the choice matters.
+- **2014 rules baseline.** The game uses 2014 PHB rules, not 2024. There is no Origin Feat to replace — Theme L1 is the existing Background structure, and Theme adds the new L5/L11/L17 progression on top.
+- **Mythic interaction is amplifying with dissonance arcs.** Resonant Theme+Path combos (Acolyte+Hierophant, Soldier+Angel) gain bonuses. Dissonant combos (Criminal+Angel) unlock a special "Redemption Arc" or "Fall From Grace" narrative path with unique abilities for playing against type. AI DM leans into dissonance for roleplay opportunities.
+- **Mentor's Imprint replaces Cross-Theme Training.** Each character can, **once per career**, declare one specific NPC or companion as their most influential bond. After significant downtime with that person, they gain **one L1-tier trait** from that mentor's Theme. Only once. Only with one chosen mentor.
+- **Custom Themes ship as a separate post-launch module.** Standard 21 at launch. Custom Themes (Opus-generated four-tier progressions from player concept) come later once the system is proven.
+- **Ancestry Feats ship at launch alongside Themes.** Full identity-progression overhaul in one release.
+- **Companions auto-pick Ancestry Feats and Theme unlocks based on personality.** No level-up menus for companions. The AI uses voice, mannerism, motivation, ideals, bonds, flaws, and alignment to pick feats that match the character. Selection delivered as a small narrative beat ("Tormund grins. 'Time I learned the old stone-runner trick.'") rather than a menu prompt.
+
+**More locked-in decisions:**
+- **Subclass × Theme combos use tagged synergies.** Specific resonant combinations (Battle Master + Soldier, Lore Bard + Sage, Arcane Trickster + Charlatan) get tagged bonuses or shared abilities. Accept some imbalance in service of flavor — major characters should be roughly balanced, but the player character can occasionally feel like a god among mortals.
+- **Multiclassing uses total character level.** A Fighter 5 / Wizard 6 unlocks Theme L11 abilities. Consistent with how D&D handles proficiency bonus.
+- **All NPCs have Themes for personality flavor.** Most NPCs don't need full mechanical leveling — the Theme is used by the AI DM to give them functional, realistic personalities and consistent voices. Only NPCs the player parties with as companions/hirelings get the full mechanical progression.
+- **L1 feature treatment is tabled until Prelude integration.** How the existing Background's L1 feature (Shelter of the Faithful, Position of Privilege, etc.) maps to the four-tier progression depends on whether the prelude is where you *earn* your L1 Theme tier through play. Decision deferred to Prelude+Themes integration design.
+
+**Ancestry Feats progression — locked in:**
+- **5 tiers, staggered at L1 / L3 / L7 / L13 / L18.** Avoids overlap with Theme tiers (1/5/11/17), ASIs (4/8/12/16/19), and Mythic tiers (5/10/15/20). Spreads "you got something new" moments across the campaign.
+- **10 races in the game** (Genasi, Firbolg, Tabaxi, Goliath removed from character creator): Aasimar, Dragonborn, Dwarf, Elf, Half-Elf, Half-Orc, Halfling, Human, Tiefling, Warforged.
+- **Each major race gets its own Ancestry Feat list**, plus subrace variations for **Drow** (mechanically distinct from other Elves) and **Aasimar** (3 paths with different destinies). All other subraces share their parent race's list. **Half-races get their own dedicated lists** (not hybrid picks from parent races) — Half-Elf identity is its own thing, not "elf with human bonuses." Total: ~12 effective lists × 5 tiers = ~60 ancestry feats.
+
+**Party Synergies — three-tier model (see PARTY_SYNERGIES.md for full design):**
+- **Tier 1 (Gear & Positioning):** Universal synergies for any two characters based on equipment and tactical position. 10 synergies (Shield Wall, Volley, Spell Convergence, Back to Back, etc.). No Theme required.
+- **Tier 2 (Theme):** 34 hardcoded signature synergies for compelling Theme pairs, plus generative tag-based synergies handled by the AI DM.
+- **Tier 3 (Team Tactics):** 20 Pathfinder-style shared techniques that both characters must learn together through downtime training (5 days) or field observation. Pair-specific: learning Coordinated Strike with Tormund doesn't mean you can execute it with Sera. Capacity = proficiency bonus.
+
+**Downtime overhaul required:**
+- Current Downtime v2 system needs extension to support Team Tactics training as an activity (5 days per tactic, both characters must participate).
+- Broader downtime overhaul is due — this should be bundled with Themes/Ancestry rollout.
+
+**Synergy invocation — triggered, not activated:**
+- Synergies fire automatically when narrative conditions are met (both characters attack the same target, both succeed on the same skill check, both engage in the same conversation). No action economy cost, no fiddly invocation. The *right circumstances* activate it, which means companion personality matters — companions choose whether to engage in the qualifying action based on who they are.
+
+**Mentor's Imprint — session count + AI gate:**
+- Player declares a mentor at any time. After **5+ sessions** where the mentor is present, the AI evaluates behind-the-scenes affinity/relationship data. When the threshold is met, the AI delivers the imprint as a narrative beat. Session count denotes real time passage; the AI gate ensures the relationship has actually deepened, not just co-existed.
+
+**No retroactive unlocks needed** — no existing high-level characters in the system.
+
+**Prelude mechanical payoff — locked in:**
+- **Characters who complete a prelude unlock their Expertise Die (d4) at L5 instead of L11.** They've already lived in this background for 3-5 hours of gameplay — they've earned that edge earlier. At L11, it scales to d6 like everyone else's d4, so the gap closes naturally. Non-prelude characters get their standard Theme L1 tier at creation with no penalty — the d4 just arrives at L11 as normal.
+- **Prelude + Theme Synergy variants: cut.** Synergies are based on what Themes characters have, not narrative details from session history. Preludes are narrative; synergies are mechanical. They don't need to talk to each other.
+
+**Background L1 feature — locked in:**
+- **Keep as-is for launch.** Existing Background features (Shelter of the Faithful, Criminal Contact, Position of Privilege, etc.) become Theme L1 features unchanged. They already work. Enhancement pass can come after the whole system is running.
+
+**Progression map — confirmed clean.** No dead levels, no overloaded levels. L1 is dense (Theme L1 + Ancestry L1 + class) but that's character creation, not a level-up. All open design questions are resolved.
+
+**All architectural decisions are finalized. Next phase: content design** — the actual abilities for 21 Theme progressions, 12 Ancestry Feat lists, ~30-40 hardcoded Party Synergies, Subclass×Theme synergy tags, and Mythic amplification combos.
 
 ---
 
