@@ -188,6 +188,13 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - API routes follow REST patterns: `/api/<resource>/...`
 - JSON stored in TEXT columns for flexible data (inventory, ability_scores, etc.)
 
+## Versioning & CHANGELOG
+- Every meaningful change gets logged in `CHANGELOG.md` with an incremented version
+- `package.json` and `client/package.json` must be bumped to match the current version in CHANGELOG
+- Version scheme: semver patch increments for iterative work (1.0.1, 1.0.2, 1.0.3...)
+- CHANGELOG uses a 4-part display format for readability (1.0.0.1, 1.0.0.2) but package.json uses strict semver (1.0.1, 1.0.2)
+- When finishing an implementation phase or shipping a feature: update CHANGELOG AND bump both package.json files in the same commit
+
 ## Don't
 - Don't add TypeScript
 - Don't add a CSS framework
@@ -195,3 +202,4 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Don't change AI model aliases or add date suffixes
 - Don't modify the primacy/recency prompt structure without understanding the pattern
 - Don't create new documentation files unless asked
+- Don't forget to update CHANGELOG and package.json versions together
