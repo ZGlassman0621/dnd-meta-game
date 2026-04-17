@@ -131,6 +131,12 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [buybackItems, setBuybackItems] = useState([]);
   const [merchantLoading, setMerchantLoading] = useState(false);
   const [shopCart, setShopCart] = useState({ buying: [], selling: [] });
+  // M3: bargaining state — reset when the shop closes
+  const [haggleRoller, setHaggleRoller] = useState('character'); // 'character' | 'companion:<id>'
+  const [haggleSkill, setHaggleSkill] = useState('Persuasion');
+  const [haggleResult, setHaggleResult] = useState(null);
+  const [hagglingInFlight, setHagglingInFlight] = useState(false);
+  const [haggleAttempts, setHaggleAttempts] = useState(0);
   const [shopOpen, setShopOpen] = useState(false);
   const [lastMerchantContext, setLastMerchantContext] = useState(null);
   const [transactionProcessing, setTransactionProcessing] = useState(false);
@@ -1387,6 +1393,51 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     });
   };
 
+  // M3: haggle against the current merchant. Uses the shopCart's most
+  // expensive item's rarity (if known) as the rarity input, since that's
+  // what drives the DC; realistic approximation when the cart has mixed
+  // rarities.
+  const haggleWithMerchant = async () => {
+    if (!merchantDbId || hagglingInFlight) return;
+    setHagglingInFlight(true);
+    try {
+      const rollerType = haggleRoller === 'character' ? 'character' : 'companion';
+      const companionId = haggleRoller.startsWith('companion:') ? Number(haggleRoller.split(':')[1]) : null;
+
+      // Derive rarity from the most expensive item in the cart (if any)
+      let itemRarity = 'common';
+      if (shopCart.buying.length > 0) {
+        const priciest = shopCart.buying.reduce((a, b) => {
+          const ap = (a.price_gp || 0) * 100 + (a.price_sp || 0) * 10 + (a.price_cp || 0);
+          const bp = (b.price_gp || 0) * 100 + (b.price_sp || 0) * 10 + (b.price_cp || 0);
+          return bp > ap ? b : a;
+        });
+        itemRarity = priciest.rarity || 'common';
+      }
+
+      const r = await fetch(`/api/merchant/${merchantDbId}/haggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterId: character.id,
+          rollerType,
+          companionId,
+          skill: haggleSkill,
+          itemRarity,
+          attemptNumber: haggleAttempts + 1
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Haggle failed');
+      setHaggleResult(data);
+      setHaggleAttempts(n => n + 1);
+    } catch (e) {
+      console.warn('Haggle error:', e);
+    } finally {
+      setHagglingInFlight(false);
+    }
+  };
+
   const confirmTransaction = async () => {
     if (!canAfford || transactionProcessing) return;
     setTransactionProcessing(true);
@@ -1398,7 +1449,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           merchantName: lastMerchantContext?.merchantName || 'Merchant',
           merchantId: merchantDbId,
           bought: shopCart.buying.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.price_gp, price_sp: i.price_sp, price_cp: i.price_cp })),
-          sold: shopCart.selling.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.sell_price_gp, price_sp: i.sell_price_sp, price_cp: i.sell_price_cp }))
+          sold: shopCart.selling.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.sell_price_gp, price_sp: i.sell_price_sp, price_cp: i.sell_price_cp })),
+          // M3: pass the discount% if the party successfully haggled this visit.
+          // Server clamps [0, 20] regardless.
+          haggleDiscountPercent: haggleResult?.success ? haggleResult.discountPercent : 0
         })
       });
       const data = await response.json();
@@ -1428,6 +1482,9 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setMessages(prev => [...prev, { type: 'narrative', content: `*${contextMsg}*` }]);
       setShopOpen(false);
       setShopCart({ buying: [], selling: [] });
+      // Reset haggle state — the discount was single-use for this transaction
+      setHaggleResult(null);
+      setHaggleAttempts(0);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -2726,9 +2783,95 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                           Selling: {shopCart.selling.map(i => `${i.quantity}x ${i.name}`).join(', ')} = +{formatCopper(calculateSellTotal())}
                         </div>
                       )}
+                      {haggleResult?.success && haggleResult.discountPercent > 0 && (
+                        <div style={{ color: '#34d399', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                          Haggle discount ({haggleResult.skill}, {haggleResult.roller?.name}): -{haggleResult.discountPercent}%
+                        </div>
+                      )}
                       <div style={{ color: netCostCp > 0 ? '#f59e0b' : '#10b981', fontWeight: 'bold', marginTop: '0.5rem' }}>
-                        Net: {netCostCp > 0 ? `-${formatCopper(netCostCp)}` : netCostCp < 0 ? `+${formatCopper(-netCostCp)}` : '0 gp'}
+                        Net: {netCostCp > 0 ? `-${formatCopper(Math.round(netCostCp * (1 - (haggleResult?.success ? haggleResult.discountPercent : 0) / 100)))}` : netCostCp < 0 ? `+${formatCopper(-netCostCp)}` : '0 gp'}
                       </div>
+                    </div>
+                  )}
+
+                  {/* M3: Inline haggle — pick roller, pick skill, roll */}
+                  {shopCart.buying.length > 0 && (
+                    <div style={{
+                      background: 'rgba(52,211,153,0.08)',
+                      border: '1px solid rgba(52,211,153,0.3)',
+                      borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <h4 style={{ margin: 0, color: '#34d399', fontSize: '0.9rem' }}>Haggle</h4>
+                        {haggleAttempts > 0 && (
+                          <span style={{ color: '#888', fontSize: '0.72rem' }}>
+                            Attempt {haggleAttempts + 1} — repeat failures hurt disposition
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                        <select
+                          value={haggleRoller}
+                          onChange={(e) => setHaggleRoller(e.target.value)}
+                          style={{
+                            flex: 1, padding: '0.3rem', background: '#2a2a2a',
+                            border: '1px solid #444', borderRadius: '4px', color: '#fff', fontSize: '0.8rem'
+                          }}
+                        >
+                          <option value="character">{character?.name || 'You'} (character)</option>
+                          {(companions || []).map(c => (
+                            <option key={c.id} value={`companion:${c.id}`}>
+                              {c.name || c.nickname || 'Companion'} (companion)
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={haggleSkill}
+                          onChange={(e) => setHaggleSkill(e.target.value)}
+                          style={{
+                            padding: '0.3rem', background: '#2a2a2a',
+                            border: '1px solid #444', borderRadius: '4px', color: '#fff', fontSize: '0.8rem'
+                          }}
+                        >
+                          <option value="Persuasion">Persuasion</option>
+                          <option value="Deception">Deception</option>
+                          <option value="Intimidation">Intimidation</option>
+                        </select>
+                        <button
+                          onClick={haggleWithMerchant}
+                          disabled={hagglingInFlight}
+                          style={{
+                            padding: '0.3rem 0.75rem', background: '#34d399',
+                            color: '#0a0a0a', border: 'none', borderRadius: '4px',
+                            fontSize: '0.8rem', fontWeight: 600,
+                            cursor: hagglingInFlight ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {hagglingInFlight ? 'Rolling…' : 'Roll'}
+                        </button>
+                      </div>
+
+                      {haggleResult && (
+                        <div style={{
+                          fontSize: '0.78rem',
+                          color: haggleResult.success ? '#34d399' : '#ef4444',
+                          padding: '0.35rem 0.5rem',
+                          background: haggleResult.success ? 'rgba(52,211,153,0.1)' : 'rgba(239,68,68,0.1)',
+                          border: `1px solid ${haggleResult.success ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                          borderRadius: '4px'
+                        }}>
+                          <strong>{haggleResult.success ? 'Success!' : 'Failed.'}</strong>{' '}
+                          Rolled {haggleResult.roll} + {haggleResult.modifier} = {haggleResult.total} vs DC {haggleResult.dc}
+                          {haggleResult.critical && ' (natural 20!)'}
+                          {haggleResult.criticalFail && ' (natural 1!)'}
+                          {haggleResult.success
+                            ? ` → ${haggleResult.discountPercent}% off`
+                            : haggleResult.dispositionChange < 0
+                              ? ` → disposition ${haggleResult.dispositionChange}`
+                              : ' → no change'}
+                        </div>
+                      )}
                     </div>
                   )}
 

@@ -2449,6 +2449,186 @@ async function testListOrdersForCharacter() {
   await cleanupTestOrderMerchant(merchantId);
 }
 
+// ===== GROUP 18: Merchant Bargaining / Haggle (M3) =====
+
+async function testHaggleHappyPath() {
+  console.log('\n  -- Character haggles successfully, gets a discount --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun('UPDATE characters SET gold_gp = 500 WHERE id = ?', [testCharId]);
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    rollerType: 'character',
+    skill: 'Persuasion',
+    itemRarity: 'common',
+    rollValue: 20 // natural 20 — max tier
+  });
+  assert(r.status === 200, `haggle returns 200 (got ${r.status})`);
+  assert(r.body.success === true, 'nat 20 always succeeds');
+  assert(r.body.discountPercent === 20, `nat 20 gives 20% discount (got ${r.body.discountPercent})`);
+  assert(r.body.critical === true, 'critical flag set');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleFailure() {
+  console.log('\n  -- Haggle failure returns no discount --');
+  const merchantId = await createTestMerchantForCommission();
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    rollerType: 'character',
+    skill: 'Persuasion',
+    itemRarity: 'legendary', // DC 23 at neutral comfortable
+    rollValue: 3 // low roll, guaranteed fail
+  });
+  assert(r.body.success === false, 'low roll vs legendary DC fails');
+  assert(r.body.discountPercent === 0, 'no discount on failure');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleCriticalFail() {
+  console.log('\n  -- Natural 1 is auto-fail with disposition hit --');
+  const merchantId = await createTestMerchantForCommission();
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    skill: 'Persuasion',
+    itemRarity: 'common',
+    rollValue: 1,
+    attemptNumber: 1
+  });
+  assert(r.body.success === false, 'nat 1 always fails');
+  assert(r.body.criticalFail === true, 'criticalFail flag set');
+  assert(r.body.dispositionChange <= -1, `disposition hit on crit fail (got ${r.body.dispositionChange})`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleIntimidationPenalty() {
+  console.log('\n  -- Intimidation failure carries a disposition hit even on first attempt --');
+  const merchantId = await createTestMerchantForCommission();
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    skill: 'Intimidation',
+    itemRarity: 'rare', // DC 18 base
+    rollValue: 5,
+    attemptNumber: 1
+  });
+  assert(r.body.success === false, 'Intimidation fails with low roll');
+  assert(r.body.dispositionChange < 0, `Intimidation failure hits disposition (got ${r.body.dispositionChange})`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleRepeatAttemptPenalty() {
+  console.log('\n  -- Repeat haggle attempts accrue a disposition penalty on failure --');
+  const merchantId = await createTestMerchantForCommission();
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    skill: 'Persuasion',
+    itemRarity: 'rare',
+    rollValue: 5,
+    attemptNumber: 3 // third attempt, failure
+  });
+  assert(r.body.success === false, 'Repeat attempt fails');
+  assert(r.body.dispositionChange < 0, 'Repeat persuasion failure accrues disposition hit');
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleRejectsInvalidSkill() {
+  console.log('\n  -- Haggle rejects unknown skills --');
+  const merchantId = await createTestMerchantForCommission();
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    skill: 'Athletics',
+    rollValue: 15
+  });
+  assert(r.status === 400, `unknown skill rejected (got ${r.status})`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleCompanionRoller() {
+  console.log('\n  -- Companion can roll to haggle --');
+  const merchantId = await createTestMerchantForCommission();
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Bard', 3);
+
+  const r = await api('POST', `/api/merchant/${merchantId}/haggle`, {
+    characterId: testCharId,
+    rollerType: 'companion',
+    companionId,
+    skill: 'Persuasion',
+    itemRarity: 'common',
+    rollValue: 18
+  });
+  assert(r.status === 200, `companion haggle returns 200 (got ${r.status})`);
+  assert(r.body.roller?.type === 'companion', 'roller reported as companion');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleDiscountAppliesToTransaction() {
+  console.log('\n  -- haggleDiscountPercent is applied server-side in transaction --');
+  // Stage: fully-stocked test merchant
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun(
+    `UPDATE merchant_inventories SET inventory = ? WHERE id = ?`,
+    [JSON.stringify([{ name: 'Sword', quantity: 1, price_gp: 100, price_sp: 0, price_cp: 0, category: 'weapon', rarity: 'common' }]), merchantId]
+  );
+  await dbRun('UPDATE characters SET gold_gp = 200, gold_sp = 0, gold_cp = 0, inventory = ? WHERE id = ?',
+    [JSON.stringify([]), testCharId]);
+
+  // Need an active session to call merchant-transaction; use the already-seeded testSessionId.
+  const r = await api('POST', `/api/dm-session/${testSessionId}/merchant-transaction`, {
+    merchantName: `TEST_OrderMerchant_${merchantId}`, // name doesn't need to match — merchantId is the key
+    merchantId,
+    bought: [{ name: 'Sword', quantity: 1, price_gp: 100, price_sp: 0, price_cp: 0 }],
+    sold: [],
+    haggleDiscountPercent: 20
+  });
+  assert(r.status === 200, `transaction returns 200 (got ${r.status})`);
+
+  const char = await dbGet('SELECT gold_gp FROM characters WHERE id = ?', [testCharId]);
+  // With 20% discount on 100gp: 80gp spent, so gold should be 120
+  assert(char.gold_gp === 120, `20% discount applied — 200-80=120gp (got ${char.gold_gp})`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
+async function testHaggleDiscountClampedServerSide() {
+  console.log('\n  -- Server clamps haggleDiscountPercent to [0, 20] --');
+  const merchantId = await createTestMerchantForCommission();
+  await dbRun(
+    `UPDATE merchant_inventories SET inventory = ? WHERE id = ?`,
+    [JSON.stringify([{ name: 'Bow', quantity: 1, price_gp: 50, price_sp: 0, price_cp: 0, category: 'weapon', rarity: 'common' }]), merchantId]
+  );
+  await dbRun('UPDATE characters SET gold_gp = 100, gold_sp = 0, gold_cp = 0, inventory = ? WHERE id = ?',
+    [JSON.stringify([]), testCharId]);
+
+  // Claim an outrageous 90% discount — server should clamp to 20%
+  const r = await api('POST', `/api/dm-session/${testSessionId}/merchant-transaction`, {
+    merchantName: `TEST_OrderMerchant_${merchantId}`,
+    merchantId,
+    bought: [{ name: 'Bow', quantity: 1, price_gp: 50, price_sp: 0, price_cp: 0 }],
+    sold: [],
+    haggleDiscountPercent: 90
+  });
+  assert(r.status === 200, 'transaction accepted');
+
+  const char = await dbGet('SELECT gold_gp FROM characters WHERE id = ?', [testCharId]);
+  // Clamped to 20%: 50*0.8 = 40gp spent, gold = 60
+  assert(char.gold_gp === 60, `clamp to 20% — 100-40=60gp (got ${char.gold_gp})`);
+
+  await cleanupTestOrderMerchant(merchantId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2596,6 +2776,17 @@ async function runTests() {
     await testCollectBlockedWhenNotReady();
     await testCancelOrderForfeitsDeposit();
     await testListOrdersForCharacter();
+
+    console.log('\n=== Group 18: Merchant Bargaining / Haggle (M3) ===');
+    await testHaggleHappyPath();
+    await testHaggleFailure();
+    await testHaggleCriticalFail();
+    await testHaggleIntimidationPenalty();
+    await testHaggleRepeatAttemptPenalty();
+    await testHaggleRejectsInvalidSkill();
+    await testHaggleCompanionRoller();
+    await testHaggleDiscountAppliesToTransaction();
+    await testHaggleDiscountClampedServerSide();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

@@ -2202,7 +2202,7 @@ router.post('/:sessionId/restock-merchant', async (req, res) => {
 router.post('/:sessionId/merchant-transaction', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { merchantName, merchantId, bought, sold } = req.body;
+    const { merchantName, merchantId, bought, sold, haggleDiscountPercent } = req.body;
 
     const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -2236,6 +2236,14 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
     const bulkDiscount = getBulkDiscount(totalBuyQty);
     if (bulkDiscount > 0) {
       totalSpentCp = Math.round(totalSpentCp * (1 - bulkDiscount));
+    }
+
+    // M3: Apply haggle discount. Clamped to [0, 20] server-side so a
+    // malformed or tampered client request can't claim an unreasonable cut.
+    // Solo game → trusted client, but the clamp is still cheap insurance.
+    const haggleDiscount = Math.max(0, Math.min(20, Number(haggleDiscountPercent) || 0)) / 100;
+    if (haggleDiscount > 0 && totalSpentCp > 0) {
+      totalSpentCp = Math.round(totalSpentCp * (1 - haggleDiscount));
     }
 
     // Process sold items
