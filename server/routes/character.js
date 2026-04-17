@@ -941,16 +941,22 @@ router.post('/level-up/:id', async (req, res) => {
           return res.status(400).json({ error: 'ASI increases cannot exceed 2 total points' });
         }
 
-        // Recalculate CON modifier if CON was increased (affects HP)
+        // When CON increases via ASI, apply its HP impact across all levels:
+        //   • THIS level's hpGain was computed above with the OLD conMod, so it
+        //     needs +modDiff to reflect the new mod at this level.
+        //   • All PRIOR levels (newTotalLevel - 1 of them) each need +modDiff
+        //     retroactively — per 5e PHB rules, CON increases boost HP for
+        //     every level already taken, not just future ones.
+        // Combined: +(modDiff × newTotalLevel) HP added to hpGain, which is
+        // added to max_hp below.
         if (asiChoice.increases.con) {
           const newConMod = Math.floor((newAbilityScores.con - 10) / 2);
-          // If CON mod increased, we get retroactive HP for all levels
           if (newConMod > conMod) {
-            hpGain += (newConMod - conMod) * newTotalLevel; // Retroactive HP for CON increase
+            hpGain += (newConMod - conMod) * newTotalLevel;
           }
         }
       }
-      // Note: Feat handling would go here - for now we just store the choice
+      // Note: feat-instead-of-ASI handling is added in the next commit.
     }
 
     // Handle subclass selection for the target class
