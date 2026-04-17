@@ -2,6 +2,50 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.16] - 2026-04-17 — M1: Party Inventory + Equip/Unequip
+
+Retires Phase 8's item-transfer and Phase 9's companion-merchant
+endpoints in favor of a single shared party bucket. Carried inventory
+and gold now live on the recruiting character's columns; companions
+keep their per-entity equipment slots and equip from the pool.
+
+Foundational change for the merchant rework (M1-M4) and future fortress
+storage (F1-F3).
+
+### Added
+- **Migration 032**: one-time merge of every active companion's
+  inventory + gold into their recruiting character. Idempotent.
+- **`POST /api/companion/:id/equip`** `{ slot, itemName }` — moves one
+  item from the party pool to the companion's equipment slot. Any
+  previously-equipped item returns to the pool.
+- **`POST /api/companion/:id/unequip`** `{ slot }` — inverse.
+- **`starting_inventory`** param on `POST /companion/create-party-member`
+  merges into the recruiter's bucket at creation time.
+- **CompanionSheet UI**: Equipment card with three slot rows + Unequip
+  buttons + "equip from party pool" picker (slot dropdown + item
+  dropdown + Equip button). Party pool fetched from the character.
+
+### Changed
+- `/companion/recruit` and `/create-party-member` now insert companions
+  with empty carry columns by default.
+- Removed the "Inventory & Equipment" carried-items list from
+  CompanionSheet — items are party-wide, not companion-scoped.
+
+### Removed / Retired (410 Gone)
+- `POST /api/companion/:id/give-item` (Phase 8)
+- `POST /api/companion/:id/take-item` (Phase 8)
+- `POST /api/companion/:id/merchant-transaction` (Phase 9)
+
+All three return 410 with an explanatory payload pointing at the
+replacement. 244 lines of scaffolding removed.
+
+### Tests
+- 8 new integration tests in Group 14 (M1): retired-410s, equip from
+  pool, swap returns previous, unequip, error paths (missing item,
+  invalid slot, empty slot), recruit-zeroed-carry invariant.
+- Phase 8's 7 tests and Phase 9's 5 tests deleted.
+- Full suite: 381 passing.
+
 ## [1.0.0.15] - 2026-04-17 — Phase 10: Companion Multiclass
 
 Companions can now have multiple classes (Wizard 3 / Cleric 2, etc.),
