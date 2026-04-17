@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react'
 import CharacterCreationWizard from './CharacterCreationWizard'
-import LevelUpModal from './LevelUpModal'
 import classesData from '../data/classes.json'
 
-function CharacterManager({ characters, selectedCharacter, onSelectCharacter, onCharacterCreated, onCharacterUpdated, onCreationFormChange, editCharacterInWizard, onClearEditCharacter }) {
+function CharacterManager({ characters, selectedCharacter, onSelectCharacter, onCharacterCreated, onCharacterUpdated, onCreationFormChange, editCharacterInWizard, onClearEditCharacter, onShowLevelUp }) {
   const [showForm, setShowForm] = useState(false)
   const [resting, setResting] = useState(false)
-  const [showLevelUpModal, setShowLevelUpModal] = useState(false)
-  const [levelUpCharacter, setLevelUpCharacter] = useState(null)
   const [canLevelUpStatus, setCanLevelUpStatus] = useState({})
 
   // Open wizard when edit character is passed in
@@ -55,21 +52,11 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
   }, [characters])
 
   const handleLevelUp = (char) => {
-    setLevelUpCharacter(char)
-    setShowLevelUpModal(true)
-  }
-
-  const handleLevelUpComplete = (updatedCharacter, summary) => {
-    setShowLevelUpModal(false)
-    setLevelUpCharacter(null)
-    onCharacterUpdated(updatedCharacter)
-    // Update the level-up status
-    setCanLevelUpStatus(prev => ({
-      ...prev,
-      [updatedCharacter.id]: false
-    }))
-    // Show celebration message
-    alert(`${updatedCharacter.name} is now level ${summary.newLevel}!\n\nHP gained: +${summary.hpGained}\nNew Max HP: ${summary.newMaxHp}${summary.newFeatures.length > 0 ? `\n\nNew Features:\n- ${summary.newFeatures.join('\n- ')}` : ''}`)
+    // Delegate to the parent — App.jsx routes to the full-page LevelUpPage flow,
+    // which handles the wizard, persistence, and celebration on completion.
+    if (onShowLevelUp) {
+      onShowLevelUp(char)
+    }
   }
   const [formData, setFormData] = useState({
     name: '',
@@ -200,18 +187,6 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
 
   return (
     <div className="container">
-      {/* Level Up Modal */}
-      {showLevelUpModal && levelUpCharacter && (
-        <LevelUpModal
-          character={levelUpCharacter}
-          onLevelUp={handleLevelUpComplete}
-          onClose={() => {
-            setShowLevelUpModal(false)
-            setLevelUpCharacter(null)
-          }}
-        />
-      )}
-
       {showForm ? (
         <CharacterCreationWizard
           editCharacter={editCharacterInWizard}

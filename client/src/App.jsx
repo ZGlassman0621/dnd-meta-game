@@ -233,7 +233,13 @@ function App() {
     setShowCreationForm(true)
   }
 
-  const handleShowLevelUp = () => {
+  const handleShowLevelUp = (character) => {
+    // Accept an optional character — if the caller is the character list, it
+    // passes the character explicitly. If called from the sheet, selectedCharacter
+    // is already the right one.
+    if (character && character.id !== selectedCharacter?.id) {
+      setSelectedCharacter(character)
+    }
     setShowLevelUp(true)
     setActiveView(null)
   }
@@ -525,6 +531,7 @@ function App() {
             onCreationFormChange={setShowCreationForm}
             editCharacterInWizard={editCharacterInWizard}
             onClearEditCharacter={() => setEditCharacterInWizard(null)}
+            onShowLevelUp={handleShowLevelUp}
           />
 
           {selectedCharacter && !showCreationForm && (
