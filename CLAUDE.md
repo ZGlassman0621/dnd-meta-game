@@ -202,6 +202,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Version scheme: semver patch increments for iterative work (1.0.1, 1.0.2, 1.0.3...)
 - CHANGELOG uses a 4-part display format for readability (1.0.0.1, 1.0.0.2) but package.json uses strict semver (1.0.1, 1.0.2)
 - When finishing an implementation phase or shipping a feature: update CHANGELOG AND bump both package.json files in the same commit
+- **When finishing an implementation phase: also update `CLAUDE.md`** to reflect the new architecture — new tables, new routes, new services, new frontend components, and any new files of note. Add entries to the "Architecture Rules" section and the "Key Files" section so future context has an accurate snapshot of what exists.
 
 ## Don't
 - Don't add TypeScript
@@ -210,4 +211,4 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Don't change AI model aliases or add date suffixes
 - Don't modify the primacy/recency prompt structure without understanding the pattern
 - Don't create new documentation files unless asked
-- Don't forget to update CHANGELOG and package.json versions together
+- Don't forget to update CHANGELOG, CLAUDE.md, and package.json versions together at each phase boundary
