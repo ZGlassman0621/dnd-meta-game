@@ -2,6 +2,47 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.20] - 2026-04-17 — M4: Merchant Relationships
+
+Completes the merchant-system rework by surfacing the merchant-memory
+data the game has been quietly persisting since migration 011.
+Transaction history, visit counts, and loyalty discounts finally have
+a UI. Plus player-authored notes per merchant and a favorite pin so
+your "usual armorer" is one click away.
+
+### Added
+- **Migration 034** — `character_merchant_relationships` table
+  (character_id, merchant_id, notes, favorited, UNIQUE on the pair).
+  Only persists data we can't derive; totals/counts are computed from
+  `transaction_history`.
+- **`merchantRelationshipService.js`**:
+  - `getRelationshipsForCharacter` — joins merchant_inventories
+    (filtered history), our new table, npc_relationships (for
+    disposition), and the economy service (for the loyalty discount
+    tier). Returns one entry per merchant interacted with, sorted
+    favorites-first then most-recently-visited.
+  - `upsertRelationship` — partial update of notes + favorited.
+- **Endpoints**:
+  - `GET /api/merchant/relationships/character/:id`
+  - `PUT /api/merchant/relationships/:merchantId`
+    `{ characterId, notes?, favorited? }`
+- **`recordTransaction` extended** — now captures `total_spent_cp`,
+  `total_earned_cp`, and an `at` ISO timestamp on each history entry,
+  so the relationship panel can show lifetime gold flow per merchant.
+  Legacy entries still work (0 totals, visit count still valid).
+- **`MerchantRelationshipsPanel`** (gold-accented slide-in):
+  - Favorites section pinned first, then all merchants
+  - Per-card: disposition badge, loyalty discount pill, visit count,
+    last-visit delta ("today" / "3 days ago"), lifetime spent/earned,
+    click-to-edit notes textarea, ★ favorite toggle
+  - New "Merchants" toolbar button in the DMSession header.
+
+### Tests
+- 5 new integration tests (Group 19, 12 assertions): empty state,
+  appears after transaction, notes upsert preserves unspecified
+  fields, favorites sort first, PUT requires characterId.
+- Full suite: 439 passing (up from 427).
+
 ## [1.0.0.19] - 2026-04-17 — M3: Bargaining / Haggle
 
 Any party member can roll Persuasion, Deception, or Intimidation
