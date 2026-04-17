@@ -392,6 +392,40 @@ function formatCompanionMood(companion) {
 /**
  * Format active companions for the system prompt
  */
+/**
+ * Render a single companion's progression layer (theme + unlocked abilities +
+ * ancestry feats) as indented lines for inclusion inside their formatCompanions
+ * block. Returns '' when there's nothing to show, so the `.filter(Boolean)`
+ * upstream drops it cleanly. Parity with formatProgression() for player
+ * characters but slimmer — no Knight path, synergies, or mythic (which apply
+ * to player characters only today).
+ */
+export function formatCompanionProgressionLines(progression) {
+  if (!progression || !progression.theme) return '';
+
+  const parts = [];
+  parts.push(`  Theme: ${progression.theme.theme_name}${progression.theme.path_choice ? ` (${progression.theme.path_choice})` : ''}`);
+
+  if (progression.theme_unlocks && progression.theme_unlocks.length > 0) {
+    parts.push('  Unlocked theme abilities:');
+    for (const u of progression.theme_unlocks) {
+      if (!u.ability_name) continue;
+      parts.push(`    - L${u.tier} ${u.ability_name}: ${u.ability_description}`);
+      if (u.mechanics) parts.push(`      Mechanics: ${u.mechanics}`);
+    }
+  }
+
+  if (progression.ancestry_feats && progression.ancestry_feats.length > 0) {
+    parts.push('  Ancestry feats:');
+    for (const f of progression.ancestry_feats) {
+      parts.push(`    - L${f.tier} ${f.feat_name}: ${f.description}`);
+      if (f.mechanics) parts.push(`      Mechanics: ${f.mechanics}`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
 function formatCompanions(companions, awayCompanions = []) {
   if ((!companions || companions.length === 0) && awayCompanions.length === 0) return '';
 
@@ -524,7 +558,8 @@ function formatCompanions(companions, awayCompanions = []) {
       companion.relationship_to_party ? `  Relationship to Party: ${companion.relationship_to_party}` : null,
       companion.background_notes ? `  Backstory: ${companion.background_notes}` : null,
       companion.notes ? `  Player Notes: ${companion.notes}` : null,
-      formatCompanionMood(companion)
+      formatCompanionMood(companion),
+      formatCompanionProgressionLines(companion.progression)
     ].filter(Boolean);
 
     return parts.join('\n');

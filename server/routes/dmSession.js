@@ -35,6 +35,7 @@ import { detectConditionChanges, formatConditionsForAI } from '../data/condition
 import { safeParse } from '../utils/safeParse.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
+import { getCompanionProgression, ensureCompanionProgressionInitialized } from '../services/progressionCompanionService.js';
 import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
 import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
@@ -475,6 +476,20 @@ router.post('/start', async (req, res) => {
       LEFT JOIN companion_backstories cb ON cb.companion_id = c.id
       WHERE c.recruited_by_character_id = ? AND c.status = 'active'
     `, [characterId]);
+
+    // Phase 5.6: attach progression snapshot to each class-based companion so
+    // the DM prompt can surface their theme abilities + ancestry feats.
+    // Lazy-backfill + silent failure — a progression hiccup must not block a
+    // session start.
+    for (const c of companions) {
+      if (c.progression_type !== 'class_based') continue;
+      try {
+        await ensureCompanionProgressionInitialized(c.id);
+        c.progression = await getCompanionProgression(c.id);
+      } catch (e) {
+        console.error(`Error fetching companion progression for ${c.id}:`, e);
+      }
+    }
 
     // Get second character if specified
     let secondCharacter = null;

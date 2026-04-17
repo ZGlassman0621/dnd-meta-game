@@ -271,6 +271,71 @@ export async function computeCompanionProgressionDecisions(companionId, newLevel
 }
 
 /**
+ * Fetch a progression snapshot for a companion: theme + all tier abilities +
+ * unlocked tiers + ancestry feats. Mirrors `getCharacterProgression()` from
+ * `progressionService.js` but reads from the companion_* tables. Returns null
+ * if the companion doesn't exist; returns an object with null `theme` if the
+ * companion exists but hasn't been initialized yet (pre-5.5 recruit, race not
+ * mappable, etc.).
+ *
+ * Used by the DM session builder to feed companion progression into the
+ * system prompt, in parity with how the primary character's progression is
+ * surfaced via `formatProgression()`.
+ */
+export async function getCompanionProgression(companionId) {
+  const companion = await dbGet(
+    `SELECT c.id, c.companion_class, c.companion_level, c.companion_subclass, n.name, n.race
+     FROM companions c JOIN npcs n ON c.npc_id = n.id
+     WHERE c.id = ?`,
+    [companionId]
+  );
+  if (!companion) return null;
+
+  const themeRow = await dbGet(
+    `SELECT ct.theme_id, ct.path_choice, t.name as theme_name,
+            t.identity, t.signature_skill_1, t.signature_skill_2, t.tags
+     FROM companion_themes ct JOIN themes t ON ct.theme_id = t.id
+     WHERE ct.companion_id = ?`,
+    [companionId]
+  );
+
+  const unlocks = await dbAll(
+    `SELECT ctu.tier, ctu.unlocked_at_level,
+            ta.ability_name, ta.ability_description, ta.mechanics, ta.flavor_text
+     FROM companion_theme_unlocks ctu
+     LEFT JOIN theme_abilities ta ON ctu.tier_ability_id = ta.id
+     WHERE ctu.companion_id = ?
+     ORDER BY ctu.tier`,
+    [companionId]
+  );
+
+  const ancestryFeats = await dbAll(
+    `SELECT caf.tier, caf.selected_at_level, af.list_id,
+            af.feat_name, af.description, af.mechanics, af.flavor_text
+     FROM companion_ancestry_feats caf
+     JOIN ancestry_feats af ON caf.feat_id = af.id
+     WHERE caf.companion_id = ?
+     ORDER BY caf.tier`,
+    [companionId]
+  );
+
+  return {
+    companion: {
+      id: companion.id,
+      name: companion.name,
+      class: companion.companion_class,
+      subclass: companion.companion_subclass,
+      level: companion.companion_level
+    },
+    theme: themeRow
+      ? { ...themeRow, tags: themeRow.tags ? JSON.parse(themeRow.tags) : [] }
+      : null,
+    theme_unlocks: unlocks,
+    ancestry_feats: ancestryFeats
+  };
+}
+
+/**
  * Lazy backfill: make sure an existing companion has a theme + tier-1 feat
  * before we compute progression decisions for it. Returns true if anything
  * was seeded, false if the companion was already set up.

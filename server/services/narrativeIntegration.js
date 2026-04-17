@@ -199,7 +199,7 @@ export async function onCompanionRecruited(companion, character, campaign = null
   });
 
   // Check if companion already has a backstory
-  const existingBackstory = await companionBackstoryService.getBackstoryByCompanion(companion.id);
+  const existingBackstory = await companionBackstoryService.getBackstoryByCompanionId(companion.id);
   if (existingBackstory) {
     return existingBackstory;
   }

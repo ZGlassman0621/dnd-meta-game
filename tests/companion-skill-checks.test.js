@@ -3,7 +3,7 @@
  * Run: node tests/companion-skill-checks.test.js
  */
 
-import { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception } from '../server/services/dmPromptBuilder.js';
+import { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception, formatCompanionProgressionLines } from '../server/services/dmPromptBuilder.js';
 
 let passed = 0;
 let failed = 0;
@@ -197,6 +197,68 @@ console.log('\ncomputePassivePerception:');
   const result = computePassivePerception(scores, ['perception'], 1);
   // 10 + WIS mod(+1) + prof(+2) = 13
   assertEqual(result, 13, 'Case-insensitive perception detection: 10 + 1 + 2 = 13');
+}
+
+// ===== formatCompanionProgressionLines (Phase 5.6) =====
+console.log('\nformatCompanionProgressionLines:');
+
+{
+  // Null / missing progression should render nothing
+  assertEqual(formatCompanionProgressionLines(null), '', 'null progression renders empty');
+  assertEqual(formatCompanionProgressionLines({}), '', 'empty progression renders empty');
+  assertEqual(formatCompanionProgressionLines({ theme: null }), '', 'null theme renders empty');
+}
+
+{
+  // Minimal theme, no unlocks, no feats
+  const out = formatCompanionProgressionLines({
+    theme: { theme_name: 'Soldier', path_choice: null },
+    theme_unlocks: [],
+    ancestry_feats: []
+  });
+  assert(out.includes('Theme: Soldier'), 'renders theme name');
+  assert(!out.includes('Unlocked theme abilities'), 'skips unlocks section when empty');
+  assert(!out.includes('Ancestry feats'), 'skips feats section when empty');
+}
+
+{
+  // Theme with path_choice renders it in parens
+  const out = formatCompanionProgressionLines({
+    theme: { theme_name: 'Outlander', path_choice: 'forest' },
+    theme_unlocks: [],
+    ancestry_feats: []
+  });
+  assert(out.includes('Theme: Outlander (forest)'), 'renders path choice in parens');
+}
+
+{
+  // Full snapshot with unlocks + feats
+  const out = formatCompanionProgressionLines({
+    theme: { theme_name: 'Sage', path_choice: null },
+    theme_unlocks: [
+      { tier: 1, ability_name: 'Research', ability_description: 'Half the time on knowledge checks', mechanics: null },
+      { tier: 5, ability_name: 'Scholar\'s Memory', ability_description: 'Perfect recall of one book per week', mechanics: 'Once/LR' }
+    ],
+    ancestry_feats: [
+      { tier: 1, feat_name: 'Fey Ancestry', description: 'Advantage vs charm', mechanics: null },
+      { tier: 3, feat_name: 'Keen Senses', description: 'Proficiency in Perception', mechanics: null }
+    ]
+  });
+  assert(out.includes('L1 Research'), 'includes L1 ability');
+  assert(out.includes('L5 Scholar\'s Memory'), 'includes L5 ability');
+  assert(out.includes('Mechanics: Once/LR'), 'includes mechanics line when present');
+  assert(out.includes('L1 Fey Ancestry'), 'includes L1 feat');
+  assert(out.includes('L3 Keen Senses'), 'includes L3 feat');
+}
+
+{
+  // Unlock row with no ability_name (orphaned unlock) is skipped
+  const out = formatCompanionProgressionLines({
+    theme: { theme_name: 'Knight of the Order', path_choice: null },
+    theme_unlocks: [{ tier: 1, ability_name: null, ability_description: null }],
+    ancestry_feats: []
+  });
+  assert(!out.includes('L1 '), 'skips unlock rows with missing ability data');
 }
 
 // ===== Summary =====
