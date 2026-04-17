@@ -2,6 +2,51 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.15] - 2026-04-17 — Phase 10: Companion Multiclass
+
+Companions can now have multiple classes (Wizard 3 / Cleric 2, etc.),
+mirroring the character-side `class_levels` system from migration 001.
+Closes the last major progression-parity gap between companions and
+player characters.
+
+### Added
+- **Migration 031** — `companion_class_levels` TEXT column (JSON array
+  of `{ class, level, subclass }`). Null-safe: pre-Phase-10 companions
+  fall back to the legacy single-class columns via a new
+  `parseCompanionClassLevels()` helper.
+- **`targetClass` param** on `POST /api/companion/:id/level-up`:
+  - Omitted → advances the primary class (back-compat)
+  - Matches an existing class entry → advances that class
+  - New class → adds a multiclass entry at level 1
+- **Semantics** (mirror character-side):
+  - `companion_level` = TOTAL level across all classes
+  - `companion_class` / `companion_subclass` = primary (index 0)
+  - ASI, subclass level, hit die, features all key off the TARGET
+    class's level, not total (5e RAW)
+  - Spell slots use `getMulticlassSpellSlots()` when class_levels has
+    >1 entry; falls back to single-class `getSpellSlots()` otherwise
+  - Theme tier + ancestry feat thresholds continue to key off TOTAL
+    level (unchanged)
+- **Recruit + create-party-member** endpoints seed class_levels with a
+  single-entry array at recruitment time.
+- **DM prompt** `formatCompanions` renders a multiclass line when
+  class_levels has >1 entry: `Classes: Wizard 3 (Divination) / Cleric 2
+  (Life) — total 5`. Single-class companions render unchanged.
+- **`/level-up-info`** returns `classLevels` + `choices.canMulticlass`
+  so the UI can render a class picker.
+- **`/spell-slots`** returns `class_levels` + `pact_magic` (when
+  warlock is one of the classes).
+- **CompanionSheet UI**: blue-accented "Class to Advance" dropdown in
+  the level-up modal groups existing classes with "Multiclass — add a
+  new class at level 1" options for all 13 standard classes not
+  already taken.
+
+### Tests
+- 6 new integration tests (24 assertions) in Group 16: recruit
+  seeding, primary-class advance, multiclass addition, secondary-class
+  advance, combined spell slots math, level-up-info shape.
+- Full suite: 386 passing (up from 362).
+
 ## [1.0.0.14] - 2026-04-17 — Phase 9: Companion Merchant Transactions
 
 Companions can now buy and sell from merchants using their own purse.
