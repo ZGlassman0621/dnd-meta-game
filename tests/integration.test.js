@@ -35,6 +35,7 @@ import livingWorldRoutes from '../server/routes/livingWorld.js';
 import dmModeRoutes from '../server/routes/dmMode.js';
 import progressionRoutes from '../server/routes/progression.js';
 import merchantRoutes from '../server/routes/merchant.js';
+import partyBaseRoutes from '../server/routes/partyBase.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -113,6 +114,7 @@ async function startServer() {
   app.use('/api/dm-mode', dmModeRoutes);
   app.use('/api/progression', progressionRoutes);
   app.use('/api/merchant', merchantRoutes);
+  app.use('/api', partyBaseRoutes); // /api/base, /api/bases, /api/projects, /api/notoriety
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
@@ -2720,6 +2722,211 @@ async function testRelationshipRequiresCharacterId() {
   await cleanupTestOrderMerchant(merchantId);
 }
 
+// ===== GROUP 20: Fortress Base Refactor (F1) =====
+
+async function cleanupTestBase(baseId) {
+  if (baseId) {
+    await dbRun('DELETE FROM base_buildings WHERE base_id = ?', [baseId]);
+    await dbRun('DELETE FROM party_bases WHERE id = ?', [baseId]);
+  }
+}
+
+async function testCreateBaseWithCategorySubtype() {
+  console.log('\n  -- Create base with new category + subtype signature --');
+  const r = await api('POST', '/api/base', {
+    characterId: testCharId,
+    campaignId: testCampaignId,
+    name: 'TEST_Greywatch',
+    category: 'martial',
+    subtype: 'fortress',
+    description: 'A test fortress'
+  });
+  assert(r.status === 201, `create base returns 201 (got ${r.status})`);
+  assert(r.body.category === 'martial', 'category persisted');
+  assert(r.body.subtype === 'fortress', 'subtype persisted');
+  assert(r.body.building_slots === 14, `fortress has 14 building slots (got ${r.body.building_slots})`);
+  assert(r.body.is_primary === 1, 'first base auto-marked primary');
+
+  await cleanupTestBase(r.body.id);
+}
+
+async function testCreateBaseRejectsMismatch() {
+  console.log('\n  -- Create rejects subtype that doesn\'t match category --');
+  const r = await api('POST', '/api/base', {
+    characterId: testCharId,
+    campaignId: testCampaignId,
+    name: 'TEST_Mismatch',
+    category: 'arcane',
+    subtype: 'fortress' // fortress is martial, not arcane
+  });
+  assert(r.status === 400, `mismatch rejected (got ${r.status})`);
+}
+
+async function testMultipleBasesSupported() {
+  console.log('\n  -- Multiple bases per character; only one primary --');
+  const r1 = await api('POST', '/api/base', {
+    characterId: testCharId,
+    campaignId: testCampaignId,
+    name: 'TEST_Primary',
+    category: 'martial',
+    subtype: 'keep'
+  });
+  const r2 = await api('POST', '/api/base', {
+    characterId: testCharId,
+    campaignId: testCampaignId,
+    name: 'TEST_Satellite',
+    category: 'martial',
+    subtype: 'watchtower'
+  });
+  assert(r1.status === 201 && r2.status === 201, 'both bases created');
+  assert(r1.body.is_primary === 1, 'first base is primary');
+  assert(r2.body.is_primary === 0, 'second base is not primary');
+
+  const list = await api('GET', `/api/bases/${testCharId}/${testCampaignId}`);
+  const ours = list.body.bases.filter(b => [r1.body.id, r2.body.id].includes(b.id));
+  assert(ours.length === 2, `both bases returned by /bases endpoint (got ${ours.length})`);
+
+  await cleanupTestBase(r1.body.id);
+  await cleanupTestBase(r2.body.id);
+}
+
+async function testSetPrimaryBase() {
+  console.log('\n  -- Promote a satellite base to primary --');
+  const r1 = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Old_Primary', category: 'martial', subtype: 'keep'
+  });
+  const r2 = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_New_Primary', category: 'civilian', subtype: 'manor'
+  });
+
+  const p = await api('POST', `/api/base/${r2.body.id}/set-primary`);
+  assert(p.status === 200 && p.body.is_primary === 1, 'satellite promoted to primary');
+
+  // The old primary should now be a satellite
+  const list = await api('GET', `/api/bases/${testCharId}/${testCampaignId}`);
+  const oldRow = list.body.bases.find(b => b.id === r1.body.id);
+  assert(oldRow.is_primary === 0, 'old primary demoted');
+
+  await cleanupTestBase(r1.body.id);
+  await cleanupTestBase(r2.body.id);
+}
+
+async function testInstallAndCompleteBuilding() {
+  console.log('\n  -- Install building, advance construction, verify perks merge --');
+  const b = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Fortress_For_Building', category: 'martial', subtype: 'fortress'
+  });
+  // Seed enough treasury for a barracks (500gp)
+  await dbRun('UPDATE party_bases SET gold_treasury = 1000 WHERE id = ?', [b.body.id]);
+
+  const install = await api('POST', `/api/base/${b.body.id}/buildings`, {
+    building_type: 'barracks', currentGameDay: 10
+  });
+  assert(install.status === 201, `install returns 201 (got ${install.status})`);
+  assert(install.body.status === 'in_progress', 'building status starts in_progress');
+
+  // Advance to completion (barracks needs 80 hours per config)
+  const adv = await api('POST', `/api/base/${b.body.id}/buildings/${install.body.id}/advance`, {
+    hours: 80, currentGameDay: 15
+  });
+  assert(adv.status === 200 && adv.body.status === 'completed', 'building completes at hours_required');
+
+  // Verify perk merged into base.active_perks
+  const baseRow = await dbGet('SELECT active_perks, gold_treasury FROM party_bases WHERE id = ?', [b.body.id]);
+  const perks = parseJSON(baseRow.active_perks);
+  assert(perks.includes('garrison_capacity_20'), 'barracks perk in active_perks');
+  assert(baseRow.gold_treasury === 500, `treasury reduced by 500gp (got ${baseRow.gold_treasury})`);
+
+  await cleanupTestBase(b.body.id);
+}
+
+async function testBuildingCategoryAllowlist() {
+  console.log('\n  -- Installing building rejected when category disallows it --');
+  const b = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Wizard_Tower', category: 'arcane', subtype: 'wizard_tower'
+  });
+  await dbRun('UPDATE party_bases SET gold_treasury = 2000 WHERE id = ?', [b.body.id]);
+
+  // Gatehouse is martial-only
+  const r = await api('POST', `/api/base/${b.body.id}/buildings`, {
+    building_type: 'gatehouse'
+  });
+  assert(r.status === 400, `gatehouse rejected in arcane base (got ${r.status})`);
+
+  await cleanupTestBase(b.body.id);
+}
+
+async function testBuildingSlotCap() {
+  console.log('\n  -- Slot cap enforced — watchtower has only 3 slots --');
+  const b = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Tiny_Watchtower', category: 'martial', subtype: 'watchtower'
+  });
+  await dbRun('UPDATE party_bases SET gold_treasury = 5000 WHERE id = ?', [b.body.id]);
+
+  // Install 3 single-slot buildings (we have 3 slots)
+  await api('POST', `/api/base/${b.body.id}/buildings`, { building_type: 'barracks' });
+  await api('POST', `/api/base/${b.body.id}/buildings`, { building_type: 'armory' });
+  await api('POST', `/api/base/${b.body.id}/buildings`, { building_type: 'chapel' });
+
+  // Fourth should fail
+  const r = await api('POST', `/api/base/${b.body.id}/buildings`, {
+    building_type: 'storage_vault'
+  });
+  assert(r.status === 400, `4th building rejected (got ${r.status})`);
+
+  await cleanupTestBase(b.body.id);
+}
+
+async function testAvailableBuildingsEndpoint() {
+  console.log('\n  -- /buildings/available returns filtered catalog + slot usage --');
+  const b = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Chapel', category: 'sanctified', subtype: 'chapel'
+  });
+
+  const r = await api('GET', `/api/base/${b.body.id}/buildings/available`);
+  assert(r.status === 200, 'returns 200');
+  assert(Array.isArray(r.body.buildings), 'buildings array');
+  assert(r.body.slotsUsed === 0, 'no buildings installed yet');
+  assert(r.body.slotsTotal === 4, 'chapel has 4 slots');
+  // Gatehouse is martial-only; should not be in sanctified catalog
+  assert(!r.body.buildings.find(x => x.key === 'gatehouse'), 'gatehouse excluded from sanctified base');
+  // Chapel building is allowedCategories:null → always shown
+  assert(r.body.buildings.find(x => x.key === 'chapel'), 'universal-allowed chapel building present');
+
+  await cleanupTestBase(b.body.id);
+}
+
+async function testRemoveBuildingStripsPerk() {
+  console.log('\n  -- Demolishing a completed building removes its perk from the base --');
+  const b = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Demolish_Base', category: 'martial', subtype: 'fortress'
+  });
+  await dbRun('UPDATE party_bases SET gold_treasury = 1000 WHERE id = ?', [b.body.id]);
+
+  const install = await api('POST', `/api/base/${b.body.id}/buildings`, {
+    building_type: 'barracks'
+  });
+  await api('POST', `/api/base/${b.body.id}/buildings/${install.body.id}/advance`, { hours: 80 });
+
+  const before = await dbGet('SELECT active_perks FROM party_bases WHERE id = ?', [b.body.id]);
+  assert(parseJSON(before.active_perks).includes('garrison_capacity_20'), 'perk was present');
+
+  const d = await api('DELETE', `/api/base/${b.body.id}/buildings/${install.body.id}`);
+  assert(d.status === 200, 'demolish returns 200');
+
+  const after = await dbGet('SELECT active_perks FROM party_bases WHERE id = ?', [b.body.id]);
+  assert(!parseJSON(after.active_perks).includes('garrison_capacity_20'), 'perk removed after demolish');
+
+  await cleanupTestBase(b.body.id);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2885,6 +3092,17 @@ async function runTests() {
     await testRelationshipNotesUpsert();
     await testRelationshipFavoritesSortFirst();
     await testRelationshipRequiresCharacterId();
+
+    console.log('\n=== Group 20: Fortress Base Refactor (F1) ===');
+    await testCreateBaseWithCategorySubtype();
+    await testCreateBaseRejectsMismatch();
+    await testMultipleBasesSupported();
+    await testSetPrimaryBase();
+    await testInstallAndCompleteBuilding();
+    await testBuildingCategoryAllowlist();
+    await testBuildingSlotCap();
+    await testAvailableBuildingsEndpoint();
+    await testRemoveBuildingStripsPerk();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);
