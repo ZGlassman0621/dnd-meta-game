@@ -3,7 +3,7 @@ import { dbAll, dbGet, dbRun } from '../database.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
 import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
-import { XP_THRESHOLDS } from '../config/levelProgression.js';
+import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted } from '../services/narrativeIntegration.js';
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
@@ -488,6 +488,18 @@ router.post('/start', async (req, res) => {
         c.progression = await getCompanionProgression(c.id);
       } catch (e) {
         console.error(`Error fetching companion progression for ${c.id}:`, e);
+      }
+
+      // Phase 6: attach spell slot state (max + used) so the DM prompt knows
+      // what's available. `getSpellSlots` returns {} for non-casters and the
+      // warlock object shape for warlocks; both cases are handled downstream.
+      try {
+        const max = getSpellSlots(c.companion_class, c.companion_level) || {};
+        const used = safeParse(c.companion_spell_slots_used, {});
+        c.spell_slots_max = max;
+        c.spell_slots_used = used;
+      } catch (e) {
+        console.error(`Error computing companion spell slots for ${c.id}:`, e);
       }
     }
 

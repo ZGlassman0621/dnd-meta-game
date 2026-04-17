@@ -400,6 +400,34 @@ function formatCompanionMood(companion) {
  * characters but slimmer — no Knight path, synergies, or mythic (which apply
  * to player characters only today).
  */
+/**
+ * Render a spellcasting companion's slot state as an indented line for the
+ * DM prompt: "Spell slots: L1 2/4, L2 0/3" (used/max). Returns '' when the
+ * companion has no slots (non-casters, npc-stats companions, or pre-rest).
+ */
+export function formatCompanionSpellSlotsLine(max, used) {
+  if (!max || typeof max !== 'object') return '';
+  const levels = Object.keys(max)
+    .map(k => parseInt(k, 10))
+    .filter(n => Number.isInteger(n) && n >= 1 && n <= 9)
+    .sort((a, b) => a - b);
+  if (levels.length === 0) return '';
+
+  const parts = levels
+    .map(lv => {
+      const m = max[lv] || max[String(lv)] || 0;
+      if (!m) return null;
+      const u = (used && (used[lv] ?? used[String(lv)])) || 0;
+      return `L${lv} ${u}/${m}`;
+    })
+    .filter(Boolean);
+  if (parts.length === 0) return '';
+
+  // Warlock-style shape: { slots: N, level: M } — handled separately by
+  // callers; this helper only renders the standard `{ "1": N, "2": N }` map.
+  return `  Spell slots: ${parts.join(', ')}`;
+}
+
 export function formatCompanionProgressionLines(progression) {
   if (!progression || !progression.theme) return '';
 
@@ -559,7 +587,8 @@ function formatCompanions(companions, awayCompanions = []) {
       companion.background_notes ? `  Backstory: ${companion.background_notes}` : null,
       companion.notes ? `  Player Notes: ${companion.notes}` : null,
       formatCompanionMood(companion),
-      formatCompanionProgressionLines(companion.progression)
+      formatCompanionProgressionLines(companion.progression),
+      formatCompanionSpellSlotsLine(companion.spell_slots_max, companion.spell_slots_used)
     ].filter(Boolean);
 
     return parts.join('\n');

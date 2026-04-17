@@ -5,7 +5,8 @@ import {
   PROFICIENCY_BONUS,
   getClassFeatures,
   hasASI,
-  SUBCLASS_LEVELS
+  SUBCLASS_LEVELS,
+  getSpellSlots
 } from '../config/levelProgression.js';
 import { onCompanionRecruited, onCompanionDismissed, onCompanionLoyaltyChanged } from '../services/narrativeIntegration.js';
 import { safeParse } from '../utils/safeParse.js';
@@ -672,6 +673,189 @@ router.get('/:id/level-up-info', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'fetch level-up info');
+  }
+});
+
+// ============================================================================
+// Phase 6: Rest + Spell Slots
+//
+// Mirrors the character-side endpoints (/rest/:id, /spell-slots/:id,
+// /spell-slots/:id/use, /spell-slots/:id/restore) but reads/writes the
+// companion columns. Max spell slots are computed on demand from
+// companion_class + companion_level via getSpellSlots(); only the
+// `companion_spell_slots_used` map is persisted.
+//
+// Non-spellcasting companions (fighter, barbarian, etc.) get an empty
+// `{}` max from getSpellSlots(), so /use returns 400 for them.
+//
+// Warlocks reset pact slots on short rest (pact magic recharges quickly);
+// all other casters recover slots on long rest.
+// ============================================================================
+
+// Get companion's spell slots (max + used)
+router.get('/:id/spell-slots', async (req, res) => {
+  try {
+    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    if (!companion.companion_class || companion.progression_type !== 'class_based') {
+      return res.json({
+        max: {},
+        used: {},
+        class: companion.companion_class,
+        level: companion.companion_level,
+        progression_type: companion.progression_type
+      });
+    }
+
+    const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+    const used = safeParse(companion.companion_spell_slots_used, {});
+
+    res.json({
+      max,
+      used,
+      class: companion.companion_class,
+      level: companion.companion_level
+    });
+  } catch (error) {
+    handleServerError(res, error, 'fetch companion spell slots');
+  }
+});
+
+// Use a companion spell slot
+router.post('/:id/spell-slots/use', async (req, res) => {
+  try {
+    const { level } = req.body;
+    if (!level || level < 1 || level > 9) {
+      return res.status(400).json({ error: 'Invalid spell level (1-9)' });
+    }
+
+    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    if (!companion.companion_class || companion.progression_type !== 'class_based') {
+      return res.status(400).json({ error: 'Only class-based companions have spell slots' });
+    }
+
+    const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+    const used = safeParse(companion.companion_spell_slots_used, {});
+
+    const maxForLevel = max[level] || 0;
+    const usedForLevel = used[level] || 0;
+
+    if (maxForLevel === 0) {
+      return res.status(400).json({ error: `This companion has no level ${level} spell slots` });
+    }
+    if (usedForLevel >= maxForLevel) {
+      return res.status(400).json({ error: `No level ${level} spell slots remaining` });
+    }
+
+    used[level] = usedForLevel + 1;
+    await dbRun(
+      'UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?',
+      [JSON.stringify(used), req.params.id]
+    );
+
+    res.json({ success: true, level, remaining: maxForLevel - used[level], max: maxForLevel });
+  } catch (error) {
+    handleServerError(res, error, 'use companion spell slot');
+  }
+});
+
+// Restore a companion spell slot (e.g., Arcane Recovery narrative)
+router.post('/:id/spell-slots/restore', async (req, res) => {
+  try {
+    const { level } = req.body;
+    if (!level || level < 1 || level > 9) {
+      return res.status(400).json({ error: 'Invalid spell level (1-9)' });
+    }
+
+    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+    const used = safeParse(companion.companion_spell_slots_used, {});
+
+    const maxForLevel = max[level] || 0;
+    const usedForLevel = used[level] || 0;
+
+    if (usedForLevel <= 0) {
+      return res.status(400).json({ error: `No used level ${level} slots to restore` });
+    }
+
+    used[level] = usedForLevel - 1;
+    await dbRun(
+      'UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?',
+      [JSON.stringify(used), req.params.id]
+    );
+
+    res.json({ success: true, level, remaining: maxForLevel - used[level], max: maxForLevel });
+  } catch (error) {
+    handleServerError(res, error, 'restore companion spell slot');
+  }
+});
+
+// Rest a companion (long or short)
+router.post('/:id/rest', async (req, res) => {
+  try {
+    const { restType = 'long' } = req.body;
+    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    let healAmount = 0;
+    let newHp = companion.companion_current_hp;
+    let spellSlotsRestored = false;
+
+    if (restType === 'long') {
+      healAmount = (companion.companion_max_hp || 0) - (companion.companion_current_hp || 0);
+      newHp = companion.companion_max_hp;
+      await dbRun(
+        `UPDATE companions
+         SET companion_current_hp = ?, companion_spell_slots_used = '{}'
+         WHERE id = ?`,
+        [newHp, req.params.id]
+      );
+      spellSlotsRestored = true;
+    } else {
+      const missing = (companion.companion_max_hp || 0) - (companion.companion_current_hp || 0);
+      healAmount = Math.max(1, Math.floor(missing * 0.5));
+      newHp = Math.min(companion.companion_max_hp, (companion.companion_current_hp || 0) + healAmount);
+
+      const classKey = companion.companion_class?.toLowerCase();
+      if (classKey === 'warlock') {
+        await dbRun(
+          `UPDATE companions
+           SET companion_current_hp = ?, companion_spell_slots_used = '{}'
+           WHERE id = ?`,
+          [newHp, req.params.id]
+        );
+        spellSlotsRestored = true;
+      } else {
+        await dbRun(
+          'UPDATE companions SET companion_current_hp = ? WHERE id = ?',
+          [newHp, req.params.id]
+        );
+      }
+    }
+
+    const updated = await dbGet(`
+      SELECT c.*, n.name, n.race, n.gender, n.avatar
+      FROM companions c JOIN npcs n ON c.npc_id = n.id
+      WHERE c.id = ?
+    `, [req.params.id]);
+
+    res.json({
+      success: true,
+      message: restType === 'long'
+        ? `${updated.name} completes a long rest. Restored ${healAmount} HP and all spell slots.`
+        : `${updated.name} completes a short rest. Restored ${healAmount} HP.${spellSlotsRestored ? ' Pact slots restored.' : ''}`,
+      companion: updated,
+      newHp,
+      hp_restored: healAmount,
+      spell_slots_restored: spellSlotsRestored
+    });
+  } catch (error) {
+    handleServerError(res, error, 'rest companion');
   }
 });
 
