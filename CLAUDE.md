@@ -96,7 +96,8 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - DM Mode effect tracker: EffectTracker component (orange #f97316) — inline bar between top bar and messages, tracks spell/condition durations with round countdown, concentration management (one per caster), auto-decrement on Advance Round, color-coded pills (green 3+, yellow 2, red 1, blue indefinite)
 - DM Mode sessions use `dm_sessions` table with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is NULL)
 - Migration 014: `dm_sessions.character_id` made nullable for DM Mode compatibility
-- Progression system (Themes / Ancestry Feats / Synergies): Phase 1 foundation shipped in v1.0.3, Phase 2 character creation shipped in v1.0.4, Phase 3 character sheet display shipped in v1.0.5. See IMPLEMENTATION_PLAN.md for remaining phases
+- Progression system (Themes / Ancestry Feats / Synergies): Phase 1 foundation shipped in v1.0.3, Phase 2 character creation shipped in v1.0.4, Phase 3 character sheet display shipped in v1.0.5, Phase 4 AI DM prompt integration shipped in v1.0.6. See IMPLEMENTATION_PLAN.md for remaining phases
+- AI DM progression awareness (v1.0.6): `formatProgression()` in `dmPromptBuilder.js` renders theme + unlocked abilities + ancestry feats + Knight moral path guidance + resonant synergies + level-gated Mythic tier bonuses + per-theme narration hooks into the system prompt. All 21 themes have bespoke narration hooks. Knight paths get tailored DM directives (True/Reformer/Martyr/Complicit/Fallen/Redemption). DM session start pre-fetches progression for primary + secondary character via `progressionService.getCharacterProgression()` and injects into sessionConfig as `progression` + `secondaryProgression`
 - Progression tab on CharacterSheet (new in v1.0.5): theme identity, full 4-tier progression with unlocked/ready/future state, ancestry feats list, resonant Subclass×Theme synergy callout, Mythic×Theme amplification callout (resonant amber; dissonant red with arc threshold). Data from `GET /api/character/:id/progression`
 - QuickReferencePanel Abilities tab (extended in v1.0.5): inline Theme callout with unlocked abilities, Ancestry Feats summary, Resonant Synergy indicator — compact in-session display; silent fail if progression data unavailable
 - Progression tables (migrations 023-027): `themes`, `theme_abilities`, `character_themes`, `character_theme_unlocks`, `knight_moral_paths` (6-path tracker), `ancestry_feats`, `character_ancestry_feats`, `team_tactics`, `character_team_tactics`, `subclass_theme_synergies`, `mythic_theme_amplifications`, `mythic_arcs`, `mentor_imprints`, `prelude_unlock_flags`, `downtime_periods`, `downtime_activities`, `downtime_vignettes`
@@ -112,6 +113,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `server/services/claude.js` — Claude API client
 - `server/routes/progression.js` — Read-only progression API (themes, ancestry feats, team tactics, synergies, amplifications)
 - `server/services/progressionSeedService.js` — Idempotent seed runner; wired into initDatabase()
+- `server/services/progressionService.js` — Reusable `getCharacterProgression(id)` snapshot builder; used by both the character progression endpoint and DM session start
 - `server/services/dmPromptBuilder.js` — DM system prompt (~600 lines)
 - `server/services/dmSessionService.js` — Session logic, marker detection
 - `server/services/storyChronicleService.js` — Canon fact database, session chronicles, context retrieval, NPC conversation + mood extraction

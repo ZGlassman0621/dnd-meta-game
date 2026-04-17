@@ -2,6 +2,32 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.6] - 2026-04-17 — Implementation Phase 4: AI DM Prompt Integration
+
+### Added
+- **Progression-aware AI DM sessions.** The AI DM system prompt now includes a `CHARACTER PROGRESSION LAYER` section when the character has a theme selected:
+  - Theme name, path choice (e.g., Outlander biome), identity, and signature skills
+  - All unlocked theme tier abilities with descriptions and mechanics
+  - Ancestry feats with tier + mechanics
+  - Knight moral path state with path-specific DM guidance (True/Reformer/Martyr/Complicit/Fallen/Redemption — each gets a tailored narration directive)
+  - Resonant Subclass × Theme synergy (if any) with name, description, mechanics
+  - Mythic × Theme amplification (resonant combo) with tier bonuses filtered by character level, OR dissonant arc description + required threshold acts
+  - Per-theme **narration hook** — short DM directives for how each theme should shape NPC responses, environmental description, and scene framing (all 21 themes have hooks)
+- **`server/services/progressionService.js`**: Extracted `getCharacterProgression(characterId)` as reusable service. Used by both the Character Sheet endpoint (GET /api/character/:id/progression) and the DM session start flow.
+- **`formatProgression()` + `NARRATION_HOOKS_BY_THEME`** exported from `server/services/dmPromptBuilder.js`.
+- DM session start (`POST /api/dm-session/start`) now fetches progression for both the primary character and optional second character; snapshots are passed into sessionConfig as `progression` and `secondaryProgression` and rendered by `formatProgression()`.
+- **`tests/progression-prompt.test.js`** (43 new tests) covers: empty/null handling, theme identity rendering, path_choice rendering (Outlander biome, Knight order), ancestry feat rendering, Knight moral path guidance for all 6 paths, subclass synergy rendering, level-gated Mythic tier bonus rendering (T1 at L5, T2 at L10, T3 at L15, T4 at L20), dissonant arc rendering, narration hook presence for all 21 themes, full prompt integration, and graceful absence when progression is not supplied.
+
+### Changed
+- `GET /api/character/:id/progression` now delegates to the extracted service (behavior unchanged; same response shape). The endpoint file shrunk from ~100 lines to 9 lines.
+
+### Testing
+- 215/215 integration tests pass (no regressions from refactor)
+- 43/43 new progression-prompt tests pass
+- 55/55 character-memory, 64/64 moral-diversity, 26/26 combat-tracker pass
+- Client builds cleanly
+- Full run of all 5 suites: 403 total passing
+
 ## [1.0.0.5] - 2026-04-17 — Implementation Phase 3: Character Sheet Display
 
 ### Added

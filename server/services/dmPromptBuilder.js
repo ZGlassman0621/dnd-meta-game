@@ -769,6 +769,147 @@ function formatNPCEntry(npc, includeVoice) {
 /**
  * Format campaign plan for DM context
  */
+/**
+ * Per-theme narration hooks that the AI DM should weave into gameplay when the
+ * character has the corresponding theme. Keyed by theme_id. Each entry is a
+ * short directive — not content to render literally, but guidance for how the
+ * theme should shape narration.
+ */
+const NARRATION_HOOKS_BY_THEME = {
+  soldier: 'The character is a military veteran. NPCs who were soldiers recognize their bearing. Use tactical language when describing combat. Military authority figures respond to them as a peer.',
+  sage: 'The character is a scholar. When lore-appropriate, acknowledge their expertise with subtle detail — they would recognize references others would miss. Knowledge-based NPCs treat them as a colleague.',
+  criminal: 'The character has underworld connections. Criminal-aligned NPCs sense their status. When in dangerous districts, the character moves with familiarity that strangers do not. Subtle underworld signals (gestures, code words) are visible to them.',
+  acolyte: 'The character is temple-trained. NPCs who share their faith treat them with reverence. Temples are safe ground. Invoke their faith when narrating moments of prayer, grief, or moral clarity.',
+  charlatan: 'The character is a con artist by trade. They notice marks instinctively. NPCs trying to deceive them face a skeptical eye. Surface opportunities for them to slip into false identities when the situation calls for it.',
+  entertainer: 'The character is a performer. Crowds notice them. When they speak in public, eyes turn. Taverns warm to them. Lean into spectacle — describe the effect their presence has on a room.',
+  noble: 'The character is nobility. Commoners defer automatically. Other nobles treat them as a peer. Court etiquette matters. They have political awareness commoners lack — surface subtle political signals in social scenes.',
+  outlander: 'The character is wilderness-raised. In their chosen biome they move with confidence others lack. They read wind, tracks, and sky instinctively. Natural environments feel like home; cities feel foreign.',
+  sailor: 'The character has lived at sea. Salty language, knowledge of tides and ships, and an ease with sailors come naturally. Ports feel like home. Land-locked cities feel confining.',
+  far_traveler: 'The character is foreign. Their accent and mannerisms mark them. Locals are curious. They notice what insiders miss — surface details about local culture that a Far Traveler would spot and comment on.',
+  haunted_one: 'The character has faced true horror. Common folk sense it and are simultaneously drawn to them and uneasy. Supernatural creatures recognize the mark. When dark things happen, the Haunted One sees them clearly — describe the chill in the air that others dismiss.',
+  guild_artisan: 'The character is a guild-trained craftsperson. They appraise goods by instinct. Merchants treat them with professional respect. Use maker\'s marks, material quality, and craft gossip when they interact with traders.',
+  clan_crafter: 'The character is ancestrally trained in craft. Materials and old techniques speak to them. Dwarven kin especially offer hospitality. Describe artisanal details through their trained eye.',
+  hermit: 'The character spent years in isolation and carries a discovery. Surface moments of inner stillness. They are composed when others panic. The revelation from their hermitage should occasionally echo in their thoughts during relevant scenes.',
+  investigator: 'The character reads scenes the way others read books. Describe crime scenes and mysteries with the detail they would notice. Let them ask DC-appropriate questions of witnesses. Others defer to their analysis.',
+  city_watch: 'The character walked the beat. In their home city (or cities of the same banner), they know every alley and face. Local guards recognize them. Describe urban environments with their familiar eye.',
+  knight_of_the_order: 'The character is sworn to an order. Their oath shapes their choices. Order members recognize them on sight. Their moral path (True/Reformer/Martyr/Complicit/Fallen/Redemption — tracked in knight_moral_paths) shapes their interactions — reinforce the tension or honor accordingly. Code violations should have consequences.',
+  mercenary_veteran: 'The character is a battle-hardened sellsword. Loyalty is earned, not given. They appraise fights by profit and survival. Fellow mercenaries recognize the look. Be pragmatic in their internal frame.',
+  urban_bounty_hunter: 'The character hunts people for a living. They notice marks in crowds. Criminal-aligned NPCs hesitate around them. In cities, they know how to ask without asking. Surface pursuit instinct when relevant.',
+  folk_hero: 'The character is a legend among common folk. In their home region, commoners greet them warmly. Their deeds precede them. Tyrants notice them too — lean into the double edge of popular recognition.',
+  urchin: 'The character survived the streets. They notice escape routes instinctively. Street children recognize one of their own (and may defer to them if the character has treated their kind well). Describe urban environments with the gaps others miss.'
+};
+
+/**
+ * Format progression data (theme, abilities, ancestry feats, synergies, moral
+ * path, mythic amplification) into a prompt section. Returns an empty string
+ * when progression is null or the character has no theme selected.
+ *
+ * This is the DM-facing view of progression: concise, mechanical, with
+ * narration hooks. Unlike the Character Sheet which shows the full 4-tier
+ * preview, this prompt only highlights UNLOCKED abilities (the AI DM
+ * shouldn't narrate abilities the character can't yet use).
+ */
+export function formatProgression(progression) {
+  if (!progression || !progression.theme) return '';
+
+  const parts = [];
+  parts.push('\n\nCHARACTER PROGRESSION LAYER:');
+  parts.push(`THEME: ${progression.theme.theme_name}${progression.theme.path_choice ? ` (${progression.theme.path_choice})` : ''}`);
+  if (progression.theme.identity) {
+    parts.push(`Identity: ${progression.theme.identity}`);
+  }
+  if (progression.theme.signature_skill_1) {
+    const sigSkills = [progression.theme.signature_skill_1, progression.theme.signature_skill_2]
+      .filter(Boolean)
+      .join(', ');
+    parts.push(`Signature skills: ${sigSkills}`);
+  }
+
+  // Unlocked theme abilities
+  if (progression.theme_unlocks && progression.theme_unlocks.length > 0) {
+    parts.push('\nUNLOCKED THEME ABILITIES (available for use in narration):');
+    for (const u of progression.theme_unlocks) {
+      parts.push(`- L${u.tier} ${u.ability_name}: ${u.ability_description}`);
+      if (u.mechanics) {
+        parts.push(`  Mechanics: ${u.mechanics}`);
+      }
+    }
+  }
+
+  // Ancestry feats
+  if (progression.ancestry_feats && progression.ancestry_feats.length > 0) {
+    parts.push('\nANCESTRY FEATS:');
+    for (const f of progression.ancestry_feats) {
+      parts.push(`- L${f.tier} ${f.feat_name}: ${f.description}`);
+      if (f.mechanics) {
+        parts.push(`  Mechanics: ${f.mechanics}`);
+      }
+    }
+  }
+
+  // Knight moral path (narrative-critical for Knight-themed characters)
+  if (progression.knight_moral_path) {
+    parts.push(`\nKNIGHT MORAL PATH: ${progression.knight_moral_path.current_path.toUpperCase()}`);
+    const pathGuidance = {
+      true: 'Character is currently walking the True Path — their oath is intact. Reinforce institutional trust and camaraderie with their order.',
+      reformer: 'Character has seen their order falter and is trying to reform it from within. Surface moral tension between personal conviction and institutional authority. Some order members support them; others see them as a threat.',
+      martyr: 'Character refused a corrupt order and paid a price. They are disowned but morally clear. Other knights may quietly admire or publicly denounce them.',
+      complicit: 'Character obeyed an unjust order out of fear or duty. They carry the weight. Surface dreams, flinches, quiet hollowness — the dissonance between who they thought they were and what they did.',
+      fallen: 'Character has broken their oath. Former order members treat them as a traitor. They have lost some abilities and may be hunted. Lean into shame, bravado, or denial as fits their current framing.',
+      redemption: 'Character is actively atoning for past failures. Track their progress toward restoration — small acts of contrition matter. Former allies slowly warm; former enemies watch for backsliding.'
+    };
+    const guidance = pathGuidance[progression.knight_moral_path.current_path];
+    if (guidance) parts.push(guidance);
+  }
+
+  // Subclass × Theme resonant synergy
+  if (progression.subclass_theme_synergy) {
+    parts.push(`\nRESONANT SUBCLASS×THEME SYNERGY: ${progression.subclass_theme_synergy.synergy_name}`);
+    parts.push(progression.subclass_theme_synergy.description);
+    if (progression.subclass_theme_synergy.mechanics) {
+      parts.push(`Mechanics: ${progression.subclass_theme_synergy.mechanics}`);
+    }
+  }
+
+  // Mythic × Theme amplification or dissonant arc
+  if (progression.mythic_theme_amplification) {
+    const m = progression.mythic_theme_amplification;
+    parts.push(`\nMYTHIC ${m.is_dissonant ? 'DISSONANT ARC' : 'AMPLIFICATION'}: ${m.combo_name}`);
+    if (m.shared_identity) parts.push(m.shared_identity);
+    if (m.is_dissonant) {
+      parts.push(`Arc: ${m.dissonant_arc_description || '(no description)'}`);
+      if (m.required_threshold_acts) {
+        parts.push(`Threshold acts required for resolution: ${m.required_threshold_acts}`);
+      }
+    } else {
+      // Emit the tier bonuses the character currently qualifies for based on their level.
+      // Mythic tiers: T1=L5, T2=L10, T3=L15, T4=L20 per CLAUDE.md
+      const level = progression.character?.level || 1;
+      const tiers = [
+        { t: 1, min: 5, text: m.t1_bonus },
+        { t: 2, min: 10, text: m.t2_bonus },
+        { t: 3, min: 15, text: m.t3_bonus },
+        { t: 4, min: 20, text: m.t4_bonus }
+      ].filter(x => x.text);
+      const qualified = tiers.filter(x => level >= x.min);
+      if (qualified.length > 0) {
+        parts.push('Active tier bonuses:');
+        qualified.forEach(x => parts.push(`- T${x.t}: ${x.text}`));
+      }
+    }
+  }
+
+  // Narration hooks tied to the theme
+  const hook = NARRATION_HOOKS_BY_THEME[progression.theme.theme_id];
+  if (hook) {
+    parts.push(`\nNARRATION HOOK: ${hook}`);
+  }
+
+  parts.push('\nIntegrate the progression layer naturally — let the character FEEL their theme through NPC responses, environmental description, and scene framing. Do NOT narrate the character using abilities they have not unlocked. Do NOT force theme references in every scene — weave them where they fit.');
+
+  return parts.join('\n');
+}
+
 function formatCampaignPlan(planSummary) {
   if (!planSummary) return '';
 
@@ -1598,7 +1739,7 @@ PLAYER AGENCY - NEVER VIOLATE:
 ${worldSettingSection}
 
 ${char1.text}
-${char2 ? '\n' + char2.text : ''}
+${char2 ? '\n' + char2.text : ''}${formatProgression(sessionContext.progression)}${char2 && sessionContext.secondaryProgression ? formatProgression(sessionContext.secondaryProgression) : ''}
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}

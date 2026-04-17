@@ -34,6 +34,7 @@ import { getLootTableForLevel } from '../config/rewards.js';
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
+import { getCharacterProgression } from '../services/progressionService.js';
 import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
 import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
@@ -802,6 +803,24 @@ router.post('/start', async (req, res) => {
       }
     }
 
+    // Fetch progression snapshot (theme, abilities, feats, synergies) for both characters.
+    // Silent on error — a missing progression snapshot just means that section of the
+    // prompt won't render.
+    let progression = null;
+    let secondaryProgression = null;
+    try {
+      progression = await getCharacterProgression(characterId);
+    } catch (e) {
+      console.error('Error fetching progression for primary character:', e);
+    }
+    if (secondCharacterId) {
+      try {
+        secondaryProgression = await getCharacterProgression(secondCharacterId);
+      } catch (e) {
+        console.error('Error fetching progression for secondary character:', e);
+      }
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -832,7 +851,9 @@ router.post('/start', async (req, res) => {
       mythicContext,
       partyBaseContext,
       notorietyContext,
-      projectsContext
+      projectsContext,
+      progression,
+      secondaryProgression
     };
 
     // Check which LLM provider is available (respects user preference)
