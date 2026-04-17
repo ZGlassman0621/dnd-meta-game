@@ -2,6 +2,54 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.12] - 2026-04-17 — Phase 7: Companion Combat Safety
+
+Adds persistent condition tracking and full 5e death save mechanics for
+companions. Previously the ConditionPanel kept conditions as React state
+only (lost when the session ended), and there was no death save
+infrastructure anywhere — a companion at 0 HP just sat there.
+
+### Added
+- **Migration 030** — three columns on `companions`:
+  - `active_conditions` (JSON array of condition keys)
+  - `death_save_successes`, `death_save_failures` (INTEGER 0..3)
+- **Six new endpoints**:
+  - `GET  /api/companion/:id/conditions`
+  - `POST /api/companion/:id/conditions/add` — validates against known
+    condition list; exhaustion levels are mutually exclusive
+  - `POST /api/companion/:id/conditions/remove`
+  - `GET  /api/companion/:id/death-saves`
+  - `POST /api/companion/:id/death-save` — server rolls d20 if `roll`
+    not provided; full 5e RAW (nat 20 revives at 1 HP, nat 1 = 2
+    failures, 10+ = success, 3 successes stabilize, 3 failures die)
+  - `POST /api/companion/:id/stabilize` — Medicine DC 10 equivalent
+- **Rest hookups** — the existing `/rest/:id` endpoint now:
+  - Long rest: clears all conditions except petrified, decrements
+    exhaustion by 1 per level, and resets death-save tallies.
+  - Short rest that brings the companion above 0 HP also resets
+    death-save tallies.
+- **DM prompt**: two new indented lines per companion in
+  `formatCompanions`:
+  - `Active conditions: Poisoned, Prone, Exhaustion 2`
+  - `Death saves: 2 successes, 1 failure (at 0 HP — edge text)`
+  Helpers `formatCompanionActiveConditionsLine` and
+  `formatCompanionDeathSavesLine` exported from `dmPromptBuilder.js`.
+- **CompanionSheet UI**:
+  - Orange-accented Active Conditions card: chip display with tooltip
+    descriptions and click-to-remove, plus dropdown + Add button.
+  - Red-accented Death Saves card that only renders at 0 HP: three
+    success circles + three failure circles, Roll Save button (server
+    rolls), Stabilize button.
+
+### Tests
+- 13 new integration tests (Group 13) — initial empty state, add/remove,
+  case-insensitive normalization, exhaustion mutual exclusion, unknown
+  condition rejection, long-rest clearing + exhaustion decrement +
+  petrified persistence, HP>0 rejection, success/failure/stabilize/die
+  state transitions, nat 20 revive, nat 1 double-failure, stabilize
+  endpoint, long-rest death-save reset.
+- Full suite: 337 passing (up from 310).
+
 ## [1.0.0.11] - 2026-04-17 — Phase 6: Companion Rest + Spell Slots
 
 Fixes the single biggest functional gap for companions: spellcasting
