@@ -1,6 +1,7 @@
 import { createClient } from '@libsql/client';
 import dotenv from 'dotenv';
 import { runMigrations } from './migrationRunner.js';
+import { seedProgressionData } from './services/progressionSeedService.js';
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ const db = createClient(
 
 export async function initDatabase() {
   await runMigrations(db);
+  await seedProgressionData(db);
 
   const mode = process.env.TURSO_DATABASE_URL ? 'Turso cloud' : 'local SQLite';
   console.log(`Database initialized successfully (${mode})`);

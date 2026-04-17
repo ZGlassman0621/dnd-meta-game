@@ -2,6 +2,32 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.3] - 2026-04-17 — Implementation Phase 1: Foundation
+
+### Added (Database + Seed Data)
+- **Migrations 023-027**: Complete schema for the progression system
+  - `023_themes_schema.js`: themes, theme_abilities, character_themes, character_theme_unlocks, knight_moral_paths (6-path tracker for True/Reformer/Martyr/Complicit/Fallen/Redemption)
+  - `024_ancestry_feats_schema.js`: ancestry_feats, character_ancestry_feats
+  - `025_synergies_schema.js`: team_tactics, character_team_tactics, subclass_theme_synergies, mythic_theme_amplifications
+  - `026_narrative_trackers_schema.js`: mythic_arcs, mentor_imprints, prelude_unlock_flags
+  - `027_downtime_schema.js`: downtime_periods, downtime_activities, downtime_vignettes
+- **Seed data**: All progression reference content loaded automatically on server startup
+  - 22 themes (21 active + 1 "any" sentinel for path amplifications)
+  - 84 theme abilities (L1/L5/L11/L17 × 21 themes)
+  - 195 ancestry feats (13 lists × 5 tiers × 3 choices)
+  - 20 team tactics (10 combat, 5 utility_skill, 5 defensive_survival)
+  - 50 subclass × theme synergies across all 12 classes including Keeper custom class
+  - 17 mythic × theme amplifications (10 resonant + 7 dissonant arcs)
+- **progressionSeedService.js**: Idempotent seed runner wired into `initDatabase()`. Safe to run on every startup.
+
+### Tested
+- All 5 schema migrations verified applying cleanly against Turso
+- All seed data verified loading correctly (counts match design docs)
+- All 156 integration tests passing
+- All 64 moral-diversity tests passing
+- All 26 combat-tracker tests passing
+- Client builds cleanly
+
 ## [1.0.0.2] - 2026-04-16 — Design Phase: Themes, Ancestry Feats, Party Synergies, Subclass Synergies
 
 ### Design Documents (not yet implemented in code)
