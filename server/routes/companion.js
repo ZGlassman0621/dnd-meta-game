@@ -14,6 +14,12 @@ import * as companionBackstoryService from '../services/companionBackstoryServic
 import { handleServerError } from '../utils/errorHandler.js';
 import { propagateNpcDeath, canRecruit } from '../services/npcLifecycleService.js';
 import { sendOnActivity, getAwayCompanions, getActivityById, recallCompanion } from '../services/companionActivityService.js';
+import {
+  autoAssignCompanionTheme,
+  autoSeedCompanionAncestryFeatTier1,
+  computeCompanionProgressionDecisions,
+  ensureCompanionProgressionInitialized
+} from '../services/progressionCompanionService.js';
 
 const router = express.Router();
 
@@ -186,6 +192,20 @@ router.post('/recruit', async (req, res) => {
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
     `, [result.lastInsertRowid]);
+
+    // Phase 5.5: auto-assign a theme + seed L1 ancestry feat. Both are
+    // idempotent no-ops on re-recruit and silently skip on unmapped data
+    // (e.g., Goblin race), so a failure here never blocks recruitment.
+    await autoAssignCompanionTheme(
+      companion.id,
+      companion.companion_class,
+      companion.companion_level || 1
+    );
+    await autoSeedCompanionAncestryFeatTier1(
+      companion.id,
+      companion.race,
+      companion.companion_level || 1
+    );
 
     // Generate backstory for the companion (async, non-blocking)
     // This will also emit the companion_recruited event
@@ -416,6 +436,14 @@ router.post('/:id/level-up', async (req, res) => {
     const newMaxHp = companion.companion_max_hp + hpGain;
     const newCurrentHp = companion.companion_current_hp + hpGain;
 
+    // Phase 5.5: make sure this companion has a theme + tier-1 feat before we
+    // compute tier decisions (existing pre-5.5 companions won't).
+    await ensureCompanionProgressionInitialized(req.params.id);
+    const progressionDecisions = await computeCompanionProgressionDecisions(
+      req.params.id,
+      newLevel
+    );
+
     await dbRun(`
       UPDATE companions SET
         companion_level = ?,
@@ -433,6 +461,41 @@ router.post('/:id/level-up', async (req, res) => {
       req.params.id
     ]);
 
+    // Apply theme tier auto-unlock, if any
+    if (progressionDecisions.theme_tier_unlock) {
+      const unlock = progressionDecisions.theme_tier_unlock;
+      await dbRun(
+        `INSERT OR REPLACE INTO companion_theme_unlocks
+         (companion_id, theme_id, tier, tier_ability_id, unlocked_at_level, narrative_delivery)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          req.params.id,
+          unlock.theme_id,
+          unlock.tier,
+          unlock.tier_ability_id,
+          newLevel,
+          `Auto-unlocked at level ${newLevel} during companion level-up.`
+        ]
+      );
+    }
+
+    // Apply ancestry feat auto-pick, if any
+    if (progressionDecisions.ancestry_feat_auto_pick) {
+      const pick = progressionDecisions.ancestry_feat_auto_pick;
+      await dbRun(
+        `INSERT OR REPLACE INTO companion_ancestry_feats
+         (companion_id, feat_id, tier, selected_at_level, narrative_delivery)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          req.params.id,
+          pick.feat_id,
+          pick.tier,
+          newLevel,
+          `Auto-picked at level ${newLevel} during companion level-up.`
+        ]
+      );
+    }
+
     const updatedCompanion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation, n.avatar
       FROM companions c
@@ -449,11 +512,86 @@ router.post('/:id/level-up', async (req, res) => {
         hpGained: hpGain,
         newMaxHp,
         newFeatures: getClassFeatures(className, newLevel),
-        proficiencyBonus: PROFICIENCY_BONUS[newLevel]
+        proficiencyBonus: PROFICIENCY_BONUS[newLevel],
+        themeTierUnlocked: progressionDecisions.theme_tier_unlock,
+        ancestryFeatSelected: progressionDecisions.ancestry_feat_auto_pick
       }
     });
   } catch (error) {
     handleServerError(res, error, 'level up companion');
+  }
+});
+
+// Get full progression snapshot for a companion (theme + unlocks + ancestry feats)
+router.get('/:id/progression', async (req, res) => {
+  try {
+    await ensureCompanionProgressionInitialized(req.params.id);
+
+    const companion = await dbGet(
+      `SELECT c.id, c.companion_class, c.companion_level, n.name, n.race
+       FROM companions c JOIN npcs n ON c.npc_id = n.id
+       WHERE c.id = ?`,
+      [req.params.id]
+    );
+    if (!companion) {
+      return res.status(404).json({ error: 'Companion not found' });
+    }
+
+    const themeRow = await dbGet(
+      `SELECT ct.theme_id, ct.path_choice, t.name as theme_name,
+              t.identity, t.signature_skill_1, t.signature_skill_2, t.tags
+       FROM companion_themes ct JOIN themes t ON ct.theme_id = t.id
+       WHERE ct.companion_id = ?`,
+      [req.params.id]
+    );
+
+    const unlocks = await dbAll(
+      `SELECT ctu.tier, ctu.unlocked_at_level, ctu.narrative_delivery,
+              ta.ability_name, ta.ability_description, ta.mechanics, ta.flavor_text
+       FROM companion_theme_unlocks ctu
+       LEFT JOIN theme_abilities ta ON ctu.tier_ability_id = ta.id
+       WHERE ctu.companion_id = ?
+       ORDER BY ctu.tier`,
+      [req.params.id]
+    );
+
+    let themeAllTiers = [];
+    if (themeRow) {
+      themeAllTiers = await dbAll(
+        `SELECT tier, ability_name, ability_description, mechanics, flavor_text, path_variant
+         FROM theme_abilities WHERE theme_id = ?
+         ORDER BY tier, path_variant`,
+        [themeRow.theme_id]
+      );
+    }
+
+    const ancestryFeats = await dbAll(
+      `SELECT caf.tier, caf.selected_at_level, caf.narrative_delivery, af.list_id,
+              af.feat_name, af.description, af.mechanics, af.flavor_text
+       FROM companion_ancestry_feats caf
+       JOIN ancestry_feats af ON caf.feat_id = af.id
+       WHERE caf.companion_id = ?
+       ORDER BY caf.tier`,
+      [req.params.id]
+    );
+
+    res.json({
+      companion: {
+        id: companion.id,
+        name: companion.name,
+        race: companion.race,
+        class: companion.companion_class,
+        level: companion.companion_level
+      },
+      theme: themeRow
+        ? { ...themeRow, tags: themeRow.tags ? JSON.parse(themeRow.tags) : [] }
+        : null,
+      theme_all_tiers: themeAllTiers,
+      theme_unlocks: unlocks,
+      ancestry_feats: ancestryFeats
+    });
+  } catch (error) {
+    handleServerError(res, error, 'fetch companion progression');
   }
 });
 
@@ -499,6 +637,14 @@ router.get('/:id/level-up-info', async (req, res) => {
     const subclassLevel = SUBCLASS_LEVELS[className] || 3;
     const needsSubclass = !companion.companion_subclass && currentLevel >= subclassLevel;
 
+    // Phase 5.5: lazy-backfill theme/ancestry for pre-5.5 companions, then
+    // compute the progression preview so the UI can show what will auto-apply
+    await ensureCompanionProgressionInitialized(req.params.id);
+    const progressionDecisions = await computeCompanionProgressionDecisions(
+      req.params.id,
+      newLevel
+    );
+
     res.json({
       companionName: companion.name,
       currentLevel,
@@ -521,7 +667,8 @@ router.get('/:id/level-up-info', async (req, res) => {
         current: PROFICIENCY_BONUS[currentLevel],
         new: PROFICIENCY_BONUS[newLevel]
       },
-      subclassLevel: SUBCLASS_LEVELS[className]
+      subclassLevel: SUBCLASS_LEVELS[className],
+      progression: progressionDecisions
     });
   } catch (error) {
     handleServerError(res, error, 'fetch level-up info');
@@ -836,6 +983,10 @@ router.post('/create-party-member', async (req, res) => {
       JOIN npcs n ON c.npc_id = n.id
       WHERE c.id = ?
     `, [companionResult.lastInsertRowid]);
+
+    // Phase 5.5: auto-assign theme + seed L1 ancestry feat for new party member
+    await autoAssignCompanionTheme(companion.id, companion.companion_class, companion.companion_level || 1);
+    await autoSeedCompanionAncestryFeatTier1(companion.id, companion.race, companion.companion_level || 1);
 
     res.status(201).json({
       message: `${name} has joined your party!`,
