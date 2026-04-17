@@ -2,6 +2,47 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.11] - 2026-04-17 — Phase 6: Companion Rest + Spell Slots
+
+Fixes the single biggest functional gap for companions: spellcasting
+companions (wizards, clerics, druids, warlocks, bards, sorcerers,
+paladins, rangers, artificers) can now actually cast leveled spells,
+and every companion can take a long or short rest that restores HP.
+Previously companions had no `spell_slots` column and the long rest
+endpoint didn't exist for them.
+
+### Added
+- **Migration 029**: `companion_spell_slots`, `companion_spell_slots_used`,
+  and `companion_hit_dice` columns on the `companions` table. All
+  nullable. Max slots are computed on demand from class + level via the
+  shared `getSpellSlots()` helper — only the used map is persisted.
+- **New endpoints** mirroring the character-side contracts:
+  - `GET /api/companion/:id/spell-slots` → `{ max, used, class, level }`
+  - `POST /api/companion/:id/spell-slots/use` → consume one slot at
+    given level; 400 if no slots available at that level
+  - `POST /api/companion/:id/spell-slots/restore` → refund one used slot
+  - `POST /api/companion/:id/rest` → `{ restType: 'long' | 'short' }`
+    - long: restores full HP + clears all used slots
+    - short: restores 50% of missing HP (min 1); warlocks also refresh
+      pact slots (parity with character-side behavior)
+- **DM prompt** now surfaces each spellcasting companion's current slot
+  state as a `Spell slots: L1 2/4, L2 0/3` line under their block via
+  the new `formatCompanionSpellSlotsLine()` helper in
+  `dmPromptBuilder.js`. Max + used are pre-computed in `dmSession.js`
+  so `dmPromptBuilder.js` stays import-free.
+- **CompanionSheet UI**: purple-accented Spell Slots section with
+  circle indicators and Use / +1 buttons per level, matching the
+  CharacterSheet pattern. Two new action buttons — teal "Long Rest"
+  and blue "Short Rest".
+
+### Tests
+- 8 new integration tests (30 assertions) in Group 12:
+  spellcasting vs non-caster slot maps, use + restore round-trip,
+  rejection paths (no such slot level, slots exhausted, npc_stats
+  companion), long rest HP + slot restoration, short rest 50% heal
+  math, warlock pact-slot recovery on short rest.
+- Full suite: 310 passing (up from 280).
+
 ## [1.0.0.10] - 2026-04-17 — Phase 5.6: DM Prompt Parity + Critical Bug Fix
 
 Two fixes surfaced during the Phase 5.5 audit: one long-standing bug that
