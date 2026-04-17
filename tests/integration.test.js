@@ -1088,6 +1088,63 @@ async function testProgressionNoSynergyForNonResonantPair() {
   await dbRun('DELETE FROM characters WHERE id = ?', [id]);
 }
 
+async function testLevelUpRequiresSubclassForMulticlass() {
+  console.log('\n  -- Level-up: multiclassing into a L1-subclass class without subclass returns 422 --');
+  // Create a Fighter at L1 with enough XP to level up (300 xp)
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_MulticlassValidation',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: null,
+    race: 'Human',
+    level: 1,
+    current_hp: 12, max_hp: 12,
+    armor_class: 15, speed: 30,
+    current_location: 'Anywhere',
+    current_quest: null,
+    experience: 300,
+    experience_to_next_level: 900,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 14, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST',
+    gender: 'female',
+    alignment: 'Neutral'
+  });
+  const id = created.id;
+
+  // Attempt to multiclass into Cleric (which requires a subclass at L1) without passing one
+  const { status, body } = await api('POST', `/api/character/level-up/${id}`, {
+    selectedClass: 'Cleric',
+    hpRoll: 'average'
+    // NOTE: deliberately omit `subclass`
+  });
+  assert(status === 422, `Returns 422 (got ${status})`);
+  assert(body.error && body.error.includes('Subclass selection required'), 'Error message mentions subclass requirement');
+  assert(body.targetClass === 'Cleric', 'Error payload includes targetClass');
+  assert(body.newClassLevel === 1, 'Error payload includes newClassLevel');
+
+  // Verify character was NOT mutated (still L1 Fighter)
+  const { body: check } = await api('GET', `/api/character/${id}`);
+  assert(check.level === 1, `Level unchanged after failed level-up (got ${check.level})`);
+  assert(check.class === 'Fighter', `Class unchanged after failed level-up (got ${check.class})`);
+
+  // Now retry WITH a subclass — should succeed
+  const retry = await api('POST', `/api/character/level-up/${id}`, {
+    selectedClass: 'Cleric',
+    subclass: 'Life Domain',
+    hpRoll: 'average'
+  });
+  assert(retry.status === 200, `Retry with subclass succeeds (got ${retry.status})`);
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
 async function testCreateKnightInitializesMoralPath() {
   console.log('\n  -- Progression: Creating Knight theme initializes moral path to "true" --');
   const { status, body } = await api('POST', '/api/character', {
@@ -1208,6 +1265,7 @@ async function runTests() {
     await testCreateCharacterWithProgression();
     await testProgressionReturnsUpcomingTiersAndSynergy();
     await testProgressionNoSynergyForNonResonantPair();
+    await testLevelUpRequiresSubclassForMulticlass();
     await testCreateKnightInitializesMoralPath();
 
   } catch (err) {

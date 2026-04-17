@@ -876,17 +876,30 @@ router.post('/level-up/:id', async (req, res) => {
     // Note: Multiclass prerequisites are NOT enforced - player can choose any class
     // This is a deliberate design decision to allow player freedom
 
-    // Determine the new class level
-    let newClassLevel;
+    // Determine the new class level (used for subclass-required validation below
+    // — mutations to classLevels happen only AFTER validation passes)
+    const newClassLevel = isMulticlass ? 1 : classLevels[existingClassIndex].level + 1;
+
+    // Validate subclass is provided when the target class requires one at this
+    // level (e.g., multiclassing into Cleric/Sorcerer/Warlock at L1 requires
+    // picking a domain/origin/patron). Without this check, `subclass: null`
+    // would be silently persisted, leaving the character in a broken state.
+    if (needsSubclassSelection(targetClassName, newClassLevel) && !subclass) {
+      return res.status(422).json({
+        error: `Subclass selection required: ${targetClass} must choose a subclass at level ${newClassLevel}`,
+        targetClass,
+        newClassLevel
+      });
+    }
+
+    // Apply class level / subclass mutations now that validation has passed
     if (isMulticlass) {
-      newClassLevel = 1;
       classLevels.push({
         class: targetClass,
         level: 1,
         subclass: subclass || null
       });
     } else {
-      newClassLevel = classLevels[existingClassIndex].level + 1;
       classLevels[existingClassIndex].level = newClassLevel;
       if (subclass && !classLevels[existingClassIndex].subclass) {
         classLevels[existingClassIndex].subclass = subclass;
