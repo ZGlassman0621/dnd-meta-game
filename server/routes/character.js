@@ -1,5 +1,5 @@
 import express from 'express';
-import { dbAll, dbGet, dbRun } from '../database.js';
+import db, { dbAll, dbGet, dbRun } from '../database.js';
 import * as questService from '../services/questService.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
@@ -924,6 +924,7 @@ router.post('/level-up/:id', async (req, res) => {
 
     // Handle ASI if applicable (based on the class being leveled)
     let newAbilityScores = { ...abilityScores };
+    let pendingFeatsJson = null; // Set when feat-instead-of-ASI path is taken
     if (hasASI(targetClassName, newClassLevel) && asiChoice) {
       if (asiChoice.type === 'asi' && asiChoice.increases) {
         // Apply ability score increases (max 20 per ability)
@@ -982,135 +983,165 @@ router.post('/level-up/:id', async (req, res) => {
           }
         }
 
-        // Persist the updated feats array
-        await dbRun('UPDATE characters SET feats = ? WHERE id = ?', [
-          JSON.stringify(existingFeats), req.params.id
-        ]);
+        // Stash for the transactional write phase below
+        pendingFeatsJson = JSON.stringify(existingFeats);
       }
     }
 
     // Handle subclass selection for the target class
     let newSubclass = character.subclass;
     if (needsSubclassSelection(targetClassName, newClassLevel) && subclass) {
-      if (isMulticlass) {
-        // For multiclass, subclass is already set above
-      } else if (!classLevels[existingClassIndex].subclass) {
-        classLevels[existingClassIndex].subclass = subclass;
-      }
-      // Update legacy subclass field if this is the primary class
+      // classLevels was already updated with the subclass above; just set the
+      // legacy top-level subclass field if this is the primary class
       if (targetClassName === character.class.toLowerCase()) {
         newSubclass = subclass;
       }
     }
 
-    // Persist new cantrips and spells learned during level-up
+    // Pre-compute cantrip / spell updates (no DB writes yet — transactional phase below)
+    let pendingCantripsJson = null;
+    let pendingSpellsJson = null;
+
     if (newCantrips && Array.isArray(newCantrips) && newCantrips.length > 0) {
       const existingCantrips = safeParse(character.known_cantrips, []);
-      const updatedCantrips = [...new Set([...existingCantrips, ...newCantrips])];
-      await dbRun('UPDATE characters SET known_cantrips = ? WHERE id = ?', [
-        JSON.stringify(updatedCantrips), req.params.id
-      ]);
+      pendingCantripsJson = JSON.stringify([...new Set([...existingCantrips, ...newCantrips])]);
     }
 
     if (newSpells && Array.isArray(newSpells) && newSpells.length > 0) {
       const existingSpells = safeParse(character.known_spells, []);
       let updatedSpells = [...existingSpells];
-
-      // Handle swap first (Bard, Sorcerer, Warlock, Ranger can swap 1 spell on level-up)
       if (swapSpell && swapSpell.old && swapSpell.new) {
         updatedSpells = updatedSpells.filter(s => s !== swapSpell.old);
       }
-
       updatedSpells = [...new Set([...updatedSpells, ...newSpells])];
-      await dbRun('UPDATE characters SET known_spells = ? WHERE id = ?', [
-        JSON.stringify(updatedSpells), req.params.id
-      ]);
+      pendingSpellsJson = JSON.stringify(updatedSpells);
     } else if (swapSpell && swapSpell.old && swapSpell.new) {
-      // Swap only, no new spells (edge case)
       const existingSpells = safeParse(character.known_spells, []);
       const updatedSpells = existingSpells.filter(s => s !== swapSpell.old);
       updatedSpells.push(swapSpell.new);
-      await dbRun('UPDATE characters SET known_spells = ? WHERE id = ?', [
-        JSON.stringify(updatedSpells), req.params.id
-      ]);
+      pendingSpellsJson = JSON.stringify(updatedSpells);
     }
 
-    // Handle Keeper-specific level-up data
+    // Keeper-specific pending writes
+    const keeperWrites = {};
     if (targetClassName === 'keeper') {
       const { keeperGenreDomain, keeperNewTexts, keeperNewRecitations, keeperSpecialization,
               keeperSecondGenre, keeperGenreMastery, keeperSubclassText } = req.body;
 
-      if (keeperGenreDomain) {
-        await dbRun('UPDATE characters SET keeper_genre_domain = ? WHERE id = ?', [keeperGenreDomain, req.params.id]);
-      }
+      if (keeperGenreDomain) keeperWrites.genre_domain = keeperGenreDomain;
+      if (keeperSecondGenre) keeperWrites.genre_domain_2 = keeperSecondGenre;
+      if (keeperGenreMastery) keeperWrites.genre_mastery = 1;
 
-      if (keeperSecondGenre) {
-        await dbRun('UPDATE characters SET keeper_genre_domain_2 = ? WHERE id = ?', [keeperSecondGenre, req.params.id]);
-      }
-
-      if (keeperGenreMastery) {
-        await dbRun('UPDATE characters SET keeper_genre_mastery = 1 WHERE id = ?', [req.params.id]);
-      }
-
-      // Collect all new texts (player-chosen + subclass-granted)
       const allNewTexts = [...(keeperNewTexts || [])];
       if (keeperSubclassText) allNewTexts.push(keeperSubclassText);
-
       if (allNewTexts.length > 0) {
         const existingTexts = safeParse(character.keeper_texts, []);
-        const updatedTexts = [...new Set([...existingTexts, ...allNewTexts])];
-        await dbRun('UPDATE characters SET keeper_texts = ? WHERE id = ?', [JSON.stringify(updatedTexts), req.params.id]);
+        keeperWrites.texts = JSON.stringify([...new Set([...existingTexts, ...allNewTexts])]);
       }
 
       if (keeperNewRecitations && Array.isArray(keeperNewRecitations) && keeperNewRecitations.length > 0) {
         const existingRec = safeParse(character.keeper_recitations, []);
-        const updatedRec = [...new Set([...existingRec, ...keeperNewRecitations])];
-        await dbRun('UPDATE characters SET keeper_recitations = ? WHERE id = ?', [JSON.stringify(updatedRec), req.params.id]);
+        keeperWrites.recitations = JSON.stringify([...new Set([...existingRec, ...keeperNewRecitations])]);
       }
 
-      if (keeperSpecialization) {
-        await dbRun('UPDATE characters SET keeper_specialization = ? WHERE id = ?', [keeperSpecialization, req.params.id]);
-      }
+      if (keeperSpecialization) keeperWrites.specialization = keeperSpecialization;
     }
 
-    // Calculate new XP to next level (based on total level)
+    // Compute final character fields
     const newXPToNextLevel = getXPToNextLevel(newTotalLevel);
-
-    // Calculate hit dice breakdown
     const hitDiceBreakdown = getHitDiceBreakdown(classLevels);
-
-    // Update the character
     const newMaxHp = character.max_hp + hpGain;
-    const newCurrentHp = character.current_hp + hpGain; // Heal the HP gained
-
-    // Determine the "primary" class for legacy field (highest level class)
+    const newCurrentHp = character.current_hp + hpGain;
     const primaryClass = classLevels.reduce((a, b) => a.level >= b.level ? a : b);
 
-    await dbRun(`
-      UPDATE characters
-      SET level = ?,
-          class = ?,
-          max_hp = ?,
-          current_hp = ?,
-          ability_scores = ?,
-          subclass = ?,
-          class_levels = ?,
-          hit_dice = ?,
-          experience_to_next_level = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [
-      newTotalLevel,
-      primaryClass.class,
-      newMaxHp,
-      newCurrentHp,
-      JSON.stringify(newAbilityScores),
-      primaryClass.subclass || newSubclass,
-      JSON.stringify(classLevels),
-      JSON.stringify(hitDiceBreakdown),
-      newXPToNextLevel,
-      req.params.id
-    ]);
+    // ==== Transactional write phase ====
+    // All writes happen inside a single transaction. If any write fails, all are
+    // rolled back — no more orphaned state where cantrips got added but the level
+    // didn't, or Keeper specialization changed but the HP didn't update.
+    const tx = await db.transaction('write');
+    try {
+      if (pendingFeatsJson !== null) {
+        await tx.execute({
+          sql: 'UPDATE characters SET feats = ? WHERE id = ?',
+          args: [pendingFeatsJson, req.params.id]
+        });
+      }
+      if (pendingCantripsJson !== null) {
+        await tx.execute({
+          sql: 'UPDATE characters SET known_cantrips = ? WHERE id = ?',
+          args: [pendingCantripsJson, req.params.id]
+        });
+      }
+      if (pendingSpellsJson !== null) {
+        await tx.execute({
+          sql: 'UPDATE characters SET known_spells = ? WHERE id = ?',
+          args: [pendingSpellsJson, req.params.id]
+        });
+      }
+      if (keeperWrites.genre_domain) {
+        await tx.execute({
+          sql: 'UPDATE characters SET keeper_genre_domain = ? WHERE id = ?',
+          args: [keeperWrites.genre_domain, req.params.id]
+        });
+      }
+      if (keeperWrites.genre_domain_2) {
+        await tx.execute({
+          sql: 'UPDATE characters SET keeper_genre_domain_2 = ? WHERE id = ?',
+          args: [keeperWrites.genre_domain_2, req.params.id]
+        });
+      }
+      if (keeperWrites.genre_mastery) {
+        await tx.execute({
+          sql: 'UPDATE characters SET keeper_genre_mastery = 1 WHERE id = ?',
+          args: [req.params.id]
+        });
+      }
+      if (keeperWrites.texts) {
+        await tx.execute({
+          sql: 'UPDATE characters SET keeper_texts = ? WHERE id = ?',
+          args: [keeperWrites.texts, req.params.id]
+        });
+      }
+      if (keeperWrites.recitations) {
+        await tx.execute({
+          sql: 'UPDATE characters SET keeper_recitations = ? WHERE id = ?',
+          args: [keeperWrites.recitations, req.params.id]
+        });
+      }
+      if (keeperWrites.specialization) {
+        await tx.execute({
+          sql: 'UPDATE characters SET keeper_specialization = ? WHERE id = ?',
+          args: [keeperWrites.specialization, req.params.id]
+        });
+      }
+
+      // Main character update (level, HP, class_levels, etc.)
+      await tx.execute({
+        sql: `UPDATE characters
+              SET level = ?, class = ?, max_hp = ?, current_hp = ?,
+                  ability_scores = ?, subclass = ?, class_levels = ?,
+                  hit_dice = ?, experience_to_next_level = ?,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`,
+        args: [
+          newTotalLevel,
+          primaryClass.class,
+          newMaxHp,
+          newCurrentHp,
+          JSON.stringify(newAbilityScores),
+          primaryClass.subclass || newSubclass,
+          JSON.stringify(classLevels),
+          JSON.stringify(hitDiceBreakdown),
+          newXPToNextLevel,
+          req.params.id
+        ]
+      });
+
+      await tx.commit();
+    } catch (txErr) {
+      await tx.rollback();
+      throw txErr;
+    }
 
     const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
 
