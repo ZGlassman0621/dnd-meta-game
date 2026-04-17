@@ -2269,6 +2269,120 @@ async function testCompanionMerchantCannotSellItemsNotOwned() {
   await cleanupTestMerchant(merchantId);
 }
 
+// ===== GROUP 16: Companion Multiclass (Phase 10) =====
+
+async function testCompanionRecruitSeedsClassLevels() {
+  console.log('\n  -- Recruit seeds companion_class_levels --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 2);
+  const row = await dbGet(
+    'SELECT companion_class_levels FROM companions WHERE id = ?',
+    [companionId]
+  );
+  const parsed = parseJSON(row.companion_class_levels || '[]');
+  assert(Array.isArray(parsed) && parsed.length === 1, 'class_levels is a single-entry array');
+  assert(parsed[0].class === 'Fighter' && parsed[0].level === 2, `Primary class seeded correctly (got ${JSON.stringify(parsed)})`);
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpAdvancesPrimary() {
+  console.log('\n  -- Level-up with no targetClass advances primary class --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 2);
+  const r = await api('POST', `/api/companion/${companionId}/level-up`, { hpRoll: 'average' });
+  assert(r.status === 200, `level-up returns 200 (got ${r.status})`);
+
+  const row = await dbGet(
+    'SELECT companion_level, companion_class_levels FROM companions WHERE id = ?',
+    [companionId]
+  );
+  assert(row.companion_level === 3, `Total level = 3 (got ${row.companion_level})`);
+  const cl = parseJSON(row.companion_class_levels);
+  assert(cl.length === 1 && cl[0].class === 'Fighter' && cl[0].level === 3,
+    `Fighter advanced to 3 (got ${JSON.stringify(cl)})`);
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpMulticlassAdd() {
+  console.log('\n  -- Level-up with new targetClass adds multiclass entry --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+
+  const r = await api('POST', `/api/companion/${companionId}/level-up`, {
+    hpRoll: 'average',
+    targetClass: 'Wizard'
+  });
+  assert(r.status === 200, 'multiclass-add returns 200');
+  assert(r.body.levelUpSummary.isMulticlassAddition === true, 'marked as multiclass addition');
+  assert(r.body.levelUpSummary.targetClass === 'Wizard', 'targetClass reported');
+
+  const row = await dbGet(
+    'SELECT companion_level, companion_class, companion_class_levels FROM companions WHERE id = ?',
+    [companionId]
+  );
+  assert(row.companion_level === 4, `Total level = 4 (got ${row.companion_level})`);
+  assert(row.companion_class === 'Fighter', `Primary class stays Fighter (got ${row.companion_class})`);
+  const cl = parseJSON(row.companion_class_levels);
+  assert(cl.length === 2, `class_levels has 2 entries (got ${cl.length})`);
+  assert(cl.find(c => c.class === 'Wizard')?.level === 1, 'Wizard entry at level 1');
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpAdvancesSecondary() {
+  console.log('\n  -- Level-up advances a secondary class once multiclass is set up --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+
+  // First, multiclass into Wizard
+  await api('POST', `/api/companion/${companionId}/level-up`, {
+    hpRoll: 'average', targetClass: 'Wizard'
+  });
+  // Then advance Wizard again
+  const r = await api('POST', `/api/companion/${companionId}/level-up`, {
+    hpRoll: 'average', targetClass: 'Wizard'
+  });
+  assert(r.status === 200, 'secondary advance returns 200');
+  assert(r.body.levelUpSummary.isMulticlassAddition === false,
+    'second Wizard level is not a new addition');
+
+  const row = await dbGet(
+    'SELECT companion_level, companion_class_levels FROM companions WHERE id = ?',
+    [companionId]
+  );
+  assert(row.companion_level === 5, `Total level = 5 (got ${row.companion_level})`);
+  const cl = parseJSON(row.companion_class_levels);
+  assert(cl.find(c => c.class === 'Wizard')?.level === 2, 'Wizard advanced to 2');
+  assert(cl.find(c => c.class === 'Fighter')?.level === 3, 'Fighter stays at 3');
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionMulticlassSpellSlots() {
+  console.log('\n  -- Multiclass companion gets combined spell slots --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Wizard', 3);
+
+  // Multiclass into Cleric
+  await api('POST', `/api/companion/${companionId}/level-up`, {
+    hpRoll: 'average', targetClass: 'Cleric'
+  });
+
+  const r = await api('GET', `/api/companion/${companionId}/spell-slots`);
+  assert(r.status === 200, 'spell-slots returns 200');
+  // Wizard 3 + Cleric 1 → caster level 4 (both full casters, combined)
+  // Full caster L4: { 1: 4, 2: 3 }
+  assert(r.body.max['1'] === 4, `L1 slots = 4 (got ${r.body.max['1']})`);
+  assert(r.body.max['2'] === 3, `L2 slots = 3 (got ${r.body.max['2']})`);
+  assert(Array.isArray(r.body.class_levels) && r.body.class_levels.length === 2,
+    'class_levels returned with 2 entries');
+  await cleanupTestCompanion(companionId, npcId);
+}
+
+async function testCompanionLevelUpInfoExposesClassLevels() {
+  console.log('\n  -- level-up-info exposes classLevels + canMulticlass flag --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+  const r = await api('GET', `/api/companion/${companionId}/level-up-info`);
+  assert(r.status === 200, 'level-up-info returns 200');
+  assert(Array.isArray(r.body.classLevels) && r.body.classLevels.length === 1,
+    'classLevels is an array');
+  assert(r.body.choices?.canMulticlass === true, 'canMulticlass flag is true');
+  await cleanupTestCompanion(companionId, npcId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2404,6 +2518,14 @@ async function runTests() {
     await testCompanionMerchantInsufficientGold();
     await testCompanionMerchantBulkDiscount();
     await testCompanionMerchantCannotSellItemsNotOwned();
+
+    console.log('\n=== Group 16: Companion Multiclass (Phase 10) ===');
+    await testCompanionRecruitSeedsClassLevels();
+    await testCompanionLevelUpAdvancesPrimary();
+    await testCompanionLevelUpMulticlassAdd();
+    await testCompanionLevelUpAdvancesSecondary();
+    await testCompanionMulticlassSpellSlots();
+    await testCompanionLevelUpInfoExposesClassLevels();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

@@ -1051,6 +1051,11 @@ function CompanionLevelUpModal({ companion, levelUpInfo, onClose, onLevelUp }) {
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 
+  // Phase 10: target class picker (default = primary / first entry in classLevels)
+  const classLevelsFromInfo = Array.isArray(levelUpInfo?.classLevels) ? levelUpInfo.classLevels : []
+  const primaryClassName = classLevelsFromInfo[0]?.class || companion.companion_class
+  const [selectedTargetClass, setSelectedTargetClass] = useState(primaryClassName)
+
   const rollHitDie = () => {
     const roll = Math.floor(Math.random() * levelUpInfo.hpGain.hitDie) + 1
     setHpRoll(roll)
@@ -1094,6 +1099,14 @@ function CompanionLevelUpModal({ companion, levelUpInfo, onClose, onLevelUp }) {
 
       if (levelUpInfo.choices.needsSubclass && selectedSubclass) {
         body.subclass = selectedSubclass
+      }
+
+      // Phase 10: include targetClass so the server knows which class to advance
+      if (selectedTargetClass && selectedTargetClass !== primaryClassName) {
+        body.targetClass = selectedTargetClass
+      } else if (selectedTargetClass) {
+        // Include explicitly even for primary so multiclass companions pick correctly
+        body.targetClass = selectedTargetClass
       }
 
       const response = await fetch(`/api/companion/${companion.id}/level-up`, {
@@ -1144,6 +1157,48 @@ function CompanionLevelUpModal({ companion, levelUpInfo, onClose, onLevelUp }) {
             color: '#e74c3c'
           }}>
             {error}
+          </div>
+        )}
+
+        {/* Phase 10: Target-class picker (multiclass). Shown whenever level-up-info
+            has reported a classLevels array — lets the user advance the primary
+            class, a secondary class, or add a brand-new multiclass entry. */}
+        {levelUpInfo.choices?.canMulticlass && classLevelsFromInfo.length > 0 && (
+          <div style={{
+            background: 'rgba(100, 149, 237, 0.1)',
+            border: '1px solid #6495ed',
+            borderRadius: '8px',
+            padding: '0.75rem 1rem',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ color: '#6495ed', fontSize: '0.95rem', margin: '0 0 0.4rem 0' }}>
+              Class to Advance
+            </h3>
+            <div style={{ color: '#888', fontSize: '0.72rem', marginBottom: '0.35rem' }}>
+              Existing classes: {classLevelsFromInfo.map(cl => `${cl.class} ${cl.level}`).join(' / ')}
+            </div>
+            <select
+              value={selectedTargetClass}
+              onChange={(e) => setSelectedTargetClass(e.target.value)}
+              style={{
+                width: '100%', padding: '0.4rem', background: '#2a2a2a',
+                border: '1px solid #444', borderRadius: '4px', color: '#fff', fontSize: '0.85rem'
+              }}
+            >
+              {classLevelsFromInfo.map(cl => (
+                <option key={cl.class} value={cl.class}>
+                  {cl.class} (advance to {cl.level + 1})
+                </option>
+              ))}
+              <optgroup label="Multiclass — add a new class at level 1">
+                {['Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter',
+                  'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard']
+                  .filter(c => !classLevelsFromInfo.find(cl => cl.class.toLowerCase() === c.toLowerCase()))
+                  .map(c => (
+                    <option key={`new-${c}`} value={c}>{c} (multiclass — new at level 1)</option>
+                  ))}
+              </optgroup>
+            </select>
           </div>
         )}
 

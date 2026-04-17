@@ -505,7 +505,23 @@ function formatCompanions(companions, awayCompanions = []) {
       const abilityScores = companion.companion_ability_scores
         ? JSON.parse(companion.companion_ability_scores)
         : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
-      statsLine = `  Class: ${companion.companion_class} Level ${companion.companion_level}${companion.companion_subclass ? ` (${companion.companion_subclass})` : ''}
+
+      // Phase 10: render multiclass breakdown when class_levels has >1 entry
+      let classLine;
+      let classLevels = companion.companion_class_levels;
+      if (typeof classLevels === 'string') {
+        try { classLevels = JSON.parse(classLevels); } catch { classLevels = null; }
+      }
+      if (Array.isArray(classLevels) && classLevels.length > 1) {
+        const parts = classLevels.map(cl =>
+          `${cl.class} ${cl.level}${cl.subclass ? ` (${cl.subclass})` : ''}`
+        );
+        classLine = `  Classes: ${parts.join(' / ')} — total ${companion.companion_level}`;
+      } else {
+        classLine = `  Class: ${companion.companion_class} Level ${companion.companion_level}${companion.companion_subclass ? ` (${companion.companion_subclass})` : ''}`;
+      }
+
+      statsLine = `${classLine}
   HP: ${companion.companion_current_hp}/${companion.companion_max_hp}
   Abilities: STR ${abilityScores.str}, DEX ${abilityScores.dex}, CON ${abilityScores.con}, INT ${abilityScores.int}, WIS ${abilityScores.wis}, CHA ${abilityScores.cha}`;
     } else {

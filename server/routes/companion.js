@@ -6,7 +6,9 @@ import {
   getClassFeatures,
   hasASI,
   SUBCLASS_LEVELS,
-  getSpellSlots
+  getSpellSlots,
+  getMulticlassSpellSlots,
+  getTotalLevel
 } from '../config/levelProgression.js';
 import { onCompanionRecruited, onCompanionDismissed, onCompanionLoyaltyChanged } from '../services/narrativeIntegration.js';
 import { safeParse } from '../utils/safeParse.js';
@@ -24,6 +26,25 @@ import {
 import { CONDITION_NAMES } from '../data/conditions.js';
 import { updateMerchantAfterTransaction } from '../services/merchantService.js';
 import { getBulkDiscount } from '../services/economyService.js';
+
+// Phase 10: parse `companion_class_levels` (multiclass breakdown) with a
+// fallback to the legacy single-class columns. Returns an array of
+// `{ class, level, subclass }`.
+function parseCompanionClassLevels(companion) {
+  if (companion.companion_class_levels) {
+    const parsed = safeParse(companion.companion_class_levels, null);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  }
+  // Legacy single-class fallback
+  if (companion.companion_class) {
+    return [{
+      class: companion.companion_class,
+      level: companion.companion_level || 1,
+      subclass: companion.companion_subclass || null
+    }];
+  }
+  return [];
+}
 
 // Phase 7: normalized set of condition keys we'll accept. Same casing the
 // detectConditionChanges pipeline uses (lowercase_underscore).
@@ -179,14 +200,24 @@ router.post('/recruit', async (req, res) => {
       companionCurrentHp = companionMaxHp;
     }
 
+    // Phase 10: seed companion_class_levels for class-based recruits so
+    // the level-up endpoint has a breakdown to work with on day 1.
+    const companionClassLevels = (progression_type === 'class_based' && companion_class)
+      ? JSON.stringify([{
+          class: companion_class,
+          level: companionLevel,
+          subclass: companion_subclass || null
+        }])
+      : null;
+
     // Insert the companion
     const result = await dbRun(`
       INSERT INTO companions (
         npc_id, recruited_by_character_id, recruited_session_id,
         progression_type, original_stats_snapshot,
         companion_class, companion_subclass, companion_level, companion_max_hp, companion_current_hp,
-        companion_ability_scores, notes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        companion_ability_scores, companion_class_levels, notes, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
     `, [
       npc_id,
       recruited_by_character_id,
@@ -199,6 +230,7 @@ router.post('/recruit', async (req, res) => {
       companionMaxHp,
       companionCurrentHp,
       companionAbilityScores,
+      companionClassLevels,
       notes
     ]);
 
@@ -365,6 +397,10 @@ router.post('/:id/convert-to-class', async (req, res) => {
 });
 
 // Level up companion (class-based only)
+// Phase 10 adds multiclass support via optional `targetClass` in the body:
+//  - Omit targetClass → advances the companion's primary class (back-compat)
+//  - targetClass matches an existing class_levels entry → advances that class
+//  - targetClass is new → adds a new class at level 1 (multiclass)
 router.post('/:id/level-up', async (req, res) => {
   try {
     const companion = await dbGet(`
@@ -384,10 +420,12 @@ router.post('/:id/level-up', async (req, res) => {
       });
     }
 
-    const currentLevel = companion.companion_level;
-    const newLevel = currentLevel + 1;
+    // Parse class_levels (fall back to legacy single-class columns)
+    let classLevels = parseCompanionClassLevels(companion);
+    const currentTotalLevel = getTotalLevel(classLevels);
+    const newTotalLevel = currentTotalLevel + 1;
 
-    if (newLevel > 20) {
+    if (newTotalLevel > 20) {
       return res.status(400).json({ error: 'Companion is already at maximum level' });
     }
 
@@ -395,16 +433,32 @@ router.post('/:id/level-up', async (req, res) => {
       hpRoll = 'average',
       rollValue,
       subclass,
-      asiChoice
+      asiChoice,
+      targetClass // Phase 10: which class is being advanced (or added)
     } = req.body;
 
-    const className = companion.companion_class.toLowerCase();
+    // Determine which class is being leveled. Default to the primary
+    // (first in class_levels) when targetClass isn't provided — preserves
+    // pre-Phase-10 behavior for single-class companions.
+    const resolvedTargetClass = (targetClass || classLevels[0]?.class || companion.companion_class);
+    if (!resolvedTargetClass) {
+      return res.status(400).json({ error: 'Cannot determine class to advance' });
+    }
+    const targetClassKey = String(resolvedTargetClass).toLowerCase();
+
+    // Find existing entry or prepare to add a new one (multiclass)
+    const existingIdx = classLevels.findIndex(
+      c => String(c.class).toLowerCase() === targetClassKey
+    );
+    const isMulticlassAddition = existingIdx === -1;
+    const newClassLevel = isMulticlassAddition ? 1 : classLevels[existingIdx].level + 1;
+
     const abilityScores = companion.companion_ability_scores
       ? safeParse(companion.companion_ability_scores, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
       : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 
-    // Calculate HP gain
-    const hitDie = HIT_DICE[className] || 8;
+    // HP uses the target class's hit die
+    const hitDie = HIT_DICE[targetClassKey] || 8;
     let conMod = Math.floor((abilityScores.con - 10) / 2);
 
     let hpGain;
@@ -417,9 +471,9 @@ router.post('/:id/level-up', async (req, res) => {
       hpGain = Math.floor(hitDie / 2) + 1 + conMod;
     }
 
-    // Handle ASI
+    // ASI is keyed to the target class's level, not total level
     let newAbilityScores = { ...abilityScores };
-    if (hasASI(className, newLevel) && asiChoice) {
+    if (hasASI(targetClassKey, newClassLevel) && asiChoice) {
       if (asiChoice.type === 'asi' && asiChoice.increases) {
         let totalIncrease = 0;
         for (const [ability, increase] of Object.entries(asiChoice.increases)) {
@@ -433,50 +487,72 @@ router.post('/:id/level-up', async (req, res) => {
         if (totalIncrease > 2) {
           return res.status(400).json({ error: 'ASI increases cannot exceed 2 total points' });
         }
-        // Retroactive HP for CON increase
         if (asiChoice.increases.con) {
           const newConMod = Math.floor((newAbilityScores.con - 10) / 2);
           if (newConMod > conMod) {
-            hpGain += (newConMod - conMod) * newLevel;
+            // Apply retroactively across the full total level (same math as
+            // character-side level-up)
+            hpGain += (newConMod - conMod) * newTotalLevel;
           }
         }
       }
     }
 
-    // Handle subclass - allow selection if:
-    // 1. At the exact subclass level, OR
-    // 2. Past subclass level but never selected one (e.g., created at higher level)
-    let newSubclass = companion.companion_subclass;
-    const subclassLevel = SUBCLASS_LEVELS[className] || 3;
-    if (!companion.companion_subclass && currentLevel >= subclassLevel && subclass) {
-      newSubclass = subclass;
+    // Subclass handling — scoped to the class being leveled. For a new
+    // multiclass addition, require subclass at/beyond the class's subclass
+    // level. For existing classes, allow selection if never chosen.
+    const subclassLevel = SUBCLASS_LEVELS[targetClassKey] || 3;
+    let targetSubclass = isMulticlassAddition ? null : classLevels[existingIdx].subclass;
+    if (!targetSubclass && newClassLevel >= subclassLevel && subclass) {
+      targetSubclass = subclass;
+    }
+
+    // Mutate classLevels in place
+    if (isMulticlassAddition) {
+      classLevels.push({
+        class: resolvedTargetClass,
+        level: 1,
+        subclass: targetSubclass
+      });
+    } else {
+      classLevels[existingIdx].level = newClassLevel;
+      classLevels[existingIdx].subclass = targetSubclass;
     }
 
     const newMaxHp = companion.companion_max_hp + hpGain;
     const newCurrentHp = companion.companion_current_hp + hpGain;
 
     // Phase 5.5: make sure this companion has a theme + tier-1 feat before we
-    // compute tier decisions (existing pre-5.5 companions won't).
+    // compute tier decisions. Tier checks key off total level, not per-class.
     await ensureCompanionProgressionInitialized(req.params.id);
     const progressionDecisions = await computeCompanionProgressionDecisions(
       req.params.id,
-      newLevel
+      newTotalLevel
     );
+
+    // Primary class stays as class_levels[0] — matches character-side
+    // semantics where `companion_class` is the "archetype" the companion
+    // identifies as, and `companion_class_levels` holds the full breakdown.
+    const primary = classLevels[0];
 
     await dbRun(`
       UPDATE companions SET
+        companion_class = ?,
+        companion_subclass = ?,
+        companion_class_levels = ?,
         companion_level = ?,
         companion_max_hp = ?,
         companion_current_hp = ?,
-        companion_ability_scores = ?,
-        companion_subclass = ?
+        companion_ability_scores = ?
       WHERE id = ?
     `, [
-      newLevel,
+      primary.class,
+      primary.subclass,
+      JSON.stringify(classLevels),
+      newTotalLevel,
       newMaxHp,
       newCurrentHp,
       JSON.stringify(newAbilityScores),
-      newSubclass,
       req.params.id
     ]);
 
@@ -492,8 +568,8 @@ router.post('/:id/level-up', async (req, res) => {
           unlock.theme_id,
           unlock.tier,
           unlock.tier_ability_id,
-          newLevel,
-          `Auto-unlocked at level ${newLevel} during companion level-up.`
+          newTotalLevel,
+          `Auto-unlocked at level ${newTotalLevel} during companion level-up.`
         ]
       );
     }
@@ -509,8 +585,8 @@ router.post('/:id/level-up', async (req, res) => {
           req.params.id,
           pick.feat_id,
           pick.tier,
-          newLevel,
-          `Auto-picked at level ${newLevel} during companion level-up.`
+          newTotalLevel,
+          `Auto-picked at level ${newTotalLevel} during companion level-up.`
         ]
       );
     }
@@ -523,17 +599,21 @@ router.post('/:id/level-up', async (req, res) => {
     `, [req.params.id]);
 
     res.json({
-      message: `${companion.name} is now level ${newLevel}!`,
+      message: `${companion.name} is now level ${newTotalLevel}!`,
       companion: updatedCompanion,
       levelUpSummary: {
-        previousLevel: currentLevel,
-        newLevel,
+        previousLevel: currentTotalLevel,
+        newLevel: newTotalLevel,
+        targetClass: resolvedTargetClass,
+        newClassLevel,
+        isMulticlassAddition,
         hpGained: hpGain,
         newMaxHp,
-        newFeatures: getClassFeatures(className, newLevel),
-        proficiencyBonus: PROFICIENCY_BONUS[newLevel],
+        newFeatures: getClassFeatures(targetClassKey, newClassLevel),
+        proficiencyBonus: PROFICIENCY_BONUS[newTotalLevel],
         themeTierUnlocked: progressionDecisions.theme_tier_unlock,
-        ancestryFeatSelected: progressionDecisions.ancestry_feat_auto_pick
+        ancestryFeatSelected: progressionDecisions.ancestry_feat_auto_pick,
+        classLevels
       }
     });
   } catch (error) {
@@ -634,46 +714,52 @@ router.get('/:id/level-up-info', async (req, res) => {
       });
     }
 
-    const currentLevel = companion.companion_level;
-    const newLevel = currentLevel + 1;
-    const className = companion.companion_class.toLowerCase();
+    // Phase 10: use class_levels for multiclass-aware preview
+    const classLevels = parseCompanionClassLevels(companion);
+    const currentTotalLevel = getTotalLevel(classLevels);
+    const newTotalLevel = currentTotalLevel + 1;
 
-    if (newLevel > 20) {
+    if (newTotalLevel > 20) {
       return res.status(400).json({ error: 'Companion is already at maximum level' });
     }
 
     const abilityScores = companion.companion_ability_scores
       ? safeParse(companion.companion_ability_scores, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
       : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
-
-    const hitDie = HIT_DICE[className] || 8;
     const conMod = Math.floor((abilityScores.con - 10) / 2);
+
+    // Preview info is keyed to the primary class by default. The UI can
+    // request preview for a specific target via ?targetClass=X; for now
+    // we report the primary-class numbers and expose classLevels so the
+    // UI can let the user switch the target pre-submit.
+    const primary = classLevels[0];
+    const primaryClassKey = primary.class.toLowerCase();
+    const primaryNewLevel = primary.level + 1;
+
+    const hitDie = HIT_DICE[primaryClassKey] || 8;
     const avgHpGain = Math.floor(hitDie / 2) + 1 + conMod;
 
-    // Check if subclass is needed:
-    // 1. Normally needed at the exact subclass level
-    // 2. Also needed if past subclass level but never selected one (e.g., created at higher level)
-    const subclassLevel = SUBCLASS_LEVELS[className] || 3;
-    const needsSubclass = !companion.companion_subclass && currentLevel >= subclassLevel;
+    const subclassLevel = SUBCLASS_LEVELS[primaryClassKey] || 3;
+    const needsSubclass = !primary.subclass && primaryNewLevel >= subclassLevel;
 
-    // Phase 5.5: lazy-backfill theme/ancestry for pre-5.5 companions, then
-    // compute the progression preview so the UI can show what will auto-apply
     await ensureCompanionProgressionInitialized(req.params.id);
     const progressionDecisions = await computeCompanionProgressionDecisions(
       req.params.id,
-      newLevel
+      newTotalLevel
     );
 
     res.json({
       companionName: companion.name,
-      currentLevel,
-      newLevel,
-      className: companion.companion_class,
-      subclass: companion.companion_subclass,
-      newFeatures: getClassFeatures(className, newLevel),
+      currentLevel: currentTotalLevel,
+      newLevel: newTotalLevel,
+      className: primary.class,
+      subclass: primary.subclass,
+      classLevels,
+      newFeatures: getClassFeatures(primaryClassKey, primaryNewLevel),
       choices: {
         needsSubclass,
-        needsASI: hasASI(className, newLevel)
+        needsASI: hasASI(primaryClassKey, primaryNewLevel),
+        canMulticlass: true
       },
       hpGain: {
         hitDie,
@@ -683,10 +769,10 @@ router.get('/:id/level-up-info', async (req, res) => {
         maximum: hitDie + conMod
       },
       proficiencyBonus: {
-        current: PROFICIENCY_BONUS[currentLevel],
-        new: PROFICIENCY_BONUS[newLevel]
+        current: PROFICIENCY_BONUS[currentTotalLevel],
+        new: PROFICIENCY_BONUS[newTotalLevel]
       },
-      subclassLevel: SUBCLASS_LEVELS[className],
+      subclassLevel: SUBCLASS_LEVELS[primaryClassKey],
       progression: progressionDecisions
     });
   } catch (error) {
@@ -711,6 +797,8 @@ router.get('/:id/level-up-info', async (req, res) => {
 // ============================================================================
 
 // Get companion's spell slots (max + used)
+// Phase 10: use multiclass math when class_levels has more than one class;
+// otherwise fall back to single-class getSpellSlots() for back-compat.
 router.get('/:id/spell-slots', async (req, res) => {
   try {
     const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
@@ -726,14 +814,27 @@ router.get('/:id/spell-slots', async (req, res) => {
       });
     }
 
-    const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+    const classLevels = parseCompanionClassLevels(companion);
+    let max = {};
+    let pactMagic = null;
+
+    if (classLevels.length > 1) {
+      const mc = getMulticlassSpellSlots(classLevels);
+      max = mc.spellSlots || {};
+      pactMagic = mc.pactMagic || null;
+    } else {
+      max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+    }
+
     const used = safeParse(companion.companion_spell_slots_used, {});
 
     res.json({
       max,
       used,
       class: companion.companion_class,
-      level: companion.companion_level
+      level: companion.companion_level,
+      class_levels: classLevels,
+      pact_magic: pactMagic
     });
   } catch (error) {
     handleServerError(res, error, 'fetch companion spell slots');
@@ -1657,17 +1758,25 @@ router.post('/create-party-member', async (req, res) => {
     // Default speed is 30, but some races have different speeds
     const calculatedSpeed = speed || 30;
 
+    // Phase 10: seed class_levels for class-based party members too
+    const companionClassLevelsJson = JSON.stringify([{
+      class: companion_class,
+      level: companionLevel,
+      subclass: companion_subclass || null
+    }]);
+
     // Now create the companion record
     const companionResult = await dbRun(`
       INSERT INTO companions (
         npc_id, recruited_by_character_id, progression_type,
         original_stats_snapshot, companion_class, companion_subclass, companion_level,
         companion_max_hp, companion_current_hp, companion_ability_scores,
+        companion_class_levels,
         skill_proficiencies, cantrips, spells_known, notes, status,
         alignment, faith, lifestyle, ideals, bonds, flaws,
         armor_class, speed, subrace, background,
         equipment, inventory, gold_gp, gold_sp, gold_cp
-      ) VALUES (?, ?, 'class_based', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
+      ) VALUES (?, ?, 'class_based', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?, ?)
@@ -1681,6 +1790,7 @@ router.post('/create-party-member', async (req, res) => {
       companionMaxHp,
       companionMaxHp, // Start at full HP
       abilityScoresJson,
+      companionClassLevelsJson,
       skillProficienciesJson,
       cantripsJson,
       spellsKnownJson,
