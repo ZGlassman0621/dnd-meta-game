@@ -2143,6 +2143,132 @@ async function testTransferRejectsBadQuantity() {
   await cleanupTestCompanion(companionId, npcId);
 }
 
+// ===== GROUP 15: Companion Merchant Transactions (Phase 9) =====
+
+async function createTestMerchant(items, goldGp = 500) {
+  const result = await dbRun(
+    `INSERT INTO merchant_inventories (campaign_id, merchant_name, merchant_type, inventory, gold_gp, prosperity)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [testCampaignId, `TEST_CompMerchant_${Date.now()}`, 'general', JSON.stringify(items), goldGp, 'modest']
+  );
+  return Number(result.lastInsertRowid);
+}
+
+async function cleanupTestMerchant(merchantId) {
+  if (merchantId) await dbRun('DELETE FROM merchant_inventories WHERE id = ?', [merchantId]);
+}
+
+async function testCompanionMerchantBuy() {
+  console.log('\n  -- Companion buys from a merchant --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Wizard', 1);
+  await dbRun('UPDATE companions SET gold_gp = 50 WHERE id = ?', [companionId]);
+  const merchantId = await createTestMerchant([
+    { name: 'Component Pouch', quantity: 3, price_gp: 25, price_sp: 0, price_cp: 0 }
+  ]);
+
+  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
+    merchantId,
+    bought: [{ name: 'Component Pouch', quantity: 1, price_gp: 25, price_sp: 0, price_cp: 0 }]
+  });
+  assert(r.status === 200, `Buy returns 200 (got ${r.status})`);
+  assert(r.body.companion.gold_gp === 25, `Gold reduced to 25gp (got ${r.body.companion.gold_gp})`);
+
+  const inv = parseJSON(r.body.companion.inventory);
+  assert(inv.find(i => i.name === 'Component Pouch'), 'Component Pouch now in companion inventory');
+
+  const merchRow = await dbGet('SELECT inventory FROM merchant_inventories WHERE id = ?', [merchantId]);
+  const merchInv = parseJSON(merchRow.inventory);
+  const stock = merchInv.find(i => i.name === 'Component Pouch');
+  assert(stock.quantity === 2, `Merchant stock decremented to 2 (got ${stock?.quantity})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestMerchant(merchantId);
+}
+
+async function testCompanionMerchantSell() {
+  console.log('\n  -- Companion sells to a merchant --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await dbRun(
+    `UPDATE companions SET inventory = ?, gold_gp = 0 WHERE id = ?`,
+    [JSON.stringify([{ name: 'Battleaxe', quantity: 1 }]), companionId]
+  );
+  const merchantId = await createTestMerchant([]);
+
+  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
+    merchantId,
+    sold: [{ name: 'Battleaxe', quantity: 1, price_gp: 5, price_sp: 0, price_cp: 0 }]
+  });
+  assert(r.status === 200, 'Sell returns 200');
+  assert(r.body.companion.gold_gp === 5, `Gold increased to 5gp (got ${r.body.companion.gold_gp})`);
+
+  const inv = parseJSON(r.body.companion.inventory);
+  assert(!inv.find(i => i.name === 'Battleaxe'), 'Battleaxe removed from companion inventory');
+
+  const merchRow = await dbGet('SELECT inventory FROM merchant_inventories WHERE id = ?', [merchantId]);
+  const merchInv = parseJSON(merchRow.inventory);
+  assert(merchInv.find(i => i.name === 'Battleaxe'), 'Merchant now stocks Battleaxe');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestMerchant(merchantId);
+}
+
+async function testCompanionMerchantInsufficientGold() {
+  console.log('\n  -- Companion blocked from buying without enough gold --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Wizard', 1);
+  await dbRun('UPDATE companions SET gold_gp = 5 WHERE id = ?', [companionId]);
+  const merchantId = await createTestMerchant([
+    { name: 'Wand', quantity: 1, price_gp: 100, price_sp: 0, price_cp: 0 }
+  ]);
+
+  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
+    merchantId,
+    bought: [{ name: 'Wand', quantity: 1, price_gp: 100, price_sp: 0, price_cp: 0 }]
+  });
+  assert(r.status === 400, `Returns 400 when companion gold insufficient (got ${r.status})`);
+
+  // Companion state should be unchanged
+  const c = await dbGet('SELECT gold_gp, inventory FROM companions WHERE id = ?', [companionId]);
+  assert(c.gold_gp === 5, 'Companion gold unchanged after rejected transaction');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestMerchant(merchantId);
+}
+
+async function testCompanionMerchantBulkDiscount() {
+  console.log('\n  -- Companion bulk purchase triggers discount --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await dbRun('UPDATE companions SET gold_gp = 100 WHERE id = ?', [companionId]);
+  const merchantId = await createTestMerchant([
+    { name: 'Arrow', quantity: 100, price_gp: 0, price_sp: 1, price_cp: 0 }
+  ]);
+
+  // 10 arrows at 1sp each = 10sp base. Bulk tier triggers at 10+.
+  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
+    merchantId,
+    bought: [{ name: 'Arrow', quantity: 10, price_gp: 0, price_sp: 1, price_cp: 0 }]
+  });
+  assert(r.status === 200, 'Bulk buy returns 200');
+  assert(r.body.bulk_discount > 0, `Bulk discount applied (got ${r.body.bulk_discount})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestMerchant(merchantId);
+}
+
+async function testCompanionMerchantCannotSellItemsNotOwned() {
+  console.log('\n  -- Rejects selling items companion does not have --');
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  const merchantId = await createTestMerchant([]);
+
+  const r = await api('POST', `/api/companion/${companionId}/merchant-transaction`, {
+    merchantId,
+    sold: [{ name: 'Phantom Sword', quantity: 1, price_gp: 10, price_sp: 0, price_cp: 0 }]
+  });
+  assert(r.status === 400, `Returns 400 when companion does not have the item (got ${r.status})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestMerchant(merchantId);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -2271,6 +2397,13 @@ async function runTests() {
     await testTransferRejectsMissingItem();
     await testTransferRejectsOverdraw();
     await testTransferRejectsBadQuantity();
+
+    console.log('\n=== Group 15: Companion Merchant Transactions (Phase 9) ===');
+    await testCompanionMerchantBuy();
+    await testCompanionMerchantSell();
+    await testCompanionMerchantInsufficientGold();
+    await testCompanionMerchantBulkDiscount();
+    await testCompanionMerchantCannotSellItemsNotOwned();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

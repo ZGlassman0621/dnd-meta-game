@@ -22,6 +22,8 @@ import {
   ensureCompanionProgressionInitialized
 } from '../services/progressionCompanionService.js';
 import { CONDITION_NAMES } from '../data/conditions.js';
+import { updateMerchantAfterTransaction } from '../services/merchantService.js';
+import { getBulkDiscount } from '../services/economyService.js';
 
 // Phase 7: normalized set of condition keys we'll accept. Same casing the
 // detectConditionChanges pipeline uses (lowercase_underscore).
@@ -1250,6 +1252,160 @@ router.post('/:id/take-item', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'take item from companion');
+  }
+});
+
+// ============================================================================
+// Phase 9: Companion Merchant Transactions
+//
+// Companions now have their own merchant flow — distinct from the party
+// character's flow in dmSession.js. Spellcaster companions can buy their
+// own components, fighter companions can sell scavenged gear. The
+// companion's own gold (gold_gp/gold_sp/gold_cp columns on `companions`)
+// is the purse.
+//
+// Simpler than the character flow:
+//  - No reputation ripple (companions aren't independent NPC relationship
+//    holders; if that matters, route through the recruiting character's
+//    transaction instead)
+//  - Same bulk discount + price math as character side
+//  - Same optimistic-locking pattern for merchant inventory updates via
+//    updateMerchantAfterTransaction()
+// ============================================================================
+
+router.post('/:id/merchant-transaction', async (req, res) => {
+  try {
+    const { merchantId, bought = [], sold = [] } = req.body || {};
+
+    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+
+    let inventory = safeParse(companion.inventory, []);
+
+    // Calculate totals in copper
+    let totalSpentCp = 0;
+    let totalEarnedCp = 0;
+
+    for (const item of bought) {
+      const costCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
+      totalSpentCp += costCp;
+      inventoryAddItem(inventory, { name: item.name }, item.quantity);
+    }
+
+    // Bulk discount: same tier math as the character flow
+    const totalBuyQty = bought.reduce((sum, i) => sum + (i.quantity || 1), 0);
+    const bulkDiscount = getBulkDiscount(totalBuyQty);
+    if (bulkDiscount > 0) {
+      totalSpentCp = Math.round(totalSpentCp * (1 - bulkDiscount));
+    }
+
+    for (const item of sold) {
+      const earnCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
+      totalEarnedCp += earnCp;
+
+      const removeResult = inventoryRemoveItem(inventory, item.name, item.quantity);
+      if (!removeResult.ok) {
+        return res.status(400).json({
+          error: `Cannot sell ${item.quantity} × ${item.name}: ${removeResult.error}`
+        });
+      }
+    }
+
+    // Validate companion has enough gold for the net cost
+    let companionCp = (companion.gold_gp || 0) * 100 + (companion.gold_sp || 0) * 10 + (companion.gold_cp || 0);
+    const netCostCp = totalSpentCp - totalEarnedCp;
+
+    if (netCostCp > companionCp) {
+      return res.status(400).json({
+        error: 'Companion does not have enough gold for this transaction'
+      });
+    }
+
+    companionCp -= netCostCp;
+    const newGp = Math.floor(companionCp / 100);
+    const remainCp = companionCp % 100;
+    const newSp = Math.floor(remainCp / 10);
+    const newCp = remainCp % 10;
+
+    await dbRun(
+      `UPDATE companions
+       SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?
+       WHERE id = ?`,
+      [JSON.stringify(inventory), newGp, newSp, newCp, req.params.id]
+    );
+
+    // Update merchant inventory with optimistic locking (mirrors the
+    // character-side dmSession flow).
+    if (merchantId) {
+      const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
+      if (merchant) {
+        let merchInv = safeParse(merchant.inventory, []);
+
+        for (const item of bought) {
+          const idx = merchInv.findIndex(i => (i.name || '').toLowerCase() === item.name.toLowerCase());
+          if (idx !== -1) {
+            merchInv[idx].quantity = (merchInv[idx].quantity || 1) - item.quantity;
+            if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
+          }
+        }
+
+        for (const item of sold) {
+          const existing = merchInv.find(i => (i.name || '').toLowerCase() === item.name.toLowerCase());
+          if (existing) {
+            existing.quantity = (existing.quantity || 1) + item.quantity;
+          } else {
+            merchInv.push({
+              name: item.name,
+              price_gp: (item.price_gp || 0) * 2,
+              price_sp: (item.price_sp || 0) * 2,
+              price_cp: (item.price_cp || 0) * 2,
+              category: 'misc',
+              description: 'Acquired from a companion',
+              quantity: item.quantity,
+              rarity: 'common'
+            });
+          }
+        }
+
+        const originalMerchGold = merchant.gold_gp || 0;
+        const newMerchGold = originalMerchGold
+          - Math.floor(totalEarnedCp / 100)
+          + Math.floor(totalSpentCp / 100);
+        const originalInventoryHash = merchant.inventory_version || 0;
+        try {
+          await updateMerchantAfterTransaction(
+            merchantId, merchInv, newMerchGold, originalMerchGold, originalInventoryHash
+          );
+        } catch (mErr) {
+          // If the optimistic-lock fails, the companion has already been
+          // mutated. Roll back by restoring the prior companion state.
+          await dbRun(
+            `UPDATE companions
+             SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?
+             WHERE id = ?`,
+            [
+              companion.inventory,
+              companion.gold_gp, companion.gold_sp, companion.gold_cp,
+              req.params.id
+            ]
+          );
+          return res.status(409).json({
+            error: 'Merchant inventory changed while transaction was in flight — retry'
+          });
+        }
+      }
+    }
+
+    const updated = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+    res.json({
+      success: true,
+      companion: updated,
+      bulk_discount: bulkDiscount,
+      total_spent_cp: totalSpentCp,
+      total_earned_cp: totalEarnedCp
+    });
+  } catch (error) {
+    handleServerError(res, error, 'companion merchant transaction');
   }
 });
 
