@@ -2,6 +2,73 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.7] - 2026-04-17 — Phase 4.5: Level-Up Flow Cleanup
+
+Foundation pass on the level-up flow before Phase 5 layers Theme tier unlocks
+and Ancestry Feat selection on top. Shipped as five small, focused commits.
+
+### Added
+- **Feat-instead-of-ASI at level-up**: When a character reaches an ASI level
+  (4/6/8/10/12/14/16/19 depending on class), the wizard now offers a toggle:
+  "Increase Ability Scores (+2 total)" or "Take a Feat". Feat mode shows a
+  dropdown of all 42 feats with descriptions, benefits, and prerequisites.
+  Feats with half-ASI ability bumps (Resilient, Actor, Observant, etc.)
+  prompt for which ability gets +1. Selected feats are persisted to the
+  character's `feats` JSON array with `acquiredAtLevel` for provenance.
+- **Multiclass subclass validation**: `POST /api/character/level-up/:id`
+  returns `422 Unprocessable Entity` when the player attempts to level
+  into a class that requires a subclass at the target level (e.g.,
+  multiclassing into Cleric/Sorcerer/Warlock at L1) without providing
+  one. Error payload includes `targetClass` and `newClassLevel` for UI
+  feedback. Character state is left untouched on failed validation.
+
+### Changed
+- **Transaction-wrapped writes**: The level-up endpoint issued up to 10
+  separate `dbRun` calls for feats, cantrips, spells, Keeper data, and
+  the main character update. A SQL error mid-flight could leave the
+  character in a half-updated state. Now all writes happen inside a
+  single `db.transaction('write')` — on any error, `tx.rollback()` is
+  called before re-throwing.
+- **Consolidated level-up UI**: Deleted `client/src/components/LevelUpModal.jsx`
+  (768 lines of "coming soon" placeholders and divergent logic). The
+  full-screen `LevelUpPage.jsx` is now the single level-up surface. Both
+  the character sheet "Level Up" button and the character list button
+  route through the same flow. CharacterManager lost ~50 lines of modal
+  state management.
+- **Clarified CON-retroactivity math**: The formula
+  `(newConMod - conMod) × newTotalLevel` was previously flagged as a bug
+  but is actually correct — this level's hpGain was computed with the
+  old mod, and we need to add modDiff for this level plus modDiff ×
+  (newTotalLevel - 1) retroactive, which equals modDiff × newTotalLevel.
+  Expanded inline comment explaining the derivation.
+
+### Deferred
+- **DecisionStep abstraction**: Planned as part of 4.5 but deferred to
+  Phase 5. Building abstractions speculatively risks getting them wrong;
+  extracting from real Theme tier / Ancestry Feat usage in Phase 5 will
+  produce a better fit.
+
+### Testing
+- 3 new integration tests (Group 10):
+  - `testLevelUpRequiresSubclassForMulticlass`: verifies 422 + untouched
+    character state, then successful retry with subclass
+  - `testLevelUpFeatInsteadOfASI`: creates a Fighter, levels up with
+    `feat=resilient` (+1 CON), verifies feat persisted, CON bumped 14→15
+  - `testLevelUpFeatMissingFeatKey`: edge case — `asiChoice.type='feat'`
+    with no feat key still succeeds, nothing appended
+- 232/232 integration tests pass (up from 215)
+- 55/55 character-memory, 64/64 moral-diversity, 26/26 combat-tracker,
+  43/43 progression-prompt all green
+- Client builds cleanly
+
+### Files touched
+- `server/routes/character.js` (validation + feat handling + transaction)
+- `client/src/components/LevelUpPage.jsx` (feat UI)
+- `client/src/components/LevelUpModal.jsx` (deleted)
+- `client/src/components/CharacterManager.jsx` (modal removal, delegate up)
+- `client/src/App.jsx` (`handleShowLevelUp` accepts optional character)
+- `tests/integration.test.js` (3 new tests)
+
 ## [1.0.0.6] - 2026-04-17 — Implementation Phase 4: AI DM Prompt Integration
 
 ### Added
