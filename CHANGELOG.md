@@ -2,6 +2,34 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.17] - 2026-04-17 — M1 polish: Ultima-style inventory + equipped-by badges
+
+Follow-on polish to M1 (v1.0.16). The in-session InventoryPanel
+becomes a true party view, matching the Ultima-style sectioned display
+we discussed.
+
+### Changed
+- **InventoryPanel** — replaces the tab-filtered inventory with a
+  single all-at-once view grouped into five sections:
+  Weapons / Armor / Consumables / Quest Items / Misc.
+- Each section has a color-coded header, item count, and hides itself
+  when empty.
+- Quest-item detection stays narrow (explicit `quest: true` flag or
+  narrow keyword list — "relic", "artifact", "prophecy", "key to",
+  "letter from", etc.) so mundane items don't get mis-labeled.
+- Consumable detection: potion, elixir, scroll, ration, antitoxin,
+  oil, poison, acid, holy water, etc.
+- Header relabeled "Party Inventory".
+
+### Added
+- **Equipped-by badges** on every inventory row where a copy of that
+  item is equipped on a party member. Shows "Name · main/off/armor"
+  pills (teal for the character, purple for companions). Multiple
+  badges render if the same-named item is in multiple slots across
+  the party.
+- New `companions` prop on `InventoryPanel` wired through from
+  `DMSession`.
+
 ## [1.0.0.16] - 2026-04-17 — M1: Party Inventory + Equip/Unequip
 
 Retires Phase 8's item-transfer and Phase 9's companion-merchant
