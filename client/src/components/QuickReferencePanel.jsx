@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import classesData from '../data/classes.json';
 import racesData from '../data/races.json';
 import spellsData from '../data/spells/index.js';
@@ -6,6 +6,18 @@ import spellsData from '../data/spells/index.js';
 function QuickReferencePanel({ character, onClose, spellSlots }) {
   const [quickRefTab, setQuickRefTab] = useState('equipment');
   const [expandedSpell, setExpandedSpell] = useState(null);
+
+  // Fetch progression data for inline theme/ancestry display in Abilities tab
+  const [progression, setProgression] = useState(null);
+  useEffect(() => {
+    if (!character?.id) return;
+    let cancelled = false;
+    fetch(`/api/character/${character.id}/progression`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setProgression(data); })
+      .catch(() => { /* silent — progression is supplemental in quick ref */ });
+    return () => { cancelled = true };
+  }, [character?.id]);
 
   const getSpellDetails = (spellName) => {
     if (!spellName) return null;
@@ -432,6 +444,109 @@ function QuickReferencePanel({ character, onClose, spellSlots }) {
                       );
                     })()}
                   </div>
+
+                  {/* Theme (active abilities from progression system) */}
+                  {progression?.theme && (
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{
+                        color: '#8b5cf6',
+                        marginBottom: '0.5rem',
+                        borderBottom: '1px solid rgba(139, 92, 246, 0.3)',
+                        paddingBottom: '0.25rem'
+                      }}>
+                        Theme: {progression.theme.theme_name}
+                        {progression.theme.path_choice && (
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: '#a78bfa' }}>
+                            ({progression.theme.path_choice.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')})
+                          </span>
+                        )}
+                      </h4>
+                      {(progression.theme_unlocks || []).length > 0 ? (
+                        progression.theme_unlocks.map((unlock, idx) => (
+                          <div key={idx} style={{
+                            padding: '0.5rem 0.75rem',
+                            marginBottom: '0.4rem',
+                            background: 'rgba(139, 92, 246, 0.08)',
+                            border: '1px solid rgba(139, 92, 246, 0.25)',
+                            borderRadius: '4px'
+                          }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#a78bfa' }}>
+                              L{unlock.tier} · {unlock.ability_name}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', marginTop: '0.2rem', opacity: 0.9 }}>
+                              {unlock.ability_description}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ fontSize: '0.8rem', opacity: 0.6, fontStyle: 'italic' }}>
+                          No theme abilities unlocked yet.
+                        </div>
+                      )}
+                      {progression.knight_moral_path && (
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.4rem', opacity: 0.8 }}>
+                          <strong>Moral Path:</strong>{' '}
+                          <span style={{ color: '#a78bfa', textTransform: 'capitalize' }}>
+                            {progression.knight_moral_path.current_path}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Ancestry Feats (active list) */}
+                  {progression?.ancestry_feats?.length > 0 && (
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{
+                        color: '#14b8a6',
+                        marginBottom: '0.5rem',
+                        borderBottom: '1px solid rgba(20, 184, 166, 0.3)',
+                        paddingBottom: '0.25rem'
+                      }}>
+                        Ancestry Feats
+                      </h4>
+                      {progression.ancestry_feats.map((feat, idx) => (
+                        <div key={idx} style={{
+                          padding: '0.5rem 0.75rem',
+                          marginBottom: '0.4rem',
+                          background: 'rgba(20, 184, 166, 0.08)',
+                          border: '1px solid rgba(20, 184, 166, 0.25)',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#2dd4bf' }}>
+                            L{feat.tier} · {feat.feat_name}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', marginTop: '0.2rem', opacity: 0.9 }}>
+                            {feat.description}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Resonant Synergy (compact callout) */}
+                  {progression?.subclass_theme_synergy && (
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{
+                        color: '#6366f1',
+                        marginBottom: '0.5rem',
+                        borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
+                        paddingBottom: '0.25rem'
+                      }}>
+                        Resonant Synergy: {progression.subclass_theme_synergy.synergy_name}
+                      </h4>
+                      <div style={{
+                        padding: '0.5rem 0.75rem',
+                        background: 'rgba(99, 102, 241, 0.08)',
+                        border: '1px solid rgba(99, 102, 241, 0.25)',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        opacity: 0.95
+                      }}>
+                        {progression.subclass_theme_synergy.description}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Class Features - loaded from classes.json based on character class/level */}
                   <div style={{ marginBottom: '1.5rem' }}>

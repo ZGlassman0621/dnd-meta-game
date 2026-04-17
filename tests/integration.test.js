@@ -986,6 +986,108 @@ async function testCreateCharacterWithProgression() {
   await dbRun('DELETE FROM characters WHERE id = ?', [createdId]);
 }
 
+async function testProgressionReturnsUpcomingTiersAndSynergy() {
+  console.log('\n  -- Progression: Character progression includes upcoming tiers + subclass synergy --');
+  // Battle Master + Soldier is a resonant pair in subclass_theme_synergies seed data
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_ProgressionSynergyChar',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Battle Master',
+    race: 'Human',
+    level: 5,
+    current_hp: 44, max_hp: 44,
+    armor_class: 17, speed: 30,
+    current_location: 'Neverwinter',
+    current_quest: null,
+    experience_to_next_level: 14000,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 14, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST',
+    gender: 'male',
+    alignment: 'Lawful Good',
+    theme_id: 'soldier',
+    theme_path_choice: null,
+    ancestry_feat_id: null,
+    ancestry_list_id: 'human'
+  });
+  const id = created.id;
+  assert(typeof id === 'number', 'Character id returned');
+
+  const { status, body } = await api('GET', `/api/character/${id}/progression`);
+  assert(status === 200, `Progression endpoint returns 200 (got ${status})`);
+
+  // Character block
+  assert(body.character?.class === 'Fighter', 'Character class in response');
+  assert(body.character?.subclass === 'Battle Master', 'Character subclass in response');
+  assert(body.character?.level === 5, 'Character level in response');
+
+  // Theme with enriched fields
+  assert(body.theme?.theme_id === 'soldier', 'Theme is soldier');
+  assert(body.theme?.identity?.length > 0, 'Theme identity included');
+  assert(body.theme?.signature_skill_1 === 'Athletics', 'Signature skill 1 populated');
+  assert(Array.isArray(body.theme?.tags), 'Tags parsed as array');
+
+  // All 4 tiers (L1/L5/L11/L17) returned for display
+  assert(Array.isArray(body.theme_all_tiers), 'theme_all_tiers is array');
+  assert(body.theme_all_tiers.length === 4, `All 4 tiers returned (got ${body.theme_all_tiers.length})`);
+  const tierNums = body.theme_all_tiers.map(t => t.tier).sort((a, b) => a - b);
+  assert(JSON.stringify(tierNums) === '[1,5,11,17]', 'Tiers are L1/L5/L11/L17');
+
+  // Only L1 unlocked (created at level 5 but only L1 tier is auto-granted at creation)
+  assert(body.theme_unlocks.length === 1, `One L1 unlock at creation (got ${body.theme_unlocks.length})`);
+  assert(body.theme_unlocks[0].tier === 1, 'Unlock is L1');
+
+  // Resonant synergy detected
+  assert(body.subclass_theme_synergy, 'Subclass×Theme synergy present for Battle Master + Soldier');
+  assert(body.subclass_theme_synergy?.synergy_name === "Tactician's Eye", `Synergy name is Tactician's Eye (got ${body.subclass_theme_synergy?.synergy_name})`);
+
+  // No mythic amplification expected (character has no mythic path)
+  assert(body.mythic_theme_amplification === null, 'No mythic amplification (character has no mythic path)');
+
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
+async function testProgressionNoSynergyForNonResonantPair() {
+  console.log('\n  -- Progression: No synergy for non-resonant subclass/theme pair --');
+  // Fighter + Champion + Criminal is NOT in the subclass_theme_synergies seed data
+  const { body: created } = await api('POST', '/api/character', {
+    name: 'TEST_NoSynergyChar',
+    first_name: 'TEST',
+    class: 'Fighter',
+    subclass: 'Champion',
+    race: 'Human',
+    level: 1,
+    current_hp: 12, max_hp: 12,
+    armor_class: 16, speed: 30,
+    current_location: 'X',
+    current_quest: null,
+    experience_to_next_level: 300,
+    gold_gp: 0, gold_sp: 0, gold_cp: 0,
+    ability_scores: JSON.stringify({ str: 16, dex: 14, con: 14, int: 10, wis: 12, cha: 10 }),
+    skills: JSON.stringify([]),
+    equipment: JSON.stringify({}),
+    inventory: JSON.stringify([]),
+    languages: JSON.stringify(['Common']),
+    feats: JSON.stringify([]),
+    tool_proficiencies: JSON.stringify([]),
+    backstory: 'TEST',
+    gender: 'female',
+    alignment: 'Chaotic Neutral',
+    theme_id: 'criminal'
+  });
+  const id = created.id;
+  const { body } = await api('GET', `/api/character/${id}/progression`);
+  assert(body.subclass_theme_synergy === null, 'No resonant synergy for Champion + Criminal');
+  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+}
+
 async function testCreateKnightInitializesMoralPath() {
   console.log('\n  -- Progression: Creating Knight theme initializes moral path to "true" --');
   const { status, body } = await api('POST', '/api/character', {
@@ -1104,6 +1206,8 @@ async function runTests() {
     await testProgressionAncestryFeatsTierFilter();
     await testProgressionAncestryFeatsNotFound();
     await testCreateCharacterWithProgression();
+    await testProgressionReturnsUpcomingTiersAndSynergy();
+    await testProgressionNoSynergyForNonResonantPair();
     await testCreateKnightInitializesMoralPath();
 
   } catch (err) {

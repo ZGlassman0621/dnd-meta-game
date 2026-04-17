@@ -2,6 +2,37 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.5] - 2026-04-17 — Implementation Phase 3: Character Sheet Display
+
+### Added
+- **"Progression" tab on the Character Sheet** (new tab between "Features & Traits" and "Spells"):
+  - Theme identity block (name, path choice, identity text, signature skills, Knight moral path if applicable)
+  - Full 4-tier theme progression with visual state indicators:
+    - Unlocked abilities (purple, 100% opacity, "✓ Unlocked" badge)
+    - Ready-to-unlock abilities (amber badge — level reached but ability not yet granted)
+    - Future abilities (dimmed, "Level X" badge for preview)
+  - Ancestry Feats section (teal) showing all selected feats with tier, list, description, and mechanics
+  - Resonant Subclass × Theme synergy callout (indigo) when the character's subclass/theme pair matches a seeded synergy (e.g., Battle Master + Soldier = "Tactician's Eye")
+  - Mythic × Theme amplification callout (amber for resonant, red for dissonant) when the character has a mythic path with a matching combo. Shows T1-T4 bonus scaling for resonant combos; arc description + threshold acts for dissonant arcs
+- **QuickReferencePanel "Abilities" tab extended** with compact in-session displays:
+  - Theme callout with all unlocked tier abilities (purple)
+  - Ancestry Feats summary (teal)
+  - Resonant Synergy indicator (indigo)
+  - Fetches progression data silently; progression sections hidden if unavailable (no blocking failures)
+- **`GET /api/character/:id/progression` enhanced** to return:
+  - Character class/subclass/level for consumer UI context
+  - Full theme metadata (identity, signature skills, tags)
+  - `theme_all_tiers` — all 4 theme tier abilities for upcoming-tier preview
+  - `subclass_theme_synergy` — resonant pair match from seed data, or null
+  - `mythic_theme_amplification` — resonant or dissonant combo from seed data (with tier bonuses or arc description), or null (also works for Legend Path's "any" theme sentinel)
+
+### Testing
+- Added `testProgressionReturnsUpcomingTiersAndSynergy` (verifies enriched endpoint, theme_all_tiers, synergy detection for Battle Master + Soldier)
+- Added `testProgressionNoSynergyForNonResonantPair` (verifies null synergy when subclass/theme pair isn't in seed data)
+- All 215 integration tests passing (up from 197)
+- All 55/64/26 unit tests passing
+- Client builds cleanly
+
 ## [1.0.0.4] - 2026-04-17 — Implementation Phase 2: Character Creation Theme Selection
 
 ### Added

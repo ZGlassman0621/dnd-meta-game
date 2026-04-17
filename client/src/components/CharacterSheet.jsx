@@ -31,6 +31,11 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   const [showLearnSpell, setShowLearnSpell] = useState(false)
   const [pendingKnown, setPendingKnown] = useState([])
 
+  // Progression tab state
+  const [progression, setProgression] = useState(null)
+  const [progressionLoading, setProgressionLoading] = useState(false)
+  const [progressionError, setProgressionError] = useState(null)
+
   // Fetch fresh character data on mount to ensure we have all fields
   useEffect(() => {
     const fetchCharacter = async () => {
@@ -44,6 +49,20 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     }
     fetchCharacter()
   }, [initialCharacter.id])
+
+  // Fetch progression data (theme, ancestry feats, synergies) — loads once per character
+  useEffect(() => {
+    let cancelled = false
+    setProgressionLoading(true)
+    setProgressionError(null)
+    fetch(`/api/character/${character.id}/progression`)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => { if (!cancelled) { setProgression(data); setProgressionLoading(false) } })
+      .catch(err => {
+        if (!cancelled) { setProgressionError(err.message); setProgressionLoading(false) }
+      })
+    return () => { cancelled = true }
+  }, [character.id])
 
   // Check if character can level up
   useEffect(() => {
@@ -800,6 +819,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     { id: 'overview', label: 'Overview' },
     { id: 'abilities', label: 'Abilities & Skills' },
     { id: 'features', label: 'Features & Traits' },
+    { id: 'progression', label: 'Progression' },
     { id: 'spells', label: 'Spells' },
     { id: 'equipment', label: 'Equipment' },
     { id: 'inventory', label: 'Inventory' },
@@ -1563,6 +1583,250 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                   <p className="feature-description">{backgroundData.feature.description}</p>
                 </div>
               </section>
+            )}
+          </div>
+        )}
+
+        {/* Progression Tab — Theme + Ancestry Feats + Synergies */}
+        {activeTab === 'progression' && (
+          <div className="tab-panel">
+            {progressionLoading && (
+              <div style={{ padding: '1rem', opacity: 0.7 }}>Loading progression...</div>
+            )}
+            {progressionError && (
+              <div style={{
+                padding: '1rem', background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
+                color: '#fca5a5'
+              }}>
+                Failed to load progression: {progressionError}
+              </div>
+            )}
+            {progression && !progression.theme && (
+              <div style={{ padding: '1rem', opacity: 0.7 }}>
+                This character has no Theme assigned. Themes replace the legacy Background system;
+                existing characters have not yet been migrated.
+              </div>
+            )}
+            {progression && progression.theme && (
+              <>
+                {/* Theme identity section */}
+                <section className="sheet-section">
+                  <h3 style={{ color: '#8b5cf6' }}>
+                    Theme: {progression.theme.theme_name}
+                    {progression.theme.path_choice && (
+                      <span style={{
+                        marginLeft: '0.75rem', fontSize: '0.85em', color: '#a78bfa'
+                      }}>
+                        ({progression.theme.path_choice.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')})
+                      </span>
+                    )}
+                  </h3>
+                  <p style={{ fontStyle: 'italic', opacity: 0.9, marginBottom: '0.5rem' }}>
+                    {progression.theme.identity}
+                  </p>
+                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>
+                    <strong>Signature Skills:</strong> {progression.theme.signature_skill_1}
+                    {progression.theme.signature_skill_2 && `, ${progression.theme.signature_skill_2}`}
+                  </p>
+                  {progression.knight_moral_path && (
+                    <p style={{ fontSize: '0.9em', opacity: 0.8, marginTop: '0.5rem' }}>
+                      <strong>Moral Path:</strong>{' '}
+                      <span style={{ color: '#a78bfa', textTransform: 'capitalize' }}>
+                        {progression.knight_moral_path.current_path}
+                      </span>
+                      {progression.knight_moral_path.last_path_change_reason && (
+                        <span style={{ opacity: 0.7, marginLeft: '0.5rem' }}>
+                          — {progression.knight_moral_path.last_path_change_reason}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </section>
+
+                {/* Theme tier abilities (unlocked + upcoming) */}
+                <section className="sheet-section">
+                  <h3 style={{ color: '#8b5cf6' }}>Theme Progression</h3>
+                  <div className="features-list">
+                    {(progression.theme_all_tiers || [])
+                      .filter(t => !t.path_variant) // Hide path-variant duplicates; base ability covers both
+                      .map(tier => {
+                        const unlocked = (progression.theme_unlocks || []).some(u => u.tier === tier.tier)
+                        const expectedLevel = tier.tier === 1 ? 1 : tier.tier // L1/L5/L11/L17
+                        const canUnlock = (progression.character.level || 1) >= expectedLevel
+                        return (
+                          <div
+                            key={tier.tier}
+                            className="feature-item"
+                            style={{
+                              borderLeft: `3px solid ${unlocked ? '#8b5cf6' : 'rgba(139,92,246,0.3)'}`,
+                              opacity: unlocked ? 1 : 0.55
+                            }}
+                          >
+                            <div className="feature-header">
+                              <span className="feature-name" style={{ color: unlocked ? '#ddd' : '#aaa' }}>
+                                L{expectedLevel}: {tier.ability_name}
+                              </span>
+                              <span style={{
+                                fontSize: '0.75em',
+                                color: unlocked ? '#a78bfa' : canUnlock ? '#f59e0b' : '#888',
+                                marginLeft: '0.5rem',
+                                padding: '0.1rem 0.4rem',
+                                background: unlocked
+                                  ? 'rgba(139,92,246,0.15)'
+                                  : canUnlock
+                                    ? 'rgba(245,158,11,0.15)'
+                                    : 'rgba(136,136,136,0.1)',
+                                border: `1px solid ${unlocked ? 'rgba(139,92,246,0.4)' : canUnlock ? 'rgba(245,158,11,0.4)' : 'rgba(136,136,136,0.3)'}`,
+                                borderRadius: '10px'
+                              }}>
+                                {unlocked ? '✓ Unlocked' : canUnlock ? 'Ready to unlock' : `Level ${expectedLevel}`}
+                              </span>
+                            </div>
+                            <p className="feature-description" style={{ opacity: unlocked ? 1 : 0.8 }}>
+                              {tier.ability_description}
+                            </p>
+                            {tier.mechanics && (
+                              <p style={{
+                                fontSize: '0.8em', color: '#888', marginTop: '0.3rem',
+                                fontStyle: 'italic'
+                              }}>
+                                {tier.mechanics}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                  </div>
+                </section>
+
+                {/* Ancestry feats */}
+                <section className="sheet-section">
+                  <h3 style={{ color: '#14b8a6' }}>Ancestry Feats</h3>
+                  {progression.ancestry_feats && progression.ancestry_feats.length > 0 ? (
+                    <div className="features-list">
+                      {progression.ancestry_feats.map((feat, idx) => (
+                        <div
+                          key={idx}
+                          className="feature-item"
+                          style={{ borderLeft: '3px solid #14b8a6' }}
+                        >
+                          <div className="feature-header">
+                            <span className="feature-name">{feat.feat_name}</span>
+                            <span style={{
+                              fontSize: '0.75em', color: '#14b8a6',
+                              marginLeft: '0.5rem', padding: '0.1rem 0.4rem',
+                              background: 'rgba(20,184,166,0.15)',
+                              border: '1px solid rgba(20,184,166,0.4)',
+                              borderRadius: '10px'
+                            }}>
+                              L{feat.tier} · {feat.list_id.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <p className="feature-description">{feat.description}</p>
+                          {feat.mechanics && (
+                            <p style={{
+                              fontSize: '0.8em', color: '#888', marginTop: '0.3rem',
+                              fontStyle: 'italic'
+                            }}>
+                              {feat.mechanics}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ opacity: 0.6, fontSize: '0.9em' }}>
+                      No Ancestry Feats selected yet. (Tiers unlock at L1, L3, L7, L13, L18.)
+                    </p>
+                  )}
+                </section>
+
+                {/* Subclass × Theme Synergy */}
+                {progression.subclass_theme_synergy && (
+                  <section className="sheet-section">
+                    <h3 style={{ color: '#6366f1' }}>
+                      Resonant Synergy: {progression.subclass_theme_synergy.synergy_name}
+                    </h3>
+                    <div
+                      className="feature-item"
+                      style={{ borderLeft: '3px solid #6366f1' }}
+                    >
+                      <div className="feature-header">
+                        <span className="feature-name">
+                          {progression.subclass_theme_synergy.subclass_name} + {progression.theme.theme_name}
+                        </span>
+                      </div>
+                      <p className="feature-description">
+                        {progression.subclass_theme_synergy.description}
+                      </p>
+                      {progression.subclass_theme_synergy.mechanics && (
+                        <p style={{
+                          fontSize: '0.8em', color: '#888', marginTop: '0.3rem',
+                          fontStyle: 'italic'
+                        }}>
+                          {progression.subclass_theme_synergy.mechanics}
+                        </p>
+                      )}
+                      {progression.subclass_theme_synergy.shared_tags && (
+                        <p style={{
+                          fontSize: '0.75em', color: '#a5b4fc', marginTop: '0.4rem'
+                        }}>
+                          <strong>Shared tags:</strong> {progression.subclass_theme_synergy.shared_tags}
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {/* Mythic × Theme Amplification */}
+                {progression.mythic_theme_amplification && (
+                  <section className="sheet-section">
+                    <h3 style={{
+                      color: progression.mythic_theme_amplification.is_dissonant ? '#ef4444' : '#f59e0b'
+                    }}>
+                      Mythic {progression.mythic_theme_amplification.is_dissonant ? 'Arc' : 'Amplification'}: {progression.mythic_theme_amplification.combo_name}
+                    </h3>
+                    <div
+                      className="feature-item"
+                      style={{
+                        borderLeft: `3px solid ${progression.mythic_theme_amplification.is_dissonant ? '#ef4444' : '#f59e0b'}`
+                      }}
+                    >
+                      <p className="feature-description" style={{ fontStyle: 'italic' }}>
+                        {progression.mythic_theme_amplification.shared_identity}
+                      </p>
+                      {progression.mythic_theme_amplification.is_dissonant ? (
+                        <>
+                          <p style={{ marginTop: '0.5rem' }}>
+                            <strong style={{ color: '#ef4444' }}>Dissonant Arc:</strong>{' '}
+                            {progression.mythic_theme_amplification.dissonant_arc_description}
+                          </p>
+                          {progression.mythic_theme_amplification.required_threshold_acts && (
+                            <p style={{
+                              fontSize: '0.85em', color: '#f87171', marginTop: '0.4rem'
+                            }}>
+                              Arc completion requires {progression.mythic_theme_amplification.required_threshold_acts} threshold acts.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.88em' }}>
+                          {['t1_bonus', 't2_bonus', 't3_bonus', 't4_bonus'].map((key, idx) => {
+                            const text = progression.mythic_theme_amplification[key]
+                            if (!text) return null
+                            return (
+                              <div key={key} style={{ marginBottom: '0.4rem' }}>
+                                <strong style={{ color: '#f59e0b' }}>T{idx + 1}:</strong> {text}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+              </>
             )}
           </div>
         )}

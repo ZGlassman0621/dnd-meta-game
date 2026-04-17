@@ -54,15 +54,21 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Get character progression — theme + ancestry feats + unlocked tier abilities
+// Get character progression — theme, unlocked + upcoming abilities, ancestry feats,
+// Knight moral path, and any resonant Subclass × Theme / Mythic × Theme combos.
+// This is the single data contract the Character Sheet "Progression" tab consumes.
 router.get('/:id/progression', async (req, res) => {
   try {
     const characterId = req.params.id;
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [characterId]);
+    const character = await dbGet(
+      'SELECT id, class, subclass, level FROM characters WHERE id = ?',
+      [characterId]
+    );
     if (!character) return notFound(res, 'Character');
 
     const themeRow = await dbGet(
-      `SELECT ct.theme_id, ct.path_choice, ct.path_data, t.name as theme_name
+      `SELECT ct.theme_id, ct.path_choice, ct.path_data, t.name as theme_name,
+              t.identity, t.signature_skill_1, t.signature_skill_2, t.tags
        FROM character_themes ct JOIN themes t ON ct.theme_id = t.id
        WHERE ct.character_id = ?`,
       [characterId]
@@ -77,6 +83,18 @@ router.get('/:id/progression', async (req, res) => {
        ORDER BY ctu.tier`,
       [characterId]
     );
+
+    // Full theme tier catalog (all 4 tiers) so the UI can show upcoming abilities too
+    let themeAllTiers = [];
+    if (themeRow) {
+      themeAllTiers = await dbAll(
+        `SELECT tier, ability_name, ability_description, mechanics, flavor_text, path_variant
+         FROM theme_abilities
+         WHERE theme_id = ?
+         ORDER BY tier, path_variant`,
+        [themeRow.theme_id]
+      );
+    }
 
     const ancestryFeats = await dbAll(
       `SELECT caf.tier, caf.selected_at_level, caf.narrative_delivery, af.list_id,
@@ -94,11 +112,63 @@ router.get('/:id/progression', async (req, res) => {
       [characterId]
     );
 
+    // Resonant Subclass × Theme synergy (if any)
+    let subclassThemeSynergy = null;
+    if (themeRow && character.class && character.subclass) {
+      subclassThemeSynergy = await dbGet(
+        `SELECT class_name, subclass_name, theme_id, synergy_name,
+                description, mechanics, shared_tags
+         FROM subclass_theme_synergies
+         WHERE class_name = ? AND subclass_name = ? AND theme_id = ?`,
+        [character.class, character.subclass, themeRow.theme_id]
+      );
+    }
+
+    // Resonant Mythic × Theme amplification (if the character has a mythic path).
+    // `mythic_characters` is the mythic system's state table — we check it soft-error-tolerantly
+    // in case the character hasn't engaged the mythic system yet.
+    let mythicThemeAmplification = null;
+    try {
+      const mythic = await dbGet(
+        `SELECT mythic_path FROM mythic_characters WHERE character_id = ?`,
+        [characterId]
+      );
+      if (mythic && mythic.mythic_path && themeRow) {
+        // Check both the exact theme match AND the 'any' sentinel (Legend Path)
+        mythicThemeAmplification = await dbGet(
+          `SELECT mythic_path, theme_id, combo_name, is_dissonant, shared_identity,
+                  t1_bonus, t2_bonus, t3_bonus, t4_bonus,
+                  dissonant_arc_description, required_threshold_acts
+           FROM mythic_theme_amplifications
+           WHERE mythic_path = ? AND (theme_id = ? OR theme_id = 'any')
+           ORDER BY CASE WHEN theme_id = 'any' THEN 1 ELSE 0 END
+           LIMIT 1`,
+          [mythic.mythic_path, themeRow.theme_id]
+        );
+      }
+    } catch (e) {
+      // Mythic table may not exist or character not yet initialized — safe to skip
+    }
+
     res.json({
-      theme: themeRow || null,
+      character: {
+        id: character.id,
+        class: character.class,
+        subclass: character.subclass,
+        level: character.level
+      },
+      theme: themeRow
+        ? {
+            ...themeRow,
+            tags: themeRow.tags ? JSON.parse(themeRow.tags) : []
+          }
+        : null,
+      theme_all_tiers: themeAllTiers,
       theme_unlocks: unlocks,
       ancestry_feats: ancestryFeats,
-      knight_moral_path: knightPath || null
+      knight_moral_path: knightPath || null,
+      subclass_theme_synergy: subclassThemeSynergy,
+      mythic_theme_amplification: mythicThemeAmplification
     });
   } catch (error) {
     handleServerError(res, error, 'fetch character progression');
