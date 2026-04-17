@@ -2,6 +2,77 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.21] - 2026-04-17 — F1: Fortress-Capable Base System
+
+Reworks the party base system so bases can be fortresses, watchtowers,
+keeps, manors, wizard towers, temples, and more — with the old 6 base
+types (tavern / guild_hall / wizard_tower / temple / thieves_den /
+manor) demoted to BUILDINGS you install inside any compatible base.
+Foundation for F2 (defense + garrison) and F3 (raids + sieges).
+
+### Added
+- **Migration 035** — drops/recreates `party_bases`, `base_upgrades`
+  (replaced by `building_upgrades`); adds `base_buildings`. Schema
+  supports:
+  - `category` (`civilian`/`martial`/`arcane`/`sanctified`)
+  - `subtype` (13 options spanning all categories)
+  - `is_primary` with a partial unique index — only one primary base
+    per character/campaign
+  - `building_slots` derived from the subtype (watchtower=3,
+    fortress=14, castle=20)
+- **Config overhaul** (`partyBaseConfig.js`):
+  - `BASE_CATEGORIES` (4 entries)
+  - `BASE_SUBTYPES` (13 entries with slot caps, upkeep, starting
+    renown, flavor)
+  - `BUILDING_TYPES` (20 buildings, each with
+    `allowedCategories`, slot cost, gold cost, hours required, perks
+    granted on completion)
+  - `getAvailableBuildingsForSubtype(subtype)` helper
+- **Service refactor** (`partyBaseService.js` rewritten):
+  - `getBase` (primary, back-compat) + `getBases` (all)
+  - `createBase({ category, subtype, ... })` new signature
+  - `setPrimaryBase(baseId)` — promote a satellite atomically
+  - `addBuilding`, `listBuildings`, `getBuildingById`,
+    `advanceBuildingConstruction`, `removeBuilding` — full building
+    lifecycle with slot-cap enforcement and perk merge/unmerge
+  - `calculateIncome` now derived from building perks
+    (`passive_income_N` pattern) + level bonus
+  - `getBaseForPrompt` renders all active bases with buildings
+- **Endpoints** (`/api/*`):
+  - `GET /api/bases/:characterId/:campaignId` (new) — all bases
+  - `POST /api/base/:baseId/set-primary` (new)
+  - `GET /api/base/:baseId/buildings/available` (new) — filtered
+    catalog + slot usage
+  - `POST /api/base/:baseId/buildings` (new) — install
+  - `POST /api/base/:baseId/buildings/:buildingId/advance` (new)
+  - `DELETE /api/base/:baseId/buildings/:buildingId` (new)
+  - `POST /api/base` now takes `{ category, subtype, is_primary? }`
+    instead of `{ base_type }`
+- **PartyBasePage UI**:
+  - Two-step establish form (Category grid → Subtype grid → Name +
+    Description)
+  - Upgrades tab replaced with Buildings tab: slot usage header,
+    Under Construction section with +8/+16/+32 hour advance buttons,
+    Built grid with per-building perks, Install New Building grid
+    filtered by category with disabled state when treasury is short
+
+### Known (intentional scope cuts; land in F1+)
+- **Multi-base UI switcher** — the server supports multiple bases per
+  character, but PartyBasePage still shows only the primary. A sidebar
+  for navigating between bases lands in F2 alongside the garrison
+  system. Use the API directly to create satellite bases for now.
+- **Building upgrades** — `building_upgrades` table is in place but
+  unused. The old base-level upgrade catalog (fortifications tiers,
+  training yard tiers) will land in a polish pass.
+
+### Tests
+- 9 new integration tests (Group 20, 28 assertions): create with new
+  signature, reject category/subtype mismatch, multi-base support,
+  set-primary atomically demotes, install + complete + perk merge,
+  category allowlist blocks disallowed buildings, slot cap enforced,
+  /buildings/available filters correctly, demolish removes perk.
+- Full suite: 467 passing (up from 439).
+
 ## [1.0.0.20] - 2026-04-17 — M4: Merchant Relationships
 
 Completes the merchant-system rework by surfacing the merchant-memory
