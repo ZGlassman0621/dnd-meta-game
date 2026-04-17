@@ -2,6 +2,61 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.9] - 2026-04-17 — Implementation Phase 5.5: Companion Progression
+
+Extends the Themes + Ancestry Feats progression system to companions. At
+recruit time a companion is auto-assigned a theme based on its class and
+(when possible) an L1 ancestry feat based on the linked NPC's race. When
+companions level up, theme tier abilities auto-unlock at L5/L11/L17 and
+ancestry feats auto-pick at L3/L7/L13/L18 — one less prompt per companion
+per session, keeping companion level-up fast.
+
+### Added
+- **Migration 028** — `companion_themes`, `companion_theme_unlocks`, and
+  `companion_ancestry_feats` tables mirroring the character-side tables
+  from 023/024.
+- **`server/services/progressionCompanionService.js`** — single source of
+  truth for companion progression:
+  - `mapCompanionClassToTheme`: class → default theme (fighter→soldier,
+    rogue→criminal, wizard→sage, etc.; unknown classes fall back to
+    soldier).
+  - `normalizeRaceToAncestryList`: NPC race text → ancestry `list_id`.
+    Handles Drow, Half-Elf, Half-Orc, all three Aasimar paths, standard
+    races, and Warforged. Returns `null` for unmapped races (Goblin,
+    Bugbear, Firbolg, etc.) so ancestry-feat progression silently skips.
+  - `autoAssignCompanionTheme`: idempotent upsert + L1 ability unlock.
+  - `autoSeedCompanionAncestryFeatTier1`: L1 feat auto-pick.
+  - `computeCompanionProgressionDecisions`: tier-threshold check for
+    L5/L11/L17 theme unlock + L3/L7/L13/L18 ancestry feat auto-pick.
+  - `ensureCompanionProgressionInitialized`: lazy backfill for pre-5.5
+    companions.
+- **POST /api/companion/recruit** and **POST /api/companion/create-party-member**
+  auto-assign a theme + L1 feat after insert. Best-effort — failures are
+  logged but never block recruitment.
+- **POST /api/companion/:id/level-up** applies theme tier unlocks and
+  auto-picks ancestry feats in the same request. Response's
+  `levelUpSummary` now includes `themeTierUnlocked` and `ancestryFeatSelected`.
+- **GET /api/companion/:id/level-up-info** returns a `progression` preview
+  so the UI can show what will auto-apply.
+- **GET /api/companion/:id/progression** — new read-only snapshot
+  (theme + all tiers + unlocks + feats) mirroring the character-side
+  endpoint.
+- **CompanionLevelUpModal UI** — purple theme-tier card and teal
+  ancestry-feat card. Both are informational; the pick has already been
+  made by the server. The teal card explicitly labels "auto-picked
+  (companions don't choose)" so the DM understands the difference from
+  the player flow.
+
+### Tests
+- 6 new integration tests (Group 11 in `tests/integration.test.js`):
+  - Auto-assign theme + L1 feat on recruit
+  - Goblin (unmapped) recruit still gets theme but no feat
+  - L4→L5 triggers theme tier unlock
+  - L2→L3 auto-picks ancestry feat
+  - GET /progression returns full snapshot
+  - Pre-5.5 companion lazy-backfill on level-up
+- Integration suite: 280 passed / 0 failed (up from 258).
+
 ## [1.0.0.8] - 2026-04-17 — Implementation Phase 5: Level-Up Wizard Progression
 
 Extends the level-up wizard to support Theme tier unlocks (L5/L11/L17) and
