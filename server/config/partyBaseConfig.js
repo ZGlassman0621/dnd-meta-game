@@ -469,6 +469,299 @@ export const RENOWN_SOURCES = {
 };
 
 // ============================================================
+// F1: CATEGORIES + SUBTYPES + BUILDINGS
+// ============================================================
+// The old BASE_TYPES above become BUILDINGS you install inside a base.
+// A base is now picked from BASE_CATEGORIES → BASE_SUBTYPES hierarchy.
+
+export const BASE_CATEGORIES = {
+  martial: {
+    name: 'Martial',
+    description: 'Strongholds and fortifications. Built for defense, garrison, and territorial control.',
+    icon: '🏰'
+  },
+  civilian: {
+    name: 'Civilian',
+    description: 'Halls, manors, and houses of trade. Built for commerce, hospitality, and social influence.',
+    icon: '🏛️'
+  },
+  arcane: {
+    name: 'Arcane',
+    description: 'Towers and sanctums of magical study. Built for research, ritual, and planar work.',
+    icon: '🔮'
+  },
+  sanctified: {
+    name: 'Sanctified',
+    description: 'Temples, monasteries, and holy sites. Built for worship, healing, and divine work.',
+    icon: '⛪'
+  }
+};
+
+// Subtype defines building-slot cap, base stats, and flavor. Building slots
+// cap how many named buildings can fit inside the base. Watchtowers are
+// cramped (3 slots); full fortresses sprawl (14 slots).
+export const BASE_SUBTYPES = {
+  // MARTIAL
+  watchtower: {
+    category: 'martial', name: 'Watchtower',
+    description: 'A narrow spire on a trade road or border. A handful of garrisoned soldiers, a beacon, a single well.',
+    icon: '🗼', buildingSlots: 3, baseUpkeepGp: 8, startingRenown: 0
+  },
+  outpost: {
+    category: 'martial', name: 'Outpost',
+    description: 'A fortified camp at the edge of civilization. Wooden palisade, a handful of buildings inside.',
+    icon: '⛺', buildingSlots: 5, baseUpkeepGp: 15, startingRenown: 0
+  },
+  keep: {
+    category: 'martial', name: 'Keep',
+    description: 'A stone tower with supporting structures. Defensible, respectable, the core of a small holding.',
+    icon: '🏯', buildingSlots: 8, baseUpkeepGp: 30, startingRenown: 10
+  },
+  fortress: {
+    category: 'martial', name: 'Fortress',
+    description: 'A major walled stronghold with gatehouse, multiple towers, courtyards, and barracks for a standing garrison.',
+    icon: '🏰', buildingSlots: 14, baseUpkeepGp: 75, startingRenown: 25
+  },
+  castle: {
+    category: 'martial', name: 'Castle',
+    description: 'The seat of a lord or crown. Concentric walls, a great hall, a donjon. Armies assemble in its courtyards.',
+    icon: '🏰', buildingSlots: 20, baseUpkeepGp: 150, startingRenown: 50
+  },
+
+  // CIVILIAN
+  tavern: {
+    category: 'civilian', name: 'Tavern',
+    description: 'A small inn or public house. The smallest viable base — a room for you, a common area below.',
+    icon: '🍺', buildingSlots: 3, baseUpkeepGp: 10, startingRenown: 0
+  },
+  hall: {
+    category: 'civilian', name: 'Hall',
+    description: 'A guild hall, meeting lodge, or trade house. A base of operations for commerce and gathering.',
+    icon: '🏛️', buildingSlots: 6, baseUpkeepGp: 25, startingRenown: 5
+  },
+  manor: {
+    category: 'civilian', name: 'Manor',
+    description: 'A grand house on grounds. Servants, gardens, stables — a landed-gentry estate.',
+    icon: '🏡', buildingSlots: 10, baseUpkeepGp: 50, startingRenown: 15
+  },
+
+  // ARCANE
+  wizard_tower: {
+    category: 'arcane', name: 'Wizard Tower',
+    description: 'A solitary spire reaching above the treeline. Cramped, stacked, every floor packed with tomes and experiments.',
+    icon: '🗼', buildingSlots: 5, baseUpkeepGp: 20, startingRenown: 5
+  },
+  academy: {
+    category: 'arcane', name: 'Academy',
+    description: 'A small college of magic with classrooms, a library, and warded workshops. Teaches and researches.',
+    icon: '📚', buildingSlots: 10, baseUpkeepGp: 50, startingRenown: 20
+  },
+
+  // SANCTIFIED
+  chapel: {
+    category: 'sanctified', name: 'Chapel',
+    description: 'A small house of prayer for a single deity or pantheon. One hall, a few quarters.',
+    icon: '⛪', buildingSlots: 4, baseUpkeepGp: 10, startingRenown: 0
+  },
+  temple: {
+    category: 'sanctified', name: 'Temple',
+    description: 'A full temple complex with sanctuary, cloister, and scriptorium. Pilgrims come here.',
+    icon: '⛪', buildingSlots: 8, baseUpkeepGp: 30, startingRenown: 10
+  },
+  sanctuary: {
+    category: 'sanctified', name: 'Sanctuary / Monastery',
+    description: 'Retreat and reliquary. Walled grounds, guest cells, a great library of holy texts.',
+    icon: '🛕', buildingSlots: 12, baseUpkeepGp: 60, startingRenown: 25
+  }
+};
+
+// Buildings you can install INSIDE a base. Each has a slot cost, install
+// cost (gold + hours), and may grant perks. Some are category-locked (you
+// can't install a Temple inside a Wizard Tower) — enforced by
+// `allowedCategories`. `allowedCategories: null` means any category works.
+export const BUILDING_TYPES = {
+  // MARTIAL-FLAVORED (installable in martial bases; some elsewhere)
+  barracks: {
+    name: 'Barracks',
+    description: 'Houses a garrison of soldiers. Each level doubles garrison capacity.',
+    icon: '🛏️',
+    allowedCategories: ['martial', 'civilian'],
+    slots: 1, baseGoldCost: 500, baseHoursRequired: 80,
+    perks: ['garrison_capacity_20']
+  },
+  armory: {
+    name: 'Armory',
+    description: 'Stores and maintains weapons + armor for the garrison. Reduces equipment wear.',
+    icon: '⚔️',
+    allowedCategories: ['martial', 'civilian'],
+    slots: 1, baseGoldCost: 400, baseHoursRequired: 60,
+    perks: ['equipment_maintenance']
+  },
+  gatehouse: {
+    name: 'Gatehouse',
+    description: 'Fortified entry with portcullis and murder holes. Major defense bonus.',
+    icon: '🚪',
+    allowedCategories: ['martial'],
+    slots: 1, baseGoldCost: 800, baseHoursRequired: 120,
+    perks: ['defense_rating_plus_3']
+  },
+  watchtower: {
+    name: 'Watchtower (building)',
+    description: 'A tower extending your base. Spots approaching threats before they arrive.',
+    icon: '🗼',
+    allowedCategories: ['martial', 'civilian'],
+    slots: 1, baseGoldCost: 350, baseHoursRequired: 50,
+    perks: ['early_warning']
+  },
+  training_yard: {
+    name: 'Training Yard',
+    description: 'Dedicated grounds for combat drill. Garrison fights harder; party gets XP bonus during downtime.',
+    icon: '🎯',
+    allowedCategories: ['martial', 'civilian'],
+    slots: 1, baseGoldCost: 300, baseHoursRequired: 40,
+    perks: ['training_bonus_xp']
+  },
+  stables: {
+    name: 'Stables',
+    description: 'Housing for mounts. Enables mounted travel bonuses.',
+    icon: '🐎',
+    allowedCategories: ['martial', 'civilian', 'sanctified'],
+    slots: 1, baseGoldCost: 250, baseHoursRequired: 35,
+    perks: ['mounted_travel']
+  },
+
+  // CIVILIAN
+  tavern: {
+    name: 'Tavern',
+    description: 'A taproom for locals and travelers. Rumor network, modest income.',
+    icon: '🍺',
+    allowedCategories: ['civilian', 'martial'],
+    slots: 1, baseGoldCost: 400, baseHoursRequired: 60,
+    perks: ['rumor_network', 'passive_income_3']
+  },
+  guild_hall: {
+    name: 'Guild Hall (building)',
+    description: 'A meeting room and job board for sellswords and specialists.',
+    icon: '⚔️',
+    allowedCategories: ['civilian', 'martial'],
+    slots: 1, baseGoldCost: 500, baseHoursRequired: 80,
+    perks: ['quest_leads']
+  },
+  manor_house: {
+    name: 'Manor House',
+    description: 'Living quarters with prestige. Social-standing bonus in the region.',
+    icon: '🏡',
+    allowedCategories: ['civilian'],
+    slots: 2, baseGoldCost: 1000, baseHoursRequired: 150,
+    perks: ['prestige']
+  },
+  garden_kitchen: {
+    name: 'Garden & Kitchen',
+    description: 'Herbs, food, alchemical ingredients. Reduces ration cost and feeds staff.',
+    icon: '🌿',
+    allowedCategories: ['civilian', 'sanctified', 'arcane'],
+    slots: 1, baseGoldCost: 200, baseHoursRequired: 30,
+    perks: ['self_sufficient']
+  },
+
+  // ARCANE
+  wizard_tower: {
+    name: 'Wizard Tower (building)',
+    description: 'An arcane spire within the base. Enables spell research and ritual casting at home.',
+    icon: '🔮',
+    allowedCategories: ['arcane', 'martial', 'civilian'],
+    slots: 2, baseGoldCost: 1500, baseHoursRequired: 200,
+    perks: ['spell_research', 'study_anywhere']
+  },
+  arcane_library: {
+    name: 'Arcane Library',
+    description: 'Shelves of tomes and scrolls. Tomes and scrolls generate slowly. Casters get research bonus.',
+    icon: '📚',
+    allowedCategories: ['arcane', 'sanctified', 'civilian'],
+    slots: 1, baseGoldCost: 600, baseHoursRequired: 90,
+    perks: ['research_bonus']
+  },
+  arcane_lab: {
+    name: 'Arcane Laboratory',
+    description: 'Alchemy, enchanting, and magical crafting workshop.',
+    icon: '🧪',
+    allowedCategories: ['arcane', 'sanctified'],
+    slots: 1, baseGoldCost: 700, baseHoursRequired: 100,
+    perks: ['crafting_speed', 'alchemy_station']
+  },
+  observatory: {
+    name: 'Observatory',
+    description: 'Celestial observation. Enables divination-based foresight once per week.',
+    icon: '🔭',
+    allowedCategories: ['arcane', 'sanctified'],
+    slots: 1, baseGoldCost: 900, baseHoursRequired: 120,
+    perks: ['divination_weekly']
+  },
+
+  // SANCTIFIED
+  temple: {
+    name: 'Temple (building)',
+    description: 'A hall of worship. Healing services, divine communion, prayer bonuses.',
+    icon: '⛪',
+    allowedCategories: ['sanctified', 'civilian', 'martial'],
+    slots: 2, baseGoldCost: 1000, baseHoursRequired: 150,
+    perks: ['prayer_bonus', 'healing_ward']
+  },
+  chapel: {
+    name: 'Chapel',
+    description: 'A small shrine within the base. Morale bonus for garrison and staff.',
+    icon: '🕊️',
+    allowedCategories: null, // Any base can have a chapel
+    slots: 1, baseGoldCost: 300, baseHoursRequired: 40,
+    perks: ['morale_bonus']
+  },
+  reliquary: {
+    name: 'Reliquary',
+    description: 'Secured vault for holy relics. Attracts pilgrims and donations.',
+    icon: '💠',
+    allowedCategories: ['sanctified', 'civilian'],
+    slots: 1, baseGoldCost: 700, baseHoursRequired: 90,
+    perks: ['pilgrim_donations', 'passive_income_5']
+  },
+
+  // SHARED UTILITY
+  storage_vault: {
+    name: 'Storage Vault',
+    description: 'Secure underground storage for treasure and supplies. Expands treasury capacity.',
+    icon: '🗝️',
+    allowedCategories: null,
+    slots: 1, baseGoldCost: 400, baseHoursRequired: 60,
+    perks: ['secure_storage']
+  },
+  guest_quarters: {
+    name: 'Guest Quarters',
+    description: 'Rooms for visiting allies. Allied NPCs stay longer; morale bump.',
+    icon: '🛋️',
+    allowedCategories: null,
+    slots: 1, baseGoldCost: 300, baseHoursRequired: 45,
+    perks: ['hospitality']
+  }
+};
+
+/**
+ * Returns which building types can be installed in a base of the given
+ * subtype. Filters BUILDING_TYPES by its `allowedCategories` against the
+ * subtype's category. Null allowedCategories means always allowed.
+ */
+export function getAvailableBuildingsForSubtype(subtype) {
+  const subtypeConfig = BASE_SUBTYPES[subtype];
+  if (!subtypeConfig) return {};
+  const cat = subtypeConfig.category;
+  const out = {};
+  for (const [key, b] of Object.entries(BUILDING_TYPES)) {
+    if (b.allowedCategories === null || b.allowedCategories.includes(cat)) {
+      out[key] = b;
+    }
+  }
+  return out;
+}
+
+// ============================================================
 // HELPERS
 // ============================================================
 
