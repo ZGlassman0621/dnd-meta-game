@@ -227,7 +227,7 @@ export default function NicknameManagerPanel({ character, onClose }) {
           <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '1rem' }}>Loading…</p>
         ) : rows.length === 0 ? (
           <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '1rem' }}>
-            No nicknames set. Add one below — for example, "Riv" for friends, or a specific name your apprentice uses.
+            No nicknames set. Add one below — for example, a short form friends use, a title strangers should default to, or a specific name one NPC calls your character.
           </p>
         ) : (
           <div style={{ marginBottom: '1rem' }}>
@@ -304,7 +304,7 @@ export default function NicknameManagerPanel({ character, onClose }) {
             type="text"
             value={draft.nickname}
             onChange={(e) => setDraft({ ...draft, nickname: e.target.value })}
-            placeholder={'e.g. "Riv", "Master", "Sir Rivelious"'}
+            placeholder={'The name or form of address this rule applies to'}
             style={inputStyle}
           />
 
@@ -368,7 +368,7 @@ export default function NicknameManagerPanel({ character, onClose }) {
           <textarea
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-            placeholder={'Private memo — e.g. "Jarrick started calling me this after the Tavern Brawl."'}
+            placeholder={'Private memo — why this rule exists, when it started, etc.'}
             rows={2}
             style={{ ...inputStyle, resize: 'vertical' }}
           />

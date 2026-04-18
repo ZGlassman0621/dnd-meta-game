@@ -964,7 +964,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           type="text"
           value={formData.nickname}
           onChange={(e) => handleChange('nickname', e.target.value)}
-          placeholder="e.g., 'Riv', 'The Brave', 'Shadowstep'"
+          placeholder="A short form, title, or epithet your character goes by"
         />
         <small style={{ color: '#bbb', marginTop: '0.25rem', display: 'block' }}>
           A shorter name or alias your character goes by

@@ -79,7 +79,7 @@ router.delete('/:id/nicknames/:nicknameId', async (req, res) => {
 });
 
 // GET /api/character/:id/nicknames/resolve/:npcId — what does this NPC call the PC?
-// Useful for UI previews and debugging ("try Jarrick" → shows Riv).
+// Useful for UI previews and debugging the audience-rule matcher.
 router.get('/:id/nicknames/resolve/:npcId', async (req, res) => {
   try {
     const resolution = await nicknameService.resolveForNpc(req.params.id, req.params.npcId);

@@ -2,6 +2,26 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.28] - 2026-04-18 — Genericize nickname UI placeholders
+
+Cosmetic follow-up to v1.0.27. Placeholder text and example strings in
+the UI previously referenced the example names ("Riv", "Rivelious",
+"Jarrick") used when scoping the feature. These never became stored
+data — they only appeared as grayed-out hints inside empty inputs —
+but they implicitly assumed a specific character.
+
+- `NicknameManagerPanel.jsx`: empty-state copy, nickname input
+  placeholder, and notes input placeholder rewritten as
+  character-agnostic hints.
+- `CharacterCreationWizard.jsx`: pre-existing Step-1 nickname
+  placeholder (`"Riv", "The Brave", "Shadowstep"`) replaced with a
+  generic "A short form, title, or epithet your character goes by".
+- Doc comments in `nicknameService.js` and `nickname.js` softened to
+  describe the shape of output rather than specific example strings.
+- Test fixtures in `tests/nickname-resolver.test.js` unchanged —
+  they use `TEST_NICK_` prefixes, exist only during the test run,
+  and are deleted on both entry and exit.
+
 ## [1.0.0.27] - 2026-04-18 — Multi-nickname system with audience rules (D)
 
 Characters can now have multiple names (legal name, title, nicknames,

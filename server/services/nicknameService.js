@@ -235,11 +235,12 @@ export async function resolveForNpcBatch(characterId, npcIds) {
 
 /**
  * Human-readable one-liner for the DM prompt's NPC block.
- * Examples:
- *   "Calls the PC: Riv (friends)."
- *   "Calls the PC: Master (role: apprentice)."
- *   "Calls the PC: any familiar name (bard — rule of cool)."
- *   "Calls the PC: Sir Rivelious (no rule — defaults to their legal name / title)."
+ * Shape (nickname + rule label in parentheses):
+ *   `Calls the PC: "<name>" (<rule>).`
+ * Bard override phrasing:
+ *   `Calls the PC: any familiar form (bard — rule of cool). Known forms: ...`
+ * Fallback when no rule matches:
+ *   `Calls the PC: <legal name> (no relationship-specific name applies).`
  */
 export function formatResolutionForPrompt(resolution) {
   if (!resolution) return null;
