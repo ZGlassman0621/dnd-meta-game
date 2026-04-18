@@ -317,20 +317,20 @@ async function runTests() {
 async function cleanup() {
   console.log('\n--- Cleanup ---');
 
-  // Delete companion_activities
+  // Order matters: delete ROWS THAT POINT AT companions first, then
+  // companions, then rows that companions pointed at. Some FKs don't
+  // cascade (notably narrative_queue.related_companion_id), so we have
+  // to clear them before the companions row goes away.
   await dbRun("DELETE FROM companion_activities WHERE companion_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
-
-  // Delete companion_backstories
   await dbRun("DELETE FROM companion_backstories WHERE companion_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
+  await dbRun("DELETE FROM narrative_queue WHERE related_companion_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
+  await dbRun("DELETE FROM narrative_queue WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE 'TEST_%')");
 
-  // Delete companions
+  // Now safe to delete companions
   await dbRun("DELETE FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%')");
 
   // Delete npc_relationships
   await dbRun("DELETE FROM npc_relationships WHERE npc_id IN (SELECT id FROM npcs WHERE name LIKE 'TEST_%')");
-
-  // Delete narrative_queue
-  await dbRun("DELETE FROM narrative_queue WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE 'TEST_%')");
 
   // Delete NPCs
   await dbRun("DELETE FROM npcs WHERE name LIKE 'TEST_%'");

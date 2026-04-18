@@ -76,13 +76,17 @@ export async function generateThreatsForCampaign(campaignId, currentGameDay) {
   const raidCapableTypes = Object.keys(RAID_CAPABLE_EVENTS);
   if (raidCapableTypes.length === 0) return summary;
 
+  // world_events has event_type, title, description, status but NO
+  // `severity` or `region` columns — those were in an earlier design.
+  // Raid generation doesn't strictly need them; scope/affected_locations
+  // could be read for future regional targeting.
   const placeholders = raidCapableTypes.map(() => '?').join(',');
   const events = await dbAll(
-    `SELECT id, event_type, title, description, severity, region
+    `SELECT id, event_type, title, description, scope, affected_locations
      FROM world_events
      WHERE campaign_id = ?
        AND event_type IN (${placeholders})
-       AND status IN ('active', 'escalating')`,
+       AND status = 'active'`,
     [campaignId, ...raidCapableTypes]
   );
   if (events.length === 0) return summary;

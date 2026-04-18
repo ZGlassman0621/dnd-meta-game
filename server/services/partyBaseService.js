@@ -745,9 +745,7 @@ export async function getBaseForPrompt(characterId, campaignId) {
   return lines.join('\n');
 }
 
-// Legacy upgrade functions — to be rewired in F1b for per-building upgrades.
-// Kept as stubs so route-layer imports don't fail; real implementation
-// lands when PartyBasePage UI is rebuilt.
-export async function getAvailableUpgrades() { return []; }
-export async function startUpgrade() { throw new Error('Upgrades are being rewired in F1b. Use addBuilding() for now.'); }
-export async function advanceUpgrade() { throw new Error('Upgrades are being rewired in F1b. Use advanceBuildingConstruction() for now.'); }
+// Legacy upgrade functions removed in the v1.0.24 bug sweep. Callers
+// (previously downtime.js and the PartyBasePage upgrades tab) now use
+// `addBuilding` + `advanceBuildingConstruction` instead. If you see
+// a reference to `advanceUpgrade` anywhere, it should be updated.

@@ -286,20 +286,26 @@ export async function resolveActivity(activityId, currentGameDay, completionRati
     WHERE id = ?
   `, [activity.companion_id]);
 
-  // Queue reunion narrative for next session
+  // Queue reunion narrative for next session. Uses direct SQL because the
+  // narrative_queue schema requires title (for indexing) + description
+  // (for display), with context as a JSON blob. Uses
+  // 'companion_mood_change' as the event_type since it's the known type
+  // that best covers a companion returning with a story.
   if (outcomes.reunion_narrative) {
     try {
       await dbRun(`
         INSERT INTO narrative_queue
-          (campaign_id, character_id, event_type, priority, content, related_npc_id, status)
-        VALUES (?, ?, 'companion_reunion', 'high', ?, ?, 'pending')
+          (campaign_id, character_id, event_type, priority, title, description,
+           context, related_companion_id, status)
+        VALUES (?, ?, 'companion_mood_change', 'high', ?, ?, ?, ?, 'pending')
       `, [
         activity.campaign_id,
         activity.character_id,
+        `${activity.companion_name} returns`,
+        outcomes.reunion_narrative,
         JSON.stringify({
           companion_name: activity.companion_name,
           activity_type: activity.activity_type,
-          reunion_narrative: outcomes.reunion_narrative,
           story_summary: outcomes.story_summary,
           success_level: outcomes.success_level
         }),

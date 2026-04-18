@@ -51,6 +51,15 @@ function assertEqual(actual, expected, message) {
   }
 }
 
+/**
+ * Clean all TEST_ prefixed narrative_queue rows between test groups so each
+ * test runs against a predictable blank slate. Prevents the flake where
+ * leftover items from group N influence group N+1.
+ */
+async function cleanQueue() {
+  await dbRun("DELETE FROM narrative_queue WHERE title LIKE 'TEST_%'");
+}
+
 // ===== Setup =====
 
 async function setup() {
@@ -290,7 +299,18 @@ async function testExpireOldItems() {
 async function testFormatForAIContext() {
   console.log('\n=== Test 7: formatForAIContext ===\n');
 
-  // We should still have some pending items from earlier tests
+  // Seed a pending item so the format test has something to render.
+  // (Cleanup between test groups means we can't rely on earlier tests'
+  // items surviving into this one.)
+  await addToQueue({
+    campaign_id: testCampaignId,
+    character_id: testCharId,
+    event_type: 'quest_available',
+    priority: 'normal',
+    title: 'TEST_Format Seed Quest',
+    description: 'A merchant is looking for hired swords.'
+  });
+
   const result = await formatForAIContext(testCharId, 5);
 
   assert(result !== null, 'Returns non-null when pending items exist');
@@ -384,15 +404,15 @@ async function cleanup() {
 async function runAll() {
   try {
     await setup();
-    await testAddToQueue();
-    await testGetPendingItems();
-    await testGetNextBatch();
-    await testMarkDelivered();
-    await testMarkMultipleDelivered();
-    await testExpireOldItems();
-    await testFormatForAIContext();
-    await testGetQueueStats();
-    await testDeliverAfterScheduling();
+    await cleanQueue(); await testAddToQueue();
+    await cleanQueue(); await testGetPendingItems();
+    await cleanQueue(); await testGetNextBatch();
+    await cleanQueue(); await testMarkDelivered();
+    await cleanQueue(); await testMarkMultipleDelivered();
+    await cleanQueue(); await testExpireOldItems();
+    await cleanQueue(); await testFormatForAIContext();
+    await cleanQueue(); await testGetQueueStats();
+    await cleanQueue(); await testDeliverAfterScheduling();
   } catch (err) {
     console.error('\nFATAL ERROR:', err);
     failed++;

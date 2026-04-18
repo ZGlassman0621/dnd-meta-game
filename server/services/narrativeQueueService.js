@@ -10,6 +10,25 @@ const PRIORITY_ORDER = ['urgent', 'high', 'normal', 'low', 'flavor'];
 /**
  * Add an event to the narrative queue
  */
+/**
+ * Known event types — the ones the DM prompt / UI recognize. Unknown types
+ * still get queued (to support future integrations without a code push),
+ * but we log a warning so typos don't silently disappear into a "ghost"
+ * queue entry that never gets delivered.
+ */
+export const KNOWN_EVENT_TYPES = new Set([
+  'quest_available', 'quest_started', 'quest_completed', 'quest_failed',
+  'quest_expired', 'faction_quest_spawned', 'faction_goal_completed',
+  'companion_recruited', 'companion_dismissed', 'companion_mood_change',
+  'promise_overdue', 'reputation_loss',
+  'merchant_order_ready', 'merchant_order_expired',
+  'base_threat_approaching', 'base_threat_repelled', 'base_captured',
+  'base_damaged', 'base_defended', 'base_permanently_lost',
+  'notoriety_entanglement', 'npc_mail', 'achievement_unlocked',
+  'world_event_escalated', 'npc_death', 'location_discovered',
+  'rumor_heard', 'tactic_discovered'
+]);
+
 export async function addToQueue(data) {
   const {
     campaign_id = null,
@@ -27,6 +46,16 @@ export async function addToQueue(data) {
     deliver_after = null,
     expires_at = null
   } = data;
+
+  if (typeof event_type !== 'string' || !event_type) {
+    throw new Error('narrative queue: event_type is required and must be a string');
+  }
+  if (!KNOWN_EVENT_TYPES.has(event_type)) {
+    console.warn(
+      `[narrativeQueue] Unknown event_type "${event_type}" — it will be queued, ` +
+      `but downstream consumers may not recognize it. Add it to KNOWN_EVENT_TYPES if intentional.`
+    );
+  }
 
   const result = await dbRun(`
     INSERT INTO narrative_queue (

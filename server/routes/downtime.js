@@ -1473,34 +1473,59 @@ async function calculateBenefits(downtime, character, activity) {
     }
 
     case 'base_upgrade': {
-      // Work on base upgrade
-      const upgradeId = downtime.work_type?.startsWith('upgrade:') ? parseInt(downtime.work_type.split(':')[1]) : null;
-      if (!upgradeId) {
-        benefits.description = `Base work for ${hours} hours — no active upgrade selected`;
+      // F1 rewire: downtime base work now advances a specific BUILDING's
+      // construction (not a free-standing upgrade row — those are retired).
+      // Accept either `building:<id>` (new) or the legacy `upgrade:<id>`
+      // shape which we reinterpret as a building id for back-compat with
+      // any in-flight downtime rows.
+      const workType = downtime.work_type || '';
+      let buildingId = null;
+      if (workType.startsWith('building:')) {
+        buildingId = parseInt(workType.split(':')[1], 10);
+      } else if (workType.startsWith('upgrade:')) {
+        buildingId = parseInt(workType.split(':')[1], 10);
+      }
+      if (!buildingId || Number.isNaN(buildingId)) {
+        benefits.description = `Base work for ${hours} hours — no building selected`;
         break;
       }
       try {
-        // Check for crafting_speed perk
         let speedBonus = 1.0;
         try {
           const hasCraftingSpeed = await partyBaseService.hasPerk(character.id, character.campaign_id, 'crafting_speed');
           if (hasCraftingSpeed) speedBonus = 1.25;
         } catch (_e) { /* no perk */ }
         const effectiveHours = hours * speedBonus;
-        const result = await partyBaseService.advanceUpgrade(upgradeId, effectiveHours);
+
+        const before = await partyBaseService.getBuildingById(buildingId);
+        if (!before) {
+          benefits.description = `Base work for ${hours} hours — building not found`;
+          break;
+        }
+        if (before.status !== 'in_progress') {
+          benefits.description = `Base work for ${hours} hours — ${before.name || before.building_type} is ${before.status}, not under construction`;
+          break;
+        }
+
+        const after = await partyBaseService.advanceBuildingConstruction(
+          buildingId, effectiveHours, character.game_day || null
+        );
+        const completed = after.status === 'completed';
         benefits.upgradeProgress = {
-          upgradeName: result.upgrade?.name || 'Unknown',
+          upgradeName: after.name || after.building_type || 'Building',
           hoursAdded: effectiveHours,
-          totalHours: result.upgrade?.hours_invested,
-          required: result.upgrade?.hours_required,
-          completed: result.completed
+          totalHours: after.hours_invested,
+          required: after.hours_required,
+          completed
         };
-        if (result.completed) {
-          benefits.events.push(`Upgrade "${result.upgrade?.name}" completed!`);
+        if (completed) {
+          benefits.events.push(`Building "${after.name || after.building_type}" completed!`);
           benefits.xpGained = 25;
         }
-        const pctDone = result.upgrade ? Math.floor((result.upgrade.hours_invested / result.upgrade.hours_required) * 100) : 0;
-        benefits.description = `Worked on base upgrade for ${hours} hours (${pctDone}% complete)`;
+        const pctDone = after.hours_required
+          ? Math.floor((after.hours_invested / after.hours_required) * 100)
+          : 0;
+        benefits.description = `Worked on ${after.name || after.building_type} for ${hours} hours (${pctDone}% complete)`;
         if (speedBonus > 1) benefits.description += ' (crafting speed bonus)';
       } catch (e) {
         benefits.description = `Base work for ${hours} hours — ${e.message}`;

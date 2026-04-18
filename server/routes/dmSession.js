@@ -1,5 +1,5 @@
 import express from 'express';
-import { dbAll, dbGet, dbRun } from '../database.js';
+import db, { dbAll, dbGet, dbRun } from '../database.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
 import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
@@ -1929,10 +1929,12 @@ router.post('/:sessionId/message', async (req, res) => {
       const promisesMade = detectPromiseMade(result.narrative);
       for (const pm of promisesMade) {
         try {
-          // Find NPC by name
+          // NPCs are campaign-global (no campaign_id column), so we match by
+          // name only. Rare collision risk across campaigns is acceptable for
+          // a solo game.
           const npc = await dbGet(
-            'SELECT id, name FROM npcs WHERE campaign_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
-            [character?.campaign_id, pm.npc]
+            'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
+            [pm.npc]
           );
           if (npc && character) {
             const deadlineGameDay = pm.deadline > 0 ? (character.game_day || 0) + pm.deadline : null;
@@ -1964,8 +1966,8 @@ router.post('/:sessionId/message', async (req, res) => {
       for (const pf of promisesFulfilled) {
         try {
           const npc = await dbGet(
-            'SELECT id, name FROM npcs WHERE campaign_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
-            [character?.campaign_id, pf.npc]
+            'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
+            [pf.npc]
           );
           if (npc && character) {
             // Find matching pending promise by text similarity
@@ -2129,13 +2131,23 @@ router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
 
     const buybackItems = generateBuybackPrices(playerItems || []);
 
-    // Calculate reputation-based price modifier (disposition + faction standing)
+    // Calculate reputation-based price modifier (disposition + faction standing).
+    // NPCs are campaign-global (no campaign_id column on npcs), so we do an
+    // exact-name match first for accuracy, falling back to prefix match if
+    // nothing hits. The campaign_id is still passed into calculatePriceModifier
+    // to scope faction lookups (factions ARE campaign-scoped).
     let priceModifier = null;
     try {
-      const merchantNpc = await dbGet(
-        'SELECT id FROM npcs WHERE campaign_id = ? AND LOWER(name) LIKE LOWER(?) LIMIT 1',
-        [character.campaign_id, `%${merchantName}%`]
+      let merchantNpc = await dbGet(
+        'SELECT id FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
+        [merchantName]
       );
+      if (!merchantNpc) {
+        merchantNpc = await dbGet(
+          'SELECT id FROM npcs WHERE LOWER(name) LIKE LOWER(?) LIMIT 1',
+          [`${merchantName}%`]
+        );
+      }
       if (merchantNpc) {
         priceModifier = await calculatePriceModifier(session.character_id, character.campaign_id, merchantNpc.id);
       }
@@ -2230,11 +2242,37 @@ router.post('/:sessionId/restock-merchant', async (req, res) => {
   }
 });
 
-// Process merchant transaction
+// Process merchant transaction (atomic — character + merchant updates succeed
+// or fail together via db.transaction('write')).
 router.post('/:sessionId/merchant-transaction', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { merchantName, merchantId, bought, sold, haggleDiscountPercent } = req.body;
+
+    // ---- Input validation (prevents negative/NaN sneaking into totals) ----
+    const validateItems = (items, label) => {
+      if (!Array.isArray(items)) return null;
+      for (const item of items) {
+        if (!item || typeof item.name !== 'string' || !item.name.trim()) {
+          return `${label}: each item must have a string name`;
+        }
+        const q = Number(item.quantity);
+        if (!Number.isInteger(q) || q < 1) {
+          return `${label}: "${item.name}" quantity must be a positive integer (got ${item.quantity})`;
+        }
+        for (const k of ['price_gp', 'price_sp', 'price_cp']) {
+          const p = Number(item[k]);
+          if (item[k] !== undefined && (Number.isNaN(p) || p < 0)) {
+            return `${label}: "${item.name}" ${k} must be a non-negative number`;
+          }
+        }
+      }
+      return null;
+    };
+    const bErr = validateItems(bought, 'bought');
+    if (bErr) return res.status(400).json({ error: bErr });
+    const sErr = validateItems(sold, 'sold');
+    if (sErr) return res.status(400).json({ error: sErr });
 
     const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
     if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -2270,9 +2308,7 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
       totalSpentCp = Math.round(totalSpentCp * (1 - bulkDiscount));
     }
 
-    // M3: Apply haggle discount. Clamped to [0, 20] server-side so a
-    // malformed or tampered client request can't claim an unreasonable cut.
-    // Solo game → trusted client, but the clamp is still cheap insurance.
+    // M3: Apply haggle discount. Clamped to [0, 20] server-side.
     const haggleDiscount = Math.max(0, Math.min(20, Number(haggleDiscountPercent) || 0)) / 100;
     if (haggleDiscount > 0 && totalSpentCp > 0) {
       totalSpentCp = Math.round(totalSpentCp * (1 - haggleDiscount));
@@ -2309,38 +2345,12 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
     const newSp = Math.floor(remainCp / 10);
     const newCp = remainCp % 10;
 
-    // Update character
-    await dbRun(`
-      UPDATE characters
-      SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [JSON.stringify(inventory), newGp, newSp, newCp, character.id]);
-
-    // Reputation: look up merchant NPC and adjust disposition
-    let reputationChange = null;
-    try {
-      const merchantNpc = await dbGet(
-        'SELECT id, name FROM npcs WHERE name LIKE ? LIMIT 1',
-        [`%${merchantName}%`]
-      );
-      if (merchantNpc) {
-        const { adjustDisposition } = await import('../services/npcRelationshipService.js');
-        const change = Math.min(10, Math.max(2, Math.floor(totalSpentCp / 1000) + 2));
-        await adjustDisposition(session.character_id, merchantNpc.id, change, `Traded with ${merchantName}`);
-        reputationChange = { npcName: merchantNpc.name, change };
-      }
-    } catch (repErr) {
-      console.warn('Reputation update failed:', repErr.message);
-    }
-
-    // Update the merchant's persistent inventory
-    // This must succeed BEFORE we respond — otherwise character and merchant get out of sync
+    // Precompute merchant-side mutations (no DB writes yet)
+    let merchantWrite = null;
     if (merchantId) {
       const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
       if (merchant) {
         let merchInv = safeParse(merchant.inventory, []);
-
-        // Remove bought items from merchant stock
         for (const item of (bought || [])) {
           const idx = merchInv.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
           if (idx !== -1) {
@@ -2348,8 +2358,6 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
             if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
           }
         }
-
-        // Add sold items to merchant stock (at full price for resale)
         for (const item of (sold || [])) {
           const existing = merchInv.find(i => i.name.toLowerCase() === item.name.toLowerCase());
           if (existing) {
@@ -2367,14 +2375,89 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
             });
           }
         }
-
-        // Update merchant gold (they pay for buybacks, receive from sales)
-        // Pass original gold + inventory hash for optimistic locking
         const originalMerchGold = merchant.gold_gp || 0;
         const newMerchGold = originalMerchGold - Math.floor(totalEarnedCp / 100) + Math.floor(totalSpentCp / 100);
-        const originalInventoryHash = merchant.inventory_version || 0;
-        await updateMerchantAfterTransaction(merchantId, merchInv, newMerchGold, originalMerchGold, originalInventoryHash);
+        merchantWrite = {
+          id: merchantId,
+          inventoryJson: JSON.stringify(merchInv),
+          newGold: newMerchGold,
+          expectedVersion: merchant.inventory_version || 0
+        };
       }
+    }
+
+    // ---- Atomic write: character + merchant in one transaction ----
+    // Either both land or neither does. If the merchant's optimistic-lock
+    // version check fails inside the tx, the whole thing rolls back and the
+    // character's gold is NOT deducted.
+    const tx = await db.transaction('write');
+    try {
+      await tx.execute({
+        sql: `UPDATE characters
+              SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`,
+        args: [JSON.stringify(inventory), newGp, newSp, newCp, character.id]
+      });
+
+      if (merchantWrite) {
+        const r = await tx.execute({
+          sql: `UPDATE merchant_inventories
+                SET inventory = ?, gold_gp = ?, inventory_version = inventory_version + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND inventory_version = ?`,
+          args: [
+            merchantWrite.inventoryJson, merchantWrite.newGold,
+            merchantWrite.id, merchantWrite.expectedVersion
+          ]
+        });
+        if (r.rowsAffected === 0) {
+          throw new Error('Transaction conflict: merchant inventory changed concurrently');
+        }
+      }
+
+      await tx.commit();
+    } catch (txErr) {
+      try { await tx.rollback(); } catch (_) { /* ignore rollback failure */ }
+      if (String(txErr.message).includes('Transaction conflict')) {
+        return res.status(409).json({ error: txErr.message });
+      }
+      throw txErr;
+    }
+
+    // Reputation: prefer merchant's linked NPC id; fall back to scoped lookup
+    // by campaign_id + exact name (NOT the fuzzy LIKE that could match the
+    // wrong NPC when multiple similar names exist in one campaign).
+    let reputationChange = null;
+    try {
+      let merchantNpc = null;
+      if (merchantId) {
+        const m = await dbGet(
+          'SELECT campaign_id, merchant_name FROM merchant_inventories WHERE id = ?',
+          [merchantId]
+        );
+        if (m?.campaign_id) {
+          // Try exact match first (case-insensitive)
+          merchantNpc = await dbGet(
+            'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
+            [m.merchant_name]
+          );
+          // Fall back to narrow prefix match scoped to the merchant's name
+          if (!merchantNpc) {
+            merchantNpc = await dbGet(
+              'SELECT id, name FROM npcs WHERE LOWER(name) LIKE LOWER(?) LIMIT 1',
+              [`${m.merchant_name}%`]
+            );
+          }
+        }
+      }
+      if (merchantNpc) {
+        const { adjustDisposition } = await import('../services/npcRelationshipService.js');
+        const change = Math.min(10, Math.max(2, Math.floor(totalSpentCp / 1000) + 2));
+        await adjustDisposition(session.character_id, merchantNpc.id, change, `Traded with ${merchantNpc.name}`);
+        reputationChange = { npcName: merchantNpc.name, change };
+      }
+    } catch (repErr) {
+      console.warn('Reputation update failed:', repErr.message);
     }
 
     // Record transaction in merchant memory for loyalty/economy tracking.

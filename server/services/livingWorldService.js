@@ -49,7 +49,20 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     event_results: [],
     spawned_events: [],
     effects_expired: 0,
-    errors: []
+    errors: [],
+    // Per-step status so callers can see which steps ran/failed/skipped without
+    // digging through stdout. { step: '3.6 base_income', status: 'ok'|'failed'|'skipped', ...details }
+    step_statuses: []
+  };
+
+  // Helper that records step status + appends to errors[] on failure.
+  // Skipped steps (e.g., no character in campaign) should call this with
+  // status='skipped' and a reason for visibility.
+  const recordStep = (step, status, extra = {}) => {
+    results.step_statuses.push({ step, status, ...extra });
+    if (status === 'failed' && extra.error) {
+      results.errors.push(`${step}: ${extra.error}`);
+    }
   };
 
   try {
@@ -63,9 +76,10 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       const season = getSeason(currentGameDay);
       const weatherResult = await advanceWeather(campaignId, gameDaysPassed * 24, currentGameDay, season);
       results.weather = weatherResult;
+      recordStep('0.5 weather', 'ok');
     } catch (e) {
       console.error('Error advancing weather:', e);
-      results.errors.push(`Weather: ${e.message}`);
+      recordStep('0.5 weather', 'failed', { error: e.message });
     }
 
     // 1. Process faction goals (they advance over time)
@@ -96,10 +110,13 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       if (currentGameDay > 0) {
         const resolvedActivities = await checkAndResolveActivities(campaignId, currentGameDay);
         results.companion_activities_resolved = resolvedActivities;
+        recordStep('3.5 companion_activities', 'ok', { resolved: (resolvedActivities || []).length });
+      } else {
+        recordStep('3.5 companion_activities', 'skipped', { reason: 'no character in campaign' });
       }
     } catch (e) {
       console.error('Error resolving companion activities:', e);
-      results.errors.push(`Companion activities: ${e.message}`);
+      recordStep('3.5 companion_activities', 'failed', { error: e.message });
     }
 
     // 3.6. Base income and upkeep
@@ -124,7 +141,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       }
     } catch (e) {
       console.error('Error processing base income/upkeep:', e);
-      results.errors.push(`Base income: ${e.message}`);
+      recordStep('3.6 base_income', 'failed', { error: e.message });
     }
 
     // 3.75. Generate NPC mail
@@ -143,11 +160,16 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
         if (charRow) {
           const npcMail = await generateNpcMail(campaignId, charRow.id, mailGameDay);
           results.npc_mail_generated = npcMail.length;
+          recordStep('3.75 npc_mail', 'ok', { generated: npcMail.length });
+        } else {
+          recordStep('3.75 npc_mail', 'skipped', { reason: 'no character in campaign' });
         }
+      } else {
+        recordStep('3.75 npc_mail', 'skipped', { reason: 'game_day is 0' });
       }
     } catch (e) {
       console.error('Error generating NPC mail:', e);
-      results.errors.push(`NPC mail: ${e.message}`);
+      recordStep('3.75 npc_mail', 'failed', { error: e.message });
     }
 
     // 3.8. Process consequences (overdue promises, expired quests)
@@ -164,10 +186,13 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       if (charRow2 && consequenceGameDay > 0) {
         const consequenceResults = await processConsequences(campaignId, charRow2.id, consequenceGameDay);
         results.consequences = consequenceResults;
+        recordStep('3.8 consequences', 'ok');
+      } else {
+        recordStep('3.8 consequences', 'skipped', { reason: !charRow2 ? 'no character' : 'game_day is 0' });
       }
     } catch (e) {
       console.error('Error processing consequences:', e);
-      results.errors.push(`Consequences: ${e.message}`);
+      recordStep('3.8 consequences', 'failed', { error: e.message });
     }
 
     // 3.85. Notoriety decay and entanglement checks
@@ -186,10 +211,13 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
           campaignId, charRowNotoriety.id, notorietyGameDay
         );
         results.notoriety = notorietyResults;
+        recordStep('3.85 notoriety', 'ok');
+      } else {
+        recordStep('3.85 notoriety', 'skipped', { reason: !charRowNotoriety ? 'no character' : 'game_day is 0' });
       }
     } catch (e) {
       console.error('Error processing notoriety tick:', e);
-      results.errors.push(`Notoriety: ${e.message}`);
+      recordStep('3.85 notoriety', 'failed', { error: e.message });
     }
 
     // 3.9. Merchant commissions: flip due orders to 'ready', expire stale
@@ -237,10 +265,11 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
           } catch (e) { /* best-effort */ }
         }
         results.merchant_orders = { readied: readied.length, expired: expired.length };
+        recordStep('3.9 merchant_orders', 'ok', { readied: readied.length, expired: expired.length });
       }
     } catch (e) {
       console.error('Error processing merchant orders:', e);
-      results.errors.push(`Merchant orders: ${e.message}`);
+      recordStep('3.9 merchant_orders', 'failed', { error: e.message });
     }
 
     // 3.95. Base threats (F3): scan for raid-capable world events and roll
@@ -267,10 +296,16 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
           auto_resolved: resolved.length,
           expired_captures: expired.length
         };
+        recordStep('3.95 base_threats', 'ok', {
+          generated: generated.generated.length,
+          auto_resolved: resolved.length
+        });
+      } else {
+        recordStep('3.95 base_threats', 'skipped', { reason: 'game_day is 0' });
       }
     } catch (e) {
       console.error('Error processing base threats:', e);
-      results.errors.push(`Base threats: ${e.message}`);
+      recordStep('3.95 base_threats', 'failed', { error: e.message });
     }
 
     // 4. Record the tick in campaign metadata
