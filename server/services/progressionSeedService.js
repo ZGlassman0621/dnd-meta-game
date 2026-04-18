@@ -70,23 +70,24 @@ async function seedThemes(db) {
     inserted++;
   }
 
+  let updated = 0;
   for (const theme of THEMES) {
-    // Check if this theme already exists
     const existing = await db.execute({
-      sql: 'SELECT id FROM themes WHERE id = ?',
+      sql: 'SELECT id, description FROM themes WHERE id = ?',
       args: [theme.id]
     });
 
     if (existing.rows.length === 0) {
       await db.execute({
         sql: `INSERT INTO themes (
-          id, name, identity, signature_skill_1, signature_skill_2,
+          id, name, identity, description, signature_skill_1, signature_skill_2,
           tags, creation_choice_label, creation_choice_options, divergence_notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           theme.id,
           theme.name,
           theme.identity,
+          theme.description || null,
           theme.signature_skill_1,
           theme.signature_skill_2,
           JSON.stringify(theme.tags),
@@ -96,9 +97,16 @@ async function seedThemes(db) {
         ]
       });
       inserted++;
+    } else if (theme.description && existing.rows[0].description !== theme.description) {
+      // Backfill / refresh description on existing rows so seed data stays authoritative
+      await db.execute({
+        sql: 'UPDATE themes SET description = ? WHERE id = ?',
+        args: [theme.description, theme.id]
+      });
+      updated++;
     }
   }
-  return { inserted, total: THEMES.length };
+  return { inserted, updated, total: THEMES.length };
 }
 
 /**
@@ -144,17 +152,20 @@ async function seedThemeAbilities(db) {
  */
 async function seedAncestryFeats(db) {
   let inserted = 0;
+  let updated = 0;
   for (const feat of ANCESTRY_FEATS) {
     const existing = await db.execute({
-      sql: 'SELECT id FROM ancestry_feats WHERE list_id = ? AND tier = ? AND choice_index = ?',
+      sql: 'SELECT id, description, choices FROM ancestry_feats WHERE list_id = ? AND tier = ? AND choice_index = ?',
       args: [feat.list_id, feat.tier, feat.choice_index]
     });
+
+    const choicesJson = feat.choices ? JSON.stringify(feat.choices) : null;
 
     if (existing.rows.length === 0) {
       await db.execute({
         sql: `INSERT INTO ancestry_feats (
-          list_id, tier, choice_index, feat_name, description, mechanics, flavor_text
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          list_id, tier, choice_index, feat_name, description, mechanics, flavor_text, choices
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           feat.list_id,
           feat.tier,
@@ -162,13 +173,24 @@ async function seedAncestryFeats(db) {
           feat.feat_name,
           feat.description,
           feat.mechanics || null,
-          feat.flavor || null
+          feat.flavor || null,
+          choicesJson
         ]
       });
       inserted++;
+    } else {
+      // Refresh description + choices so seed rewrite propagates to existing DBs
+      const row = existing.rows[0];
+      if (row.description !== feat.description || (row.choices || null) !== choicesJson) {
+        await db.execute({
+          sql: 'UPDATE ancestry_feats SET description = ?, choices = ? WHERE id = ?',
+          args: [feat.description, choicesJson, row.id]
+        });
+        updated++;
+      }
     }
   }
-  return { inserted, total: ANCESTRY_FEATS.length };
+  return { inserted, updated, total: ANCESTRY_FEATS.length };
 }
 
 /**

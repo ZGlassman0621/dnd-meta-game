@@ -134,7 +134,8 @@ router.post('/', async (req, res) => {
       theme_id = null,
       theme_path_choice = null,
       ancestry_feat_id = null,
-      ancestry_list_id = null
+      ancestry_list_id = null,
+      ancestry_feat_choices = null // object of player-resolved sub-choices, e.g. { skill: 'perception', language: 'dwarvish' }
     } = req.body;
 
     const sql = `
@@ -180,7 +181,7 @@ router.post('/', async (req, res) => {
       await persistThemeSelection(characterId, theme_id, theme_path_choice, level);
     }
     if (ancestry_feat_id) {
-      await persistAncestryFeatSelection(characterId, ancestry_feat_id, 1, level);
+      await persistAncestryFeatSelection(characterId, ancestry_feat_id, 1, level, ancestry_feat_choices);
     }
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
@@ -230,13 +231,19 @@ async function persistThemeSelection(characterId, themeId, pathChoice, level) {
 
 /**
  * Persist an L1 ancestry feat selection for a newly-created character.
+ * `choicesData` is an optional object of player-resolved sub-choices
+ * (e.g. { skill: 'perception', language: 'dwarvish' }) matching the
+ * feat's `choices` schema.
  */
-async function persistAncestryFeatSelection(characterId, featId, tier, selectedAtLevel) {
+async function persistAncestryFeatSelection(characterId, featId, tier, selectedAtLevel, choicesData) {
+  const choicesJson = choicesData && typeof choicesData === 'object'
+    ? JSON.stringify(choicesData)
+    : null;
   await dbRun(
     `INSERT OR REPLACE INTO character_ancestry_feats
-     (character_id, feat_id, tier, selected_at_level, narrative_delivery)
-     VALUES (?, ?, ?, ?, ?)`,
-    [characterId, featId, tier, selectedAtLevel || 1, 'Chosen at character creation.']
+     (character_id, feat_id, tier, selected_at_level, narrative_delivery, choices_data)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [characterId, featId, tier, selectedAtLevel || 1, 'Chosen at character creation.', choicesJson]
   );
 }
 

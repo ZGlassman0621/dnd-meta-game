@@ -8,6 +8,53 @@ import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
 import { STANDARD_TEXTS, RECITATIONS } from '../data/keeperTexts.js'
 
+// Static option lists used by the Ancestry Feat sub-choice selectors.
+const ALL_SKILLS_5E = [
+  'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception', 'History',
+  'Insight', 'Intimidation', 'Investigation', 'Medicine', 'Nature', 'Perception',
+  'Performance', 'Persuasion', 'Religion', 'Sleight of Hand', 'Stealth', 'Survival'
+]
+const COMMON_ARTISAN_TOOLS = [
+  "Alchemist's Supplies", "Brewer's Supplies", "Calligrapher's Supplies",
+  "Carpenter's Tools", "Cartographer's Tools", "Cobbler's Tools", "Cook's Utensils",
+  "Glassblower's Tools", "Jeweler's Tools", "Leatherworker's Tools", "Mason's Tools",
+  "Painter's Supplies", "Potter's Tools", "Smith's Tools", "Tinker's Tools",
+  "Weaver's Tools", "Woodcarver's Tools"
+]
+const COMMON_TOOLS_EXTENDED = [
+  ...COMMON_ARTISAN_TOOLS,
+  'Disguise Kit', 'Forgery Kit', 'Herbalism Kit', "Poisoner's Kit",
+  "Navigator's Tools", "Thieves' Tools", 'Gaming Set', 'Musical Instrument'
+]
+const MARTIAL_WEAPONS = [
+  'Battleaxe', 'Flail', 'Glaive', 'Greataxe', 'Greatsword', 'Halberd', 'Lance',
+  'Longsword', 'Maul', 'Morningstar', 'Pike', 'Rapier', 'Scimitar', 'Shortsword',
+  'Trident', 'War Pick', 'Warhammer', 'Whip', 'Blowgun', 'Crossbow (hand)',
+  'Crossbow (heavy)', 'Longbow', 'Net'
+]
+
+/**
+ * Resolves the option list for an ancestry-feat sub-choice. Returns an array of
+ * strings when a dropdown is appropriate, or null when the choice is too
+ * open-ended and should render as a free-form text input (e.g. picking a
+ * specific spell by name).
+ */
+function resolveAncestryChoiceOptions(choice) {
+  if (!choice) return null
+  if (Array.isArray(choice.options)) return choice.options
+  switch (choice.options) {
+    case 'any_skill': return ALL_SKILLS_5E
+    case 'any_language': return [
+      ...(equipmentData.languages?.standard || []),
+      ...(equipmentData.languages?.exotic || [])
+    ]
+    case 'any_artisan_tool': return COMMON_ARTISAN_TOOLS
+    case 'any_tool': return COMMON_TOOLS_EXTENDED
+    case 'any_martial_weapon': return MARTIAL_WEAPONS
+    default: return null // sentinel like 'any_cantrip_wizard_or_druid' → text input
+  }
+}
+
 function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
   // Check if we're in edit mode
   const isEditMode = !!editCharacter
@@ -54,6 +101,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         theme_path_choice: '',
         ancestry_feat_id: null,
         ancestry_list_id: '',
+        ancestry_feat_choices: {},
         class: '',
         subclass: '',
         level: 1,
@@ -189,6 +237,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       theme_path_choice: '',
       ancestry_feat_id: null,
       ancestry_list_id: '',
+      ancestry_feat_choices: {},
       class: classKey,
       subclass: subclassValue,
       level: editCharacter.level || 1,
@@ -800,7 +849,10 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       theme_id: formData.theme_id || null,
       theme_path_choice: formData.theme_path_choice || null,
       ancestry_feat_id: formData.ancestry_feat_id || null,
-      ancestry_list_id: formData.ancestry_list_id || null
+      ancestry_list_id: formData.ancestry_list_id || null,
+      ancestry_feat_choices: formData.ancestry_feat_choices && Object.keys(formData.ancestry_feat_choices).length > 0
+        ? formData.ancestry_feat_choices
+        : null
     }
 
     if (isEditMode) {
@@ -1006,6 +1058,128 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         </div>
       )}
 
+      {/* L1 Ancestry Feat — shown once race (and subrace if applicable) is set */}
+      {formData.race && (!hasSubraces || formData.subrace) && (
+        <div className="form-group">
+          <label>Ancestry Feat (L1)</label>
+          {ancestryFeats.length === 0 ? (
+            <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>Loading feats...</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {ancestryFeats.map(feat => {
+                  const isSelected = formData.ancestry_feat_id === feat.id
+                  return (
+                    <div
+                      key={feat.id}
+                      style={{
+                        padding: '0.75rem',
+                        border: isSelected
+                          ? '2px solid #8b5cf6'
+                          : '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        background: isSelected
+                          ? 'rgba(139,92,246,0.15)'
+                          : 'rgba(255,255,255,0.03)',
+                        cursor: 'pointer',
+                        fontSize: '0.88rem'
+                      }}
+                      onClick={() => {
+                        if (formData.ancestry_feat_id !== feat.id) {
+                          handleChange('ancestry_feat_id', feat.id)
+                          // Reset sub-choices whenever the player picks a different feat
+                          handleChange('ancestry_feat_choices', {})
+                        }
+                      }}
+                    >
+                      <div style={{
+                        fontWeight: 'bold',
+                        color: isSelected ? '#a78bfa' : '#ddd',
+                        marginBottom: '0.2rem'
+                      }}>
+                        {feat.feat_name}
+                      </div>
+                      <div style={{ opacity: 0.9, lineHeight: 1.4 }}>
+                        {feat.description}
+                      </div>
+                      {isSelected && Array.isArray(feat.choices) && feat.choices.length > 0 && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            marginTop: '0.6rem',
+                            padding: '0.6rem 0.75rem',
+                            background: 'rgba(139,92,246,0.12)',
+                            border: '1px dashed rgba(139,92,246,0.35)',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            cursor: 'default'
+                          }}
+                        >
+                          {feat.choices.map((choice, ci) => {
+                            const opts = resolveAncestryChoiceOptions(choice)
+                            const count = Math.max(1, choice.count || 1)
+                            return (
+                              <div key={choice.id + '-' + ci} style={{ marginBottom: ci < feat.choices.length - 1 ? '0.55rem' : 0 }}>
+                                <label style={{ fontSize: '0.8rem', opacity: 0.9, fontWeight: 'normal', display: 'block', marginBottom: '0.2rem' }}>
+                                  {choice.label || 'Choose one'}{count > 1 ? ` — pick ${count}` : ''}:
+                                </label>
+                                {[...Array(count)].map((_, idx) => {
+                                  const stored = formData.ancestry_feat_choices?.[choice.id]
+                                  const currentVal = count > 1
+                                    ? (Array.isArray(stored) ? stored[idx] : null) || ''
+                                    : (typeof stored === 'string' ? stored : '') || ''
+                                  const setVal = (v) => {
+                                    const cur = { ...(formData.ancestry_feat_choices || {}) }
+                                    if (count > 1) {
+                                      const arr = Array.isArray(cur[choice.id]) ? [...cur[choice.id]] : []
+                                      arr[idx] = v
+                                      cur[choice.id] = arr
+                                    } else {
+                                      cur[choice.id] = v
+                                    }
+                                    handleChange('ancestry_feat_choices', cur)
+                                  }
+                                  return opts ? (
+                                    <select
+                                      key={idx}
+                                      value={currentVal}
+                                      onChange={(e) => setVal(e.target.value)}
+                                      style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem' }}
+                                      required
+                                    >
+                                      <option value="">Select…</option>
+                                      {opts.map(o => (
+                                        <option key={o} value={o}>{o}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      key={idx}
+                                      type="text"
+                                      value={currentVal}
+                                      onChange={(e) => setVal(e.target.value)}
+                                      placeholder={choice.label || 'Enter value'}
+                                      style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem' }}
+                                    />
+                                  )
+                                })}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.4rem' }}>
+                Choose one. You'll gain additional Ancestry Feats at levels 3, 7, 13, and 18.
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="form-group">
         <label>Theme (formerly Background)</label>
         <select
@@ -1027,6 +1201,17 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
+        {selectedThemeData && selectedThemeData.description && (
+          <p style={{
+            fontSize: '0.85rem',
+            color: '#bbb',
+            marginTop: '0.5rem',
+            lineHeight: 1.45,
+            fontStyle: 'italic'
+          }}>
+            {selectedThemeData.description}
+          </p>
+        )}
         {selectedThemeData && selectedThemeData.l1_ability && (
           <div style={{
             marginTop: '0.5rem', padding: '0.75rem',
@@ -1062,52 +1247,142 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         )}
       </div>
 
-      {/* L1 Ancestry Feat — only shown once race (and subrace if applicable) is set */}
-      {formData.race && (!hasSubraces || formData.subrace) && (
-        <div className="form-group">
-          <label>Ancestry Feat (L1)</label>
-          {ancestryFeats.length === 0 ? (
-            <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>Loading feats...</div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {ancestryFeats.map(feat => {
-                  const isSelected = formData.ancestry_feat_id === feat.id
+      {selectedBackgroundData && (
+        <div style={{
+          marginTop: '1rem',
+          padding: '1rem',
+          background: 'rgba(46, 204, 113, 0.1)',
+          borderRadius: '6px'
+        }}>
+          <h4 style={{ marginBottom: '0.5rem' }}>Background Feature: {selectedBackgroundData.feature.name}</h4>
+          <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
+            {selectedBackgroundData.description}
+          </p>
+          <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
+            <strong>Skill Proficiencies:</strong> {selectedBackgroundData.skillProficiencies.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace(/_/g, ' ')).join(', ')}
+          </p>
+          <p style={{ fontSize: '0.85rem', color: '#bbb' }}>
+            <strong>Feature:</strong> {selectedBackgroundData.feature.description}
+          </p>
+
+          {/* Language Selection */}
+          {typeof selectedBackgroundData.languages === 'number' && selectedBackgroundData.languages > 0 && (
+            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
+              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Choose {selectedBackgroundData.languages} Language{selectedBackgroundData.languages > 1 ? 's' : ''}
+              </p>
+              {[...Array(selectedBackgroundData.languages)].map((_, idx) => (
+                <div key={idx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                  <select
+                    value={formData.selected_languages[idx] || ''}
+                    onChange={(e) => {
+                      const newLangs = [...formData.selected_languages]
+                      newLangs[idx] = e.target.value
+                      handleChange('selected_languages', newLangs)
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Select Language {idx + 1}...</option>
+                    <optgroup label="Standard Languages">
+                      {(equipmentData.languages?.standard || [])
+                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
+                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
+                        .map(lang => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Exotic Languages">
+                      {(equipmentData.languages?.exotic || [])
+                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
+                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
+                        .map(lang => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                    </optgroup>
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tool Proficiency Selection */}
+          {selectedBackgroundData.toolProficiencies && selectedBackgroundData.toolProficiencies.some(t =>
+            t.toLowerCase().includes('one type of') ||
+            t.toLowerCase().includes('one from') ||
+            t.toLowerCase().includes('two from') ||
+            t.toLowerCase().includes(' or ')
+          ) && (
+            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
+              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Choose Tool Proficiencies
+              </p>
+              {selectedBackgroundData.toolProficiencies.map((tool, idx) => {
+                // Check if this is a choice
+                const isArtisanChoice = tool.toLowerCase().includes('artisan')
+                const isGamingChoice = tool.toLowerCase().includes('gaming')
+                const isMusicalChoice = tool.toLowerCase().includes('musical')
+                const isComboChoice = tool.toLowerCase().includes(' or ')
+                const isTwoChoice = tool.toLowerCase().includes('two from')
+
+                if (!isArtisanChoice && !isGamingChoice && !isMusicalChoice && !isComboChoice && !isTwoChoice) {
                   return (
-                    <div
-                      key={feat.id}
-                      onClick={() => handleChange('ancestry_feat_id', feat.id)}
-                      style={{
-                        padding: '0.75rem',
-                        border: isSelected
-                          ? '2px solid #8b5cf6'
-                          : '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '6px',
-                        background: isSelected
-                          ? 'rgba(139,92,246,0.15)'
-                          : 'rgba(255,255,255,0.03)',
-                        cursor: 'pointer',
-                        fontSize: '0.88rem'
-                      }}
-                    >
-                      <div style={{
-                        fontWeight: 'bold',
-                        color: isSelected ? '#a78bfa' : '#ddd',
-                        marginBottom: '0.2rem'
-                      }}>
-                        {feat.feat_name}
-                      </div>
-                      <div style={{ opacity: 0.9, lineHeight: 1.4 }}>
-                        {feat.description}
-                      </div>
-                    </div>
+                    <p key={idx} style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.25rem' }}>
+                      • {tool}
+                    </p>
                   )
-                })}
-              </div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.4rem' }}>
-                Choose one. You'll gain additional Ancestry Feats at levels 3, 7, 13, and 18.
-              </div>
-            </>
+                }
+
+                // Build options based on type
+                let options = []
+                if (isArtisanChoice) {
+                  options = (equipmentData.tools?.artisansTools || []).map(t => t.name)
+                } else if (isGamingChoice) {
+                  options = (equipmentData.tools?.gamingSets || []).map(t => t.name)
+                } else if (isMusicalChoice) {
+                  options = equipmentData.musicalInstruments || []
+                } else if (isComboChoice || isTwoChoice) {
+                  // Combo like "gaming set or musical instrument"
+                  if (tool.toLowerCase().includes('gaming')) {
+                    options.push(...(equipmentData.tools?.gamingSets || []).map(t => t.name))
+                  }
+                  if (tool.toLowerCase().includes('musical')) {
+                    options.push(...(equipmentData.musicalInstruments || []))
+                  }
+                  if (tool.toLowerCase().includes('thieves')) {
+                    options.push("Thieves' Tools")
+                  }
+                }
+
+                const numChoices = isTwoChoice ? 2 : 1
+
+                return (
+                  <div key={idx}>
+                    <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>{tool}</p>
+                    {[...Array(numChoices)].map((_, choiceIdx) => (
+                      <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                        <select
+                          value={formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''}
+                          onChange={(e) => {
+                            const newTools = [...formData.selected_tool_proficiencies]
+                            newTools[idx * numChoices + choiceIdx] = e.target.value
+                            handleChange('selected_tool_proficiencies', newTools)
+                          }}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="">Select tool...</option>
+                          {options
+                            .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
+                              formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
+                            .map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}
@@ -1270,146 +1545,6 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               <li key={idx}>{feature}</li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {selectedBackgroundData && (
-        <div style={{
-          marginTop: '1rem',
-          padding: '1rem',
-          background: 'rgba(46, 204, 113, 0.1)',
-          borderRadius: '6px'
-        }}>
-          <h4 style={{ marginBottom: '0.5rem' }}>Background Feature: {selectedBackgroundData.feature.name}</h4>
-          <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
-            {selectedBackgroundData.description}
-          </p>
-          <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
-            <strong>Skill Proficiencies:</strong> {selectedBackgroundData.skillProficiencies.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace(/_/g, ' ')).join(', ')}
-          </p>
-          <p style={{ fontSize: '0.85rem', color: '#bbb' }}>
-            <strong>Feature:</strong> {selectedBackgroundData.feature.description}
-          </p>
-
-          {/* Language Selection */}
-          {typeof selectedBackgroundData.languages === 'number' && selectedBackgroundData.languages > 0 && (
-            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
-              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Choose {selectedBackgroundData.languages} Language{selectedBackgroundData.languages > 1 ? 's' : ''}
-              </p>
-              {[...Array(selectedBackgroundData.languages)].map((_, idx) => (
-                <div key={idx} className="form-group" style={{ marginBottom: '0.5rem' }}>
-                  <select
-                    value={formData.selected_languages[idx] || ''}
-                    onChange={(e) => {
-                      const newLangs = [...formData.selected_languages]
-                      newLangs[idx] = e.target.value
-                      handleChange('selected_languages', newLangs)
-                    }}
-                    style={{ width: '100%' }}
-                  >
-                    <option value="">Select Language {idx + 1}...</option>
-                    <optgroup label="Standard Languages">
-                      {(equipmentData.languages?.standard || [])
-                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
-                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
-                        .map(lang => (
-                          <option key={lang} value={lang}>{lang}</option>
-                        ))}
-                    </optgroup>
-                    <optgroup label="Exotic Languages">
-                      {(equipmentData.languages?.exotic || [])
-                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
-                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
-                        .map(lang => (
-                          <option key={lang} value={lang}>{lang}</option>
-                        ))}
-                    </optgroup>
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Tool Proficiency Selection */}
-          {selectedBackgroundData.toolProficiencies && selectedBackgroundData.toolProficiencies.some(t =>
-            t.toLowerCase().includes('one type of') ||
-            t.toLowerCase().includes('one from') ||
-            t.toLowerCase().includes('two from') ||
-            t.toLowerCase().includes(' or ')
-          ) && (
-            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
-              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Choose Tool Proficiencies
-              </p>
-              {selectedBackgroundData.toolProficiencies.map((tool, idx) => {
-                // Check if this is a choice
-                const isArtisanChoice = tool.toLowerCase().includes('artisan')
-                const isGamingChoice = tool.toLowerCase().includes('gaming')
-                const isMusicalChoice = tool.toLowerCase().includes('musical')
-                const isComboChoice = tool.toLowerCase().includes(' or ')
-                const isTwoChoice = tool.toLowerCase().includes('two from')
-
-                if (!isArtisanChoice && !isGamingChoice && !isMusicalChoice && !isComboChoice && !isTwoChoice) {
-                  return (
-                    <p key={idx} style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.25rem' }}>
-                      • {tool}
-                    </p>
-                  )
-                }
-
-                // Build options based on type
-                let options = []
-                if (isArtisanChoice) {
-                  options = (equipmentData.tools?.artisansTools || []).map(t => t.name)
-                } else if (isGamingChoice) {
-                  options = (equipmentData.tools?.gamingSets || []).map(t => t.name)
-                } else if (isMusicalChoice) {
-                  options = equipmentData.musicalInstruments || []
-                } else if (isComboChoice || isTwoChoice) {
-                  // Combo like "gaming set or musical instrument"
-                  if (tool.toLowerCase().includes('gaming')) {
-                    options.push(...(equipmentData.tools?.gamingSets || []).map(t => t.name))
-                  }
-                  if (tool.toLowerCase().includes('musical')) {
-                    options.push(...(equipmentData.musicalInstruments || []))
-                  }
-                  if (tool.toLowerCase().includes('thieves')) {
-                    options.push("Thieves' Tools")
-                  }
-                }
-
-                const numChoices = isTwoChoice ? 2 : 1
-
-                return (
-                  <div key={idx}>
-                    <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>{tool}</p>
-                    {[...Array(numChoices)].map((_, choiceIdx) => (
-                      <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
-                        <select
-                          value={formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''}
-                          onChange={(e) => {
-                            const newTools = [...formData.selected_tool_proficiencies]
-                            newTools[idx * numChoices + choiceIdx] = e.target.value
-                            handleChange('selected_tool_proficiencies', newTools)
-                          }}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="">Select tool...</option>
-                          {options
-                            .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
-                              formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
-                            .map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })}
-            </div>
-          )}
         </div>
       )}
 

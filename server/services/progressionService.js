@@ -16,6 +16,12 @@
 
 import { dbAll, dbGet } from '../database.js';
 
+function safeJsonParse(v) {
+  if (v == null) return null;
+  if (typeof v !== 'string') return v;
+  try { return JSON.parse(v); } catch { return null; }
+}
+
 /**
  * Fetch the full progression snapshot for a character. Returns null if the
  * character doesn't exist. Returns a complete object shape (with null fields
@@ -58,15 +64,20 @@ export async function getCharacterProgression(characterId) {
     );
   }
 
-  const ancestryFeats = await dbAll(
-    `SELECT caf.tier, caf.selected_at_level, caf.narrative_delivery, af.list_id,
-            af.feat_name, af.description, af.mechanics, af.flavor_text
+  const ancestryFeatRows = await dbAll(
+    `SELECT caf.tier, caf.selected_at_level, caf.narrative_delivery, caf.choices_data,
+            af.list_id, af.feat_name, af.description, af.mechanics, af.flavor_text, af.choices
      FROM character_ancestry_feats caf
      JOIN ancestry_feats af ON caf.feat_id = af.id
      WHERE caf.character_id = ?
      ORDER BY caf.tier`,
     [characterId]
   );
+  const ancestryFeats = ancestryFeatRows.map(row => ({
+    ...row,
+    choices: row.choices ? safeJsonParse(row.choices) : null,
+    choices_data: row.choices_data ? safeJsonParse(row.choices_data) : null
+  }));
 
   const knightPath = await dbGet(
     `SELECT current_path, last_path_change_reason

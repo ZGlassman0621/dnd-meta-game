@@ -2,6 +2,56 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.26] - 2026-04-18 — Character creation polish: feat copy + theme descriptions + sub-choice selectors
+
+Three-part refresh of the character creation flow, driven by playtest feedback.
+
+### A. Ancestry feat copy — full sentences across all 195 feats
+- Rewrote every ancestry feat's `description` in `server/data/ancestryFeats.js` as
+  complete, second-person prose. Fragment lists like *"Two additional languages.
+  Advantage on Charisma checks..."* become *"You learn two additional
+  languages of your choice. You gain advantage on Charisma checks..."*.
+- All feat-name, mechanics, flavor, list_id, tier, and choice_index fields
+  preserved — only `description` text changed.
+- `progressionSeedService.seedAncestryFeats` now UPSERTs descriptions on
+  existing DBs so the rewrite propagates without a DB reset.
+
+### B. Theme descriptions — PHB-style narrative blurbs
+- Added a 2-3 sentence `description` field to all 21 themes in
+  `server/data/themes.js` ("what life was like, what it means for the
+  character" in the voice of PHB backgrounds).
+- Migration `038_theme_description.js` adds `themes.description`,
+  `ancestry_feats.choices`, and `character_ancestry_feats.choices_data`
+  columns (all nullable, backward compatible).
+- `GET /api/progression/themes` and `GET /api/progression/themes/:id` now
+  return `description`.
+- CharacterCreationWizard renders the theme description as italic helper
+  text directly under the theme picker, above the L1 ability card.
+
+### C. Character creation flow — reorder + feat sub-choice selectors
+- **Step 1 order reshuffled** to match the way the DM 5e books actually
+  present identity: Name / Identity → Race / Subrace → **Ancestry Feat** →
+  **Theme** → **Background Feature** → Class / Subclass. Previously feat came
+  after theme, and background feature sat below class features.
+- **Feat sub-choices** (skill picks, language picks, damage-type picks,
+  enemy-type picks, tool picks, ability-score picks, spell-list picks) are
+  now declared on each feat via a `choices: [...]` schema and rendered as
+  inline selectors under the feat card. 31 of the 195 feats carry choice
+  schemas — Variant Human's *Relentless Drive* now lets you pick the skill
+  proficiency and the extra language at creation, *Traveler's Tongue* lets
+  you pick both languages, Dwarf's *Grudge-Sworn* lets you pick the
+  traditional foe, etc.
+- Resolved choices persist on `character_ancestry_feats.choices_data` as JSON.
+  `POST /api/character` accepts an `ancestry_feat_choices` object in the
+  request body; `progressionService.getCharacterProgression()` returns
+  parsed choices + choices_data alongside each feat so character sheet,
+  DM prompt, and AI dialogue can all reference the player's actual picks.
+- New helper constants in the client: `ALL_SKILLS_5E`,
+  `COMMON_ARTISAN_TOOLS`, `COMMON_TOOLS_EXTENDED`, `MARTIAL_WEAPONS`, plus
+  `resolveAncestryChoiceOptions()` which maps sentinel strings like
+  `any_skill` / `any_language` / `any_martial_weapon` to option lists.
+  Open-ended choices (specific spells) fall back to a free-form text input.
+
 ## [1.0.0.25] - 2026-04-17 — Ollama: reasoning-token strip + new default model + Opus 4.7
 
 ### Claude

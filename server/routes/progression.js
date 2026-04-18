@@ -24,7 +24,7 @@ const router = express.Router();
 router.get('/themes', async (req, res) => {
   try {
     const themes = await dbAll(`
-      SELECT id, name, identity, signature_skill_1, signature_skill_2,
+      SELECT id, name, identity, description, signature_skill_1, signature_skill_2,
              tags, creation_choice_label, creation_choice_options, divergence_notes
       FROM themes
       WHERE id != 'any'
@@ -59,7 +59,7 @@ router.get('/themes', async (req, res) => {
 router.get('/themes/:id', async (req, res) => {
   try {
     const theme = await dbGet(`
-      SELECT id, name, identity, signature_skill_1, signature_skill_2,
+      SELECT id, name, identity, description, signature_skill_1, signature_skill_2,
              tags, creation_choice_label, creation_choice_options, divergence_notes
       FROM themes
       WHERE id = ?
@@ -99,11 +99,11 @@ router.get('/ancestry-feats/:listId', async (req, res) => {
   try {
     const tierFilter = req.query.tier ? parseInt(req.query.tier, 10) : null;
     const sql = tierFilter
-      ? `SELECT id, list_id, tier, choice_index, feat_name, description, mechanics, flavor_text
+      ? `SELECT id, list_id, tier, choice_index, feat_name, description, mechanics, flavor_text, choices
          FROM ancestry_feats
          WHERE list_id = ? AND tier = ?
          ORDER BY tier, choice_index`
-      : `SELECT id, list_id, tier, choice_index, feat_name, description, mechanics, flavor_text
+      : `SELECT id, list_id, tier, choice_index, feat_name, description, mechanics, flavor_text, choices
          FROM ancestry_feats
          WHERE list_id = ?
          ORDER BY tier, choice_index`;
@@ -114,7 +114,13 @@ router.get('/ancestry-feats/:listId', async (req, res) => {
       return res.status(404).json({ error: `No ancestry feats found for list '${req.params.listId}'` });
     }
 
-    res.json(feats);
+    // Parse choices JSON for each feat so the UI doesn't have to
+    const parsed = feats.map(f => ({
+      ...f,
+      choices: f.choices ? JSON.parse(f.choices) : null
+    }));
+
+    res.json(parsed);
   } catch (err) {
     handleServerError(res, err, 'Failed to fetch ancestry feats');
   }
