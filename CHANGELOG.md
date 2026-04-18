@@ -2,6 +2,70 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.23] - 2026-04-17 — F3: Raids + Sieges
+
+The world can now attack your bases. When hostile factions or regional
+threats (bandits, armies, undead, cults, mercenaries) are active, bases
+in harm's way get raided. Players get warning days to return and defend,
+or the threat auto-resolves at the deadline. Captured bases have a
+14-day recapture window before they're permanently lost.
+
+### Design
+- **Contextual frequency**: threats spawn only from active, raid-capable
+  world events (`bandit_activity`, `war`, `undead_uprising`,
+  `mercenary_incursion`, `cult_activity`). Dire wolves and stateless
+  monsters don't raid.
+- **Player agency is default**: narrative queue warning → player chooses
+  to defend or accept auto-resolution at deadline.
+- **Captured bases**: 14-day recapture window; after that, permanent.
+
+### Added
+- **Migration 037** — `base_threats` table with status state machine
+  (approaching → defending/resolving → resolved) and outcome enum
+  (repelled/damaged/captured/abandoned).
+- **`server/config/raidConfig.js`** — `RAID_CAPABLE_EVENTS` map,
+  `SIEGE_FORCE_THRESHOLD=15`, vulnerability multipliers,
+  `RECAPTURE_WINDOW_DAYS=14`, helpers `computeRaidProbability` and
+  `rollInRange`.
+- **`server/services/baseThreatService.js`**:
+  - `generateThreatsForCampaign` — scans active world events, rolls
+    against vulnerable bases, queues narrative-queue warnings
+  - `computeAutoResolveOutcome` — attackerForce + d20 vs defense_rating
+    + garrison/4 + d20; margin → outcome
+  - `autoResolveThreat` / `autoResolveDueThreats` — applies building
+    damage, treasury and garrison loss, narrative queue messages
+  - `initiatePlayerDefense`, `recordPlayerDefenseOutcome` — player-led
+    flow
+  - `markDueThreatsForResolution`, `expireStaleCapturedBases`
+- **Living-world tick step 3.95** — generation + due-check + auto-resolve
+  + expire.
+- **AI marker `[BASE_DEFENSE_RESULT: Threat=X Outcome=Y Narrative="..."]`**
+  — detected in `dmSessionService`, processed in `dmSession` to record
+  the outcome of a player-led defense sequence.
+- **DM prompt** — new BASE THREATS section; `getBaseForPrompt` shows
+  per-base "⚔️ UNDER THREAT" / "DEFENDING" / "COMBAT IN PROGRESS" lines.
+- **Endpoints**:
+  - `GET  /api/base/:id/threats`
+  - `GET  /api/threats/campaign/:campaignId`
+  - `POST /api/threats/:id/defend`
+  - `POST /api/threats/:id/resolve-defense`
+- **UI** — PartyBasePage Garrison tab now opens with a red-accented
+  Active Threats banner (Return to Defend buttons, defending/combat
+  status badges) and a compact recent-attacks history.
+
+### Tests
+- 9 new integration tests (Group 22, 19 assertions): empty listing,
+  create + list, defend flow transitions, defend rejected when not
+  approaching, resolve player defense, invalid outcome rejected, auto-
+  resolve math on extreme matchups, captured sets 14-day recapture
+  clock, expireStaleCapturedBases.
+- Full suite: 501 passing.
+
+### Deferred
+- Recapture-quest auto-generation: players can still reclaim a captured
+  base narratively or through a directly-initiated DM session, but
+  structured automated quest generation is a polish pass.
+
 ## [1.0.0.22] - 2026-04-17 — F2: Defense Rating + Garrison + Companions as Officers
 
 Bases now have meaningful defensive stats. Companions can be assigned
