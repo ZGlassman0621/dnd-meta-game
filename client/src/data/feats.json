@@ -226,8 +226,8 @@
     "prerequisites": null,
     "choices": [
       { "id": "class", "type": "custom", "count": 1, "label": "Spellcasting class", "options": ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"] },
-      { "id": "cantrips", "type": "spell_freeform", "count": 2, "label": "Two cantrips from the chosen class's list" },
-      { "id": "spell", "type": "spell_freeform", "count": 1, "label": "One 1st-level spell from the chosen class's list" }
+      { "id": "cantrips", "type": "spell_grid", "spell_level": "cantrip", "class_from": "class", "count": 2, "label": "Two cantrips from the chosen class's list" },
+      { "id": "spell", "type": "spell_grid", "spell_level": "1st", "class_from": "class", "count": 1, "label": "One 1st-level spell from the chosen class's list" }
     ]
   },
   "martial_adept": {
@@ -323,7 +323,7 @@
     "prerequisites": "Intelligence or Wisdom 13 or higher",
     "choices": [
       { "id": "class", "type": "custom", "count": 1, "label": "Spellcasting class", "options": ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"] },
-      { "id": "rituals", "type": "spell_freeform", "count": 2, "label": "Two 1st-level ritual spells from the chosen class's list" }
+      { "id": "rituals", "type": "spell_grid", "spell_level": "1st", "class_from": "class", "ritual_only": true, "count": 2, "label": "Two 1st-level ritual spells from the chosen class's list" }
     ]
   },
   "savage_attacker": {

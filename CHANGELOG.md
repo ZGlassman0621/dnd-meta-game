@@ -2,6 +2,34 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.30] - 2026-04-18 — Magic Initiate + Ritual Caster spell pickers (follow-up to 1.0.29)
+
+1.0.29 shipped Magic Initiate and Ritual Caster sub-choices as
+free-form text inputs because the valid spell list depends on which
+class you pick. Free text meant nothing stopped a player from
+entering a spell that didn't exist or wasn't available to the chosen
+class.
+
+### Fix
+- New `spell_grid` sub-choice type with fields `spell_level`
+  (`'cantrip'` or `'1st'`), `class_from` (id of the sibling choice
+  holding the class), `ritual_only` (bool), and `count`.
+- Renders a multi-select grid identical in style to the existing
+  class-cantrip picker: checkbox-style toggles, selected-count
+  readout, inline description + casting time + range + ritual tag.
+- Filters spells by the chosen class from `spellsData.cantrips[class]`
+  or `spellsData.spells['1st'].filter(s => s.classes.includes(class))`.
+  Ritual Caster additionally filters to `s.ritual === true`.
+- Shows helpful placeholder text when no class is picked yet:
+  "Pick a class above first to see available spells."
+- **Switching the class sub-choice clears any dependent spell_grid
+  picks** — you can't keep "Faerie Fire" selected after switching
+  from Bard to Wizard.
+- Magic Initiate (`choices[1]` cantrips, `choices[2]` spell) and
+  Ritual Caster (`choices[1]` rituals) migrated to use `spell_grid`.
+- "Next" button validation updated to handle grid storage (always
+  arrays, even for count=1).
+
 ## [1.0.0.29] - 2026-04-18 — Character creation playtest fixes (10 issues)
 
 Batch of polish fixes from first playtest of v1.0.26's character

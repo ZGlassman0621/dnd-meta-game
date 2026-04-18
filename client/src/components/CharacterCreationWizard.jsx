@@ -2140,8 +2140,10 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                     Same structure as ancestry feats: each entry is
                     { id, type, count, label, options }. Linguist picks 3
                     languages, Skilled picks 3 skills, Magic Initiate picks
-                    class + cantrips + spell, etc. Open-ended picks fall
-                    back to a text input. */}
+                    class + cantrips + spell, Ritual Caster picks class +
+                    rituals. `spell_grid` type renders a multi-select grid
+                    of spells filtered by class (and optionally ritual-only).
+                    Open-ended picks without options fall back to text. */}
                 {Array.isArray(featsData[formData.selected_feat].choices) && featsData[formData.selected_feat].choices.length > 0 && (
                   <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.75rem', background: 'rgba(155, 89, 182, 0.12)', border: '1px dashed rgba(155, 89, 182, 0.35)', borderRadius: '4px' }}>
                     {featsData[formData.selected_feat].choices.map((choice, ci) => {
@@ -2150,6 +2152,119 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                       const picks = count > 1
                         ? (Array.isArray(stored) ? stored : [])
                         : [typeof stored === 'string' ? stored : '']
+
+                      // Spell-grid choice: depends on a `class_from` sibling choice.
+                      // Renders a multi-select grid of spells filtered by that
+                      // class (and optionally ritual-only), mirroring the main
+                      // class-cantrip picker's UI.
+                      if (choice.type === 'spell_grid') {
+                        const dependsOnClass = formData.feat_choices?.[choice.class_from]
+                        const selectedArr = Array.isArray(stored) ? stored : (stored ? [stored] : [])
+
+                        let spellPool = []
+                        if (dependsOnClass) {
+                          if (choice.spell_level === 'cantrip') {
+                            spellPool = (spellsData.cantrips?.[dependsOnClass] || [])
+                          } else {
+                            const levelKey = choice.spell_level || '1st'
+                            spellPool = (spellsData.spells?.[levelKey] || [])
+                              .filter(sp => Array.isArray(sp.classes) && sp.classes.includes(dependsOnClass))
+                          }
+                          if (choice.ritual_only) {
+                            spellPool = spellPool.filter(sp => sp.ritual === true)
+                          }
+                        }
+
+                        const toggleSpell = (name) => {
+                          const cur = { ...(formData.feat_choices || {}) }
+                          const arr = Array.isArray(cur[choice.id]) ? [...cur[choice.id]] : (cur[choice.id] ? [cur[choice.id]] : [])
+                          const existing = arr.indexOf(name)
+                          if (existing >= 0) {
+                            arr.splice(existing, 1)
+                          } else if (arr.length < count) {
+                            arr.push(name)
+                          }
+                          cur[choice.id] = count === 1 ? (arr[0] || '') : arr
+                          handleChange('feat_choices', cur)
+                        }
+
+                        return (
+                          <div key={choice.id + '-' + ci} style={{ marginBottom: ci < featsData[formData.selected_feat].choices.length - 1 ? '0.7rem' : 0 }}>
+                            <label style={{ fontSize: '0.8rem', color: '#c4b5fd', display: 'block', marginBottom: '0.3rem', fontWeight: 500 }}>
+                              {choice.label || 'Choose spells'}{count > 1 ? ` — pick ${count}` : ''}:
+                            </label>
+
+                            {!dependsOnClass && (
+                              <p style={{ fontSize: '0.78rem', color: '#888', fontStyle: 'italic', margin: 0 }}>
+                                Pick a class above first to see available spells.
+                              </p>
+                            )}
+
+                            {dependsOnClass && spellPool.length === 0 && (
+                              <p style={{ fontSize: '0.78rem', color: '#f59e0b', margin: 0 }}>
+                                No {choice.ritual_only ? 'ritual ' : ''}
+                                {choice.spell_level === 'cantrip' ? 'cantrips' : `${choice.spell_level || '1st'}-level spells`}
+                                {' '}available for {dependsOnClass}.
+                              </p>
+                            )}
+
+                            {dependsOnClass && spellPool.length > 0 && (
+                              <>
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: choice.spell_level === 'cantrip' ? 'repeat(2, 1fr)' : '1fr',
+                                  gap: '0.4rem',
+                                  maxHeight: '280px',
+                                  overflowY: 'auto'
+                                }}>
+                                  {spellPool.map(sp => {
+                                    const isSelected = selectedArr.includes(sp.name)
+                                    const isDisabled = !isSelected && selectedArr.length >= count
+                                    return (
+                                      <button
+                                        key={sp.name}
+                                        type="button"
+                                        onClick={() => toggleSpell(sp.name)}
+                                        style={{
+                                          padding: '0.5rem 0.6rem',
+                                          background: isSelected ? 'rgba(155, 89, 182, 0.3)' : 'rgba(255, 255, 255, 0.05)',
+                                          border: isSelected ? '2px solid #9b59b6' : '2px solid transparent',
+                                          borderRadius: '4px',
+                                          color: isSelected ? '#e9d5ff' : (isDisabled ? '#666' : '#ccc'),
+                                          cursor: isDisabled && !isSelected ? 'not-allowed' : 'pointer',
+                                          fontSize: '0.82rem',
+                                          textAlign: 'left',
+                                          lineHeight: 1.35
+                                        }}
+                                        title={sp.description}
+                                      >
+                                        <div style={{ fontWeight: 600, marginBottom: '0.1rem' }}>
+                                          {isSelected ? '● ' : '○ '}{sp.name}
+                                        </div>
+                                        <div style={{ fontSize: '0.68rem', color: '#888', marginBottom: '0.25rem' }}>
+                                          {sp.school}
+                                          {sp.castingTime ? ` · ${sp.castingTime}` : ''}
+                                          {sp.range ? ` · ${sp.range}` : ''}
+                                          {sp.ritual ? ' · ritual' : ''}
+                                        </div>
+                                        {sp.description && (
+                                          <div style={{ fontSize: '0.7rem', color: isDisabled && !isSelected ? '#555' : '#aaa', fontWeight: 400 }}>
+                                            {sp.description}
+                                          </div>
+                                        )}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                                <p style={{ fontSize: '0.72rem', color: '#888', marginTop: '0.4rem', marginBottom: 0 }}>
+                                  Selected: {selectedArr.length}/{count}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        )
+                      }
+
                       return (
                         <div key={choice.id + '-' + ci} style={{ marginBottom: ci < featsData[formData.selected_feat].choices.length - 1 ? '0.55rem' : 0 }}>
                           <label style={{ fontSize: '0.8rem', color: '#c4b5fd', display: 'block', marginBottom: '0.2rem', fontWeight: 500 }}>
@@ -2179,7 +2294,21 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                               <select
                                 key={idx}
                                 value={currentVal}
-                                onChange={(e) => setVal(e.target.value)}
+                                onChange={(e) => {
+                                  setVal(e.target.value)
+                                  // If a class sub-choice changes, clear dependent spell_grid picks
+                                  // so you can't keep a bard spell after switching to wizard.
+                                  if (featsData[formData.selected_feat].choices.some(c => c.type === 'spell_grid' && c.class_from === choice.id)) {
+                                    const cur = { ...(formData.feat_choices || {}) }
+                                    for (const c of featsData[formData.selected_feat].choices) {
+                                      if (c.type === 'spell_grid' && c.class_from === choice.id) {
+                                        cur[c.id] = c.count > 1 ? [] : ''
+                                      }
+                                    }
+                                    cur[choice.id] = e.target.value
+                                    handleChange('feat_choices', cur)
+                                  }
+                                }}
                                 style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem', padding: '0.4rem 0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(155, 89, 182, 0.4)', borderRadius: '4px', color: '#e4e4e4' }}
                               >
                                 <option value="">Select…</option>
@@ -2483,9 +2612,13 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               (formData.selected_feat && Array.isArray(featsData[formData.selected_feat]?.choices) && featsData[formData.selected_feat].choices.some(choice => {
                 const count = Math.max(1, choice.count || 1)
                 const stored = formData.feat_choices?.[choice.id]
+                // spell_grid always uses arrays even for count=1 (toggle-select).
+                if (choice.type === 'spell_grid') {
+                  const arr = Array.isArray(stored) ? stored : (stored ? [stored] : [])
+                  return arr.filter(v => v && String(v).trim()).length < count
+                }
                 if (count === 1) return !stored || !String(stored).trim()
                 const arr = Array.isArray(stored) ? stored : []
-                // need `count` non-empty entries
                 return arr.filter(v => v && String(v).trim()).length < count
               })) ||
               (selectedClassData?.spellcasting?.cantripsKnown[0] > 0 && formData.selected_cantrips.length < selectedClassData.spellcasting.cantripsKnown[0]) ||
