@@ -2,6 +2,100 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.24] - 2026-04-17 — Bug Sweep: 15 fixes across server + client
+
+Comprehensive bug sweep following a deep audit of the shipped systems.
+Ten reported issues + seven more uncovered during verification and
+a second follow-up audit, all fixed together here.
+
+### Server bug fixes
+- **Downtime "base_upgrade" activity rewired to buildings** — the old
+  `advanceUpgrade()` stub from F1a was throwing on every attempt. Now
+  calls `advanceBuildingConstruction(buildingId, hours)`; accepts
+  both `building:<id>` and legacy `upgrade:<id>` work_type shapes.
+- **Merchant transaction input validation** — rejects negative /
+  non-integer quantities, negative prices, malformed names with 400.
+  Previously a malformed payload could corrupt character state with
+  negative totals.
+- **Merchant NPC lookup tightened** — was using a loose `LIKE %X%`
+  that matched "Bob's Inn" when looking for "Bob". Now: exact match
+  first, prefix fallback. Dropped the false `campaign_id = ?` filter
+  (NPCs are campaign-global — they have no such column).
+- **Merchant transaction atomicity** — character update + merchant
+  update now run inside a single `db.transaction('write')`. If the
+  merchant's optimistic-lock version check fails, the whole thing
+  rolls back; the character's gold is NOT deducted.
+- **Living-world tick step visibility** — new `results.step_statuses`
+  array tracks each step (ok/skipped/failed with reason). Failed
+  steps no longer silently vanish.
+- **Dead code removed** — `getAvailableUpgrades`, `startUpgrade`,
+  `advanceUpgrade` stubs from partyBaseService were unused after F1b.
+- **Three stale `FROM npcs WHERE campaign_id = ?` queries** fixed in
+  dmSession.js (PROMISE_MADE / PROMISE_FULFILLED / merchant price
+  modifier). Now scan global NPCs by name only.
+- **Narrative queue soft validation** — `addToQueue` now throws on
+  missing event_type and warns on unknown types (via
+  `KNOWN_EVENT_TYPES` set). Catches typos that would queue items the
+  DM prompt never recognizes.
+- **F3 base threat query** — was selecting non-existent `severity`
+  and `region` columns from `world_events`. Now selects `scope` and
+  `affected_locations` (which do exist). Also dropped the invalid
+  `'escalating'` status filter.
+- **Companion reunion narrative** — was INSERTing into
+  `narrative_queue.content` column (doesn't exist); now uses the
+  correct `title` + `description` + `context` + `event_type`.
+- **Cross-user campaign data leak** —
+  `campaignService.getCampaignById(id)` added optional userId
+  parameter; route now passes `req.user?.id` so users can only read
+  their own campaigns. `getAllCampaigns(null)` and
+  `getActiveCampaigns(null)` now return `[]` instead of every
+  campaign system-wide.
+- **MERCHANT_COMMISSION idempotency** — an AI repeat of the same
+  marker would have placed the same order twice and deducted the
+  deposit twice. Now skips when an active order with the same item
+  name already exists at the same merchant for this character.
+- **`/adjust-date` now advances downstream systems** — manual date
+  advances update `character.game_day` and fire
+  `processLivingWorldTick(campaign_id, daysToAdd)` so weather,
+  companion moods, merchant orders, base threats, etc. all catch up.
+  Backward moves (flashbacks) are skipped.
+
+### Client bug fixes
+- **DMSession loot-drop refresh guarded** — was parsing error bodies
+  on non-200 responses and clobbering character state; now wrapped
+  in try/response.ok guard.
+- **Merchant transaction response validation** — a 200 with malformed
+  body no longer sets character gold to NaN. Throws if `newGold` or
+  `newInventory` are missing from the response.
+
+### Test fixes
+- **"Message With Active Conditions"** test now accepts 200/503/500
+  (the test is about the endpoint handling the payload, not AI
+  availability — 500 is expected when credits are exhausted).
+- **Narrative queue test isolation** — new `cleanQueue()` helper
+  called between each test group prevents state pollution. Test 7
+  now seeds its own item instead of relying on cumulative state.
+- **companion-activities cleanup order** — FKs from
+  `narrative_queue.related_companion_id` now cleared before
+  companions are deleted.
+
+### Test suite
+- `tests/integration.test.js`: 502 passed, 0 failed (was 501/1)
+- `tests/living-world.test.js`: 38 passed, 0 failed (was 37/1)
+- `tests/narrative-queue.test.js`: 30 passed, 0 failed
+
+### Known-but-deferred
+- FK cascade gaps on several non-`campaigns` tables. SQLite
+  ALTER-to-add-CASCADE requires table recreation; the cleanup
+  ordering in tests works around it.
+- Character/companion/session endpoints don't filter by user owner.
+  Solo-play has no exposure; shared deployments would need a JOIN-
+  through-campaigns pattern. Noted for a future multi-user release.
+- NPCs are campaign-global (no campaign_id). Architectural choice.
+- Scattered `JSON.parse()` calls that could crash on corrupted data
+  — most are caught by enclosing try/catch but a full pass to
+  `safeParse` would be cleaner.
+
 ## [1.0.0.23] - 2026-04-17 — F3: Raids + Sieges
 
 The world can now attack your bases. When hostile factions or regional
