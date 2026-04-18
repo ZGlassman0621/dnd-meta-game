@@ -2,6 +2,53 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.22] - 2026-04-17 — F2: Defense Rating + Garrison + Companions as Officers
+
+Bases now have meaningful defensive stats. Companions can be assigned
+as named officers, leading the garrison and contributing to the base's
+defense rating. Foundation for F3 (raid + siege world events).
+
+### Added
+- **Migration 036** — `defense_rating`, `garrison_strength`,
+  `subtype_defense_bonus` on `party_bases`; new `base_officers` table
+  with UNIQUE(base_id, companion_id).
+- **Subtype defense bonuses**: watchtower +2, outpost +3, keep +5,
+  fortress +8, castle +12 (martial); manor +2, wizard tower +3, temple
+  +2, sanctuary +4; tavern +0.
+- **Three new buildings**: palisade (+2 def), stone_walls (martial-only,
+  +5 def), war_room (+1 to each officer's bonus).
+- **Perk parser** (`parseDefenseGarrisonPerk`) recognizes pattern keys
+  `defense_rating_plus_N`, `garrison_capacity_N`,
+  `officer_bonus_plus_N`.
+- **`recomputeDefenseAndGarrison`** — sums subtype + building perks +
+  officer contributions (ceil(level/3) each + any officer_bonus).
+  Auto-fires on building complete, building demolish, officer assign,
+  officer unassign.
+- **Endpoints**:
+  - `GET /api/base/:id/garrison` — defense + garrison + officers
+  - `POST /api/base/:id/officers` — assign a companion
+  - `DELETE /api/base/:id/officers/:officerId`
+- **DM prompt** — each active base shows a defensive-posture line:
+  `Defense 11 · Garrison capacity 20 · Officers: Elara, Cedric`.
+- **UI** — new Garrison tab in PartyBasePage with three stat cards
+  (Defense Rating, Garrison Strength, Officers count), officer roster
+  with per-officer defense contribution + Unassign, and companion
+  picker to assign new officers.
+
+### Fixed
+- **Route ordering bug**: the existing `GET /base/:characterId/:campaignId`
+  (primary-base fetch) was swallowing `GET /base/:baseId/garrison`
+  because both match any 3-segment `/base/x/y` GET. Moved the 2-param
+  GET to the bottom of the /base group. Would have broken any future
+  `/base/:id/xxx` GET endpoint too.
+
+### Tests
+- 6 new integration tests (Group 21, 15 assertions): subtype defense
+  applies at creation, gatehouse + barracks raise stats correctly,
+  officer assign/unassign round-trip, dismissed companion rejected,
+  duplicate assignment rejected, demolish removes defense.
+- Full suite: 482 passing.
+
 ## [1.0.0.21] - 2026-04-17 — F1: Fortress-Capable Base System
 
 Reworks the party base system so bases can be fortresses, watchtowers,
