@@ -289,9 +289,47 @@ ${character.backstory ? `- Backstory: ${character.backstory}` : ''}`,
 }
 
 /**
- * Format custom NPC data for the system prompt
+ * Format a one-line naming protocol directive for a single NPC's block,
+ * derived from a nickname resolution. Returns null when no resolution is
+ * available so the caller can filter it out cleanly.
  */
-function formatCustomNpcs(npcs) {
+function formatNamingProtocolLine(resolution) {
+  if (!resolution) return null;
+  if (resolution.bard_override) {
+    const names = (resolution.allowed || []).map(a => a.nickname).filter(Boolean);
+    return names.length > 0
+      ? `  Calls the PC: any familiar form (bard — rule of cool). Known forms: ${names.join(', ')}.`
+      : `  Calls the PC: any familiar form (bard — rule of cool).`;
+  }
+  const row = resolution.primary_row;
+  if (!row) {
+    return `  Calls the PC: ${resolution.fallback_legal_name} (no relationship-specific name applies).`;
+  }
+  const label = audiencePromptLabel(row);
+  return `  Calls the PC: "${row.nickname}" (${label}).`;
+}
+
+function audiencePromptLabel(row) {
+  switch (row.audience_type) {
+    case 'default': return 'default / stranger-facing';
+    case 'friends': return 'friends only';
+    case 'allied': return 'allied or closer';
+    case 'devoted': return 'devoted only';
+    case 'specific_npc': return 'this NPC specifically';
+    case 'role': return `role: ${row.audience_value}`;
+    default: return row.audience_type;
+  }
+}
+
+/**
+ * Format custom NPC data for the system prompt.
+ *
+ * `nicknameResolutions` is an optional map keyed by npc id → resolution object
+ * (shape from `nicknameService.resolveForNpc`). When present, each NPC block
+ * gets a "Calls the PC:" line specifying which form of the player's name this
+ * NPC should use, based on the audience rules the player set up.
+ */
+function formatCustomNpcs(npcs, nicknameResolutions = null) {
   if (!npcs || npcs.length === 0) return '';
 
   const npcDescriptions = npcs.map(npc => {
@@ -313,10 +351,14 @@ function formatCustomNpcs(npcs) {
       roleDescription = ' ** This NPC is hostile to the player **';
     }
 
+    const resolution = nicknameResolutions ? nicknameResolutions[npc.id] : null;
+    const namingLine = formatNamingProtocolLine(resolution);
+
     const parts = [
       `- ${npc.name}${roleNote}${roleDescription}`,
       `  Race: ${npc.race}${npc.age ? ` (${npc.age})` : ''}, Gender: ${npc.gender || 'unspecified'}`,
       npc.nickname ? `  Private Nickname: "${npc.nickname}" (ONLY use if the NPC explicitly shares it with the player - introduce them by their full name first)` : null,
+      namingLine,
       npc.occupation ? `  OCCUPATION: ${npc.occupation} - THIS DEFINES WHAT THEY DO. A book dealer sells books. A blacksmith forges weapons. DO NOT make them into something else.` : null,
       npc.occupation_category ? `  Occupation Type: ${npc.occupation_category}` : null,
       npc.current_location ? `  Location: ${npc.current_location}` : null,
@@ -1680,6 +1722,7 @@ export function createDMSystemPrompt(character, sessionContext, secondCharacter 
   const customConcepts = sessionContext.customConcepts;
   const campaignLength = sessionContext.campaignLength;
   const customNpcs = sessionContext.customNpcs;
+  const nicknameResolutions = sessionContext.nicknameResolutions || null;
 
   // Build world setting section based on module type
   let worldSettingSection = '';
@@ -1865,7 +1908,7 @@ ${char2 ? '\n' + char2.text : ''}${formatProgression(sessionContext.progression)
 
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 
 PLAYER NAME ACCURACY - CRITICAL:
 - The player character's name is EXACTLY as shown above: "${characterNames}"

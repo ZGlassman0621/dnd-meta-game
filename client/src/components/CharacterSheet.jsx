@@ -5,6 +5,7 @@ import backgroundsData from '../data/backgrounds.json'
 import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
 import spellsData from '../data/spells/index.js'
+import NicknameManagerPanel from './NicknameManagerPanel.jsx'
 
 function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdated, onEditInWizard, onLevelUp }) {
   const [character, setCharacter] = useState(initialCharacter)
@@ -16,6 +17,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
   // Inventory management state
   const [showAddItem, setShowAddItem] = useState(false)
+  const [showNicknames, setShowNicknames] = useState(false)
   const [newItemName, setNewItemName] = useState('')
   const [newItemQuantity, setNewItemQuantity] = useState(1)
   const [selectedEquipmentCategory, setSelectedEquipmentCategory] = useState('')
@@ -1144,6 +1146,23 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           <div>
             <h1>{character.name}</h1>
             {character.nickname && <p className="nickname">"{character.nickname}"</p>}
+            <button
+              onClick={() => setShowNicknames(true)}
+              style={{
+                marginTop: '0.2rem',
+                padding: '0.25rem 0.6rem',
+                background: 'rgba(217, 70, 239, 0.12)',
+                border: '1px solid rgba(217, 70, 239, 0.4)',
+                borderRadius: '4px',
+                color: '#d946ef',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                letterSpacing: '0.03em'
+              }}
+              title="Manage what each NPC calls this character"
+            >
+              ✎ Manage names & nicknames
+            </button>
             <p className="subtitle">
               Level {character.level} {capitalize(character.race)}{' '}
               {character.class_levels ? (
@@ -3576,6 +3595,13 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           </div>
         )}
       </div>
+
+      {showNicknames && (
+        <NicknameManagerPanel
+          character={character}
+          onClose={() => setShowNicknames(false)}
+        />
+      )}
     </div>
   )
 }

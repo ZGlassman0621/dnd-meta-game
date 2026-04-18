@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { initDatabase } from './database.js';
 import characterRoutes from './routes/character.js';
+import nicknameRoutes from './routes/nickname.js';
 import adventureRoutes from './routes/adventure.js';
 import uploadRoutes from './routes/upload.js';
 import dmSessionRoutes from './routes/dmSession.js';
@@ -73,6 +74,7 @@ app.use('/api', authMiddleware);
 
 // Protected routes
 app.use('/api/character', characterRoutes);
+app.use('/api/character', nicknameRoutes);
 app.use('/api/adventure', adventureRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/dm-session', dmSessionRoutes);

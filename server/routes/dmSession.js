@@ -37,6 +37,7 @@ import { detectConditionChanges, formatConditionsForAI } from '../data/condition
 import { safeParse } from '../utils/safeParse.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
+import { resolveForNpcBatch as resolveNicknamesForNpcBatch } from '../services/nicknameService.js';
 import { getCompanionProgression, ensureCompanionProgressionInitialized } from '../services/progressionCompanionService.js';
 import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
@@ -850,6 +851,20 @@ router.post('/start', async (req, res) => {
       }
     }
 
+    // Resolve per-NPC nicknames for the active custom NPCs so the DM prompt
+    // can tell each NPC exactly what form of the PC's name to use. Silent
+    // failure — a missing resolution just means that NPC's block omits the
+    // naming line (the DM will fall back to legal name or any nickname column).
+    let nicknameResolutions = null;
+    if (Array.isArray(customNpcs) && customNpcs.length > 0) {
+      try {
+        const npcIds = customNpcs.map(n => n?.id).filter(Boolean);
+        nicknameResolutions = await resolveNicknamesForNpcBatch(characterId, npcIds);
+      } catch (e) {
+        console.error('Error resolving nicknames for NPCs:', e);
+      }
+    }
+
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
       campaignModule,
@@ -859,6 +874,7 @@ router.post('/start', async (req, res) => {
       customConcepts,
       campaignLength,
       customNpcs,
+      nicknameResolutions,
       companions,
       awayCompanions,
       pendingDowntimeNarratives: pendingNarratives,

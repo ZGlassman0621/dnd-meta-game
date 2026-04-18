@@ -2,6 +2,65 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.27] - 2026-04-18 — Multi-nickname system with audience rules (D)
+
+Characters can now have multiple names (legal name, title, nicknames,
+epithets) with per-audience rules controlling who is allowed to use
+each one. The DM prompt tells every active NPC exactly which form to
+use based on the rule the player set.
+
+### Data layer
+- Migration `039_character_nicknames.js` adds `character_nicknames`
+  table: `(id, character_id, nickname, audience_type, audience_value,
+  notes)` with `ON DELETE CASCADE` from `characters`. Audience types:
+  `default`, `friends` (≥ 25), `allied` (≥ 50), `devoted` (≥ 75),
+  `specific_npc`, `role`.
+- Existing `characters.nickname` values are backfilled as `friends`-tier
+  rules (matches the prior DM-prompt semantics). The legacy column
+  stays in place for back-compat (session titles, exports, preludes).
+
+### Service & API
+- `server/services/nicknameService.js` — CRUD + `resolveForNpc(charId, npcId)`
+  that returns all matching names ranked by priority (specific_npc 5 >
+  devoted 4 > allied 3 / role 3 > friends 2 > default 0). Fallback to
+  the character's legal name when no rows exist. `resolveForNpcBatch()`
+  for the prompt builder.
+- **Bard override** (rule of cool): any NPC whose `occupation` contains
+  "bard" may use any nickname on the list, regardless of the audience
+  rules. Flagged as `bard_override: true` in the resolver result and
+  surfaced in the DM prompt.
+- `server/routes/nickname.js` mounted at `/api/character` — GET / POST /
+  PUT / DELETE for nickname rows plus GET `/:id/nicknames/resolve/:npcId`
+  for UI previews.
+
+### DM prompt integration
+- `formatCustomNpcs()` in `dmPromptBuilder.js` now takes a
+  `nicknameResolutions` map and emits a `Calls the PC: "..." (<rule>)`
+  line inside each NPC's block. Bard-override rows get the rule-of-cool
+  phrasing so the AI knows it's freely allowed.
+- `dmSession.js` computes the resolution map once at session start
+  (silent failure — a missing resolution just omits the naming line)
+  and passes it through `sessionConfig.nicknameResolutions`.
+
+### UI
+- New `NicknameManagerPanel` (fuchsia accent, slide-in, 460px) on the
+  Character Sheet. Accessible via a ✎ "Manage names & nicknames" button
+  next to the character's legal name in the sheet header.
+- Add / edit / delete flow with audience picker. Specific-NPC rule
+  surfaces a dropdown of the character's known NPCs. Role rule is a
+  free-form substring input ("apprentice", "retainer", etc.). Private
+  notes field for player memos ("Jarrick started calling me this
+  after the Tavern Brawl").
+
+### Tests
+- `tests/nickname-resolver.test.js` (27 assertions): stranger default,
+  friends tier, allied precedence, devoted, specific-NPC beats tier,
+  role match fires regardless of disposition, bard override returns all
+  names, prompt formatter output, and fallback-to-legal-name for
+  characters with zero rows.
+- All existing suites (character-memory, moral-diversity, combat,
+  dm-mode, condition-tracking) still pass.
+
 ## [1.0.0.26] - 2026-04-18 — Character creation polish: feat copy + theme descriptions + sub-choice selectors
 
 Three-part refresh of the character creation flow, driven by playtest feedback.
