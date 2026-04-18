@@ -3,8 +3,8 @@ import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 
 // Ollama API endpoint (runs locally) - fallback when Claude is unavailable
 const OLLAMA_API = 'http://localhost:11434/api/generate';
-const ADVENTURE_MODEL = 'gemma3:12b';  // Fast model for adventure generation
-const NARRATIVE_MODEL = 'gemma3:12b';  // Better model for narrative generation
+const ADVENTURE_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';  // Fast model for adventure generation
+const NARRATIVE_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';  // Better model for narrative generation
 
 /**
  * Unified LLM call - uses Claude when available, Ollama as fallback

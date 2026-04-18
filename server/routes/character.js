@@ -1658,7 +1658,7 @@ Be concise but specific. Use names and details from the sessions. Only include t
       generatedNotes = await ollama.chat([
         { role: 'system', content: 'You are a helpful assistant organizing campaign notes for a D&D character.' },
         { role: 'user', content: extractionPrompt }
-      ], 'gemma3:12b');
+      ]);
     }
 
     // Prepend with a header indicating this was auto-generated

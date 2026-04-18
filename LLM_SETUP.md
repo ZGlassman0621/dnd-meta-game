@@ -8,11 +8,11 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 
 | Model | Purpose | When Used |
 |-------|---------|-----------|
-| **Claude Opus** (`claude-opus-4-6`) | World building & generation | Campaign plans, backstory parsing, NPC/quest/location/companion generation, living world events, adventure generation, first session opening |
+| **Claude Opus** (`claude-opus-4-7`) | World building & generation | Campaign plans, backstory parsing, NPC/quest/location/companion generation, living world events, adventure generation, first session opening |
 | **Claude Sonnet** (`claude-sonnet-4-6`) | AI Dungeon Master sessions | Continuing session gameplay, narration, combat, dialogue |
-| **Ollama (Gemma 3 12B)** | Offline fallback | All of the above when no internet/API key available |
+| **Ollama (`gpt-oss:20b`)** | Offline fallback | All of the above when no internet/API key available |
 
-> **Note:** Both Claude models use alias IDs (no date suffix) so they automatically resolve to the latest available version when Anthropic releases updates.
+> **Note:** Claude model IDs use the alias form (no date suffix), which auto-resolves to the latest *build* within a major.minor version. Bumping across major.minor (e.g. Opus 4-6 → 4-7) still requires a manual code change — update these when Anthropic releases new versions.
 
 ## Architecture
 
@@ -89,20 +89,28 @@ Ollama enables fully offline play with no API costs.
 brew install ollama
 brew services start ollama
 
-# Pull the model
-ollama pull gemma3:12b
+# Pull the default model
+ollama pull gpt-oss:20b
+
+# Optional: stronger narration (tighter VRAM fit on 16GB cards)
+ollama pull qwen3.5:27b
+
+# Optional: lighter/faster fallback
+ollama pull qwen3.5:9b
 ```
 
 ### Configuration
-No `.env` changes needed. The app automatically connects to Ollama at `http://localhost:11434`.
+No `.env` changes needed for the default. The app automatically connects to Ollama at `http://localhost:11434` and uses `gpt-oss:20b`. Override via `OLLAMA_MODEL=qwen3.5:27b` (or any installed tag) in `.env`.
 
 ### Model Information
-| Property | Value |
-|----------|-------|
-| Model | Gemma 3 12B |
-| Size | ~8 GB |
-| Speed | 4-6 seconds per generation (GPU accelerated) |
-| Quality | Excellent for creative D&D content |
+| Model | Size | VRAM (Q4) | Notes |
+|-------|------|-----------|-------|
+| **gpt-oss:20b** (default) | ~12 GB | ~12 GB | Fast, good narration, comfortable fit on 16GB cards |
+| qwen3.5:27b | ~16 GB | ~16 GB | Best narration; tight VRAM fit |
+| qwen3.5:9b | ~5 GB | ~6 GB | Budget pick, still capable |
+| gemma4:26b | ~15 GB | ~15 GB | Alternative to qwen3.5:27b |
+
+Reasoning-model `<think>` / `<thinking>` / `<reasoning>` tokens are automatically stripped before responses reach the player, so DeepSeek R1 and similar reasoning models are safe to use (though not recommended for narration).
 
 ### Status Indicator
 - **Green dot + "Ollama"** = Ollama connected and serving locally
@@ -117,7 +125,7 @@ The server checks providers on startup and per-request:
 2. **Check Ollama** — If Claude is unavailable, check `localhost:11434`
 3. **Status endpoint** — `GET /api/dm-session/llm-status` returns provider info
 
-When Claude is available, Claude Opus handles all world-building and content generation while Claude Sonnet runs interactive DM sessions. When only Ollama is available, Gemma 3 12B handles all tasks.
+When Claude is available, Claude Opus handles all world-building and content generation while Claude Sonnet runs interactive DM sessions. When only Ollama is available, the configured local model (default `gpt-oss:20b`) handles all tasks.
 
 ---
 
@@ -133,7 +141,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-sonnet-4-6","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}'
+  -d '{"model":"claude-opus-4-7","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}'
 ```
 
 ### Ollama Issues
@@ -148,7 +156,7 @@ brew services restart ollama
 ollama list
 
 # Test directly
-ollama run gemma3:12b "Write a D&D adventure hook"
+ollama run gpt-oss:20b "Write a D&D adventure hook"
 ```
 
 ### Server Logs

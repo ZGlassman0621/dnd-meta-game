@@ -2,6 +2,37 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.25] - 2026-04-17 — Ollama: reasoning-token strip + new default model + Opus 4.7
+
+### Claude
+- **Opus bumped from 4-6 → 4-7** in `server/services/claude.js`. Opus 4.7
+  shipped recently and is the stronger generation model; since the API
+  pins major.minor (no rolling `claude-opus` alias), this bump has to
+  be manual. Clarified the comment in `claude.js` + `CLAUDE.md` +
+  `LLM_SETUP.md` so future bumps don't get missed. Sonnet stays at 4-6
+  (still the latest Sonnet).
+
+
+### Ollama integration
+- **`<think>` / `<thinking>` / `<reasoning>` tokens stripped** from all
+  Ollama responses before they reach the player or marker detection.
+  Reasoning-family models (DeepSeek R1, QwQ, qwen3-thinking variants)
+  emit chain-of-thought inside `<think>...</think>` before their final
+  output; leaking that into DM narration both spoils pacing and breaks
+  `[COMBAT_START]` / `[LOOT_DROP]` / other marker parsing which scans
+  the full response body.
+- Added `stripThinkingTokens()` in `server/services/llmClient.js`:
+  strips matched pairs, orphan opening tags (response truncated
+  mid-thought), and orphan closing tags. Runs at the top of the
+  existing `cleanupResponse()` pipeline so every Ollama response is
+  scrubbed in one place.
+- **Default model bumped from `gemma3:12b` → `gpt-oss:20b`.** Better
+  narration and instruction-following at a still-comfortable VRAM fit
+  for 16GB cards. All hardcoded fallbacks (`dmSession.js`,
+  `character.js`, `adventureGenerator.js`, `DMSession.jsx`,
+  `.env.example`, `README.md`, `LLM_SETUP.md`) updated to match.
+  Override with `OLLAMA_MODEL=<tag>` for any installed model.
+
 ## [1.0.0.24] - 2026-04-17 — Bug Sweep: 15 fixes across server + client
 
 Comprehensive bug sweep following a deep audit of the shipped systems.

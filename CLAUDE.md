@@ -17,7 +17,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 
 ## Architecture Rules
 - All JS uses ES modules (`import`/`export`, `"type": "module"` in package.json)
-- Claude model aliases (no date suffix): `claude-opus-4-6`, `claude-sonnet-4-6`
+- Claude model aliases (no date suffix): `claude-opus-4-7`, `claude-sonnet-4-6` — bump these manually when new Claude versions ship (date-suffix aliases auto-resolve to latest *build* within a major.minor, but major.minor itself is pinned)
 - Opus handles ALL generation (campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world)
 - Sonnet handles ONLY interactive DM sessions (except first session opening which uses Opus)
 - AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[MERCHANT_COMMISSION]`, `[BASE_DEFENSE_RESULT]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`, `[PROMISE_MADE]`, `[PROMISE_FULFILLED]`, `[NOTORIETY_GAIN]`, `[NOTORIETY_LOSS]`

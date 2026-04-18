@@ -6,9 +6,11 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-// Use alias form (no date suffix) so these automatically resolve to the latest version
+// Model aliases (no date suffix) auto-resolve to the latest *build* of a
+// given major.minor version, but the major.minor itself is pinned — bump these
+// manually when a new Claude release ships (e.g. 4-6 → 4-7).
 const SONNET_MODEL = 'claude-sonnet-4-6';
-const OPUS_MODEL = 'claude-opus-4-6';
+const OPUS_MODEL = 'claude-opus-4-7';
 const DEFAULT_MODEL = SONNET_MODEL;
 
 /**

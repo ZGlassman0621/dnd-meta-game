@@ -1029,7 +1029,7 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
       title,
       locationName,
       campaignLength || 'ongoing-saga',
-      model || 'gemma3:12b',
+      model || process.env.OLLAMA_MODEL || 'gpt-oss:20b',
       JSON.stringify(result.messages),
       JSON.stringify(sessionConfig),
       gameStartDay,
@@ -1165,11 +1165,11 @@ router.post('/start-prelude', async (req, res) => {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: openingPrompt }
       ];
-      const ollamaResponse = await ollama.chat(ollamaMessages, model || 'gemma3:12b');
+      const ollamaResponse = await ollama.chat(ollamaMessages, model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
       result = {
         systemPrompt,
         openingNarrative: ollamaResponse,
-        model: model || 'gemma3:12b',
+        model: model || process.env.OLLAMA_MODEL || 'gpt-oss:20b',
         messages: [
           ...ollamaMessages,
           { role: 'assistant', content: ollamaResponse }
@@ -1266,7 +1266,7 @@ router.post('/:sessionId/message', async (req, res) => {
 
     // Check if context window compression is needed
     let messagesToSend = messages;
-    const modelForCompression = provider === 'claude' ? 'claude-sonnet-4-6' : (session.model || 'gemma3:12b');
+    const modelForCompression = provider === 'claude' ? 'claude-sonnet-4-6' : (session.model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
     const compressionCheck = shouldCompress(messages, modelForCompression);
 
     if (compressionCheck.needsCompression) {

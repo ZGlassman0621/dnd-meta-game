@@ -87,7 +87,7 @@ You are the Dungeon Master. The AI controls a party of 4 characters with distinc
 - **Can't connect:** Ensure ports 3000 (server) and 5173 (client) aren't in use
 - **AI errors:** Verify your `ANTHROPIC_API_KEY` in `.env` and check usage limits at [console.anthropic.com](https://console.anthropic.com)
 - **Database:** SQLite database (`local.db`) is created automatically on first run. Delete to reset all data.
-- **Offline play:** Install [Ollama](https://ollama.ai) and run `ollama pull gemma3:12b` — see [LLM_SETUP.md](LLM_SETUP.md)
+- **Offline play:** Install [Ollama](https://ollama.ai) and run `ollama pull gpt-oss:20b` — see [LLM_SETUP.md](LLM_SETUP.md)
 
 ## Scripts
 
