@@ -14,6 +14,7 @@ const ACCENT_DIM = '#92400e'
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'buildings', label: 'Buildings' },
+  { key: 'garrison', label: 'Garrison' },
   { key: 'staff', label: 'Staff' },
   { key: 'projects', label: 'Projects' },
   { key: 'events', label: 'Events' },
@@ -283,6 +284,11 @@ export default function PartyBasePage({ characterId, campaignId }) {
   // Buildings (F1: replaces the old base-level upgrades catalog)
   const [availableBuildings, setAvailableBuildings] = useState({ buildings: [], slotsUsed: 0, slotsTotal: 0 })
 
+  // Garrison (F2)
+  const [garrison, setGarrison] = useState(null)
+  const [companions, setCompanions] = useState([])
+  const [selectedOfficerCompanion, setSelectedOfficerCompanion] = useState('')
+
   // Staff hire form
   const [showHireForm, setShowHireForm] = useState(false)
   const [hireData, setHireData] = useState({ name: '', role: '', salary_gp: 5 })
@@ -360,6 +366,27 @@ export default function PartyBasePage({ characterId, campaignId }) {
     }
   }, [base])
 
+  const loadGarrison = useCallback(async () => {
+    if (!base) return
+    try {
+      const res = await fetch(`/api/base/${base.id}/garrison`)
+      const data = await res.json()
+      setGarrison(data)
+    } catch (e) {
+      console.error('Error loading garrison:', e)
+    }
+  }, [base])
+
+  const loadCompanions = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/companion/character/${characterId}`)
+      const data = await res.json()
+      setCompanions(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('Error loading companions:', e)
+    }
+  }, [characterId])
+
   useEffect(() => {
     setLoading(true)
     Promise.all([loadBase(), loadProjects(), loadNotoriety()])
@@ -368,6 +395,8 @@ export default function PartyBasePage({ characterId, campaignId }) {
 
   useEffect(() => { loadEvents() }, [loadEvents])
   useEffect(() => { loadAvailableBuildings() }, [loadAvailableBuildings])
+  useEffect(() => { loadGarrison() }, [loadGarrison])
+  useEffect(() => { loadCompanions() }, [loadCompanions])
 
   // ─── ACTIONS ───────────────────────────────────────────
 
@@ -430,6 +459,7 @@ export default function PartyBasePage({ characterId, campaignId }) {
       if (res.ok) {
         await loadBase()
         await loadAvailableBuildings()
+        await loadGarrison()
       } else {
         const err = await res.json()
         setError(err.error)
@@ -438,6 +468,32 @@ export default function PartyBasePage({ characterId, campaignId }) {
     } catch (e) {
       setError(e.message)
     }
+  }
+
+  const assignOfficer = async () => {
+    if (!selectedOfficerCompanion) return
+    try {
+      const res = await fetch(`/api/base/${base.id}/officers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companionId: Number(selectedOfficerCompanion) })
+      })
+      if (res.ok) {
+        setSelectedOfficerCompanion('')
+        await loadGarrison()
+      } else {
+        const err = await res.json()
+        setError(err.error || 'Failed to assign officer')
+        setTimeout(() => setError(null), 4000)
+      }
+    } catch (e) { setError(e.message) }
+  }
+
+  const unassignOfficer = async (officerId) => {
+    try {
+      const res = await fetch(`/api/base/${base.id}/officers/${officerId}`, { method: 'DELETE' })
+      if (res.ok) await loadGarrison()
+    } catch (e) { setError(e.message) }
   }
 
   const hireStaff = async () => {
@@ -688,6 +744,7 @@ export default function PartyBasePage({ characterId, campaignId }) {
       {/* Tab Content */}
       {activeTab === 'overview' && renderOverview()}
       {activeTab === 'buildings' && renderBuildings()}
+      {activeTab === 'garrison' && renderGarrison()}
       {activeTab === 'staff' && renderStaff()}
       {activeTab === 'projects' && renderProjects()}
       {activeTab === 'events' && renderEvents()}
@@ -903,6 +960,115 @@ export default function PartyBasePage({ characterId, campaignId }) {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── TAB: GARRISON (F2) ────────────────────────────────
+
+  function renderGarrison() {
+    if (!garrison) {
+      return <div style={styles.empty}>Loading garrison data…</div>
+    }
+    const officers = garrison.officers || []
+    // Companions not already assigned
+    const assignedIds = new Set(officers.map(o => o.companion_id))
+    const available = companions.filter(c => c.status === 'active' && !assignedIds.has(c.id))
+
+    return (
+      <div>
+        {/* Defense + Garrison summary */}
+        <div style={{ ...styles.grid, marginBottom: '1.5rem' }}>
+          <div style={{ ...styles.card, borderColor: '#60a5fa44' }}>
+            <div style={{ color: '#60a5fa', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.2rem' }}>
+              Defense Rating
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#60a5fa' }}>
+              {garrison.defense_rating ?? 0}
+            </div>
+            <div style={{ color: '#888', fontSize: '0.72rem' }}>
+              {garrison.subtype_defense_bonus > 0 && `${garrison.subtype_defense_bonus} inherent`}
+              {garrison.defense_from_buildings > 0 && ` · ${garrison.defense_from_buildings} buildings`}
+              {garrison.defense_from_officers > 0 && ` · ${garrison.defense_from_officers} officers`}
+            </div>
+          </div>
+
+          <div style={{ ...styles.card, borderColor: '#f9731644' }}>
+            <div style={{ color: '#f97316', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.2rem' }}>
+              Garrison Strength
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
+              {garrison.garrison_strength ?? 0}
+            </div>
+            <div style={{ color: '#888', fontSize: '0.72rem' }}>
+              troops the base can house (install barracks to grow)
+            </div>
+          </div>
+
+          <div style={{ ...styles.card, borderColor: '#a78bfa44' }}>
+            <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.2rem' }}>
+              Officers
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#a78bfa' }}>
+              {garrison.officer_count ?? 0}
+            </div>
+            <div style={{ color: '#888', fontSize: '0.72rem' }}>
+              named companions commanding the garrison
+            </div>
+          </div>
+        </div>
+
+        {/* Officer roster */}
+        <div style={{ ...styles.cardTitle, marginBottom: '0.5rem' }}>Officers</div>
+        {officers.length === 0 ? (
+          <div style={styles.empty}>No officers assigned. Assign a companion below to add +defense.</div>
+        ) : (
+          <div style={{ marginBottom: '1rem' }}>
+            {officers.map(o => (
+              <div key={o.id} style={{ ...styles.card, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700 }}>{o.companion_name}</div>
+                  <div style={{ color: '#888', fontSize: '0.78rem' }}>
+                    {o.companion_class || 'Companion'} · Level {o.companion_level || 1} · {o.role?.replace(/_/g, ' ') || 'officer'}
+                  </div>
+                </div>
+                <div style={{ color: '#60a5fa', fontSize: '0.85rem', fontWeight: 600 }}>
+                  +{Math.ceil((o.companion_level || 1) / 3)} def
+                </div>
+                <button
+                  style={{ ...styles.btn('secondary'), padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}
+                  onClick={() => unassignOfficer(o.id)}
+                >Unassign</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Assign officer picker */}
+        {available.length > 0 && (
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>Assign Officer</div>
+            <div style={styles.row}>
+              <select
+                value={selectedOfficerCompanion}
+                onChange={(e) => setSelectedOfficerCompanion(e.target.value)}
+                style={{ ...styles.input, flex: 1 }}
+              >
+                <option value="">Choose a companion…</option>
+                {available.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {c.companion_class || 'Companion'} L{c.companion_level || 1}
+                  </option>
+                ))}
+              </select>
+              <button
+                style={styles.btn('primary')}
+                onClick={assignOfficer}
+                disabled={!selectedOfficerCompanion}
+              >Assign</button>
+            </div>
           </div>
         )}
       </div>

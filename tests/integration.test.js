@@ -2927,6 +2927,127 @@ async function testRemoveBuildingStripsPerk() {
   await cleanupTestBase(b.body.id);
 }
 
+// ===== GROUP 21: Base Garrison + Defense (F2) =====
+
+async function testSubtypeDefenseBonus() {
+  console.log('\n  -- Subtype defense bonus applies at creation --');
+  const r = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_DefFort', category: 'martial', subtype: 'fortress'
+  });
+  assert(r.status === 201, 'base created');
+  assert(r.body.subtype_defense_bonus === 8, `fortress has +8 inherent defense (got ${r.body.subtype_defense_bonus})`);
+  assert(r.body.defense_rating === 8, 'defense_rating initialized to subtype bonus');
+  assert(r.body.garrison_strength === 0, 'garrison_strength starts at 0');
+  await cleanupTestBase(r.body.id);
+}
+
+async function testCompletedBuildingRaisesDefense() {
+  console.log('\n  -- Gatehouse completion adds +3 defense; barracks adds +20 garrison --');
+  const r = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_DefBuildings', category: 'martial', subtype: 'fortress'
+  });
+  await dbRun('UPDATE party_bases SET gold_treasury = 3000 WHERE id = ?', [r.body.id]);
+
+  const g = await api('POST', `/api/base/${r.body.id}/buildings`, { building_type: 'gatehouse' });
+  await api('POST', `/api/base/${r.body.id}/buildings/${g.body.id}/advance`, { hours: 120 });
+
+  const b = await api('POST', `/api/base/${r.body.id}/buildings`, { building_type: 'barracks' });
+  await api('POST', `/api/base/${r.body.id}/buildings/${b.body.id}/advance`, { hours: 80 });
+
+  const g2 = await api('GET', `/api/base/${r.body.id}/garrison`);
+  assert(g2.body.defense_rating === 11, `fortress 8 + gatehouse 3 = 11 defense (got ${g2.body.defense_rating})`);
+  assert(g2.body.garrison_strength === 20, `barracks gives 20 garrison (got ${g2.body.garrison_strength})`);
+
+  await cleanupTestBase(r.body.id);
+}
+
+async function testAssignAndUnassignOfficer() {
+  console.log('\n  -- Assign companion as officer; unassign reverses defense --');
+  const base = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_OfficerBase', category: 'martial', subtype: 'keep'
+  });
+
+  // Recruit a level-3 companion
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
+
+  const assign = await api('POST', `/api/base/${base.body.id}/officers`, { companionId });
+  assert(assign.status === 201, `assign returns 201 (got ${assign.status})`);
+  assert(Array.isArray(assign.body.officers) && assign.body.officers.length === 1, 'officer listed');
+
+  // Officer contributes ceil(3/3)=1 defense. Keep subtype = +5.
+  const g = await api('GET', `/api/base/${base.body.id}/garrison`);
+  assert(g.body.defense_rating === 6, `keep(5) + L3 officer(1) = 6 defense (got ${g.body.defense_rating})`);
+  assert(g.body.officer_count === 1, 'officer_count is 1');
+
+  // Unassign
+  const officer = assign.body.officers[0];
+  const un = await api('DELETE', `/api/base/${base.body.id}/officers/${officer.id}`);
+  assert(un.status === 200, 'unassign returns 200');
+
+  const g2 = await api('GET', `/api/base/${base.body.id}/garrison`);
+  assert(g2.body.defense_rating === 5, `defense back to keep-only 5 (got ${g2.body.defense_rating})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestBase(base.body.id);
+}
+
+async function testOfficerRejectsInactiveCompanion() {
+  console.log('\n  -- Reject assigning a dismissed companion --');
+  const base = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Reject', category: 'martial', subtype: 'keep'
+  });
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+  await dbRun(`UPDATE companions SET status = 'dismissed' WHERE id = ?`, [companionId]);
+
+  const r = await api('POST', `/api/base/${base.body.id}/officers`, { companionId });
+  assert(r.status === 400, `dismissed companion rejected (got ${r.status})`);
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestBase(base.body.id);
+}
+
+async function testOfficerRejectsDuplicateAssignment() {
+  console.log('\n  -- Rejects assigning the same companion twice --');
+  const base = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Dupe', category: 'martial', subtype: 'keep'
+  });
+  const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 1);
+
+  await api('POST', `/api/base/${base.body.id}/officers`, { companionId });
+  const r = await api('POST', `/api/base/${base.body.id}/officers`, { companionId });
+  assert(r.status === 400, 'duplicate assignment rejected');
+
+  await cleanupTestCompanion(companionId, npcId);
+  await cleanupTestBase(base.body.id);
+}
+
+async function testDemolishRemovesDefense() {
+  console.log('\n  -- Demolishing a gatehouse removes its defense bonus --');
+  const base = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: 'TEST_Demolish_Def', category: 'martial', subtype: 'keep'
+  });
+  await dbRun('UPDATE party_bases SET gold_treasury = 1500 WHERE id = ?', [base.body.id]);
+
+  const g = await api('POST', `/api/base/${base.body.id}/buildings`, { building_type: 'gatehouse' });
+  await api('POST', `/api/base/${base.body.id}/buildings/${g.body.id}/advance`, { hours: 120 });
+
+  const before = await api('GET', `/api/base/${base.body.id}/garrison`);
+  assert(before.body.defense_rating === 8, `keep(5) + gate(3) = 8 (got ${before.body.defense_rating})`);
+
+  await api('DELETE', `/api/base/${base.body.id}/buildings/${g.body.id}`);
+
+  const after = await api('GET', `/api/base/${base.body.id}/garrison`);
+  assert(after.body.defense_rating === 5, `defense drops back to 5 (got ${after.body.defense_rating})`);
+
+  await cleanupTestBase(base.body.id);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -3103,6 +3224,14 @@ async function runTests() {
     await testBuildingSlotCap();
     await testAvailableBuildingsEndpoint();
     await testRemoveBuildingStripsPerk();
+
+    console.log('\n=== Group 21: Base Garrison + Defense (F2) ===');
+    await testSubtypeDefenseBonus();
+    await testCompletedBuildingRaisesDefense();
+    await testAssignAndUnassignOfficer();
+    await testOfficerRejectsInactiveCompanion();
+    await testOfficerRejectsDuplicateAssignment();
+    await testDemolishRemovesDefense();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

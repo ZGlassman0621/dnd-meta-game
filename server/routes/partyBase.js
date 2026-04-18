@@ -8,17 +8,13 @@ const router = express.Router();
 
 // ─── Party Base ───────────────────────────────────────────
 
+// NOTE: The 2-param GET /base/:characterId/:campaignId route below is defined
+// LAST among /base/... routes because Express matches patterns in registration
+// order. `/base/:baseId/garrison` (3 segments on GET) would otherwise be
+// swallowed by `/base/:a/:b`, which also matches any 3-segment /base URL.
+
 // GET /api/base/:characterId/:campaignId — primary base (back-compat single)
-router.get('/base/:characterId/:campaignId', async (req, res) => {
-  try {
-    const { characterId, campaignId } = req.params;
-    const base = await partyBaseService.getBase(characterId, campaignId);
-    if (!base) return res.json(null);
-    res.json(base);
-  } catch (err) {
-    handleServerError(res, err, 'fetch party base');
-  }
-});
+// (defined at bottom of /base routes to avoid collision; see below)
 
 // GET /api/bases/:characterId/:campaignId — ALL bases (F1b)
 router.get('/bases/:characterId/:campaignId', async (req, res) => {
@@ -160,6 +156,68 @@ router.delete('/base/:baseId/buildings/:buildingId', async (req, res) => {
     res.json({ success: true, removed });
   } catch (err) {
     handleServerError(res, err, 'remove building');
+  }
+});
+
+// ─── Garrison & Officers (F2) ─────────────────────────────
+
+// GET /api/base/:baseId/garrison — defense rating + garrison strength + officers
+router.get('/base/:baseId/garrison', async (req, res) => {
+  try {
+    const snap = await partyBaseService.getGarrisonSnapshot(Number(req.params.baseId));
+    if (!snap) return res.status(404).json({ error: 'Base not found' });
+    res.json(snap);
+  } catch (err) {
+    handleServerError(res, err, 'fetch garrison');
+  }
+});
+
+// POST /api/base/:baseId/officers — assign a companion as officer
+router.post('/base/:baseId/officers', async (req, res) => {
+  try {
+    const { companionId, role, notes, currentGameDay } = req.body || {};
+    if (!companionId) return res.status(400).json({ error: 'companionId is required' });
+    const officers = await partyBaseService.assignOfficer(
+      Number(req.params.baseId),
+      Number(companionId),
+      { role, notes, currentGameDay }
+    );
+    res.status(201).json({ officers });
+  } catch (err) {
+    if (err.message?.includes('not found') ||
+        err.message?.includes('not active') ||
+        err.message?.includes('different character') ||
+        err.message?.includes('already an officer')) {
+      return res.status(400).json({ error: err.message });
+    }
+    handleServerError(res, err, 'assign officer');
+  }
+});
+
+// DELETE /api/base/:baseId/officers/:officerId — unassign
+router.delete('/base/:baseId/officers/:officerId', async (req, res) => {
+  try {
+    const result = await partyBaseService.unassignOfficer(Number(req.params.officerId));
+    res.json(result);
+  } catch (err) {
+    if (err.message?.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    handleServerError(res, err, 'unassign officer');
+  }
+});
+
+// GET /api/base/:characterId/:campaignId — primary base (back-compat single).
+// Registered AFTER the /base/:baseId/... routes to avoid swallowing their 3-
+// segment patterns (like /base/:baseId/garrison).
+router.get('/base/:characterId/:campaignId', async (req, res) => {
+  try {
+    const { characterId, campaignId } = req.params;
+    const base = await partyBaseService.getBase(characterId, campaignId);
+    if (!base) return res.json(null);
+    res.json(base);
+  } catch (err) {
+    handleServerError(res, err, 'fetch party base');
   }
 });
 

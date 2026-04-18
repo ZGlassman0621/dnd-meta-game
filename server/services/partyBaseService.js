@@ -1,7 +1,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import {
   BASE_SUBTYPES, BASE_CATEGORIES, BUILDING_TYPES,
-  getAvailableBuildingsForSubtype,
+  getAvailableBuildingsForSubtype, parseDefenseGarrisonPerk,
   LEVEL_THRESHOLDS, getLevelForRenown,
   getUpgradeCatalog, PERK_EFFECTS, RENOWN_SOURCES
 } from '../config/partyBaseConfig.js';
@@ -74,6 +74,7 @@ async function hydrateBase(row) {
   row.categoryInfo = BASE_CATEGORIES[row.category] || null;
   row.subtypeInfo = BASE_SUBTYPES[row.subtype] || null;
   row.buildings = await listBuildings(row.id);
+  row.officers = await listOfficers(row.id);
   return row;
 }
 
@@ -114,13 +115,17 @@ export async function createBase(characterId, campaignId, args) {
     `INSERT INTO party_bases (
        campaign_id, character_id, location_id, name,
        category, subtype, is_primary, building_slots,
-       description, monthly_upkeep_gp, renown
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       description, monthly_upkeep_gp, renown,
+       subtype_defense_bonus, defense_rating, garrison_strength
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       campaignId, characterId, location_id || null, name,
       category, subtype, shouldBePrimary ? 1 : 0, subtypeConfig.buildingSlots,
       description || subtypeConfig.description,
-      subtypeConfig.baseUpkeepGp, subtypeConfig.startingRenown || 0
+      subtypeConfig.baseUpkeepGp, subtypeConfig.startingRenown || 0,
+      subtypeConfig.defenseBonus || 0,
+      subtypeConfig.defenseBonus || 0, // defense_rating starts at just the subtype bonus
+      0 // garrison_strength starts at 0 until barracks are built
     ]
   );
 
@@ -306,6 +311,8 @@ export async function advanceBuildingConstruction(buildingId, hours, currentGame
       'UPDATE party_bases SET active_perks = ? WHERE id = ?',
       [JSON.stringify([...current]), building.base_id]
     );
+    // F2: recompute defense + garrison now that this building's perks are live
+    await recomputeDefenseAndGarrison(building.base_id);
   } else {
     await dbRun(
       `UPDATE base_buildings
@@ -331,7 +338,154 @@ export async function removeBuilding(buildingId) {
     );
   }
   await dbRun('DELETE FROM base_buildings WHERE id = ?', [buildingId]);
+  // F2: recompute defense + garrison since this building is gone
+  await recomputeDefenseAndGarrison(building.base_id);
   return building;
+}
+
+// ============================================================
+// GARRISON + DEFENSE (F2)
+// ============================================================
+
+/**
+ * Recompute defense_rating and garrison_strength for a base from its
+ * subtype bonus + completed building perks + assigned officers.
+ *
+ * Formula:
+ *   defense_rating   = subtype_defense_bonus
+ *                    + sum of `defense_rating_plus_N` from completed buildings
+ *                    + per-officer contribution (1 + officer_bonus_plus_N
+ *                      perks, times ceil(companion_level / 3))
+ *   garrison_strength = sum of `garrison_capacity_N` from completed buildings
+ *
+ * Returns the updated base row.
+ */
+export async function recomputeDefenseAndGarrison(baseId) {
+  const base = await dbGet('SELECT * FROM party_bases WHERE id = ?', [baseId]);
+  if (!base) return null;
+
+  const buildings = await dbAll(
+    `SELECT building_type, perks_granted FROM base_buildings
+     WHERE base_id = ? AND status = 'completed'`,
+    [baseId]
+  );
+
+  let defenseFromBuildings = 0;
+  let garrison = 0;
+  let officerBonus = 0;
+  for (const b of buildings) {
+    const perks = safeParse(b.perks_granted, []);
+    for (const p of perks) {
+      const parsed = parseDefenseGarrisonPerk(p);
+      defenseFromBuildings += parsed.defense;
+      garrison += parsed.garrison;
+      officerBonus += parsed.officerBonus;
+    }
+  }
+
+  // Officer contribution — each officer adds ceil(level/3), bumped by any
+  // officer_bonus_plus_N perks (e.g., from a war_room building).
+  const officers = await dbAll(
+    `SELECT o.*, c.companion_level FROM base_officers o
+     JOIN companions c ON o.companion_id = c.id
+     WHERE o.base_id = ?`,
+    [baseId]
+  );
+  let officerDefense = 0;
+  for (const o of officers) {
+    const lvl = o.companion_level || 1;
+    officerDefense += Math.ceil(lvl / 3) + officerBonus;
+  }
+
+  const newDefense = (base.subtype_defense_bonus || 0) + defenseFromBuildings + officerDefense;
+
+  await dbRun(
+    `UPDATE party_bases
+     SET defense_rating = ?, garrison_strength = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [newDefense, garrison, baseId]
+  );
+
+  return {
+    defense_rating: newDefense,
+    garrison_strength: garrison,
+    subtype_defense_bonus: base.subtype_defense_bonus || 0,
+    defense_from_buildings: defenseFromBuildings,
+    defense_from_officers: officerDefense,
+    officer_count: officers.length
+  };
+}
+
+export async function listOfficers(baseId) {
+  return dbAll(
+    `SELECT o.*, c.companion_level, c.companion_class,
+            n.name as companion_name, n.avatar
+     FROM base_officers o
+     JOIN companions c ON o.companion_id = c.id
+     JOIN npcs n ON c.npc_id = n.id
+     WHERE o.base_id = ?
+     ORDER BY o.created_at ASC`,
+    [baseId]
+  );
+}
+
+export async function assignOfficer(baseId, companionId, { role, notes, currentGameDay } = {}) {
+  const base = await dbGet('SELECT id, character_id, campaign_id FROM party_bases WHERE id = ?', [baseId]);
+  if (!base) throw new Error('Base not found');
+
+  const companion = await dbGet(
+    `SELECT id, recruited_by_character_id, status FROM companions WHERE id = ?`,
+    [companionId]
+  );
+  if (!companion) throw new Error('Companion not found');
+  if (companion.status !== 'active') {
+    throw new Error(`Companion is ${companion.status}, not active`);
+  }
+  if (companion.recruited_by_character_id !== base.character_id) {
+    throw new Error('Companion belongs to a different character');
+  }
+
+  // UNIQUE(base_id, companion_id) enforces single-assignment; catch and rethrow readably.
+  try {
+    await dbRun(
+      `INSERT INTO base_officers (base_id, companion_id, role, notes, assigned_at_game_day)
+       VALUES (?, ?, ?, ?, ?)`,
+      [baseId, companionId, role || 'garrison_officer', notes || null, currentGameDay || null]
+    );
+  } catch (e) {
+    if (String(e.message).includes('UNIQUE')) {
+      throw new Error('Companion is already an officer at this base');
+    }
+    throw e;
+  }
+
+  await recomputeDefenseAndGarrison(baseId);
+  return listOfficers(baseId);
+}
+
+export async function unassignOfficer(officerId) {
+  const officer = await dbGet('SELECT base_id FROM base_officers WHERE id = ?', [officerId]);
+  if (!officer) throw new Error('Officer not found');
+  await dbRun('DELETE FROM base_officers WHERE id = ?', [officerId]);
+  await recomputeDefenseAndGarrison(officer.base_id);
+  return { removed: true, baseId: officer.base_id };
+}
+
+/**
+ * Garrison snapshot for a base. Used by UI + DM prompt.
+ */
+export async function getGarrisonSnapshot(baseId) {
+  const base = await dbGet(
+    `SELECT id, name, subtype, subtype_defense_bonus, defense_rating, garrison_strength
+     FROM party_bases WHERE id = ?`,
+    [baseId]
+  );
+  if (!base) return null;
+
+  // Recompute on read to stay consistent — cheap and idempotent
+  const recomputed = await recomputeDefenseAndGarrison(baseId);
+  const officers = await listOfficers(baseId);
+  return { base, ...recomputed, officers };
 }
 
 // ============================================================
@@ -535,6 +689,18 @@ export async function getBaseForPrompt(characterId, campaignId) {
       `- ${b.name}${primaryTag} — ${b.subtypeInfo?.name || b.subtype} (${b.categoryInfo?.name || b.category})`
     );
     lines.push(`    Level ${b.level}, Renown ${b.renown}, Treasury ${b.gold_treasury}gp`);
+
+    // F2: defensive posture — surfaced for raid / siege narration
+    if ((b.defense_rating || 0) > 0 || (b.garrison_strength || 0) > 0 || (b.officers || []).length > 0) {
+      const defenseParts = [`Defense ${b.defense_rating || 0}`];
+      if ((b.garrison_strength || 0) > 0) defenseParts.push(`Garrison capacity ${b.garrison_strength}`);
+      if ((b.officers || []).length > 0) {
+        const officerNames = b.officers.map(o => o.companion_name).filter(Boolean).join(', ');
+        defenseParts.push(`Officers: ${officerNames}`);
+      }
+      lines.push(`    ${defenseParts.join(' · ')}`);
+    }
+
     if (b.buildings && b.buildings.length > 0) {
       const built = b.buildings.filter(x => x.status === 'completed').map(x => x.name || x.building_type);
       const building = b.buildings.filter(x => x.status === 'in_progress').map(x => `${x.name || x.building_type} (under construction)`);

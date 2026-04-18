@@ -497,81 +497,96 @@ export const BASE_CATEGORIES = {
   }
 };
 
-// Subtype defines building-slot cap, base stats, and flavor. Building slots
-// cap how many named buildings can fit inside the base. Watchtowers are
-// cramped (3 slots); full fortresses sprawl (14 slots).
+// Subtype defines building-slot cap, base stats, inherent defense, and flavor.
+// Building slots cap how many named buildings can fit inside the base.
+// Watchtowers are cramped (3 slots); full fortresses sprawl (14 slots).
+// `defenseBonus` is the inherent structural defense — stone castles start
+// with thick walls even before a gatehouse is built.
 export const BASE_SUBTYPES = {
   // MARTIAL
   watchtower: {
     category: 'martial', name: 'Watchtower',
     description: 'A narrow spire on a trade road or border. A handful of garrisoned soldiers, a beacon, a single well.',
-    icon: '🗼', buildingSlots: 3, baseUpkeepGp: 8, startingRenown: 0
+    icon: '🗼', buildingSlots: 3, baseUpkeepGp: 8, startingRenown: 0,
+    defenseBonus: 2
   },
   outpost: {
     category: 'martial', name: 'Outpost',
     description: 'A fortified camp at the edge of civilization. Wooden palisade, a handful of buildings inside.',
-    icon: '⛺', buildingSlots: 5, baseUpkeepGp: 15, startingRenown: 0
+    icon: '⛺', buildingSlots: 5, baseUpkeepGp: 15, startingRenown: 0,
+    defenseBonus: 3
   },
   keep: {
     category: 'martial', name: 'Keep',
     description: 'A stone tower with supporting structures. Defensible, respectable, the core of a small holding.',
-    icon: '🏯', buildingSlots: 8, baseUpkeepGp: 30, startingRenown: 10
+    icon: '🏯', buildingSlots: 8, baseUpkeepGp: 30, startingRenown: 10,
+    defenseBonus: 5
   },
   fortress: {
     category: 'martial', name: 'Fortress',
     description: 'A major walled stronghold with gatehouse, multiple towers, courtyards, and barracks for a standing garrison.',
-    icon: '🏰', buildingSlots: 14, baseUpkeepGp: 75, startingRenown: 25
+    icon: '🏰', buildingSlots: 14, baseUpkeepGp: 75, startingRenown: 25,
+    defenseBonus: 8
   },
   castle: {
     category: 'martial', name: 'Castle',
     description: 'The seat of a lord or crown. Concentric walls, a great hall, a donjon. Armies assemble in its courtyards.',
-    icon: '🏰', buildingSlots: 20, baseUpkeepGp: 150, startingRenown: 50
+    icon: '🏰', buildingSlots: 20, baseUpkeepGp: 150, startingRenown: 50,
+    defenseBonus: 12
   },
 
   // CIVILIAN
   tavern: {
     category: 'civilian', name: 'Tavern',
     description: 'A small inn or public house. The smallest viable base — a room for you, a common area below.',
-    icon: '🍺', buildingSlots: 3, baseUpkeepGp: 10, startingRenown: 0
+    icon: '🍺', buildingSlots: 3, baseUpkeepGp: 10, startingRenown: 0,
+    defenseBonus: 0
   },
   hall: {
     category: 'civilian', name: 'Hall',
     description: 'A guild hall, meeting lodge, or trade house. A base of operations for commerce and gathering.',
-    icon: '🏛️', buildingSlots: 6, baseUpkeepGp: 25, startingRenown: 5
+    icon: '🏛️', buildingSlots: 6, baseUpkeepGp: 25, startingRenown: 5,
+    defenseBonus: 1
   },
   manor: {
     category: 'civilian', name: 'Manor',
     description: 'A grand house on grounds. Servants, gardens, stables — a landed-gentry estate.',
-    icon: '🏡', buildingSlots: 10, baseUpkeepGp: 50, startingRenown: 15
+    icon: '🏡', buildingSlots: 10, baseUpkeepGp: 50, startingRenown: 15,
+    defenseBonus: 2
   },
 
   // ARCANE
   wizard_tower: {
     category: 'arcane', name: 'Wizard Tower',
     description: 'A solitary spire reaching above the treeline. Cramped, stacked, every floor packed with tomes and experiments.',
-    icon: '🗼', buildingSlots: 5, baseUpkeepGp: 20, startingRenown: 5
+    icon: '🗼', buildingSlots: 5, baseUpkeepGp: 20, startingRenown: 5,
+    defenseBonus: 3
   },
   academy: {
     category: 'arcane', name: 'Academy',
     description: 'A small college of magic with classrooms, a library, and warded workshops. Teaches and researches.',
-    icon: '📚', buildingSlots: 10, baseUpkeepGp: 50, startingRenown: 20
+    icon: '📚', buildingSlots: 10, baseUpkeepGp: 50, startingRenown: 20,
+    defenseBonus: 4
   },
 
   // SANCTIFIED
   chapel: {
     category: 'sanctified', name: 'Chapel',
     description: 'A small house of prayer for a single deity or pantheon. One hall, a few quarters.',
-    icon: '⛪', buildingSlots: 4, baseUpkeepGp: 10, startingRenown: 0
+    icon: '⛪', buildingSlots: 4, baseUpkeepGp: 10, startingRenown: 0,
+    defenseBonus: 1
   },
   temple: {
     category: 'sanctified', name: 'Temple',
     description: 'A full temple complex with sanctuary, cloister, and scriptorium. Pilgrims come here.',
-    icon: '⛪', buildingSlots: 8, baseUpkeepGp: 30, startingRenown: 10
+    icon: '⛪', buildingSlots: 8, baseUpkeepGp: 30, startingRenown: 10,
+    defenseBonus: 2
   },
   sanctuary: {
     category: 'sanctified', name: 'Sanctuary / Monastery',
     description: 'Retreat and reliquary. Walled grounds, guest cells, a great library of holy texts.',
-    icon: '🛕', buildingSlots: 12, baseUpkeepGp: 60, startingRenown: 25
+    icon: '🛕', buildingSlots: 12, baseUpkeepGp: 60, startingRenown: 25,
+    defenseBonus: 4
   }
 };
 
@@ -611,7 +626,7 @@ export const BUILDING_TYPES = {
     icon: '🗼',
     allowedCategories: ['martial', 'civilian'],
     slots: 1, baseGoldCost: 350, baseHoursRequired: 50,
-    perks: ['early_warning']
+    perks: ['early_warning', 'defense_rating_plus_1']
   },
   training_yard: {
     name: 'Training Yard',
@@ -742,6 +757,52 @@ export const BUILDING_TYPES = {
     perks: ['hospitality']
   }
 };
+
+// Additional defensive buildings (F2)
+BUILDING_TYPES.palisade = {
+  name: 'Palisade',
+  description: 'A wooden defensive wall ringing the base. Cheap but effective against raiders.',
+  icon: '🪵',
+  allowedCategories: ['martial', 'civilian', 'sanctified'],
+  slots: 1, baseGoldCost: 250, baseHoursRequired: 40,
+  perks: ['defense_rating_plus_2']
+};
+
+BUILDING_TYPES.stone_walls = {
+  name: 'Stone Walls',
+  description: 'Thick stone walls replace the palisade. Major defensive upgrade; scales with base size.',
+  icon: '🧱',
+  allowedCategories: ['martial'],
+  slots: 2, baseGoldCost: 2000, baseHoursRequired: 300,
+  perks: ['defense_rating_plus_5']
+};
+
+BUILDING_TYPES.war_room = {
+  name: 'War Room',
+  description: 'A strategy chamber. Officers stationed here coordinate defense.',
+  icon: '🗺️',
+  allowedCategories: ['martial', 'civilian'],
+  slots: 1, baseGoldCost: 500, baseHoursRequired: 70,
+  perks: ['officer_bonus_plus_1']
+};
+
+/**
+ * Parse a perk string into its defense/garrison contribution. Returns an
+ * object `{ defense: N, garrison: N }` with zeros for non-matching perks.
+ * Pattern-based so future perks like `defense_rating_plus_10` work without
+ * code changes.
+ */
+export function parseDefenseGarrisonPerk(perk) {
+  if (typeof perk !== 'string') return { defense: 0, garrison: 0, officerBonus: 0 };
+  const def = perk.match(/^defense_rating_plus_(\d+)$/);
+  const gar = perk.match(/^garrison_capacity_(\d+)$/);
+  const off = perk.match(/^officer_bonus_plus_(\d+)$/);
+  return {
+    defense: def ? parseInt(def[1], 10) : 0,
+    garrison: gar ? parseInt(gar[1], 10) : 0,
+    officerBonus: off ? parseInt(off[1], 10) : 0
+  };
+}
 
 /**
  * Returns which building types can be installed in a base of the given
