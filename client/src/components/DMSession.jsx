@@ -815,10 +815,18 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       // Track loot drops gained this session
       if (data.lootDrops?.length > 0) {
         setItemsGainedThisSession(prev => [...prev, ...data.lootDrops.map(d => d.item)]);
-        // Refresh character to pick up inventory changes
+        // Refresh character to pick up inventory changes. Guard response.ok —
+        // on a 4xx/5xx, parsing body would either throw or return an error
+        // object that would then clobber character state with corrupt data.
         if (onCharacterUpdated) {
-          const updatedChar = await fetch(`/api/character/${character.id}`).then(r => r.json());
-          onCharacterUpdated(updatedChar);
+          try {
+            const r = await fetch(`/api/character/${character.id}`);
+            if (r.ok) {
+              onCharacterUpdated(await r.json());
+            }
+          } catch (e) {
+            console.warn('Refresh character after loot drop failed:', e.message);
+          }
         }
       }
 
@@ -1458,7 +1466,12 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || `Transaction failed (${response.status})`);
+      // Defensive: if the server responds 200 but with a malformed body,
+      // don't clobber character state with undefined/NaN values.
+      if (!data.newGold || !data.newInventory) {
+        throw new Error('Transaction response is missing inventory/gold data');
+      }
 
       onCharacterUpdated({
         ...character,

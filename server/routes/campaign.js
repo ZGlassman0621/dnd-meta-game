@@ -26,10 +26,10 @@ router.get('/active', async (req, res) => {
   }
 });
 
-// GET /api/campaign/:id - Get a specific campaign
+// GET /api/campaign/:id - Get a specific campaign (owner-scoped)
 router.get('/:id', async (req, res) => {
   try {
-    const campaign = await campaignService.getCampaignById(req.params.id);
+    const campaign = await campaignService.getCampaignById(req.params.id, req.user?.id);
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found' });
     }

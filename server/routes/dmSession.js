@@ -7,7 +7,7 @@ import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted } from '../services/narrativeIntegration.js';
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
-import { getCharacterWorldView } from '../services/livingWorldService.js';
+import { getCharacterWorldView, processLivingWorldTick } from '../services/livingWorldService.js';
 import { getActiveFactions } from '../services/factionService.js';
 import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter, addPromise, fulfillPromise, getPendingPromises, adjustDisposition as adjustNpcDisposition, adjustTrust as adjustNpcTrust } from '../services/npcRelationshipService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
@@ -1517,6 +1517,28 @@ router.post('/:sessionId/message', async (req, res) => {
               );
             }
 
+            // Idempotency guard: if an active order with the same item name
+            // already exists at this merchant for this character, skip —
+            // the AI likely repeated the marker across retries or across
+            // two turns in the same narrative beat. Prevents double-charging
+            // the deposit.
+            const dupe = await dbGet(
+              `SELECT id FROM merchant_orders
+               WHERE merchant_id = ? AND character_id = ?
+                 AND LOWER(item_name) = LOWER(?)
+                 AND status IN ('pending','ready')
+               LIMIT 1`,
+              [dbMerchant.id, session.character_id, c.item]
+            );
+            if (dupe) {
+              result.messages.push({
+                role: 'user',
+                content: `[SYSTEM: MERCHANT_COMMISSION skipped — an order for "${c.item}" at ${c.merchant} is already in progress (order #${dupe.id}). Don't restate the commission.]`
+              });
+              await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+              continue;
+            }
+
             const quotedCp = (c.price_gp || 0) * 100 + (c.price_sp || 0) * 10 + (c.price_cp || 0);
             const depositCp = (c.deposit_gp || 0) * 100 + (c.deposit_sp || 0) * 10 + (c.deposit_cp || 0);
 
@@ -2521,6 +2543,35 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
       WHERE id = ?
     `, [newDate.day, newDate.year, sessionId]);
 
+    // Also advance the character's game_day so downstream systems
+    // (weather, survival, companion moods, base threats) see the new
+    // date. Only advance forward — going backwards is a narrative
+    // flashback, not a real time skip.
+    let tickResult = null;
+    if (daysToAdd > 0 && session.character_id) {
+      const character = await dbGet(
+        'SELECT id, campaign_id, game_day FROM characters WHERE id = ?',
+        [session.character_id]
+      );
+      if (character) {
+        const newGameDay = (character.game_day || 1) + daysToAdd;
+        await dbRun(
+          'UPDATE characters SET game_day = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [newGameDay, character.id]
+        );
+        // Fire a living-world tick for the elapsed days so weather,
+        // moods, merchant orders, base threats, etc. advance too.
+        // Best-effort: a tick failure shouldn't block the date change.
+        if (character.campaign_id) {
+          try {
+            tickResult = await processLivingWorldTick(character.campaign_id, daysToAdd);
+          } catch (e) {
+            console.warn('adjust-date: living-world tick failed:', e.message);
+          }
+        }
+      }
+    }
+
     // Return the formatted date
     const gameDate = dayToDate(newDate.day, newDate.year);
 
@@ -2528,7 +2579,8 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
       success: true,
       gameDate,
       day: newDate.day,
-      year: newDate.year
+      year: newDate.year,
+      tickResult
     });
   } catch (error) {
     handleServerError(res, error, 'adjust game date');

@@ -27,30 +27,34 @@ export async function createCampaign(data) {
 }
 
 /**
- * Get a campaign by ID
+ * Get a campaign by ID. Optionally scope to a user — the route layer
+ * should ALWAYS pass userId for any endpoint reachable by a logged-in
+ * user. Omitting userId returns the campaign regardless of owner, which
+ * is only safe for internal service calls that have already verified
+ * ownership some other way.
  */
-export async function getCampaignById(id) {
+export async function getCampaignById(id, userId = null) {
+  if (userId) {
+    return dbGet('SELECT * FROM campaigns WHERE id = ? AND user_id = ?', [id, userId]);
+  }
   return dbGet('SELECT * FROM campaigns WHERE id = ?', [id]);
 }
 
 /**
- * Get all campaigns
+ * Get all campaigns. Requires a userId to return results; callers without
+ * a user context get an empty list rather than leaking every user's data.
  */
 export async function getAllCampaigns(userId = null) {
-  if (userId) {
-    return dbAll('SELECT * FROM campaigns WHERE user_id = ? ORDER BY updated_at DESC', [userId]);
-  }
-  return dbAll('SELECT * FROM campaigns ORDER BY updated_at DESC');
+  if (!userId) return [];
+  return dbAll('SELECT * FROM campaigns WHERE user_id = ? ORDER BY updated_at DESC', [userId]);
 }
 
 /**
- * Get active campaigns
+ * Get active campaigns. Same user-required contract as getAllCampaigns.
  */
 export async function getActiveCampaigns(userId = null) {
-  if (userId) {
-    return dbAll("SELECT * FROM campaigns WHERE user_id = ? AND status = 'active' ORDER BY updated_at DESC", [userId]);
-  }
-  return dbAll("SELECT * FROM campaigns WHERE status = 'active' ORDER BY updated_at DESC");
+  if (!userId) return [];
+  return dbAll("SELECT * FROM campaigns WHERE user_id = ? AND status = 'active' ORDER BY updated_at DESC", [userId]);
 }
 
 /**
