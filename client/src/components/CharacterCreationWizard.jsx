@@ -38,21 +38,68 @@ const MARTIAL_WEAPONS = [
  * strings when a dropdown is appropriate, or null when the choice is too
  * open-ended and should render as a free-form text input (e.g. picking a
  * specific spell by name).
+ *
+ * Takes optional `context` ({ raceLanguages, currentPicks, currentIdx })
+ * so language and skill dropdowns can filter out the character's racial
+ * languages and any already-picked values from other slots of the same choice.
  */
-function resolveAncestryChoiceOptions(choice) {
+function resolveAncestryChoiceOptions(choice, context = {}) {
   if (!choice) return null
-  if (Array.isArray(choice.options)) return choice.options
-  switch (choice.options) {
-    case 'any_skill': return ALL_SKILLS_5E
-    case 'any_language': return [
-      ...(equipmentData.languages?.standard || []),
-      ...(equipmentData.languages?.exotic || [])
-    ]
-    case 'any_artisan_tool': return COMMON_ARTISAN_TOOLS
-    case 'any_tool': return COMMON_TOOLS_EXTENDED
-    case 'any_martial_weapon': return MARTIAL_WEAPONS
-    default: return null // sentinel like 'any_cantrip_wizard_or_druid' → text input
+
+  let base = null
+  if (Array.isArray(choice.options)) {
+    base = choice.options
+  } else {
+    switch (choice.options) {
+      case 'any_skill':
+        base = ALL_SKILLS_5E
+        break
+      case 'any_language':
+        base = [
+          ...(equipmentData.languages?.standard || []),
+          ...(equipmentData.languages?.exotic || [])
+        ]
+        break
+      case 'any_artisan_tool':
+        base = COMMON_ARTISAN_TOOLS
+        break
+      case 'any_tool':
+        base = COMMON_TOOLS_EXTENDED
+        break
+      case 'any_martial_weapon':
+        base = MARTIAL_WEAPONS
+        break
+      default:
+        return null // sentinel like 'any_cantrip_wizard_or_druid' → text input
+    }
   }
+
+  const { raceLanguages = [], currentPicks = [], currentIdx = -1 } = context
+
+  // Filter out racial languages for language choices — the character already
+  // knows those, so picking them again would be wasted.
+  let filtered = base
+  if (choice.type === 'language' && raceLanguages.length > 0) {
+    const racialSet = new Set(raceLanguages.map(l => String(l).toLowerCase()))
+    filtered = filtered.filter(opt => !racialSet.has(String(opt).toLowerCase()))
+  }
+
+  // Dedup across the count-slots of this choice: an option used in another
+  // slot should disappear from this slot's dropdown (but stay visible in its
+  // own slot so the current value doesn't vanish).
+  if (Array.isArray(currentPicks) && currentPicks.length > 0) {
+    const otherPicks = new Set(
+      currentPicks
+        .map((v, i) => (i === currentIdx ? null : v))
+        .filter(v => v && String(v).trim())
+        .map(v => String(v).toLowerCase())
+    )
+    if (otherPicks.size > 0) {
+      filtered = filtered.filter(opt => !otherPicks.has(String(opt).toLowerCase()))
+    }
+  }
+
+  return filtered
 }
 
 function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
@@ -343,25 +390,25 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   const deities = Object.keys(deitiesData)
 
   const ALIGNMENTS = [
-    { value: 'LG', label: 'Lawful Good' },
-    { value: 'NG', label: 'Neutral Good' },
-    { value: 'CG', label: 'Chaotic Good' },
-    { value: 'LN', label: 'Lawful Neutral' },
-    { value: 'N', label: 'True Neutral' },
-    { value: 'CN', label: 'Chaotic Neutral' },
-    { value: 'LE', label: 'Lawful Evil' },
-    { value: 'NE', label: 'Neutral Evil' },
-    { value: 'CE', label: 'Chaotic Evil' }
+    { value: 'LG', label: 'Lawful Good', description: 'Acts as a good person is expected or required to act — combines a commitment to oppose evil with the discipline to fight for what is right. A Lawful Good character tells the truth, keeps their word, helps those in need, and speaks out against injustice.' },
+    { value: 'NG', label: 'Neutral Good', description: 'Does the best that a good person can do. They help others according to their needs, neither bound by authority nor drawn to rebellion. Goodness itself is their compass.' },
+    { value: 'CG', label: 'Chaotic Good', description: 'Acts as their conscience directs, with little regard for what others expect. Makes their own way but is kind and benevolent. Believes in goodness and right, but has little use for laws or regulations.' },
+    { value: 'LN', label: 'Lawful Neutral', description: 'Acts in accordance with law, tradition, or a personal code. Order and organization matter above all — a judge, a soldier of rigid discipline, a monk following the path. Not swayed by whether an outcome is kind or cruel.' },
+    { value: 'N', label: 'True Neutral', description: 'Prefers to avoid moral absolutes. Sees the world as a matter of balance, or simply does what seems necessary without strong feelings either way. Many druids follow this path to preserve natural equilibrium.' },
+    { value: 'CN', label: 'Chaotic Neutral', description: 'Follows their whims, valuing personal freedom above all but not driven toward harming or helping others deliberately. Unpredictable — an adventurer who lives by their own rules, beholden to no one.' },
+    { value: 'LE', label: 'Lawful Evil', description: 'Methodically takes what they want within the limits of a code of tradition, loyalty, or order. Cares about tradition, loyalty, and order — but not about freedom, dignity, or life. The tyrant, the disciplined villain, the devil.' },
+    { value: 'NE', label: 'Neutral Evil', description: 'Does whatever they can get away with, without compassion or qualms. Pure self-interest unbound by loyalty or tradition. Kills when advantageous, steals when profitable, helps only when forced.' },
+    { value: 'CE', label: 'Chaotic Evil', description: 'Acts with arbitrary violence, spurred by greed, hatred, or bloodlust. Unpredictable and violent — the raider, the demon, the monster given to destructive impulse.' }
   ]
 
   const LIFESTYLES = [
-    { value: 'wretched', label: 'Wretched (0 gp/day)', cost: 0 },
-    { value: 'squalid', label: 'Squalid (1 sp/day)', cost: 0.1 },
-    { value: 'poor', label: 'Poor (2 sp/day)', cost: 0.2 },
-    { value: 'modest', label: 'Modest (1 gp/day)', cost: 1 },
-    { value: 'comfortable', label: 'Comfortable (2 gp/day)', cost: 2 },
-    { value: 'wealthy', label: 'Wealthy (4 gp/day)', cost: 4 },
-    { value: 'aristocratic', label: 'Aristocratic (10 gp/day minimum)', cost: 10 }
+    { value: 'wretched', label: 'Wretched (0 gp/day)', cost: 0, description: 'You live in inhumane conditions. With no place to call home, you shelter wherever you can — risking disease, hunger, and violence. Most people with this lifestyle have suffered a terrible tragedy or misfortune.' },
+    { value: 'squalid', label: 'Squalid (1 sp/day)', cost: 0.1, description: 'You live in a leaky stable, a mud-floored hut just outside town, or a vermin-infested boarding house in the worst part of town. You have shelter from the elements, but live in desperate, unpleasant, often dangerous surroundings.' },
+    { value: 'poor', label: 'Poor (2 sp/day)', cost: 0.2, description: 'Poor living standards mean going without comforts available in more civilized society. Simple food and lodgings, threadbare clothing, and unpredictable travel. You suffer no privation, but your environment is unpleasant and demanding.' },
+    { value: 'modest', label: 'Modest (1 gp/day)', cost: 1, description: 'Modest living keeps you out of the slums and ensures you can maintain your equipment. You live in an older part of town, renting a room in a boarding house, inn, or temple. You don\'t go hungry or thirsty, and your surroundings are clean if simple.' },
+    { value: 'comfortable', label: 'Comfortable (2 gp/day)', cost: 2, description: 'A comfortable lifestyle means you have the means to maintain decent clothes, simple jewelry, and a respectable home. You rent lodgings in a private home or a nice inn and are considered a respectable member of society.' },
+    { value: 'wealthy', label: 'Wealthy (4 gp/day)', cost: 4, description: 'A wealthy lifestyle means abundance and comfort, though not the extremes the aristocracy enjoys. You have a nice home in a good neighborhood with servants, eat fine food, and dress in fashionable clothing.' },
+    { value: 'aristocratic', label: 'Aristocratic (10 gp/day minimum)', cost: 10, description: 'You live a life of plenty and comfort surrounded by high society and the political elite. You occupy rooms in the finest inns, own a home in a wealthy neighborhood, have servants at your command, and attend social events of the highest caliber.' }
   ]
 
   const races = Object.keys(racesData)
@@ -370,6 +417,56 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   const selectedClassData = formData.class ? classesData[formData.class] : null
   const hasSubraces = selectedRaceData && selectedRaceData.subraces && selectedRaceData.subraces.length > 0
   const hasSubclasses = selectedClassData && selectedClassData.subclasses && selectedClassData.subclasses.length > 0
+
+  // Deities grouped by pantheon, with the character's racial pantheon listed first.
+  // Atheist/Agnostic always top. Faerûnian is the default "general" pantheon.
+  const groupedDeities = (() => {
+    const racePantheonMap = {
+      dragonborn: 'Draconic',
+      elf: 'Elven',
+      half_elf: 'Elven',
+      dwarf: 'Dwarven',
+      halfling: 'Halfling',
+      half_orc: 'Orcish',
+      gnome: 'Gnomish',
+      tiefling: 'Faerûnian'
+    }
+    const raceKey = (formData.race || '').toLowerCase()
+    const subrace = (formData.subrace || '').toLowerCase()
+    let primaryPantheon = racePantheonMap[raceKey] || null
+    // Drow subrace has its own pantheon
+    if (raceKey === 'elf' && (subrace.includes('drow') || subrace.includes('dark elf'))) {
+      primaryPantheon = 'Drow'
+    }
+
+    const groups = {}
+    for (const key of deities) {
+      const d = deitiesData[key]
+      const panth = d.pantheon || 'Other'
+      if (!groups[panth]) groups[panth] = []
+      groups[panth].push(key)
+    }
+    // Sort each pantheon's deities alphabetically by name
+    for (const panth of Object.keys(groups)) {
+      groups[panth].sort((a, b) =>
+        (deitiesData[a].name || a).localeCompare(deitiesData[b].name || b)
+      )
+    }
+
+    // Build ordered list of pantheon labels
+    const atheistKeys = deities.filter(k => !deitiesData[k].pantheon)
+    const pantheons = Object.keys(groups).filter(p => p !== 'Other')
+    pantheons.sort((a, b) => {
+      if (primaryPantheon && a === primaryPantheon) return -1
+      if (primaryPantheon && b === primaryPantheon) return 1
+      if (a === 'Faerûnian') return -1
+      if (b === 'Faerûnian') return 1
+      return a.localeCompare(b)
+    })
+    if (groups['Other']) pantheons.push('Other')
+
+    return { groups, pantheons, atheistKeys, primaryPantheon }
+  })()
 
   // Helper: derive ancestry list ID from race + subrace. Drow and Aasimar paths
   // have their own separate lists; all other subraces share the parent race's list.
@@ -1116,18 +1213,27 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                           }}
                         >
                           {feat.choices.map((choice, ci) => {
-                            const opts = resolveAncestryChoiceOptions(choice)
                             const count = Math.max(1, choice.count || 1)
+                            const stored = formData.ancestry_feat_choices?.[choice.id]
+                            // Normalize stored value into an array of count slots so
+                            // dedup filtering works uniformly for count=1 and count>1.
+                            const picks = count > 1
+                              ? (Array.isArray(stored) ? stored : [])
+                              : [typeof stored === 'string' ? stored : '']
                             return (
                               <div key={choice.id + '-' + ci} style={{ marginBottom: ci < feat.choices.length - 1 ? '0.55rem' : 0 }}>
                                 <label style={{ fontSize: '0.8rem', opacity: 0.9, fontWeight: 'normal', display: 'block', marginBottom: '0.2rem' }}>
                                   {choice.label || 'Choose one'}{count > 1 ? ` — pick ${count}` : ''}:
                                 </label>
                                 {[...Array(count)].map((_, idx) => {
-                                  const stored = formData.ancestry_feat_choices?.[choice.id]
                                   const currentVal = count > 1
                                     ? (Array.isArray(stored) ? stored[idx] : null) || ''
                                     : (typeof stored === 'string' ? stored : '') || ''
+                                  const opts = resolveAncestryChoiceOptions(choice, {
+                                    raceLanguages: selectedRaceData?.languages || [],
+                                    currentPicks: picks,
+                                    currentIdx: idx
+                                  })
                                   const setVal = (v) => {
                                     const cur = { ...(formData.ancestry_feat_choices || {}) }
                                     if (count > 1) {
@@ -1305,85 +1411,104 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             </div>
           )}
 
-          {/* Tool Proficiency Selection */}
-          {selectedBackgroundData.toolProficiencies && selectedBackgroundData.toolProficiencies.some(t =>
-            t.toLowerCase().includes('one type of') ||
-            t.toLowerCase().includes('one from') ||
-            t.toLowerCase().includes('two from') ||
-            t.toLowerCase().includes(' or ')
-          ) && (
-            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
-              <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Choose Tool Proficiencies
-              </p>
-              {selectedBackgroundData.toolProficiencies.map((tool, idx) => {
-                // Check if this is a choice
-                const isArtisanChoice = tool.toLowerCase().includes('artisan')
-                const isGamingChoice = tool.toLowerCase().includes('gaming')
-                const isMusicalChoice = tool.toLowerCase().includes('musical')
-                const isComboChoice = tool.toLowerCase().includes(' or ')
-                const isTwoChoice = tool.toLowerCase().includes('two from')
+          {/* Tool Proficiencies: split fixed (automatic) from chooser proficiencies.
+              Prevents confusing displays like a "• Vehicles (land)" bullet showing
+              inside the "Choose Tool Proficiencies" section. */}
+          {(() => {
+            if (!selectedBackgroundData.toolProficiencies || selectedBackgroundData.toolProficiencies.length === 0) {
+              return null
+            }
+            const isChoice = (t) => {
+              const lc = t.toLowerCase()
+              return lc.includes('one type of') || lc.includes('one from') ||
+                     lc.includes('two from') || lc.includes(' or ') ||
+                     lc.includes('artisan') || lc.includes('gaming') || lc.includes('musical')
+            }
+            const fixedProfs = selectedBackgroundData.toolProficiencies.filter(t => !isChoice(t))
+            const choiceProfs = selectedBackgroundData.toolProficiencies.filter(isChoice)
 
-                if (!isArtisanChoice && !isGamingChoice && !isMusicalChoice && !isComboChoice && !isTwoChoice) {
-                  return (
-                    <p key={idx} style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.25rem' }}>
-                      • {tool}
+            return (
+              <>
+                {fixedProfs.length > 0 && (
+                  <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
+                    <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.4rem', fontWeight: 'bold' }}>
+                      Automatic Tool Proficiencies
                     </p>
-                  )
-                }
-
-                // Build options based on type
-                let options = []
-                if (isArtisanChoice) {
-                  options = (equipmentData.tools?.artisansTools || []).map(t => t.name)
-                } else if (isGamingChoice) {
-                  options = (equipmentData.tools?.gamingSets || []).map(t => t.name)
-                } else if (isMusicalChoice) {
-                  options = equipmentData.musicalInstruments || []
-                } else if (isComboChoice || isTwoChoice) {
-                  // Combo like "gaming set or musical instrument"
-                  if (tool.toLowerCase().includes('gaming')) {
-                    options.push(...(equipmentData.tools?.gamingSets || []).map(t => t.name))
-                  }
-                  if (tool.toLowerCase().includes('musical')) {
-                    options.push(...(equipmentData.musicalInstruments || []))
-                  }
-                  if (tool.toLowerCase().includes('thieves')) {
-                    options.push("Thieves' Tools")
-                  }
-                }
-
-                const numChoices = isTwoChoice ? 2 : 1
-
-                return (
-                  <div key={idx}>
-                    <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>{tool}</p>
-                    {[...Array(numChoices)].map((_, choiceIdx) => (
-                      <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
-                        <select
-                          value={formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''}
-                          onChange={(e) => {
-                            const newTools = [...formData.selected_tool_proficiencies]
-                            newTools[idx * numChoices + choiceIdx] = e.target.value
-                            handleChange('selected_tool_proficiencies', newTools)
-                          }}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="">Select tool...</option>
-                          {options
-                            .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
-                              formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
-                            .map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                        </select>
-                      </div>
+                    {fixedProfs.map((tool, idx) => (
+                      <p key={idx} style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.25rem' }}>
+                        • {tool}
+                      </p>
                     ))}
                   </div>
-                )
-              })}
-            </div>
-          )}
+                )}
+
+                {choiceProfs.length > 0 && (
+                  <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(46, 204, 113, 0.3)' }}>
+                    <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                      Choose Tool Proficiencies
+                    </p>
+                    {choiceProfs.map((tool, idx) => {
+                      const lc = tool.toLowerCase()
+                      const isArtisanChoice = lc.includes('artisan')
+                      const isGamingChoice = lc.includes('gaming')
+                      const isMusicalChoice = lc.includes('musical')
+                      const isComboChoice = lc.includes(' or ')
+                      const isTwoChoice = lc.includes('two from')
+
+                      // Build options based on type
+                      let options = []
+                      if (isArtisanChoice) {
+                        options = (equipmentData.tools?.artisansTools || []).map(t => t.name)
+                      } else if (isGamingChoice) {
+                        options = (equipmentData.tools?.gamingSets || []).map(t => t.name)
+                      } else if (isMusicalChoice) {
+                        options = equipmentData.musicalInstruments || []
+                      } else if (isComboChoice || isTwoChoice) {
+                        if (lc.includes('gaming')) {
+                          options.push(...(equipmentData.tools?.gamingSets || []).map(t => t.name))
+                        }
+                        if (lc.includes('musical')) {
+                          options.push(...(equipmentData.musicalInstruments || []))
+                        }
+                        if (lc.includes('thieves')) {
+                          options.push("Thieves' Tools")
+                        }
+                      }
+
+                      const numChoices = isTwoChoice ? 2 : 1
+
+                      return (
+                        <div key={idx}>
+                          <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>{tool}</p>
+                          {[...Array(numChoices)].map((_, choiceIdx) => (
+                            <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                              <select
+                                value={formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''}
+                                onChange={(e) => {
+                                  const newTools = [...formData.selected_tool_proficiencies]
+                                  newTools[idx * numChoices + choiceIdx] = e.target.value
+                                  handleChange('selected_tool_proficiencies', newTools)
+                                }}
+                                style={{ width: '100%' }}
+                              >
+                                <option value="">Select tool...</option>
+                                {options
+                                  .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
+                                    formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
+                                  .map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
 
@@ -1680,7 +1805,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         <p style={{ fontSize: '0.9rem', color: '#bbb', marginBottom: '1rem' }}>
           {formData.ability_score_method === 'standard_array'
             ? 'Assign standard array values to each ability: 15, 14, 13, 12, 10, 8'
-            : 'Enter your rolled or custom ability scores (3-18)'}
+            : 'Enter your rolled or custom ability scores (3-20)'}
           {selectedClassData && (
             <>
               <span style={{ display: 'block', marginTop: '0.5rem', color: '#2ecc71' }}>
@@ -1727,7 +1852,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                   <input
                     type="number"
                     min="3"
-                    max="18"
+                    max="20"
                     value={baseScore ?? ''}
                     onChange={(e) => {
                       const val = e.target.value
@@ -1742,16 +1867,18 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                       }
                     }}
                     onBlur={(e) => {
-                      // Clamp value to 3-18 when user leaves the field
+                      // Clamp value to 3-20 when user leaves the field.
+                      // 20 is the normal 5e hard cap; 18 would artificially
+                      // downgrade a rolled 19 or 20.
                       const val = e.target.value
                       if (val !== '') {
                         const num = parseInt(val)
                         if (!isNaN(num)) {
-                          handleChange(ability, Math.min(18, Math.max(3, num)))
+                          handleChange(ability, Math.min(20, Math.max(3, num)))
                         }
                       }
                     }}
-                    placeholder="3-18"
+                    placeholder="3-20"
                     style={{
                       width: '100%',
                       padding: '0.5rem',
@@ -2009,46 +2136,72 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                   </div>
                 )}
 
-                {/* Feat Choices (e.g., Magic Initiate class, Elemental Adept damage type) */}
-                {featsData[formData.selected_feat].choices && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(155, 89, 182, 0.1)', borderRadius: '4px', border: '1px solid rgba(155, 89, 182, 0.3)' }}>
-                    {Object.entries(featsData[formData.selected_feat].choices).map(([choiceKey, options]) => {
-                      const labels = {
-                        class: 'Spellcasting Class',
-                        damageType: 'Damage Type'
-                      }
-                      const descriptions = {
-                        class: 'Choose a class to learn spells from',
-                        damageType: 'Choose a damage type for this feat'
-                      }
+                {/* Feat Sub-Choices — unified array schema.
+                    Same structure as ancestry feats: each entry is
+                    { id, type, count, label, options }. Linguist picks 3
+                    languages, Skilled picks 3 skills, Magic Initiate picks
+                    class + cantrips + spell, etc. Open-ended picks fall
+                    back to a text input. */}
+                {Array.isArray(featsData[formData.selected_feat].choices) && featsData[formData.selected_feat].choices.length > 0 && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.75rem', background: 'rgba(155, 89, 182, 0.12)', border: '1px dashed rgba(155, 89, 182, 0.35)', borderRadius: '4px' }}>
+                    {featsData[formData.selected_feat].choices.map((choice, ci) => {
+                      const count = Math.max(1, choice.count || 1)
+                      const stored = formData.feat_choices?.[choice.id]
+                      const picks = count > 1
+                        ? (Array.isArray(stored) ? stored : [])
+                        : [typeof stored === 'string' ? stored : '']
                       return (
-                        <div key={choiceKey}>
-                          <label style={{ fontSize: '0.8rem', color: '#9b59b6', display: 'block', marginBottom: '0.25rem' }}>
-                            <strong>{labels[choiceKey] || choiceKey}:</strong>
-                            <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#888' }}>
-                              {descriptions[choiceKey] || ''}
-                            </span>
+                        <div key={choice.id + '-' + ci} style={{ marginBottom: ci < featsData[formData.selected_feat].choices.length - 1 ? '0.55rem' : 0 }}>
+                          <label style={{ fontSize: '0.8rem', color: '#c4b5fd', display: 'block', marginBottom: '0.2rem', fontWeight: 500 }}>
+                            {choice.label || 'Choose one'}{count > 1 ? ` — pick ${count}` : ''}:
                           </label>
-                          <select
-                            value={formData.feat_choices[choiceKey] || ''}
-                            onChange={(e) => handleChange('feat_choices', { ...formData.feat_choices, [choiceKey]: e.target.value || null })}
-                            style={{
-                              width: '100%',
-                              padding: '0.5rem',
-                              background: 'rgba(255, 255, 255, 0.1)',
-                              border: '1px solid rgba(155, 89, 182, 0.5)',
-                              borderRadius: '4px',
-                              color: '#e4e4e4',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            <option value="">Select {labels[choiceKey]?.toLowerCase() || choiceKey}...</option>
-                            {options.map(option => (
-                              <option key={option} value={option}>
-                                {option.charAt(0).toUpperCase() + option.slice(1)}
-                              </option>
-                            ))}
-                          </select>
+                          {[...Array(count)].map((_, idx) => {
+                            const currentVal = count > 1
+                              ? (Array.isArray(stored) ? stored[idx] : null) || ''
+                              : (typeof stored === 'string' ? stored : '') || ''
+                            const opts = resolveAncestryChoiceOptions(choice, {
+                              raceLanguages: selectedRaceData?.languages || [],
+                              currentPicks: picks,
+                              currentIdx: idx
+                            })
+                            const setVal = (v) => {
+                              const cur = { ...(formData.feat_choices || {}) }
+                              if (count > 1) {
+                                const arr = Array.isArray(cur[choice.id]) ? [...cur[choice.id]] : []
+                                arr[idx] = v
+                                cur[choice.id] = arr
+                              } else {
+                                cur[choice.id] = v
+                              }
+                              handleChange('feat_choices', cur)
+                            }
+                            return opts ? (
+                              <select
+                                key={idx}
+                                value={currentVal}
+                                onChange={(e) => setVal(e.target.value)}
+                                style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem', padding: '0.4rem 0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(155, 89, 182, 0.4)', borderRadius: '4px', color: '#e4e4e4' }}
+                              >
+                                <option value="">Select…</option>
+                                {opts.map(o => (
+                                  <option key={o} value={o}>
+                                    {typeof o === 'string' && o.length > 0 && o === o.toLowerCase() && !o.includes(' ')
+                                      ? o.charAt(0).toUpperCase() + o.slice(1)
+                                      : o}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                key={idx}
+                                type="text"
+                                value={currentVal}
+                                onChange={(e) => setVal(e.target.value)}
+                                placeholder={choice.label || 'Enter value'}
+                                style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem', padding: '0.4rem 0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(155, 89, 182, 0.4)', borderRadius: '4px', color: '#e4e4e4' }}
+                              />
+                            )
+                          })}
                         </div>
                       )
                     })}
@@ -2192,20 +2345,31 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                       }
                     }}
                     style={{
-                      padding: '0.5rem',
+                      padding: '0.6rem',
                       background: isSelected ? 'rgba(155, 89, 182, 0.3)' : 'rgba(255, 255, 255, 0.05)',
                       border: isSelected ? '2px solid #9b59b6' : '2px solid transparent',
                       borderRadius: '4px',
-                      color: isSelected ? '#9b59b6' : (isDisabled ? '#666' : '#ccc'),
+                      color: isSelected ? '#e9d5ff' : (isDisabled ? '#666' : '#ccc'),
                       cursor: isDisabled && !isSelected ? 'not-allowed' : 'pointer',
                       fontSize: '0.85rem',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      lineHeight: 1.35
                     }}
                     title={cantrip.description}
                   >
-                    {isSelected ? '● ' : '○ '}
-                    {cantrip.name}
-                    <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>{cantrip.school}</span>
+                    <div style={{ fontWeight: 600, marginBottom: '0.15rem' }}>
+                      {isSelected ? '● ' : '○ '}{cantrip.name}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '0.3rem' }}>
+                      {cantrip.school}
+                      {cantrip.castingTime ? ` · ${cantrip.castingTime}` : ''}
+                      {cantrip.range ? ` · ${cantrip.range}` : ''}
+                    </div>
+                    {cantrip.description && (
+                      <div style={{ fontSize: '0.74rem', color: isDisabled && !isSelected ? '#555' : '#aaa', fontWeight: 400 }}>
+                        {cantrip.description}
+                      </div>
+                    )}
                   </button>
                 )
               })}
@@ -2252,24 +2416,30 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                         }
                       }}
                       style={{
-                        padding: '0.5rem 0.75rem',
+                        padding: '0.6rem 0.75rem',
                         background: isSelected ? 'rgba(231, 76, 60, 0.3)' : 'rgba(255, 255, 255, 0.05)',
                         border: isSelected ? '2px solid #e74c3c' : '2px solid transparent',
                         borderRadius: '4px',
-                        color: isSelected ? '#e74c3c' : (isDisabled ? '#666' : '#ccc'),
+                        color: isSelected ? '#ffcdc8' : (isDisabled ? '#666' : '#ccc'),
                         cursor: isDisabled && !isSelected ? 'not-allowed' : 'pointer',
                         fontSize: '0.85rem',
-                        textAlign: 'left'
+                        textAlign: 'left',
+                        lineHeight: 1.35
                       }}
                       title={spell.description}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>{isSelected ? '● ' : '○ '}{spell.name}</span>
+                        <span style={{ fontWeight: 600 }}>{isSelected ? '● ' : '○ '}{spell.name}</span>
                         <span style={{ fontSize: '0.7rem', color: '#888' }}>{spell.school}</span>
                       </div>
-                      <span style={{ fontSize: '0.7rem', color: '#888', display: 'block', marginTop: '0.25rem' }}>
-                        {spell.castingTime} | {spell.range} | {spell.duration}
+                      <span style={{ fontSize: '0.7rem', color: '#888', display: 'block', marginTop: '0.2rem' }}>
+                        {spell.castingTime} · {spell.range} · {spell.duration}
                       </span>
+                      {spell.description && (
+                        <div style={{ fontSize: '0.74rem', color: isDisabled && !isSelected ? '#555' : '#aaa', fontWeight: 400, marginTop: '0.3rem' }}>
+                          {spell.description}
+                        </div>
+                      )}
                     </button>
                   )
                 })}
@@ -2310,7 +2480,14 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               (selectedClassData && formData.selected_skills.length < selectedClassData.skillChoices) ||
               (formData.subrace === 'Variant Human' && !formData.selected_feat) ||
               (formData.selected_feat && featsData[formData.selected_feat]?.abilityIncrease?.choice && !formData.feat_ability_choice) ||
-              (formData.selected_feat && featsData[formData.selected_feat]?.choices && Object.keys(featsData[formData.selected_feat].choices).some(key => !formData.feat_choices?.[key])) ||
+              (formData.selected_feat && Array.isArray(featsData[formData.selected_feat]?.choices) && featsData[formData.selected_feat].choices.some(choice => {
+                const count = Math.max(1, choice.count || 1)
+                const stored = formData.feat_choices?.[choice.id]
+                if (count === 1) return !stored || !String(stored).trim()
+                const arr = Array.isArray(stored) ? stored : []
+                // need `count` non-empty entries
+                return arr.filter(v => v && String(v).trim()).length < count
+              })) ||
               (selectedClassData?.spellcasting?.cantripsKnown[0] > 0 && formData.selected_cantrips.length < selectedClassData.spellcasting.cantripsKnown[0]) ||
               (selectedClassData?.spellcasting?.spellsKnown === 'Limited known' && selectedClassData?.spellcasting?.spellsKnownByLevel?.[0] > 0 && formData.selected_spells.length < selectedClassData.spellcasting.spellsKnownByLevel[0])
             }
@@ -2340,6 +2517,14 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             </option>
           ))}
         </select>
+        {formData.alignment && (() => {
+          const a = ALIGNMENTS.find(al => al.value === formData.alignment)
+          return a?.description ? (
+            <small style={{ color: '#bbb', marginTop: '0.35rem', display: 'block', lineHeight: 1.45 }}>
+              {a.description}
+            </small>
+          ) : null
+        })()}
       </div>
 
       <div className="form-group">
@@ -2349,16 +2534,46 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           onChange={(e) => handleChange('faith', e.target.value)}
         >
           <option value="">Select deity or belief</option>
-          {deities.map(deityKey => (
-            <option key={deityKey} value={deityKey}>
-              {deitiesData[deityKey].name}
-            </option>
+          {groupedDeities.atheistKeys.length > 0 && (
+            <optgroup label="Belief">
+              {groupedDeities.atheistKeys.map(k => (
+                <option key={k} value={k}>{deitiesData[k].name}</option>
+              ))}
+            </optgroup>
+          )}
+          {groupedDeities.pantheons.map(panth => (
+            <optgroup
+              key={panth}
+              label={panth === groupedDeities.primaryPantheon
+                ? `${panth} (matches your race)`
+                : panth}
+            >
+              {groupedDeities.groups[panth].map(k => (
+                <option key={k} value={k}>{deitiesData[k].name}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
-        {formData.faith && deitiesData[formData.faith] && deitiesData[formData.faith].description && (
-          <small style={{ color: '#bbb', marginTop: '0.25rem', display: 'block' }}>
-            {deitiesData[formData.faith].description}
+        {groupedDeities.primaryPantheon && !formData.faith && (
+          <small style={{ color: '#888', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+            The {groupedDeities.primaryPantheon} pantheon is most relevant to your race — it's listed first.
           </small>
+        )}
+        {formData.faith && deitiesData[formData.faith] && (
+          <div style={{ marginTop: '0.35rem' }}>
+            {deitiesData[formData.faith].description && (
+              <small style={{ color: '#bbb', display: 'block', lineHeight: 1.4 }}>
+                {deitiesData[formData.faith].description}
+              </small>
+            )}
+            {(deitiesData[formData.faith].alignment || deitiesData[formData.faith].domain) && (
+              <small style={{ color: '#888', fontSize: '0.73rem', display: 'block', marginTop: '0.2rem' }}>
+                {deitiesData[formData.faith].alignment && `${deitiesData[formData.faith].alignment}`}
+                {deitiesData[formData.faith].alignment && deitiesData[formData.faith].domain && ' · '}
+                {deitiesData[formData.faith].domain && `Domain: ${deitiesData[formData.faith].domain}`}
+              </small>
+            )}
+          </div>
         )}
       </div>
 
@@ -2376,6 +2591,17 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             </option>
           ))}
         </select>
+        <small style={{ color: '#888', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+          Lifestyle represents your ongoing expenses between adventures — housing, food, clothing, social expectations. It colors how NPCs perceive you and what doors open or close.
+        </small>
+        {formData.lifestyle && (() => {
+          const l = LIFESTYLES.find(ls => ls.value === formData.lifestyle)
+          return l?.description ? (
+            <small style={{ color: '#bbb', marginTop: '0.35rem', display: 'block', lineHeight: 1.45 }}>
+              {l.description}
+            </small>
+          ) : null
+        })()}
       </div>
 
       <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', color: '#3498db' }}>Physical Appearance</h4>
@@ -3368,7 +3594,8 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           )}
           <p style={{ color: '#bbb' }}>
             {formData.gender && `${formData.gender} `}
-            {formData.subrace || racesData[formData.race].name} {formData.class}
+            {formData.subrace || racesData[formData.race].name}{' '}
+            {formData.class ? formData.class.charAt(0).toUpperCase() + formData.class.slice(1) : ''}
           </p>
           <p style={{ color: '#bbb', fontSize: '0.9rem', marginTop: '0.5rem' }}>
             <strong>Theme:</strong> {selectedThemeData?.name || backgroundsData[formData.background]?.name || '—'}

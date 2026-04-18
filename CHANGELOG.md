@@ -2,6 +2,81 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.29] - 2026-04-18 — Character creation playtest fixes (10 issues)
+
+Batch of polish fixes from first playtest of v1.0.26's character
+creation rework.
+
+### Identity & review screen
+- **Class capitalization in review** — was rendering "artificer"
+  lowercase in the final summary. Fixed.
+
+### Stats
+- **Rolled stats of 19 and 20 now allowed.** The manual ability-score
+  input and on-blur clamp were hard-capped at 18, silently downgrading
+  a rolled 20 to 18. Raised to 20 (the normal 5e cap). Placeholder,
+  helper text, and input `max` all updated.
+
+### Ancestry feat sub-choices (follow-up to v1.0.26)
+- **Racial languages now locked out.** When a feat's language choice
+  offers "any_language", the dropdown now filters out every language
+  granted by the character's race/subrace — Humans can no longer pick
+  Common as one of Traveler's Tongue's two languages, Dwarves can't
+  double up on Dwarvish, etc.
+- **Multi-count picks deduplicate across slots.** Picking Dwarvish in
+  slot 1 of a "pick 2 languages" choice hides Dwarvish from slot 2's
+  dropdown (but keeps it visible in slot 1 so the current value
+  doesn't vanish). Same logic applies to skills and any other
+  count > 1 choice.
+
+### PHB feats (Variant Human bonus feat picker)
+- **5 feats now have proper sub-choice UI**: Linguist (pick 3
+  languages), Skilled (pick 3 skills), Martial Adept (pick 2 Battle
+  Master maneuvers from the 16-entry list), Magic Initiate (pick
+  class + 2 cantrips + 1 spell), Ritual Caster (pick class + 2 ritual
+  spells). Previously the feat's narrative description mentioned
+  these picks but no UI surfaced them.
+- **Unified schema**: the old PHB `choices: { class: [...] }` object
+  was converted to the same array schema ancestry feats use —
+  `choices: [{ id, type, count, label, options }]`. Elemental Adept,
+  Magic Initiate, and Ritual Caster all migrated. The render code
+  now shares the same helpers (`resolveAncestryChoiceOptions`), so
+  racial-language lockout and dedup apply to PHB feats too.
+- **Validation updated**: the "Next" button gate now requires all
+  array-schema slots to be filled (with count > 1 slots each
+  requiring `count` non-empty entries), not just one property per key.
+
+### Background Feature display
+- **Soldier's "Vehicles (land)" no longer orphaned under the wrong
+  header.** The previous renderer dropped fixed tool proficiencies
+  as bullets inside the "Choose Tool Proficiencies" section, which
+  read like an option in the chooser. Now split into two sections:
+  "Automatic Tool Proficiencies" (always-granted, bullet list) and
+  "Choose Tool Proficiencies" (only the dropdown slots). Applies to
+  any background with a mix — Guild Artisan, Outlander, etc.
+
+### Spell & cantrip pickers
+- **Descriptions now display inline** below each cantrip / 1st-level
+  spell option, not just as a hover tooltip. Also surfaces
+  castingTime, range, and duration in a compact line above the
+  description.
+
+### Pickers with descriptions
+- **Alignment descriptions added** — each of the 9 alignments now
+  shows its PHB-style 1-2 sentence description below the dropdown
+  when selected.
+- **Lifestyle descriptions added** — all 7 lifestyle options
+  (Wretched → Aristocratic) show the PHB description explaining what
+  that daily-spend level actually looks like. A one-line helper
+  above the dropdown explains what Lifestyle is at all.
+- **Deity picker grouped by pantheon and sorted for relevance.**
+  Deities are now organized under `<optgroup>` headers by pantheon,
+  with the character's racial pantheon listed first and labeled
+  "(matches your race)". Atheist/Agnostic options separated into
+  a "Belief" group at the top. Selected deity shows
+  alignment + domain below the dropdown in addition to the
+  existing description.
+
 ## [1.0.0.28] - 2026-04-18 — Genericize nickname UI placeholders
 
 Cosmetic follow-up to v1.0.27. Placeholder text and example strings in

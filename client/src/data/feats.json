@@ -98,7 +98,9 @@
       "Treat 1s on damage dice as 2s for spells of chosen type"
     ],
     "prerequisites": "The ability to cast at least one spell",
-    "choices": { "damageType": ["acid", "cold", "fire", "lightning", "thunder"] }
+    "choices": [
+      { "id": "damage_type", "type": "damage_type", "count": 1, "label": "Choose a damage type", "options": ["acid", "cold", "fire", "lightning", "thunder"] }
+    ]
   },
   "grappler": {
     "name": "Grappler",
@@ -188,7 +190,10 @@
       "You can create written ciphers that others can't decipher without a DC 15 Intelligence check"
     ],
     "prerequisites": null,
-    "abilityIncrease": { "ability": "int", "amount": 1 }
+    "abilityIncrease": { "ability": "int", "amount": 1 },
+    "choices": [
+      { "id": "languages", "type": "language", "count": 3, "label": "Choose three additional languages", "options": "any_language" }
+    ]
   },
   "lucky": {
     "name": "Lucky",
@@ -219,7 +224,11 @@
       "Learn one 1st-level spell from chosen class (cast once per long rest without a slot)"
     ],
     "prerequisites": null,
-    "choices": { "class": ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"] }
+    "choices": [
+      { "id": "class", "type": "custom", "count": 1, "label": "Spellcasting class", "options": ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"] },
+      { "id": "cantrips", "type": "spell_freeform", "count": 2, "label": "Two cantrips from the chosen class's list" },
+      { "id": "spell", "type": "spell_freeform", "count": 1, "label": "One 1st-level spell from the chosen class's list" }
+    ]
   },
   "martial_adept": {
     "name": "Martial Adept",
@@ -229,7 +238,10 @@
       "You gain one superiority die (d6)",
       "You regain your superiority die when you finish a short or long rest"
     ],
-    "prerequisites": null
+    "prerequisites": null,
+    "choices": [
+      { "id": "maneuvers", "type": "custom", "count": 2, "label": "Two Battle Master maneuvers", "options": ["Commander's Strike", "Disarming Attack", "Distracting Strike", "Evasive Footwork", "Feinting Attack", "Goading Attack", "Lunging Attack", "Maneuvering Attack", "Menacing Attack", "Parry", "Precision Attack", "Pushing Attack", "Rally", "Riposte", "Sweeping Attack", "Trip Attack"] }
+    ]
   },
   "medium_armor_master": {
     "name": "Medium Armor Master",
@@ -309,7 +321,10 @@
       "You can copy other ritual spells into your book"
     ],
     "prerequisites": "Intelligence or Wisdom 13 or higher",
-    "choices": { "class": ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"] }
+    "choices": [
+      { "id": "class", "type": "custom", "count": 1, "label": "Spellcasting class", "options": ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"] },
+      { "id": "rituals", "type": "spell_freeform", "count": 2, "label": "Two 1st-level ritual spells from the chosen class's list" }
+    ]
   },
   "savage_attacker": {
     "name": "Savage Attacker",
@@ -355,7 +370,10 @@
     "benefits": [
       "Gain proficiency in three skills or tools of your choice"
     ],
-    "prerequisites": null
+    "prerequisites": null,
+    "choices": [
+      { "id": "skills_or_tools", "type": "skill", "count": 3, "label": "Three skills (choose skills or tools freely — tools can be typed here)", "options": "any_skill" }
+    ]
   },
   "skulker": {
     "name": "Skulker",
