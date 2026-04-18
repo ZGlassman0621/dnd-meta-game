@@ -13,6 +13,12 @@ import { processConsequences } from './consequenceService.js';
 import * as partyBaseService from './partyBaseService.js';
 import * as notorietyService from './notorietyService.js';
 import { processDueOrders, expireStaleReadyOrders } from './merchantOrderService.js';
+import {
+  generateThreatsForCampaign,
+  markDueThreatsForResolution,
+  autoResolveDueThreats,
+  expireStaleCapturedBases
+} from './baseThreatService.js';
 import { getSeason } from '../config/harptos.js';
 
 /**
@@ -235,6 +241,36 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     } catch (e) {
       console.error('Error processing merchant orders:', e);
       results.errors.push(`Merchant orders: ${e.message}`);
+    }
+
+    // 3.95. Base threats (F3): scan for raid-capable world events and roll
+    //       new threats against vulnerable bases; mark approaching threats
+    //       that hit their deadline for auto-resolution; expire any
+    //       captured bases whose 14-day recapture window closed.
+    try {
+      const maxDayRowThreat = await dbGet(
+        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+        [campaignId]
+      );
+      const threatGameDay = maxDayRowThreat?.max_day || 0;
+      if (threatGameDay > 0) {
+        const generated = await generateThreatsForCampaign(campaignId, threatGameDay);
+        const dueIds = await markDueThreatsForResolution(campaignId, threatGameDay);
+        // Threats marked 'resolving' (deadline hit without player defense)
+        // get auto-resolved now — attacker vs. defense roll determines
+        // outcome; damage reports + narrative queue entries are written.
+        const resolved = await autoResolveDueThreats(campaignId, threatGameDay);
+        const expired = await expireStaleCapturedBases(campaignId, threatGameDay);
+        results.base_threats = {
+          generated: generated.generated.length,
+          due_for_resolution: dueIds.length,
+          auto_resolved: resolved.length,
+          expired_captures: expired.length
+        };
+      }
+    } catch (e) {
+      console.error('Error processing base threats:', e);
+      results.errors.push(`Base threats: ${e.message}`);
     }
 
     // 4. Record the tick in campaign metadata

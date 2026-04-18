@@ -289,6 +289,9 @@ export default function PartyBasePage({ characterId, campaignId }) {
   const [companions, setCompanions] = useState([])
   const [selectedOfficerCompanion, setSelectedOfficerCompanion] = useState('')
 
+  // Threats (F3)
+  const [threats, setThreats] = useState([])
+
   // Staff hire form
   const [showHireForm, setShowHireForm] = useState(false)
   const [hireData, setHireData] = useState({ name: '', role: '', salary_gp: 5 })
@@ -387,6 +390,17 @@ export default function PartyBasePage({ characterId, campaignId }) {
     }
   }, [characterId])
 
+  const loadThreats = useCallback(async () => {
+    if (!base) return
+    try {
+      const res = await fetch(`/api/base/${base.id}/threats`)
+      const data = await res.json()
+      setThreats(Array.isArray(data.threats) ? data.threats : [])
+    } catch (e) {
+      console.error('Error loading threats:', e)
+    }
+  }, [base])
+
   useEffect(() => {
     setLoading(true)
     Promise.all([loadBase(), loadProjects(), loadNotoriety()])
@@ -397,6 +411,7 @@ export default function PartyBasePage({ characterId, campaignId }) {
   useEffect(() => { loadAvailableBuildings() }, [loadAvailableBuildings])
   useEffect(() => { loadGarrison() }, [loadGarrison])
   useEffect(() => { loadCompanions() }, [loadCompanions])
+  useEffect(() => { loadThreats() }, [loadThreats])
 
   // ─── ACTIONS ───────────────────────────────────────────
 
@@ -493,6 +508,20 @@ export default function PartyBasePage({ characterId, campaignId }) {
     try {
       const res = await fetch(`/api/base/${base.id}/officers/${officerId}`, { method: 'DELETE' })
       if (res.ok) await loadGarrison()
+    } catch (e) { setError(e.message) }
+  }
+
+  const engageDefense = async (threatId) => {
+    if (!confirm('Return to defend the base? This commits your character to the defense — the DM will narrate the engagement in your next session.')) return
+    try {
+      const res = await fetch(`/api/threats/${threatId}/defend`, { method: 'POST' })
+      if (res.ok) {
+        await loadThreats()
+      } else {
+        const err = await res.json()
+        setError(err.error || 'Failed to engage defense')
+        setTimeout(() => setError(null), 4000)
+      }
     } catch (e) { setError(e.message) }
   }
 
@@ -973,12 +1002,107 @@ export default function PartyBasePage({ characterId, campaignId }) {
       return <div style={styles.empty}>Loading garrison data…</div>
     }
     const officers = garrison.officers || []
-    // Companions not already assigned
     const assignedIds = new Set(officers.map(o => o.companion_id))
     const available = companions.filter(c => c.status === 'active' && !assignedIds.has(c.id))
+    const activeThreats = (threats || []).filter(t => ['approaching', 'defending', 'resolving'].includes(t.status))
 
     return (
       <div>
+        {/* F3: Active threats banner (rendered first — urgency) */}
+        {activeThreats.length > 0 && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ ...styles.cardTitle, color: '#ef4444', marginBottom: '0.5rem' }}>
+              ⚔️ Active Threats
+            </div>
+            {activeThreats.map(t => {
+              const isApproaching = t.status === 'approaching'
+              return (
+                <div key={t.id} style={{
+                  ...styles.card,
+                  border: `2px solid ${t.status === 'defending' ? '#f59e0b' : '#ef4444'}`,
+                  background: 'rgba(239,68,68,0.08)',
+                  marginBottom: '0.5rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: '#ef4444', fontSize: '1rem' }}>
+                        {t.attacker_source} {t.threat_type === 'siege' ? '(siege)' : '(raid)'}
+                      </div>
+                      <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                        Force: <strong style={{ color: '#ef4444' }}>{t.attacker_force}</strong>{' '}
+                        · Base defense: <strong style={{ color: '#60a5fa' }}>{garrison.defense_rating}</strong>
+                      </div>
+                      <div style={{ color: '#999', fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                        Warned: day {t.warning_game_day} · Deadline: <strong>day {t.deadline_game_day}</strong>
+                      </div>
+                    </div>
+                    {isApproaching && (
+                      <button
+                        onClick={() => engageDefense(t.id)}
+                        style={{
+                          ...styles.btn('primary'),
+                          background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+                          color: '#fff', padding: '0.5rem 1rem', fontSize: '0.85rem'
+                        }}
+                      >
+                        Return to Defend
+                      </button>
+                    )}
+                    {t.status === 'defending' && (
+                      <span style={{
+                        background: '#f59e0b22', border: '1px solid #f59e0b',
+                        color: '#f59e0b', padding: '4px 10px', borderRadius: '4px',
+                        fontSize: '0.78rem', fontWeight: 700
+                      }}>
+                        DEFENDING
+                      </span>
+                    )}
+                    {t.status === 'resolving' && (
+                      <span style={{
+                        background: '#ef444422', border: '1px solid #ef4444',
+                        color: '#ef4444', padding: '4px 10px', borderRadius: '4px',
+                        fontSize: '0.78rem', fontWeight: 700
+                      }}>
+                        COMBAT
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Recent resolved threats — compact history */}
+        {threats.filter(t => t.status === 'resolved' && t.outcome).slice(0, 3).length > 0 && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ color: '#888', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+              Recent attacks
+            </div>
+            {threats.filter(t => t.status === 'resolved' && t.outcome).slice(0, 3).map(t => (
+              <div key={t.id} style={{
+                ...styles.card,
+                borderColor: t.outcome === 'repelled' ? '#22c55e44'
+                  : t.outcome === 'captured' ? '#dc262644' : '#f59e0b44',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.8rem',
+                marginBottom: '0.25rem'
+              }}>
+                <span style={{
+                  color: t.outcome === 'repelled' ? '#22c55e'
+                    : t.outcome === 'captured' ? '#dc2626' : '#f59e0b',
+                  fontWeight: 700, textTransform: 'uppercase', fontSize: '0.7rem', marginRight: '0.5rem'
+                }}>{t.outcome}</span>
+                <span style={{ color: '#ddd' }}>{t.attacker_source}</span>
+                <span style={{ color: '#888' }}> · day {t.outcome_game_day || t.deadline_game_day}</span>
+                {t.narrative && (
+                  <div style={{ color: '#aaa', fontSize: '0.75rem', marginTop: '0.2rem' }}>{t.narrative}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Defense + Garrison summary */}
         <div style={{ ...styles.grid, marginBottom: '1.5rem' }}>
           <div style={{ ...styles.card, borderColor: '#60a5fa44' }}>

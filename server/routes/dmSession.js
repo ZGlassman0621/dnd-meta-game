@@ -14,9 +14,10 @@ import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
 import { placeCommission } from '../services/merchantOrderService.js';
+import { recordPlayerDefenseOutcome } from '../services/baseThreatService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
-  detectMerchantRefer, detectAddItem, detectLootDrop, detectMerchantCommission, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
+  detectMerchantRefer, detectAddItem, detectLootDrop, detectMerchantCommission, detectBaseDefenseResult, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
   detectWeatherChange, detectShelterFound, detectSwim, detectEat, detectDrink,
   detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
   detectMythicTrial, detectPietyChange, detectItemAwaken, detectMythicSurge,
@@ -1550,6 +1551,37 @@ router.post('/:sessionId/message', async (req, res) => {
         }
       } catch (e) {
         console.error('Error processing merchant commission:', e);
+      }
+    }
+
+    // F3: Handle BASE_DEFENSE_RESULT markers — record the outcome of a
+    // player-led base defense so the threat flips from 'defending' to
+    // 'resolved' with the declared outcome.
+    const defenseResults = detectBaseDefenseResult(result.narrative);
+    if (defenseResults.length > 0) {
+      try {
+        const character = await dbGet('SELECT game_day FROM characters WHERE id = ?', [session.character_id]);
+        for (const d of defenseResults) {
+          try {
+            await recordPlayerDefenseOutcome(d.threatId, {
+              outcome: d.outcome,
+              narrative: d.narrative,
+              gameDay: character?.game_day || null
+            });
+            result.messages.push({
+              role: 'user',
+              content: `[SYSTEM: Base defense outcome recorded. Threat #${d.threatId} resolved as ${d.outcome}.]`
+            });
+          } catch (e) {
+            result.messages.push({
+              role: 'user',
+              content: `[SYSTEM: BASE_DEFENSE_RESULT failed — ${e.message}]`
+            });
+          }
+        }
+        await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+      } catch (e) {
+        console.error('Error processing base defense result:', e);
       }
     }
 

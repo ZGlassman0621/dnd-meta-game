@@ -149,6 +149,34 @@ export function detectAddItem(narrative) {
  * merchant NPC. Parsed by the DM session handler, which creates a
  * merchant_orders row via placeCommission().
  */
+/**
+ * Detect BASE_DEFENSE_RESULT markers (F3).
+ * [BASE_DEFENSE_RESULT: Threat=<id> Outcome=repelled|damaged|captured Narrative="..."]
+ *
+ * Emitted by the DM after a player-led defense sequence concludes
+ * narratively. The server flips the threat from 'defending' to 'resolved'
+ * with the declared outcome.
+ */
+export function detectBaseDefenseResult(narrative) {
+  if (!narrative) return [];
+  const markers = [];
+  const regex = /\[BASE_DEFENSE_RESULT:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(narrative)) !== null) {
+    const data = parseMarkerPairs(match[1]);
+    if (data.threat && data.outcome) {
+      markers.push({
+        threatId: parseInt(data.threat, 10),
+        outcome: data.outcome.toLowerCase(),
+        narrative: data.narrative || null
+      });
+    } else {
+      console.warn('[Marker] BASE_DEFENSE_RESULT detected but missing Threat or Outcome:', match[0]);
+    }
+  }
+  return markers;
+}
+
 export function detectMerchantCommission(narrative) {
   if (!narrative) return [];
   const markers = [];

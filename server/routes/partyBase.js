@@ -2,6 +2,7 @@ import express from 'express';
 import * as partyBaseService from '../services/partyBaseService.js';
 import * as longTermProjectService from '../services/longTermProjectService.js';
 import * as notorietyService from '../services/notorietyService.js';
+import * as baseThreatService from '../services/baseThreatService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -204,6 +205,69 @@ router.delete('/base/:baseId/officers/:officerId', async (req, res) => {
       return res.status(404).json({ error: err.message });
     }
     handleServerError(res, err, 'unassign officer');
+  }
+});
+
+// ─── Threats / Raids / Sieges (F3) ────────────────────────
+
+// GET /api/base/:baseId/threats — list threats against a base
+router.get('/base/:baseId/threats', async (req, res) => {
+  try {
+    const { includeResolved } = req.query;
+    const threats = await baseThreatService.listThreatsForBase(
+      Number(req.params.baseId),
+      { includeResolved: includeResolved === 'true' }
+    );
+    res.json({ threats });
+  } catch (err) {
+    handleServerError(res, err, 'list base threats');
+  }
+});
+
+// GET /api/threats/campaign/:campaignId — all active threats in a campaign
+router.get('/threats/campaign/:campaignId', async (req, res) => {
+  try {
+    const threats = await baseThreatService.listActiveThreatsForCampaign(
+      Number(req.params.campaignId)
+    );
+    res.json({ threats });
+  } catch (err) {
+    handleServerError(res, err, 'list campaign threats');
+  }
+});
+
+// POST /api/threats/:threatId/defend — player engages the defense flow
+router.post('/threats/:threatId/defend', async (req, res) => {
+  try {
+    const threat = await baseThreatService.initiatePlayerDefense(Number(req.params.threatId));
+    res.json({ threat });
+  } catch (err) {
+    if (err.message?.includes('not approaching') || err.message?.includes('not found')) {
+      return res.status(400).json({ error: err.message });
+    }
+    handleServerError(res, err, 'initiate defense');
+  }
+});
+
+// POST /api/threats/:threatId/resolve-defense — record player-led defense outcome
+// Body: { outcome: 'repelled' | 'damaged' | 'captured',
+//         damageReport?, narrative?, gameDay? }
+router.post('/threats/:threatId/resolve-defense', async (req, res) => {
+  try {
+    const { outcome, damageReport, narrative, gameDay } = req.body || {};
+    if (!outcome) return res.status(400).json({ error: 'outcome is required' });
+    const threat = await baseThreatService.recordPlayerDefenseOutcome(
+      Number(req.params.threatId),
+      { outcome, damageReport, narrative, gameDay }
+    );
+    res.json({ threat });
+  } catch (err) {
+    if (err.message?.includes('not defending') ||
+        err.message?.includes('Invalid outcome') ||
+        err.message?.includes('not found')) {
+      return res.status(400).json({ error: err.message });
+    }
+    handleServerError(res, err, 'resolve player defense');
   }
 });
 

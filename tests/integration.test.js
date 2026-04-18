@@ -3048,6 +3048,180 @@ async function testDemolishRemovesDefense() {
   await cleanupTestBase(base.body.id);
 }
 
+// ===== GROUP 22: Base Threats / Raids / Sieges (F3) =====
+
+async function createTestBaseForThreat(subtype = 'watchtower', defenseRating = 0) {
+  const r = await api('POST', '/api/base', {
+    characterId: testCharId, campaignId: testCampaignId,
+    name: `TEST_ThreatBase_${subtype}`, category: 'martial', subtype
+  });
+  await dbRun(
+    'UPDATE party_bases SET status = ?, defense_rating = ?, gold_treasury = 500, garrison_strength = 10 WHERE id = ?',
+    ['active', defenseRating, r.body.id]
+  );
+  return r.body.id;
+}
+
+async function createRawThreat(baseId, args = {}) {
+  const {
+    attackerForce = 10, attackerSource = 'TEST Raiders', attackerCategory = 'criminal',
+    threatType = 'raid', warningGameDay = 10, deadlineGameDay = 15, status = 'approaching'
+  } = args;
+  const result = await dbRun(
+    `INSERT INTO base_threats
+     (base_id, campaign_id, threat_type, attacker_source, attacker_category,
+      attacker_force, warning_game_day, deadline_game_day, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [baseId, testCampaignId, threatType, attackerSource, attackerCategory,
+     attackerForce, warningGameDay, deadlineGameDay, status]
+  );
+  return Number(result.lastInsertRowid);
+}
+
+async function cleanupThreats(baseId) {
+  await dbRun('DELETE FROM base_threats WHERE base_id = ?', [baseId]);
+}
+
+async function testListThreatsEmpty() {
+  console.log('\n  -- Empty threats list for a peaceful base --');
+  const baseId = await createTestBaseForThreat();
+  const r = await api('GET', `/api/base/${baseId}/threats`);
+  assert(r.status === 200, 'returns 200');
+  assert(Array.isArray(r.body.threats) && r.body.threats.length === 0, 'no threats');
+  await cleanupTestBase(baseId);
+}
+
+async function testCreateAndListThreat() {
+  console.log('\n  -- Threat appears in base listing and campaign active list --');
+  const baseId = await createTestBaseForThreat();
+  const threatId = await createRawThreat(baseId);
+
+  const byBase = await api('GET', `/api/base/${baseId}/threats`);
+  assert(byBase.body.threats.length === 1, 'base-scoped list returns 1');
+
+  const byCampaign = await api('GET', `/api/threats/campaign/${testCampaignId}`);
+  assert(byCampaign.body.threats.some(t => t.id === threatId), 'campaign-scoped list includes it');
+
+  await cleanupThreats(baseId);
+  await cleanupTestBase(baseId);
+}
+
+async function testDefendFlowTransitions() {
+  console.log('\n  -- POST /defend flips approaching → defending --');
+  const baseId = await createTestBaseForThreat();
+  const threatId = await createRawThreat(baseId);
+
+  const r = await api('POST', `/api/threats/${threatId}/defend`);
+  assert(r.status === 200, `defend returns 200 (got ${r.status})`);
+  assert(r.body.threat.status === 'defending', `status = defending (got ${r.body.threat.status})`);
+  assert(r.body.threat.player_defended === 1, 'player_defended flag set');
+
+  await cleanupThreats(baseId);
+  await cleanupTestBase(baseId);
+}
+
+async function testDefendRejectsNonApproaching() {
+  console.log('\n  -- Cannot defend a threat that is already resolving --');
+  const baseId = await createTestBaseForThreat();
+  const threatId = await createRawThreat(baseId, { status: 'resolving' });
+
+  const r = await api('POST', `/api/threats/${threatId}/defend`);
+  assert(r.status === 400, 'rejected with 400');
+
+  await cleanupThreats(baseId);
+  await cleanupTestBase(baseId);
+}
+
+async function testResolvePlayerDefense() {
+  console.log('\n  -- Resolve player defense with outcome=repelled --');
+  const baseId = await createTestBaseForThreat();
+  const threatId = await createRawThreat(baseId);
+  await api('POST', `/api/threats/${threatId}/defend`);
+
+  const r = await api('POST', `/api/threats/${threatId}/resolve-defense`, {
+    outcome: 'repelled', narrative: 'The raiders broke on our walls.'
+  });
+  assert(r.status === 200, 'resolve returns 200');
+  assert(r.body.threat.status === 'resolved', 'status = resolved');
+  assert(r.body.threat.outcome === 'repelled', 'outcome = repelled');
+
+  await cleanupThreats(baseId);
+  await cleanupTestBase(baseId);
+}
+
+async function testResolveDefenseRejectsBadOutcome() {
+  console.log('\n  -- Invalid outcome rejected --');
+  const baseId = await createTestBaseForThreat();
+  const threatId = await createRawThreat(baseId);
+  await api('POST', `/api/threats/${threatId}/defend`);
+
+  const r = await api('POST', `/api/threats/${threatId}/resolve-defense`, {
+    outcome: 'glorious_victory'
+  });
+  assert(r.status === 400, 'rejected with 400');
+
+  await cleanupThreats(baseId);
+  await cleanupTestBase(baseId);
+}
+
+async function testAutoResolveMath() {
+  console.log('\n  -- computeAutoResolveOutcome produces a valid outcome --');
+  const { computeAutoResolveOutcome } = await import('../server/services/baseThreatService.js');
+  // Stack the deck: huge defense, tiny force → repelled
+  const strong = computeAutoResolveOutcome({
+    attackerForce: 2, defenseRating: 30, garrisonStrength: 40, threatType: 'raid'
+  });
+  assert(strong.outcome === 'repelled', `overwhelming defense → repelled (got ${strong.outcome})`);
+
+  // Tiny defense, huge force → captured
+  const weak = computeAutoResolveOutcome({
+    attackerForce: 25, defenseRating: 0, garrisonStrength: 0, threatType: 'raid'
+  });
+  assert(weak.outcome === 'captured', `overwhelming attacker → captured (got ${weak.outcome})`);
+}
+
+async function testAutoResolveCapturedStartsRecaptureClock() {
+  console.log('\n  -- Auto-resolving a 100%-loss threat schedules a 14-day recapture window --');
+  const baseId = await createTestBaseForThreat('watchtower', 0);
+  // Force a captured outcome by stacking an impossible attacker
+  const threatId = await createRawThreat(baseId, {
+    attackerForce: 100, status: 'resolving', deadlineGameDay: 20
+  });
+
+  const { autoResolveThreat } = await import('../server/services/baseThreatService.js');
+  const resolved = await autoResolveThreat(threatId, 20);
+  assert(resolved.status === 'resolved', 'threat resolved');
+  assert(resolved.outcome === 'captured', `outcome captured (got ${resolved.outcome})`);
+  assert(resolved.recapture_deadline_game_day === 34, `recapture deadline = 20 + 14 = 34 (got ${resolved.recapture_deadline_game_day})`);
+
+  await cleanupThreats(baseId);
+  await dbRun('DELETE FROM base_buildings WHERE base_id = ?', [baseId]);
+  await dbRun('DELETE FROM party_bases WHERE id = ?', [baseId]);
+}
+
+async function testExpireCapturedBase() {
+  console.log('\n  -- expireStaleCapturedBases flips base to abandoned after window --');
+  const baseId = await createTestBaseForThreat();
+  // Manually set up a captured threat whose recapture window is long past
+  await createRawThreat(baseId, { status: 'resolving', deadlineGameDay: 10 });
+  await dbRun(
+    `UPDATE base_threats
+     SET status = 'resolved', outcome = 'captured', recapture_deadline_game_day = 15
+     WHERE base_id = ?`,
+    [baseId]
+  );
+
+  const { expireStaleCapturedBases } = await import('../server/services/baseThreatService.js');
+  const expired = await expireStaleCapturedBases(testCampaignId, 30);
+  assert(expired.length >= 1, 'expired at least one base');
+
+  const baseRow = await dbGet('SELECT status FROM party_bases WHERE id = ?', [baseId]);
+  assert(baseRow.status === 'abandoned', `base status = abandoned (got ${baseRow.status})`);
+
+  await cleanupThreats(baseId);
+  await dbRun('DELETE FROM party_bases WHERE id = ?', [baseId]);
+}
+
 // ===== TEST RUNNER =====
 
 async function runTests() {
@@ -3232,6 +3406,17 @@ async function runTests() {
     await testOfficerRejectsInactiveCompanion();
     await testOfficerRejectsDuplicateAssignment();
     await testDemolishRemovesDefense();
+
+    console.log('\n=== Group 22: Base Threats / Raids / Sieges (F3) ===');
+    await testListThreatsEmpty();
+    await testCreateAndListThreat();
+    await testDefendFlowTransitions();
+    await testDefendRejectsNonApproaching();
+    await testResolvePlayerDefense();
+    await testResolveDefenseRejectsBadOutcome();
+    await testAutoResolveMath();
+    await testAutoResolveCapturedStartsRecaptureClock();
+    await testExpireCapturedBase();
 
   } catch (err) {
     console.error('\nFATAL TEST ERROR:', err);

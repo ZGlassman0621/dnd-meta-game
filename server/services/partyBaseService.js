@@ -681,6 +681,19 @@ export async function getBaseForPrompt(characterId, campaignId) {
   const bases = await getBases(characterId, campaignId);
   if (bases.length === 0) return '';
 
+  // F3: pull active threats so the prompt can describe approaching attacks
+  let activeThreats = [];
+  try {
+    const { listActiveThreatsForCampaign } = await import('./baseThreatService.js');
+    activeThreats = await listActiveThreatsForCampaign(campaignId);
+  } catch (e) { /* F3 service may not be wired yet — fall back */ }
+  const threatsByBase = new Map();
+  for (const t of activeThreats) {
+    const arr = threatsByBase.get(t.base_id) || [];
+    arr.push(t);
+    threatsByBase.set(t.base_id, arr);
+  }
+
   const lines = ['\n\nPARTY BASES:'];
   for (const b of bases) {
     if (b.status === 'abandoned') continue;
@@ -709,6 +722,24 @@ export async function getBaseForPrompt(characterId, campaignId) {
     }
     if ((b.active_perks || []).length > 0) {
       lines.push(`    Active perks: ${b.active_perks.slice(0, 6).join(', ')}`);
+    }
+
+    // F3: surface active threats so the DM can narrate the warning / siege
+    const threats = threatsByBase.get(b.id) || [];
+    for (const t of threats) {
+      if (t.status === 'approaching') {
+        lines.push(
+          `    ⚔️  UNDER THREAT: ${t.attacker_source} (${t.threat_type}, force ${t.attacker_force}) — arriving day ${t.deadline_game_day}`
+        );
+      } else if (t.status === 'defending') {
+        lines.push(
+          `    ⚔️  DEFENDING: player has committed to defend against ${t.attacker_source}`
+        );
+      } else if (t.status === 'resolving') {
+        lines.push(
+          `    ⚔️  COMBAT IN PROGRESS: ${t.attacker_source} vs defenders`
+        );
+      }
     }
   }
   return lines.join('\n');
