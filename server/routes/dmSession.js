@@ -1344,7 +1344,7 @@ router.post('/:sessionId/message', async (req, res) => {
       // Always use Sonnet for ongoing session actions (cost-effective for gameplay)
       const systemMessage = messagesToSend.find(m => m.role === 'system');
       const systemPrompt = systemMessage?.content || '';
-      const claudeResult = await claude.continueSession(systemPrompt, messagesToSend, action, 'sonnet');
+      const claudeResult = await claude.continueSession(systemPrompt, messagesToSend, action, 'sonnet', { sessionId });
       result = {
         narrative: claudeResult.response,
         messages: claudeResult.messages

@@ -2,6 +2,70 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.35] - 2026-04-19 — Pillar 6: Anthropic prompt caching + cache telemetry
+
+Final pillar from the prompt redesign arc (invisible infrastructure —
+no change to player-visible behavior, just latency and cost savings).
+
+### What changed
+- DM system prompt now embeds a `<!-- CACHE_BREAK:AFTER_CORE -->`
+  marker immediately after the END OF CORE RULES header.
+- `claude.chat()` detects the marker and converts the string system
+  prompt into Anthropic's multi-block format:
+  ```
+  system: [
+    { type: "text", text: "<core rules>", cache_control: { type: "ephemeral" } },
+    { type: "text", text: "<dynamic context>" }
+  ]
+  ```
+- Anthropic's prompt cache kicks in. Cache reads cost ~10% of a fresh
+  input token; cache creation costs ~25% more than fresh. Net effect
+  after the first turn in a session: ~50% reduction in input-token
+  cost and noticeably lower latency on the cached prefix.
+- Back-compat: `chat()` still accepts a plain string system prompt
+  with no marker and sends it as-is. Short prompts (below Anthropic's
+  1024-token cache minimum) also fall back to string form.
+
+### Telemetry
+- `[cache]` log line printed for every cached call, e.g.:
+  ```
+  [cache] session 42: created 0 / read 3311 / fresh-input 842 / output 1203 (67% cache-hit rate)
+  ```
+  Shows cache creation (bytes written to cache), cache read (bytes
+  served from cache), fresh input (uncached portion of this turn),
+  and output tokens.
+- Aggregated stats available via `getCumulativeCacheStats()` — can be
+  wired to an admin summary log or periodic report.
+
+### Current tier split
+- Tier 1 (cached): Cardinal Rules, Craft Principles, Conversation
+  Handling, few-shot examples. ~3.3K tokens.
+- Tier 2 (not cached): world setting, character sheet, progression,
+  campaign context, mechanical markers, self-check. ~4.2K tokens.
+
+### Future work (filed)
+- 3-tier split (adds per-character cache for world + char sheet +
+  progression) requires reordering the prompt so all static content
+  is contiguous before dynamic content. Estimated ~+20% cache rate
+  over current.
+- Parallel context assembly at session start — independent fetches
+  (weather, crafting, mythic, party base, notoriety, projects,
+  chronicles, progression) are all sequential today. `Promise.all`
+  would cut session-start latency in half. Filed for the next
+  invisible-infra pass.
+- Retry/backoff on Anthropic 529s: already implemented in
+  `claude.chat()` (discovered during the Pillar 6 work — no action
+  needed).
+
+### Tests
+- All existing test suites still pass (character-memory 56,
+  moral-diversity 59, nickname-resolver 27, combat-tracker 26,
+  condition-tracking 56).
+- Added mock-fetch smoke test that validates the cache split in all
+  three paths (long-prompt with marker → array; short-prompt below
+  cache minimum → string; no marker → string). Available in the
+  Pillar 6 commit history.
+
 ## [1.0.0.34] - 2026-04-18 — Pillar 5: session-level repetition ledger
 
 Stretch pillar from the v1.0.33 prompt redesign. Solves the playtest

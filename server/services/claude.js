@@ -13,6 +13,76 @@ const SONNET_MODEL = 'claude-sonnet-4-6';
 const OPUS_MODEL = 'claude-opus-4-7';
 const DEFAULT_MODEL = SONNET_MODEL;
 
+// Prompt-cache configuration (Pillar 6). The DM prompt builder embeds
+// `<!-- CACHE_BREAK:AFTER_CORE -->` right after the END OF CORE RULES header.
+// When we detect this marker in the system prompt string, we split and send
+// the system as a multi-block array with cache_control on the core block —
+// enabling Anthropic's prompt caching. Five-minute ephemeral cache TTL.
+const CACHE_BREAK_MARKER = '<!-- CACHE_BREAK:AFTER_CORE -->';
+const CACHE_MIN_TOKENS = 1024; // Anthropic's cacheable-block minimum
+
+// Running cache telemetry — flushed to stdout once per turn via logCacheStats().
+// Not persisted anywhere; just observability.
+let cumulativeCacheStats = {
+  turns: 0,
+  cacheCreated: 0,
+  cacheRead: 0,
+  inputFresh: 0,
+  output: 0
+};
+
+function buildSystemParam(systemPrompt) {
+  // Backward-compat: if no cache marker, send as plain string.
+  if (!systemPrompt || typeof systemPrompt !== 'string') return systemPrompt;
+  const markerIdx = systemPrompt.indexOf(CACHE_BREAK_MARKER);
+  if (markerIdx < 0) return systemPrompt;
+
+  const coreText = systemPrompt.slice(0, markerIdx).replace(/\n+$/, '');
+  const restText = systemPrompt.slice(markerIdx + CACHE_BREAK_MARKER.length).replace(/^\n+/, '');
+
+  // Heuristic: 1 token ≈ 4 chars. Skip caching if core is below the minimum.
+  const approxCoreTokens = Math.ceil(coreText.length / 4);
+  if (approxCoreTokens < CACHE_MIN_TOKENS) {
+    return coreText + '\n\n' + restText; // too small to cache — send as string
+  }
+
+  // Array form with cache_control on the core block only.
+  return [
+    { type: 'text', text: coreText, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: restText }
+  ];
+}
+
+function logCacheStats(usage, sessionId = null) {
+  if (!usage) return;
+  const created = usage.cache_creation_input_tokens || 0;
+  const read = usage.cache_read_input_tokens || 0;
+  const fresh = usage.input_tokens || 0;
+  const out = usage.output_tokens || 0;
+
+  cumulativeCacheStats.turns += 1;
+  cumulativeCacheStats.cacheCreated += created;
+  cumulativeCacheStats.cacheRead += read;
+  cumulativeCacheStats.inputFresh += fresh;
+  cumulativeCacheStats.output += out;
+
+  const label = sessionId ? `session ${sessionId}` : 'turn';
+  const hitPct = (read + created) > 0
+    ? ` (${Math.round((read / (read + fresh + created)) * 100)}% cache-hit rate)`
+    : '';
+  console.log(
+    `[cache] ${label}: created ${created} / read ${read} / fresh-input ${fresh} / output ${out}${hitPct}`
+  );
+}
+
+/**
+ * Read aggregate cache stats since server start. Useful for a periodic
+ * summary log or an admin endpoint.
+ */
+export function getCumulativeCacheStats() {
+  return { ...cumulativeCacheStats };
+}
+
 /**
  * Get the model ID based on selection
  * @param {string} modelChoice - 'opus', 'sonnet', or undefined for default
@@ -80,7 +150,7 @@ function cleanupResponse(text) {
  * @param {number} maxTokens - Max tokens for response (default 2000)
  * @param {boolean} rawResponse - If true, skip cleanup (for JSON responses)
  */
-export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice = null, maxTokens = 2000, rawResponse = false) {
+export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice = null, maxTokens = 2000, rawResponse = false, options = {}) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY not set');
   }
@@ -95,6 +165,11 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       content: m.content
     }));
 
+  // Pillar 6: wrap system prompt for caching if a CACHE_BREAK marker is present.
+  // buildSystemParam returns either a plain string (back-compat) or an array
+  // of content blocks with cache_control on the cacheable portion.
+  const systemParam = buildSystemParam(systemPrompt);
+
   let lastError;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -108,7 +183,7 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         body: JSON.stringify({
           model: selectedModel,
           max_tokens: maxTokens,
-          system: systemPrompt,
+          system: systemParam,
           messages: claudeMessages
         })
       });
@@ -134,8 +209,12 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       const data = await response.json();
       const content = data.content?.[0]?.text || '';
 
-      // Log response metadata for debugging
-      if (rawResponse) {
+      // Pillar 6: log cache stats for this turn. Only interesting when
+      // caching is active (i.e. system prompt had the CACHE_BREAK marker).
+      if (Array.isArray(systemParam)) {
+        logCacheStats(data.usage, options.sessionId);
+      } else if (rawResponse) {
+        // Fallback logging for non-cached raw-response calls.
         console.log(`Claude API response - model: ${data.model}, stop_reason: ${data.stop_reason}, content_length: ${content.length}, usage: input=${data.usage?.input_tokens} output=${data.usage?.output_tokens}`);
       }
 
@@ -174,10 +253,12 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
  * @param {string} systemPrompt - The DM system prompt
  * @param {string} openingPrompt - The opening scene prompt
  * @param {string} modelChoice - 'opus' for first campaign session, 'sonnet' for regular
+ * @param {object} [options]
+ * @param {number|string} [options.sessionId] - session id for cache-stat logging
  */
-export async function startSession(systemPrompt, openingPrompt, modelChoice = null) {
+export async function startSession(systemPrompt, openingPrompt, modelChoice = null, options = {}) {
   const messages = [{ role: 'user', content: openingPrompt }];
-  const response = await chat(systemPrompt, messages, 3, modelChoice, 4000);
+  const response = await chat(systemPrompt, messages, 3, modelChoice, 4000, false, options);
 
   const selectedModel = getModelId(modelChoice);
   console.log(`Starting DM session with model: ${selectedModel}`);
@@ -199,14 +280,16 @@ export async function startSession(systemPrompt, openingPrompt, modelChoice = nu
  * @param {Array} messages - Message history
  * @param {string} playerAction - The player's action
  * @param {string} modelChoice - 'opus' or 'sonnet' (defaults to sonnet for continuations)
+ * @param {object} [options]
+ * @param {number|string} [options.sessionId] - session id for cache-stat logging
  */
-export async function continueSession(systemPrompt, messages, playerAction, modelChoice = 'sonnet') {
+export async function continueSession(systemPrompt, messages, playerAction, modelChoice = 'sonnet', options = {}) {
   const updatedMessages = [
     ...messages.filter(m => m.role !== 'system'),
     { role: 'user', content: playerAction }
   ];
 
-  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 4000);
+  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 4000, false, options);
 
   return {
     response,

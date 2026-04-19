@@ -2079,6 +2079,7 @@ RIGHT (specific and engageable):
 ═══════════════════════════════════════════════════════════════
 END OF CORE RULES
 ═══════════════════════════════════════════════════════════════
+<!-- CACHE_BREAK:AFTER_CORE -->
 
 ${worldSettingSection}
 
