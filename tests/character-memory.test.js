@@ -165,26 +165,25 @@ console.log('\n=== Test 4: Player Autonomy Enforcement (Strengthened) ===\n');
 
   const prompt = createDMSystemPrompt(mockCharacter, mockContext);
 
-  // ABSOLUTE RULES section
-  assert(prompt.includes('NEVER generate dialogue for the player character'), 'Absolute rules: never generate dialogue');
-  assert(prompt.includes('NEVER write "you say"'), 'Absolute rules: forbids "you say"');
-  assert(prompt.includes('"you reply"'), 'Absolute rules: forbids "you reply"');
-  assert(prompt.includes('"you ask"'), 'Absolute rules: forbids "you ask"');
-  assert(prompt.includes('"you tell"'), 'Absolute rules: forbids "you tell"');
-  assert(prompt.includes('extended speeches'), 'Absolute rules: forbids extended speeches');
+  // CARDINAL RULES section (new architecture — was "ABSOLUTE RULES")
+  assert(prompt.includes('PLAYER SOVEREIGNTY'), 'Cardinal Rules: player sovereignty section present');
+  assert(prompt.includes('Never write player dialogue'), 'Cardinal Rules: never write player dialogue');
+  assert(prompt.includes('"you say"'), 'Cardinal Rules: forbids "you say"');
+  assert(prompt.includes('"you reply"'), 'Cardinal Rules: forbids "you reply"');
+  assert(prompt.includes('"you ask"'), 'Cardinal Rules: forbids "you ask"');
+  assert(prompt.includes('"you tell"'), 'Cardinal Rules: forbids "you tell"');
+  assert(prompt.includes('Never write player thoughts or feelings'), 'Cardinal Rules: no player thoughts/feelings');
+  assert(prompt.includes('Never write implied player decisions'), 'Cardinal Rules: no implied decisions');
+  assert(prompt.includes('Never roll the player\'s dice'), 'Cardinal Rules: never roll for player');
+  assert(prompt.includes('HARD STOPS'), 'Cardinal Rules: hard stops section present');
 
-  // PLAYER AUTONOMY section - principle-based rules (no WRONG/RIGHT examples)
-  assert(prompt.includes('NEVER write the player speaking in any form'), 'Player autonomy: forbids all forms of player speech');
-  assert(prompt.includes('NEVER write implied decisions'), 'Player autonomy: forbids implied decisions');
-  assert(prompt.includes('describe the NPC waiting and END your message'), 'Player autonomy: instructs to end and let player speak');
-  assert(prompt.includes('short replies, long speeches, inner thoughts'), 'Player autonomy: covers all forms of player speech');
-
-  // FINAL REMINDER section
-  const finalReminderPos = prompt.indexOf('FINAL REMINDER');
-  const afterFinal = prompt.substring(finalReminderPos);
-  assert(afterFinal.includes('NEVER generate player dialogue'), 'Final reminder: never generate dialogue');
-  assert(afterFinal.includes('no implied speech or decisions'), 'Final reminder: mentions implied speech');
-  assert(afterFinal.includes('Zero exceptions'), 'Final reminder: zero exceptions');
+  // SELF-CHECK RUBRIC section (new architecture — was FINAL REMINDER)
+  const selfCheckPos = prompt.indexOf('BEFORE YOU SEND');
+  assert(selfCheckPos > 0, 'Self-check rubric section exists');
+  const afterSelfCheck = prompt.substring(selfCheckPos);
+  assert(afterSelfCheck.includes('DID I SPEAK FOR THE PLAYER'), 'Self-check: player sovereignty check');
+  assert(afterSelfCheck.includes('any player-side dice outcome'), 'Self-check: mentions dice outcomes');
+  assert(afterSelfCheck.includes('DID I CONTINUE PAST AN NPC QUESTION OR A ROLL REQUEST'), 'Self-check: hard stop check');
 }
 
 // ===== 5. DM GUIDELINE - CHARACTER OBSERVATION =====
@@ -211,7 +210,7 @@ console.log('\n=== Test 5: DM Guideline — Character Observation ===\n');
 
   const prompt = createDMSystemPrompt(mockCharacter, mockContext);
 
-  assert(prompt.includes('character-defining moments'), 'DM guidelines include character observation instruction');
+  assert(prompt.includes('CHARACTER-DEFINING MOMENTS') || prompt.includes('character-defining moments'), 'Prompt includes character observation instruction');
   assert(prompt.includes('preferences, values, fears, or emotional responses'), 'Lists what to observe');
 }
 

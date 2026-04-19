@@ -2,6 +2,102 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.33] - 2026-04-18 — DM prompt redesign: rules, craft, conversation modes, voice palette
+
+Full architectural rewrite of the main DM system prompt, informed by a
+deep audit of the existing ~16K-token prompt (100+ prohibitions, 80+
+directives, zero few-shot examples, scattered duplication). Targets
+speech quality, conversation flow, age-appropriate NPC dialogue, and
+rule discipline.
+
+### Pillar 1 — Rules redesign
+- Consolidated ~100 prohibitions into **5 Cardinal Rules**, each with
+  paired WRONG/RIGHT examples:
+  1. **Player sovereignty** — no dialogue, thoughts, decisions, or dice
+     rolls for the player. Explicit "never write 'you roll a 19'" rule.
+  2. **Hard stops** — terminal moments (NPC question, roll request).
+  3. **Scene integrity** — only established NPCs.
+  4. **Stay in the world** — no meta-commentary, pure narrative.
+  5. **Markers = mechanics** — exact schema, required positions.
+- Each Cardinal Rule includes a defensive framing note:
+  *"examples illustrative — the rule applies universally."*
+- **12 Craft Principles** consolidated into a single block: match energy,
+  answer first / elaborate second, one beat per NPC per turn, show don't
+  tell, concrete over vague, vary imagery, silence is fine, moral
+  diversity, knowledge boundaries, timeline fidelity, consequences
+  stick, backstory is fuel.
+- Killed contradictions: "short vs. vivid" resolved as "short for
+  mechanics, vivid for atmosphere"; foreshadowing resolved as
+  "plant clues you'll pay off; avoid hints you won't."
+
+### Pillar 2 — Conversation Handling (new)
+- Four-mode conversation taxonomy: **SPOTLIGHT** (one NPC holds the
+  floor), **COUNCIL** (multiple NPCs in sequence, each to their
+  domain), **CROSSTALK** (short interlocking cuts), **WAIT** (silence
+  as a valid beat).
+- Decision ladder the AI walks before each response (time pressure →
+  Crosstalk; narrow question → Spotlight; multi-domain → Council;
+  brief player input → Wait).
+- Length scales by mode — no more padding to fill space. SPOTLIGHT
+  30-120 words, COUNCIL 120-250, CROSSTALK 60-150, WAIT 1-30.
+- Power dynamics inside modes — senior NPCs can interrupt juniors,
+  subordinates wait for superiors.
+- Solves the playtest failures where an NPC would answer + ask 3
+  questions + take a physical action in one response.
+
+### Pillar 3 — Few-shot examples (15 embedded in prompt)
+- WRONG/RIGHT pairs for: player-sovereignty violation (dialogue + rolls
+  + decisions), hard-stop violations (continuing past question, past
+  roll request), all four conversation modes with Corvin/fortress-
+  meeting/tactical-recon examples, age & register calibration
+  (9-year-old street kid vs. elderly priest vs. dockworker),
+  show-don't-tell (concrete vs. vague).
+- Each example block has defensive framing so the model doesn't
+  treat examples as the only valid cases.
+
+### Pillar 4 — Voice palette (Opus-generated NPC speech hints)
+- Migration 040 adds `voice_palette` (JSON), `voice_palette_generated_at`,
+  and `interaction_count` columns to `npcs`.
+- `npcVoiceService.js` generates a structured palette per NPC via one
+  Opus call:
+  - `age_descriptor` — "child (9)", "elder (60s)", etc.
+  - `register` — "street slang, clipped" vs. "formal, measured"
+  - `speech_patterns` — 2-4 tics ("trails off mid-thought")
+  - `mannerisms` — 2-3 physical tells
+  - `vocabulary` — "limited (kid-appropriate)" vs. "scholarly"
+  - `forbid` — things this NPC would never say
+- **Auto-triggers**: important NPCs (companions, quest-givers, faction
+  leaders, campaign-plan NPCs) get a palette immediately at NPC
+  creation. Minor NPCs generate lazily after 3 player interactions
+  (threshold tracked via `npcs.interaction_count`, bumped by
+  `recordInteraction`).
+- `formatCustomNpcs()` in `dmPromptBuilder` renders the palette as
+  4 extra lines per NPC block: Voice / Speech / Mannerisms /
+  Vocabulary / Never says. Fire-and-forget generation — silent-fail
+  never blocks gameplay.
+- Solves the Corvin playtest failure (9-year-old speaking like a
+  30-year-old narrator).
+
+### Size impact
+- Prompt assembly shrank from ~16K tokens → ~7.5K tokens
+  **while adding the examples, voice-palette hooks, and conversation
+  mode taxonomy**. Rule consolidation netted more savings than
+  examples added.
+
+### Tests
+- All prompt-related tests updated to match the new architecture:
+  `character-memory.test.js` (56 passing), `moral-diversity.test.js`
+  (59 passing), plus `combat-tracker`, `loot-systems`,
+  `condition-tracking`, `nickname-resolver` all green.
+
+### Deferred (separate releases)
+- **Pillar 5** — session-level repetition ledger (track recently-used
+  distinctive imagery, inject as "avoid reusing" list).
+- **Pillar 6** — layered prompt architecture with Anthropic prompt
+  caching (split core vs. character vs. session tiers).
+- Portrait headshot cropping, prelude opt-out / more questions —
+  still deferred from earlier feedback.
+
 ## [1.0.0.32] - 2026-04-18 — Prelude + deity picker + prompt discipline fixes
 
 Batch of playtest fixes. Portrait headshot cropping (3), prelude

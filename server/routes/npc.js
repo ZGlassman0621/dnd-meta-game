@@ -131,6 +131,17 @@ router.post('/', async (req, res) => {
     ]);
 
     const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
+
+    // Voice palette (v1.0.33+): fire-and-forget generation for important NPCs
+    // (companions, quest-givers, faction leaders). Minor NPCs generate
+    // lazily after the 3-interaction threshold (see npcRelationshipService).
+    try {
+      const { generateVoicePaletteIfImportant } = await import('../services/npcVoiceService.js');
+      generateVoicePaletteIfImportant(newNpc.id).catch(() => {});
+    } catch (err) {
+      // Silent-fail — palette generation is a polish feature, not blocking.
+    }
+
     res.status(201).json(newNpc);
   } catch (error) {
     handleServerError(res, error, 'create NPC');

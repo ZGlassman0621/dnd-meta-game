@@ -215,6 +215,32 @@ export async function recordInteraction(characterId, npcId, gameDate = null, gam
     WHERE id = ?
   `, [gameDate || new Date().toISOString(), gameDay, rel.id]);
 
+  // Bump the NPC-side interaction counter used by the voice palette
+  // auto-trigger (v1.0.33+). Generates a palette for minor NPCs once they
+  // cross the 3-interaction threshold — important NPCs already got one at
+  // creation time via generateVoicePaletteIfImportant.
+  let newInteractionCount = null;
+  try {
+    await dbRun(
+      'UPDATE npcs SET interaction_count = COALESCE(interaction_count, 0) + 1 WHERE id = ?',
+      [npcId]
+    );
+    const row = await dbGet('SELECT interaction_count FROM npcs WHERE id = ?', [npcId]);
+    newInteractionCount = row?.interaction_count ?? null;
+  } catch (err) {
+    // Silent-fail: interaction counter is best-effort. The column is added
+    // in migration 040; older DBs may not have it until migration runs.
+  }
+
+  if (newInteractionCount !== null) {
+    try {
+      const { maybeGenerateOnInteraction } = await import('./npcVoiceService.js');
+      maybeGenerateOnInteraction(npcId, newInteractionCount).catch(() => {});
+    } catch (err) {
+      // Silent-fail — voice palette is polish.
+    }
+  }
+
   // Check for reunion boost (14+ days since last interaction)
   if (gameDay && rel.last_interaction_game_day) {
     const daysAbsent = gameDay - rel.last_interaction_game_day;

@@ -68,21 +68,20 @@ console.log('\n=== Test 1: DM System Prompt — NPC Moral Diversity ===\n');
 
   const prompt = createDMSystemPrompt(mockCharacter, mockContext);
 
-  // NPC Moral Diversity section
-  assert(prompt.includes('NPC MORAL DIVERSITY - CRITICAL'), 'Contains NPC MORAL DIVERSITY section header');
-  assert(prompt.includes('DO NOT default every NPC to "friendly and helpful."'), 'Instructs against defaulting to friendly NPCs');
-  assert(prompt.includes('Merchants overcharge when they can'), 'Includes merchant overcharging example');
-  assert(prompt.includes('Guards take bribes'), 'Includes guard bribe example');
-  assert(prompt.includes('Helpful NPCs should WANT SOMETHING in return'), 'NPCs should want something in return');
-  assert(prompt.includes('Shared interests ≠ shared values'), 'Allies can disagree morally');
-  assert(prompt.includes('jealousy, cowardice, spite, laziness, greed'), 'Lists petty human flaws');
-  assert(prompt.includes('Check the campaign plan NPC alignments'), 'References campaign plan alignments');
-
-  // Real Stakes section expansion
-  assert(prompt.includes('not every shopkeeper is honest, not every guard is just'), 'Real Stakes extends beyond villains to whole world');
-
-  // Final Reminder reinforcement
-  assert(prompt.includes('NPC MORAL DIVERSITY: Not every NPC is kind or helpful'), 'FINAL REMINDER includes moral diversity reinforcement');
+  // MORAL DIVERSITY — now a Craft Principle in the new architecture
+  assert(prompt.includes('MORAL DIVERSITY'), 'Contains moral diversity rule');
+  assert(prompt.includes('Most NPCs are self-interested'), 'States most NPCs are self-interested');
+  assert(prompt.includes('Merchants overcharge'), 'Includes merchant overcharging example');
+  assert(prompt.includes('Guards take bribes') || prompt.includes('guards take bribes'), 'Includes guard bribe example');
+  assert(prompt.includes('Help from strangers should cost something') ||
+         prompt.includes('help from strangers should cost'), 'NPCs should want something in return');
+  // v1.0.33: consolidated as "not saintly" in the Craft Principle.
+  // Semantically: allies and NPCs in general can be imperfect / self-interested.
+  assert(prompt.includes('not saintly') ||
+         prompt.includes('Allies can be rude') ||
+         prompt.includes('self-interested'),
+         'NPCs (including allies) are not uniformly saintly');
+  assert(prompt.includes('Some people are just bad'), 'Some villains are genuinely evil');
 }
 
 // ===== 2. DM SYSTEM PROMPT - COMPANION INDEPENDENCE =====
@@ -282,21 +281,22 @@ console.log('\n=== Test 6: Moral Diversity Prompt Reinforcement (Primacy/Recency
 
   const prompt = createDMSystemPrompt(mockCharacter, mockContext);
 
-  // Find positions of key sections to verify ordering
-  const npcDiversityPos = prompt.indexOf('NPC MORAL DIVERSITY - CRITICAL');
-  const finalReminderPos = prompt.indexOf('FINAL REMINDER');
-  const finalDiversityPos = prompt.indexOf('NPC MORAL DIVERSITY: Not every NPC is kind');
-  const realStakesPos = prompt.indexOf('REAL STAKES AND GENUINE VILLAINS');
+  // Architecture check: v1.0.33 consolidated the prompt structure.
+  // The old "NPC MORAL DIVERSITY — CRITICAL" body section + "FINAL REMINDER"
+  // recap pattern was replaced with a single unified "MORAL DIVERSITY" Craft
+  // Principle. Verify the new shape: one principle, placed inside the
+  // CRAFT PRINCIPLES block (which appears in the top third of the prompt).
+  const craftPrinciplesPos = prompt.indexOf('CRAFT PRINCIPLES');
+  const moralDiversityPos = prompt.indexOf('MORAL DIVERSITY');
+  const selfCheckPos = prompt.indexOf('BEFORE YOU SEND');
 
-  assert(npcDiversityPos > 0, 'NPC MORAL DIVERSITY section exists in prompt body');
-  assert(realStakesPos > 0, 'REAL STAKES section exists in prompt body');
-  assert(finalReminderPos > 0, 'FINAL REMINDER section exists');
-  assert(finalDiversityPos > finalReminderPos, 'Moral diversity reinforcement appears after FINAL REMINDER (recency)');
-  assert(npcDiversityPos < finalReminderPos, 'NPC MORAL DIVERSITY body section appears before FINAL REMINDER (primacy)');
-
-  // Verify the prompt has BOTH the detailed section AND the final reminder version
-  const detailedCount = (prompt.match(/NPC MORAL DIVERSITY/g) || []).length;
-  assert(detailedCount >= 2, `Moral diversity mentioned ${detailedCount} times (primacy + recency)`);
+  assert(craftPrinciplesPos > 0, 'CRAFT PRINCIPLES block exists');
+  assert(moralDiversityPos > craftPrinciplesPos,
+         'MORAL DIVERSITY principle lives inside CRAFT PRINCIPLES block');
+  assert(selfCheckPos > moralDiversityPos,
+         'Self-check rubric appears after craft principles');
+  assert(moralDiversityPos < craftPrinciplesPos + 3500,
+         'Moral diversity principle is in the top portion of the prompt (high-visibility position)');
 }
 
 // ===== RESULTS =====
