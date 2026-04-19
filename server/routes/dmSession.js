@@ -1291,19 +1291,37 @@ router.post('/:sessionId/message', async (req, res) => {
       // Silent-fail — ledger is polish.
     }
 
-    // Check if context window compression is needed
+    // Apply the rolling session summary (Follow-up #3). If this session has
+    // one, it replaces the summarized prefix with a compact "PREVIOUS SCENES —
+    // SUMMARY" user message. Keeps the most recent KEEP_TAIL_MESSAGES turns
+    // verbatim. No-op if the session hasn't crossed the roll threshold yet.
     let messagesToSend = augmentedMessages;
+    try {
+      const { applyToMessages } = await import('../services/rollingSummaryService.js');
+      const rolled = applyToMessages(session, augmentedMessages);
+      if (rolled.summaryInjected) {
+        messagesToSend = rolled.messages;
+        console.log(
+          `[rolling-summary] session ${sessionId}: applied summary, compacted ${rolled.originalCount} → ${rolled.finalCount} messages`
+        );
+      }
+    } catch (err) {
+      // Silent-fail — falls back to pre-compaction messages.
+    }
+
+    // Reactive context-window compression as a safety net. With rolling
+    // summaries in place this should rarely fire — but we keep it for
+    // cases where summarization lags behind (e.g. rapid-fire turns).
     const modelForCompression = provider === 'claude' ? 'claude-sonnet-4-6' : (session.model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
-    const compressionCheck = shouldCompress(augmentedMessages, modelForCompression);
+    const compressionCheck = shouldCompress(messagesToSend, modelForCompression);
 
     if (compressionCheck.needsCompression) {
       console.log(`Context compression triggered (${compressionCheck.urgency}): ${compressionCheck.totalTokens} estimated tokens`);
       try {
-        messagesToSend = await compressMessageHistory(augmentedMessages, parseInt(sessionId), modelForCompression);
-        console.log(`Compressed ${augmentedMessages.length} messages to ${messagesToSend.length}`);
+        messagesToSend = await compressMessageHistory(messagesToSend, parseInt(sessionId), modelForCompression);
+        console.log(`Compressed to ${messagesToSend.length} messages`);
       } catch (compressError) {
         console.error('Context compression failed, using full history:', compressError.message);
-        messagesToSend = augmentedMessages;
       }
     }
 
@@ -2124,6 +2142,24 @@ router.post('/:sessionId/message', async (req, res) => {
       captureFromResponse(sessionId, cleanNarrative).catch(() => {});
     } catch (err) {
       // Silent-fail — repetition ledger is a polish feature.
+    }
+
+    // Rolling session summary (Follow-up #3). After the AI response is saved,
+    // if the session has grown past the roll threshold, kick off a background
+    // summarization of the next oldest chunk. Fire-and-forget — the player
+    // never waits on this. The result lands on dm_sessions.rolling_summary
+    // and is applied by the NEXT turn's prompt assembly.
+    try {
+      const { shouldRoll, rollSummary } = await import('../services/rollingSummaryService.js');
+      // Re-read the session so we have the latest rolling_summary_through_index
+      const freshSession = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
+      if (freshSession && shouldRoll(freshSession, result.messages)) {
+        rollSummary(parseInt(sessionId), freshSession, result.messages).catch(err => {
+          console.warn(`[rolling-summary] background roll failed: ${err.message}`);
+        });
+      }
+    } catch (err) {
+      // Silent-fail — rolling summary is a polish feature.
     }
 
     res.json({

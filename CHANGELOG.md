@@ -2,6 +2,61 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.38] - 2026-04-19 — Rolling session summaries
+
+Final invisible-infrastructure follow-up. Replaces the reactive "panic
+compress when the context window fills up" pattern with incremental,
+proactive summarization. No latency spike mid-session, no loss of
+detail from emergency compression.
+
+### How it works
+- `dm_sessions` gains three columns via migration 041:
+  - `rolling_summary TEXT` — prose recap of the earlier session
+  - `rolling_summary_through_index INTEGER` — last message index covered
+  - `rolling_summary_updated_at TEXT` — telemetry
+- After every AI response, if the session's message count has grown
+  past a roll threshold, a background Sonnet call extends the summary
+  to cover the next chunk. Fire-and-forget — never delays the player's
+  turn.
+- When assembling the NEXT turn's prompt, `applyToMessages()` replaces
+  the summarized prefix with a synthetic "PREVIOUS SCENES — SUMMARY"
+  message. Messages after the through-index are kept verbatim.
+- The most-recent 16 messages (~8 exchanges) are always kept verbatim —
+  the model needs recent turns in full to stay coherent.
+
+### Tunables (in `rollingSummaryService.js`)
+- `KEEP_TAIL_MESSAGES = 16` — never summarize the last N
+- `ROLL_TRIGGER_THRESHOLD = 30` — start rolling once messages > 30
+- `ROLL_CHUNK_SIZE = 8` — summarize this many per roll
+- `MIN_ROLL_AGE_MESSAGES = 4` — don't re-roll the same chunk
+
+### Summary generation
+- Sonnet call with a dense, factual template — output read only by the
+  DM, never the player, so the summary stays compact and information-
+  rich rather than narrative-pretty.
+- Produces updates under ~600 words; condenses older material as the
+  summary grows.
+- Preserves: named NPCs, locations, items gained/lost, promises
+  made/kept, combat outcomes, deaths, key decisions, discovered clues.
+- Drops: atmospheric description, weather dressing, repeated scene-
+  setting.
+
+### Safety net
+- Reactive `shouldCompress` / `compressMessageHistory` stays in place
+  as a last-resort fallback. With rolling summaries active it should
+  rarely fire — but it catches edge cases where summarization lags
+  behind (rapid-fire turns, Sonnet outage, etc.).
+
+### Tests
+- New `tests/rolling-summary.test.js` — 21 unit-test assertions for
+  `shouldRoll` and `applyToMessages` across edge cases (empty,
+  drifted through-index, missing system message, etc.).
+- All existing suites still pass.
+
+### Deferred
+- Live-session integration test (requires real Sonnet calls and a
+  running session — best verified during playtest).
+
 ## [1.0.0.37] - 2026-04-19 — 3-tier prompt cache split
 
 Follow-up to Pillar 6 (v1.0.35). The original 2-tier split cached ~3.3K
