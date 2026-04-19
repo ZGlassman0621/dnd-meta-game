@@ -418,8 +418,17 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   const hasSubraces = selectedRaceData && selectedRaceData.subraces && selectedRaceData.subraces.length > 0
   const hasSubclasses = selectedClassData && selectedClassData.subclasses && selectedClassData.subclasses.length > 0
 
-  // Deities grouped by pantheon, with the character's racial pantheon listed first.
-  // Atheist/Agnostic always top. Faerûnian is the default "general" pantheon.
+  // Deities sorted by relevance to the character's race, class, subclass, and
+  // theme. Structure of the returned object:
+  //   recommendedKeys: small list (~3-6) of deities the player is most likely
+  //       to pick — matches on domain (cleric/paladin), nature affinity
+  //       (druid/ranger), or racial pantheon.
+  //   atheistKeys:     deities with no `pantheon` field (Atheist, Agnostic).
+  //   pantheons:       ordered pantheon labels, racial pantheon first.
+  //   groups:          pantheon → sorted deity keys. Excludes no-pantheon
+  //                    deities so Atheist/Agnostic don't appear twice.
+  //   primaryPantheon: the racial pantheon used for the "matches your race"
+  //                    label (or null).
   const groupedDeities = (() => {
     const racePantheonMap = {
       dragonborn: 'Draconic',
@@ -434,28 +443,87 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
     const raceKey = (formData.race || '').toLowerCase()
     const subrace = (formData.subrace || '').toLowerCase()
     let primaryPantheon = racePantheonMap[raceKey] || null
-    // Drow subrace has its own pantheon
     if (raceKey === 'elf' && (subrace.includes('drow') || subrace.includes('dark elf'))) {
       primaryPantheon = 'Drow'
     }
 
+    // Atheist/Agnostic first — they're "beliefs" rather than pantheon deities.
+    const atheistKeys = deities.filter(k => !deitiesData[k].pantheon)
+
+    // Group the rest by pantheon. EXCLUDES no-pantheon deities so they don't
+    // double up with the atheist list (bug fixed in v1.0.32).
     const groups = {}
     for (const key of deities) {
       const d = deitiesData[key]
-      const panth = d.pantheon || 'Other'
+      if (!d.pantheon) continue
+      const panth = d.pantheon
       if (!groups[panth]) groups[panth] = []
       groups[panth].push(key)
     }
-    // Sort each pantheon's deities alphabetically by name
     for (const panth of Object.keys(groups)) {
       groups[panth].sort((a, b) =>
         (deitiesData[a].name || a).localeCompare(deitiesData[b].name || b)
       )
     }
 
-    // Build ordered list of pantheon labels
-    const atheistKeys = deities.filter(k => !deitiesData[k].pantheon)
-    const pantheons = Object.keys(groups).filter(p => p !== 'Other')
+    // Recommended list — strongest signal wins. Limit to ~6 entries so the
+    // dropdown stays scannable.
+    const classKey = (formData.class || '').toLowerCase()
+    const subclass = (formData.subclass || '').toLowerCase()
+    const themeId = (formData.theme_id || formData.background || '').toLowerCase()
+    const alignment = (formData.alignment || '').toUpperCase()
+
+    const scoreDeity = (key) => {
+      const d = deitiesData[key]
+      if (!d.pantheon) return -1 // atheist/agnostic excluded
+      const domain = (d.domain || '').toLowerCase()
+      const dAlign = (d.alignment || '').toUpperCase()
+      let score = 0
+      // Domain match for cleric's chosen subclass ("Life Domain" → domain includes "life")
+      if (classKey === 'cleric' && subclass) {
+        const sub = subclass.replace(/\s+domain$/i, '').trim()
+        if (sub && domain.includes(sub)) score += 10
+      }
+      // Class-general domain affinities
+      if (classKey === 'paladin') {
+        if (dAlign.startsWith('L') || dAlign.includes('G')) score += 4
+        if (/(war|light|life|protection|valor)/i.test(domain)) score += 3
+      }
+      if (classKey === 'druid' || classKey === 'ranger') {
+        if (/nature|tempest/i.test(domain)) score += 5
+      }
+      if (classKey === 'cleric' && !subclass) {
+        // Without a subclass yet, every deity with a Cleric-accessible domain is plausible
+        score += 2
+      }
+      if (classKey === 'warlock') {
+        if (/trickery|death|grave/i.test(domain)) score += 2
+      }
+      if (classKey === 'bard') {
+        if (/knowledge|trickery|light/i.test(domain)) score += 2
+      }
+      // Racial pantheon affinity
+      if (primaryPantheon && d.pantheon === primaryPantheon) score += 3
+      // Theme affinity
+      if (themeId === 'acolyte') score += 1
+      if (themeId === 'hermit' && /nature|knowledge|life/i.test(domain)) score += 2
+      if ((themeId === 'charlatan' || themeId === 'criminal') && /trickery/i.test(domain)) score += 2
+      if (themeId === 'soldier' && /war/i.test(domain)) score += 2
+      if (themeId === 'knight_of_the_order' && /light|life|war/i.test(domain)) score += 2
+      // Alignment resonance (soft)
+      if (alignment && dAlign && alignment[0] === dAlign[0]) score += 1
+      return score
+    }
+
+    const scored = deities
+      .filter(k => deitiesData[k].pantheon)
+      .map(k => ({ key: k, score: scoreDeity(k) }))
+      .filter(r => r.score >= 3) // only surface clear matches
+      .sort((a, b) => b.score - a.score || (deitiesData[a.key].name || a.key).localeCompare(deitiesData[b.key].name || b.key))
+    const recommendedKeys = scored.slice(0, 6).map(r => r.key)
+
+    // Pantheon ordering: racial pantheon first, then Faerûnian, then alphabetical.
+    const pantheons = Object.keys(groups)
     pantheons.sort((a, b) => {
       if (primaryPantheon && a === primaryPantheon) return -1
       if (primaryPantheon && b === primaryPantheon) return 1
@@ -463,9 +531,8 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       if (b === 'Faerûnian') return 1
       return a.localeCompare(b)
     })
-    if (groups['Other']) pantheons.push('Other')
 
-    return { groups, pantheons, atheistKeys, primaryPantheon }
+    return { groups, pantheons, atheistKeys, recommendedKeys, primaryPantheon }
   })()
 
   // Helper: derive ancestry list ID from race + subrace. Drow and Aasimar paths
@@ -2669,6 +2736,13 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           onChange={(e) => handleChange('faith', e.target.value)}
         >
           <option value="">Select deity or belief</option>
+          {groupedDeities.recommendedKeys.length > 0 && (
+            <optgroup label="Recommended for your character">
+              {groupedDeities.recommendedKeys.map(k => (
+                <option key={`rec-${k}`} value={k}>{deitiesData[k].name}</option>
+              ))}
+            </optgroup>
+          )}
           {groupedDeities.atheistKeys.length > 0 && (
             <optgroup label="Belief">
               {groupedDeities.atheistKeys.map(k => (
@@ -2689,9 +2763,11 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             </optgroup>
           ))}
         </select>
-        {groupedDeities.primaryPantheon && !formData.faith && (
+        {!formData.faith && (groupedDeities.recommendedKeys.length > 0 || groupedDeities.primaryPantheon) && (
           <small style={{ color: '#888', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
-            The {groupedDeities.primaryPantheon} pantheon is most relevant to your race — it's listed first.
+            {groupedDeities.recommendedKeys.length > 0
+              ? 'Suggested deities at the top are matched to your race, class, and theme — pick one or browse below.'
+              : `The ${groupedDeities.primaryPantheon} pantheon is most relevant to your race — it's listed first.`}
           </small>
         )}
         {formData.faith && deitiesData[formData.faith] && (

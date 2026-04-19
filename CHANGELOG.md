@@ -2,6 +2,78 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.32] - 2026-04-18 — Prelude + deity picker + prompt discipline fixes
+
+Batch of playtest fixes. Portrait headshot cropping (3), prelude
+opt-out / more questions (7), and the bigger NPC-speech-quality /
+duplicate-phrase prompt engineering pass (12, 13) are deferred to
+their own releases — each is sized for a focused pass.
+
+### Deity picker
+- **Atheist and Agnostic no longer double up.** They were appearing
+  in both the "Belief" optgroup AND under "Other" because deities
+  without a `pantheon` field were falling into `groups['Other']`. Now
+  excluded from the grouped map entirely.
+- **Relevance sort now considers class, subclass, theme, and
+  alignment — not just race.** New "Recommended for your character"
+  optgroup surfaces up to 6 deities with strong matches. Scoring:
+  - Cleric with Divine Domain subclass picked → deity domain must
+    include the subclass name (e.g. Life → Chauntea / Lathander).
+  - Paladin → lawful/good alignment, War/Light/Life/Protection/Valor
+    domain affinity.
+  - Druid, Ranger → Nature / Tempest domain affinity.
+  - Warlock → Trickery / Death / Grave domains.
+  - Bard → Knowledge / Trickery / Light.
+  - Racial pantheon match (existing).
+  - Theme match (Acolyte, Hermit, Charlatan/Criminal, Soldier,
+    Knight of the Order).
+  - Alignment first-letter resonance (soft signal).
+
+### Prelude setup
+- **Character line now reads cleanly**: "Level 1 Scourge Aasimar
+  Cleric — Mercenary Veteran" (was "Level 1 Aasimar Cleric —
+  mercenary_veteran"). Subrace prepended, theme title-cased.
+- **Intro blurb uses gendered pronouns** derived from
+  `character.gender` rather than a blanket "they/them". Non-binary /
+  other / unset still fall back to they/them.
+- **Multiple tones can be picked.** Tones blend rather than compete
+  (a "gritty" story can also be "hopeful"), so the single-select
+  button strip became a multi-toggle. Backend receives the joined
+  string (`"heroic + gritty"`) on the legacy `tone` field plus a
+  raw `tones` array for future use. One tone is always required.
+- **Start date no longer hardcoded to 1 Hammer, 1492 DR.** The year
+  now derives from `character.game_year - yearsBack` where
+  `yearsBack` matches the player's chosen `timeSpan`:
+    - Childhood to Young Adult → 18-22 years back
+    - Coming of Age → 10-14
+    - Last Few Years → 3-7
+    - Single Pivotal Event → 5-15
+  Day-of-year is randomized (1..365), so preludes don't all start
+  on New Year's.
+
+### DM prompt discipline
+- **"Never roll for the player" rule explicitly added** to the
+  ABSOLUTE RULES (primacy block) AND to the prelude's FINAL
+  REMINDER. Covers: never write "you roll", "you rolled", "the
+  number you rolled", "a 19", or any outcome of a player-side d20.
+  AI must emit the skill-check marker then STOP.
+- **"Never narrate the result before the system returns it"** —
+  explicit rule that the marker is the LAST sentence in the
+  response.
+
+### Bug fixes
+- **SQL error when rolling initiative** — `SELECT name,
+  companion_ability_scores FROM companions WHERE character_id = ?
+  AND is_active = 1` was wrong on three counts. `companions` has no
+  `name` column (name lives on npcs via npc_id), no `character_id`
+  (it's `recruited_by_character_id`), and no `is_active` (active
+  state is `status = 'active'`). Query rewritten with a proper
+  JOIN and correct column names.
+- **`[SKILL_CHECK: ...]` marker leaking into visible narrative**
+  during preludes. The marker-stripping list in `dmSession.js` had
+  entries for LOOT_DROP, COMBAT_START, CONDITION_ADD, etc. but was
+  missing SKILL_CHECK. Added.
+
 ## [1.0.0.31] - 2026-04-18 — Fix silent Step 2 "Next" block when any ability score > 18
 
 Follow-up to v1.0.29 "raise stat cap from 18 → 20." That change fixed

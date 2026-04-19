@@ -1197,10 +1197,28 @@ router.post('/start-prelude', async (req, res) => {
     const title = `Prelude: The Story of ${charName}`;
     const locationName = preludeConfig.preludeLocation || 'Unknown';
 
-    // Pick a starting day — preludes happen before the character's adventure,
-    // so we set it before any existing game_day
-    const gameStartDay = 1; // Day 1 of their prelude timeline
-    const gameStartYear = character.game_year || 1492;
+    // Pick a starting day + year for the prelude. Preludes happen BEFORE the
+    // character's adventure, so we back up the clock from the character's
+    // "present day" year (or the default 1492 fallback) by an amount that
+    // matches the requested timeSpan:
+    //   childhood_to_young_adult → 18-22 years before adventure
+    //   coming_of_age           → 10-14 years before
+    //   last_few_years          → 3-7 years before
+    //   single_pivotal_event    → 5-15 years before
+    // Day-of-year is randomized so no two preludes share "1 Hammer" unless
+    // the AI narratively chose that day.
+    const presentYear = character.game_year || 1492;
+    const timeSpan = preludeConfig.timeSpan || 'childhood_to_young_adult';
+    const YEARS_BACK = {
+      childhood_to_young_adult: [18, 22],
+      coming_of_age: [10, 14],
+      last_few_years: [3, 7],
+      single_pivotal_event: [5, 15]
+    };
+    const [minBack, maxBack] = YEARS_BACK[timeSpan] || YEARS_BACK.childhood_to_young_adult;
+    const yearsBack = minBack + Math.floor(Math.random() * (maxBack - minBack + 1));
+    const gameStartYear = presentYear - yearsBack;
+    const gameStartDay = Math.floor(Math.random() * 365) + 1; // 1..365
 
     const sessionConfig = {
       sessionType: 'prelude',
@@ -1421,6 +1439,9 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
+    // Prelude-flow skill checks. The AI is instructed to emit these when a
+    // check is required, but the marker itself must never reach the player.
+    cleanNarrative = cleanNarrative.replace(/\[SKILL_CHECK:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[CONDITION_ADD:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[CONDITION_REMOVE:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[WEATHER_CHANGE:[^\]]+\]\s*/gi, '').trim();
@@ -1697,9 +1718,15 @@ router.post('/:sessionId/message', async (req, res) => {
           initiative: playerRoll + playerDexMod
         });
 
-        // Companion initiatives
+        // Companion initiatives.
+        // Schema notes: companions.name doesn't exist (name lives on npcs via
+        // npc_id); the FK column is recruited_by_character_id, and active-state
+        // is `status = 'active'` rather than a boolean is_active.
         const activeCompanions = await dbAll(
-          'SELECT name, companion_ability_scores FROM companions WHERE character_id = ? AND is_active = 1',
+          `SELECT n.name AS name, c.companion_ability_scores
+           FROM companions c
+           JOIN npcs n ON c.npc_id = n.id
+           WHERE c.recruited_by_character_id = ? AND c.status = 'active'`,
           [session.character_id]
         );
         for (const comp of activeCompanions) {

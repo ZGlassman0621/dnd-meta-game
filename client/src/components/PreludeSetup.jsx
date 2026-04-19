@@ -78,7 +78,16 @@ export default function PreludeSetup({ character, onStartPrelude, onBack, isLoad
   const [endingLocation, setEndingLocation] = useState('');
   const [timeSpan, setTimeSpan] = useState('childhood_to_young_adult');
   const [selectedThemes, setSelectedThemes] = useState([]);
-  const [tone, setTone] = useState('heroic');
+  const [tones, setTones] = useState(['heroic']);
+  const toggleTone = (id) => {
+    setTones(prev => {
+      if (prev.includes(id)) {
+        // Don't let the user deselect the last tone — one is required
+        return prev.length > 1 ? prev.filter(t => t !== id) : prev;
+      }
+      return [...prev, id];
+    });
+  };
   const [storyBeats, setStoryBeats] = useState('');
 
   const toggleTheme = (id) => {
@@ -93,7 +102,11 @@ export default function PreludeSetup({ character, onStartPrelude, onBack, isLoad
       endingLocation: endingLocation.trim() || null,
       timeSpan,
       themes: selectedThemes,
-      tone,
+      // Backend schema expects a single `tone` string. Join multi-tone picks
+      // with " + " (e.g. "hopeful + gritty") — the prelude prompt treats the
+      // string as a descriptor, so the blended form reads naturally.
+      tone: tones.join(' + '),
+      tones, // also include the array for any callers that want the raw list
       storyBeats: storyBeats.trim() || null
     });
   };
@@ -102,6 +115,30 @@ export default function PreludeSetup({ character, onStartPrelude, onBack, isLoad
   const charBackground = character.background;
   const charBackstory = character.backstory;
   const hasBackstory = charBackstory && charBackstory.trim().length > 20;
+
+  // Presentation helpers
+  const titleCase = (s) => (s || '')
+    .toString()
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+
+  const raceLabel = [character.subrace, character.race]
+    .filter(Boolean)
+    .map(titleCase)
+    .join(' ');
+  const classLabel = titleCase(character.class);
+  const backgroundLabel = titleCase(charBackground);
+
+  // Gendered pronouns for the intro blurb. Falls back to they/them for
+  // non-binary, other, or unset gender.
+  const gender = (character.gender || '').toLowerCase();
+  const pronouns = gender === 'male' || gender === 'm'
+    ? { subject: 'he', object: 'him', possessive: 'his' }
+    : gender === 'female' || gender === 'f'
+    ? { subject: 'she', object: 'her', possessive: 'her' }
+    : { subject: 'they', object: 'them', possessive: 'their' };
 
   return (
     <div className="dm-session-container">
@@ -123,8 +160,8 @@ export default function PreludeSetup({ character, onStartPrelude, onBack, isLoad
             <div>
               <h3 style={{ margin: 0, color: ACCENT }}>{character.nickname || character.name}</h3>
               <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.9rem' }}>
-                Level {character.level} {character.race?.charAt(0).toUpperCase() + character.race?.slice(1)} {character.class?.charAt(0).toUpperCase() + character.class?.slice(1)}
-                {charBackground && <span style={{ color: '#aaa' }}> — {charBackground}</span>}
+                Level {character.level} {raceLabel} {classLabel}
+                {backgroundLabel && <span style={{ color: '#aaa' }}> — {backgroundLabel}</span>}
               </p>
             </div>
           </div>
@@ -152,8 +189,8 @@ export default function PreludeSetup({ character, onStartPrelude, onBack, isLoad
           fontSize: '0.88rem', color: '#bbb'
         }}>
           A prelude session tells the story of <strong style={{ color: '#ddd' }}>{character.nickname || character.name}</strong> before
-          they became an adventurer. You'll play through formative moments, make lasting decisions,
-          meet people who shaped them, and arrive at the threshold of adventure with a character
+          {' '}{pronouns.subject} became an adventurer. You'll play through formative moments, make lasting decisions,
+          meet people who shaped {pronouns.object}, and arrive at the threshold of adventure with a character
           you truly know.
         </div>
 
@@ -247,26 +284,32 @@ export default function PreludeSetup({ character, onStartPrelude, onBack, isLoad
 
           {/* Tone */}
           <div style={sectionStyle}>
-            <label style={labelStyle}>Tone</label>
+            <label style={labelStyle}>
+              Tone
+              <span style={sublabelStyle}>Pick one or more — tones blend rather than compete</span>
+            </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-              {TONE_OPTIONS.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setTone(t.id)}
-                  style={{
-                    padding: '0.35rem 0.7rem',
-                    borderRadius: '16px',
-                    border: tone === t.id ? `1px solid ${ACCENT}` : '1px solid rgba(255,255,255,0.15)',
-                    background: tone === t.id ? `${ACCENT}22` : 'transparent',
-                    color: tone === t.id ? ACCENT : '#aaa',
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    fontWeight: tone === t.id ? 'bold' : 'normal'
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
+              {TONE_OPTIONS.map(t => {
+                const isSelected = tones.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => toggleTone(t.id)}
+                    style={{
+                      padding: '0.35rem 0.7rem',
+                      borderRadius: '16px',
+                      border: isSelected ? `1px solid ${ACCENT}` : '1px solid rgba(255,255,255,0.15)',
+                      background: isSelected ? `${ACCENT}22` : 'transparent',
+                      color: isSelected ? ACCENT : '#aaa',
+                      cursor: 'pointer',
+                      fontSize: '0.82rem',
+                      fontWeight: isSelected ? 'bold' : 'normal'
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
