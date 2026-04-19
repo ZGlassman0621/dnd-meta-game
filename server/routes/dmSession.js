@@ -1298,19 +1298,43 @@ router.post('/:sessionId/message', async (req, res) => {
       return res.status(503).json({ error: 'No LLM provider available' });
     }
 
+    // Pillar 5: inject the repetition ledger into the system prompt so the DM
+    // sees "Recently used imagery — do not reuse" before composing the next
+    // response. Builds an augmented messages array without mutating the
+    // original (which is const). Silent-fail on read errors.
+    let augmentedMessages = messages;
+    try {
+      const { getLedger, formatRepetitionLedger } = await import('../services/repetitionLedgerService.js');
+      const ledger = await getLedger(parseInt(sessionId));
+      const ledgerBlock = formatRepetitionLedger(ledger);
+      if (ledgerBlock && messages[0] && messages[0].role === 'system' && messages[0].content) {
+        // Strip any previously-appended ledger (we re-inject the latest each turn).
+        const cleaned = messages[0].content.replace(
+          /\n*══════════════════════════════════════════════════════════════\nRECENTLY USED IMAGERY[\s\S]*/,
+          ''
+        );
+        augmentedMessages = [
+          { ...messages[0], content: cleaned + ledgerBlock },
+          ...messages.slice(1)
+        ];
+      }
+    } catch (err) {
+      // Silent-fail — ledger is polish.
+    }
+
     // Check if context window compression is needed
-    let messagesToSend = messages;
+    let messagesToSend = augmentedMessages;
     const modelForCompression = provider === 'claude' ? 'claude-sonnet-4-6' : (session.model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
-    const compressionCheck = shouldCompress(messages, modelForCompression);
+    const compressionCheck = shouldCompress(augmentedMessages, modelForCompression);
 
     if (compressionCheck.needsCompression) {
       console.log(`Context compression triggered (${compressionCheck.urgency}): ${compressionCheck.totalTokens} estimated tokens`);
       try {
-        messagesToSend = await compressMessageHistory(messages, parseInt(sessionId), modelForCompression);
-        console.log(`Compressed ${messages.length} messages to ${messagesToSend.length}`);
+        messagesToSend = await compressMessageHistory(augmentedMessages, parseInt(sessionId), modelForCompression);
+        console.log(`Compressed ${augmentedMessages.length} messages to ${messagesToSend.length}`);
       } catch (compressError) {
         console.error('Context compression failed, using full history:', compressError.message);
-        messagesToSend = messages;
+        messagesToSend = augmentedMessages;
       }
     }
 
@@ -2120,6 +2144,17 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     } catch (e) {
       console.error('Error processing notoriety markers:', e);
+    }
+
+    // Pillar 5: record distinctive imagery from this response so the next
+    // prompt can tell the DM "don't reuse these." Strict on similes +
+    // "X of Y" imagery; loose on functional language (see
+    // repetitionLedgerService for extraction heuristics). Fire-and-forget.
+    try {
+      const { captureFromResponse } = await import('../services/repetitionLedgerService.js');
+      captureFromResponse(sessionId, cleanNarrative).catch(() => {});
+    } catch (err) {
+      // Silent-fail — repetition ledger is a polish feature.
     }
 
     res.json({

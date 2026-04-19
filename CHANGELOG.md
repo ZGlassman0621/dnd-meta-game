@@ -2,6 +2,60 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.34] - 2026-04-18 — Pillar 5: session-level repetition ledger
+
+Stretch pillar from the v1.0.33 prompt redesign. Solves the playtest
+failure where the AI reused distinctive imagery like "skinny as a
+pulled thread" across multiple descriptions because it had no memory
+of what it already wrote.
+
+### Extraction
+- `repetitionLedgerService.extractSimiles()` detects three patterns
+  in narration text (dialogue and italicized NPC voice excluded):
+  - "X as Y" similes ("skinny as a pulled thread")
+  - "like a X" similes ("like a coin at the bottom of a well")
+  - "the X of Y" imagery ("the color of old pewter")
+- Common structural nouns ("the edge of", "the rest of", "the end of")
+  are filtered out. Functional language produces zero matches.
+- Regex-only — no AI call, no latency cost.
+
+### Storage
+- Ledger persists on `dm_sessions.session_config.repetition_ledger`
+  as `{ similes: string[], updated_at: ISO }`. No migration required —
+  `session_config` is an existing JSON TEXT column.
+- Cap: 30 most recent entries, FIFO.
+
+### Capture
+- `captureFromResponse(sessionId, responseText)` called after every
+  AI response in the DM-session message handler, right before the
+  JSON reply is sent. Fire-and-forget, silent-fail — a failed capture
+  never blocks the player.
+
+### Injection
+- Before each Claude/Ollama continue-session call, the current
+  ledger is rendered by `formatRepetitionLedger()` and appended to
+  the system prompt (messages[0]). On subsequent turns, the stale
+  ledger block is stripped and replaced with the fresh one, so the
+  AI always sees the latest "do not reuse" list.
+- Rendered block explicitly notes:
+  *"This rule is STRICT for imagery and simile. Functional language —
+  'the door opens', 'he nods' — is fine to reuse."*
+- Compression flow (`shouldCompress` / `compressMessageHistory`) uses
+  the augmented messages so the ledger survives compression.
+
+### Complements prior pillars
+- Pillar 1 (Craft Principles) already includes "VARY IMAGERY" as a
+  rule. Pillar 5 enforces it with concrete memory.
+- Pillar 3 (Self-Check Rubric) has a check item: "Did I reuse
+  distinctive imagery from earlier this session?" The ledger gives
+  the model the data to answer that honestly.
+
+### Deferred (next release)
+- Pillar 6 — layered prompt architecture with Anthropic prompt
+  caching. The repetition ledger's dynamic injection pattern is a
+  good precursor to the caching split (core static vs. per-turn
+  dynamic).
+
 ## [1.0.0.33] - 2026-04-18 — DM prompt redesign: rules, craft, conversation modes, voice palette
 
 Full architectural rewrite of the main DM system prompt, informed by a
