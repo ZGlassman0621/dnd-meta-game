@@ -73,7 +73,8 @@ async function seedThemes(db) {
   let updated = 0;
   for (const theme of THEMES) {
     const existing = await db.execute({
-      sql: 'SELECT id, description FROM themes WHERE id = ?',
+      sql: `SELECT id, description, identity, creation_choice_label, creation_choice_options
+            FROM themes WHERE id = ?`,
       args: [theme.id]
     });
 
@@ -97,13 +98,40 @@ async function seedThemes(db) {
         ]
       });
       inserted++;
-    } else if (theme.description && existing.rows[0].description !== theme.description) {
-      // Backfill / refresh description on existing rows so seed data stays authoritative
-      await db.execute({
-        sql: 'UPDATE themes SET description = ? WHERE id = ?',
-        args: [theme.description, theme.id]
-      });
-      updated++;
+    } else {
+      // Refresh static fields on existing rows so changes to seed data (e.g.
+      // adding missing creation_choice_options for City Watch) propagate
+      // without a DB reset. Only write when at least one field differs.
+      const row = existing.rows[0];
+      const nextOptions = theme.creation_choice_options
+        ? JSON.stringify(theme.creation_choice_options)
+        : null;
+      const needsUpdate =
+        (theme.description && row.description !== theme.description) ||
+        (theme.creation_choice_label && row.creation_choice_label !== theme.creation_choice_label) ||
+        (nextOptions !== (row.creation_choice_options || null)) ||
+        (theme.identity && row.identity !== theme.identity);
+
+      if (needsUpdate) {
+        // Coalesce to null (not undefined) so libsql doesn't reject the args.
+        const nz = v => (v === undefined ? null : v);
+        await db.execute({
+          sql: `UPDATE themes SET
+                  description = ?,
+                  identity = ?,
+                  creation_choice_label = ?,
+                  creation_choice_options = ?
+                WHERE id = ?`,
+          args: [
+            nz(theme.description || row.description),
+            nz(theme.identity || row.identity),
+            nz(theme.creation_choice_label || row.creation_choice_label),
+            nextOptions, // already null when no options
+            theme.id
+          ]
+        });
+        updated++;
+      }
     }
   }
   return { inserted, updated, total: THEMES.length };

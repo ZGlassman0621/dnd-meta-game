@@ -269,7 +269,22 @@ export const THEMES = [
     id: 'city_watch',
     name: 'City Watch',
     creation_choice_label: 'Home City',
-    creation_choice_options: [],
+    // The settlement this character patrolled. Drawn from the Forgotten Realms
+    // cities list so NPCs and the DM recognize it as canon. Non-human strongholds
+    // (Menzoberranzan, Mithral Hall) are included for unusual concepts — a drow
+    // City Watch or a dwarven clan guard both work narratively.
+    creation_choice_options: [
+      'Waterdeep',
+      "Baldur's Gate",
+      'Neverwinter',
+      'Luskan',
+      'Silverymoon',
+      'Mithral Hall',
+      'Candlekeep',
+      'Menzoberranzan',
+      'Calimport',
+      'Athkatla'
+    ],
     identity: 'A civilian peacekeeper rooted in a specific settlement — deep community knowledge, informal networks, the authority of place.',
     description: 'You walked a specific beat for years, learning one settlement the way its residents never could — its alleys, its troublemakers, its quiet deals, its decent people. The watch made you a part of the city, and even if you have moved on, the city still knows you by name.',
     signature_skill_1: 'Athletics',

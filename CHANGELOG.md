@@ -2,6 +2,31 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.39] - 2026-04-19 — City Watch home city options + seed refresh for theme fields
+
+### Bug fix
+- **City Watch theme's "Home City" dropdown was empty.** The theme had
+  `creation_choice_label: 'Home City'` but `creation_choice_options: []`
+  in `server/data/themes.js` — the list had never been populated. Added
+  the 10 canonical Forgotten Realms cities from `STARTING_LOCATIONS`:
+  Waterdeep, Baldur's Gate, Neverwinter, Luskan, Silverymoon, Mithral
+  Hall, Candlekeep, Menzoberranzan, Calimport, Athkatla.
+
+### Seed refresh
+- `progressionSeedService.seedThemes()` previously only backfilled
+  `description` on existing theme rows. Any other seed-data change
+  (like populating `creation_choice_options` for City Watch) wouldn't
+  propagate without a DB reset.
+- Extended the UPSERT to also refresh `identity`, `creation_choice_label`,
+  and `creation_choice_options` when they differ from the seed file.
+  Only writes when at least one field differs, so it's idempotent and
+  quiet when there's nothing to update.
+- Added a null-coalesce helper so libsql doesn't reject undefined args
+  when a pre-existing row has sparse columns.
+
+Effect: next server boot automatically picks up the City Watch fix
+(and any future similar data changes) — no manual migration needed.
+
 ## [1.0.0.38] - 2026-04-19 — Rolling session summaries
 
 Final invisible-infrastructure follow-up. Replaces the reactive "panic
