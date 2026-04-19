@@ -2,6 +2,68 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.37] - 2026-04-19 — 3-tier prompt cache split
+
+Follow-up to Pillar 6 (v1.0.35). The original 2-tier split cached ~3.3K
+tokens. With the prompt reorganized so all static content is contiguous
+before the first cache break, the universal-static tier is now ~7K
+tokens — most of the prompt.
+
+### Prompt reorganization
+- All static marker schemas (MECHANICAL MARKERS through BACKSTORY IS
+  FUEL) and CHARACTER-DEFINING MOMENTS have been moved up into the
+  core rules block, BEFORE the first cache break.
+- NPC NAMING's dynamic "NAMES ALREADY USED" interpolation extracted
+  and moved to Tier 3 (it varies per session). A reference note in
+  Tier 1 tells the DM that list exists later in the prompt.
+- PLAYER NAME SPELLING now lives in Tier 2 (per-character block).
+- SELF-CHECK rubric stays at the very bottom (Tier 3, uncached) —
+  ~200 tokens is cheap to re-send, and recency positioning helps.
+
+### Tier layout
+- **Tier 1** (universal, cacheable): Cardinal Rules, Craft Principles,
+  Conversation Handling, 15 few-shot examples, MECHANICAL MARKERS,
+  COMPANION RECRUITMENT, PLAYER OBSERVATION, BASE THREATS, NPC NAMING
+  (static), STORY MEMORY, BACKSTORY IS FUEL, CHARACTER-DEFINING
+  MOMENTS. ~7K tokens. Never changes across sessions or characters.
+- **Tier 2** (per-character, cacheable): worldSettingSection,
+  character sheet(s), progression, PLAYER NAME SPELLING. ~200-2000
+  tokens depending on campaign depth.
+- **Tier 3** (dynamic, uncached): NAMES ALREADY USED (if any),
+  CAMPAIGN STRUCTURE, pacing, all dynamic formatters (customConcepts,
+  customNpcs, companions, campaign plan, world state, chronicle,
+  weather, survival, crafting, mythic, party base, notoriety, projects,
+  repetition ledger), SELF-CHECK. Varies per session and per turn.
+
+### Cache control wiring
+- `claude.js` now handles TWO markers:
+  - `<!-- CACHE_BREAK:AFTER_CORE -->` → end of Tier 1
+  - `<!-- CACHE_BREAK:AFTER_CHARACTER -->` → end of Tier 2
+- Full 3-tier split emits a 3-block system array with `cache_control`
+  on blocks 0 and 1.
+- Graceful degradation: if Tier 2 is below Anthropic's 1024-token
+  cache minimum (common for starter characters), Tier 2 and Tier 3
+  merge into a single uncached block, preserving Tier 1's cache.
+- Back-compat fully preserved: prompts with no markers or only the
+  AFTER_CORE marker still work (2-block or plain string).
+
+### Expected performance
+- First turn in a session: ~7K cached write, ~200-2K uncached
+  (character block isn't cached yet either since the cache key is
+  the character block content itself).
+- Subsequent turns in the same session: ~7K cache read + ~200-2K
+  cache read (character, once warm) + ~500-3K fresh.
+- Cache-hit rate climbs from ~50% (v1.0.35) to **~80-90%** on long
+  sessions with rich campaign context.
+
+### Tests
+- All existing suites pass (character-memory 56, moral-diversity 59,
+  nickname-resolver 49, combat-tracker 26, condition-tracking 56).
+- Cache-split smoke test validates all four paths: 3-block form
+  (both markers, all tiers big), 2-block form (only core marker),
+  merged-tail form (both markers but Tier 2 too small), and plain
+  string (no markers, back-compat).
+
 ## [1.0.0.36] - 2026-04-19 — Parallel context assembly + batched NPC lookups
 
 Two invisible-infrastructure wins from the Pillar 6 follow-up list.

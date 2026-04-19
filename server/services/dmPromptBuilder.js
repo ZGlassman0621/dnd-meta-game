@@ -2077,27 +2077,6 @@ RIGHT (specific and engageable):
 > At the far end of the alley, a silhouette shifts behind a stack of crates. A boot scrapes wet stone.
 
 ═══════════════════════════════════════════════════════════════
-END OF CORE RULES
-═══════════════════════════════════════════════════════════════
-<!-- CACHE_BREAK:AFTER_CORE -->
-
-${worldSettingSection}
-
-${char1.text}
-${char2 ? '\n' + char2.text : ''}${formatProgression(sessionContext.progression)}${char2 && sessionContext.secondaryProgression ? formatProgression(sessionContext.secondaryProgression) : ''}
-
-CAMPAIGN STRUCTURE:
-${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
-
-PLAYER NAME SPELLING:
-The player character's name is exactly "${characterNames}". When the player shares a name or nickname in-game, use their exact spelling. Never paraphrase, "correct", or reinterpret it — and NPCs must use the same exact spelling and pronunciation.
-
-${isTwoPlayer ? `TWO-PLAYER NOTE: Give both characters opportunities to shine based on their unique abilities. When the players submit joint actions, describe how the characters work together.
-
-` : ''}CHARACTER-DEFINING MOMENTS: When the player reveals preferences, values, fears, or emotional responses through their character's actions or dialogue, remember them. These moments build the character over time — NPCs react to who the player has shown them to be, not a generic adventurer.
-
-═══════════════════════════════════════════════════════════════
 MECHANICAL MARKERS
 ═══════════════════════════════════════════════════════════════
 System markers trigger real game state. Emit them exactly as specified — malformed markers silently fail.
@@ -2268,7 +2247,7 @@ If the player chooses to defend, narrate it as combat (use COMBAT_START / COMBAT
 Don't invent threats the server hasn't generated.
 
 ──────────── NPC NAMING & APPEARANCE ────────────
-${sessionContext.usedNames?.length > 0 ? `NAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n\n` : ''}Every NPC must have a unique name within this campaign. Once a name appears, it's off-limits forever. Avoid overused fantasy names: Marcus, Elena, Lyra, Aldric, Garrett, Marta, Alaric, Liora, Elara, Cedric, Viktor, Thorne, Crane, Blackwood, Darkhollow, Nightshade, Stormwind, Ravencrest.
+Every NPC must have a unique name within this campaign. Once a name appears, it's off-limits forever — a "NAMES ALREADY USED" list is provided later in the prompt. Avoid overused fantasy names: Marcus, Elena, Lyra, Aldric, Garrett, Marta, Alaric, Liora, Elara, Cedric, Viktor, Thorne, Crane, Blackwood, Darkhollow, Nightshade, Stormwind, Ravencrest.
 
 Draw from diverse sources: Tolkien / Le Guin / Sanderson / Jordan / Moorcock / Leiber / Vance / Pratchett; Elder Scrolls / Baldur's Gate / Dragon Age / Pillars of Eternity / Witcher; Welsh / Gaelic / Norse / Persian / Slavic / Byzantine / Mongol traditions. Simple folk can have simple varied names: Bram, Osric, Wenna, Corvin, Hadley, Pell, Greta, Tam. Match to cultural background (Calishite, Chondathan, Illuskan, Turami, Rashemi, Mulhorandi).
 
@@ -2283,6 +2262,29 @@ When ACTIVE QUESTS are listed, weave them into the narrative organically — thr
 
 ──────────── BACKSTORY IS FUEL ────────────
 The player's backstory is a resource. Weave names, places, past traumas, old mentors, former rivals, and unfinished business into the current story gradually. An NPC they meet might know someone from their past; a faction from their history might have influence here; a letter might reference their hometown. Pace revelations — a passing mention in session 2 can become a major plot point in session 8. Don't contradict established backstory. Don't diminish it ("your mentor was secretly evil") unless the player has built toward it. Don't info-dump — weave organically.
+
+──────────── CHARACTER-DEFINING MOMENTS ────────────
+When the player reveals preferences, values, fears, or emotional responses through their character's actions or dialogue, remember them. These moments build the character over time — NPCs react to who the player has shown them to be, not a generic adventurer.${isTwoPlayer ? `
+
+TWO-PLAYER NOTE: Give both characters opportunities to shine based on their unique abilities. When the players submit joint actions, describe how the characters work together.` : ''}
+
+═══════════════════════════════════════════════════════════════
+END OF CORE RULES
+═══════════════════════════════════════════════════════════════
+<!-- CACHE_BREAK:AFTER_CORE -->
+
+${worldSettingSection}
+
+${char1.text}
+${char2 ? '\n' + char2.text : ''}${formatProgression(sessionContext.progression)}${char2 && sessionContext.secondaryProgression ? formatProgression(sessionContext.secondaryProgression) : ''}
+
+PLAYER NAME SPELLING:
+The player character's name is exactly "${characterNames}". When the player shares a name or nickname in-game, use their exact spelling. Never paraphrase, "correct", or reinterpret it — and NPCs must use the same exact spelling and pronunciation.
+<!-- CACHE_BREAK:AFTER_CHARACTER -->
+${sessionContext.usedNames?.length > 0 ? `\nNAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n` : ''}
+CAMPAIGN STRUCTURE:
+${pacingGuidance}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 
 ═══════════════════════════════════════════════════════════════
 BEFORE YOU SEND — SELF-CHECK

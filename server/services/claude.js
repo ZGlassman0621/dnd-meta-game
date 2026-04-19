@@ -13,13 +13,30 @@ const SONNET_MODEL = 'claude-sonnet-4-6';
 const OPUS_MODEL = 'claude-opus-4-7';
 const DEFAULT_MODEL = SONNET_MODEL;
 
-// Prompt-cache configuration (Pillar 6). The DM prompt builder embeds
-// `<!-- CACHE_BREAK:AFTER_CORE -->` right after the END OF CORE RULES header.
-// When we detect this marker in the system prompt string, we split and send
-// the system as a multi-block array with cache_control on the core block —
-// enabling Anthropic's prompt caching. Five-minute ephemeral cache TTL.
-const CACHE_BREAK_MARKER = '<!-- CACHE_BREAK:AFTER_CORE -->';
+// Prompt-cache configuration. Three tiers:
+//   Tier 1 (universal static): Cardinal Rules + Craft + Conversation + examples
+//     + mechanical markers + CHARACTER-DEFINING MOMENTS. Never changes.
+//   Tier 2 (per-character static): world setting + character sheet + progression
+//     + PLAYER NAME SPELLING. Changes on level-up / equipment swaps.
+//   Tier 3 (dynamic, uncached): CAMPAIGN STRUCTURE + all live formatters
+//     + NAMES_ALREADY_USED list + SELF-CHECK.
+//
+// The DM prompt builder embeds two markers:
+//   <!-- CACHE_BREAK:AFTER_CORE -->       → end of tier 1
+//   <!-- CACHE_BREAK:AFTER_CHARACTER -->  → end of tier 2
+// claude.chat() splits on these markers and sends the system as a 3-block array
+// with cache_control on blocks 0 and 1.
+//
+// Back-compat paths preserved:
+//   • No markers → plain string (legacy behavior).
+//   • Only AFTER_CORE marker → 2-block array (tier 1 cached, tier 2+3 together).
+//   • Both markers → 3-block array (tier 1 + tier 2 cached, tier 3 fresh).
+//   • Any tier below 1024 tokens → fall back to a single merged string so
+//     Anthropic accepts the request (the cache minimum would reject it).
+const CACHE_BREAK_CORE = '<!-- CACHE_BREAK:AFTER_CORE -->';
+const CACHE_BREAK_CHARACTER = '<!-- CACHE_BREAK:AFTER_CHARACTER -->';
 const CACHE_MIN_TOKENS = 1024; // Anthropic's cacheable-block minimum
+const CACHE_MIN_CHARS = CACHE_MIN_TOKENS * 4; // rough char→token
 
 // Running cache telemetry — flushed to stdout once per turn via logCacheStats().
 // Not persisted anywhere; just observability.
@@ -32,24 +49,57 @@ let cumulativeCacheStats = {
 };
 
 function buildSystemParam(systemPrompt) {
-  // Backward-compat: if no cache marker, send as plain string.
+  // Backward-compat: no system prompt or non-string → pass through unchanged.
   if (!systemPrompt || typeof systemPrompt !== 'string') return systemPrompt;
-  const markerIdx = systemPrompt.indexOf(CACHE_BREAK_MARKER);
-  if (markerIdx < 0) return systemPrompt;
 
-  const coreText = systemPrompt.slice(0, markerIdx).replace(/\n+$/, '');
-  const restText = systemPrompt.slice(markerIdx + CACHE_BREAK_MARKER.length).replace(/^\n+/, '');
+  const coreIdx = systemPrompt.indexOf(CACHE_BREAK_CORE);
+  if (coreIdx < 0) return systemPrompt;
 
-  // Heuristic: 1 token ≈ 4 chars. Skip caching if core is below the minimum.
-  const approxCoreTokens = Math.ceil(coreText.length / 4);
-  if (approxCoreTokens < CACHE_MIN_TOKENS) {
-    return coreText + '\n\n' + restText; // too small to cache — send as string
+  const charIdx = systemPrompt.indexOf(CACHE_BREAK_CHARACTER);
+  const haveCharBreak = charIdx > coreIdx;
+
+  // Slice out each tier and strip the boundary whitespace so the concatenated
+  // form reads naturally if we fall back to a string.
+  const core = systemPrompt.slice(0, coreIdx).replace(/\n+$/, '');
+  const afterCore = haveCharBreak
+    ? systemPrompt.slice(coreIdx + CACHE_BREAK_CORE.length, charIdx).replace(/^\n+|\n+$/g, '')
+    : systemPrompt.slice(coreIdx + CACHE_BREAK_CORE.length).replace(/^\n+/, '');
+  const afterChar = haveCharBreak
+    ? systemPrompt.slice(charIdx + CACHE_BREAK_CHARACTER.length).replace(/^\n+/, '')
+    : null;
+
+  const coreBigEnough = core.length >= CACHE_MIN_CHARS;
+  const afterCoreBigEnough = afterCore.length >= CACHE_MIN_CHARS;
+
+  // Tier 1 too small to cache → merge everything and send as plain string.
+  if (!coreBigEnough) {
+    return afterChar === null
+      ? `${core}\n\n${afterCore}`
+      : `${core}\n\n${afterCore}\n\n${afterChar}`;
   }
 
-  // Array form with cache_control on the core block only.
+  // 2-block form (only AFTER_CORE marker present)
+  if (afterChar === null) {
+    return [
+      { type: 'text', text: core, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: afterCore }
+    ];
+  }
+
+  // Both markers present. If tier 2 is too small to cache independently,
+  // merge tiers 2+3 and only cache tier 1 (2-block form). Otherwise emit
+  // the full 3-block form.
+  if (!afterCoreBigEnough) {
+    return [
+      { type: 'text', text: core, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: `${afterCore}\n\n${afterChar}` }
+    ];
+  }
+
   return [
-    { type: 'text', text: coreText, cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: restText }
+    { type: 'text', text: core, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: afterCore, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: afterChar }
   ];
 }
 
