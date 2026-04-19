@@ -564,10 +564,12 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   // Check if all ability scores are assigned
   const allAbilitiesAssigned = () => {
     if (formData.ability_score_method === 'manual') {
-      // For manual entry, check that all scores are valid numbers between 3 and 18
+      // For manual entry, check that all scores are valid numbers between 3 and 20.
+      // (Cap is 20 — the normal 5e hard cap. Prior to v1.0.30 this was 18 which
+      // silently blocked the Next button when a player rolled a 19 or 20.)
       return ['str', 'dex', 'con', 'int', 'wis', 'cha'].every(ability => {
         const score = formData[ability]
-        return score !== null && Number.isInteger(score) && score >= 3 && score <= 18
+        return score !== null && Number.isInteger(score) && score >= 3 && score <= 20
       })
     }
     // For standard array, just check that all are assigned

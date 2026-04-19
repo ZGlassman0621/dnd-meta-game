@@ -2,6 +2,15 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.31] - 2026-04-18 — Fix silent Step 2 "Next" block when any ability score > 18
+
+Follow-up to v1.0.29 "raise stat cap from 18 → 20." That change fixed
+the input clamp but missed `allAbilitiesAssigned()` in the wizard,
+which also hardcoded `score <= 18` as a validity check. Any character
+with a rolled 19 or 20 passed the input but silently failed the
+validator, leaving the Step 2 "Next" button disabled with no visible
+explanation. Raised the cap in `allAbilitiesAssigned()` to 20 too.
+
 ## [1.0.0.30] - 2026-04-18 — Magic Initiate + Ritual Caster spell pickers (follow-up to 1.0.29)
 
 1.0.29 shipped Magic Initiate and Ritual Caster sub-choices as
