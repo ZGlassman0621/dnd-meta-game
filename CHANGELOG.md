@@ -2,6 +2,50 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.36] - 2026-04-19 — Parallel context assembly + batched NPC lookups
+
+Two invisible-infrastructure wins from the Pillar 6 follow-up list.
+No change to player-visible behavior — just faster session start and
+fewer DB round-trips per prompt build.
+
+### Parallel context assembly (session-start latency)
+- `/start-session` previously did 15+ sequential `await`s gathering
+  weather, survival, crafting, mythic, party base, notoriety,
+  projects, chronicles, progression, nickname resolutions, etc.
+  Total ~150-300ms on cold caches.
+- Refactored into three phases:
+  - **Phase A** — worldState-filling reads (NPC conversations, NPC
+    event effects, active quests) + away companions. All parallel.
+  - **Phase B** — mood + absence mutations (parallel — different tables).
+  - **Phase C** — all remaining independent reads (weather, crafting,
+    mythic, party base, notoriety, projects, chronicle summaries,
+    primary + secondary progression, nickname resolutions). Parallel.
+- Dedupes a double weather fetch (previously fetched twice — once for
+  weatherContext, once for survivalContext).
+- Silent-per-fetch error handling preserved — one failure doesn't
+  cancel the rest.
+- Expected session-start latency cut roughly in half.
+
+### Batched NPC relationship lookups
+- `resolveForNpcBatch` previously looped `resolveForNpc` sequentially:
+  4 queries × N NPCs = 4N queries, each round-trip.
+- Now batches to **4 queries total regardless of N**:
+  - 1 character fetch
+  - 1 character-nicknames fetch
+  - 1 batched `npc_relationships WHERE character_id=? AND npc_id IN (...)`
+  - 1 batched `npcs WHERE id IN (...)`
+- Resolution logic extracted to a pure-in-memory helper
+  (`resolveForNpcInMemory`) so single-NPC and batch paths share one
+  rule implementation.
+- New test case (`nickname-resolver.test.js` Test 9): batch output
+  matches single-NPC output for every id. 49 assertions total (up
+  from 27).
+
+### Tests
+- Full suites still green: character-memory 56, moral-diversity 59,
+  nickname-resolver 49, combat-tracker 26, condition-tracking 56.
+- Server boots cleanly.
+
 ## [1.0.0.35] - 2026-04-19 — Pillar 6: Anthropic prompt caching + cache telemetry
 
 Final pillar from the prompt redesign arc (invisible infrastructure —

@@ -211,8 +211,21 @@ async function main() {
   assert(bardLine.toLowerCase().includes('bard'), 'bard prompt line mentions "bard"');
   assert(bardLine.toLowerCase().includes('rule of cool'), 'bard prompt line includes "rule of cool"');
 
-  // 9. Empty nickname list → fallback to legal name
-  console.log('\nTest 9: Character with no nicknames falls back to legal name');
+  // 9. Batch resolver parity (v1.0.36 — batched queries)
+  console.log('\nTest 9: Batch resolver produces same result as single-NPC resolver');
+  const batchIds = [npcStranger, npcFriend, npcAlly, npcDevoted, npcJarrick, npcApprentice, npcBard];
+  const batchResult = await nicknameService.resolveForNpcBatch(charId, batchIds);
+  assert(Object.keys(batchResult).length === batchIds.length, 'batch returns entry for every id');
+  for (const id of batchIds) {
+    const batched = batchResult[id];
+    const solo = await nicknameService.resolveForNpc(charId, id);
+    assert(batched !== null, `batch resolution for npc ${id} is not null`);
+    assert(batched.primary === solo.primary, `batch .primary matches solo for npc ${id} (batch=${batched.primary}, solo=${solo.primary})`);
+    assert(batched.bard_override === solo.bard_override, `batch .bard_override matches solo for npc ${id}`);
+  }
+
+  // 10. Empty nickname list → fallback to legal name
+  console.log('\nTest 10: Character with no nicknames falls back to legal name');
   const naked = await dbRun(
     `INSERT INTO characters
      (name, first_name, last_name, class, race, level, current_hp, max_hp,

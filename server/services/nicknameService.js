@@ -219,18 +219,132 @@ export async function resolveForNpc(characterId, npcId) {
 /**
  * Bulk resolver: for a list of npc ids, return a map of npcId → resolution.
  * Used by the DM prompt builder to compute naming protocol for every active NPC.
+ *
+ * Performance note (v1.0.36): previously this looped `resolveForNpc` sequentially,
+ * firing 4 queries per NPC (character, nicknames, relationship, npc row). For N
+ * NPCs that was 4N queries. Now we batch:
+ *   1 query for the character
+ *   1 query for character's nicknames
+ *   1 batched query for all relationships (WHERE character_id = ? AND npc_id IN (...))
+ *   1 batched query for all NPC rows (WHERE id IN (...))
+ * Then we resolve each NPC in-memory. Constant 4 queries regardless of N.
+ * Silent-fail per NPC remains — a missing relationship or NPC row yields null.
  */
 export async function resolveForNpcBatch(characterId, npcIds) {
   const out = {};
-  for (const id of npcIds) {
-    try {
-      out[id] = await resolveForNpc(characterId, id);
-    } catch (err) {
-      // Defensive: never let one bad NPC crash the whole prompt.
-      out[id] = null;
+  if (!characterId || !Array.isArray(npcIds) || npcIds.length === 0) return out;
+
+  // Dedupe + drop falsy
+  const ids = [...new Set(npcIds.filter(id => id != null))];
+  if (ids.length === 0) return out;
+
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    const [character, allNicknames, relRows, npcRows] = await Promise.all([
+      dbGet(
+        `SELECT id, name, first_name, last_name, nickname
+         FROM characters WHERE id = ?`,
+        [characterId]
+      ),
+      listNicknames(characterId),
+      dbAll(
+        `SELECT npc_id, disposition, trust_level
+         FROM npc_relationships
+         WHERE character_id = ? AND npc_id IN (${placeholders})`,
+        [characterId, ...ids]
+      ),
+      dbAll(
+        `SELECT id, name, occupation
+         FROM npcs
+         WHERE id IN (${placeholders})`,
+        ids
+      )
+    ]);
+
+    const relByNpcId = new Map(relRows.map(r => [r.npc_id, r]));
+    const npcById = new Map(npcRows.map(n => [n.id, n]));
+
+    const legalName =
+      [character?.first_name, character?.last_name].filter(Boolean).join(' ').trim() ||
+      character?.name ||
+      'the traveler';
+
+    for (const npcId of ids) {
+      try {
+        const npc = npcById.get(Number(npcId)) || npcById.get(npcId);
+        const relationship = relByNpcId.get(Number(npcId)) || relByNpcId.get(npcId) || null;
+        out[npcId] = resolveForNpcInMemory(npcId, npc, relationship, allNicknames, legalName);
+      } catch (err) {
+        out[npcId] = null;
+      }
     }
+  } catch (err) {
+    // Total failure: return nulls for all ids so the caller falls back gracefully.
+    for (const id of ids) out[id] = null;
   }
   return out;
+}
+
+/**
+ * Pure-in-memory version of resolveForNpc. Takes already-fetched data and
+ * produces the same resolution shape. Used by resolveForNpcBatch.
+ * Kept colocated with resolveForNpc so future rule changes stay in one place.
+ */
+function resolveForNpcInMemory(npcId, npc, relationship, allNicknames, legalName) {
+  const occupation = (npc?.occupation || '').toLowerCase();
+  const isBard = occupation.includes('bard');
+
+  if (isBard) {
+    const sorted = [...allNicknames].sort((a, b) =>
+      (AUDIENCE_PRIORITY[b.audience_type] || 0) - (AUDIENCE_PRIORITY[a.audience_type] || 0)
+    );
+    const primaryRow = sorted[0] || null;
+    return {
+      primary: primaryRow ? primaryRow.nickname : legalName,
+      primary_row: primaryRow,
+      allowed: sorted,
+      bard_override: true,
+      fallback_legal_name: legalName
+    };
+  }
+
+  const disposition = relationship?.disposition ?? 0;
+  const matches = [];
+  for (const row of allNicknames) {
+    const priority = AUDIENCE_PRIORITY[row.audience_type] || 0;
+    switch (row.audience_type) {
+      case 'default':
+        matches.push({ ...row, priority });
+        break;
+      case 'friends':
+        if (disposition >= 25) matches.push({ ...row, priority });
+        break;
+      case 'allied':
+        if (disposition >= 50) matches.push({ ...row, priority });
+        break;
+      case 'devoted':
+        if (disposition >= 75) matches.push({ ...row, priority });
+        break;
+      case 'specific_npc':
+        if (String(row.audience_value) === String(npcId)) matches.push({ ...row, priority });
+        break;
+      case 'role': {
+        const needle = String(row.audience_value || '').toLowerCase().trim();
+        if (needle && occupation.includes(needle)) matches.push({ ...row, priority });
+        break;
+      }
+    }
+  }
+
+  matches.sort((a, b) => b.priority - a.priority);
+  const primaryRow = matches[0] || null;
+  return {
+    primary: primaryRow ? primaryRow.nickname : legalName,
+    primary_row: primaryRow,
+    allowed: matches,
+    bard_override: false,
+    fallback_legal_name: legalName
+  };
 }
 
 /**

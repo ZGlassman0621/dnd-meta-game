@@ -689,181 +689,150 @@ router.post('/start', async (req, res) => {
       }
     }
 
-    // Fetch NPC conversation history for DM prompt context
-    if (character.campaign_id) {
-      try {
-        const npcConversations = await getConversationsForCharacter(characterId);
-        if (worldState) {
-          worldState.npcConversations = npcConversations;
-        }
-      } catch (e) {
-        console.error('Error fetching NPC conversations:', e);
-      }
-    }
+    // ──────────── PARALLEL CONTEXT ASSEMBLY (v1.0.36) ────────────
+    // Previously the context-gathering block was 15+ sequential awaits totalling
+    // ~150-300ms. All of these reads are independent — Promise.all collapses the
+    // latency to the slowest single fetch (~30-50ms).
+    //
+    // Ordering we still enforce:
+    //   Phase A — worldState-filling reads (NPC convs, NPC events, quests) +
+    //             awayCompanions. Parallel internally.
+    //   Phase B — mood/absence mutations. Parallel internally, but must
+    //             complete before any subsequent read that depends on them.
+    //             (In practice nothing after this block reads moods/dispositions
+    //             until the prompt is built, so this is a safety precaution.)
+    //   Phase C — all remaining independent reads, parallel.
 
-    // Fetch NPC event effects for DM prompt context
-    if (character.campaign_id) {
-      try {
-        const npcEventEffects = await getActiveNpcEffects(character.campaign_id);
-        if (worldState) {
-          worldState.npcEventEffects = npcEventEffects;
-        }
-      } catch (e) {
-        console.error('Error fetching NPC event effects:', e);
-      }
-    }
+    // Phase A — parallel reads that fill worldState
+    const campaignId = character.campaign_id;
+    const worldStateFills = campaignId && worldState
+      ? [
+          getConversationsForCharacter(characterId).catch(e => {
+            console.error('Error fetching NPC conversations:', e); return null;
+          }),
+          getActiveNpcEffects(campaignId).catch(e => {
+            console.error('Error fetching NPC event effects:', e); return null;
+          }),
+          getCharacterActiveQuests(characterId).catch(e => {
+            console.error('Error fetching active quests:', e); return null;
+          })
+        ]
+      : [Promise.resolve(null), Promise.resolve(null), Promise.resolve(null)];
 
-    // Fetch active quests for DM prompt context
-    if (character.campaign_id && worldState) {
-      try {
-        const activeQuests = await getCharacterActiveQuests(characterId);
-        // Enrich with faction names for quest display
-        for (const q of activeQuests) {
+    const awayCompanionsPromise = getAwayCompanions(characterId).catch(e => {
+      console.error('Error fetching away companions:', e); return [];
+    });
+
+    const [npcConversations, npcEventEffects, activeQuestsRaw, awayCompanions] = await Promise.all([
+      ...worldStateFills,
+      awayCompanionsPromise
+    ]);
+
+    if (worldState) {
+      if (npcConversations) worldState.npcConversations = npcConversations;
+      if (npcEventEffects) worldState.npcEventEffects = npcEventEffects;
+      if (activeQuestsRaw) {
+        // Enrich active quests with faction names using already-loaded worldState
+        for (const q of activeQuestsRaw) {
           if (q.source_type === 'faction' && q.source_id) {
-            const faction = worldState.activeFactions.find(f => f.id === q.source_id);
+            const faction = worldState.activeFactions?.find(f => f.id === q.source_id);
             q.faction_name = faction?.name || null;
           }
-          // For conflict quests, add faction names from rewards
           if (q.quest_type === 'faction_conflict' && q.rewards) {
-            const agg = worldState.activeFactions.find(f => f.id === q.rewards.aggressor_faction_id);
-            const def = worldState.activeFactions.find(f => f.id === q.rewards.defender_faction_id);
+            const agg = worldState.activeFactions?.find(f => f.id === q.rewards.aggressor_faction_id);
+            const def = worldState.activeFactions?.find(f => f.id === q.rewards.defender_faction_id);
             q.rewards.aggressor_faction_name = agg?.name || null;
             q.rewards.defender_faction_name = def?.name || null;
           }
         }
-        worldState.activeQuests = activeQuests;
-      } catch (e) {
-        console.error('Error fetching active quests:', e);
+        worldState.activeQuests = activeQuestsRaw;
       }
     }
 
-    // Fetch away companions for DM prompt context
-    let awayCompanions = [];
-    try {
-      awayCompanions = await getAwayCompanions(characterId);
-    } catch (e) {
-      console.error('Error fetching away companions:', e);
-    }
-
-    // Decay companion moods based on game days elapsed
+    // Phase B — mutations (decay companion moods + NPC dispositions). Parallel
+    // since they touch different tables.
     if (character.game_day) {
-      try {
-        await decayMoods(characterId, character.game_day);
-      } catch (e) {
-        console.error('Error decaying companion moods:', e);
-      }
-
-      // Decay NPC dispositions/trust based on absence
-      try {
-        await processAbsenceEffects(characterId, character.game_day);
-      } catch (e) {
-        console.error('Error processing NPC absence effects:', e);
-      }
+      await Promise.all([
+        decayMoods(characterId, character.game_day).catch(e => {
+          console.error('Error decaying companion moods:', e);
+        }),
+        processAbsenceEffects(characterId, character.game_day).catch(e => {
+          console.error('Error processing NPC absence effects:', e);
+        })
+      ]);
     }
 
-    // Gather weather, survival, and crafting context for DM prompt
+    // Phase C — remaining independent reads. Also dedupes the weather fetch
+    // (previously fetched twice — once for weatherContext, once for
+    // survivalContext).
+    const [
+      weatherSnapshot,
+      craftingContextResult,
+      mythicStatusResult,
+      partyBaseContextResult,
+      notorietyContextResult,
+      projectsContextResult,
+      chronicleSummariesResult,
+      progression,
+      secondaryProgression,
+      nicknameResolutionsResult
+    ] = await Promise.all([
+      campaignId
+        ? getWeather(campaignId).catch(e => { console.error('Error fetching weather:', e); return null; })
+        : Promise.resolve(null),
+      campaignId
+        ? formatCraftingForPrompt(characterId).catch(e => { console.error('Error formatting crafting:', e); return ''; })
+        : Promise.resolve(''),
+      getMythicStatus(characterId).catch(e => { console.error('Error fetching mythic:', e); return null; }),
+      getBaseForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error base:', e); return ''; }),
+      getNotorietyForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error notoriety:', e); return ''; }),
+      getProjectsForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error projects:', e); return ''; }),
+      campaignId
+        ? getSessionSummariesForPrompt(campaignId, characterId).catch(e => { console.error('Error chronicle summaries:', e); return []; })
+        : Promise.resolve([]),
+      getCharacterProgression(characterId).catch(e => { console.error('Error progression primary:', e); return null; }),
+      secondCharacterId
+        ? getCharacterProgression(secondCharacterId).catch(e => { console.error('Error progression secondary:', e); return null; })
+        : Promise.resolve(null),
+      (Array.isArray(customNpcs) && customNpcs.length > 0)
+        ? resolveNicknamesForNpcBatch(characterId, customNpcs.map(n => n?.id).filter(Boolean)).catch(e => {
+            console.error('Error resolving nicknames:', e); return null;
+          })
+        : Promise.resolve(null)
+    ]);
+
+    // Synchronous formatting from the fetched data
     let weatherContext = '';
     let survivalContext = '';
-    let craftingContext = '';
-    if (character.campaign_id) {
+    if (weatherSnapshot) {
       try {
-        const weather = await getWeather(character.campaign_id);
-        const season = getSeason(character.game_day || 1);
         const timeOfDay = getTimeOfDay(character.game_hour || 8);
-        const effectiveTemp = getEffectiveTemperature(weather.temperature_f, weather.weather_type, timeOfDay);
+        const effectiveTemp = getEffectiveTemperature(weatherSnapshot.temperature_f, weatherSnapshot.weather_type, timeOfDay);
         const gearSummary = calculateGearWarmth(character.inventory, character.equipment);
         const shelterType = checkHasShelter(character.current_location || '', character.inventory);
-        weatherContext = formatWeatherForPrompt(weather, effectiveTemp, timeOfDay, gearSummary, shelterType, character.current_location || '');
+        weatherContext = formatWeatherForPrompt(weatherSnapshot, effectiveTemp, timeOfDay, gearSummary, shelterType, character.current_location || '');
       } catch (e) {
-        console.error('Error gathering weather context:', e);
+        console.error('Error formatting weather context:', e);
       }
-
       try {
-        const weather = await getWeather(character.campaign_id);
-        survivalContext = formatSurvivalForPrompt(character, weather, null);
+        survivalContext = formatSurvivalForPrompt(character, weatherSnapshot, null);
       } catch (e) {
-        console.error('Error gathering survival context:', e);
-      }
-
-      try {
-        craftingContext = await formatCraftingForPrompt(characterId);
-      } catch (e) {
-        console.error('Error gathering crafting context:', e);
+        console.error('Error formatting survival context:', e);
       }
     }
 
-    // Gather mythic context for DM prompt
+    const craftingContext = craftingContextResult;
+    const partyBaseContext = partyBaseContextResult;
+    const notorietyContext = notorietyContextResult;
+    const projectsContext = projectsContextResult;
+    const chronicleSummaries = chronicleSummariesResult;
+    const nicknameResolutions = nicknameResolutionsResult;
+
     let mythicContext = '';
-    try {
-      const mythicStatus = await getMythicStatus(characterId);
-      if (mythicStatus && mythicStatus.tier > 0) {
-        mythicContext = formatMythicForPrompt(mythicStatus, character);
-      }
-    } catch (e) {
-      console.error('Error gathering mythic context:', e);
+    if (mythicStatusResult && mythicStatusResult.tier > 0) {
+      mythicContext = formatMythicForPrompt(mythicStatusResult, character);
     }
-
-    // Gather party base, notoriety, and long-term project context
-    let partyBaseContext = '';
-    let notorietyContext = '';
-    let projectsContext = '';
-    try {
-      partyBaseContext = await getBaseForPrompt(characterId, character.campaign_id) || '';
-    } catch (e) {
-      console.error('Error gathering party base context:', e);
-    }
-    try {
-      notorietyContext = await getNotorietyForPrompt(characterId, character.campaign_id) || '';
-    } catch (e) {
-      console.error('Error gathering notoriety context:', e);
-    }
-    try {
-      projectsContext = await getProjectsForPrompt(characterId, character.campaign_id) || '';
-    } catch (e) {
-      console.error('Error gathering projects context:', e);
-    }
-
-    // Fetch ALL chronicle summaries (richer 300-500 word AI-generated recaps)
-    let chronicleSummaries = [];
-    if (character.campaign_id) {
-      try {
-        chronicleSummaries = await getSessionSummariesForPrompt(character.campaign_id, characterId);
-      } catch (e) {
-        console.error('Error fetching chronicle summaries:', e);
-      }
-    }
-
-    // Fetch progression snapshot (theme, abilities, feats, synergies) for both characters.
-    // Silent on error — a missing progression snapshot just means that section of the
-    // prompt won't render.
-    let progression = null;
-    let secondaryProgression = null;
-    try {
-      progression = await getCharacterProgression(characterId);
-    } catch (e) {
-      console.error('Error fetching progression for primary character:', e);
-    }
-    if (secondCharacterId) {
-      try {
-        secondaryProgression = await getCharacterProgression(secondCharacterId);
-      } catch (e) {
-        console.error('Error fetching progression for secondary character:', e);
-      }
-    }
-
-    // Resolve per-NPC nicknames for the active custom NPCs so the DM prompt
-    // can tell each NPC exactly what form of the PC's name to use. Silent
-    // failure — a missing resolution just means that NPC's block omits the
-    // naming line (the DM will fall back to legal name or any nickname column).
-    let nicknameResolutions = null;
-    if (Array.isArray(customNpcs) && customNpcs.length > 0) {
-      try {
-        const npcIds = customNpcs.map(n => n?.id).filter(Boolean);
-        nicknameResolutions = await resolveNicknamesForNpcBatch(characterId, npcIds);
-      } catch (e) {
-        console.error('Error resolving nicknames for NPCs:', e);
-      }
-    }
+    // ──────────── END PARALLEL CONTEXT ASSEMBLY ────────────
 
     // Build session config with campaign module or custom Forgotten Realms context
     const sessionConfig = {
