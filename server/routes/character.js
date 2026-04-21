@@ -294,75 +294,82 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete character and all related data
+// Delete character and all related data.
+//
+// Uses dynamic foreign-key discovery instead of a hand-written deletion
+// list. Every table in the database is scanned via PRAGMA foreign_key_list;
+// any table with a declared FK to `characters` has its matching rows
+// deleted before the character row itself. This is robust against future
+// schema additions — new tables with an FK to characters are picked up
+// automatically, no endpoint edits required.
+//
+// One indirect cascade is still handled explicitly: session_message_summaries
+// FKs dm_sessions (not characters directly), and has no ON DELETE CASCADE
+// declared, so we have to clear it before dm_sessions gets deleted.
+//
+// Replaces the prior hand-written 13-step list, which missed any table
+// added after it was last maintained — the reason the v1.0.50 play-test
+// couldn't delete TEST_LWChar (companions.recruited_by_character_id was in
+// the list but some parallel dependency wasn't, and the error surfaced
+// before the companion delete reached it).
 router.delete('/:id', async (req, res) => {
   try {
     const id = req.params.id;
 
-    // Verify character exists
     const character = await dbGet('SELECT id FROM characters WHERE id = ?', [id]);
     if (!character) return res.status(404).json({ error: 'Character not found' });
 
-    // Delete all related records in dependency order to satisfy foreign key constraints
+    // --- INDIRECT CASCADES (FK to intermediate table, not characters) ---
+    // session_message_summaries → dm_sessions(id). No ON DELETE CASCADE.
+    await dbRun(
+      'DELETE FROM session_message_summaries WHERE session_id IN (SELECT id FROM dm_sessions WHERE character_id = ?)',
+      [id]
+    );
 
-    // 1. Session message summaries (FK → dm_sessions, no cascade)
-    await dbRun('DELETE FROM session_message_summaries WHERE session_id IN (SELECT id FROM dm_sessions WHERE character_id = ?)', [id]);
+    // --- DIRECT FK HOLDERS (discovered from schema at request time) ---
+    const tables = await dbAll(
+      `SELECT name FROM sqlite_master
+       WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'characters'`
+    );
+    const directRefs = [];
+    for (const t of tables) {
+      // Inline the table name — PRAGMA args can't be bound as parameters in
+      // SQLite. Table names come from sqlite_master so they're trusted.
+      const fks = await dbAll(`PRAGMA foreign_key_list(${t.name})`);
+      for (const fk of fks) {
+        if (fk.table === 'characters') directRefs.push({ table: t.name, column: fk.from });
+      }
+    }
 
-    // 2. Story chronicles and canon facts (FK → characters + dm_sessions)
-    await dbRun('DELETE FROM story_chronicles WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM canon_facts WHERE character_id = ?', [id]);
+    // Delete from every direct FK holder. Order among direct refs doesn't
+    // matter — they're all at the same depth in the FK graph.
+    const cleaned = [];
+    for (const { table, column } of directRefs) {
+      await dbRun(`DELETE FROM ${table} WHERE ${column} = ?`, [id]);
+      cleaned.push(`${table}.${column}`);
+    }
 
-    // 3. DM sessions (now safe — summaries already deleted)
-    await dbRun('DELETE FROM dm_sessions WHERE character_id = ?', [id]);
-
-    // 4. Adventures and adventure options
-    await dbRun('DELETE FROM adventure_options WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM adventures WHERE character_id = ?', [id]);
-
-    // 5. Companion data (companion_backstories cascade from companions via ON DELETE CASCADE)
-    await dbRun('DELETE FROM companion_activities WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM companions WHERE recruited_by_character_id = ?', [id]);
-
-    // 6. Quests (quest_requirements cascade via ON DELETE CASCADE)
-    await dbRun('DELETE FROM quests WHERE character_id = ?', [id]);
-
-    // 7. NPC data
-    await dbRun('DELETE FROM npc_relationships WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM npc_conversations WHERE character_id = ?', [id]);
-
-    // 8. Narrative and world data
-    await dbRun('DELETE FROM narrative_queue WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM faction_standings WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM journeys WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM story_threads WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM consequence_log WHERE character_id = ?', [id]);
-
-    // 9. Activity and downtime
-    await dbRun('DELETE FROM activity_queue WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM downtime WHERE character_id = ?', [id]);
-
-    // 10. Achievements
-    await dbRun('DELETE FROM character_achievements WHERE character_id = ?', [id]);
-
-    // 11. Crafting data
-    await dbRun('DELETE FROM crafting_projects WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM character_recipes WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM character_materials WHERE character_id = ?', [id]);
-
-    // 12. Mythic progression data
-    await dbRun('DELETE FROM mythic_characters WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM mythic_trials WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM mythic_abilities WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM character_piety WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM character_epic_boons WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM legendary_items WHERE character_id = ?', [id]);
-    await dbRun('DELETE FROM piety_history WHERE character_id = ?', [id]);
-
-    // 13. Finally delete the character
+    // --- FINAL: the character row itself ---
     await dbRun('DELETE FROM characters WHERE id = ?', [id]);
 
-    res.json({ message: 'Character deleted successfully' });
+    res.json({
+      message: 'Character deleted successfully',
+      cleaned_tables: cleaned.length,
+      tables_scanned: tables.length
+    });
   } catch (error) {
+    // Foreign-key constraint errors after the dynamic sweep usually mean a
+    // deeper FK chain than one hop (table B → table A → characters, where A
+    // and B don't have ON DELETE CASCADE). Surface a specific message so
+    // the operator can see which table is blocking.
+    const msg = String(error?.message || '');
+    if (msg.includes('FOREIGN KEY constraint')) {
+      console.error('Character delete blocked by FK constraint. Stack:', error);
+      return res.status(409).json({
+        error: 'A foreign-key dependency prevented the delete. Check server logs for the specific table.',
+        details: msg
+      });
+    }
     handleServerError(res, error, 'delete character');
   }
 });

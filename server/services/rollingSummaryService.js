@@ -65,8 +65,15 @@ export function shouldRoll(session, messages) {
  * Build the Sonnet prompt that produces (or updates) the rolling summary.
  * Uses a compact template — the model knows the format and we want a low-
  * cost generation call.
+ *
+ * Template branches on `sessionType`:
+ *   - Default (adventure sessions): prioritizes plot, combat, quests, items.
+ *   - 'prelude_arc': prioritizes character development, relationships,
+ *     values-forming choices, emotional texture — the stuff of growing up.
+ *     Plot-of-the-day beats are less important than WHO the character is
+ *     becoming and WHICH relationships shifted.
  */
-function buildSummaryPrompt(existingSummary, newMessages) {
+function buildSummaryPrompt(existingSummary, newMessages, sessionType = 'player') {
   const transcript = newMessages
     .map(m => {
       if (m.role === 'system') return null;
@@ -81,6 +88,31 @@ function buildSummaryPrompt(existingSummary, newMessages) {
     ? `SUMMARY SO FAR:\n${existingSummary}\n\n`
     : '';
 
+  if (sessionType === 'prelude_arc') {
+    return `You are maintaining a rolling summary for a D&D prelude arc — a character's childhood played across 7-10 sessions. Your output is read ONLY by the AI DM (Sonnet), never by the player. Be dense, factual, and weighted toward what matters for CHARACTER DEVELOPMENT.
+
+${priorBlock}NEW EXCHANGES TO INTEGRATE:
+${transcript}
+
+Produce an updated SUMMARY SO FAR that prioritizes, in order:
+1. **Character development moments** — what the character learned, how they reacted under pressure, what they've started to believe or reject.
+2. **Relationship shifts** — changes in how the character relates to family, mentors, rivals, friends. Name NPCs explicitly.
+3. **Values-forming choices** — non-binary decisions the character made and what they revealed. (E.g., "Lied to protect Rook despite Halda's warnings" — values the character is accruing: loyalty, defiance.)
+4. **Emotional texture** — what carries forward emotionally: grief unhealed, a secret held, a friendship cooling, a resentment growing.
+5. **Plot beats** only to the extent they shaped the above. Don't enumerate "each errand run."
+6. **Time elapsed** — if [AGE_ADVANCE] fired, note the current age.
+
+Style:
+• Past tense, second person matches the session voice but is NOT required here — concise third-person fragments work ("Bought the half-loaf. Moira's hands trembled for the first time.").
+• Under 600 words total — condense older material if the summary grows.
+• Preserve every named NPC the character has actually interacted with.
+• Drop purely atmospheric description unless it signaled emotional weight.
+• Do NOT restate rules, DC values, marker schemas, or arc-plan content.
+
+Write only the updated summary. No preamble, no commentary.`;
+  }
+
+  // Default (adventure / player) template
   return `You are maintaining a rolling session summary for an ongoing D&D text adventure. Your output is read ONLY by the AI DM, never by the player — be dense and factual rather than narrative.
 
 ${priorBlock}NEW EXCHANGES TO INTEGRATE:
@@ -126,8 +158,9 @@ export async function rollSummary(sessionId, session, messages) {
     if (chunk.length === 0) return null;
 
     const existing = session?.rolling_summary || null;
+    const sessionType = session?.session_type || 'player';
     const systemPrompt = 'You are a concise, factual summarizer. Output only the requested summary with no preamble or commentary.';
-    const userPrompt = buildSummaryPrompt(existing, chunk);
+    const userPrompt = buildSummaryPrompt(existing, chunk, sessionType);
 
     const updated = await claude.chat(
       systemPrompt,

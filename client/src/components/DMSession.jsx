@@ -15,7 +15,6 @@ import MerchantRelationshipsPanel from './MerchantRelationshipsPanel';
 import CombatTracker from './CombatTracker';
 import SessionSetup from './SessionSetup';
 import SessionRewards from './SessionRewards';
-import PreludeSetup from './PreludeSetup';
 import CampaignNotesPanel from './CampaignNotesPanel';
 import QuickReferencePanel from './QuickReferencePanel';
 import CompanionsPanel from './CompanionsPanel';
@@ -74,9 +73,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Campaign continuity state
   const [campaignContext, setCampaignContext] = useState(null);
   const [continueCampaign, setContinueCampaign] = useState(false);
-
-  // Prelude state
-  const [showPreludeSetup, setShowPreludeSetup] = useState(false);
 
   // Campaign notes state
   const [showCampaignNotes, setShowCampaignNotes] = useState(false);
@@ -714,59 +710,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     }
   };
 
-  const startPrelude = async (preludeConfig) => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/dm-session/start-prelude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId: character.id,
-          preludeConfig,
-          model: DEFAULT_MODEL,
-          providerPreference
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to start prelude');
-      }
-
-      setActiveSession({
-        id: data.sessionId,
-        title: data.title,
-        status: 'active',
-        isPrelude: true
-      });
-
-      if (data.gameDate) {
-        setGameDate(data.gameDate);
-      }
-
-      setMessages([{
-        type: 'narrative',
-        content: data.openingNarrative
-      }]);
-
-      setSessionEnded(false);
-      setSessionRewards(null);
-      setSessionAchievements([]);
-      setSessionRecap(null);
-      setActiveGameTab('adventure');
-      setShowPreludeSetup(false);
-
-      fetchSpellSlots();
-
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Old single-session prelude (startPrelude, PreludeSetup flow) removed in
+  // v1.0.44. The prelude-forward character creator lives in CharacterManager
+  // via PreludeSetupWizard + PreludeArcPreview and doesn't run inside a
+  // DMSession at all.
 
   const sendAction = async (e) => {
     e.preventDefault();
@@ -3019,18 +2966,8 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     );
   }
 
-  // Render prelude setup
-  if (showPreludeSetup) {
-    return (
-      <PreludeSetup
-        character={character}
-        onStartPrelude={startPrelude}
-        onBack={() => setShowPreludeSetup(false)}
-        isLoading={isLoading}
-        error={error}
-      />
-    );
-  }
+  // (Old `<PreludeSetup>` branch removed in v1.0.44 — origin-story prelude
+  // is gone; the prelude-forward creator runs from the character manager.)
 
   // Render session setup
   return (
@@ -3067,7 +3004,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       selectedNpcIds={selectedNpcIds}
       onSelectedNpcIdsChange={setSelectedNpcIds}
       onStartSession={startSession}
-      onStartPrelude={() => setShowPreludeSetup(true)}
       onOpenCampaignNotes={openCampaignNotes}
       isLoading={isLoading}
       error={error}

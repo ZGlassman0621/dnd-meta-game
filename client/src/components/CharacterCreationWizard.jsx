@@ -7,6 +7,11 @@ import equipmentData from '../data/equipment.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
 import { STANDARD_TEXTS, RECITATIONS } from '../data/keeperTexts.js'
+import {
+  ABILITY_SCORES, SKILLS, TOOLS, LANGUAGES, DAMAGE_TYPES,
+  MAGIC_INITIATE_CLASSES, MAGIC_INITIATE_ABILITIES,
+  skillKey, lookupReference, formatWeaponLine, formatArmorLine, formatGearLine
+} from '../data/references.js'
 
 // Static option lists used by the Ancestry Feat sub-choice selectors.
 const ALL_SKILLS_5E = [
@@ -100,6 +105,80 @@ function resolveAncestryChoiceOptions(choice, context = {}) {
   }
 
   return filtered
+}
+
+// --- Equipment lookup helpers ----------------------------------------------
+// Build a single name-keyed map of every weapon/armor/gear item so pickers can
+// surface damage/AC/cost/weight inline without walking the nested equipment
+// tree every render.
+
+const ALL_WEAPONS_BY_NAME = (() => {
+  const map = {}
+  const groups = equipmentData.simpleWeapons
+  if (groups) {
+    ;(groups.melee || []).forEach(w => { map[w.name] = w })
+    ;(groups.ranged || []).forEach(w => { map[w.name] = w })
+  }
+  const mg = equipmentData.martialWeapons
+  if (mg) {
+    ;(mg.melee || []).forEach(w => { map[w.name] = w })
+    ;(mg.ranged || []).forEach(w => { map[w.name] = w })
+  }
+  return map
+})()
+
+const ALL_ARMOR_BY_NAME = (() => {
+  const map = {}
+  const a = equipmentData.armor
+  if (a) {
+    ;(a.light || []).forEach(x => { map[x.name] = x })
+    ;(a.medium || []).forEach(x => { map[x.name] = x })
+    ;(a.heavy || []).forEach(x => { map[x.name] = x })
+    ;(a.shields || []).forEach(x => { map[x.name] = x })
+  }
+  return map
+})()
+
+const ALL_GEAR_BY_NAME = (() => {
+  const map = {}
+  ;(equipmentData.adventuringGear || []).forEach(g => { map[g.name] = g })
+  ;(equipmentData.ammunition || []).forEach(g => { map[g.name] = g })
+  return map
+})()
+
+/**
+ * Try to resolve a picker option's full stats by name. Falls back across
+ * weapon → armor → gear. Returns an object with a rendered `line` string
+ * (e.g. "1d8 slashing · versatile · 15 gp · 3 lb") or null if the name
+ * matches no canonical entry (e.g. "Any Simple Weapon", "Holy Symbol").
+ */
+function resolveEquipmentLine(name) {
+  if (!name || typeof name !== 'string') return null
+  // Strip trailing parenthetical quantity e.g. "20 Bolts" or "(20)" from the
+  // name. Try both the original string and the stripped version to maximize
+  // hit rate on picker options like "Light Crossbow and 20 Bolts".
+  const clean = name.trim()
+  const w = ALL_WEAPONS_BY_NAME[clean]
+  if (w) return { kind: 'weapon', data: w, line: formatWeaponLine(w) }
+  const a = ALL_ARMOR_BY_NAME[clean]
+  if (a) return { kind: 'armor', data: a, line: formatArmorLine(a) }
+  const g = ALL_GEAR_BY_NAME[clean]
+  if (g) return { kind: 'gear', data: g, line: formatGearLine(g) }
+  return null
+}
+
+/**
+ * Split a class feature string of the form "Name - Description" into
+ * { name, description }. Falls back to treating the whole string as the name.
+ */
+function splitFeature(featureString) {
+  if (!featureString || typeof featureString !== 'string') return { name: '', description: '' }
+  const idx = featureString.indexOf(' - ')
+  if (idx === -1) return { name: featureString, description: '' }
+  return {
+    name: featureString.slice(0, idx).trim(),
+    description: featureString.slice(idx + 3).trim()
+  }
 }
 
 function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
@@ -1268,6 +1347,17 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                       <div style={{ opacity: 0.9, lineHeight: 1.4 }}>
                         {feat.description}
                       </div>
+                      {feat.flavor_text && (
+                        <div style={{
+                          marginTop: '0.35rem',
+                          fontSize: '0.78rem',
+                          color: '#9fa3a8',
+                          fontStyle: 'italic',
+                          lineHeight: 1.4
+                        }}>
+                          {feat.flavor_text}
+                        </div>
+                      )}
                       {isSelected && Array.isArray(feat.choices) && feat.choices.length > 0 && (
                         <div
                           onClick={(e) => e.stopPropagation()}
@@ -1314,19 +1404,57 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                                     }
                                     handleChange('ancestry_feat_choices', cur)
                                   }
+                                  // Map the choice.type to a reference-map category
+                                  // so we can surface a helper description under
+                                  // the selected value (skill / tool / language / damage).
+                                  const refCategory = (() => {
+                                    if (!choice.type) return null
+                                    const t = String(choice.type).toLowerCase()
+                                    if (t.includes('skill')) return 'skill'
+                                    if (t.includes('language')) return 'language'
+                                    if (t.includes('tool') || t.includes('artisan') || t.includes('gaming') || t.includes('instrument')) return 'tool'
+                                    if (t.includes('damage')) return 'damage'
+                                    if (t.includes('weapon')) return 'weapon'
+                                    return null
+                                  })()
+                                  const pickedDesc = currentVal
+                                    ? (refCategory === 'weapon'
+                                        ? (resolveEquipmentLine(currentVal)?.line || null)
+                                        : lookupReference(refCategory, currentVal))
+                                    : null
                                   return opts ? (
-                                    <select
-                                      key={idx}
-                                      value={currentVal}
-                                      onChange={(e) => setVal(e.target.value)}
-                                      style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem' }}
-                                      required
-                                    >
-                                      <option value="">Select…</option>
-                                      {opts.map(o => (
-                                        <option key={o} value={o}>{o}</option>
-                                      ))}
-                                    </select>
+                                    <div key={idx} style={{ marginTop: idx > 0 ? '0.5rem' : 0 }}>
+                                      <select
+                                        value={currentVal}
+                                        onChange={(e) => setVal(e.target.value)}
+                                        style={{ width: '100%', fontSize: '0.85rem' }}
+                                        required
+                                      >
+                                        <option value="">Select…</option>
+                                        {opts.map(o => {
+                                          // For weapon sub-choices, surface the stat line in the option itself.
+                                          const optDesc = refCategory === 'weapon'
+                                            ? (resolveEquipmentLine(o)?.line || null)
+                                            : null
+                                          return (
+                                            <option key={o} value={o}>
+                                              {o}{optDesc ? ` — ${optDesc}` : ''}
+                                            </option>
+                                          )
+                                        })}
+                                      </select>
+                                      {pickedDesc && (
+                                        <div style={{
+                                          marginTop: '0.25rem',
+                                          fontSize: '0.72rem',
+                                          color: '#9fa3a8',
+                                          fontStyle: 'italic',
+                                          lineHeight: 1.35
+                                        }}>
+                                          {pickedDesc}
+                                        </div>
+                                      )}
+                                    </div>
                                   ) : (
                                     <input
                                       key={idx}
@@ -1412,12 +1540,34 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               style={{ marginTop: '0.25rem' }}
             >
               <option value="">Select one</option>
-              {(selectedThemeData.creation_choice_options || []).map(opt => (
-                <option key={opt} value={opt}>
-                  {opt.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                </option>
-              ))}
+              {(selectedThemeData.creation_choice_options || []).map(opt => {
+                // Back-compat: options used to be bare strings; are now
+                // { value, label, description } objects. Handle both.
+                const isObj = opt && typeof opt === 'object'
+                const value = isObj ? opt.value : opt
+                const label = isObj
+                  ? opt.label
+                  : String(opt).split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+                return <option key={value} value={value}>{label}</option>
+              })}
             </select>
+            {(() => {
+              const opts = selectedThemeData.creation_choice_options || []
+              const picked = opts.find(o => (o && typeof o === 'object' ? o.value : o) === formData.theme_path_choice)
+              const desc = picked && typeof picked === 'object' ? picked.description : null
+              if (!desc) return null
+              return (
+                <p style={{
+                  marginTop: '0.5rem',
+                  fontSize: '0.8rem',
+                  color: '#bbb',
+                  fontStyle: 'italic',
+                  lineHeight: 1.45
+                }}>
+                  {desc}
+                </p>
+              )
+            })()}
           </div>
         )}
       </div>
@@ -1446,37 +1596,52 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
               <p style={{ color: '#2ecc71', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                 Choose {selectedBackgroundData.languages} Language{selectedBackgroundData.languages > 1 ? 's' : ''}
               </p>
-              {[...Array(selectedBackgroundData.languages)].map((_, idx) => (
-                <div key={idx} className="form-group" style={{ marginBottom: '0.5rem' }}>
-                  <select
-                    value={formData.selected_languages[idx] || ''}
-                    onChange={(e) => {
-                      const newLangs = [...formData.selected_languages]
-                      newLangs[idx] = e.target.value
-                      handleChange('selected_languages', newLangs)
-                    }}
-                    style={{ width: '100%' }}
-                  >
-                    <option value="">Select Language {idx + 1}...</option>
-                    <optgroup label="Standard Languages">
-                      {(equipmentData.languages?.standard || [])
-                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
-                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
-                        .map(lang => (
-                          <option key={lang} value={lang}>{lang}</option>
-                        ))}
-                    </optgroup>
-                    <optgroup label="Exotic Languages">
-                      {(equipmentData.languages?.exotic || [])
-                        .filter(lang => !selectedRaceData?.languages?.includes(lang))
-                        .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
-                        .map(lang => (
-                          <option key={lang} value={lang}>{lang}</option>
-                        ))}
-                    </optgroup>
-                  </select>
-                </div>
-              ))}
+              {[...Array(selectedBackgroundData.languages)].map((_, idx) => {
+                const picked = formData.selected_languages[idx]
+                const pickedDesc = picked ? LANGUAGES[picked] : null
+                return (
+                  <div key={idx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                    <select
+                      value={picked || ''}
+                      onChange={(e) => {
+                        const newLangs = [...formData.selected_languages]
+                        newLangs[idx] = e.target.value
+                        handleChange('selected_languages', newLangs)
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Select Language {idx + 1}...</option>
+                      <optgroup label="Standard Languages">
+                        {(equipmentData.languages?.standard || [])
+                          .filter(lang => !selectedRaceData?.languages?.includes(lang))
+                          .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
+                          .map(lang => (
+                            <option key={lang} value={lang}>{lang}</option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="Exotic Languages">
+                        {(equipmentData.languages?.exotic || [])
+                          .filter(lang => !selectedRaceData?.languages?.includes(lang))
+                          .filter(lang => !formData.selected_languages.includes(lang) || formData.selected_languages[idx] === lang)
+                          .map(lang => (
+                            <option key={lang} value={lang}>{lang}</option>
+                          ))}
+                      </optgroup>
+                    </select>
+                    {pickedDesc && (
+                      <p style={{
+                        fontSize: '0.75rem',
+                        color: '#9fa3a8',
+                        marginTop: '0.25rem',
+                        fontStyle: 'italic',
+                        lineHeight: 1.35
+                      }}>
+                        {pickedDesc}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -1549,27 +1714,42 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                       return (
                         <div key={idx}>
                           <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>{tool}</p>
-                          {[...Array(numChoices)].map((_, choiceIdx) => (
-                            <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
-                              <select
-                                value={formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''}
-                                onChange={(e) => {
-                                  const newTools = [...formData.selected_tool_proficiencies]
-                                  newTools[idx * numChoices + choiceIdx] = e.target.value
-                                  handleChange('selected_tool_proficiencies', newTools)
-                                }}
-                                style={{ width: '100%' }}
-                              >
-                                <option value="">Select tool...</option>
-                                {options
-                                  .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
-                                    formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
-                                  .map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                  ))}
-                              </select>
-                            </div>
-                          ))}
+                          {[...Array(numChoices)].map((_, choiceIdx) => {
+                            const picked = formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] || ''
+                            const pickedDesc = picked ? TOOLS[picked] : null
+                            return (
+                              <div key={choiceIdx} className="form-group" style={{ marginBottom: '0.5rem' }}>
+                                <select
+                                  value={picked}
+                                  onChange={(e) => {
+                                    const newTools = [...formData.selected_tool_proficiencies]
+                                    newTools[idx * numChoices + choiceIdx] = e.target.value
+                                    handleChange('selected_tool_proficiencies', newTools)
+                                  }}
+                                  style={{ width: '100%' }}
+                                >
+                                  <option value="">Select tool...</option>
+                                  {options
+                                    .filter(opt => !formData.selected_tool_proficiencies.includes(opt) ||
+                                      formData.selected_tool_proficiencies[idx * numChoices + choiceIdx] === opt)
+                                    .map(opt => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                                {pickedDesc && (
+                                  <p style={{
+                                    fontSize: '0.72rem',
+                                    color: '#9fa3a8',
+                                    marginTop: '0.2rem',
+                                    fontStyle: 'italic',
+                                    lineHeight: 1.35
+                                  }}>
+                                    {pickedDesc}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       )
                     })}
@@ -1734,10 +1914,18 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
             <strong>Skills:</strong> Choose {selectedClassData.skillChoices} from {selectedClassData.skillOptions.map(skill => skill.charAt(0).toUpperCase() + skill.slice(1).replace(/_/g, ' ')).join(', ')}
           </p>
-          <ul style={{ fontSize: '0.85rem', color: '#bbb', marginLeft: '1.25rem', marginTop: '0.5rem' }}>
-            {selectedClassData.features.map((feature, idx) => (
-              <li key={idx}>{feature}</li>
-            ))}
+          <ul style={{ fontSize: '0.85rem', color: '#bbb', marginLeft: '1.25rem', marginTop: '0.5rem', listStyle: 'none', padding: 0 }}>
+            {selectedClassData.features.map((feature, idx) => {
+              const { name, description } = splitFeature(feature)
+              return (
+                <li key={idx} style={{ marginBottom: '0.4rem' }}>
+                  <strong style={{ color: '#e0e0e0' }}>{name}</strong>
+                  {description && (
+                    <span style={{ color: '#9fa3a8' }}> — {description}</span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -1750,6 +1938,40 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
           borderRadius: '6px'
         }}>
           <h4 style={{ marginBottom: '0.5rem' }}>Racial Traits</h4>
+          {selectedRaceData.description && (
+            <p style={{
+              fontSize: '0.85rem',
+              color: '#bbb',
+              marginBottom: '0.5rem',
+              fontStyle: 'italic',
+              lineHeight: 1.45
+            }}>
+              {selectedRaceData.description}
+            </p>
+          )}
+          {(() => {
+            // Show subrace description below the base race description when
+            // a subrace is selected. Some subraces stand alone as identities
+            // (e.g. Drow, Gold Dragonborn) and deserve their own flavor line.
+            if (formData.subrace && hasSubraces) {
+              const subraceData = selectedRaceData.subraces.find(sr => sr.name === formData.subrace)
+              if (subraceData && subraceData.description) {
+                return (
+                  <p style={{
+                    fontSize: '0.85rem',
+                    color: '#bbb',
+                    marginBottom: '0.5rem',
+                    fontStyle: 'italic',
+                    lineHeight: 1.45
+                  }}>
+                    <strong style={{ color: '#e0e0e0', fontStyle: 'normal' }}>{subraceData.name}:</strong>{' '}
+                    {subraceData.description}
+                  </p>
+                )
+              }
+            }
+            return null
+          })()}
           <p style={{ fontSize: '0.85rem', color: '#bbb', marginBottom: '0.5rem' }}>
             <strong>Size:</strong> {selectedRaceData.size} | <strong>Speed:</strong> {selectedRaceData.speed} ft
           </p>
@@ -1898,6 +2120,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
             const isPrimary = isPrimaryAbility(ability)
             const isDump = isDumpStat(ability)
 
+            const abilityInfo = ABILITY_SCORES[ability]
             return (
               <div key={ability} className="form-group">
                 <label style={{
@@ -1906,6 +2129,19 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                   fontWeight: (isPrimary || isDump) ? 'bold' : 'normal'
                 }}>
                   {isPrimary && '⭐ '}{isDump && '✗ '}{ability}
+                  {abilityInfo && (
+                    <span style={{
+                      display: 'block',
+                      marginTop: '0.15rem',
+                      fontSize: '0.7rem',
+                      textTransform: 'none',
+                      fontWeight: 'normal',
+                      color: '#9fa3a8',
+                      lineHeight: 1.3
+                    }}>
+                      {abilityInfo.description}
+                    </span>
+                  )}
                 </label>
                 {formData.ability_score_method === 'standard_array' ? (
                   <select
@@ -1999,6 +2235,13 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                   s => s.toLowerCase() === skill.toLowerCase() || s.toLowerCase().replace('_', ' ') === skill.toLowerCase()
                 )
                 const isDisabled = isFromBackground || (!isSelected && formData.selected_skills.length >= selectedClassData.skillChoices)
+                const skillInfo = SKILLS[skillKey(skillName)]
+                const hoverText = skillInfo
+                  ? `${skillInfo.name} (${skillInfo.ability.toUpperCase()}) — ${skillInfo.description}`
+                  : ''
+                const titleText = isFromBackground
+                  ? `Granted by ${selectedBackgroundData.name} background. ${hoverText}`
+                  : hoverText
 
                 return (
                   <button
@@ -2028,14 +2271,35 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                       color: isFromBackground ? '#2ecc71' : isSelected ? '#3498db' : (isDisabled ? '#666' : '#ccc'),
                       cursor: isFromBackground ? 'default' : (isDisabled && !isSelected) ? 'not-allowed' : 'pointer',
                       fontSize: '0.85rem',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.15rem'
                     }}
                     disabled={isFromBackground}
-                    title={isFromBackground ? `Granted by ${selectedBackgroundData.name} background` : ''}
+                    title={titleText}
                   >
-                    {isFromBackground ? '✓ ' : isSelected ? '● ' : '○ '}
-                    {skillName}
-                    {isFromBackground && <span style={{ fontSize: '0.7rem', marginLeft: '0.5rem' }}>(Background)</span>}
+                    <div>
+                      {isFromBackground ? '✓ ' : isSelected ? '● ' : '○ '}
+                      <strong>{skillName}</strong>
+                      {skillInfo && (
+                        <span style={{ color: '#777', fontWeight: 'normal', marginLeft: '0.35rem', fontSize: '0.72rem' }}>
+                          ({skillInfo.ability.toUpperCase()})
+                        </span>
+                      )}
+                      {isFromBackground && <span style={{ fontSize: '0.7rem', marginLeft: '0.5rem' }}>(Background)</span>}
+                    </div>
+                    {skillInfo && (
+                      <div style={{
+                        color: '#9fa3a8',
+                        fontWeight: 'normal',
+                        fontSize: '0.72rem',
+                        lineHeight: 1.3,
+                        whiteSpace: 'normal'
+                      }}>
+                        {skillInfo.description}
+                      </div>
+                    )}
                   </button>
                 )
               })}
@@ -2359,36 +2623,69 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                               }
                               handleChange('feat_choices', cur)
                             }
+                            // Reference-map category for helper description below dropdown.
+                            const refCategory = (() => {
+                              if (!choice.type) return null
+                              const t = String(choice.type).toLowerCase()
+                              if (t === 'class_caster' || t === 'class' || t.includes('class_from')) return 'class_caster'
+                              if (t.includes('skill')) return 'skill'
+                              if (t.includes('language')) return 'language'
+                              if (t.includes('tool') || t.includes('artisan') || t.includes('gaming') || t.includes('instrument')) return 'tool'
+                              if (t.includes('damage')) return 'damage'
+                              if (t.includes('weapon')) return 'weapon'
+                              return null
+                            })()
+                            const optionLabel = (o) => {
+                              // Bare lowercase tokens (e.g., "bard", "wizard") look better capitalized.
+                              if (typeof o === 'string' && o.length > 0 && o === o.toLowerCase() && !o.includes(' ')) {
+                                return o.charAt(0).toUpperCase() + o.slice(1)
+                              }
+                              return o
+                            }
+                            const pickedDesc = (() => {
+                              if (!currentVal) return null
+                              if (refCategory === 'class_caster') return MAGIC_INITIATE_CLASSES[String(currentVal).toLowerCase()] || null
+                              if (refCategory === 'weapon') return resolveEquipmentLine(currentVal)?.line || null
+                              return lookupReference(refCategory, currentVal)
+                            })()
                             return opts ? (
-                              <select
-                                key={idx}
-                                value={currentVal}
-                                onChange={(e) => {
-                                  setVal(e.target.value)
-                                  // If a class sub-choice changes, clear dependent spell_grid picks
-                                  // so you can't keep a bard spell after switching to wizard.
-                                  if (featsData[formData.selected_feat].choices.some(c => c.type === 'spell_grid' && c.class_from === choice.id)) {
-                                    const cur = { ...(formData.feat_choices || {}) }
-                                    for (const c of featsData[formData.selected_feat].choices) {
-                                      if (c.type === 'spell_grid' && c.class_from === choice.id) {
-                                        cur[c.id] = c.count > 1 ? [] : ''
+                              <div key={idx} style={{ marginTop: idx > 0 ? '0.5rem' : 0 }}>
+                                <select
+                                  value={currentVal}
+                                  onChange={(e) => {
+                                    setVal(e.target.value)
+                                    // If a class sub-choice changes, clear dependent spell_grid picks
+                                    // so you can't keep a bard spell after switching to wizard.
+                                    if (featsData[formData.selected_feat].choices.some(c => c.type === 'spell_grid' && c.class_from === choice.id)) {
+                                      const cur = { ...(formData.feat_choices || {}) }
+                                      for (const c of featsData[formData.selected_feat].choices) {
+                                        if (c.type === 'spell_grid' && c.class_from === choice.id) {
+                                          cur[c.id] = c.count > 1 ? [] : ''
+                                        }
                                       }
+                                      cur[choice.id] = e.target.value
+                                      handleChange('feat_choices', cur)
                                     }
-                                    cur[choice.id] = e.target.value
-                                    handleChange('feat_choices', cur)
-                                  }
-                                }}
-                                style={{ width: '100%', marginTop: idx > 0 ? '0.25rem' : 0, fontSize: '0.85rem', padding: '0.4rem 0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(155, 89, 182, 0.4)', borderRadius: '4px', color: '#e4e4e4' }}
-                              >
-                                <option value="">Select…</option>
-                                {opts.map(o => (
-                                  <option key={o} value={o}>
-                                    {typeof o === 'string' && o.length > 0 && o === o.toLowerCase() && !o.includes(' ')
-                                      ? o.charAt(0).toUpperCase() + o.slice(1)
-                                      : o}
-                                  </option>
-                                ))}
-                              </select>
+                                  }}
+                                  style={{ width: '100%', fontSize: '0.85rem', padding: '0.4rem 0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(155, 89, 182, 0.4)', borderRadius: '4px', color: '#e4e4e4' }}
+                                >
+                                  <option value="">Select…</option>
+                                  {opts.map(o => (
+                                    <option key={o} value={o}>{optionLabel(o)}</option>
+                                  ))}
+                                </select>
+                                {pickedDesc && (
+                                  <div style={{
+                                    marginTop: '0.25rem',
+                                    fontSize: '0.72rem',
+                                    color: '#9fa3a8',
+                                    fontStyle: 'italic',
+                                    lineHeight: 1.35
+                                  }}>
+                                    {pickedDesc}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <input
                                 key={idx}
@@ -3471,13 +3768,33 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                     <option value="">Select an option</option>
                     {choice.from.map((option, optIdx) => {
                       const packInfo = isPack(option) ? getPackContents(option) : null
+                      const eqLine = !packInfo ? resolveEquipmentLine(option) : null
+                      let suffix = ''
+                      if (packInfo) suffix = ` — ${packInfo.cost}`
+                      else if (eqLine) suffix = ` — ${eqLine.line}`
                       return (
                         <option key={optIdx} value={option}>
-                          {option}{packInfo ? ` (${packInfo.cost})` : ''}
+                          {option}{suffix}
                         </option>
                       )
                     })}
                   </select>
+
+                  {/* Stats for selected individual item (not a pack) */}
+                  {selectedOption && !isPack(selectedOption) && (() => {
+                    const eqLine = resolveEquipmentLine(selectedOption)
+                    if (!eqLine) return null
+                    return (
+                      <p style={{
+                        marginTop: '0.35rem',
+                        fontSize: '0.75rem',
+                        color: '#9fa3a8',
+                        fontStyle: 'italic'
+                      }}>
+                        {eqLine.line}
+                      </p>
+                    )
+                  })()}
 
                   {/* Pack contents tooltip */}
                   {selectedOption && isPack(selectedOption) && (() => {
@@ -3513,10 +3830,31 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                         style={{ marginTop: '0.25rem' }}
                       >
                         <option value="">Choose one</option>
-                        {subOptions.map((subOpt, subIdx) => (
-                          <option key={subIdx} value={subOpt}>{subOpt}</option>
-                        ))}
+                        {subOptions.map((subOpt, subIdx) => {
+                          const eqLine = resolveEquipmentLine(subOpt)
+                          return (
+                            <option key={subIdx} value={subOpt}>
+                              {subOpt}{eqLine ? ` — ${eqLine.line}` : ''}
+                            </option>
+                          )
+                        })}
                       </select>
+                      {(() => {
+                        const picked = formData.equipment_sub_selections[idx]
+                        if (!picked) return null
+                        const eqLine = resolveEquipmentLine(picked)
+                        if (!eqLine) return null
+                        return (
+                          <p style={{
+                            marginTop: '0.35rem',
+                            fontSize: '0.75rem',
+                            color: '#9fa3a8',
+                            fontStyle: 'italic'
+                          }}>
+                            {eqLine.line}
+                          </p>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>
@@ -3532,9 +3870,15 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
                 <ul style={{ fontSize: '0.85rem', color: '#bbb', marginLeft: '1.25rem' }}>
                   {selectedClassData.startingEquipment.given.map((item, idx) => {
                     const packInfo = isPack(item) ? getPackContents(item) : null
+                    const eqLine = !packInfo ? resolveEquipmentLine(item) : null
                     return (
                       <li key={idx}>
                         {item}
+                        {eqLine && (
+                          <span style={{ color: '#777', fontStyle: 'italic', marginLeft: '0.4rem' }}>
+                            — {eqLine.line}
+                          </span>
+                        )}
                         {packInfo && (
                           <details style={{ marginTop: '0.25rem', marginLeft: '0.5rem' }}>
                             <summary style={{ cursor: 'pointer', fontSize: '0.75rem', color: '#888' }}>

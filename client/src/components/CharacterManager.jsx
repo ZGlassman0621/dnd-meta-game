@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
 import CharacterCreationWizard from './CharacterCreationWizard'
+import PreludeSetupWizard from './PreludeSetupWizard'
+import PreludeArcPreview from './PreludeArcPreview'
+import PreludeSession from './PreludeSession'
 import classesData from '../data/classes.json'
 
 function CharacterManager({ characters, selectedCharacter, onSelectCharacter, onCharacterCreated, onCharacterUpdated, onCreationFormChange, editCharacterInWizard, onClearEditCharacter, onShowLevelUp }) {
   const [showForm, setShowForm] = useState(false)
+  const [showPrelude, setShowPrelude] = useState(false)
+  const [preludeArcCharacter, setPreludeArcCharacter] = useState(null)
+  const [preludeSessionCharacter, setPreludeSessionCharacter] = useState(null)
   const [resting, setResting] = useState(false)
   const [canLevelUpStatus, setCanLevelUpStatus] = useState({})
 
@@ -28,11 +34,19 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
     }
   }
 
-  // Check level-up status for all characters
+  // Check level-up status for all characters.
+  // Skip prelude-phase characters — they don't have a class/level yet, so
+  // the level-up check would false-positive on their placeholder class='prelude'
+  // and level=0. Leveling emerges from the primary character creator after
+  // the prelude ends, not during it.
   useEffect(() => {
     const checkLevelUpStatus = async () => {
       const statusMap = {}
       for (const char of characters) {
+        if (char.creation_phase === 'prelude') {
+          statusMap[char.id] = false
+          continue
+        }
         try {
           const response = await fetch(`/api/character/can-level-up/${char.id}`)
           if (response.ok) {
@@ -187,7 +201,49 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
 
   return (
     <div className="container">
-      {showForm ? (
+      {preludeSessionCharacter ? (
+        <PreludeSession
+          character={preludeSessionCharacter}
+          onBack={() => {
+            setPreludeSessionCharacter(null)
+            if (onCreationFormChange) onCreationFormChange(false)
+          }}
+        />
+      ) : preludeArcCharacter ? (
+        <PreludeArcPreview
+          character={preludeArcCharacter}
+          onBegin={() => {
+            // Route into the session loop. The PreludeSession component will
+            // resume an active session or start a new one.
+            setPreludeArcCharacter(null)
+            setPreludeSessionCharacter(preludeArcCharacter)
+          }}
+          onReturn={() => {
+            setPreludeArcCharacter(null)
+            if (onCreationFormChange) onCreationFormChange(false)
+          }}
+        />
+      ) : showPrelude ? (
+        <PreludeSetupWizard
+          onPreludeCreated={(char, opts = {}) => {
+            // Setup done. Two routing paths depending on the arc-preview
+            // checkbox: testing → preview screen; production → straight
+            // into session start. Keep form-change flag true either way
+            // so NavigationMenu / etc. know we're still in a creation flow.
+            setShowPrelude(false)
+            onCharacterCreated(char)
+            if (opts.showArcPreview === false) {
+              setPreludeSessionCharacter(char)
+            } else {
+              setPreludeArcCharacter(char)
+            }
+          }}
+          onCancel={() => {
+            setShowPrelude(false)
+            if (onCreationFormChange) onCreationFormChange(false)
+          }}
+        />
+      ) : showForm ? (
         <CharacterCreationWizard
           editCharacter={editCharacterInWizard}
           onCharacterCreated={(char) => {
@@ -208,16 +264,37 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ margin: 0 }}>Characters</h2>
-            <button
-              className="button button-secondary"
-              onClick={() => {
-                onSelectCharacter(null)
-                handleShowForm(true)
-              }}
-              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-            >
-              + New Character
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => {
+                  onSelectCharacter(null)
+                  setShowPrelude(true)
+                  if (onCreationFormChange) onCreationFormChange(true)
+                }}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  fontSize: '0.85rem',
+                  background: 'rgba(139,92,246,0.2)',
+                  border: '1px solid #8b5cf6',
+                  color: '#c4b5fd',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+                title="Play your character's childhood and adolescence; class, stats, and values emerge from play"
+              >
+                ✦ Start with a Prelude
+              </button>
+              <button
+                className="button button-secondary"
+                onClick={() => {
+                  onSelectCharacter(null)
+                  handleShowForm(true)
+                }}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              >
+                + New Character
+              </button>
+            </div>
           </div>
 
           {characters.length === 0 ? (
@@ -228,7 +305,25 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
             <div
               key={char.id}
               className={`character-card ${selectedCharacter?.id === char.id ? 'selected' : ''}`}
-              onClick={() => onSelectCharacter(char)}
+              onClick={async () => {
+                // Prelude-phase characters route into the session loop if one
+                // is active, else into the arc preview (which has the Begin
+                // the Prelude button that jumps to session start).
+                if (char.creation_phase === 'prelude') {
+                  onSelectCharacter(char)
+                  if (onCreationFormChange) onCreationFormChange(true)
+                  try {
+                    const resp = await fetch(`/api/prelude/${char.id}/sessions/active`)
+                    if (resp.ok) {
+                      setPreludeSessionCharacter(char)
+                      return
+                    }
+                  } catch (_) { /* fall through to arc preview */ }
+                  setPreludeArcCharacter(char)
+                } else {
+                  onSelectCharacter(char)
+                }
+              }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 {char.avatar && (
@@ -253,8 +348,30 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
                       {char.name}
                     </p>
                   )}
-                  <p style={{ margin: '0.25rem 0 0 0', color: '#bbb' }}>Level {char.level} {capitalize(char.race)} {capitalize(char.class)}</p>
+                  {char.creation_phase === 'prelude' ? (
+                    <p style={{ margin: '0.25rem 0 0 0', color: '#bbb' }}>
+                      {capitalize(char.race)}{char.subrace ? ` (${char.subrace})` : ''} · Age {char.prelude_age || '?'}
+                    </p>
+                  ) : (
+                    <p style={{ margin: '0.25rem 0 0 0', color: '#bbb' }}>Level {char.level} {capitalize(char.race)} {capitalize(char.class)}</p>
+                  )}
                 </div>
+                {char.creation_phase === 'prelude' && (
+                  <span
+                    style={{
+                      background: 'rgba(139,92,246,0.15)',
+                      border: '1px solid #8b5cf6',
+                      color: '#c4b5fd',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold'
+                    }}
+                    title="Prelude in progress — gameplay arrives in Phase 2"
+                  >
+                    ✦ In Prelude
+                  </span>
+                )}
                 {canLevelUpStatus[char.id] && (
                   <span style={{
                     background: 'rgba(241, 196, 15, 0.2)',

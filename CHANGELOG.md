@@ -2,6 +2,1682 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.61] - 2026-04-21 — Session length target raised to ~50 exchanges
+
+v1.0.59's thresholds were too tight — a play-test session ended at
+16 exchanges with no cliffhanger, no action, no weight. The pacing
+nudges fired early and Sonnet interpreted "begin looking for a close"
+as "close ASAP," cutting sessions short. Now that canon facts
+(v1.0.60) guard against drift, we can safely let sessions run longer.
+
+### Raised thresholds
+
+| Threshold | v1.0.59 (old) | v1.0.61 (new) |
+|---|---|---|
+| Gentle nudge | 30 msg / ~15 exchanges | **100 msg / ~50 exchanges** |
+| Wrap ("fire in 3-5 responses") | 50 msg / ~25 exchanges | **130 msg / ~65 exchanges** |
+| Force ("fire NOW") | 70 msg / ~35 exchanges | **160 msg / ~80 exchanges** |
+
+Target session length: **~50 exchanges** — substantial enough for
+multiple scenes, real character development, and stakes that build
+across the session.
+
+### Re-tuned nudge language
+
+The first nudge used to say "begin looking for a close point" —
+Sonnet interpreted that as an order to end soon. New language: "Watch
+for a strong cliffhanger moment over the next several scenes. Don't
+force an arbitrary ending; wait for the right beat." Same escalation
+ladder, but the first step is an explicit HINT, not a close order.
+
+### Prompt rule 11b rewritten
+
+Now explicitly distinguishes good vs. bad stopping points:
+
+- **GOOD:** stakes spike, significant decision pending, someone
+  important just appeared/died/threatened, chapter close moments
+- **BAD:** mid-conversation lulls, quiet texture scenes, trivial
+  errand completions, "the morning stretches out ahead"
+
+Tells Sonnet the first pacing nudge is a hint to start watching,
+not an order to close. Notes that canon facts mitigate the drift
+risk that originally motivated early endings.
+
+### Tests + build
+
+- All 3 prelude suites still green (38 + 15 + 117). Build clean.
+- Numbers-only change in the service + prompt rewording; no schema
+  or API surface changes.
+
+## [1.0.0.60] - 2026-04-21 — Canon facts ledger: prevent context drift at the source
+
+Context drift is the root cause of the "Moss is 12 now" class of
+regressions. Pacing fixes (v1.0.59) help, but the real solution is to
+give the AI a ground-truth ledger it sees every turn. Ported the
+pattern from the main DM's `canon_facts`.
+
+### New table — `prelude_canon_facts` (migration 043)
+
+Per-character ledger of canonical truths. Columns: `category`
+(npc/location/event/relationship/trait/item), `subject`, `fact`,
+`established_age`, `session_id`, `status` ('active' | 'retired').
+UNIQUE index on (character_id, category, subject, fact) where
+status='active' — exact duplicates silently ignored. Index on
+(character_id, status, category) for fast retrieval.
+
+### New markers
+
+- **`[CANON_FACT: subject="..." category="npc|location|event|relationship|trait|item" fact="..."]`** —
+  additive. Sonnet emits when establishing new canonical detail. Multiple
+  per response allowed. Strip from display.
+- **`[CANON_FACT_RETIRE: subject="..." fact_contains="..."]`** — marks
+  matching active facts as `retired` so they stop appearing in the
+  prompt. Used when a fact is no longer true (age rolled forward,
+  character died, trait changed). Substring match on `fact`.
+
+### New service — `preludeCanonService.js`
+
+- `recordCanonFact(characterId, {subject, category, fact, establishedAge, sessionId})`
+- `retireCanonFacts(characterId, {subject, factContains})`
+- `getActiveCanonFacts(characterId)` — flat list, ordered by category+subject
+- `buildCanonFactsBlock(characterId)` — formatted prompt block: grouped
+  sections per category (PEOPLE / RELATIONSHIPS / TRAITS / PLACES /
+  ITEMS / EVENTS), bullets per subject, dense and scannable.
+
+### Wire — every Sonnet call sees the ledger
+
+Both `startSession` and `sendMessage` now call
+`canonService.buildCanonFactsBlock()` and pass the result to the prompt
+builder. `createPreludeSystemPrompt()` takes a new `canonFactsBlock`
+parameter; the block appears between RECURRING THREADS and the MARKERS
+section. When no facts exist yet, a placeholder tells Sonnet to start
+emitting.
+
+### Session processor — process canon markers
+
+`processMarkersForSession`:
+1. Retires match first (so a same-turn fire+retire lands cleanly).
+2. Inserts new facts with the current `prelude_age` as `established_age`.
+3. Duplicate inserts (exact subject+category+fact match) silently
+   succeed — the UNIQUE index catches them; `recordCanonFact` returns
+   `{status: 'duplicate'}`.
+4. Surfaces added/retired in the `markers` payload returned to the UI.
+
+### Prompt rule 15a — CANON FACTS DISCIPLINE
+
+New ABSOLUTE RULE teaches Sonnet:
+- Scan the CANON FACTS block before generating named details.
+- Defer to canon when it contradicts what you're about to write.
+- Emit `[CANON_FACT]` when first establishing a named NPC / place /
+  event / relationship / trait / item — with examples.
+- Emit `[CANON_FACT_RETIRE]` before overwriting (e.g., after
+  `[AGE_ADVANCE]`, retire old ages).
+- Facts should be short, factual, dense — not flowery. 1-2 per session
+  is typical.
+
+FINAL REMINDER surfaces the rule in recency position.
+
+### New API
+
+- `GET /api/prelude/:characterId/canon-facts` — active ledger for the UI.
+
+### UI — Canon ledger section in the Setup panel
+
+The existing Setup panel gets a new "Canon ledger" section showing
+the live ground truth grouped by category (People / Relationships /
+Traits / Places / Items / Events). Each fact shows subject + fact text
++ established age. Refreshes on Setup panel open + after any turn. Makes
+drift debuggable — you can see what Sonnet has registered.
+
+### Tests + build
+
+- `tests/prelude-markers.test.js` grew 101 → 117 (covering both canon
+  markers + strip regressions + default category + aliases).
+- prelude-setup 38, prelude-arc 15, prelude-markers 117 — 170 prelude
+  tests green total.
+- Migration 043 verified on Turso.
+- Client build clean.
+
+### How this interacts with existing systems
+
+- **v1.0.54 session ordinal**: unchanged.
+- **v1.0.55 session recap**: unchanged. Recap generation doesn't touch
+  canon facts.
+- **v1.0.55 rolling summaries**: complementary — rolling summary is
+  prose memory, canon facts is structured ground truth. Both get
+  injected in the prompt.
+- **v1.0.56 emergence markers**: canon facts are lighter-weight and
+  have no accept/decline step. A stat hint is player-facing and
+  mechanical; a canon fact is DM-facing and informational.
+- **v1.0.59 session length pacing**: canon facts don't affect length.
+  But if a session does run long, canon facts prevent the drift that
+  forced v1.0.59 in the first place.
+
+### Still not built (Phase 5)
+
+Transition to main creator — `[PRELUDE_END]` marker, Opus-generated
+backstory using canon facts + emergences, pre-filled main creator
+wizard, primary campaign world-gen receiving prelude as required
+input. Canon facts give Phase 5 a much richer source for backstory
+generation when it lands.
+
+## [1.0.0.59] - 2026-04-21 — Preserve self-correction + enforce session length discipline
+
+Two things from play-test:
+
+### 1. Self-correction (bake the good behavior into the prompt)
+
+Sonnet caught itself putting words in the player's mouth mid-response,
+acknowledged the violation, and rewound. Good behavior — I want to
+preserve it.
+
+New rule **2a: SELF-CORRECTION IS WELCOME** explicitly blesses this:
+if you catch yourself mid-violation, acknowledge and rewind — don't
+silently cover it up. Same for when the player corrects a drift the
+AI missed ("Moss is nine, not twelve"): brief "You're right — [correction].
+[Continue]." pattern, don't over-explain.
+
+FINAL REMINDER surfaces the same line in recency position.
+
+### 2. Session length discipline
+
+Context drift hit a long-running session. Sonnet started writing
+"Moss is twelve and has had lessons" — but Moss is nine with no
+weapons training established. The prompt's `[SESSION_END_CLIFFHANGER]`
+guidance was too soft: "at a natural break." Sonnet kept going past
+natural break points because the player was engaged.
+
+Two-sided fix:
+
+**Server-side pacing enforcement** (`preludeSessionService.js`):
+
+- New `session_config.currentPlaySessionBaseline` — message-count at
+  the start of the current play-session. Set to 0 on session creation;
+  reset to `messages.length` on each resume (so each pause-to-pause
+  cycle gets its own length budget).
+- Three escalating thresholds on play-session message count:
+  - **≥30 messages** (~15 exchanges): gentle nudge injected as
+    `[SYSTEM NOTE]` — "begin looking for a natural close."
+  - **≥50 messages** (~25 exchanges): firmer — "fire
+    [SESSION_END_CLIFFHANGER] within the next 2-3 responses."
+  - **≥70 messages** (~35 exchanges): forced — "you MUST fire
+    [SESSION_END_CLIFFHANGER] in THIS response. Even an imperfect
+    cliffhanger beats continuing."
+- Thresholds defined as module constants for easy tuning.
+
+**Prompt-side awareness** (new rule **11b**: SESSION LENGTH DISCIPLINE):
+
+Lists good stopping points (scene close, stakes spike, decision forced,
+chapter close moment). Makes the AI aware that the server will inject
+escalating nudges and instructs it to obey them promptly.
+
+Existing sessions without `currentPlaySessionBaseline` treat baseline
+as 0 — meaning their full current history counts, which correctly
+triggers wrap/force nudges for sessions that have already drifted long.
+
+### Tests + build
+
+- All 3 prelude suites still green (38 + 15 + 101). Client build clean.
+- No schema changes — new config field lives on the existing
+  `session_config` JSON column.
+- Follow-up noted: integration test for session pacing (mock Sonnet +
+  simulate long session) would catch regressions. Not written tonight.
+
+## [1.0.0.58] - 2026-04-21 — Hotfix: TDZ error in Phase 3 sendMessage
+
+Every prelude message send was crashing with
+`ReferenceError: Cannot access 'markerResults' before initialization`.
+
+### Cause
+
+In the Phase 3 cap-violation feedback code I added, the block that
+reads `markerResults.capViolations` was placed BEFORE the line that
+declares `markerResults`. Classic temporal-dead-zone JavaScript
+error. Tests didn't catch it because the marker-detection tests are
+unit tests against the detection module, not the send flow.
+
+### Fix
+
+Swapped the ordering in `preludeSessionService.sendMessage()`:
+
+1. Call Sonnet → get result
+2. Persist messages
+3. Fire rolling summary (no dependencies on markerResults)
+4. **`const markerResults = await processMarkersForSession(...)`** ← moved here
+5. Consume cap-violation feedback into `session_config` for the next turn
+6. Handle cliffhanger / recap
+
+No prompt or schema changes — pure ordering fix.
+
+### Tests + build
+
+- All 3 prelude suites green. Build clean.
+- Follow-up note: should add an integration-style test covering the
+  full sendMessage flow with mocked Sonnet to catch this class of
+  regression in future.
+
+## [1.0.0.57] - 2026-04-20 — Prelude Phase 4: age-register voice + time compression + tone application
+
+Phase 4 ships. All prompt-only work — no schema, service, or UI changes.
+The goal: make NPC dialogue sound age-differentiated, time compression
+feel crafted rather than lazy, and tone tags actually shape prose
+rather than just decorate it.
+
+### Expanded Rule 17 — NPC VOICE: AGE REGISTER
+
+Was one sentence. Now five life-stages with concrete speech/thought
+patterns each:
+
+- **Small child (5-9):** fragments, concrete nouns, favorites named,
+  one idea per breath
+- **Older child / tween (9-13):** chaining thoughts, "actually" and
+  "though," compares things, secrets matter
+- **Teen / adolescent (13-18):** compression as coolness, irony,
+  loaded single words ("fine," "whatever"), peer over family
+- **Young adult (18-25):** most formally competent, confident where
+  untested, green at edges
+- **Adult (25-55):** class + occupation + exhaustion shapes speech;
+  rural compressed, urban layered
+- **Elder (55+):** memory as lens, repeated stories, direct opinions,
+  body fatigue in dialogue
+
+Applied-test framing: "if a tavern has innkeeper + drunk + 7-year-old
+daughter, those three voices should be UNMISTAKABLY distinct in cadence,
+vocabulary, topic-density, and compression."
+
+### Expanded Rule 11 — TIME ADVANCES with four technique examples
+
+Was generic guidance. Now four named compression techniques with
+worked examples:
+
+- **SEASON-SKIP:** concrete beat + time passing + delta detail, all in
+  2 sentences
+- **RHYTHM-COMPRESSION:** name the pattern, then break it with the
+  scene
+- **SELECTIVE DETAIL:** specific concrete details across time
+- **[AGE_ADVANCE] JUMP:** the biggest hammer — use only at chapter
+  close
+
+Plus a positive rule of what compression ISN'T ("Time passed. Things
+happened. You grew." = lazy; every line still earns its keep).
+
+And a WHEN-TO-COMPRESS-vs-SCENE-OUT decision ladder: new decisions,
+relationship shifts, new people, fights/oaths/betrayals → scene out;
+routine work, waiting, repeated meals → compress.
+
+### Expanded Rule 14 — TONE FIDELITY with per-tag applied guidance
+
+Was generic "gritty + dark humor has blunt prose." Now 16 tone tags,
+each with how it actually shapes prose at the word/sentence level:
+
+- Gritty: short sentences, concrete nouns, body details, name hunger
+  not "empty feeling"
+- Dark humor: one dry aside per scene, salt not sugar
+- Hopeful: small kindnesses explicitly named
+- Epic: elevated diction ("cold stone," "the wind out of the north")
+- Quiet/melancholic: long sentences, pauses, unsaid things
+- Tragic: beautiful things named just before they break
+- Whimsical: wonder-details, never violates Faerûn canon
+- Political: another agenda in every room
+- Rustic: land details saturate, time measured in crops not clocks
+- Mystical: porous world, dreams carry weight, gods indirect
+- Brutal: slow healing, rare mercy, unclean resolutions
+- Tender/intimate: close-ups on faces and hands, small touches
+- Romantic: yearning as a color, unsaid words
+- Eerie/uncanny: something faintly wrong, repetition, children's dreams
+- Bawdy: earthy, frank, no euphemism
+- Spiritual: ritual weight, faith as daily presence
+
+Explicit note: COMBINED TAGS amplify each other — honour the
+combination, don't pick one and ignore the rest.
+
+### Tests + build
+
+- All 3 prelude suites green (38 + 15 + 101 = 154 prelude tests total).
+- Client build clean.
+- No code changes, so no code tests added — prompt-only release.
+
+### Phase 4 scope notes
+
+- **Prompt-only by design** per user directive. Full per-NPC voice
+  palette generation (like the main DM's system) is deferred — the
+  expanded age-register and tone rules should be sufficient for the
+  7-10 session prelude scope.
+- **Next:** Phase 5 (transition to primary campaign) — `[PRELUDE_END]`
+  marker, backstory generation from emergences + canon NPCs + values,
+  pre-filled main creator wizard, mentor imprint seeding, campaign
+  world-gen receiving prelude as required input.
+
+## [1.0.0.56] - 2026-04-20 — Prelude Phase 3: mechanical emergence
+
+Phase 3 ships. Non-binary choices now shape the character sheet.
+
+### Six emergence markers
+
+Sonnet fires these when the player's actions earn them — not on authorial
+whim. Server records, caps enforce, UI surfaces accept/decline cards.
+
+- `[STAT_HINT: stat=str|dex|con|int|wis|cha magnitude=1|2 reason="..."]` —
+  stat pressure from played behaviour. **Cap: +2 max per stat.**
+- `[SKILL_HINT: skill="Athletics" reason="..."]` —
+  skill affinity. **Cap: 2 skills total across the prelude.**
+- `[CLASS_HINT: class="ranger" reason="..."]` — auto-tallied class affinity.
+- `[THEME_HINT: theme="outlander" reason="..."]` — auto-tallied theme affinity.
+- `[ANCESTRY_HINT: feat_id="dwarf_l1_stone_sense" reason="..."]` — auto-tallied ancestry feat.
+- `[VALUE_HINT: value="loyalty" delta=+1 reason="..."]` —
+  values accumulate (no cap). 12 canonical values: curiosity, loyalty,
+  empathy, ambition, self_preservation, restraint, justice, defiance,
+  compassion, pragmatism, honor, freedom.
+
+### Chapter-weighted tallies
+
+Class / theme / ancestry hints are weighted by chapter at prelude end:
+Ch1-2 = 1.0x, Ch3 = 1.5x, Ch4 = 2.0x. Recency breaks ties. Stats and
+skills aren't tallied — they're player-decided accept/decline cards
+fired inline in the message feed.
+
+### New service — `preludeEmergenceService.js`
+
+`recordStatHint`, `recordSkillHint`, `recordClassHint`,
+`recordThemeHint`, `recordAncestryHint`, `recordValueHint`:
+each enforces its specific caps and returns `{ status: 'offered' | 'capped'
+| 'capped_previously_declined' | 'tallied' | 'accumulated' }`.
+
+`acceptEmergence(characterId, id)`, `declineEmergence(characterId, id,
+{permanent})`: player decisions.
+
+`getOfferedEmergences(characterId)`: for UI polling.
+`getAcceptedEmergences(characterId, sinceSessionId)`: feeds session recap.
+`getValues(characterId)`: for the values tracker panel.
+`getTrajectoryWinner(characterId, kind)`: chapter-weighted winner for
+class/theme/ancestry at prelude end (Phase 5 consumer).
+
+### New API endpoints
+
+- `GET /api/prelude/:characterId/emergences/offered` — pending cards
+- `POST /api/prelude/:characterId/emergences/:id/accept`
+- `POST /api/prelude/:characterId/emergences/:id/decline` (body: `{permanent: bool}`)
+- `GET /api/prelude/:characterId/values` — current rolling tally
+
+### UI — inline accept/decline cards in the message feed
+
+When Sonnet emits a STAT_HINT or SKILL_HINT, the UI renders an amber-
+bordered card below the assistant message with ✦ EMERGENCE OFFER header,
+reason, and three buttons: **Accept**, **Not now**, **Never offer**.
+Resolved cards show their status inline. Class/theme/ancestry hints
+tally silently (no card).
+
+### UI — values tracker in Setup panel
+
+The existing Setup panel now includes an "Emerging values" section
+below the setup review. Shows each value and its current score,
+color-coded (green +3+, purple +1/+2, red -3+, gray neutral).
+Refreshes when the Setup panel opens and after any player turn (so
+the tracker reflects value hints fired this session).
+
+### Cap-violation feedback loop
+
+When Sonnet fires a hint the server rejects (e.g., STR already at +2,
+or 2 skills already accepted), the rejection reason gets queued on
+`session_config.pendingCapFeedback` and injected into the NEXT turn's
+prompt as a `[SYSTEM NOTE]` so Sonnet knows to stop firing that
+target. Cleared after consumption.
+
+### Session-end recap integration
+
+The Sonnet-generated session recap now receives the list of
+emergences the player accepted during this session (stat +1 CON, skill
+Athletics, etc.) and weaves them into the prose naturally — "the
+running and climbing have made you quicker" — instead of listing them
+mechanically. Feels earned, not bureaucratic.
+
+### Prompt — EMERGENCE MARKERS section
+
+New block in the Sonnet system prompt documenting all 6 markers with
+canonical ids (stats, 5e skill names, D&D class ids, theme ids from
+`server/data/themes.js`, ancestry feat list ids from migration 023).
+Firing rules: only fire when PLAYED BEHAVIOR earned the hint, aim for
+1-3 per session (not every turn), obey `[SYSTEM NOTE]` cap-violation
+feedback.
+
+### Tests + build
+
+- prelude-markers grew 74 → 101 (covering all 6 emergence marker types
+  + roll-up + strip regressions). prelude-setup 38, prelude-arc 15.
+- Client build clean.
+
+### Still not built (Phase 5)
+
+Stat bonuses and skill proficiencies don't APPLY to the character
+sheet mid-prelude — they accumulate on `prelude_emergences` and flow
+through at prelude end into the main creator wizard. That's the Phase
+5 "transition to primary campaign" work. For now, accepted emergences
+show "✓ Accepted" in the UI and get carried in the session recap.
+
+## [1.0.0.55] - 2026-04-20 — Prelude Phase 2b-ii: HP, session recap, chapter promise, pacing
+
+Phase 2b-ii ships. Seven pieces integrated:
+
+### HP tracking
+- **`[HP_CHANGE: delta=-N reason="..."]`** marker — Sonnet emits for damage/healing.
+  Server updates `characters.current_hp`, UI top bar reflects.
+- HP displayed in top bar with color: green >50%, yellow <50%, red at 0.
+- Dropped: +/- buttons (per user directive — if Sonnet misses the marker, it's a bug to fix, not a UI fallback).
+
+### Age-scaled stats
+- When `[AGE_ADVANCE]` pushes into a new chapter, `max_hp` recomputes from
+  the per-chapter formula (4/6/8/10 + CON mod), and `current_hp` scales
+  proportionally — a character at full HP stays full, at half stays at
+  roughly half.
+
+### Per-chapter session budget (DM-side pacing)
+- Prompt rule 11a adds soft guidance: Ch1 ~1-2 sessions, Ch2 ~2, Ch3 ~2-3,
+  Ch4 ~2-3. Sonnet sees it every turn alongside the current session number.
+- Player-facing top bar stays clean — this is DM guidance only.
+
+### CHAPTER_PROMISE marker
+- **`[CHAPTER_PROMISE: theme="..." question="..."]`** — emitted ONLY at
+  the opening of chapter 3 and chapter 4. Surfaces the thematic
+  throughline and invites player to confirm / redirect / see-where-it-goes.
+- Rendered inline in the message feed as a distinct dashed-purple card
+  labeled "CHAPTER N PROMISE."
+
+### Session-end recap
+- When `[SESSION_END_CLIFFHANGER]` fires, server invokes Sonnet to
+  generate a 1-2 paragraph recap of the session in second person.
+- Persisted on `session_config.lastSessionRecap`, surfaced in the
+  paused banner + on reload of a paused session. Fresh recap per session
+  (no cross-session history per user directive).
+
+### Prelude-tuned rolling summary template
+- `rollingSummaryService.buildSummaryPrompt()` now branches on
+  `sessionType`. For `session_type='prelude_arc'`, uses a character-
+  development-weighted template instead of the plot/combat/quest-focused
+  adventure template.
+- Prioritizes: character development moments, relationship shifts,
+  values-forming choices, emotional texture. Plot beats only matter
+  insofar as they shaped those.
+- `preludeSessionService.sendMessage()` now applies the rolling summary
+  before building the continuation prompt and fires `rollSummary()`
+  fire-and-forget after each turn, matching the main DM pattern.
+
+### Notice pills in the feed
+- Chapter advances, age advances, and HP deltas surface as quiet
+  monospace notice rows between messages (e.g., *"→ Chapter 2"*, *"→ +4 years (Age 10)"*, *"HP -2"*).
+
+### Tests + build
+- prelude-markers tests grew 55 → 74 (covering HP_CHANGE, CHAPTER_PROMISE,
+  strip regressions for both). 38 + 15 + 74 = 127 prelude tests green.
+- Client build clean.
+
+### Scope cuts (as discussed with user)
+- Dice roller UI — dropped. User uses physical dice; text action reports work.
+- Combat tracker UI — dropped. Combat handled narratively by AI + dice rolls.
+- HP manual override — dropped. Marker is the only path; regressions are bugs.
+
+## [1.0.0.54] - 2026-04-20 — Prelude play-test round 5: DC leak, agency violation, marker leak, session ordinal
+
+Four fixes from play-test, two prompt-side, two code-side.
+
+### Prompt — DM-SIDE vs PLAYER-SIDE INFORMATION (new rule 13a)
+
+Sonnet was announcing DCs directly: "That's an Insight check, DC 12."
+The DC is DM-side info — it stays behind the screen. New rule with
+explicit WRONG/RIGHT pairs:
+
+- WRONG: "That's an Insight check, DC 12. She's guarded."
+- RIGHT: "Give me an Insight check — she's guarded."
+
+Also bans announcing: critical success/failure as numbers ("nat 20 means
+critical success"), enemy AC/HP, named arc-plan beats ("this is the
+First Blood beat"). Difficulty is conveyed through narrative adjectives
+("tricky," "long shot") — the numbers stay yours.
+
+### Prompt — tightened PLAYER AGENCY (rule 2) with the exact violation as the WRONG example
+
+Sonnet wrote direct dialogue for the player: `"Moss," you say. Very
+quiet. Very even. "Get Halda. Go up the stairs. Right now."` The rule
+said "don't narrate what you do/say/think/feel" but was generic.
+Now includes the exact violation as the WRONG example plus a RIGHT
+rewrite that describes the pressure around the player without putting
+words in their mouth. Also clarifies: never narrate internal thoughts,
+feelings, or decisions either — only involuntary physical sensations
+("the coin is warmer than you expected") are environment, not choice.
+
+### Code — marker leak fixed
+
+`[COMBAT_START]` and other inherited markers were leaking into the
+player-facing narrative. `stripPreludeMarkers()` now also removes:
+
+- `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[ADD_ITEM]`
+  (inherited from main DM prompt; prelude doesn't wire these into UI
+  yet but Sonnet sometimes emits them anyway)
+- Any `[ALL_CAPS_TOKEN: ...]` bracketed marker as a catch-all for
+  future additions. Requires 3+ chars of A-Z/underscore so mixed-case
+  bracketed content like `[Karrow's Rest]` or `[Eleint]` passes through.
+
+9 new strip tests cover the regression.
+
+### Code — session ordinal (UX: "Session N of ~7-10")
+
+Play-test surfaced that "session end" was ambiguous — was that the end
+of session 1? a break? A prelude uses a SINGLE `dm_sessions` row per
+character, state-machined through pauses and resumes. Now tracks a
+play-session ordinal on `session_config.session_number`:
+
+- Starts at 1 on creation.
+- Increments by `resumeSession()` — resuming after a pause/cliffhanger
+  means the player is starting the NEXT play-session.
+- Surfaced in the UI top bar ("Session 3 · Chapter 2 of 4 · Age 10")
+  and in the paused banner ("Session 3 complete — Begin Session 4")
+  and in Sonnet's system prompt ("play-session 3 of ~7-10 in a prelude").
+
+Paused banner rewritten:
+- Old: small dashed "Session paused" box with generic "Resume session"
+  button.
+- New: proper "✦ Session N complete" framing with chapter / age /
+  cliffhanger context, and a clear "Begin Session N+1" button.
+
+### Tests + build
+
+- prelude-setup 38, prelude-arc 15, prelude-markers 55 (was 46 — +9
+  for marker strip coverage). Build clean.
+
+### Scope deliberately cut
+
+Things the user raised that land in later releases:
+
+- **Session-end recap** (Sonnet-generated summary of what happened
+  this session) — deferred. Ordinal + cliffhanger banner covers the
+  "what happens at session end" question for now.
+- **Chapter wrap-up** (auto-close when seeded beats all fire) — needs
+  seeded-beat tracking, which lands with Phase 3 emergence infrastructure.
+- **Emergence offers on session end** — Phase 3.
+
+## [1.0.0.53] - 2026-04-20 — Prelude: anachronism ban + anti-stall skill-check
+
+Two specific issues from v1.0.52 play-test: (1) Sonnet invented "the
+last train before the pass closed" — trains don't exist in Faerûn.
+(2) A letter-reading scene ended with Halda saying "Keep going" with
+no next-word to read, leaving the player softlocked when it should
+have been a skill check.
+
+### Prompt — expanded WORLD RULES with explicit anachronism list
+
+Rule 15 (WORLD RULES = FAERÛN) now spells out banned anachronisms
+that Sonnet drifts toward:
+
+- **NO TRAINS, rails, railways.** Caravans move by wagon, ox, horse,
+  foot. "A wagon train" at most.
+- **NO GUNS, firearms, cannons, gunpowder** (unless the setup
+  explicitly establishes a gunpowder setting).
+- **NO MODERN TECH:** no photos, phones, cars, radios, computers,
+  precise-minute clocks (use bells / candlemarks / sundials), kilometers,
+  "miles per hour."
+- **NO INDUSTRIAL CONCEPTS:** factories, assembly lines, shipping
+  containers, steam engines, electricity, plastic.
+- **Currency:** gold/silver/copper, never "dollars."
+- **Time:** tenday, season, candlemark, watch, bell — not "week" /
+  precise "hour."
+- **Distance:** miles, leagues, bowshots, strides — not metric.
+
+Plus the existing Faerûn canon clauses (animals don't speak, 5e magic,
+canonical pantheon).
+
+FINAL REMINDER block also surfaces anachronism guard.
+
+### Prompt — expanded SKILL CHECKS with reading + anti-stall
+
+Rule 13 (COMBAT AND SKILL CHECKS) now includes:
+
+- **New explicit scenario: Reading a difficult text.** Intelligence
+  check. DC by complexity: merchant's ledger DC 10, lord's formal
+  letter DC 12-15, arcane/ancient text DC 15-20. Child-level literacy
+  vs. adult document = roll, not handoff.
+- **Anti-stall guard:** if your response would end with "keep going,"
+  "try again," "continue," "what do you think it says" — and the
+  next step needs content the player doesn't have (more of a letter,
+  next beat in a song) — THAT IS A SKILL CHECK, not a handoff. Call
+  for the roll.
+- **Worked example** in the prompt: the player-character reading a
+  lord's formal letter aloud. Wrong behavior (end with "keep going")
+  vs. right behavior ("The next sentence is small and dense — give me
+  an Intelligence check, DC 13") baked in.
+
+FINAL REMINDER block adds the anti-stall line so Sonnet sees it in
+recency position.
+
+### Tests + build
+
+- All prelude suites still green (38 + 15 + 46). Build clean.
+- Prompt-only change, no schema or API touch.
+
+## [1.0.0.52] - 2026-04-20 — Prelude: skill checks, banned openers, family race, dev toggle
+
+Round 4 of play-test feedback. Six coordinated changes tackling the
+biggest remaining issues: no skill-check requests, stock opening lines,
+family-race assumptions, and sessions drifting into pure-conversation
+drift.
+
+### Prompt — SCENES CARRY WEIGHT (revised urgency rule)
+
+Previous framing demanded an event-or-shift in every scene. Too strict
+— it ruled out quiet moments like Aelwin-and-the-wax-tablet that
+genuinely matter. New framing:
+
+> Most scenes should contain one of: event, discovery, decision forced,
+> relationship change, threat, revelation, or meaningful time
+> compression. Pure texture scenes are ALLOWED but must be the
+> exception — roughly 1 in 5, not 4 in 5.
+
+Plus a STALL GUARD: if a scene has drifted through 3-4 dialogue
+exchanges with no shift, escalate — interruption, revelation,
+consequence, or time-forward.
+
+New companion rule: **TIME ADVANCES AFTER TEXTURE SCENES** — specific
+per-chapter pacing guidance. Early chapter: days-to-weeks between
+scenes. Mid chapter: weeks-to-months. Approaching boundary:
+months-to-a-year. At the boundary: emit `[AGE_ADVANCE]`. Texture scenes
+cost real time budget.
+
+### Prompt — COMBAT AND SKILL CHECKS (expanded, made proactive)
+
+Previous rule just said "ask for rolls." Play-test surfaced zero rolls
+across multiple sessions. New rule is explicit about:
+
+- **Never narrate an uncertain outcome without the roll.**
+- **State the DC, then STOP. Wait for the player to report.**
+- **DC guidance:** standard = 10, easy = 5, hard = 15, very hard = 20.
+- **Nat 1 = critical failure** — lean into humor/disaster appropriate to tone.
+- **Nat 20 = critical success** — lean into magnificent outcomes.
+- **Be PROACTIVE**: learning a craft → Insight or tool proficiency.
+  Reading a person → Insight. Remembering → History. Sneaking →
+  Stealth. If you're narrating an uncertain outcome without asking for
+  a roll, you're doing it wrong.
+
+### Prompt — BANNED STOCK OPENERS
+
+Every test character opened with some variant of: "[Name] is [N] winters
+old and small for it, the smallest person in any room that isn't a
+cradle." Explicit bans added to both the ABSOLUTE RULES and the
+opening-prompt:
+
+- "[Name] is [N] winters old…"
+- "small for it" / "small for [their age]"
+- "the smallest person in any room that isn't a cradle"
+- "[season] sun comes through the [window/door] in [stripes/bars/…]"
+- Any demographic-summary-plus-size opener as the first line.
+
+Open on a SPECIFIC moment instead.
+
+### Prompt — NO NPC ECHO AS DEFAULT
+
+The pattern where an NPC repeats the player's phrase back as a
+"I'm-listening" beat ("'Fitting in,' he says. Not a question. More
+like he's turning the phrase over to see what's under it.") is an AI
+tic. New rule: allowed MAX ONCE per session across ALL NPCs, only for
+characters where it genuinely fits (a quiet elder, a careful priest).
+Never as a default.
+
+### Prompt — NO INVENTED SPECIALNESS
+
+Sonnet kept treating the player's uncommon-race birth as a secret or
+burden even when the player hadn't established that. New rule: if the
+player's family shares the player's race (they usually do by default
+— see race fields below), that's normal. Don't dwell on "your
+specialness" unless the player's setup actually established that.
+
+### New — parent and sibling race fields
+
+Each parent slot now has a race dropdown alongside role, name, and
+status. Each sibling slot adds race alongside gender + relative age.
+Default: player's race. Override per-slot for mixed-race or foundling
+scenarios. Piped through to both the Opus arc-plan generator and the
+Sonnet session prompt as canonical.
+
+Existing characters (pre-v1.0.52) without race data fall back to the
+player's race silently — no migration needed.
+
+### New — dev-mode arc preview toggle
+
+New checkbox at the bottom of the setup wizard: "Show the arc preview
+(testing)." Default ON while play-testing. When unchecked, the wizard
+submits and the player goes straight into the first session — the arc
+plan is auto-generated server-side on session start (adds 45-90s to
+the first turn; same token cost, just deferred).
+
+This addresses "I like the arc preview for testing but don't want it
+in the full game." Flip the checkbox OFF for production-feeling play.
+
+### Tests + build
+
+- All prelude suites still green (38 + 15 + 46). Build clean.
+- No schema changes — parent/sibling race is a new optional JSON field
+  on the setup payload, server accepts it without migration.
+
+## [1.0.0.51] - 2026-04-20 — Character delete: dynamic FK discovery
+
+Play-test turned up a character that couldn't be deleted from the UI —
+the endpoint was failing silently with a foreign-key constraint error.
+Manual cleanup found the blocking row was in a table not on the
+endpoint's hand-written deletion list. Rewrote the endpoint to
+discover FK references dynamically from the schema.
+
+### Problem
+
+The `DELETE /api/character/:id` endpoint was maintaining a 13-step
+hand-written deletion list of tables with `character_id` columns.
+Every time a new table with an FK to `characters` was added (e.g.,
+the Phase 1 prelude tables, or older feature tables that were never
+retrofitted), someone had to remember to add it to the delete list.
+When a row existed in an unlisted table, the final `DELETE FROM
+characters` would fail with `SQLITE_CONSTRAINT: FOREIGN KEY constraint
+failed` — and the client just saw "delete failed" with no hint which
+table was blocking.
+
+In TEST_LWChar's case, the blocker ended up being `companions.recruited_by_character_id`
+(actually on the list), but an earlier table in the chain threw first
+and the endpoint never reached the companion delete.
+
+### Fix
+
+`DELETE /api/character/:id` now:
+
+1. Handles one known **indirect cascade** explicitly — `session_message_summaries`
+   FKs `dm_sessions`, not `characters` directly, and has no `ON DELETE
+   CASCADE`. So we clear it before any `dm_sessions` rows go.
+2. Scans `sqlite_master` for every table, queries
+   `PRAGMA foreign_key_list` on each, and collects every `{table, column}`
+   pair with a declared FK to `characters`.
+3. Deletes matching rows from each discovered table (order among direct
+   FK holders doesn't matter — they're all at the same depth).
+4. Deletes the `characters` row last.
+5. On FK-constraint failure, returns HTTP 409 with the specific error
+   message instead of generic 500. Logs the full stack for inspection.
+
+New tables with an FK to `characters` are picked up automatically on
+next request — no endpoint edit needed. The response includes
+`cleaned_tables` (count cleared) and `tables_scanned` (total in
+schema) for observability.
+
+### Why the dynamic approach is safer than hand-maintained
+
+Since v1.0.0 the codebase has added ~20 tables with `character_id`
+FKs across themes, crafting, mythic progression, merchants, bases,
+prelude, etc. The hand-written list drifts against the schema
+silently. The dynamic sweep trades a small per-request cost
+(~20-30 extra PRAGMA queries on delete — happens once per character,
+not per turn) for reliability.
+
+### Tests + build
+
+- All 5 unit suites still green. Client build clean.
+- No schema change — this is endpoint logic only.
+
+## [1.0.0.50] - 2026-04-19 — Prelude 2b-i round 3 (grounded prose + UX polish)
+
+Round 3 of real-play feedback. Big fix: Sonnet was overwriting the
+opening scene with writerly metaphor ("The Spine of the World sits
+blue on the horizon and pretends to be a wall"). Added GROUNDED
+PROSE as a new ABSOLUTE RULE with concrete WRONG/RIGHT examples. Plus
+four smaller fixes from the same play-test.
+
+### New — sibling gender field
+
+Setup was asking for sibling name + relative age but not gender —
+leaving the AI to guess or use neutral language. Added a gender
+dropdown (Sister / Brother / Sibling non-binary) per sibling slot.
+Schema: `{ name, gender, relative_age }` where gender defaults to
+`sibling` on null. Wizard UI row is now 4-column; server prompt
+surfaces sibling gender inline.
+
+### Prompt fix — whimsical tone description
+
+Old text: "Wonder is close to the surface — omens in the wheat, the
+forge that hums on feast days, **dreams that come true small**. The
+world of Faerûn stays Faerûn; the whimsy lives in perception and
+small kindnesses, **not in rule-breaking.**" The "dreams come true
+small" phrasing was confusing ("what does that even mean?"), and the
+"not in rule-breaking" clause was a system rule leaking into player-
+facing flavor text. New text: "Wonder is close to the surface — small
+omens in the wheat, a forge that sings on feast days, folk tales
+half-remembered from old grandmothers. Tender and curious, not twee."
+
+### Prompt fix — GROUNDED PROSE (new ABSOLUTE RULE 18)
+
+Sonnet's opening scene drifted into purple prose that reads as
+"AI trying to sound literary" rather than a child's lived moment.
+Five specific patterns now banned:
+
+(a) **Personifying inanimate things that adds nothing.** WRONG: "The
+Spine of the World sits blue on the horizon and pretends to be a
+wall." The mountain IS a wall. The personification is showing-off.
+
+(b) **Abstract-compound descriptors for people.** WRONG: "a tall
+woman made of long bones and patience." Writerly tic. RIGHT: "a
+tall woman with a long face and rough hands."
+
+(c) **Delayed-reveal syntax for known subjects.** WRONG: "someone —
+your father, years ago — carved a small crooked star." If the player
+knows who, name them directly.
+
+(d) **Single-line poetic flourishes ending a paragraph.** WRONG:
+"The morning stretches out ahead, empty and ordinary and entirely
+Zalyere's." These read as short-story endings, not session beats —
+they substitute mood for direction.
+
+(e) **Metaphor compounds stacked three-ways.** One flourish per
+paragraph at most, earned.
+
+Plus an explicit age-perception reminder: "A 6-year-old does NOT
+perceive their mother as 'made of long bones and patience.'" Stay
+in the perceptual register of the character's age.
+
+FINAL REMINDER block updated to surface GROUNDED PROSE in recency
+position — Sonnet will see it on every turn.
+
+### UX — elapsed-time counter on loading screens
+
+Static estimates ("20-40 seconds" / "15-30 seconds") were inaccurate
+and gave no sense of real progress. Both the arc-generation loading
+screen and the session-opening loading screen now show a live
+monospace `{N}s elapsed` counter updating twice per second. Static
+estimates bumped to more accurate ranges: arc 45-90s, opening 30-60s.
+The in-feed "The story unfolds…" during send also shows elapsed time.
+
+### UX — Setup review panel in session
+
+No way to see prelude-setup choices once in gameplay. New **Setup**
+button in the session top bar toggles an inline panel showing: name,
+gender, race, birth circumstance, home, region, parents (with roles),
+siblings (with gender + age), talents, cares, tone tags. Useful
+during play-test to verify state; also just useful for players who
+forget what they picked ten sessions in.
+
+### Tests + build
+
+- All prelude suites still green (38 + 15 + 46). Build clean.
+- No schema changes — sibling gender is a new optional field on the
+  setup payload JSON blob; server accepts it alongside existing
+  schema without migration.
+
+## [1.0.0.49] - 2026-04-19 — Prelude: resume paused sessions
+
+Blocking bug: after clicking "End session" (or a `[SESSION_END_CLIFFHANGER]`
+marker firing), the session went to `paused` status but the UI only showed
+"Back to characters" — no way to resume. The session was stuck.
+
+### Fixed
+
+- New service method `resumeSession(sessionId)` flips paused → active.
+  No-op on already-active sessions, rejects completed ones.
+- New endpoint **`POST /api/prelude/sessions/:sessionId/resume`**.
+- "Session paused" banner in `PreludeSession.jsx` now shows a **▶ Resume
+  session** button alongside "Back to characters." Clicking it flips the
+  session back to active, clears the paused banner, and the action input
+  reappears so the player can continue.
+- The last cliffhanger (from either an end-session or a SESSION_END_CLIFFHANGER
+  marker) is already persisted on `session_config.lastCliffhanger`, so the
+  next Sonnet call will receive it via the resume prompt infrastructure
+  (`createPreludeResumePrompt`) once that's wired into `sendMessage` — which
+  happens naturally because `sendMessage` builds the system prompt fresh
+  each turn and the resume prompt is baked into the regular continuation flow.
+
+### Tests + build
+
+- Prelude suites still green (38 + 15 + 46). Build clean.
+
+## [1.0.0.48] - 2026-04-19 — Prelude 2b-i play-test fixes (round 2)
+
+Round 2 of real-play feedback. Six new ABSOLUTE RULES + deeper work
+logged to FUTURE_FEATURES.
+
+### Prompt fixes
+
+**ABSOLUTE RULE 1: SECOND-PERSON NARRATION.** The AI was writing "Rook
+looks at Zalyere" and "Rook looks at him" — third person about the
+player character. Breaks immersion. New rule: always "you," never the
+character's name (except when another character speaks it aloud). One
+allowed exception: the opening scene can use the full name as
+establishing exposition once, then shifts to "you" for everything after.
+
+**ABSOLUTE RULE 3: NPC QUESTIONS ARE HARD STOPS.** The AI had an NPC
+ask "You got coin for bread?" and then keep talking right past it:
+"I'll walk with you… Got nothing. Breta gave me a heel last tenday."
+The player never got to answer. Ported the main-DM rule: when an NPC
+asks a direct question, the response ENDS. Includes the WRONG/RIGHT
+pair.
+
+**ABSOLUTE RULE 4: HONOR ESTABLISHED PRONOUNS.** "They're" was used
+for Rook, whose gender is established (boy). New rule: gendered NPCs
+get gendered pronouns. Only use they/them for genuinely unknown or
+explicitly non-binary NPCs.
+
+**ABSOLUTE RULE 6: KEEP MOMENTUM.** The big one. After the player
+finished the bread errand, the AI left them in "the morning stretches
+out ahead, empty and ordinary" — a "what now?" vacuum. For a
+6-year-old character with no agency or worldliness, directionless
+banter is unplayable. New rule: when a beat concludes, advance time,
+introduce a new beat, surface a seeded arc beat that hasn't fired, OR
+offer 2-3 concrete age-and-location-appropriate options. Never drift.
+
+**ABSOLUTE RULE 7: FAERÛN CALENDAR.** The AI called a month "October"
+— should be "Marpenoth." Harptos months listed in the rule: Hammer,
+Alturiak, Ches, Tarsakh, Mirtul, Kythorn, Flamerule, Eleasis, Eleint,
+Marpenoth, Uktar, Nightal. "Tenday" not "week." Mention the month
+sparingly — once for season, not in every paragraph.
+
+**ABSOLUTE RULE 8: WORLD JARGON MUST BE INFERRABLE.** The AI used
+"heel" and "tenday" with no context — player was lost on both. New
+rule: in-world slang either has obvious meaning or gets a brief
+contextual hint. "Breta gave me a heel last tenday" → "Breta gave me
+a heel — the end-slice, no good for selling — tenday back." Don't
+strand the player.
+
+FINAL REMINDER block updated to surface all six new rules in recency
+position. Opening-scene prompt updated to specify second-person after
+the establishing paragraph.
+
+### Logged to FUTURE_FEATURES — deeper work
+
+Three items flagged for real design work beyond prompt tweaks:
+
+1. **Character voice / tone system.** The existing voice-palette
+   infrastructure gives rough sketches; play-test shows NPCs still
+   drift to "writerly fragmented dialogue" rather than *this person's*
+   actual voice. Needs: signature tics, emotional-state modulation,
+   sample-utterance injection, possibly a dialogue-audit pass.
+
+2. **Expanded naming conventions.** The AI leans on a stock pool
+   (Voss, Lyra, Aldric, Jarrick, Jakob, Garda, Aldrin) repeatedly.
+   Need a culture/region-tuned name bank drawing from the wider
+   fantasy literary tradition (Tolkien, Sapkowski, Le Guin, Pratchett,
+   Herbert, Moorcock, Howard, Martin, Rothfuss, Abercrombie, etc.).
+
+3. **Cross-session repetition detection.** The session-scope ledger
+   (v1.0.34) doesn't catch phrases like "he says the name like he's
+   tasting it" that recur across sessions. Optional character-level
+   persistent ledger — design tension around how aggressive to be.
+
+### Tests
+
+- All prelude suites still green (38 + 15 + 46). Build clean.
+- No test additions — all changes are prompt wording.
+
+## [1.0.0.47] - 2026-04-19 — Prelude 2b-i play-test fixes (SQL + prompt)
+
+First round of real-play feedback on the session loop. One blocker, three
+prompt-tuning wins.
+
+### Fixed — SQL error on every send
+
+`sendMessage` was writing `UPDATE dm_sessions SET messages = ?,
+updated_at = datetime('now')` but the `dm_sessions` table has no
+`updated_at` column (unlike `characters`). Every player action crashed
+with `SQLITE_UNKNOWN: no such column: updated_at`. Dropped the
+timestamp write — if we need telemetry later, we'll add the column in
+a proper migration.
+
+### Prompt fix — dialogue authenticity
+
+Sonnet was writing NPC dialogue like a DM dispensing player instructions
+rather than people talking. Example from play-test:
+
+> "Little fish. I need you to run to the bread woman and bring back a
+> half-loaf. Just the half. Don't let her talk you into the whole one
+> — tell her *half*, and bring back the two copper."
+
+That's stilted — over-explained, complete sentences, narrated shopping
+list. Real tired working-class speech is compressed, contextual, and
+trusts the listener.
+
+New **ABSOLUTE RULE 11: NPC VOICE — AUTHENTIC SPEECH, NOT DM-NARRATION**
+added to the prompt with a WRONG/RIGHT comparison:
+
+> WRONG: "Little fish. I need you to run to the bread woman and bring
+> back a half-loaf..."
+> RIGHT: "Take this." (pushing the coin across) "Bread. Half a loaf
+> — not the whole one. You tell her half." A pause. "And stay off
+> the stairs."
+
+The rule calls out: fragments, elision, trust, pronouns-instead-of-nouns,
+no self-narration, speech matched to who the person is (tired / rushed
+/ guarded / loving) and the tone tags.
+
+### Prompt fix — opening scene set dressing + length
+
+Opening was missing physical grounding — the player came in with no
+visual for their own character (age, appearance, clothing, how they
+carry themselves), the home (specific corner, sensory detail beyond
+the room), or the family member present (face, hands, voice).
+
+**`createPreludeOpeningPrompt`** now explicitly requires 5-8 paragraphs
+covering:
+
+1. The character's own body — size relative to adults, canonical race
+   features, what they're wearing (shaped by birth circumstance), how
+   they carry themselves at this age.
+2. The home with senses — smell, sound, texture, light — specific
+   corner of it, using the arc plan's home-world description as
+   source material.
+3. At least one named family member with physical presence — face,
+   hands, clothing, voice, wear.
+4. A grounded first situation with stakes appropriate to the age,
+   tone-matched, using authentic speech per Rule 11.
+
+### Prompt fix — response length guidance
+
+New **ABSOLUTE RULE 13: RESPONSE LENGTH** — weight-matched rather than
+uniformly short. Routine beats 2-4 paragraphs, important beats 4-7,
+openings 5-8. Never end on exposition; always end on a question or
+pressure. FINAL REMINDER block surfaces the same guidance for recency.
+
+### Tests
+
+- All prelude suites still green (38 + 15 + 46). Build clean.
+- No test additions — all changes are prompt wording / SQL removal,
+  and the existing marker detection tests already cover the output
+  side.
+
+## [1.0.0.46] - 2026-04-19 — Prelude Phase 2b-i: core session loop
+
+The prelude is playable. Click **Begin the Prelude** from the arc preview
+(or click an in-progress prelude character from the list) and you drop
+into a text-based D&D session running within the Opus-generated arc plan.
+Opus writes the opening scene; Sonnet runs the gameplay.
+
+### New — prompt builder (`preludeArcPromptBuilder.js`)
+
+Separate from `dmPromptBuilder.js` (adult adventuring) and from
+`preludeArcService.buildArcSystemPrompt` (which is Opus *generating* the
+arc plan). This builder is **Sonnet playing within** an already-generated
+plan. Three entry points:
+
+- `createPreludeSystemPrompt(character, setup, arcPlan, runtime)` — the
+  system prompt injected on every Sonnet turn. Includes 11 ABSOLUTE
+  RULES + character canon + home-world reference + current chapter's
+  seeded beats + recurring threads + MARKERS block + FINAL REMINDER.
+- `createPreludeOpeningPrompt(...)` — the user-role "opening" message
+  for the first session. Asks Sonnet to open Chapter 1 with a
+  grounded, age-appropriate scene ending in an invitation to action.
+- `createPreludeResumePrompt(..., lastCliffhanger)` — resume prompt
+  when reopening a paused session.
+
+**ABSOLUTE RULES include**: player agency (beats are situations, not
+scripted outcomes — with WRONG/RIGHT examples), age-appropriate voice
+and stakes, non-binary choices, time compression, real-and-rolled
+combat, tone fidelity, Faerûn canon, no invented character traits,
+age-register NPC voice, and "arc is reference, not a rail."
+
+### New — session service (`preludeSessionService.js`)
+
+- `startSession(characterId)` — creates a new `dm_sessions` row with
+  `session_type='prelude_arc'`, calls Opus for the opening scene, processes
+  any markers the opening emits, returns session data.
+- `getActiveSession(characterId)` — lookup for UI resume-vs-begin
+  branching.
+- `getResumePayload(sessionId)` — full payload for reopening a
+  session (messages, character, runtime, last cliffhanger).
+- `sendMessage(sessionId, action)` — appends player action, calls
+  Sonnet (with the latest system prompt reflecting current age/
+  chapter), processes markers, persists, returns cleaned response.
+- `endSession(sessionId, { completed })` — flips status to `paused`
+  (resumable) or `completed` (Phase 5 reserved).
+- Race-aware chapter-boundary logic: when `[AGE_ADVANCE]` pushes a
+  character past the next threshold for their race
+  (dwarf > 25 → Ch2, elf > 50 → Ch2, etc.), the chapter updates.
+
+### New — marker detection (`preludeMarkerDetection.js`)
+
+Five lifecycle markers for Phase 2b-i:
+
+- `[AGE_ADVANCE: years=N]` — time compression; updates character
+  age + chapter if threshold crossed.
+- `[CHAPTER_END: summary="..."]` — narrative chapter close.
+- `[SESSION_END_CLIFFHANGER: "..."]` — natural session pause; flips
+  session to `paused` and stores cliffhanger for the resume prompt.
+- `[NPC_CANON: name="..." relationship="..." status="..."]` — marks
+  NPCs canonical; inserts into `prelude_canon_npcs` (deduped by name).
+- `[LOCATION_CANON: name="..." type="..." is_home=true]` — same for
+  `prelude_canon_locations`.
+
+Parsers are regex-based and tolerant of single/double/no-quote
+variants. `stripPreludeMarkers(text)` removes markers from displayed
+narrative while the server retains them for state processing.
+
+Emergence markers (`[STAT_HINT]`, `[SKILL_HINT]`, `[CLASS_HINT]` etc.)
+and transition markers (`[DEPARTURE]`, `[PRELUDE_END]`) land in Phase
+3 and Phase 5 respectively — scope cut here for shippability.
+
+### New — API endpoints
+
+- `POST /api/prelude/:characterId/sessions/start` — begin a session
+- `GET  /api/prelude/:characterId/sessions/active` — resume lookup
+- `GET  /api/prelude/sessions/:sessionId` — full resume payload
+- `POST /api/prelude/sessions/:sessionId/message` — send player action
+- `POST /api/prelude/sessions/:sessionId/end` — pause or complete
+
+Response markers are stripped from the displayed narrative but
+retained server-side. The `runtime` object (age + chapter + maxHp)
+travels with every response so the UI updates in real time.
+
+### New — UI (`PreludeSession.jsx`)
+
+Text-based gameplay screen with a top bar (character name + chapter
+N of 4 + life-stage label + age), scrolling message feed (user actions
+styled blue, Sonnet narrative styled purple-tinted), textarea action
+input (Enter to send, Shift+Enter for newline), End-session button,
+Back-to-characters button. Session-ended state surfaces the
+cliffhanger prose + a return button.
+
+### Wired into CharacterManager
+
+- **"Begin the Prelude"** on the arc preview now routes into
+  `PreludeSession` (not back to the character list). The button is no
+  longer a dead end.
+- **Clicking an in-progress prelude character** checks for an active
+  session: if one exists, jumps straight into `PreludeSession`; if
+  not, opens the arc preview (which has the Begin button).
+
+### Tests
+
+- **`tests/prelude-markers.test.js`** — 46 tests covering all 5
+  markers' detection + `stripPreludeMarkers` + `detectPreludeMarkers`
+  roll-up. Handles single/double/no-quote variants, edge cases
+  (empty, missing fields, negative numbers), and the roll-up
+  aggregation.
+- Existing suites all still green: prelude-setup 38, prelude-arc 15,
+  plus 310 pre-prelude tests. Total 409.
+- Client build clean.
+
+### Scope deliberately cut from 2b-i
+
+These land in subsequent sub-phases:
+
+- **Dice roller UI** (2b-ii) — player describes rolls in action text
+  for now; the prompt tells Sonnet to state DCs/ACs and ask the
+  player to roll physically and report.
+- **Combat tracker integration** (2b-ii).
+- **Age-scaled provisional stats engine** beyond the max-HP formula
+  that ships here (2b-ii).
+- **`[CHAPTER_PROMISE]` marker** (chapters 3-4 only) (2b-ii).
+- **Prelude-tuned rolling summary template** (2b-ii).
+- **Emergence markers + toast UI** (Phase 3).
+- **`[DEPARTURE]` + `[PRELUDE_END]` transition flow** (Phase 5).
+
+## [1.0.0.45] - 2026-04-19 — Arc preview fixes (play-test round 2)
+
+Second round of play-test feedback. Fixes a batch of UX + prompt issues
+surfaced by actually reading a generated arc.
+
+### UX fixes
+
+- **Re-roll button was hidden.** POST `/api/prelude/:id/arc-plan` returned
+  the plan object without the `can_regenerate` flag that the UI checks —
+  so `plan.can_regenerate` was always `undefined`, hiding the button
+  after the initial generate. Fixed: POST now includes the flag.
+- **Preview was left-aligned.** The outer `.app` container is centered at
+  1200px, but `PreludeArcPreview` set `maxWidth: 780px` without
+  `margin: 0 auto`, so the 780px card hugged the left edge with huge
+  right whitespace. Added `margin: 0 auto` to both the preview and the
+  setup wizard.
+- **False "Level Up!" badge on prelude characters.** The level-up status
+  checker was running `/api/character/can-level-up/:id` on prelude-phase
+  characters (which have `class='prelude'`, `level=0`), producing bogus
+  level-up notifications. Fixed: level-up check now skips characters
+  with `creation_phase === 'prelude'`. Leveling happens when the prelude
+  ends and the main creator submits — not during play.
+- **No way to resume an in-progress prelude.** Clicking a prelude
+  character in the character list now routes back into the arc preview
+  so the player can pick up where they left off. (Phase 2b will replace
+  this with a session-resume hook.)
+
+### Arc prompt fixes (the big ones)
+
+Three new ABSOLUTE RULES added to the Opus arc-plan generator to fix
+player-agency violations + ungrounded suggestions observed in the first
+real generation:
+
+- **Rule 8: BEATS ARE SITUATIONS, NOT SCRIPTED OUTCOMES.** The single
+  most important rule. A beat describes the SITUATION the player walks
+  into — the setting, the other people, the stakes, the question. It
+  does NOT describe what the character does, says, feels, or decides.
+  WRONG/RIGHT examples are now in the prompt:
+  - WRONG: "Cornered by toughs in an alley, Zalyere spins a lie so
+    vivid about a watchman coming that the men flinch and leave."
+  - RIGHT: "Cornered by toughs in an alley, close enough to smell the
+    indigo on their hands. The way you get out of this — fists, lies,
+    running, surrender, something else — will mark how Rook sees you
+    for years."
+- **Rule 9: DON'T INVENT CHARACTER TRAITS NOT IN THE SETUP.** The
+  previous generation hallucinated "dark veins to the surface of his
+  arms" as a scourge-aasimar fever symptom — never in the player's
+  setup. New rule: canonical 5e race features are fair game, but
+  invented physical markers (veins, birthmarks, glowing eyes) and
+  family secrets (hidden bloodlines, prophecies) are not. Stay inside
+  the lines the player drew.
+- **Rule 10: TRAJECTORY NUDGES MUST CITE PLAYER SETUP EXPLICITLY.**
+  The previous "paladin because scourge aasimar" reasoning was
+  ungrounded. New requirement: "paladin because **you said you care
+  about Justice and Protecting the Weak**, and Chapter 3 puts you
+  between a fallen institution and a quiet faith." Cite talents,
+  cares, or tone tags BY NAME.
+
+Schema updated: `character_trajectory` now requires `why_class` and
+`why_theme` fields (1 sentence each, must cite setup). The preview UI
+renders these below the class/theme nudges. FINAL REMINDER block
+reinforces all three new rules with one-liners.
+
+### Tests
+
+- 38 setup + 15 arc + all prior suites still green. Client build clean.
+- Prompt changes don't change any API shape, so no test additions.
+
+## [1.0.0.44] - 2026-04-19 — Remove old origin-story prelude
+
+Two systems both calling themselves "preludes" were confusing. The new
+prelude-forward character creator is the one we're keeping. The old
+single-session origin-story flavor (from migration 022) is fully removed.
+
+### Deleted
+
+- **`server/services/preludePromptBuilder.js`** — the single-session
+  origin-story prompt builder. File gone.
+- **`client/src/components/PreludeSetup.jsx`** — the old in-session
+  prelude setup form. File gone.
+- **`POST /api/dm-session/start-prelude`** — the endpoint that started
+  an origin-story session for an already-built character. Gone.
+- **Prelude-completion hook in `dm_sessions` end-session flow** — the
+  `if (session.session_type === 'prelude')` block that set
+  `prelude_completed=1` and appended the summary to backstory. Gone.
+- **`startPrelude` function in `DMSession.jsx`** and its state
+  (`showPreludeSetup`). Gone.
+- **"Play a Prelude?" card in `SessionSetup.jsx`** and its
+  `onStartPrelude` prop. Gone.
+
+### Preserved (intentionally)
+
+- **Migration 022** itself stays — it's historical and migrations are
+  append-only. The columns it added (`prelude_completed`, `prelude_config`)
+  remain on the `characters` table but are no longer read or written by
+  anything. They're harmless; dropping them would require SQLite 3.35+
+  and the cost isn't worth the cleanup.
+- **Any existing characters with `prelude_completed=1`** — their flag
+  just stops being surfaced. No migration, no backfill.
+- **`dm_sessions` rows with `session_type='prelude'`** — historical data
+  stays intact. The new system uses `session_type='prelude_arc'` (coming
+  in Phase 2b), so the two don't collide.
+
+### Wire-through
+
+- Only one "prelude" entry point now: **Characters → ✦ Start with a
+  Prelude** on `CharacterManager.jsx`. No more surprise "Play a Prelude?"
+  card appearing inside a session-setup screen.
+
+### Tests
+
+- 38 setup + 15 arc + 310 existing = 363 green. Client build clean.
+- No test file referenced the removed APIs, so no test updates needed.
+
+## [1.0.0.43] - 2026-04-19 — Prelude Phase 2a hardening (play-test feedback)
+
+First round of play-test feedback on the arc generator. Addresses a hard
+blocker (JSON truncation) and a batch of UX issues surfaced by real setup
+flow.
+
+### Fixed — arc generation was hitting max_tokens
+
+Opus was producing verbose beats + wordy JSON overhead that pushed the
+output past the 4096-token cap, truncating mid-array and crashing the
+JSON parser. Two compounding fixes:
+
+- **Bump max_tokens 4096 → 8192.** Headroom for even the wordiest
+  tone combinations (political + mystical + tragic).
+- **Tighten the schema prose directives.**
+  - home_world description: 3-5 sentences → 2-3
+  - locals: 5-10 entries → 4-6 entries, each 1 sentence (was 1 sentence
+    but no cap)
+  - tensions: any count → exactly 2
+  - threats: any count → 1-2
+  - chapter beats: 2-3 per chapter → exactly 2
+  - beat descriptions: 2-3 sentences → 1-2 sentences
+  - chapter_end_moment: 1-2 sentences → 1 sentence
+  - recurring_threads: 2-4 → 2-3
+  - non_tragic_alternatives: 2-3 → exactly 2
+  - seeded_emergences: any count → 1-2 per chapter
+  - Explicit "BE CONCISE. Keep prose TIGHT." directive in the system prompt
+  - Explicit QUANTITY LIMITS block
+
+Before: two consecutive generation attempts both failed with Opus emitting
+~4096 output tokens of an incomplete JSON object. After: plan comfortably
+fits in ~2000-3500 output tokens.
+
+### Fixed — starting age now race-aware
+
+Starting age was a hardcoded 5-8 picker regardless of race. An elven 7-year-old
+is a newborn by elven reckoning; a dwarven 18-year-old is still
+pre-adolescent. Removed the age picker entirely:
+
+- **Q4 starting-age picker is gone.** The wizard now has 11 questions
+  instead of 12.
+- `server/services/preludeService.js::computeStartingAge(race)` derives
+  the Chapter 1 starting age from the character's race:
+  human/tiefling/aasimar/halfling = 6, half-elf = 8, half-orc = 4,
+  dragonborn = 2, dwarf = 18, elf = 30, gnome = 14, warforged = 1.
+- `server/services/preludeArcService.js::RACE_CHAPTER_AGES` defines the
+  per-race chapter age ranges passed to Opus so the arc plan honours the
+  race's actual life stages. Elves run 25-50 / 50-80 / 80-100 / 100-120;
+  dwarves 15-25 / 25-40 / 40-50 / 50-75; humans 5-8 / 9-12 / 13-16 / 17-21;
+  warforged "N years post-activation" across all four chapters.
+- The arc system prompt explicitly notes: "This character is a {race}.
+  Chapter 1 = early childhood for a {race} ({ages.ch1}). Chapter 4 =
+  threshold of adulthood for a {race} ({ages.ch4})."
+- Smoke-test confirms: creating an elf now produces `prelude_age=30` (was
+  always 7); a dwarf → 18; a warforged → 1.
+- Validator no longer checks starting_age. If a client sends one anyway,
+  it's silently ignored and recomputed from race.
+
+### Fixed — setup UX issues from play-test
+
+- **Merged `farmer_child` + `rural_smallholder` → `farm_family`.** They
+  were functionally identical; the isolated-vs-connected distinction is
+  handled by the home-setting question (farmstead vs. village etc.).
+- **Regions annotated with race affinities.** Each region's description
+  now ends with the dominant races ("Cormyr — predominantly human,"
+  "Underdark — drow, duergar, deep gnomes," etc.). Two new regions
+  added: **Cormanthor** (ancient elven realm east of Cormyr) and
+  **Evermeet** (elven island kingdom) — give elven characters natural
+  homelands.
+- **Parent slots now have a role dropdown.** Was "Parent 1 / Parent 2"
+  with no way to distinguish; now: Mother, Father, Guardian, Step-mother,
+  Step-father, Adoptive mother, Adoptive father, Grandmother/father
+  (raised you), Aunt/Uncle (raised you), Elder sibling (raised you).
+  Both slots can be any role — two mothers, guardian + stepfather, etc.
+- **Sibling age is now Younger / Older / Twin** — dropdown replaces the
+  confusing "age diff number; positive = older, negative = younger"
+  input. Server-side validation enforces the enum.
+- **Q9/Q10 now address the player directly** — "Three things you're
+  good at," "Three things you care about" (was "they").
+- **Whimsical tone description rewritten.** Old text said "animals might
+  speak" which violates Faerûn's established rules. New text:
+  "Wonder is close to the surface — omens in the wheat, the forge that
+  hums on feast days, dreams that come true small. The world of Faerûn
+  stays Faerûn; the whimsy lives in perception and small kindnesses,
+  not in rule-breaking." The arc prompt also gets an explicit WORLD RULES
+  line reinforcing that Faerûn canon is non-negotiable.
+
+### Tests
+
+- `tests/prelude-setup.test.js` grew from 37 → 38 tests covering the
+  new sibling relative_age enum and the removed age-bounds logic.
+- `tests/prelude-arc.test.js` still at 15 (no schema-validation shape
+  changes).
+- All 7 prior suites still green.
+- Client build clean.
+
+## [1.0.0.42] - 2026-04-19 — Prelude Phase 2a: Opus arc plan + preview
+
+Second Prelude ship. After the player completes the 12-question setup, Opus
+now generates a structured 1-2k-token arc plan covering the entire 7-10-session
+shape of the character's childhood. The player sees a full preview before
+gameplay, with a single re-roll available if it doesn't land. No gameplay
+yet — Phase 2b adds the session loop.
+
+### New — Phase 1 audit fixes (shipped alongside 2a)
+
+- **Server-side name validation lenient to match client.** Phase 1's server
+  validator required BOTH `first_name` AND `last_name`, while the wizard
+  accepted either. D&D has plenty of single-name characters ("Pig," "Tom,"
+  "Vermalen"). Fixed the server to match the wizard — at least one name
+  field must be non-empty. Added test cases for first-only, last-only,
+  and both-empty.
+- **Prelude-phase characters get a purple "✦ In Prelude" badge** in the
+  character list and render as `[Race] (Subrace) · Age N` instead of the
+  misleading "Level 0 [Race] Prelude" that Phase 1 produced. Makes
+  in-progress preludes visually distinct from finished characters.
+
+### New — arc plan service
+
+- **`server/services/preludeArcService.js`** — Opus call + persistence.
+  - `generateArcPlan(characterId, { isRegeneration })` — calls
+    `claude-opus-4-7` with a structured system prompt (6 ABSOLUTE RULES +
+    JSON output format + FINAL REMINDER) and a user prompt containing
+    the character's full 12-question setup enriched with the player-
+    selected tone tags' full descriptions.
+  - `getArcPlan(characterId)` — reads and parses the stored plan.
+  - `canRegenerate(characterId)` — returns true only if the re-roll
+    hasn't been used (hard cap `MAX_REGENERATIONS=1`).
+  - `extractJson()` — strips fence wrappers and surrounding prose, finds
+    the outermost `{ ... }` block. Tolerates Opus occasionally echoing
+    a preamble or closing comment.
+  - `validateParsedPlan()` — rejects missing `home_world`, any missing
+    `chapter_N_arc`, or a chapter 4 arc missing its `departure_seed`.
+
+### New — arc plan content shape
+
+```
+{
+  home_world: { description, locals[5-10], tensions[], threats[], mentor_possibility }
+  chapter_1_arc: { theme, beats[2-3], chapter_end_moment, seeded_emergences[] }
+  chapter_2_arc: (same)
+  chapter_3_arc: (same + chapter_promise_prompt)
+  chapter_4_arc: (same + chapter_promise_prompt + departure_seed)
+  recurring_threads[2-4]
+  character_trajectory: { suggested_class, suggested_theme, suggested_ancestry_feat, notes }
+  seed_emergences[] — candidate hints the arc nudges toward; emergences still fire from played behaviour
+}
+```
+
+The departure seed explicitly carries both a primary reason
+(pilgrimage / test / conscription / exile / apprenticeship-posting /
+political-match / call-to-adventure / flight / tragedy) and an emotional
+tone, plus 2-3 non-tragic alternatives in case play diverges.
+
+### New — server-side labels
+
+- **`server/services/preludeSetupLabels.js`** — mirrors the client's
+  `preludeSetup.js` curated lists (BIRTH_CIRCUMSTANCES, HOME_SETTINGS,
+  REGIONS, TONE_TAGS). Used only to enrich the Opus prompt with the same
+  flavor text the player saw when picking. Keep in sync with the client
+  file; if they drift, Opus still works on raw `value` strings.
+
+### New — API endpoints
+
+- `POST /api/prelude/:characterId/arc-plan` — generate. Accepts
+  `?regenerate=1` query param (or `{regenerate: true}` body) for re-roll.
+  Returns 400 when the re-roll limit is exceeded, else the parsed plan.
+- `GET /api/prelude/:characterId/arc-plan` — read. 404 if not yet
+  generated. Response includes `can_regenerate` flag so the UI can
+  hide the re-roll button after the cap is hit.
+
+### New — UI
+
+- **`PreludeArcPreview.jsx`** — full-page preview shown right after
+  setup completes. Renders the home (description + locals + tensions +
+  threats + mentor possibility), all four chapters (theme + beats +
+  chapter-end moment; chapter 4 also shows the departure seed),
+  recurring threads, and the soft trajectory suggestions. Auto-fetches
+  the plan on mount (generates if not yet generated). Re-roll button
+  respects the server-side cap.
+- **CharacterManager flow** — setup → arc preview → (Phase 2b will add
+  gameplay) → back to character list. `preludeArcCharacter` state
+  drives the new screen; `showPrelude` still drives the wizard.
+
+### Tests
+
+- **`tests/prelude-arc.test.js`** — 15 tests on `extractJson` (clean,
+  fenced, with prose, malformed, empty) and `validateParsedPlan`
+  (minimal, null, missing fields, missing departure_seed). All green.
+- Prelude setup tests grew from 35 → 37 to cover the single-name fix.
+- All 7 prior suites still green (56 + 59 + 26 + 56 + 49 + 21 + 43 = 310).
+- Client build clean.
+
+### Known concerns (non-blocking for Phase 2a)
+
+- **Pre-existing "prelude" system** from migration 022 is a separate
+  single-session origin-story flavor (different from this 7-10 session
+  character-creation-through-play system). Both coexist: the old system
+  uses `preludePromptBuilder.js` + `prelude_completed` flag + `session_type='prelude'`;
+  the new one uses `preludeArcService.js` + `prelude_arc_plans` table +
+  `creation_phase='prelude'`. Phase 2b will name its new session-prompt
+  module `preludeArcPromptBuilder.js` and use `session_type='prelude_arc'`
+  to avoid collision.
+
+## [1.0.0.41] - 2026-04-19 — Prelude Phase 1: setup scaffolding
+
+First ship of the Prelude-Forward Character Creator (see
+`PRELUDE_IMPLEMENTATION_PLAN.md` for the full 6-phase plan). This release
+lays the foundation: data model, setup wizard, API endpoints. No gameplay
+yet — Phase 2 adds the Opus arc-plan generator + session loop.
+
+### New — setup flow
+
+- **"✦ Start with a Prelude" button** in the character manager, next to
+  "+ New Character" — purple-accented. Opens a new 12-question setup
+  wizard instead of the standard creator.
+- **`PreludeSetupWizard.jsx`** — 12 questions, every one mandatory.
+  Curated picklists with free-text fallback (except Q12 which is a
+  closed vocabulary):
+  1. Name (first / last / nickname)
+  2. Gender (female / male / non-binary / other-write-your-own)
+  3. Race + sub-race (same pickers as main creator)
+  4. Starting age (5-8, default 7)
+  5. Birth circumstance (10 curated: noble scion, street orphan,
+     caravan child, refugee, temple foundling, etc.)
+  6. Home setting (12 curated: village, tenement, caravan, ship, etc.)
+  7. Region (15 curated FR regions + free text)
+  8. Parents (1-2, each with name + status: present / living-distant /
+     died-before-memory / died-in-childhood / unknown)
+  9. Siblings (0-N, name + age difference)
+  10. 3 things they're good at (28 curated + free text)
+  11. 3 things they care about (27 curated + free text)
+  12. Tone tags (pick 2-4 from 16 — gritty, dark humor, epic, quiet,
+      tragic, whimsical, political, rustic, mystical, brutal, tender,
+      romantic, eerie, bawdy, spiritual, hopeful). Composite shapes
+      arc-plan generation and scene prose in later phases.
+
+### New — data model (migration 042)
+
+- `characters` gains 4 columns: `creation_phase` (default `'active'`
+  for existing rows; `'prelude'` for new prelude characters),
+  `prelude_age`, `prelude_chapter`, `prelude_setup_data` (JSON blob).
+- New tables, all scoped per-character with FK cascade:
+  - `prelude_emergences` — every `[STAT_HINT]` / `[SKILL_HINT]` /
+    `[CLASS_HINT]` / `[THEME_HINT]` / `[ANCESTRY_HINT]` / `[VALUE_HINT]`
+    the AI will eventually emit, with accept/decline status. Unused
+    in Phase 1; wired in Phase 3.
+  - `prelude_values` — rolling tally of emergent values. Unused in
+    Phase 1; wired in Phase 3.
+  - `prelude_canon_npcs` — parents, siblings, mentors, rivals that
+    will carry into the primary campaign.
+  - `prelude_canon_locations` — home village, landmarks, region
+    anchors.
+  - `prelude_arc_plans` — table scaffolding only; Phase 2 populates
+    this from Opus via `preludeArcService.js`.
+
+### New — API surface
+
+- `POST /api/prelude/setup` — creates a prelude-phase character.
+  Server-side `validateSetupPayload` enforces all 12 field rules
+  (matches client-side validation in the wizard).
+- `GET /api/prelude/list` — all preludes (for the character manager).
+- `GET /api/prelude/:characterId` — one prelude with parsed setup.
+- `server/services/preludeService.js` — `createPreludeCharacter`,
+  `getPreludeCharacter`, `listPreludeCharacters`, `validateSetupPayload`.
+  Provisional stats (all 10s + age-scaled HP) are set at creation time;
+  emergences accrue on `prelude_emergences` in later phases.
+
+### Phase 1 cap — nothing playable yet
+
+After submitting the setup, the wizard closes and the player returns
+to the character list. The prelude character is saved with
+`creation_phase='prelude'` and all 12 answers persisted — but gameplay
+doesn't exist until Phase 2 (arc plan + session loop). The
+`onPreludeCreated` hook is wired so Phase 2 can route to the arc
+preview screen without rewiring.
+
+### Tests
+
+- `tests/prelude-setup.test.js` — 35 tests covering payload validation
+  (happy path, required fields, age bounds, parents / siblings array
+  rules, talent/care count enforcement, tone-tag count limits,
+  null/empty/whitespace edges). All green.
+- All 7 existing suites still green (56 + 59 + 26 + 56 + 49 + 21 + 43 = 310).
+- Client `vite build` succeeds; migration 042 applies cleanly on boot.
+
+## [1.0.0.40] - 2026-04-19 — Character creator descriptions pass
+
+Addresses player feedback: "the character creator we've built is good,
+but it isn't descriptive enough. I want to make sure that when a player
+creates a new character, they know who and what they're creating."
+
+The wizard was strong on narrative choices (alignment, deity, theme,
+lifestyle) but weak on the mechanical ones — weapons, armor, tools,
+skills, languages, and theme sub-choices were bare names in dropdowns
+with no explainer. This release surfaces that information inline.
+
+### New reference data
+- **`client/src/data/references.js`** — single source of truth for
+  1-sentence explainers of shared D&D 5e concepts. `ABILITY_SCORES`
+  (6), `SKILLS` (18), `TOOLS` (~27 artisan + gaming + kits + 10
+  instruments), `LANGUAGES` (~18 standard + exotic + Druidic +
+  Thieves' Cant), `DAMAGE_TYPES` (13), `WEAPON_PROPERTIES` (11),
+  `MAGIC_INITIATE_CLASSES` (6). Plus `formatWeaponLine/ArmorLine/
+  GearLine` helpers for compact inline stats.
+- **`client/src/data/races.json`** — added `description` field to all
+  10 base races (Aasimar, Dragonborn, Dwarf, Elf, Half-Elf, Half-Orc,
+  Halfling, Human, Tiefling, Warforged). Previously only subraces had
+  descriptions; selecting a race with no subrace showed nothing.
+
+### Theme sub-choice schema upgrade
+- `server/data/themes.js` — `creation_choice_options` upgraded from
+  bare `string[]` to `{ value, label, description }[]` for the three
+  themes that use sub-choices: Outlander (9 biomes), City Watch (10
+  home cities), Knight of the Order (4 order types). Each option now
+  carries a 1-sentence flavor description.
+- **Back-compat preserved.** `value` fields match the old strings, so
+  existing characters' `theme_path_choice` values still resolve. The
+  wizard renders both shapes (objects → description shown; strings →
+  legacy behavior). Seed service already JSON.stringify's the blob;
+  no migration needed — next boot reseeds.
+
+### Wizard rendering (`CharacterCreationWizard.jsx`)
+- **Theme sub-choices**: description appears under the selected value
+  (italic gray, 0.8rem).
+- **Base race**: description rendered above subrace description in the
+  Racial Traits box.
+- **Class features**: `"Name - Description"` strings parsed and
+  rendered as `<strong>Name</strong> — description` for readability.
+- **Ability scores** (Step 2): 1-sentence explainer under each STR/
+  DEX/CON/INT/WIS/CHA label.
+- **Skill picker** (Step 2 class skills): skill name bold + governing
+  ability + 1-sentence description per tile.
+- **Equipment items**: stat line inline in dropdowns and under picks
+  (e.g., "Longsword — 1d8 slashing · versatile · 15 gp · 3 lb").
+  Packs show cost in dropdown; contents already surfaced below.
+- **Ancestry feat picker**: `flavor_text` line now rendered below the
+  description. Sub-choice selects show inline reference descriptions
+  (skill / tool / language / damage / weapon) under the picked value.
+- **Background language picker**: description under selected language.
+- **Background tool picker**: description under selected tool.
+- **Variant Human PHB feat sub-choices**: class picker surfaces Magic
+  Initiate flavor ("Wizard = methodical studied arcane magic" etc.);
+  other sub-choices get the same reference-map helper.
+
+### Not shipped (deferred to a polish pass)
+- Class feature data schema rewrite. Most features already have
+  `"Name - Description"` strings embedded — rendering fix is enough.
+  A cleaner `{ name, description }[]` schema is a follow-up.
+- Tooltips for weapon properties (finesse, versatile, etc.). Data is
+  in `WEAPON_PROPERTIES` map; UI integration pending.
+
+### Tests
+- All 5 existing suites still green (56 + 59 + 26 + 56 + 49 + 21 +
+  43 = 310). No behavioral changes to prompts, markers, or API
+  shapes — purely additive data + UI.
+- `vite build` succeeds without warnings beyond the existing chunk-
+  size notice.
+
 ## [1.0.0.39] - 2026-04-19 — City Watch home city options + seed refresh for theme fields
 
 ### Bug fix

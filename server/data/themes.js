@@ -135,7 +135,17 @@ export const THEMES = [
     id: 'outlander',
     name: 'Outlander',
     creation_choice_label: 'Chosen Biome',
-    creation_choice_options: ['forest', 'desert', 'mountain', 'arctic', 'swamp', 'coastal', 'grasslands', 'underground', 'extra_planar'],
+    creation_choice_options: [
+      { value: 'forest', label: 'Forest', description: 'Deep woodland — canopy cathedrals, game trails, and shifting light. You learned quiet step, which roots are safe to chew, and how to read a thicket for what passed through it.' },
+      { value: 'desert', label: 'Desert', description: 'Sand sea and salt plain. You learned to travel by night, read a sky full of stars, and know which rocks hold water underneath when the wadi runs dry.' },
+      { value: 'mountain', label: 'Mountain', description: 'High stone and thin air. You learned where the snow is safe to cross, how to read weather off a peak, and to trust your footing on ledges others would not dare.' },
+      { value: 'arctic', label: 'Arctic', description: 'Frozen tundra and winter-dark nights. You learned to bank a fire through a blizzard, find seal breathing-holes on the ice, and spot the slight seam where snow hides a crevasse.' },
+      { value: 'swamp', label: 'Swamp', description: 'Flooded wetland and tangled bayou. You learned which frogs warn of worse things, where the ground will hold weight, and how to sleep dry on a hummock in a rainstorm.' },
+      { value: 'coastal', label: 'Coastal', description: 'Shore and shallow sea. You learned the tides, what the gulls mean, how to gut a fish by feel in the dark, and which shells tell you there is a storm ten miles out.' },
+      { value: 'grasslands', label: 'Grasslands', description: 'Open plain and rolling savanna. You learned to read a herd at a mile, call weather off a distant cloud bank, and lose a mounted pursuer in grass that hides everything.' },
+      { value: 'underground', label: 'Underground', description: 'Deep caverns and Underdark fringes. You learned which fungi glow safely, which dripping water is safe to drink, and how to move in a dark that would blind anyone else.' },
+      { value: 'extra_planar', label: 'Extra-Planar', description: 'A wilderness that was not of this world — a Feywild grove, Shadowfell moor, elemental plane, or Astral drift. You came back changed, and the land still hums behind your eyes when you sleep.' }
+    ],
     identity: 'Raised in the wild, far from civilization. For the Outlander, the wilderness is home — but only their chosen biome, mastered intimately.',
     description: 'You grew up far from any city, in the wilderness — a forest, a mountain range, a desert, a frozen waste, or somewhere stranger. The land taught you its rhythms, and you know things about your chosen biome that most learned sages do not, though the press of crowded streets still feels wrong against your skin.',
     signature_skill_1: 'Survival',
@@ -274,16 +284,16 @@ export const THEMES = [
     // (Menzoberranzan, Mithral Hall) are included for unusual concepts — a drow
     // City Watch or a dwarven clan guard both work narratively.
     creation_choice_options: [
-      'Waterdeep',
-      "Baldur's Gate",
-      'Neverwinter',
-      'Luskan',
-      'Silverymoon',
-      'Mithral Hall',
-      'Candlekeep',
-      'Menzoberranzan',
-      'Calimport',
-      'Athkatla'
+      { value: 'Waterdeep', label: 'Waterdeep', description: 'The City of Splendors — cosmopolitan, wealthy, and layered with political intrigue. The Waterdhavian Watch is disciplined, heavily regulated, and famous for its uniformed patrols through districts whose laws each twist a little differently.' },
+      { value: "Baldur's Gate", label: "Baldur's Gate", description: 'A sprawling port city divided between the wealthy Upper City and the rougher Lower City below. The Flaming Fist — mercenary company and de facto law — keeps a harsh, pragmatic peace among dockhands, sellswords, and Gondian priests.' },
+      { value: 'Neverwinter', label: 'Neverwinter', description: 'Rebuilt jewel of the Sword Coast, warmed by hot springs and scarred by cataclysm. The Neverwinter Guard walks streets still pocked with old damage, and half the city remembers when there was no law at all.' },
+      { value: 'Luskan', label: 'Luskan', description: 'A lawless northern pirate haven run by the five High Captains. "Watch" here is whatever a High Captain says it is — their thugs in surcoats, more protection racket than peacekeeping. You survived by knowing which crew to never cross.' },
+      { value: 'Silverymoon', label: 'Silverymoon', description: 'The Gem of the North — a city of scholars, bards, and diverse kin walking one peaceful street. The Knights in Silver guard Silverymoon with courtesy and blade alike, and their watchposts double as study halls.' },
+      { value: 'Mithral Hall', label: 'Mithral Hall', description: 'The great dwarven hold under the Spine of the World. Its watch is a clan-warrior rotation — axe and shield, stone-trained ears, and a keen sense for which disturbance is a drunk cousin and which is something worse coming up from below.' },
+      { value: 'Candlekeep', label: 'Candlekeep', description: 'The fortified library-city atop the cliffs of the Sea of Swords. The Watchers who guard it are part librarian, part warrior-monk — the rules are strict, the books irreplaceable, and every visitor is scrutinized.' },
+      { value: 'Menzoberranzan', label: 'Menzoberranzan', description: 'The great drow city deep in the Underdark. House-bound patrols keep a brittle, cruel peace under Lolth\'s priestesses; "law" bends to whichever noble is rising. You learned to read politics before you learned to walk.' },
+      { value: 'Calimport', label: 'Calimport', description: 'Sun-baked jewel of the southern coast — merchant palaces and labyrinthine slums side by side. The Pasha\'s watch is bought and sold like any other commodity; enforcement depends entirely on who you offended and how wealthy their family is.' },
+      { value: 'Athkatla', label: 'Athkatla', description: 'The City of Coin, heart of Amn. Every guard wears a Cowled Wizard\'s invisible leash — magic is licensed, crime is taxed, and the Council of Six hears all. You learned that gold rewrites most laws before sunrise.' }
     ],
     identity: 'A civilian peacekeeper rooted in a specific settlement — deep community knowledge, informal networks, the authority of place.',
     description: 'You walked a specific beat for years, learning one settlement the way its residents never could — its alleys, its troublemakers, its quiet deals, its decent people. The watch made you a part of the city, and even if you have moved on, the city still knows you by name.',
@@ -302,7 +312,12 @@ export const THEMES = [
     id: 'knight_of_the_order',
     name: 'Knight of the Order',
     creation_choice_label: 'Order Type',
-    creation_choice_options: ['chivalric', 'religious', 'scholarly', 'secret'],
+    creation_choice_options: [
+      { value: 'chivalric', label: 'Chivalric Order', description: 'A sworn knighthood of honor and arms — tournaments, heraldry, protection of the weak, and martial code. Your oath binds you to a lord or cause, and your reputation travels with your banner.' },
+      { value: 'religious', label: 'Religious Order', description: 'A militant faith — crusader, paladin-adjacent, temple-sworn. You answer to a deity and the clergy who speak for them; your sword arm is an extension of the altar.' },
+      { value: 'scholarly', label: 'Scholarly Order', description: 'A philosophical brotherhood — Harpers-like, lorekeepers, monks of reason. The order prizes knowledge, discretion, and careful action over pageantry; you were taught to think before you struck.' },
+      { value: 'secret', label: 'Secret Order', description: 'A hidden fellowship with hidden aims — occult, political, or older than any kingdom knows. Your oath is known to few outside it; your methods, fewer still. The order\'s hand moves in shadow, and so do you.' }
+    ],
     identity: 'A sworn member of a chivalric, religious, or philosophical order. Power from oath and institutional backing. Supports six branching moral paths: True / Reformer / Martyr / Complicit / Fallen / Redemption.',
     description: 'You swore an oath to an order — chivalric, religious, philosophical, or martial — and that oath still shapes the person you are now. The order\'s code and the order\'s people stand behind you, for good or ill, and your choices are always made in their shadow.',
     signature_skill_1: 'Persuasion',

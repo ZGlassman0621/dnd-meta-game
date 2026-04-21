@@ -1,6 +1,7 @@
 {
   "aasimar": {
     "name": "Aasimar",
+    "description": "Humans touched by the divine — descendants, hosts, or chosen of celestial beings. Aasimar look human with subtle luminous traits: metallic hair, piercing eyes, a faint glow in low light. Their souls answer to a guiding celestial, and the relationship shapes who they become.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -63,6 +64,7 @@
   },
   "dragonborn": {
     "name": "Dragonborn",
+    "description": "Proud, draconic humanoids walking upright with scaled hides, clawed hands, and reptilian features. Each dragonborn carries the blood of one of the great dragons; their ancestry grants a breath weapon and colors their outlook — chromatic (often cruel and cunning) or metallic (often honorable and just).",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -213,6 +215,7 @@
   },
   "dwarf": {
     "name": "Dwarf",
+    "description": "Stout, bearded, mountain-bred folk who prize craft, clan, and ancient grudges. Dwarves live well over two centuries, building deep halls of stone and passing down hammer and heirloom across generations. They are slow to anger, slow to trust, and absolutely loyal once won.",
     "size": "Medium",
     "speed": 25,
     "abilityScoreIncrease": {
@@ -264,6 +267,7 @@
   },
   "elf": {
     "name": "Elf",
+    "description": "Graceful, long-lived inhabitants of the forests, hills, and Underdark. Elves live seven centuries or more and do not sleep — they meditate in a half-dreaming trance for four hours a night. Their patience, keen senses, and fey ancestry lend them an otherworldly distance from shorter-lived kin.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -332,6 +336,7 @@
   },
   "half-elf": {
     "name": "Half-Elf",
+    "description": "Children of two worlds — human and elf — belonging fully to neither. Half-elves stand on a bridge between short-lived ambition and long-lived grace, often restless wanderers and natural diplomats. Most were raised in one parent's culture and carry a quiet curiosity about the other.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -408,6 +413,7 @@
   },
   "half-orc": {
     "name": "Half-Orc",
+    "description": "Strong, fierce, and often caught between cultures. Half-orcs carry obvious orcish features — heavy jaw, prominent tusks, greyish or green-tinged skin — and draw stares from both human and orc kin. They feel emotion powerfully: rage, joy, and grief all run close to the surface.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -428,6 +434,7 @@
   },
   "halfling": {
     "name": "Halfling",
+    "description": "Small, hardy folk who value home, hearth, and good food above glory. Halflings stand three to four feet tall, move quietly, and take unusual pleasure in the simple things — a warm fire, a full pantry, an evening of song. They endure hardship with a cheerfulness that surprises taller races.",
     "size": "Small",
     "speed": 25,
     "abilityScoreIncrease": {
@@ -473,6 +480,7 @@
   },
   "human": {
     "name": "Human",
+    "description": "The most numerous and widespread of the civilized peoples. Humans lack the long memory of elves or the clannish roots of dwarves, but they compensate with ambition, adaptability, and sheer range — from merchant princes to tundra herders, humans live in nearly every climate and culture.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -519,6 +527,7 @@
   },
   "tiefling": {
     "name": "Tiefling",
+    "description": "Humans whose bloodline has been touched by the Lower Planes — often an infernal ancestor many generations removed. Tieflings carry visible signs: horns, a barbed tail, unusual eye color, skin in warm hues. They are met with suspicion nearly everywhere, which shapes them: wary, self-reliant, and used to making their own way.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
@@ -538,6 +547,7 @@
   },
   "warforged": {
     "name": "Warforged",
+    "description": "Sentient constructs — walking soldiers of wood, stone, metal, and magical fiber, built to serve in old wars and left behind after. Warforged don't eat, drink, or sleep the way flesh-and-blood folk do; they stand watch through the night and ask, each dawn, what purpose they carry today.",
     "size": "Medium",
     "speed": 30,
     "abilityScoreIncrease": {
