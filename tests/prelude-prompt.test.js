@@ -117,6 +117,62 @@ console.log('\n=== Rule 6 MOMENTUM — every response ends on engagement ===\n')
   );
 }
 
+console.log('\n=== Rule 6 SECOND CARVE-OUT — NPC exits & unfinished thoughts (v1.0.69) ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+
+  assert(
+    p.includes('SECOND CARVE-OUT') || p.includes('NPC EXITS AND UNFINISHED THOUGHTS'),
+    'Rule 6 has the second carve-out heading (NPC exits)'
+  );
+  assert(
+    p.includes('PAUSE BEFORE THE EXIT'),
+    '6c option (i) — pause before exit'
+  );
+  assert(
+    p.includes('COMPRESS FORWARD PAST THE EXIT'),
+    '6c option (ii) — compress forward'
+  );
+  assert(
+    p.includes('CALL A ROLL ON WHAT JUST HAPPENED'),
+    '6c option (iii) — call a roll'
+  );
+  assert(
+    p.includes('THE UNFINISHED SENTENCE IS A BECKON'),
+    '6c mentions the unfinished-sentence pattern'
+  );
+  // BAD ENDINGS now includes the play-test Halgrim example
+  assert(
+    p.includes('walks toward the far door without looking back'),
+    'BAD ENDINGS includes Halgrim exit example'
+  );
+  // GOOD ENDINGS includes 6c worked examples
+  assert(
+    p.includes('6c(i)') || p.includes('paused before exit'),
+    'GOOD ENDINGS includes 6c(i) example'
+  );
+  assert(
+    p.includes('6c(ii)') || p.includes('compressed forward past exit'),
+    'GOOD ENDINGS includes 6c(ii) example'
+  );
+  assert(
+    p.includes('6c(iii)') || p.includes('roll on what just happened'),
+    'GOOD ENDINGS includes 6c(iii) example'
+  );
+  // Fail-condition line updated
+  assert(
+    p.includes('NPC walking away without a handoff'),
+    'fail-condition line calls out NPC-walking-away as a fail'
+  );
+
+  // FINAL REMINDER surfaces the carve-out
+  const tail = p.slice(p.indexOf('FINAL REMINDER'));
+  assert(
+    tail.includes('CARVE-OUT 2') && tail.includes('exits'),
+    'FINAL REMINDER surfaces NPC-exit carve-out'
+  );
+}
+
 console.log('\n=== Rule 6 CARVE-OUT — NPC-directed tasks route to roll prompt (v1.0.65) ===\n');
 {
   const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());

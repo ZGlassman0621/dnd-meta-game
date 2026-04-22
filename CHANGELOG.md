@@ -2,6 +2,51 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.69] - 2026-04-22 — Rule 6c: NPC exits and unfinished thoughts require a handoff
+
+Play-test: Halgrim said "'Your brother holds honor like a shield… You — ' He stops. Doesn't finish it. He walks toward the far door without looking back." Great atmospheric prose, but the response ended there. The PC was left alone in a room with nothing to do — no question to answer, no roll to make, no time-skip to a new beat. The unfinished "You —" was a direct invitation for the PC to speak, but the NPC walked away before they had the chance.
+
+Rule 6 already requires every response to end on engagement. But "NPC walks away" was slipping through option (c) ("something happening TO/AROUND the PC that demands response") because something IS happening — they're leaving. The rule didn't catch that leaving-the-room doesn't DEMAND response; it atmospherically closes the scene.
+
+### New sub-rule 6c — THREE VALID HANDOFFS for NPC exits
+
+Prompt-only fix. When an NPC is leaving, walking away, turning their back to go, closing a door between them, or cutting themselves off mid-thought, the response CANNOT end on the exit itself. Choose one of:
+
+- **(i) PAUSE BEFORE THE EXIT.** End at the moment the NPC stops, hesitates, reaches for the door — BEFORE they actually leave. The PC has this beat to speak.
+  > *"'You — ' Halgrim stops. Does not finish it. His hand rests on the door handle. He has not turned yet."*
+
+- **(ii) COMPRESS FORWARD PAST THE EXIT.** Narrate past the NPC leaving to the next meaningful moment — minutes, a tenday, a season later. Always land on a new beat that demands response.
+  > *"He walks toward the far door without looking back. The door closes. A tenday passes… Then, on the seventh morning, Moira comes to find you — her face is new."*
+
+- **(iii) CALL A ROLL ON WHAT JUST HAPPENED.** What does the PC make of it? Insight (was he lying?), Perception (what did you see in his face?), Investigation (what was he about to say?), History (do you remember anything like this?).
+  > *"He walks toward the far door without looking back. Whatever he was about to say is yours to guess at — give me an Insight check."*
+
+### THE UNFINISHED SENTENCE IS A BECKON
+
+Special case named explicitly in the rule: when an NPC cuts themselves off mid-thought about the PC ("You — " and stops), that IS a direct invitation for the PC to fill the silence. Use option (i) — pause the NPC before the exit, let the beat sit, end the response. Don't let them walk away from that silence uncontested.
+
+### BAD / GOOD endings updated
+
+The exact play-test transcript is now a worked BAD example:
+
+> *"Halgrim pauses at the edge of the lamplight ... 'You — ' He stops. Doesn't finish it. He walks toward the far door without looking back."* [unfinished thought + NPC exit — stop at "He stops. Doesn't finish it." and let the PC speak]
+
+Three worked GOOD endings show the correct 6c(i), 6c(ii), and 6c(iii) shapes.
+
+### FINAL REMINDER updated
+
+Rule 6's existing "CARVE-OUT" (NPC-directed tasks → roll) is now labeled CARVE-OUT 1. New CARVE-OUT 2 covers NPC exits + unfinished thoughts and lists the three handoff options in recency position.
+
+### No server-side detection this round
+
+A heuristic detector for "NPC walks away without handoff" would require scanning the last N sentences for exit verbs AND absence of question marks, roll prompts, and [AGE_ADVANCE] markers. Too many false-positive edges (a valid pause-before-exit ending with "door" nouns could trip it). Prompt-strengthening first; if the pattern keeps slipping through, detection is the next layer.
+
+### Tests
+
+- `tests/prelude-prompt.test.js` grew 49 → 60 (+11 tests covering the new carve-out heading, three options, unfinished-sentence callout, Halgrim BAD example, three GOOD 6c examples, fail-condition line, and FINAL REMINDER surfacing).
+- All 6 prelude suites green: 38 + 15 + 130 + 60 + 33 + 52 = **328 prelude tests total**.
+- Client build clean. No schema or API changes.
+
 ## [1.0.0.68] - 2026-04-22 — Hotfix: violation detector false-positive on NPC split dialogue
 
 v1.0.67's detector fired on an NPC's mid-sentence dialogue break:
