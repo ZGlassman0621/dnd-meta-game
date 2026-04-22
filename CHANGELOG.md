@@ -2,6 +2,134 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.67] - 2026-04-22 — Rule 2 hard enforcement: detector + next-turn correction + UI warning
+
+Play-test: Opus wrote dialogue for the player during a climactic beat
+— "'Someone removed an instruction,' you say. 'Something Father told
+you to do…'" — a direct Rule 2 violation. The existing rule was
+clearly insufficient on its own at emotional peaks. Three-layer fix.
+
+### Layer 1 — Rule 2 rewritten (primacy position)
+
+**New foundational framing** (user-contributed):
+
+> YOU CONTROL EVERYTHING IN THIS WORLD EXCEPT THE PLAYER CHARACTER.
+> The world, NPCs, weather, rooms, smells, sounds, consequences,
+> time passing, what other people say and do, what the PC's body
+> passively senses — all yours. The PC's voice, thoughts, feelings,
+> choices, and actions — NOT YOURS. Your job is to build a world the
+> PC can experience and react to, placing them into situations with
+> means of interacting, without EVER forcing the PC to do or say or
+> think anything they haven't said they're doing.
+
+Positive statement of what the AI owns BEFORE the negative boundary
+— clearer mental model than the previous rule-2 wording.
+
+Added a second WRONG example taken verbatim from the play-test
+transcript so the pattern Opus fell into is explicitly banned.
+
+### Layer 2 — New Rule 2b: climactic-moment self-check
+
+New sub-rule that explicitly calls out emotional peaks as the
+violation hotspot:
+
+> The strongest pull to write the player's line comes at emotional
+> peaks: the confession, the breakthrough realization, the
+> courageous word, the revelation. "If only I could hear the player
+> deliver THIS line," you think. That pull IS the violation point.
+
+Plus a **mandatory self-check** the AI must run before emitting:
+
+> Scan the last 3 paragraphs of your response. Are there any quoted
+> passages followed OR preceded by "you said / say / whisper /
+> answer / reply / think / tell / ask / murmur / add / mutter /
+> begin / continue / offer / breathe / call / realize / decide /
+> wonder / remember" (or similar verbs of speech or cognition)? If
+> YES — STOP. DELETE that section. Rewrite to END at the point
+> where the player WOULD speak.
+
+Plus GOOD/BAD endings list showing the exact tempting violations
+vs. the correct non-violating endings.
+
+### Layer 3 — Server-side detector (belt-and-suspenders)
+
+Because trusting the AI to self-police at climactic moments isn't
+enough. New module `preludeViolationDetection.js` pattern-matches
+the two common violation shapes:
+
+- **Pattern A**: `"..."[,.-—]? you [verb]` (quote before verb)
+- **Pattern B**: `you [verb] [up to 120 chars, tempered] "..."` (verb
+  before quote, with a tempered quantifier that REJECTS if another
+  speaker verb intervenes — so "you say nothing as she whispers
+  'hello'" correctly doesn't flag)
+
+Verb list covers speech (said, whisper, answer, reply, tell, ask,
+murmur, etc.) and cognition (thought, realize, wonder, decide).
+Curly quotes normalized before matching.
+
+When a violation is detected:
+
+1. **The response still surfaces** — the player sees what happened.
+   We don't hide it, because opaque censorship feels worse than a
+   transparent flag.
+2. **A warning badge renders inline** — red-outlined card beneath
+   the offending response: *"⚠ Rule violation flagged. The DM wrote
+   dialogue or reaction attributed to your character. Disregard that
+   passage — your character has not spoken or reacted. The DM has
+   been notified and will correct on the next turn."*
+3. **A correction `[SYSTEM NOTE]` is queued** for the next turn — it
+   names the specific pattern(s) that fired and instructs the AI to
+   briefly acknowledge ("Apologies — I put words in your mouth
+   there; please disregard that passage.") and strictly end scenes at
+   the point where the player would speak.
+4. **The violation is logged** server-side for telemetry.
+
+### Layer 4 — FINAL REMINDER updated (recency position)
+
+Two ⚠-prefixed lines at the top of the reminder block:
+
+- "YOU CONTROL THE WORLD, NOT THE PLAYER CHARACTER (rule 2). You
+  own… You do NOT own the PC's voice, thoughts, feelings, choices,
+  or reactions."
+- "BEFORE FINISHING: scan your last 3 paragraphs. Did you write
+  QUOTED DIALOGUE attributed to the player character… If YES →
+  DELETE and rewrite. This violation is most tempting in climactic
+  moments. The satisfying line belongs to the player, NOT to you."
+
+### Rules apply to BOTH Sonnet AND Opus — clarified
+
+The system prompt is built once per turn and passed to whichever
+model the auto-picker chose. Rules never switch off. But Opus
+interprets rules differently from Sonnet — it prioritizes narrative
+flow more and will more readily override structural rules in
+climactic moments. That's a model-personality difference, not a
+prompt-handling issue. The detector + correction loop is model-
+agnostic; it catches Opus violations the same as Sonnet ones.
+
+### Tests
+
+- **New suite `tests/prelude-violation-detection.test.js`** — 46
+  tests covering the user's exact transcript, canonical variants,
+  Pattern B with intervening words, colon-attribution (`you answer
+  in a voice smaller than you meant: "yes"`), curly-quote
+  normalization, internal-monologue variants, NPC-dialogue
+  negatives, tempered-quantifier (second-speaker NOT flagged),
+  snippet truncation, and `buildViolationCorrectionNote`.
+- `tests/prelude-prompt.test.js` unchanged (still 49 green).
+- All 6 prelude suites green: 49 + 130 + 38 + 15 + 33 + 46 = **311
+  prelude tests total**.
+- Client build clean. No schema changes; warning note lives on the
+  existing `session_config` JSON column.
+
+### What's not here (follow-up if needed)
+
+Automatic retry — if the detector flags a violation, we could
+re-call the AI with a stronger system note and serve the retry
+instead of the violation. Not built this round: adds latency + cost,
+could loop, and prompt-strengthening + next-turn correction should
+already move the needle. If play-test still sees violations
+surfacing, retry is the obvious next layer.
+
 ## [1.0.0.66] - 2026-04-22 — Auto picker: break the Opus-feedback loop (release discipline + cap)
 
 Play-test report: auto mode got stuck on Opus. Once Opus was running,

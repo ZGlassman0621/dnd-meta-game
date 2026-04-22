@@ -36,6 +36,7 @@ import { detectPreludeMarkers } from './preludeMarkerDetection.js';
 import * as rollingSummary from './rollingSummaryService.js';
 import * as emergenceService from './preludeEmergenceService.js';
 import * as canonService from './preludeCanonService.js';
+import { detectPlayerDialogueViolation, buildViolationCorrectionNote } from './preludeViolationDetection.js';
 
 // Play-session pacing thresholds. A "play-session" is one pause-to-pause
 // cycle; each resume starts a new play-session. Exchange count = messages
@@ -405,6 +406,13 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   const sessionCfg = safeJsonParse(session.session_config, {});
   const pendingCapFeedback = sessionCfg.pendingCapFeedback;
 
+  // v1.0.67 — pending Rule 2 violation correction from the previous turn.
+  // When the violation detector flags quoted-PC-dialogue, we stash a
+  // correction note on session_config.pendingViolationNote; it gets
+  // injected as a [SYSTEM NOTE] on the NEXT turn so the AI acknowledges
+  // and self-corrects. Consumed here, cleared after.
+  const pendingViolationNote = sessionCfg.pendingViolationNote;
+
   // Play-session pacing — count messages since the current play-session
   // began, inject a [SYSTEM NOTE] when we're past the healthy length.
   // Context drift kicks in hard after ~35 exchanges; nudge at ~15, wrap
@@ -426,6 +434,9 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
       role: 'user',
       content: `[SYSTEM NOTE] Your last response's emergence markers were partially rejected:\n${pendingCapFeedback}\n\nAcknowledge in your next narration — don't fire those capped hints again.`
     });
+  }
+  if (pendingViolationNote) {
+    injectedMessages.push({ role: 'user', content: pendingViolationNote });
   }
   if (pacingNote) {
     injectedMessages.push({ role: 'user', content: pacingNote });
@@ -472,8 +483,29 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
     });
   }
 
+  // v1.0.67 — Rule 2 (player agency) post-generation scan. Pattern-matches
+  // quoted dialogue / internal monologue attributed to the player character.
+  // If violated, the response still surfaces (the player sees what happened)
+  // but with a warning flag the UI can render, and we queue a correction
+  // [SYSTEM NOTE] for the NEXT turn so the AI acknowledges and stops.
+  const violation = detectPlayerDialogueViolation(result.response);
+  if (violation.violated) {
+    console.warn(
+      `[prelude] Rule 2 violation detected on session ${sessionId}:`,
+      violation.matches.map(m => m.snippet).join(' | ')
+    );
+  }
+
   // Process markers on the AI response
   const markerResults = await processMarkersForSession(session.character_id, sessionId, result.response);
+
+  // Attach the violation flag to markerResults so the route returns it with
+  // the response payload.
+  if (violation.violated) {
+    markerResults.rule2Violation = {
+      matches: violation.matches
+    };
+  }
 
   // If the cap-violation feedback we just injected was consumed, clear it.
   // If new violations happened this turn, queue them for next turn.
@@ -483,6 +515,14 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
     nextCfg.pendingCapFeedback = markerResults.capViolations
       .map(v => `  • ${v.kind} ${v.target}: ${v.reason}`)
       .join('\n');
+  }
+
+  // v1.0.67 — consume / queue the Rule 2 violation correction note. If we
+  // injected one this turn, clear it. If this turn produced a new violation,
+  // queue a correction for next turn.
+  if (pendingViolationNote) delete nextCfg.pendingViolationNote;
+  if (violation.violated) {
+    nextCfg.pendingViolationNote = buildViolationCorrectionNote(violation.matches);
   }
 
   // v1.0.62 — stash this turn's signals for the auto-mode resolver on the

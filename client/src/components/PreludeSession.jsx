@@ -165,6 +165,13 @@ export default function PreludeSession({ character, onBack }) {
       if (Array.isArray(data.markers?.offeredEmergences) && data.markers.offeredEmergences.length > 0) {
         newAssistant.offeredEmergences = data.markers.offeredEmergences
       }
+      // v1.0.67 — Rule 2 violation flag. If the detector caught quoted
+      // dialogue attributed to the PC, attach the flag to the message so
+      // the render layer can show a red warning badge. The server has
+      // already queued a correction [SYSTEM NOTE] for the next turn.
+      if (data.markers?.rule2Violation) {
+        newAssistant.rule2Violation = data.markers.rule2Violation
+      }
       // Chapter advancement + age advancement produce tiny notice banners
       // between messages — purely informational.
       const notices = []
@@ -571,6 +578,31 @@ export default function PreludeSession({ character, onBack }) {
                 )}
                 {m.content}
               </div>
+              {/* v1.0.67 — Rule 2 violation warning badge. Surfaces when the
+                  server-side detector catches quoted dialogue attributed to
+                  the player character. The server already queued a correction
+                  [SYSTEM NOTE] for the next turn; this badge just makes the
+                  violation visible to the player so they know to disregard
+                  the offending passage. */}
+              {m.rule2Violation && (
+                <div style={{
+                  margin: '-0.5rem 0 1rem',
+                  padding: '0.6rem 0.85rem',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.5)',
+                  borderRadius: '6px',
+                  fontSize: '0.82rem',
+                  color: '#fca5a5',
+                  lineHeight: 1.4
+                }}>
+                  <div style={{ fontWeight: 700, color: '#fca5a5', marginBottom: '0.25rem' }}>
+                    ⚠ Rule violation flagged
+                  </div>
+                  <div style={{ color: '#fecaca' }}>
+                    The DM wrote dialogue or reaction attributed to your character. Disregard that passage — your character has not spoken or reacted. The DM has been notified and will correct on the next turn.
+                  </div>
+                </div>
+              )}
               {/* Phase 3 — emergence offer cards. Stat/skill hints get
                   accept / not now / never buttons. Class/theme/ancestry
                   hints are tallied silently server-side (no card needed). */}
