@@ -2,6 +2,40 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.64] - 2026-04-21 — Hotfix: SQLITE_NOMEM on emergence snapshot
+
+v1.0.63's `buildEmergenceSnapshotBlock()` fired 5 queries via
+Promise.all on every prelude turn — saturated Turso's per-request
+compute budget and crashed `sendMessage` with:
+
+```
+LibsqlError: SQLITE_NOMEM: SQLite error: init_step failed: out of memory
+```
+
+### Consolidated 5 queries into 2 sequential reads
+
+One `SELECT kind, target, magnitude, chapter, status FROM
+prelude_emergences WHERE character_id = ?` pulls every emergence row
+for the character. All four previously-separate reductions (accepted
+stat totals, accepted skill names, and the three chapter-weighted
+class/theme/ancestry trajectory winners) now happen in JS from that
+single pass. A second read grabs `prelude_values`. No more Promise.all.
+
+### Safety net at the call sites
+
+Both `startSession` and `sendMessage` in `preludeSessionService.js`
+now wrap the snapshot build in try/catch. Rule 15b uses the snapshot
+to lean upcoming scenes — it's informational, not load-bearing, so a
+DB hiccup should degrade to the prompt builder's "none yet"
+placeholder rather than crash the whole turn. Matches the defensive
+pattern already used for rolling summaries and session recaps.
+
+### Tests + build
+
+- All 4 prelude suites still green (38 + 15 + 130 + 38 = 221).
+- Client build clean.
+- No schema changes; no API surface changes.
+
 ## [1.0.0.63] - 2026-04-21 — Prelude as tutorial: rolls, momentum, emergence-aware shaping
 
 Play-test surfaced three real issues with prelude gameplay:

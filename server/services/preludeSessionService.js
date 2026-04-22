@@ -186,7 +186,16 @@ export async function startSession(characterId) {
   // v1.0.63 — emergence snapshot. Empty-but-structured on first session
   // (all "none yet" / "undecided" placeholders); populated as the player
   // accepts stat/skill hints and as class/theme/ancestry tallies grow.
-  const emergenceBlock = await emergenceService.buildEmergenceSnapshotBlock(characterId);
+  // Wrapped in try/catch: the snapshot is informational (rule 15b uses it
+  // to lean scenes, not drive them), so a DB hiccup must never block the
+  // session. On failure we log and fall through to the prompt builder's
+  // "none yet" placeholder.
+  let emergenceBlock = '';
+  try {
+    emergenceBlock = await emergenceService.buildEmergenceSnapshotBlock(characterId);
+  } catch (err) {
+    console.error('[prelude] emergence snapshot build failed (startSession):', err.message);
+  }
 
   const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock, emergenceBlock);
   const openingPrompt = createPreludeOpeningPrompt(character, setup, arcPlan, runtime);
@@ -338,7 +347,15 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // v1.0.63 — fetch the current emergence snapshot. Tells the AI which
   // stats, skills, class/theme/ancestry trajectories, and values have
   // emerged so it can lean upcoming scenes toward those strengths.
-  const emergenceBlock = await emergenceService.buildEmergenceSnapshotBlock(session.character_id);
+  // Wrapped in try/catch: informational only (rule 15b), so any DB
+  // failure degrades to the "none yet" placeholder rather than blocking
+  // the whole send path.
+  let emergenceBlock = '';
+  try {
+    emergenceBlock = await emergenceService.buildEmergenceSnapshotBlock(session.character_id);
+  } catch (err) {
+    console.error('[prelude] emergence snapshot build failed (sendMessage):', err.message);
+  }
 
   const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock, emergenceBlock);
 

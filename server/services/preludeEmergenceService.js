@@ -311,28 +311,74 @@ export async function getValues(characterId) {
  * Always returns a non-empty block so the prompt structure stays stable
  * for caching — uses "none yet" / "undecided" placeholders for unfilled
  * slots.
+ *
+ * Query strategy (2 sequential reads, not 5 parallel): one pass over
+ * `prelude_emergences` pulls every row for the character, and we compute
+ * accepted-stat totals + accepted-skill names + chapter-weighted class/
+ * theme/ancestry winners all in JS. A second read pulls `prelude_values`.
+ * Earlier versions ran 5 queries via Promise.all which saturated Turso's
+ * per-request compute budget and produced SQLITE_NOMEM on session send.
  */
 export async function buildEmergenceSnapshotBlock(characterId) {
-  const [accepted, values, classWinner, themeWinner, ancestryWinner] = await Promise.all([
-    getAcceptedEmergences(characterId),
-    getValues(characterId),
-    getTrajectoryWinner(characterId, 'class'),
-    getTrajectoryWinner(characterId, 'theme'),
-    getTrajectoryWinner(characterId, 'ancestry')
-  ]);
+  const allEmergences = await dbAll(
+    `SELECT kind, target, magnitude, chapter, status
+     FROM prelude_emergences
+     WHERE character_id = ?`,
+    [characterId]
+  );
+  const values = await dbAll(
+    `SELECT value, score
+     FROM prelude_values
+     WHERE character_id = ?`,
+    [characterId]
+  );
 
-  // Sum accepted stat magnitudes per stat
+  // Accepted stat totals — sum magnitudes per stat for rows with kind='stat'
+  // and status='accepted'. Capped by recordStatHint server-side at +2, but
+  // we just sum what's there.
   const statMap = new Map();
-  for (const row of accepted) {
-    if (row.kind !== 'stat') continue;
-    statMap.set(row.target, (statMap.get(row.target) || 0) + (row.magnitude || 0));
+  const acceptedSkills = [];
+  for (const row of allEmergences) {
+    if (row.status !== 'accepted') continue;
+    if (row.kind === 'stat') {
+      statMap.set(row.target, (statMap.get(row.target) || 0) + (row.magnitude || 0));
+    } else if (row.kind === 'skill') {
+      acceptedSkills.push(row.target);
+    }
   }
   const statLine = statMap.size > 0
     ? [...statMap.entries()].map(([s, m]) => `${s.toUpperCase()} +${m}`).join(', ')
     : 'none yet';
+  const skillLine = acceptedSkills.length > 0 ? acceptedSkills.join(', ') : 'none yet';
 
-  const skills = accepted.filter(r => r.kind === 'skill').map(r => r.target);
-  const skillLine = skills.length > 0 ? skills.join(', ') : 'none yet';
+  // Chapter-weighted trajectory winners for class / theme / ancestry. All
+  // hint rows count regardless of status (they're auto-tallied, no player
+  // accept/decline). Weight: ch1-2 = 1.0x, ch3 = 1.5x, ch4 = 2.0x. Tiebreak
+  // by most recent chapter.
+  const trajectoryWinner = (kind) => {
+    const tally = new Map(); // target → { score, lastChapter }
+    for (const row of allEmergences) {
+      if (row.kind !== kind) continue;
+      const weight = CHAPTER_WEIGHT[row.chapter] || 1.0;
+      const current = tally.get(row.target) || { score: 0, lastChapter: 0 };
+      current.score += weight;
+      current.lastChapter = Math.max(current.lastChapter, row.chapter || 0);
+      tally.set(row.target, current);
+    }
+    let winner = null;
+    for (const [target, data] of tally.entries()) {
+      if (!winner) { winner = { target, ...data }; continue; }
+      if (data.score > winner.score) { winner = { target, ...data }; continue; }
+      if (data.score === winner.score && data.lastChapter > winner.lastChapter) {
+        winner = { target, ...data };
+      }
+    }
+    return winner ? { winner: winner.target, score: winner.score } : null;
+  };
+
+  const classWinner = trajectoryWinner('class');
+  const themeWinner = trajectoryWinner('theme');
+  const ancestryWinner = trajectoryWinner('ancestry');
 
   const classLine = classWinner
     ? `${classWinner.winner} (leading, ${classWinner.score.toFixed(1)} pts)`
