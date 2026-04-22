@@ -2,6 +2,24 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.71] - 2026-04-22 — DX: `npm run dev` waits for the server before starting the client
+
+Every `npm run dev` run produced an `AggregateError [ECONNREFUSED]` in the Vite log because the client's proxy tried to forward requests to the Express server before it finished booting.
+
+### Fix
+
+- New `client:wait` npm script uses `wait-on` to poll `GET /api/health` (up to 30s) before starting Vite.
+- `dev` now runs `server` + `client:wait` concurrently, with labeled output (`server` in blue, `client` in green).
+- `client` script preserved as an escape hatch for the rare case you want to start Vite without waiting.
+
+### Dependencies
+
+- `wait-on ^9.0.5` added to `devDependencies`.
+
+### Not a version bump for any user-facing behavior — pure DX
+
+No prompt, schema, route, or client feature changes. Tests not re-run (no code path altered).
+
 ## [1.0.0.70] - 2026-04-22 — Session-position injection + expanded canon taxonomy + 5-exchange nudge
 
 Play-test: the AI DM drifted on recent NPC details (within the last 20 exchanges) and miscounted its own position — thought it was at exchange 8-12 when the player was at 32. Two different failures that share a root cause: **the AI has no reliable structured signal about session state or what's worth remembering.** This release gives it both.

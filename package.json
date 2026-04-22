@@ -1,12 +1,13 @@
 {
   "name": "dnd-meta-game",
-  "version": "1.0.70",
+  "version": "1.0.71",
   "description": "D&D Meta Game - AI-powered solo D&D campaign management system",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently -n server,client -c blue,green \"npm run server\" \"npm run client:wait\"",
     "server": "node --watch server/index.js",
     "client": "cd client && npm run dev",
+    "client:wait": "wait-on -t 30000 http://localhost:3000/api/health && cd client && npm run dev",
     "build": "cd client && npm run build",
     "start": "node server/index.js",
     "offline": "npm run build && npm run start",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "concurrently": "^8.2.2",
-    "eslint": "^10.0.1"
+    "eslint": "^10.0.1",
+    "wait-on": "^9.0.5"
   }
 }
