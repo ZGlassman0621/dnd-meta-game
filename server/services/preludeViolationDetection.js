@@ -75,6 +75,32 @@ function normalizeQuotes(text) {
 }
 
 /**
+ * Returns true if the character at `index` in `text` sits inside an
+ * unclosed double-quoted span. Used to reject violation matches that
+ * START inside NPC dialogue — where "you [verb]" is the NPC addressing
+ * the PC in second person, NOT the AI attributing speech to the PC.
+ *
+ * Counts straight `"` characters before `index`. Odd count ⇒ inside a
+ * quote. This is a simple, stateless pass; it doesn't understand
+ * escaped quotes (rare in narrative prose) or markdown/HTML quote
+ * substitutes. Good enough for the patterns Sonnet/Opus actually emit.
+ *
+ * Example of the false-positive this prevents:
+ *   `"You will not speak of this. Not to Moira — " he said, "— who ..."`
+ *   Pattern B would otherwise match "You will ... speak" (inside Q1)
+ *   + gap across narration + opening `"` of Q2 as a fake PC-quote
+ *   attribution. Since "You" is inside Q1 (odd count of `"` before it),
+ *   we reject.
+ */
+function isInsideQuote(text, index) {
+  let count = 0;
+  for (let i = 0; i < index; i++) {
+    if (text.charCodeAt(i) === 34 /* " */) count++;
+  }
+  return (count & 1) === 1;
+}
+
+/**
  * Pattern A — "quoted text," + optional adverb + "you [verb]".
  *
  *   "'Hello,' you whisper."
@@ -129,6 +155,13 @@ export function detectPlayerDialogueViolation(response) {
   let m;
   PATTERN_A.lastIndex = 0;
   while ((m = PATTERN_A.exec(normalized)) !== null) {
+    // Pattern A matches a quote THEN "you [verb]". The quote itself is
+    // consumed in the match, so the match starts at the opening `"`. If
+    // that opening `"` has an odd number of `"` chars before it, we're
+    // starting inside an outer quote — e.g. nested or split dialogue —
+    // and the "you [verb]" that follows is likely an NPC's second-person
+    // address continuing inside the same quoted span. Reject.
+    if (isInsideQuote(normalized, m.index)) continue;
     matches.push({
       pattern: 'quote-then-verb',
       snippet: m[0].slice(0, 240) + (m[0].length > 240 ? '…' : '')
@@ -136,6 +169,12 @@ export function detectPlayerDialogueViolation(response) {
   }
   PATTERN_B.lastIndex = 0;
   while ((m = PATTERN_B.exec(normalized)) !== null) {
+    // Pattern B starts at "you [verb]". If that "you" sits inside a
+    // quoted span, it's NPC dialogue addressing the PC in second person,
+    // not AI-written PC attribution. Common case: split NPC dialogue
+    // like `"You will not speak. — " he said, " — to anyone."` where
+    // the regex would otherwise bridge the two quote halves.
+    if (isInsideQuote(normalized, m.index)) continue;
     matches.push({
       pattern: 'verb-then-quote',
       snippet: m[0].slice(0, 240) + (m[0].length > 240 ? '…' : '')

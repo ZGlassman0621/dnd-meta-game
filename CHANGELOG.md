@@ -2,6 +2,60 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.68] - 2026-04-22 — Hotfix: violation detector false-positive on NPC split dialogue
+
+v1.0.67's detector fired on an NPC's mid-sentence dialogue break:
+
+```
+"You will not speak of this. Not to Moss. ... Not to Moira — " he
+does not look at Moira ... "— who has already forgotten what she
+heard. Do you understand me?"
+```
+
+Halgrim (NPC) is addressing the PC in second person, mid-quote, and
+the regex couldn't tell the difference. Pattern B matched "You will
+not speak" → consumed "speak" as the verb → treated the closing `"`
+of Q1 as the opening of what it thought was a PC quote → bridged to
+the opening `"` of Q2 as the closing bookend. The whole match sat
+INSIDE the NPC's split dialogue.
+
+### Fix — reject matches inside open quote spans
+
+New helper `isInsideQuote(text, index)` counts `"` chars before the
+match's start position. Odd count ⇒ inside a quote ⇒ reject the
+match. Applied to both Pattern A and Pattern B.
+
+Intuition: the `you [verb]` pattern only signals PC dialogue
+attribution when it appears in NARRATION. Inside an NPC's quoted
+speech, "you [verb]" is the NPC addressing the PC in second person
+(command, question, observation) — that's fine, it's dialogue, not
+the AI writing the PC's voice.
+
+The guard is stateless and single-pass — no quote-parser needed. It
+doesn't understand escaped quotes or nested quote substitutes
+(rare in prose), but it catches the actual false-positive patterns
+Sonnet/Opus emit.
+
+### Still works on real violations
+
+Verified with tests:
+- NPC split dialogue with "you [verb]" inside → NOT flagged
+- NPC command with "you [verb]" inside → NOT flagged
+- Real violation after NPC dialogue ("`"I won't tell anyone," she
+  said. You whisper, "I promise."`") → still flagged
+- Internal monologue (`You think, "he's lying."`) → still flagged
+  (the `you think` is OUTSIDE the quote it attributes to)
+
+### Tests
+
+- `tests/prelude-violation-detection.test.js` grew 46 → 52
+  (+6 tests covering the Halgrim transcript, simpler split dialogue,
+  NPC commands with "you" inside, and sanity-checks that real
+  violations after NPC dialogue still fire).
+- All 6 prelude suites green: 38 + 15 + 130 + 49 + 33 + 52 = **317
+  prelude tests total**.
+- Client build clean. No schema changes, no API surface changes.
+
 ## [1.0.0.67] - 2026-04-22 — Rule 2 hard enforcement: detector + next-turn correction + UI warning
 
 Play-test: Opus wrote dialogue for the player during a climactic beat

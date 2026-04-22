@@ -147,6 +147,47 @@ console.log('\n=== True negatives — legitimate prose (must NOT flag) ===\n');
     `You say nothing as she whispers "hello" to the door.`
   );
   assert(!twoSpeakers.violated, 'second verb blocks pattern B (attribution goes to "she," not PC)');
+}
+
+console.log('\n=== v1.0.68 false-positive guard — "you [verb]" INSIDE NPC dialogue ===\n');
+{
+  // Exact play-test false positive (Halgrim speaking, mid-sentence break).
+  // "You will not speak ... Moira — " he said, " — who has forgotten ..."
+  // Pattern B would match "You will not speak ... Moira — " + narration
+  // + opening of next quote, but the "You" is inside the NPC's Q1.
+  const splitDialogue = detectPlayerDialogueViolation(
+    `"You will not speak of this. Not to Moss. Not to Master Coren. Not to Sister Vara. Not to Moira — " he does not look at Moira, but Moira does not look up either, "— who has already forgotten what she heard. Do you understand me?"`
+  );
+  assert(!splitDialogue.violated, 'NPC split dialogue with second-person address does NOT flag');
+
+  // Simpler split dialogue
+  const simpleSplit = detectPlayerDialogueViolation(
+    `"You must understand," he said, "what this means for the family."`
+  );
+  assert(!simpleSplit.violated, 'simple NPC split dialogue does not flag');
+
+  // NPC gives the PC a command ("you shall tell" inside NPC quote)
+  const npcCommand = detectPlayerDialogueViolation(
+    `"You shall tell no one of this," she said firmly.`
+  );
+  assert(!npcCommand.violated, 'NPC command containing "you [verb]" does not flag');
+
+  // Sanity: the violation must still fire OUTSIDE the quote
+  const violationOutside = detectPlayerDialogueViolation(
+    `"I won't tell anyone," she said. You whisper, "I promise."`
+  );
+  assert(violationOutside.violated, 'real violation after NPC dialogue still flags');
+  assert(
+    violationOutside.matches[0].snippet.includes('you') || violationOutside.matches[0].snippet.includes('You'),
+    'snippet shows the "You whisper" attribution'
+  );
+
+  // PC violation inside their OWN internal-monologue quote is still a violation,
+  // since the quote itself is attributed to the PC by the "you think" wrapper
+  const innerThought = detectPlayerDialogueViolation(
+    `You think, "he's lying." That's the conclusion.`
+  );
+  assert(innerThought.violated, 'internal-monologue violation still flags ("you think" outside quote)');
 
   // Empty / null inputs
   assert(!detectPlayerDialogueViolation('').violated, 'empty string → not flagged');
