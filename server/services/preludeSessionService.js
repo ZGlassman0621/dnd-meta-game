@@ -49,6 +49,55 @@ const PLAY_SESSION_NUDGE_MESSAGES = 100;   // ~50 exchanges — approaching targ
 const PLAY_SESSION_WRAP_MESSAGES = 130;    // ~65 exchanges — fire cliffhanger soon
 const PLAY_SESSION_FORCE_MESSAGES = 160;   // ~80 exchanges — force cliffhanger NOW
 
+// Player-toggleable model preference. Three modes:
+//   'sonnet' — always Sonnet (default, fast, cheap)
+//   'opus'   — always Opus (richer, slower, ~5x cost)
+//   'auto'   — Sonnet by default, escalate to Opus for heavy scenes.
+//
+// Auto-mode escalation fires when ANY of:
+//   • current chapter == 4 (finale always Opus)
+//   • play-session past PLAY_SESSION_WRAP_MESSAGES (close a big beat well)
+//   • previous turn fired [CHAPTER_PROMISE] (next scene resolves its weight)
+//   • previous turn had HP delta ≤ -3 (stakes just spiked)
+//   • previous turn tagged [NEXT_SCENE_WEIGHT: heavy] (AI self-judgement)
+//   • previous turn tagged [NEXT_SCENE_WEIGHT: light] → Sonnet regardless
+//     (AI can downgrade if it senses a texture scene coming)
+const VALID_MODES = new Set(['sonnet', 'opus', 'auto']);
+const VALID_CONCRETE_MODELS = new Set(['sonnet', 'opus']);
+
+// Derive the concrete model to call given the current mode + session state.
+// Returns { mode, model, reason } — `reason` is null for plain sonnet/opus
+// modes, or a short string when auto escalates ("chapter-4", "heavy-weight",
+// etc.) so the UI can show "Auto → Opus (chapter-4)".
+function pickAutoModel(sessionCfg, runtime, playSessionLength) {
+  if (runtime?.chapter >= 4) return { model: 'opus', reason: 'chapter-4' };
+  if (playSessionLength >= PLAY_SESSION_WRAP_MESSAGES) {
+    return { model: 'opus', reason: 'session-wrap' };
+  }
+  const lastWeight = sessionCfg?.lastSceneWeight;
+  if (lastWeight === 'heavy') return { model: 'opus', reason: 'heavy-weight' };
+  if (lastWeight === 'light') return { model: 'sonnet', reason: 'light-weight' };
+  const lastHpDelta = sessionCfg?.lastHpDelta;
+  if (typeof lastHpDelta === 'number' && lastHpDelta <= -3) {
+    return { model: 'opus', reason: 'hp-drop' };
+  }
+  if (sessionCfg?.lastChapterPromiseTurn === true) {
+    return { model: 'opus', reason: 'chapter-promise' };
+  }
+  return { model: 'sonnet', reason: null };
+}
+
+function resolveModel(override, sessionCfg, runtime, playSessionLength) {
+  const stored = sessionCfg?.model_preference;
+  const mode = (override && VALID_MODES.has(override))
+    ? override
+    : (stored && VALID_MODES.has(stored)) ? stored : 'sonnet';
+  if (mode === 'sonnet') return { mode, model: 'sonnet', reason: null };
+  if (mode === 'opus') return { mode, model: 'opus', reason: null };
+  const { model, reason } = pickAutoModel(sessionCfg, runtime, playSessionLength);
+  return { mode, model, reason };
+}
+
 // Race-aware starting HP for the current chapter. Mirrors
 // preludeService.computeStartingHP but takes the current chapter as input.
 function computeMaxHp(chapter = 1, conMod = 0) {
@@ -185,7 +234,13 @@ export async function startSession(characterId) {
     title,
     opening: result.response,
     messages: result.messages,
-    runtime: { ...buildRuntime(refreshedCharacter), sessionNumber }
+    runtime: { ...buildRuntime(refreshedCharacter), sessionNumber },
+    // mode = 'sonnet' by default for a fresh session. The opening narrative
+    // was already generated with Opus (hardcoded above like the main DM's
+    // first session); `model` here is the mode going forward.
+    model: 'sonnet',
+    resolvedModel: 'sonnet',
+    resolveReason: null
   };
 }
 
@@ -244,15 +299,18 @@ export async function getResumePayload(sessionId) {
     character,
     runtime: { ...buildRuntime(character), sessionNumber },
     lastCliffhanger: cfg.lastCliffhanger || null,
-    lastSessionRecap: cfg.lastSessionRecap || null
+    lastSessionRecap: cfg.lastSessionRecap || null,
+    model: VALID_MODES.has(cfg.model_preference) ? cfg.model_preference : 'sonnet'
   };
 }
 
 /**
- * Send a player action and get Sonnet's response. Processes markers on the
- * AI response and persists everything.
+ * Send a player action and get the AI's response. Processes markers on the
+ * AI response and persists everything. Accepts an optional `modelOverride`
+ * ('sonnet' | 'opus') that becomes the new stored preference for this and
+ * future turns until the player toggles again.
  */
-export async function sendMessage(sessionId, action) {
+export async function sendMessage(sessionId, action, modelOverride = null) {
   const session = await dbGet(
     `SELECT * FROM dm_sessions WHERE id = ? AND session_type = 'prelude_arc'`,
     [sessionId]
@@ -318,11 +376,25 @@ export async function sendMessage(sessionId, action) {
     ? [...nonSystemMessages, ...injectedMessages]
     : nonSystemMessages;
 
+  // Resolve which model to call for THIS turn. If the player passed an
+  // override (toggle flip), persist it as the new mode preference. The
+  // resolver inspects runtime + last-turn markers when mode == 'auto'.
+  if (modelOverride && VALID_MODES.has(modelOverride) && modelOverride !== sessionCfg.model_preference) {
+    sessionCfg.model_preference = modelOverride;
+    // Write early so the preference survives a failed API call.
+    await dbRun(
+      `UPDATE dm_sessions SET session_config = ? WHERE id = ?`,
+      [JSON.stringify(sessionCfg), sessionId]
+    );
+  }
+  const resolved = resolveModel(modelOverride, sessionCfg, runtime, playSessionLength);
+  const modelChoice = resolved.model;
+
   const result = await claudeContinueSession(
     systemPrompt,
     augmentedMessages,
     action,
-    'sonnet',
+    modelChoice,
     { sessionId }
   );
 
@@ -354,6 +426,24 @@ export async function sendMessage(sessionId, action) {
       .map(v => `  • ${v.kind} ${v.target}: ${v.reason}`)
       .join('\n');
   }
+
+  // v1.0.62 — stash this turn's signals for the auto-mode resolver on the
+  // NEXT turn. lastSceneWeight is null → absent when the AI didn't tag.
+  // lastHpDelta is the most negative delta (worst hit) from HP_CHANGE markers.
+  // lastChapterPromiseTurn reflects whether this turn fired the promise — the
+  // resolution happens over the next 2-3 scenes so we leave a one-turn flag.
+  if (markerResults.nextSceneWeight) {
+    nextCfg.lastSceneWeight = markerResults.nextSceneWeight;
+  } else {
+    delete nextCfg.lastSceneWeight;
+  }
+  if (typeof markerResults.hpDelta === 'number') {
+    nextCfg.lastHpDelta = markerResults.hpDelta;
+  } else {
+    delete nextCfg.lastHpDelta;
+  }
+  nextCfg.lastChapterPromiseTurn = !!markerResults.chapterPromise;
+
   await dbRun(
     `UPDATE dm_sessions SET session_config = ? WHERE id = ?`,
     [JSON.stringify(nextCfg), sessionId]
@@ -407,7 +497,13 @@ export async function sendMessage(sessionId, action) {
     messages: result.messages,
     markers: markerResults,
     runtime: { ...buildRuntime(updatedCharacter), sessionNumber },
-    sessionEnded: !!markerResults.cliffhanger
+    sessionEnded: !!markerResults.cliffhanger,
+    // mode = what the player has selected ('auto' | 'sonnet' | 'opus').
+    // resolvedModel = what we actually called ('sonnet' | 'opus').
+    // resolveReason = why auto picked what it picked (or null).
+    model: resolved.mode,
+    resolvedModel: resolved.model,
+    resolveReason: resolved.reason
   };
 }
 
@@ -491,7 +587,9 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
     hpReasons: [],
     chapterPromise: null,
     canonFactsAdded: [],
-    canonFactsRetired: []
+    canonFactsRetired: [],
+    // v1.0.62 — AI's forward-looking weight hint for the Auto model-picker
+    nextSceneWeight: detected.nextSceneWeight || null
   };
 
   // AGE_ADVANCE — update character's age and (if threshold crossed) chapter.

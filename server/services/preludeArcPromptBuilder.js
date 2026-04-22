@@ -405,6 +405,31 @@ function markersBlock() {
     to be" question="This feels like it's about deciding who you'll
     become, not who they raised you to be. Is that right?"
 
+[NEXT_SCENE_WEIGHT: heavy|standard|light]
+    FORWARD-LOOKING HINT about the next scene's emotional weight. Emit
+    at the END of your response, ONCE per turn. The server uses this to
+    pick which model generates the NEXT turn (lighter model for texture,
+    heavier model for emotional climaxes). Tag based on WHAT THE STORY
+    IS ABOUT TO DO, not what you just wrote.
+
+      heavy — next scene is likely a confrontation, farewell, death,
+        betrayal, first-meeting with a chapter-defining NPC, the moment
+        a major relationship shifts, the resolution of a chapter promise,
+        a scene with real emotional stakes. Err toward 'heavy' when
+        ambiguous and the stakes are real.
+
+      light — next scene is a texture/transition moment: traveling,
+        routine chores, a short time-compression beat, a brief
+        atmospheric scene. Use SPARINGLY; most scenes are 'standard'.
+
+      standard — default. Use for most scenes: dialogue, exploration,
+        small-stakes decisions, normal developmental beats.
+
+    Omit the marker entirely if uncertain — the system defaults to
+    'standard'. Never over-tag 'heavy' to seem important; the player
+    feels forced escalation immediately. One tag at the end of your
+    response is enough.
+
 EMERGENCE MARKERS (Phase 3) — fire these when the PLAYER'S PLAYED BEHAVIOR earns them, never on authorial whim:
 
 [STAT_HINT: stat=str|dex|con|int|wis|cha magnitude=1 reason="..."]

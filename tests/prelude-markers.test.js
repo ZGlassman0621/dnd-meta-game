@@ -28,6 +28,7 @@ import {
   detectValueHints,
   detectCanonFacts,
   detectCanonFactRetires,
+  detectNextSceneWeight,
   detectPreludeMarkers,
   stripPreludeMarkers
 } from '../server/services/preludeMarkerDetection.js';
@@ -255,6 +256,33 @@ console.log('\n=== detectPreludeMarkers roll-up (with HP + CHAPTER_PROMISE) ===\
   assert(all.chapterPromise?.theme === 'x', 'roll-up includes chapterPromise');
 }
 
+console.log('\n=== NEXT_SCENE_WEIGHT (v1.0.62 auto model picker) ===\n');
+{
+  assert(detectNextSceneWeight('') === null, 'empty → null');
+  assert(detectNextSceneWeight('no marker') === null, 'no marker → null');
+  assert(detectNextSceneWeight('[NEXT_SCENE_WEIGHT: heavy]') === 'heavy', 'heavy parsed');
+  assert(detectNextSceneWeight('[NEXT_SCENE_WEIGHT: light]') === 'light', 'light parsed');
+  assert(detectNextSceneWeight('[NEXT_SCENE_WEIGHT: standard]') === 'standard', 'standard parsed');
+  assert(detectNextSceneWeight('[next_scene_weight: HEAVY]') === 'heavy', 'case-insensitive');
+  assert(detectNextSceneWeight('[NEXT_SCENE_WEIGHT:heavy]') === 'heavy', 'no space variant');
+  assert(detectNextSceneWeight('[NEXT_SCENE_WEIGHT: sparkly]') === null, 'invalid weight rejected');
+
+  // "Last one wins" — if the AI fires multiple, the latest read of the
+  // situation is the one we trust.
+  const multi = detectNextSceneWeight(
+    '[NEXT_SCENE_WEIGHT: light] ...then things escalate... [NEXT_SCENE_WEIGHT: heavy]'
+  );
+  assert(multi === 'heavy', 'last fire wins on multiple');
+
+  // Roll-up integration
+  const rolled = detectPreludeMarkers('The scene closes. [NEXT_SCENE_WEIGHT: heavy]');
+  assert(rolled.nextSceneWeight === 'heavy', 'roll-up includes nextSceneWeight');
+
+  // Absence in roll-up
+  const absent = detectPreludeMarkers('A quiet room. She sets the kettle.');
+  assert(absent.nextSceneWeight === null, 'absent marker → null in roll-up');
+}
+
 console.log('\n=== stripPreludeMarkers ===\n');
 {
   const raw = 'She leaves. [AGE_ADVANCE: years=3] Three years pass. [CHAPTER_END: summary="x"] [NPC_CANON: name="Moira"] [LOCATION_CANON: name="Ashlane"] [SESSION_END_CLIFFHANGER: "y"] Fin.';
@@ -316,6 +344,10 @@ console.log('\n=== stripPreludeMarkers: inherited + catch-all markers ===\n');
 
   const cfr = stripPreludeMarkers('[CANON_FACT_RETIRE: subject="Moss" fact_contains="age 9"] Three years on.');
   assert(!cfr.includes('[CANON_FACT_RETIRE'), 'CANON_FACT_RETIRE stripped');
+
+  const nsw = stripPreludeMarkers('The door swings. [NEXT_SCENE_WEIGHT: heavy]');
+  assert(!nsw.includes('[NEXT_SCENE_WEIGHT'), 'NEXT_SCENE_WEIGHT stripped');
+  assert(nsw.includes('The door swings.'), 'NEXT_SCENE_WEIGHT surrounding prose kept');
 
   // Catch-all for future markers
   const future = stripPreludeMarkers('Beat fires. [FUTURE_MARKER: payload="x"] and continues.');

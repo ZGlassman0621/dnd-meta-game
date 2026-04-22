@@ -2,6 +2,87 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.62] - 2026-04-21 — Auto/Sonnet/Opus model picker for prelude sessions
+
+Prelude sessions default to Sonnet but now expose a three-mode model
+toggle in the top bar: **auto · sonnet · opus**. The Auto mode escalates
+to Opus for heavy beats (chapter 4, session wrap, HP drops, chapter
+promises, AI-tagged heavy scenes) and stays on Sonnet for the texture
+that fills most of play. Cost stays low, climactic scenes get the
+richer writer.
+
+### New marker — `[NEXT_SCENE_WEIGHT: heavy|standard|light]`
+
+Forward-looking hint the AI emits at the end of a response to flag
+what the NEXT scene is about to carry. The server parses it and uses
+it to pick the model for the following turn. Stripped from display.
+
+- `heavy` — confrontation, farewell, death, betrayal, chapter-defining
+  meeting, resolution of a chapter promise. Err toward heavy when the
+  stakes are real.
+- `light` — transition, routine work, atmospheric beat, time-
+  compression. Used sparingly.
+- `standard` — default. Omit the marker entirely if uncertain.
+
+Prompt rule tells Sonnet to tag based on WHAT THE STORY IS ABOUT TO
+DO, not what it just wrote, and to avoid over-tagging 'heavy' to seem
+important — the player feels forced escalation immediately.
+
+### Auto-mode escalation heuristic (`resolveModel` in `preludeSessionService.js`)
+
+Order of checks, first match wins:
+
+1. Current chapter == 4 → **opus** (`chapter-4`) — finale always heavy
+2. Play-session past `PLAY_SESSION_WRAP_MESSAGES` (130) → **opus** (`session-wrap`) — close big beats well
+3. `session_config.lastSceneWeight === 'heavy'` → **opus** (`heavy-weight`) — AI flagged
+4. `session_config.lastSceneWeight === 'light'` → **sonnet** (`light-weight`) — AI downgraded
+5. `session_config.lastHpDelta <= -3` → **opus** (`hp-drop`) — stakes spiked last turn
+6. `session_config.lastChapterPromiseTurn === true` → **opus** (`chapter-promise`) — next 2-3 scenes resolve its weight
+7. Default → **sonnet**
+
+Signals are stashed on `session_config` after each turn by
+`processMarkersForSession` — `lastSceneWeight`, `lastHpDelta`,
+`lastChapterPromiseTurn`. They drive only the NEXT turn's resolution;
+they're either refreshed or cleared on each response.
+
+### Persistence + API
+
+- Mode lives on `session_config.model_preference`. Survives pause /
+  resume / server restart.
+- `POST /api/prelude/sessions/:sid/message` accepts optional `model`
+  field ('auto' | 'sonnet' | 'opus'). Any valid override becomes the
+  new stored preference (written BEFORE the Sonnet call so a failed
+  API call doesn't lose the flip).
+- Response payload adds three fields: `model` (mode), `resolvedModel`
+  (what we actually called), `resolveReason` (null for manual modes,
+  short string like `heavy-weight` for auto escalations).
+
+### UI — top-bar toggle + auto indicator
+
+Three-segment toggle left of the Setup button in
+`PreludeSession.jsx`. Purple accent. Disabled while a turn is in
+flight. Title-tooltip explains what auto does. When mode is 'auto',
+a small `last turn → opus · heavy-weight` line shows under the
+toggle so the player can see when and why an escalation fired. Hidden
+when mode is manual sonnet/opus.
+
+### Tests + build
+
+- `prelude-markers.test.js` +13 tests (parse, case-insensitive,
+  last-fire-wins, roll-up inclusion, strip). 117 → 130 green.
+- Prelude setup (38) and arc (15) suites unchanged. Client build
+  clean.
+- No schema changes — state lives on the existing `session_config`
+  JSON column.
+
+### What this unlocks for v1.0.63
+
+The auto-picker is a prerequisite for the upcoming roll-discipline +
+momentum + emergence-aware shaping work — those prompt changes need
+to apply regardless of which model is serving the turn. With the
+escalation heuristic in place, new prompt rules land in one system
+prompt and flow through both Sonnet and Opus calls.
+
 ## [1.0.0.61] - 2026-04-21 — Session length target raised to ~50 exchanges
 
 v1.0.59's thresholds were too tight — a play-test session ended at

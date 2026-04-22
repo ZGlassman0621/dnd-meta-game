@@ -152,6 +152,24 @@ export function detectChapterPromise(text) {
 }
 
 /**
+ * Detect [NEXT_SCENE_WEIGHT: heavy|standard|light] — the AI's forward-looking
+ * hint about what the next scene is likely to carry. Consumed by the "Auto"
+ * model-picker on the following turn. Returns 'heavy' | 'standard' | 'light'
+ * or null. If multiple fire in one response, the last one wins (the DM's
+ * most recent read of the situation).
+ */
+export function detectNextSceneWeight(text) {
+  if (!text) return null;
+  const re = /\[NEXT_SCENE_WEIGHT:\s*(heavy|standard|light)\s*\]/gi;
+  let last = null;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    last = m[1].toLowerCase();
+  }
+  return last;
+}
+
+/**
  * Detect all [LOCATION_CANON: name="..." type="..." is_home=true]
  * markers. Returns an array of { name, type, is_home }.
  */
@@ -386,7 +404,9 @@ export function detectPreludeMarkers(text) {
     valueHints: detectValueHints(text),
     // v1.0.60 canon facts
     canonFacts: detectCanonFacts(text),
-    canonFactRetires: detectCanonFactRetires(text)
+    canonFactRetires: detectCanonFactRetires(text),
+    // v1.0.62 model auto-picker
+    nextSceneWeight: detectNextSceneWeight(text)
   };
 }
 
@@ -428,6 +448,8 @@ export function stripPreludeMarkers(text) {
     // v1.0.60 canon-facts markers
     .replace(/\[CANON_FACT:[^\]]*\]/gi, '')
     .replace(/\[CANON_FACT_RETIRE:[^\]]*\]/gi, '')
+    // v1.0.62 model auto-picker — AI's forward weight hint
+    .replace(/\[NEXT_SCENE_WEIGHT:[^\]]*\]/gi, '')
     // Combat + loot markers inherited from the main DM prompt convention
     .replace(/\[COMBAT_START(?::[^\]]*)?\]/gi, '')
     .replace(/\[COMBAT_END(?::[^\]]*)?\]/gi, '')

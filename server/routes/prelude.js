@@ -205,15 +205,19 @@ router.get('/sessions/:sessionId', async (req, res) => {
  */
 router.post('/sessions/:sessionId/message', async (req, res) => {
   try {
-    const { action } = req.body || {};
+    const { action, model } = req.body || {};
     if (!action || typeof action !== 'string' || !action.trim()) {
       return validationError(res, 'action is required');
     }
-    const result = await sendPreludeMessage(req.params.sessionId, action.trim());
+    const modelOverride = (model === 'sonnet' || model === 'opus' || model === 'auto') ? model : null;
+    const result = await sendPreludeMessage(req.params.sessionId, action.trim(), modelOverride);
     res.json({
       response: stripPreludeMarkers(result.response),
       runtime: result.runtime,
       sessionEnded: result.sessionEnded,
+      model: result.model,
+      resolvedModel: result.resolvedModel,
+      resolveReason: result.resolveReason,
       // markers carries the processed marker events the UI wants to surface
       // (HP changes, chapter advance, chapter promise, recap on pause, etc.).
       markers: result.markers

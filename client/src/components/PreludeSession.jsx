@@ -35,6 +35,15 @@ export default function PreludeSession({ character, onBack }) {
   const [showSetup, setShowSetup] = useState(false)
   const [values, setValues] = useState([])
   const [canonFacts, setCanonFacts] = useState([])
+  // model = the MODE the player has selected ('auto' | 'sonnet' | 'opus').
+  // resolvedModel = what the server actually called on the last turn
+  // ('sonnet' | 'opus'). In auto mode these can differ — e.g. mode='auto'
+  // and resolvedModel='opus' when the last turn escalated. resolveReason
+  // carries a short string ('chapter-4', 'heavy-weight', 'hp-drop', etc.)
+  // for the "Auto → Opus (reason)" indicator.
+  const [model, setModel] = useState('sonnet')
+  const [resolvedModel, setResolvedModel] = useState('sonnet')
+  const [resolveReason, setResolveReason] = useState(null)
   const scrollerRef = useRef(null)
 
   // Fetch values + canon facts whenever the Setup panel opens, or after
@@ -93,6 +102,7 @@ export default function PreludeSession({ character, onBack }) {
           setLastCliffhanger(full.lastCliffhanger || null)
           setSessionRecap(full.lastSessionRecap || null)
           setSessionEnded(full.status === 'paused')
+          if (full.model === 'sonnet' || full.model === 'opus' || full.model === 'auto') setModel(full.model)
           return
         }
         // No active session → start a new one
@@ -106,6 +116,7 @@ export default function PreludeSession({ character, onBack }) {
         setSessionId(started.sessionId)
         setMessages([{ role: 'assistant', content: started.opening }])
         setRuntime(started.runtime)
+        if (started.model === 'sonnet' || started.model === 'opus' || started.model === 'auto') setModel(started.model)
       } catch (e) {
         if (!cancelled) setError(e.message)
       } finally {
@@ -135,7 +146,7 @@ export default function PreludeSession({ character, onBack }) {
       const resp = await fetch(`/api/prelude/sessions/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: a })
+        body: JSON.stringify({ action: a, model })
       })
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
@@ -170,6 +181,9 @@ export default function PreludeSession({ character, onBack }) {
       }
       setMessages(prev => [...prev, ...notices, newAssistant])
       if (data.runtime) setRuntime(data.runtime)
+      if (data.model === 'sonnet' || data.model === 'opus' || data.model === 'auto') setModel(data.model)
+      if (data.resolvedModel === 'sonnet' || data.resolvedModel === 'opus') setResolvedModel(data.resolvedModel)
+      setResolveReason(data.resolveReason || null)
       if (data.sessionEnded) {
         setSessionEnded(true)
         if (data.markers?.cliffhanger) setLastCliffhanger(data.markers.cliffhanger)
@@ -315,7 +329,54 @@ export default function PreludeSession({ character, onBack }) {
             )}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {/* Model toggle — three modes:
+              • Auto   — Sonnet by default, escalate to Opus on heavy scenes
+              • Sonnet — always Sonnet (fast, cheap)
+              • Opus   — always Opus (richer prose, ~5x cost, slower)
+              When Auto resolves to Opus, a subtle badge shows which trigger fired. */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.15rem' }}>
+            <div style={{
+              display: 'inline-flex',
+              border: '1px solid rgba(139,92,246,0.4)',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              fontSize: '0.78rem',
+              fontFamily: 'monospace'
+            }} title="AI model selection. Auto picks Sonnet by default, escalates to Opus for heavy scenes (chapter 4, cliffhanger approach, big HP drops, AI-tagged heavy scenes). Applies to your next message.">
+              {['auto', 'sonnet', 'opus'].map((m, i) => (
+                <button
+                  key={m}
+                  onClick={() => setModel(m)}
+                  disabled={sending}
+                  style={{
+                    padding: '0.4rem 0.65rem',
+                    background: model === m ? 'rgba(139,92,246,0.3)' : 'transparent',
+                    border: 'none',
+                    borderLeft: i === 0 ? 'none' : '1px solid rgba(139,92,246,0.4)',
+                    color: model === m ? '#e9d5ff' : '#9ca3af',
+                    cursor: sending ? 'not-allowed' : 'pointer',
+                    fontWeight: model === m ? 600 : 400,
+                    textTransform: 'capitalize'
+                  }}
+                >{m}</button>
+              ))}
+            </div>
+            {/* Auto-resolution indicator. Shows on last turn's result when
+                mode is 'auto' — e.g. "→ opus · heavy-weight" — so the player
+                can see why a beat went to Opus. Hidden when mode is manual. */}
+            {model === 'auto' && resolvedModel && (
+              <div style={{
+                fontSize: '0.68rem',
+                color: resolvedModel === 'opus' ? '#c4b5fd' : '#6b7280',
+                fontFamily: 'monospace',
+                lineHeight: 1
+              }}>
+                last turn → {resolvedModel}
+                {resolveReason ? ` · ${resolveReason}` : ''}
+              </div>
+            )}
+          </div>
           <button onClick={() => setShowSetup(s => !s)} style={{
             padding: '0.4rem 0.8rem',
             background: showSetup ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.1)',
