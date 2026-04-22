@@ -143,14 +143,35 @@ function computeMaxHp(chapter = 1, conMod = 0) {
  * Build the runtime snapshot passed to the prompt builder on every turn.
  * Keeps the prompt construction side pure by centralising state lookup.
  */
-function buildRuntime(character) {
+// v1.0.70 — session budget constants. Matches the pacing thresholds in
+// PLAY_SESSION_*_MESSAGES (100/130/160) divided by 2 (msgs/exchange).
+const SESSION_TARGET_EXCHANGES = 50;   // soft target; nudge fires ~here
+const SESSION_WRAP_EXCHANGES = 65;     // wrap threshold
+const SESSION_FORCE_EXCHANGES = 80;    // force threshold
+
+function buildRuntime(character, playSessionLength = 0) {
   const chapter = character.prelude_chapter || 1;
   const age = character.prelude_age || 6;
   // Phase 2b-ii: max_hp derived from chapter. HP in-the-moment comes
   // straight from the `current_hp` column, updated by [HP_CHANGE] markers.
   const maxHp = computeMaxHp(chapter, 0);
   const currentHp = character.current_hp != null ? character.current_hp : maxHp;
-  return { chapter, age, maxHp, currentHp };
+  // v1.0.70 — session position. An "exchange" = one user turn + one AI
+  // response. playSessionLength is the message count since the current
+  // play-session's baseline was set (on session start or resume).
+  // exchangeCount = floor(playSessionLength / 2) — the opening-only case
+  // (1 message, 0 exchanges) rounds down correctly.
+  const exchangeCount = Math.max(0, Math.floor(playSessionLength / 2));
+  const sessionBudget = SESSION_TARGET_EXCHANGES;
+  const progressFraction = Math.min(1, exchangeCount / sessionBudget);
+  return {
+    chapter, age, maxHp, currentHp,
+    exchangeCount,
+    sessionBudget,
+    wrapAt: SESSION_WRAP_EXCHANGES,
+    forceAt: SESSION_FORCE_EXCHANGES,
+    progressFraction
+  };
 }
 
 /**
@@ -369,7 +390,16 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
 
   const setup = character.prelude_setup_data;
   const arcPlan = await getArcPlan(session.character_id);
-  const runtime = buildRuntime(character);
+
+  // v1.0.70 — parse messages + session config early so playSessionLength
+  // is available for buildRuntime() and the runtime can report live
+  // exchange count / budget fraction to the AI.
+  const currentMessages = safeJsonParse(session.messages, []);
+  const sessionCfg = safeJsonParse(session.session_config, {});
+  const baseline = sessionCfg.currentPlaySessionBaseline || 0;
+  const playSessionLength = Math.max(0, currentMessages.length - baseline);
+
+  const runtime = buildRuntime(character, playSessionLength);
 
   // v1.0.60 — fetch the current canon-facts block. Injected into the
   // system prompt as ground truth so Sonnet checks against named details
@@ -391,8 +421,6 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
 
   const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock, emergenceBlock);
 
-  const currentMessages = safeJsonParse(session.messages, []);
-
   // Apply the rolling summary (if any) — compacts older messages down to a
   // synthetic summary + recent tail, keeping the prompt small. Prelude uses
   // its own summarizer template (character development / relationships)
@@ -403,7 +431,6 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // Phase 3 — inject any pending cap-violation feedback from the previous
   // turn. Stored on session_config.pendingCapFeedback by the marker
   // processor when a hint was rejected. Consumed here, cleared after.
-  const sessionCfg = safeJsonParse(session.session_config, {});
   const pendingCapFeedback = sessionCfg.pendingCapFeedback;
 
   // v1.0.67 — pending Rule 2 violation correction from the previous turn.
@@ -413,19 +440,36 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // and self-corrects. Consumed here, cleared after.
   const pendingViolationNote = sessionCfg.pendingViolationNote;
 
-  // Play-session pacing — count messages since the current play-session
-  // began, inject a [SYSTEM NOTE] when we're past the healthy length.
-  // Context drift kicks in hard after ~35 exchanges; nudge at ~15, wrap
-  // at ~25, force-close at ~35.
-  const baseline = sessionCfg.currentPlaySessionBaseline || 0;
-  const playSessionLength = Math.max(0, currentMessages.length - baseline);
+  // Play-session pacing — inject a [SYSTEM NOTE] when we're past the
+  // healthy length. Thresholds match SESSION_*_EXCHANGES (50/65/80)
+  // in buildRuntime. (playSessionLength computed above near runtime.)
   let pacingNote = null;
   if (playSessionLength >= PLAY_SESSION_FORCE_MESSAGES) {
-    pacingNote = `[SYSTEM NOTE] This play-session has run ${playSessionLength} messages — well past the target length. Even with the canon ledger, extended sessions risk inconsistency. You MUST fire [SESSION_END_CLIFFHANGER: "..."] in THIS response. Pick the most natural break point you can find in the current scene — even an imperfect cliffhanger is better than continuing further.`;
+    pacingNote = `[SYSTEM NOTE] This play-session has run ${playSessionLength} messages (~${runtime.exchangeCount} exchanges) — well past the target length. Even with the canon ledger, extended sessions risk inconsistency. You MUST fire [SESSION_END_CLIFFHANGER: "..."] in THIS response. Pick the most natural break point you can find in the current scene — even an imperfect cliffhanger is better than continuing further.`;
   } else if (playSessionLength >= PLAY_SESSION_WRAP_MESSAGES) {
-    pacingNote = `[SYSTEM NOTE] This play-session has run ${playSessionLength} messages. You should fire [SESSION_END_CLIFFHANGER: "..."] within the next 3-5 responses at the next natural break (a scene close, a stakes spike, a decision pending, a moment of suspense). Start steering toward a close but don't rush it.`;
+    pacingNote = `[SYSTEM NOTE] This play-session has run ${playSessionLength} messages (~${runtime.exchangeCount} exchanges). You should fire [SESSION_END_CLIFFHANGER: "..."] within the next 3-5 responses at the next natural break (a scene close, a stakes spike, a decision pending, a moment of suspense). Start steering toward a close but don't rush it.`;
   } else if (playSessionLength >= PLAY_SESSION_NUDGE_MESSAGES) {
-    pacingNote = `[SYSTEM NOTE] This play-session has run ${playSessionLength} messages — approaching the target length (~50 exchanges). Watch for a strong cliffhanger moment over the next several scenes. Don't force an arbitrary ending; wait for the right beat — a real stakes spike, a decision pending, a scene that lands with weight. Fire [SESSION_END_CLIFFHANGER] when that beat arrives naturally.`;
+    pacingNote = `[SYSTEM NOTE] This play-session has run ${playSessionLength} messages (~${runtime.exchangeCount} exchanges) — approaching the target length (~50 exchanges). Watch for a strong cliffhanger moment over the next several scenes. Don't force an arbitrary ending; wait for the right beat — a real stakes spike, a decision pending, a scene that lands with weight. Fire [SESSION_END_CLIFFHANGER] when that beat arrives naturally.`;
+  }
+
+  // v1.0.70 — canon check-in nudge every 5 exchanges. Fires as a
+  // periodic reminder to the AI to scan recent scenes for canon-worthy
+  // details (NPC traits, conversation beats, character moments, world
+  // lore) it may have forgotten to log. Tracked via
+  // session_config.lastCanonCheckAtMessages so the cadence is guaranteed
+  // regardless of skipped turns or error retries.
+  const CANON_NUDGE_INTERVAL_MESSAGES = 10;  // 5 exchanges
+  const CANON_NUDGE_MIN_EXCHANGES = 5;        // don't nudge in the first few exchanges
+  const lastCanonCheckAt = sessionCfg.lastCanonCheckAtMessages || 0;
+  const messagesSinceCheck = currentMessages.length - lastCanonCheckAt;
+  let canonNudge = null;
+  if (runtime.exchangeCount >= CANON_NUDGE_MIN_EXCHANGES && messagesSinceCheck >= CANON_NUDGE_INTERVAL_MESSAGES) {
+    canonNudge = `[SYSTEM NOTE] Canon check-in (every 5 exchanges). In the last ~5 exchanges, did you establish or reinforce any of:
+  • NPC details — age, race, tone, personality, flaw, personal history, relationship to another NPC
+  • Conversation beats — a plan made, plot shift, shared perception change, promise, debt, oath
+  • Character moments — a skill demonstrated, world lore learned, achievement, failure, lie told, secret kept, scar earned
+  • World details — location layout, seasonal weather, settlement politics, regional threat, historical reference
+If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker(s) THIS turn (use the appropriate category: npc / location / event / relationship / trait / item). If genuinely no, continue normally — but check against the CANON FACTS block to confirm nothing drifted.`;
   }
 
   const injectedMessages = [];
@@ -437,6 +481,9 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   }
   if (pendingViolationNote) {
     injectedMessages.push({ role: 'user', content: pendingViolationNote });
+  }
+  if (canonNudge) {
+    injectedMessages.push({ role: 'user', content: canonNudge });
   }
   if (pacingNote) {
     injectedMessages.push({ role: 'user', content: pacingNote });
@@ -511,6 +558,12 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // If new violations happened this turn, queue them for next turn.
   const nextCfg = safeJsonParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
   if (pendingCapFeedback) delete nextCfg.pendingCapFeedback;
+
+  // v1.0.70 — advance the canon-nudge cursor whenever a nudge fired this
+  // turn, so the next nudge is 5 exchanges out from this point.
+  if (canonNudge) {
+    nextCfg.lastCanonCheckAtMessages = currentMessages.length;
+  }
   if (Array.isArray(markerResults.capViolations) && markerResults.capViolations.length > 0) {
     nextCfg.pendingCapFeedback = markerResults.capViolations
       .map(v => `  • ${v.kind} ${v.target}: ${v.reason}`)

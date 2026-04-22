@@ -2,6 +2,63 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.70] - 2026-04-22 — Session-position injection + expanded canon taxonomy + 5-exchange nudge
+
+Play-test: the AI DM drifted on recent NPC details (within the last 20 exchanges) and miscounted its own position — thought it was at exchange 8-12 when the player was at 32. Two different failures that share a root cause: **the AI has no reliable structured signal about session state or what's worth remembering.** This release gives it both.
+
+### Part 1 — Live session-position in every system prompt
+
+`buildRuntime()` now computes:
+- `exchangeCount` — `floor(playSessionLength / 2)`, derived from the live message count minus the baseline
+- `sessionBudget` — 50 (soft target, matches the 100-message nudge)
+- `wrapAt` — 65 (matches the 130-message wrap threshold)
+- `forceAt` — 80 (matches the 160-message force threshold)
+- `progressFraction` — `exchangeCount / sessionBudget`
+
+Injected into the system prompt as:
+> Session position: exchange 32 of ~50 target budget (64% — wrap ~65, force-close ~80). Begin foreshadowing a cliffhanger moment around exchange 40; fire `[SESSION_END_CLIFFHANGER]` at the strongest natural beat after that.
+
+So the AI has an authoritative count every turn — no more guessing from context. When it drifts, it drifts with visibility.
+
+### Part 2 — Expanded canon taxonomy (Rule 15a rewritten)
+
+Drift wasn't "the AI didn't try" — it was "the AI didn't know how many things in recent scenes were worth logging." Rule 15a's taxonomy was too terse. Rewritten with the full taxonomy from the play-test conversation:
+
+- **(a) NPC details** — age, race, role, physical description, voice/cadence, tone, personality markers, defining flaw, moral temperament, personal history, relationships between NPCs
+- **(b) Conversations and decisions** — plans made, plot shifts, perception changes, relationship shifts, promises made or broken
+- **(c) Character moments** — skills demonstrated, world lore learned, achievements, failures, **promises / vows / oaths / debts**, **lies told**, **secrets kept**, **body / physical state changes (scars, injuries, growth, distinguishing marks)**
+- **(d) World canon** — settlements / layouts / weather / holds / kingdoms / threats / discoveries / regional history / NPCs who exist but haven't met the PC
+- **(e) Named objects** — heirlooms, gifts, tokens, named weapons, cursed items
+
+Each category has concrete CANON_FACT examples drawn from the actual play-test transcript.
+
+New quantitative target: **3-6 canon facts per session, more in rich scenes.** Under-emission is called out explicitly as the single biggest source of drift. The old "1-2 per session is typical" guidance is reversed — it was under-prescribing.
+
+FINAL REMINDER updated accordingly: `CANON FACTS: emit GENEROUSLY (target 3-6/session, more in rich scenes) — NPC details, conversation beats, character moments, world canon. Under-emission is the primary cause of drift.`
+
+### Part 3 — 5-exchange canon nudge
+
+Server-side forcing function. Every 5 exchanges (10 messages), a `[SYSTEM NOTE]` is injected into the next prompt:
+
+> Canon check-in (every 5 exchanges). In the last ~5 exchanges, did you establish or reinforce any of:
+> • NPC details — age, race, tone, personality, flaw, personal history, relationship to another NPC
+> • Conversation beats — a plan made, plot shift, shared perception change, promise, debt, oath
+> • Character moments — a skill demonstrated, world lore learned, achievement, failure, lie told, secret kept, scar earned
+> • World details — location layout, seasonal weather, settlement politics, regional threat, historical reference
+> If YES to any you haven't yet logged, emit the corresponding `[CANON_FACT]` marker(s) THIS turn. If genuinely no, continue normally — but check against the CANON FACTS block to confirm nothing drifted.
+
+Cadence guaranteed via `session_config.lastCanonCheckAtMessages` — the cursor advances only when the nudge actually fires, so skipped turns or error retries don't break the rhythm. Nudge is gated on `exchangeCount >= 5` so the first few turns don't get a premature check-in.
+
+### Architecture discussion — future work (documented for later)
+
+This conversation also surfaced the **years-of-play architecture question**: how does canon scale from a single prelude to multiple campaigns over real-world years? Sketched three options (phase-scoped silos, unified canon with scope columns, append-only event log with derived views). Recommended path: **unified canon tables with a `scope` column**, rolling out around Phase 5 (prelude → primary campaign transition). Retrieval at scale (beyond ~500 facts) will need relevance filtering, recency bias, and eventually semantic retrieval via embeddings — all deferred until there's real cross-campaign play data to learn from.
+
+### Tests + build
+
+- `tests/prelude-prompt.test.js` grew 60 → 82 (+22 tests covering: session-position injection at 0/3/32 exchange, foreshadowing instruction, expanded taxonomy sections (a)-(e), user's taxonomy terms (age/race/role/personality/flaw, plans/plot/perception, skill reveals/lore), added categories (promises/vows/lies/secrets/scars), 5-exchange nudge callout, FINAL REMINDER surfacing generous emission).
+- All 6 prelude suites green: 38 + 15 + 130 + 82 + 33 + 52 = **350 prelude tests total**.
+- Client build clean. No schema changes; new counter lives on the existing `session_config` JSON column.
+
 ## [1.0.0.69] - 2026-04-22 — Rule 6c: NPC exits and unfinished thoughts require a handoff
 
 Play-test: Halgrim said "'Your brother holds honor like a shield… You — ' He stops. Doesn't finish it. He walks toward the far door without looking back." Great atmospheric prose, but the response ended there. The PC was left alone in a room with nothing to do — no question to answer, no roll to make, no time-skip to a new beat. The unfinished "You —" was a direct invitation for the PC to speak, but the NPC walked away before they had the chance.

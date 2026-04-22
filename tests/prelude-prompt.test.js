@@ -77,7 +77,11 @@ function makeArcPlan(overrides = {}) {
 }
 
 function makeRuntime(overrides = {}) {
-  return { chapter: 1, age: 7, maxHp: 10, currentHp: 10, sessionNumber: 1, ...overrides };
+  return {
+    chapter: 1, age: 7, maxHp: 10, currentHp: 10, sessionNumber: 1,
+    exchangeCount: 0, sessionBudget: 50, wrapAt: 65, forceAt: 80, progressFraction: 0,
+    ...overrides
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +439,134 @@ console.log('\n=== Opening prompt no longer mentions "concrete options" ===\n');
   assert(
     opening.includes('NEVER offer menus'),
     'opening prompt forbids action menus'
+  );
+}
+
+console.log('\n=== v1.0.70 session-position injection ===\n');
+{
+  // Early in the session
+  const early = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup(),
+    makeArcPlan(),
+    makeRuntime({ exchangeCount: 3, progressFraction: 0.06 })
+  );
+  assert(
+    early.includes('Session position: exchange 3 of ~50 target budget (6%'),
+    'early session shows exchange 3 / 6%'
+  );
+  assert(
+    early.includes('wrap ~65') && early.includes('force-close ~80'),
+    'early session surfaces wrap + force thresholds'
+  );
+
+  // Mid-session
+  const mid = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup(),
+    makeArcPlan(),
+    makeRuntime({ exchangeCount: 32, progressFraction: 0.64 })
+  );
+  assert(
+    mid.includes('Session position: exchange 32 of ~50 target budget (64%'),
+    'mid-session shows exchange 32 / 64%'
+  );
+  assert(
+    mid.includes('Begin foreshadowing a cliffhanger moment around exchange 40'),
+    'prompt instructs AI to foreshadow near 80% of budget'
+  );
+
+  // Session opening — exchangeCount 0
+  const open = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup(),
+    makeArcPlan(),
+    makeRuntime({ exchangeCount: 0, progressFraction: 0 })
+  );
+  assert(
+    open.includes('exchange 0 of ~50 target budget (0%'),
+    'opening shows exchange 0 / 0%'
+  );
+}
+
+console.log('\n=== v1.0.70 expanded canon taxonomy (rule 15a) ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+
+  assert(
+    p.includes('EMIT GENEROUSLY'),
+    'rule 15a calls for generous canon emission'
+  );
+  assert(
+    p.includes('3-6 canon facts per session'),
+    'rule 15a gives quantitative emission target'
+  );
+  // Taxonomy sections
+  assert(
+    p.includes('(a) NPC details'),
+    'taxonomy section (a) NPC details present'
+  );
+  assert(
+    p.includes('(b) Conversations and decisions'),
+    'taxonomy section (b) conversations present'
+  );
+  assert(
+    p.includes('(c) Character moments'),
+    'taxonomy section (c) character moments present'
+  );
+  assert(
+    p.includes('(d) World canon'),
+    'taxonomy section (d) world canon present'
+  );
+  assert(
+    p.includes('(e) Named objects'),
+    'taxonomy section (e) named objects present'
+  );
+  // User's original taxonomy list
+  assert(
+    p.includes('Age, race, role') && p.includes('Personality markers, defining flaw'),
+    'NPC section includes user\'s taxonomy (age/race/role/personality/flaw)'
+  );
+  assert(
+    p.includes('Plans made') && p.includes('Plot shifts') && p.includes('Perception changes'),
+    'conversation section includes plans/plot/perception'
+  );
+  assert(
+    p.includes('Skills demonstrated') && p.includes('World lore the PC learned'),
+    'character moments section includes skill reveals + lore'
+  );
+  // My additions
+  assert(
+    p.includes('Promises / vows / oaths / debts'),
+    'canon section covers promises/vows/debts'
+  );
+  assert(
+    p.includes('Lies told') && p.includes('Secrets kept'),
+    'canon section covers lies and secrets'
+  );
+  assert(
+    p.includes('Body / physical state changes') && p.includes('scars'),
+    'canon section covers body / scars'
+  );
+  assert(
+    p.includes('Rumors') || p.includes('Discoveries'),
+    'canon section covers rumors / discoveries'
+  );
+  // 5-exchange nudge callout
+  assert(
+    p.includes('every 5 exchanges'),
+    'rule 15a mentions the 5-exchange check-in nudge'
+  );
+
+  // FINAL REMINDER emphasizes generous emission
+  const tail = p.slice(p.indexOf('FINAL REMINDER'));
+  assert(
+    tail.includes('GENEROUSLY') && tail.includes('3-6/session'),
+    'FINAL REMINDER surfaces generous emission + quantitative target'
+  );
+  assert(
+    tail.includes('Under-emission is the primary cause of drift'),
+    'FINAL REMINDER cites under-emission as drift cause'
   );
 }
 
