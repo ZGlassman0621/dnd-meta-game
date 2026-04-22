@@ -302,6 +302,67 @@ export async function getValues(characterId) {
 }
 
 /**
+ * Build a compact EMERGENCE SO FAR block for injection into the Sonnet/Opus
+ * system prompt. Shows accepted stats/skills + leading class/theme/ancestry
+ * trajectories + top values — the AI consults it when composing upcoming
+ * scenes so it can lean toward emerging strengths. Runs on every turn so
+ * the snapshot stays current as hints accept and values shift.
+ *
+ * Always returns a non-empty block so the prompt structure stays stable
+ * for caching — uses "none yet" / "undecided" placeholders for unfilled
+ * slots.
+ */
+export async function buildEmergenceSnapshotBlock(characterId) {
+  const [accepted, values, classWinner, themeWinner, ancestryWinner] = await Promise.all([
+    getAcceptedEmergences(characterId),
+    getValues(characterId),
+    getTrajectoryWinner(characterId, 'class'),
+    getTrajectoryWinner(characterId, 'theme'),
+    getTrajectoryWinner(characterId, 'ancestry')
+  ]);
+
+  // Sum accepted stat magnitudes per stat
+  const statMap = new Map();
+  for (const row of accepted) {
+    if (row.kind !== 'stat') continue;
+    statMap.set(row.target, (statMap.get(row.target) || 0) + (row.magnitude || 0));
+  }
+  const statLine = statMap.size > 0
+    ? [...statMap.entries()].map(([s, m]) => `${s.toUpperCase()} +${m}`).join(', ')
+    : 'none yet';
+
+  const skills = accepted.filter(r => r.kind === 'skill').map(r => r.target);
+  const skillLine = skills.length > 0 ? skills.join(', ') : 'none yet';
+
+  const classLine = classWinner
+    ? `${classWinner.winner} (leading, ${classWinner.score.toFixed(1)} pts)`
+    : 'undecided';
+  const themeLine = themeWinner
+    ? `${themeWinner.winner} (leading, ${themeWinner.score.toFixed(1)} pts)`
+    : 'undecided';
+  const ancestryLine = ancestryWinner
+    ? `${ancestryWinner.winner} (leading)`
+    : 'undecided';
+
+  // Top values by absolute score — include negatives so the AI sees
+  // what the character has acted AGAINST, not just what they embrace.
+  const topValues = values
+    .filter(v => v.score !== 0)
+    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
+    .slice(0, 5)
+    .map(v => `${v.value} (${v.score > 0 ? '+' : ''}${v.score})`);
+  const valueLine = topValues.length > 0 ? topValues.join(', ') : 'none yet';
+
+  return `EMERGENCE SO FAR (what the character is becoming — lean upcoming scenes toward these strengths, don't force):
+  Stats emerged:          ${statLine}
+  Skills emerged:         ${skillLine}
+  Class trajectory:       ${classLine}
+  Theme trajectory:       ${themeLine}
+  Ancestry-feat leaning:  ${ancestryLine}
+  Top values so far:      ${valueLine}`;
+}
+
+/**
  * Compute the chapter-weighted winner for class/theme/ancestry tallies.
  * Returns { winner: target, score: number } or null if no hints recorded.
  */

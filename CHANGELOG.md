@@ -2,6 +2,185 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.63] - 2026-04-21 — Prelude as tutorial: rolls, momentum, emergence-aware shaping
+
+Play-test surfaced three real issues with prelude gameplay:
+
+1. **Rolls weren't happening.** The DM was asking the player to
+   notice / recall / react — tasks that should be rolled for — but
+   never prompting the dice. The prelude was built to use physical
+   dice throughout (design goal #16), but the prompt wasn't enforcing
+   it strongly enough.
+2. **Narrative momentum stalled.** Responses ended on atmosphere
+   ("the keep is already arranging itself around his arrival") or on
+   the PC being passively moved (hand on shoulder, led across the
+   yard). Great prose, no forward beat — player stuck.
+3. **The prelude lost its "I'm a tutorial" framing.** It should be
+   teaching the player how our version of D&D feels while building
+   backstory. That role got buried under atmospheric writing.
+
+Three prompt-level rules fixed it, plus one new data plumbing path.
+
+### Rule 6 MOMENTUM — rewritten for hard engagement endings
+
+Old rule had an escape hatch offering "2-3 concrete options" the
+character could take. Player feedback: action menus pull them out of
+the scene because the AI is effectively playing the character's
+agency. That branch is GONE.
+
+Every response now must end in exactly ONE of:
+- **(a)** A direct question to the player (NPC asks, situation
+  demands a decision).
+- **(b)** A roll prompt (per rule 13).
+- **(c)** Something happening TO or AROUND the PC that demands
+  response — NPC speaks, door opens, sound cuts through, hand lands
+  on arm, stranger meets their eyes.
+
+Explicit BANNED: menus of actions the character could take. Even
+"being led" scenes preserve agency — the NPC steering the PC says
+something, passes something, notices something. Atmospheric texture
+is fine in the BODY; the END forces engagement.
+
+Rule 6 now includes worked BAD endings (hand-on-shoulder-led-across,
+atmosphere-only closes) and GOOD endings (direct question, aimed
+pressure, thing happening to PC, roll prompt) so Sonnet can pattern-
+match.
+
+### Rule 13 ROLL DISCIPLINE — rewritten, chapter-gated
+
+The old rule had the bones (wait-for-roll, DC hidden, crit framework)
+but it wasn't explicit enough about HOW to surface the roll, and the
+"THIS IS THE TUTORIAL" framing was missing.
+
+**THE IRON RULE** (unchanged, now louder): when a roll is called, the
+response ENDS THERE. Do not speculate about the outcome. Do not write
+provisional prose. Do not continue past the prompt. The player rolls
+physical dice, reports the number, and THEN the DM narrates.
+Exception: player explicitly declines ("skip the roll," "just narrate").
+
+**Chapter-gated surface format** (the tutorial scaffolding):
+- **Chapter 1-2** (early + middle childhood): surface rolls INSIDE
+  the action, naming the skill so the player learns what it's for.
+  Example: *"You could try to catch Moss's eye — that'd be a
+  Perception check."* / *"The letter is dense and you're six. Give me
+  an Intelligence check."* The mapping becomes visible through play.
+- **Chapter 3-4** (adolescence + threshold): surface rolls BARE —
+  *"Roll Perception."* / *"Athletics, go."* The player is fluent
+  now; the tutorial scaffold drops.
+
+A `CURRENT CHAPTER` footer in rule 13 tells the DM which mode to use
+THIS turn (switches at chapter threshold).
+
+**DC never announced, in either mode.** Difficulty is conveyed
+through narrative flavoring ("she's guarded," "the letter is dense,"
+"this one's tricky"), never a number.
+
+**Critical framework (bake-it-in explicit):**
+- **Natural 1 = CRITICAL FAILURE** — fail and something worse, funny
+  or dramatic per tone. Self-injury, object breaking, decision
+  foreclosed, bystander laughing, NPC hurt in extreme cases only.
+  Don't punish for playing; make failures interesting.
+- **Natural 20 = CRITICAL SUCCESS** — miraculous, epic per tone
+  regardless of register. Memory unlocks, hidden passage reveals,
+  merchant spills a secret, bully's jaw drops.
+- **2-19 against internal DC** — ordinary pass/fail narrated in tone.
+
+Expanded "WHEN TO CALL FOR ROLLS" list — noticing, reading people,
+remembering, piecing clues, sneaking, persuading, deceiving,
+intimidating, physical feats, difficult texts, jargon, any "can my
+character do this?" moment where a die should decide.
+
+### Rule 15b EMERGENCE SHAPING + EMERGENCE SO FAR block
+
+New directive: the AI should lean UPCOMING scenes toward the
+character's emerging strengths. A character whose Perception emerged
+should start getting more noticing beats; one trending toward
+"ranger" gets more wilderness; one with rising Loyalty gets more
+scenes testing it.
+
+**New data plumbing — emergence snapshot block.** Every Sonnet
+(and Opus, when auto escalates) call now gets an EMERGENCE SO FAR
+block in the system prompt — accepted stat bonuses, accepted skills,
+leading class/theme/ancestry trajectories (by chapter-weighted
+tally), and top 5 values with scores.
+
+- New service helper `buildEmergenceSnapshotBlock(characterId)` in
+  `preludeEmergenceService.js` — composes the block from existing
+  accessors (`getAcceptedEmergences`, `getValues`, per-kind
+  `getTrajectoryWinner`). Always returns a structured block (with
+  "none yet" / "undecided" placeholders) so the prompt shape stays
+  stable for caching.
+- Wired into both `startSession` and `sendMessage` in
+  `preludeSessionService.js` — fetched alongside the canon-facts
+  block, passed to `createPreludeSystemPrompt` as a new 6th arg.
+- Lands in the system prompt right below the CANON FACTS block, above
+  MARKERS — same general shape as canon facts (state snapshot the AI
+  consults every turn).
+
+**Applies to both Sonnet AND Opus.** v1.0.62's auto model picker can
+escalate mid-session, so the emergence block must flow through
+whichever model is serving the turn. Since it's in the system prompt,
+it does.
+
+**Rule 15b tells the AI** to consult the block before composing the
+next scene and to pick the next-beat option that plays to the
+character's emerging direction — gentle lean, not heavy-handed. Arc
+plan still owns macro structure. By Chapter 3-4, the story should
+feel TAILORED to who the player has been playing.
+
+DM-side only — don't announce "this scene was chosen because your
+Perception emerged." Just play the scene.
+
+### FINAL REMINDER updated (recency position)
+
+New lines surface:
+- "END EVERY RESPONSE ON ENGAGEMENT" with the three allowed endings.
+- "ROLLS ARE FREQUENT AND WAITED ON" with runtime-selected chapter
+  mode ("CH 1-2 tutorial mode" vs "CH 3-4 fluent mode") — the
+  recency reminder literally tells the DM which surface format to
+  use THIS turn.
+- "EMERGENCE SHAPING" with the gentle-lean directive.
+
+### Opening prompt — "concrete options" removed
+
+The first-session opening-prompt instruction used to say "End with an
+invitation to action — a question, a pressure, concrete options."
+"Concrete options" is a menu. Gone. Now: "End on engagement — a
+direct question, a concrete pressure, or something happening to/
+around the character that demands response. NEVER offer menus."
+
+### PRELUDE_IMPLEMENTATION_PLAN.md — 3 new design goals
+
+- **#25 Emergence shapes the story as it happens.**
+- **#26 The prelude IS the tutorial.** (rolls + chapter-gated surface
+  format)
+- **#27 Every DM response ends on engagement.** (no action menus)
+
+### Tests
+
+- **New suite `tests/prelude-prompt.test.js`** — 38 tests covering:
+  - Rule 6 momentum language (direct question / roll / happening TO
+    PC; no action menus; BAD vs GOOD endings)
+  - Rule 13 roll discipline (iron-rule language; Ch 1-2 offer-inside
+    mode; Ch 3-4 bare mode; runtime chapter footer flips between
+    modes; DC-hidden; crit framework)
+  - Rule 15b emergence shaping (heading, gentle-lean, DM-side)
+  - Emergence snapshot block passes through + placeholder when absent
+  - FINAL REMINDER surfaces all three new rules in recency position
+    (and flips chapter mode based on runtime)
+  - Opening prompt no longer mentions "concrete options"
+- All 4 prelude suites green: setup 38, arc 15, markers 130, prompt
+  38 → **221 prelude tests total**.
+- Client build clean. No schema changes.
+
+### What's not here (still Phase 5)
+
+Transition to main creator — `[PRELUDE_END]` marker, Opus-generated
+backstory from canon facts + emergences + values, pre-filled main
+creator, primary campaign world-gen receiving prelude as input. The
+emergence snapshot block will feed the backstory generator when
+Phase 5 lands.
+
 ## [1.0.0.62] - 2026-04-21 — Auto/Sonnet/Opus model picker for prelude sessions
 
 Prelude sessions default to Sonnet but now expose a three-mode model

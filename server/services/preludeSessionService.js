@@ -183,7 +183,12 @@ export async function startSession(characterId) {
   // Sonnet emits [CANON_FACT] markers across turns.
   const canonBlock = await canonService.buildCanonFactsBlock(characterId);
 
-  const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock);
+  // v1.0.63 — emergence snapshot. Empty-but-structured on first session
+  // (all "none yet" / "undecided" placeholders); populated as the player
+  // accepts stat/skill hints and as class/theme/ancestry tallies grow.
+  const emergenceBlock = await emergenceService.buildEmergenceSnapshotBlock(characterId);
+
+  const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock, emergenceBlock);
   const openingPrompt = createPreludeOpeningPrompt(character, setup, arcPlan, runtime);
 
   // Opus for the opening — like the main DM's first session.
@@ -330,7 +335,12 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // (ages, relationships, traits, past events) before generating.
   const canonBlock = await canonService.buildCanonFactsBlock(session.character_id);
 
-  const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock);
+  // v1.0.63 — fetch the current emergence snapshot. Tells the AI which
+  // stats, skills, class/theme/ancestry trajectories, and values have
+  // emerged so it can lean upcoming scenes toward those strengths.
+  const emergenceBlock = await emergenceService.buildEmergenceSnapshotBlock(session.character_id);
+
+  const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock, emergenceBlock);
 
   const currentMessages = safeJsonParse(session.messages, []);
 
