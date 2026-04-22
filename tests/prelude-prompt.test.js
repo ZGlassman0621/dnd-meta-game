@@ -570,6 +570,61 @@ console.log('\n=== v1.0.70 expanded canon taxonomy (rule 15a) ===\n');
   );
 }
 
+console.log('\n=== v1.0.72 sibling nickname field ===\n');
+{
+  // Sibling with a nickname renders "Name (\"Nickname\")"
+  const withNickname = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({
+      siblings: [
+        { name: 'Moira Astaron', nickname: 'Mo', gender: 'sister', relative_age: 'two years older' }
+      ]
+    }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    withNickname.includes('Moira Astaron ("Mo")'),
+    'sibling with nickname renders as Name ("Nickname")'
+  );
+
+  // Sibling without a nickname renders just the name (back-compat)
+  const withoutNickname = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({
+      siblings: [
+        { name: 'Moss', gender: 'brother', relative_age: 'older' }
+      ]
+    }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    withoutNickname.includes('• Moss (') && !withoutNickname.includes('Moss ("'),
+    'sibling without nickname renders just the name'
+  );
+
+  // Nickname === empty string also falls back to name only
+  const emptyNickname = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({
+      siblings: [
+        { name: 'Brenn', nickname: '', gender: 'brother', relative_age: 'younger' }
+      ]
+    }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    !emptyNickname.includes('Brenn ("")'),
+    'empty-string nickname does not render empty quotes'
+  );
+  assert(
+    emptyNickname.includes('• Brenn ('),
+    'empty-string nickname still renders the name'
+  );
+}
+
 console.log('\n==================================================');
 console.log(`Prelude Prompt Tests: ${passed} passed, ${failed} failed`);
 console.log('==================================================\n');

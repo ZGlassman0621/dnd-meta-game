@@ -44,7 +44,7 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       { role: 'mother', name: '', race: '', status: 'present' },
       { role: 'father', name: '', race: '', status: 'present' }
     ],
-    siblings: [], // { name, gender, race, relative_age }
+    siblings: [], // { name, nickname, gender, race, relative_age }
     talents: [], // 3 items
     talent_other: '',
     cares: [], // 3 items
@@ -78,7 +78,7 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
   const addSibling = () => {
     // Default sibling race to player's race — matches the typical case, and
     // the player can override per-slot. Same pattern for parents.
-    set('siblings', [...form.siblings, { name: '', gender: 'sister', race: form.race || '', relative_age: 'younger' }])
+    set('siblings', [...form.siblings, { name: '', nickname: '', gender: 'sister', race: form.race || '', relative_age: 'younger' }])
   }
   const updateSibling = (idx, key, value) => {
     const next = [...form.siblings]
@@ -130,6 +130,7 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       parents: parentsFinal,
       siblings: form.siblings.map(s => ({
         name: (s.name || '').trim(),
+        nickname: (s.nickname || '').trim() || null,
         gender: s.gender || 'sibling',
         race: s.race || form.race,
         relative_age: s.relative_age || 'younger'
@@ -424,8 +425,15 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
           Only children can leave this empty. For each sibling, pick whether they're younger, older, or a twin.
         </p>
         {form.siblings.map((s, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.9fr auto', gap: '0.35rem', marginBottom: '0.35rem' }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.9fr 1fr 1fr 0.9fr auto', gap: '0.35rem', marginBottom: '0.35rem' }}>
             <input type="text" value={s.name} onChange={e => updateSibling(i, 'name', e.target.value)} placeholder="Sibling name" />
+            <input
+              type="text"
+              value={s.nickname || ''}
+              onChange={e => updateSibling(i, 'nickname', e.target.value)}
+              placeholder="Nickname (optional)"
+              title="What family calls them — short, informal. Used by the DM alongside their full name."
+            />
             <select
               value={s.race || ''}
               onChange={e => updateSibling(i, 'race', e.target.value)}

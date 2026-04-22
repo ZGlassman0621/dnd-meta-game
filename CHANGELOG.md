@@ -2,6 +2,26 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.72] - 2026-04-22 — Sibling nickname field in prelude setup
+
+Siblings can now have an optional nickname (e.g., `Moira Astaron` called `"Mo"`). Parents already had a name field; siblings had only a formal name. Families use nicknames; the DM should too.
+
+### Changes
+
+- **Client** (`PreludeSetupWizard.jsx`) — new nickname column in the sibling form, placed between the full-name input and the race dropdown. Labeled "Nickname (optional)."
+- **Payload** — `siblings[].nickname` is included when non-empty, `null` when empty.
+- **Prompt builder** — sibling lines now render as `• Moira Astaron ("Mo") (Human sister, two years older)` when a nickname is set. Falls back to just `• Moss (Human brother, older)` when absent — fully back-compatible with existing prelude characters.
+
+### Storage
+
+No migration needed — siblings live inside the `prelude_setup_data` JSON blob on the `characters` table. Existing characters without nicknames render correctly via the optional-field fallback.
+
+### Tests
+
+- `tests/prelude-prompt.test.js` grew 82 → 86 (+4 tests for nickname rendering, back-compat, and empty-string fallback).
+- All 6 prelude suites green: 38 + 15 + 130 + 86 + 33 + 52 = **354 prelude tests total**.
+- Client build clean.
+
 ## [1.0.0.71] - 2026-04-22 — DX: `npm run dev` waits for the server before starting the client
 
 Every `npm run dev` run produced an `AggregateError [ECONNREFUSED]` in the Vite log because the client's proxy tried to forward requests to the Express server before it finished booting.

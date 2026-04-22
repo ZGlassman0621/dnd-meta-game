@@ -662,7 +662,10 @@ export function createPreludeSystemPrompt(character, setup, arcPlan, runtime, ca
   const siblingLines = (setup.siblings || []).length > 0
     ? '\n' + setup.siblings.map(s => {
         const race = s.race || playerRace;
-        return `  • ${s.name} (${race} ${s.gender || 'sibling'}, ${s.relative_age || 'unspecified'})`;
+        const nameDisplay = s.nickname
+          ? `${s.name} ("${s.nickname}")`
+          : s.name;
+        return `  • ${nameDisplay} (${race} ${s.gender || 'sibling'}, ${s.relative_age || 'unspecified'})`;
       }).join('\n')
     : ' (only child)';
 
