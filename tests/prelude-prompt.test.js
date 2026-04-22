@@ -117,6 +117,56 @@ console.log('\n=== Rule 6 MOMENTUM — every response ends on engagement ===\n')
   );
 }
 
+console.log('\n=== Rule 6 CARVE-OUT — NPC-directed tasks route to roll prompt (v1.0.65) ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+
+  assert(
+    p.includes('CRITICAL CARVE-OUT'),
+    'Rule 6 has the CRITICAL CARVE-OUT heading'
+  );
+  assert(
+    p.includes('NPC-DIRECTED TASKS ROUTE TO (b)'),
+    'Rule 6 carve-out explicitly routes NPC-directed tasks to option (b)'
+  );
+  assert(
+    p.includes('TRIGGER PHRASES THAT SIGNAL A ROLL PROMPT'),
+    'Rule 6 has an explicit trigger-phrase list'
+  );
+  // The specific phrases that Sonnet missed in play-test
+  assert(
+    p.includes('Read it to me') || p.includes('"Read it to me."'),
+    'trigger list covers "Read it to me"'
+  );
+  assert(
+    p.includes('Can you sneak past'),
+    'trigger list covers "Can you sneak past"'
+  );
+  assert(
+    p.includes('Convince her'),
+    'trigger list covers "Convince her"'
+  );
+  // The test framing that lets the AI self-check
+  assert(
+    p.includes('invent content they don') || p.includes('invent content'),
+    'Rule 6 carve-out has the "invent content they don\'t have" self-test'
+  );
+  // The skipped-roll bad-ending examples
+  assert(
+    p.includes('SKIPPED ROLL'),
+    'Rule 6 BAD ENDINGS list includes SKIPPED ROLL examples'
+  );
+  assert(
+    p.includes("Read me what it says") || p.includes("letter-reading is Intelligence"),
+    'Rule 6 cites the letter-reading scenario as a skipped-roll example'
+  );
+  // Good-ending example showing NPC-directed task + roll prompt
+  assert(
+    p.includes("Halgrim") && p.includes('Intelligence check'),
+    'Rule 6 GOOD ENDINGS includes Halgrim letter-reading with roll prompt'
+  );
+}
+
 console.log('\n=== Rule 13 ROLL DISCIPLINE — chapter 1 surface format ===\n');
 {
   const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime({ chapter: 1 }));
@@ -274,6 +324,10 @@ console.log('\n=== FINAL REMINDER surfaces new rules (recency position) ===\n');
   assert(
     tail.includes('END EVERY RESPONSE ON ENGAGEMENT'),
     'FINAL REMINDER surfaces momentum rule'
+  );
+  assert(
+    tail.includes('CARVE-OUT') && tail.includes('skips the roll'),
+    'FINAL REMINDER surfaces the NPC-directed-task carve-out'
   );
   assert(
     tail.includes('ROLLS ARE FREQUENT AND WAITED ON'),

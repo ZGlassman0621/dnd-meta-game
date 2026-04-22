@@ -2,6 +2,91 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.65] - 2026-04-21 — Rule 6 carve-out: NPC-directed tasks route to roll prompts
+
+Play-test regression. Halgrim-the-steward pushed a sealed letter
+across the table and said "Read me what it says." Sonnet ended the
+response there. Rule 13 explicitly flags letter-reading as an
+Intelligence check — and its ANTI-STALL example was literally this
+scenario — but the rule didn't fire.
+
+### Why it failed
+
+Rule 6 (momentum) and Rule 13 (roll discipline) competed. Sonnet
+satisfied Rule 6's option (c) "something happening TO the PC that
+demands response" with the NPC's request to read the letter. From
+its view, the response had ended on engagement. Rule 13's roll
+trigger lost to the cheaper Rule 6 branch.
+
+The player is left inventing content they don't have (the words of
+the letter) to make progress. That's the stall Rule 13 was supposed
+to prevent.
+
+### Fix — carve NPC-directed tasks out of Rule 6 option (c)
+
+New sub-section in Rule 6:
+
+> CRITICAL CARVE-OUT — NPC-DIRECTED TASKS ROUTE TO (b), NOT (a) OR (c).
+>
+> When an NPC asks the PC to DO SOMETHING with an uncertain outcome
+> where a skill applies — "Read it to me." "Can you sneak past?"
+> "Convince her." "What do you remember?" "Try again." — that is NOT
+> an end-on-(a)-question ending. That is a ROLL PROMPT. End on the
+> roll, not on the NPC's request.
+
+Plus an explicit **trigger-phrase list** Sonnet can pattern-match
+against — the exact NPC lines that should flip its ending from "I
+asked a question" to "I called a roll":
+
+- "Read it to me." / "Read what it says." → Intelligence
+- "What does it say?" / "What do you think it says?" → Intelligence (Investigation)
+- "Keep going." / "Try again." (mid-task) → same skill as the task
+- "Tell me what you remember." → Intelligence (History)
+- "Can you sneak past?" → Stealth
+- "Convince her." / "Talk him out of it." → Persuasion / Deception / Intimidation
+- "Did you catch his face?" → Perception
+- "Can you lift it?" / "Climb up." → Athletics
+- "Is she lying?" → Insight
+- …etc.
+
+### Self-test baked into the rule
+
+> Test: if the player's next move would require them to invent
+> content they don't have (the words of the letter, the memory of
+> the face, the exact lie told) — you've skipped a roll. Go back and
+> call it.
+
+That test is the cleanest way to catch the class of failure without
+building a new marker or enforcement system. If Sonnet notices it's
+about to offload un-rollable content to the player, it knows to
+rewind.
+
+### BAD ENDINGS list now includes skipped-roll examples
+
+- "'Your father's seal,' he says. 'Read me what it says.'" → SKIPPED
+  ROLL — letter-reading is Intelligence
+- "'Can you sneak past them?' she whispers." → SKIPPED ROLL — Stealth
+
+GOOD ENDINGS list adds matching worked examples:
+
+- "Halgrim pushes the parchment toward you. 'Read me what it says.'
+  The letter is dense and you're six — give me an Intelligence
+  check." [NPC-directed task → roll prompt]
+
+### FINAL REMINDER updated
+
+The carve-out + self-test now land in recency position so Sonnet
+sees them at generation time, not just in the primacy block.
+
+### Tests + build
+
+- `tests/prelude-prompt.test.js` grew 38 → 49 (+11 tests covering
+  the carve-out, trigger phrases, self-test, BAD/GOOD examples,
+  FINAL REMINDER surfacing).
+- All 4 prelude suites green: 38 + 15 + 130 + 49 = **232 prelude
+  tests total**.
+- Client build clean. No schema changes, no API surface changes.
+
 ## [1.0.0.64] - 2026-04-21 — Hotfix: SQLITE_NOMEM on emergence snapshot
 
 v1.0.63's `buildEmergenceSnapshotBlock()` fired 5 queries via
