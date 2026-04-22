@@ -2,6 +2,93 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.66] - 2026-04-22 — Auto picker: break the Opus-feedback loop (release discipline + cap)
+
+Play-test report: auto mode got stuck on Opus. Once Opus was running,
+its own emotionally loaded prose read as "heavy" to itself, so it
+kept tagging `[NEXT_SCENE_WEIGHT: heavy]` on every turn, never
+releasing back to Sonnet for ordinary texture. Two fixes — one
+prompt-side, one server-side safety valve.
+
+### Prompt fix — RELEASE DISCIPLINE in the marker guidance
+
+The old guidance said: *"Err toward 'heavy' when ambiguous and the
+stakes are real."* That line actively biased toward stickiness.
+
+Rewritten with new framing:
+
+> **HEAVY IS A SHOT, NOT A STATE.** The most common mistake is
+> staying tagged 'heavy' across multiple turns because the arc
+> feels loaded. Don't. A heavy tag buys ONE climactic scene. After
+> that scene resolves — the confrontation lands, the tears dry, the
+> decision is made, the stranger leaves — the NEXT scene is back to
+> ordinary texture. Tag it 'standard' or 'light'. […] You must
+> actively release.
+
+Plus explicit RELEASE DISCIPLINE bullets:
+- Did the previous scene fire a heavy beat? Then the next tag is
+  almost certainly 'standard' or 'light'.
+- Conversation, chore, quiet walk, meal, transition? That's
+  'standard', never 'heavy'.
+- When in doubt, omit the marker (defaults to standard). The burden
+  of proof is on 'heavy' — you should be able to name the specific
+  climactic beat coming.
+
+Frequency target tightened: heavy ~1 scene in 5-10, not every
+emotionally loaded moment.
+
+### Server fix — consecutive-Opus cap
+
+Because trusting the AI to self-release isn't enough on its own,
+a server-side safety valve: soft-triggered Opus can run at most
+**2 consecutive turns** before auto-dropping to Sonnet for one
+cooldown turn. Reason code surfaced to the UI as `soft-opus-cap`.
+
+Trigger taxonomy in `pickAutoModel()`:
+
+- **HARD triggers** (bypass cap — user-directed long-Opus states):
+  chapter 4, session-wrap. `hard: true`.
+- **SOFT triggers** (Opus, subject to cap): heavy-weight, hp-drop
+  ≤ -3, chapter-promise. `hard: false`.
+- **AI downshift** (always Sonnet): light-weight tag.
+- **Default**: Sonnet.
+
+New `session_config.consecutiveSoftOpusTurns` counter — increments
+on any soft-triggered Opus turn, resets on ANY Sonnet turn OR on
+any hard-triggered Opus turn. That last part matters: Chapter 4
+should not accumulate against the cap since it's explicitly a
+finale-long Opus state.
+
+### API surface (UI-visible)
+
+`resolveReason` field on the message response now includes
+`soft-opus-cap` when the cap forces a cooldown. The auto-indicator
+in the top bar will show `last turn → sonnet · soft-opus-cap` for
+that cooldown turn — so the player can see the safety valve fire.
+
+### Tests
+
+- **New suite `tests/prelude-auto-model.test.js`** — 33 tests
+  covering hard/soft trigger precedence, cap behavior
+  (counter=0/1 passes, counter≥2 caps), light-weight downshift,
+  hard-triggers-bypass-cap, and boundary conditions (HP 0, HP +5,
+  HP -2).
+- `pickAutoModel` exported from `preludeSessionService` for direct
+  unit testing.
+- All 5 prelude suites green: 49 + 130 + 38 + 15 + 33 = **265
+  prelude tests total**.
+- Client build clean. No schema changes; new counter lives on the
+  existing `session_config` JSON column.
+
+### What this means in play
+
+- A heavy beat still gets Opus for 1-2 turns of rich prose.
+- Then, unless the player's action creates a new escalation (HP
+  drop, new chapter promise, or a fresh heavy tag from a *Sonnet*
+  turn), auto drops back to Sonnet for the quiet aftermath.
+- The player still has full manual override — toggle Opus directly
+  in the top bar to stay heavy.
+
 ## [1.0.0.65] - 2026-04-21 — Rule 6 carve-out: NPC-directed tasks route to roll prompts
 
 Play-test regression. Halgrim-the-steward pushed a sealed letter

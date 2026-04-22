@@ -474,28 +474,53 @@ function markersBlock() {
 
 [NEXT_SCENE_WEIGHT: heavy|standard|light]
     FORWARD-LOOKING HINT about the next scene's emotional weight. Emit
-    at the END of your response, ONCE per turn. The server uses this to
-    pick which model generates the NEXT turn (lighter model for texture,
-    heavier model for emotional climaxes). Tag based on WHAT THE STORY
-    IS ABOUT TO DO, not what you just wrote.
+    at the END of your response, ONCE per turn. Tag based on WHAT THE
+    STORY IS ABOUT TO DO, not what you just wrote.
 
-      heavy — next scene is likely a confrontation, farewell, death,
-        betrayal, first-meeting with a chapter-defining NPC, the moment
-        a major relationship shifts, the resolution of a chapter promise,
-        a scene with real emotional stakes. Err toward 'heavy' when
-        ambiguous and the stakes are real.
+    HEAVY IS A SHOT, NOT A STATE. The most common mistake is staying
+    tagged 'heavy' across multiple turns because the arc feels loaded.
+    Don't. A heavy tag buys ONE climactic scene. After that scene
+    resolves — the confrontation lands, the tears dry, the decision is
+    made, the stranger leaves — the NEXT scene is back to ordinary
+    texture. Tag it 'standard' or 'light'. The system uses the tag to
+    pick a richer model for the climactic beat; if you keep tagging
+    'heavy,' that richer model keeps writing, and the character never
+    gets a breath of ordinary life. You must actively release.
 
-      light — next scene is a texture/transition moment: traveling,
+    WEIGHT DEFINITIONS:
+
+      heavy — the NEXT scene is a climactic beat: a confrontation,
+        farewell, death, betrayal, first-meeting with a chapter-
+        defining NPC, a major relationship shift, the resolution of a
+        chapter promise, a decision with stakes that will echo.
+        Frequency target: ~1 scene in 5-10. NOT every emotionally
+        loaded moment — only the peaks.
+
+      light — the NEXT scene is texture or transition: traveling,
         routine chores, a short time-compression beat, a brief
-        atmospheric scene. Use SPARINGLY; most scenes are 'standard'.
+        atmospheric scene. Use when you want to explicitly RELEASE
+        from a heavy moment back to ordinary life.
 
-      standard — default. Use for most scenes: dialogue, exploration,
-        small-stakes decisions, normal developmental beats.
+      standard — DEFAULT. Use for most scenes: dialogue, exploration,
+        small-stakes decisions, normal developmental beats, the quiet
+        aftermath of a heavy moment, a new day, a new location.
+
+    RELEASE DISCIPLINE (the key rule — read this before every tag):
+      • Did the previous scene you wrote fire a heavy beat (climax,
+        confrontation, decision, reveal)? Then the NEXT tag is almost
+        certainly 'standard' or 'light'. The heavy moment USED its
+        budget. Don't re-up on inertia.
+      • Are you about to write a conversation, a chore, a quiet walk,
+        a meal, a routine practice, a transition between scenes? That's
+        'standard' (or 'light' for pure transition). Never 'heavy' just
+        because the arc is emotionally loaded in general.
+      • When in doubt, tag 'standard' or omit the marker entirely
+        (which defaults to standard). The burden of proof is on
+        'heavy' — you should be able to name the specific climactic
+        beat coming.
 
     Omit the marker entirely if uncertain — the system defaults to
-    'standard'. Never over-tag 'heavy' to seem important; the player
-    feels forced escalation immediately. One tag at the end of your
-    response is enough.
+    'standard'. One tag at the end of your response is enough.
 
 EMERGENCE MARKERS (Phase 3) — fire these when the PLAYER'S PLAYED BEHAVIOR earns them, never on authorial whim:
 

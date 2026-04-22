@@ -54,37 +54,68 @@ const PLAY_SESSION_FORCE_MESSAGES = 160;   // ~80 exchanges — force cliffhange
 //   'opus'   — always Opus (richer, slower, ~5x cost)
 //   'auto'   — Sonnet by default, escalate to Opus for heavy scenes.
 //
-// Auto-mode escalation fires when ANY of:
-//   • current chapter == 4 (finale always Opus)
+// Auto-mode "HARD" triggers (always Opus regardless of consecutive-turn cap):
+//   • current chapter == 4 (finale always Opus — user-directed)
 //   • play-session past PLAY_SESSION_WRAP_MESSAGES (close a big beat well)
-//   • previous turn fired [CHAPTER_PROMISE] (next scene resolves its weight)
+//
+// Auto-mode "SOFT" triggers (Opus, but subject to consecutive-turn cap):
+//   • previous turn tagged [NEXT_SCENE_WEIGHT: heavy]
 //   • previous turn had HP delta ≤ -3 (stakes just spiked)
-//   • previous turn tagged [NEXT_SCENE_WEIGHT: heavy] (AI self-judgement)
-//   • previous turn tagged [NEXT_SCENE_WEIGHT: light] → Sonnet regardless
-//     (AI can downgrade if it senses a texture scene coming)
+//   • previous turn fired [CHAPTER_PROMISE]
+//
+// Auto-mode downgrade (always Sonnet):
+//   • previous turn tagged [NEXT_SCENE_WEIGHT: light] — AI explicitly released
+//   • consecutive soft-opus turns exceeded the cap (safety valve)
+//
+// Consecutive-Opus cap (v1.0.66):
+//   Soft-triggered Opus can only run AUTO_SOFT_OPUS_MAX turns in a row
+//   before auto-dropping back to Sonnet for one cooldown turn. Prevents
+//   the Opus-feedback-loop bug where Opus keeps tagging 'heavy' because
+//   its own prose reads as emotionally loaded and never releases.
+//   Hard triggers (chapter 4, session wrap) bypass the cap — those are
+//   user-directed long-Opus states.
 const VALID_MODES = new Set(['sonnet', 'opus', 'auto']);
 const VALID_CONCRETE_MODELS = new Set(['sonnet', 'opus']);
+const AUTO_SOFT_OPUS_MAX = 2;  // cap of consecutive soft-triggered Opus turns
 
 // Derive the concrete model to call given the current mode + session state.
-// Returns { mode, model, reason } — `reason` is null for plain sonnet/opus
-// modes, or a short string when auto escalates ("chapter-4", "heavy-weight",
-// etc.) so the UI can show "Auto → Opus (chapter-4)".
-function pickAutoModel(sessionCfg, runtime, playSessionLength) {
-  if (runtime?.chapter >= 4) return { model: 'opus', reason: 'chapter-4' };
+// Returns { mode, model, reason, hard } — `reason` is null for plain
+// sonnet/opus modes, or a short string when auto escalates ("chapter-4",
+// "heavy-weight", etc.) so the UI can show "Auto → Opus (chapter-4)".
+// `hard` indicates whether the trigger bypasses the consecutive-Opus cap.
+// Exported for unit tests.
+export function pickAutoModel(sessionCfg, runtime, playSessionLength) {
+  // HARD triggers — bypass the consecutive-Opus cap
+  if (runtime?.chapter >= 4) return { model: 'opus', reason: 'chapter-4', hard: true };
   if (playSessionLength >= PLAY_SESSION_WRAP_MESSAGES) {
-    return { model: 'opus', reason: 'session-wrap' };
+    return { model: 'opus', reason: 'session-wrap', hard: true };
   }
+
+  // Explicit AI downgrade
   const lastWeight = sessionCfg?.lastSceneWeight;
-  if (lastWeight === 'heavy') return { model: 'opus', reason: 'heavy-weight' };
-  if (lastWeight === 'light') return { model: 'sonnet', reason: 'light-weight' };
-  const lastHpDelta = sessionCfg?.lastHpDelta;
-  if (typeof lastHpDelta === 'number' && lastHpDelta <= -3) {
-    return { model: 'opus', reason: 'hp-drop' };
+  if (lastWeight === 'light') return { model: 'sonnet', reason: 'light-weight', hard: false };
+
+  // SOFT Opus triggers (subject to consecutive-turn cap)
+  let softTrigger = null;
+  if (lastWeight === 'heavy') softTrigger = 'heavy-weight';
+  else if (typeof sessionCfg?.lastHpDelta === 'number' && sessionCfg.lastHpDelta <= -3) {
+    softTrigger = 'hp-drop';
   }
-  if (sessionCfg?.lastChapterPromiseTurn === true) {
-    return { model: 'opus', reason: 'chapter-promise' };
+  else if (sessionCfg?.lastChapterPromiseTurn === true) softTrigger = 'chapter-promise';
+
+  if (softTrigger) {
+    // Cap check: if we've already run Opus on N consecutive soft-triggered
+    // turns, force Sonnet this turn for a cooldown. This breaks the
+    // feedback loop where Opus keeps tagging 'heavy' on its own output
+    // because the prose reads as loaded.
+    const consecutive = sessionCfg?.consecutiveSoftOpusTurns || 0;
+    if (consecutive >= AUTO_SOFT_OPUS_MAX) {
+      return { model: 'sonnet', reason: 'soft-opus-cap', hard: false };
+    }
+    return { model: 'opus', reason: softTrigger, hard: false };
   }
-  return { model: 'sonnet', reason: null };
+
+  return { model: 'sonnet', reason: null, hard: false };
 }
 
 function resolveModel(override, sessionCfg, runtime, playSessionLength) {
@@ -470,6 +501,16 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
     delete nextCfg.lastHpDelta;
   }
   nextCfg.lastChapterPromiseTurn = !!markerResults.chapterPromise;
+
+  // v1.0.66 — track consecutive soft-triggered Opus turns so the cap in
+  // pickAutoModel() can force a Sonnet cooldown turn. Resets on any Sonnet
+  // turn OR on a hard-triggered Opus turn (chapter-4 / session-wrap — those
+  // are user-directed long-Opus states, not candidates for cooldown).
+  if (resolved.mode === 'auto' && resolved.model === 'opus' && resolved.reason !== 'chapter-4' && resolved.reason !== 'session-wrap') {
+    nextCfg.consecutiveSoftOpusTurns = (nextCfg.consecutiveSoftOpusTurns || 0) + 1;
+  } else {
+    nextCfg.consecutiveSoftOpusTurns = 0;
+  }
 
   await dbRun(
     `UPDATE dm_sessions SET session_config = ? WHERE id = ?`,
