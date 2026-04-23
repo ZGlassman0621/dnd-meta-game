@@ -760,7 +760,7 @@ console.log('\n=== v1.0.76 per-chapter engagement mode block ===\n');
   const p4 = createPreludeSystemPrompt(makeCharacter({ prelude_chapter: 4, prelude_age: 18 }),
     makeSetup(), makeArcPlan(), makeRuntime({ chapter: 4, age: 18 }));
   assert(p4.includes('MODE: COMMIT'), 'Ch4 block says MODE: COMMIT');
-  assert(p4.includes('varied') && p4.includes('non-tragic'),
+  assert(p4.toLowerCase().includes('varied') && p4.toLowerCase().includes('non-tragic'),
     'Ch4 emphasizes varied non-tragic departure');
   // Check for 4+ of the departure options
   const departureOptions = ['ENLISTMENT', 'APPRENTICESHIP', 'PILGRIMAGE', 'FINDING A CURE',

@@ -125,7 +125,7 @@ function formatHomeWorld(hw) {
  *   Ch4 → COMMIT + varied non-tragic departure (enlistment, apprenticeship,
  *         pilgrimage, cure-finding, learning, exploration, test, etc.)
  */
-function engagementModeBlock(chapter, age) {
+function engagementModeBlock(chapter, age, committedTheme = null, themeDepartureMap = {}) {
   switch (chapter) {
     case 1:
       return `   **MODE: OBSERVE (with character-shaping choices).** You are ${age}, in early childhood.
@@ -176,7 +176,7 @@ function engagementModeBlock(chapter, age) {
    Target: 4-5 beats across ONE session. chapter_end_moment is the "first-rupture" — a bigger event the PC can't fix but has to understand (a death, a betrayal, an adult crisis that reshapes home).`;
 
     case 3:
-      return `   **MODE: DECIDE (with real combat).** You are ${age}, in adolescence.
+      return `   **MODE: DECIDE (with real combat + theme commitment at wrap-up).** You are ${age}, in adolescence.
    Real agency now. Real consequences. Real moral complexity.
 
    YES — decisions with real cost:
@@ -191,10 +191,28 @@ function engagementModeBlock(chapter, age) {
 
    Chapter opens with CHAPTER_PROMISE (rule 22) — Sonnet asks the player what this chapter is about and lets them confirm, redirect, or see-where-it-goes.
 
-   Target: 6-8 beats across TWO sessions. chapter_end_moment is an irreversible act — a choice made with real cost that sets up departure.`;
+   ⚑ THEME COMMITMENT CEREMONY (v1.0.77) — AT CH3 WRAP-UP.
+   AFTER the irreversible-act chapter_end_moment lands — the act is done, consequences are visible — emit [THEME_COMMITMENT_OFFERED]. The server will compute the authoritative offer (leading theme from trajectory + 3 alternatives + a wildcard from talents/cares) and the UI will render a "Choose Your Path" card.
+   In narration, LEAD INTO the marker with a reflective beat: the PC looks back at what they've done; the shape of who they're becoming is visible for the first time. An elder, a mentor, a sibling, or the PC's own quiet moment can frame the question — "Who have you been, these years? Who are you choosing to be?" Do NOT name specific themes in the narrative (the card does that); the ceremony is emotional, not administrative.
+   Emit [THEME_COMMITMENT_OFFERED] ONCE, at Ch3 wrap-up. Don't emit at Ch3 open. Don't emit earlier. After the marker, END THE RESPONSE — the player chooses next.
 
-    case 4:
-      return `   **MODE: COMMIT (with varied, non-tragic-default departure).** You are ${age}, at threshold.
+   Target: 6-8 beats across TWO sessions. chapter_end_moment is an irreversible act — a choice made with real cost. Theme-commitment ceremony follows the act. Then [CHAPTER_END] fires and Ch4 opens with the committed theme driving the departure.`;
+
+    case 4: {
+      // v1.0.77 — if the player committed a theme at Ch3 wrap-up, it
+      // drives the departure type. Tone preset modulates the register /
+      // feel. No theme committed means defer to the trajectory winner and
+      // the arc plan's departure_seed.
+      const committedLine = committedTheme
+        ? `   ⚑ COMMITTED THEME: ${committedTheme.toUpperCase()}
+   The player committed to this theme at Ch3 wrap-up. The departure MUST shape to this theme.
+   Theme-appropriate departure (the TYPE): ${themeDepartureMap[committedTheme] || '(no specific map — shape the departure to the theme naturally)'}
+   Tone preset modulates the FEEL, not the type. A ${committedTheme} departing in Brutal & Gritty reads very differently from a ${committedTheme} in Tender & Hopeful or Epic Fantasy — match the tone's register. But the TYPE of departure (how they leave, under what banner, for what reason) comes from the theme.
+`
+        : `   No theme was committed at Ch3 (player deferred or never reached the wrap-up ceremony). Fall back to the arc plan's departure_seed and the trajectory's theme winner. Still honor non-tragic variety.
+`;
+
+      return `   **MODE: COMMIT (theme-driven departure).** You are ${age}, at threshold.
    Culmination and departure. The question is no longer "what will I do" but "who am I leaving as."
 
    YES — culminating beats:
@@ -204,22 +222,28 @@ function engagementModeBlock(chapter, age) {
 
    Chapter opens with CHAPTER_PROMISE (rule 22).
 
-   DEPARTURE IS VARIED. The departure_seed in the arc plan offers non-tragic alternatives — honor them. Reasons to leave home (not exhaustive):
-     • ENLISTMENT — answering a call to military service
-     • APPRENTICESHIP POSTING — a craft, a smithy, a temple
-     • PILGRIMAGE — faith or self-discovery
-     • FINDING A CURE — for a loved one, for oneself
-     • LEAVING TO LEARN — academy, temple, master, library
-     • LEAVING TO EXPLORE — wanderlust, a map, a rumor, a call
-     • COMING-OF-AGE QUEST or TEST — cultural rite
-     • POLITICAL MATCH — betrothal journey
-     • CONSCRIPTION — the world calls, the PC answers
-     • EXILE — if the story earned it
+${committedLine}
+
+   DEPARTURE IS VARIED AND NON-TRAGIC-DEFAULT. Reasons to leave home (the theme picks the type; tone modulates feel):
+     • ENLISTMENT — soldier, mercenary_veteran, city_watch
+     • APPRENTICESHIP POSTING — guild_artisan, clan_crafter
+     • PILGRIMAGE / CALLING / VIGIL — acolyte, hermit
+     • FINDING A CURE — any theme where a loved one's illness is a thread
+     • LEAVING TO LEARN — sage, investigator, haunted_one
+     • LEAVING TO EXPLORE — outlander, sailor, far_traveler
+     • COMING-OF-AGE QUEST — folk_hero, knight_of_the_order
+     • POLITICAL MATCH — noble
+     • A CALL TO ADVENTURE — folk_hero
+     • A CONTRACT / WARRANT — urban_bounty_hunter, mercenary_veteran
+     • FLIGHT FROM CONSEQUENCES — criminal, charlatan, urchin
+     • A TROUPE / STAGE / PATRON — entertainer
+     • A SHIP'S BERTH — sailor
+     • QUEST / OATH-PILGRIMAGE — knight_of_the_order
+     • EXILE — if the story earned it (not default)
      • TRAGEDY — one option among many, NEVER default
 
-   Match the tone preset: Brutal & Gritty might land on conscription or flight; Tender & Hopeful on apprenticeship or pilgrimage; Epic Fantasy on a call-to-adventure or quest; Rustic & Spiritual on pilgrimage or vision-quest.
-
    Target: 3-4 beats across ONE session. chapter_end_moment is the DEPARTURE itself — emit [DEPARTURE: reason="..." tone="..."] then [PRELUDE_END].`;
+    }
 
     default:
       return `   **MODE: OBSERVE.** (Unexpected chapter number ${chapter}; defaulting to Ch1 mode.)`;
@@ -287,7 +311,7 @@ function cardinalRules(character, setup, runtime) {
 
 5a. ENGAGEMENT MODE FOR THIS CHAPTER (v1.0.76 — the 5-session condensed prelude). Each chapter has a PRIMARY MODE shaping what kind of scene you design and what kind of choices the PC can meaningfully own.
 
-${engagementModeBlock(runtime.chapter, runtime.age)}
+${engagementModeBlock(runtime.chapter, runtime.age, runtime.committedTheme, runtime.themeDepartureMap)}
 
 6. KEEP MOMENTUM — EVERY RESPONSE ENDS ON ENGAGEMENT.
    Every response must end in exactly ONE of these three ways:

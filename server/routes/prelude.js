@@ -35,6 +35,7 @@ import {
 } from '../services/preludeSessionService.js';
 import * as emergenceService from '../services/preludeEmergenceService.js';
 import * as canonService from '../services/preludeCanonService.js';
+import * as themeService from '../services/preludeThemeService.js';
 import { stripPreludeMarkers } from '../services/preludeMarkerDetection.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 
@@ -343,6 +344,58 @@ router.get('/:characterId/canon-facts', async (req, res) => {
     res.json(rows);
   } catch (err) {
     handleServerError(res, err, 'fetch canon facts');
+  }
+});
+
+/**
+ * v1.0.77 — Theme commitment endpoints.
+ *
+ * The flow:
+ *   1. At Ch3 wrap-up the AI emits [THEME_COMMITMENT_OFFERED] and the
+ *      session-send response carries `markers.themeCommitmentOffer` with
+ *      the authoritative offer (built server-side from the trajectory
+ *      tally + setup wildcards).
+ *   2. Client renders a Choose Your Path card and, when the player picks,
+ *      posts here with the theme id (or null = defer).
+ *   3. GET endpoint exists for debugging / future rehydration.
+ */
+router.post('/:characterId/commit-theme', async (req, res) => {
+  try {
+    const { theme, reason, source } = req.body || {};
+    const result = await themeService.commitTheme(req.params.characterId, {
+      theme: theme === undefined ? null : theme,  // allow explicit null = defer
+      reason: reason || null,
+      source: source || 'unknown'
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.message && err.message.startsWith('Unknown theme id:')) {
+      return validationError(res, err.message);
+    }
+    handleServerError(res, err, 'commit theme');
+  }
+});
+
+router.get('/:characterId/committed-theme', async (req, res) => {
+  try {
+    const row = await themeService.getCommittedTheme(req.params.characterId);
+    res.json(row || { theme: null, committed_at: null });
+  } catch (err) {
+    handleServerError(res, err, 'fetch committed theme');
+  }
+});
+
+/**
+ * Rebuild the current theme offer (leading + alternatives + wildcard).
+ * Used by the UI to rehydrate the Choose Your Path card if the player
+ * navigates away and returns before committing.
+ */
+router.get('/:characterId/theme-offer', async (req, res) => {
+  try {
+    const offer = await themeService.buildThemeOffer(req.params.characterId);
+    res.json(offer);
+  } catch (err) {
+    handleServerError(res, err, 'build theme offer');
   }
 });
 

@@ -152,6 +152,25 @@ export function detectChapterPromise(text) {
 }
 
 /**
+ * Detect [THEME_COMMITMENT_OFFERED: ...] marker (v1.0.77). Fires at the
+ * Chapter 3 wrap-up after the irreversible-act beat, offering the player
+ * a set of themes to commit to (shapes Ch4 departure + carries to primary
+ * campaign). Server-side: the actual OFFER is recomputed authoritatively
+ * by preludeThemeService.buildThemeOffer() rather than trusted from the
+ * marker, because the AI doesn't reliably have the full trajectory. The
+ * marker just SIGNALS the moment — the UI then fetches the authoritative
+ * offer.
+ *
+ * Returns { signaled: true } or null. No field parsing; presence is all
+ * that matters.
+ */
+export function detectThemeCommitmentOffered(text) {
+  if (!text) return null;
+  const re = /\[THEME_COMMITMENT_OFFERED(?::[^\]]*)?\]/i;
+  return re.test(text) ? { signaled: true } : null;
+}
+
+/**
  * Detect [NEXT_SCENE_WEIGHT: heavy|standard|light] — the AI's forward-looking
  * hint about what the next scene is likely to carry. Consumed by the "Auto"
  * model-picker on the following turn. Returns 'heavy' | 'standard' | 'light'
@@ -406,7 +425,9 @@ export function detectPreludeMarkers(text) {
     canonFacts: detectCanonFacts(text),
     canonFactRetires: detectCanonFactRetires(text),
     // v1.0.62 model auto-picker
-    nextSceneWeight: detectNextSceneWeight(text)
+    nextSceneWeight: detectNextSceneWeight(text),
+    // v1.0.77 theme commitment (signal only; server recomputes the offer)
+    themeCommitmentOffered: detectThemeCommitmentOffered(text)
   };
 }
 
@@ -450,6 +471,9 @@ export function stripPreludeMarkers(text) {
     .replace(/\[CANON_FACT_RETIRE:[^\]]*\]/gi, '')
     // v1.0.62 model auto-picker — AI's forward weight hint
     .replace(/\[NEXT_SCENE_WEIGHT:[^\]]*\]/gi, '')
+    // v1.0.77 theme commitment — stripped from display; the UI renders a
+    // Choose Your Path card instead after the narrative paragraph.
+    .replace(/\[THEME_COMMITMENT_OFFERED(?::[^\]]*)?\]/gi, '')
     // Combat + loot markers inherited from the main DM prompt convention
     .replace(/\[COMBAT_START(?::[^\]]*)?\]/gi, '')
     .replace(/\[COMBAT_END(?::[^\]]*)?\]/gi, '')

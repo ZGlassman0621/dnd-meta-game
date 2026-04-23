@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import PreludeLorePanel from './PreludeLorePanel'
+import PreludeThemeCommitCard from './PreludeThemeCommitCard'
 
 /**
  * PreludeSession — gameplay screen for a prelude-arc session.
@@ -172,6 +173,13 @@ export default function PreludeSession({ character, onBack }) {
       // already queued a correction [SYSTEM NOTE] for the next turn.
       if (data.markers?.rule2Violation) {
         newAssistant.rule2Violation = data.markers.rule2Violation
+      }
+      // v1.0.77 — theme commitment offer (Ch3 wrap-up). Server recomputes
+      // the authoritative offer from the trajectory + setup wildcards;
+      // attach it to the assistant beat so a Choose Your Path card renders
+      // inline below the narration.
+      if (data.markers?.themeCommitmentOffer) {
+        newAssistant.themeCommitmentOffer = data.markers.themeCommitmentOffer
       }
       // Chapter advancement + age advancement produce tiny notice banners
       // between messages — purely informational.
@@ -621,6 +629,14 @@ export default function PreludeSession({ character, onBack }) {
                     The DM wrote dialogue or reaction attributed to your character. Disregard that passage — your character has not spoken or reacted. The DM has been notified and will correct on the next turn.
                   </div>
                 </div>
+              )}
+              {/* v1.0.77 — theme commitment card (Ch3 wrap-up). */}
+              {m.themeCommitmentOffer && (
+                <PreludeThemeCommitCard
+                  characterId={character?.id}
+                  offer={m.themeCommitmentOffer}
+                  onCommit={() => { /* card self-dismisses; no state change needed */ }}
+                />
               )}
               {/* Phase 3 — emergence offer cards. Stat/skill hints get
                   accept / not now / never buttons. Class/theme/ancestry

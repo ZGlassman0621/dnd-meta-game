@@ -2,6 +2,97 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.77] - 2026-04-22 — Theme commitment at Ch3 wrap-up drives Ch4 departure
+
+User insight (from playtest discussion): tone shouldn't deterministically shape the departure — that makes Brutal & Gritty always conscription, Tender & Hopeful always apprenticeship. Instead, the player's character choices throughout the story should drive which theme emerges, and the theme should drive the departure. A Brutal & Gritty Soldier departs for war. A Tender & Hopeful Soldier departs for a quiet enlistment. A Brutal & Gritty Acolyte might go on a grim pilgrimage; a Tender & Hopeful Acolyte to a pastoral apprenticeship. Theme drives TYPE, tone drives FEEL.
+
+Landing moment: Chapter 3 wrap-up — after the irreversible-act beat, when the PC has DONE the things that define who they're becoming.
+
+### New data model
+
+- Migration 044: `characters.prelude_committed_theme TEXT` + `prelude_committed_theme_at TEXT` (nullable).
+
+### New service — `preludeThemeService.js`
+
+- `ALL_THEME_IDS` — canonical list of 21 themes (mirrors `server/data/themes.js`).
+- `THEME_DEPARTURE_MAP` — 21-entry theme-id → departure-type-clause map:
+  - `soldier` → *enlistment, military posting, war-call, conscripted levy, mercenary contract*
+  - `sage` → *academy, library, master's teaching, research expedition*
+  - `acolyte` → *pilgrimage, calling, vigil, temple assignment, a vision that demands travel*
+  - `guild_artisan` → *apprenticeship posting, a master in another town*
+  - `outlander` → *leaving to explore, wanderlust, a map, a rumor of the deep places*
+  - `folk_hero` → *the call to adventure, a village in need beyond yours, a standard raised*
+  - `criminal` → *flight from consequences, exile, a crew that needs a new member*
+  - `charlatan` → *flight from consequences, a mark that got too close*
+  - `hermit` → *the insight you found requires sharing, or the world requires your absence*
+  - `knight_of_the_order` → *a quest, an oath-pilgrimage, a vow to uphold*
+  - `noble` → *political match, duty-to-crown, dynastic journey*
+  - *…15 more themes mapped in the same shape.*
+- `buildThemeOffer(characterId)` — pulls all `theme` kind rows from `prelude_emergences`, applies chapter weighting (1.0x Ch1-2, 1.5x Ch3, 2x Ch4), returns `{ leading, alternatives[], wildcard, reason, trajectoryScores[] }`. Wildcard comes from a talent/care → theme lean map when the trajectory hasn't reached it — surfaces a fresh option the player might not have expected.
+- `commitTheme(characterId, { theme, reason, source })` — validates against `ALL_THEME_IDS`, writes to `characters`. Null = explicit defer.
+- `getCommittedTheme(characterId)` — read path.
+- `getDepartureTypeForTheme(themeId)` — helper for the Ch4 prompt.
+
+### New marker — `[THEME_COMMITMENT_OFFERED]`
+
+Fires at Ch3 wrap-up AFTER the irreversible-act chapter_end_moment. Server recomputes the authoritative offer from the trajectory + setup wildcards (doesn't trust fields in the marker — the AI doesn't have the full trajectory data), attaches it to the `markers.themeCommitmentOffer` response payload. Stripped from display text; the UI renders a "Choose Your Path" card inline below the narration.
+
+### New endpoints
+
+- `POST /api/prelude/:characterId/commit-theme` — writes the chosen theme (or null for defer).
+- `GET /api/prelude/:characterId/committed-theme` — reads the committed theme.
+- `GET /api/prelude/:characterId/theme-offer` — rebuilds the offer (for UI rehydration if player navigates away and back).
+
+### Prompt changes
+
+**Ch3 engagement mode** — new THEME COMMITMENT CEREMONY block. Tells the DM:
+- AFTER the irreversible-act beat lands, emit `[THEME_COMMITMENT_OFFERED]`
+- Lead into the marker with a reflective narrative beat (elder/mentor/sibling framing the "who are you becoming" question, or the PC's own quiet moment)
+- DO NOT name specific themes in the narrative — the card does that; the ceremony is emotional, not administrative
+- Fire the marker ONCE at wrap-up; never at chapter open
+
+**Ch4 engagement mode** — reads `runtime.committedTheme`. If set, the block includes a COMMITTED THEME header plus the theme-specific departure type clause from `THEME_DEPARTURE_MAP`. Teaches: *"Tone preset modulates the FEEL, not the type. A soldier departing in Brutal & Gritty reads very differently from a soldier in Tender & Hopeful or Epic Fantasy — match the tone's register. But the TYPE (how they leave, under what banner, for what reason) comes from the theme."* If no theme committed, falls back to arc plan's departure_seed + trajectory winner with non-tragic-variety emphasis preserved.
+
+Old per-tone-preset departure leans (v1.0.76: *Brutal & Gritty leans conscription/flight; Tender & Hopeful leans apprenticeship/pilgrimage; Epic Fantasy leans call-to-adventure*) are replaced. Tone no longer prescribes departure type.
+
+### New UI component — `PreludeThemeCommitCard.jsx`
+
+Rendered inline in the message feed (same pattern as emergence toasts) when `data.markers.themeCommitmentOffer` is present. Shows:
+
+- Leading theme button (with "leading" badge)
+- Up to 3 alternative theme buttons from the trajectory
+- 1 wildcard theme button (talent/care-derived, with "wildcard" badge, amber accent)
+- "Other" dropdown → full 21-theme list
+- Commit button (enabled only when something is picked)
+- "See where it goes" button (commits null → fallback to trajectory winner at prelude end)
+
+On commit, POSTs to the endpoint, then displays a brief confirmation line in the card's place. No page refresh needed.
+
+### PRELUDE_IMPLEMENTATION_PLAN.md
+
+Added design goal **#29** capturing the theme-commitment ceremony.
+
+### Tests
+
+- **New suite `tests/prelude-theme-commitment.test.js`** — 59 tests covering:
+  - `[THEME_COMMITMENT_OFFERED]` marker detection (bare, with fields, case-insensitive, roll-up, absence)
+  - Marker stripping
+  - `ALL_THEME_IDS` (21 themes, specific ids)
+  - `THEME_DEPARTURE_MAP` (entry per theme, non-empty, `getDepartureTypeForTheme` lookups)
+  - Ch3 engagement mode prompt content (ceremony heading, marker named, wrap-up timing specified, Choose-Your-Path mentioned, "don't name themes in narrative" instruction)
+  - Ch4 prompt — no-theme-committed fallback language, theme-committed header+specific departure, theme-specific substring asserts (soldier→enlistment, acolyte→pilgrimage, acolyte does NOT show soldier line), tone-modulates-feel guidance preserved
+  - Departure variety (tragedy-never-default language preserved, 5+ varied departure types listed)
+- All 7 prelude suites green: 42 + 15 + 130 + 161 + 33 + 76 + 59 = **516 prelude tests total**.
+- Client build clean.
+
+### What this fixes
+
+- A Cleric who wants an apprenticeship can get one — pick the Acolyte theme at Ch3 (or Guild Artisan), and tone modulates it from there.
+- A Soldier in Epic Fantasy gets a royal summons, not a conscripted peasant levy.
+- Tone doesn't deterministically write the departure — the player's played choices do.
+- The "Choose Your Path" moment is a real player-agency beat, not a pre-determined outcome.
+- Committed theme carries forward — it's the primary campaign's starting theme when Phase 5 (transition to primary campaign) ships.
+
 ## [1.0.0.76] - 2026-04-22 — Prelude restructure: 5 focused sessions + per-chapter engagement modes
 
 Playtest feedback: Ch1 was meandering and too ambitious. A 6-year-old's life doesn't have story-shaping choices (no factions, no quests, no world-changing decisions) — just character-shaping ones (hide or run, obey or defy, share or hoard, attentive or drift). The arc generator was designing Ch1 beats like adventure hooks, and the DM tried to make the PC own choices they couldn't honestly own. Meandering was the symptom; the actual problem was that no layer of the system knew what engagement-mode belonged to which chapter.

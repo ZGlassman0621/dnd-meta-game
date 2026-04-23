@@ -37,6 +37,7 @@ import * as rollingSummary from './rollingSummaryService.js';
 import * as emergenceService from './preludeEmergenceService.js';
 import * as canonService from './preludeCanonService.js';
 import { detectPlayerDialogueViolation, buildViolationCorrectionNote } from './preludeViolationDetection.js';
+import { THEME_DEPARTURE_MAP } from './preludeThemeService.js';
 
 // Play-session pacing thresholds. A "play-session" is one pause-to-pause
 // cycle; each resume starts a new play-session. Exchange count = messages
@@ -168,13 +169,19 @@ function buildRuntime(character, playSessionLength = 0) {
   const exchangeCount = Math.max(0, Math.floor(playSessionLength / 2));
   const sessionBudget = SESSION_TARGET_EXCHANGES;
   const progressFraction = Math.min(1, exchangeCount / sessionBudget);
+  // v1.0.77 — committed theme. Read from the character row (populated by
+  // commitTheme() endpoint after the Ch3 wrap-up ceremony). Null means no
+  // commitment yet; Ch4 engagement-mode block falls back to trajectory
+  // winner + arc plan departure_seed.
+  const committedTheme = character.prelude_committed_theme || null;
   return {
     chapter, age, maxHp, currentHp,
     exchangeCount,
     sessionBudget,
     wrapAt: SESSION_WRAP_EXCHANGES,
     forceAt: SESSION_FORCE_EXCHANGES,
-    progressFraction
+    progressFraction,
+    committedTheme
   };
 }
 
@@ -234,7 +241,7 @@ export async function startSession(characterId) {
   }
 
   const setup = character.prelude_setup_data;
-  const runtime = buildRuntime(character);
+  const runtime = { ...buildRuntime(character), themeDepartureMap: THEME_DEPARTURE_MAP };
 
   // v1.0.60 — canon facts block. Empty on first session, populated as
   // Sonnet emits [CANON_FACT] markers across turns.
@@ -405,7 +412,7 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   const baseline = sessionCfg.currentPlaySessionBaseline || 0;
   const playSessionLength = Math.max(0, currentMessages.length - baseline);
 
-  const runtime = buildRuntime(character, playSessionLength);
+  const runtime = { ...buildRuntime(character, playSessionLength), themeDepartureMap: THEME_DEPARTURE_MAP };
 
   // v1.0.60 — fetch the current canon-facts block. Injected into the
   // system prompt as ground truth so Sonnet checks against named details
@@ -881,6 +888,21 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
   // may store chapter promises for retrospective review.
   if (detected.chapterPromise) {
     results.chapterPromise = detected.chapterPromise;
+  }
+
+  // v1.0.77 — THEME_COMMITMENT_OFFERED. Fires at Ch3 wrap-up. Server
+  // recomputes the authoritative offer (leading + alternatives + wildcard)
+  // from the trajectory + setup rather than trusting the marker's fields.
+  // Marker just signals the moment; UI fetches the full offer via the
+  // dedicated endpoint OR reads it from the returned markers payload here.
+  if (detected.themeCommitmentOffered) {
+    try {
+      const { buildThemeOffer } = await import('./preludeThemeService.js');
+      const offer = await buildThemeOffer(characterId);
+      results.themeCommitmentOffer = offer;
+    } catch (err) {
+      console.error('[prelude] theme commitment offer build failed:', err.message);
+    }
   }
 
   // v1.0.60 — canon facts. Retire first, then record new ones. Order
