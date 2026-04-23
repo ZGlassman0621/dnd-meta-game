@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import PreludeLorePanel from './PreludeLorePanel'
 
 /**
  * PreludeSession — gameplay screen for a prelude-arc session.
@@ -33,15 +34,15 @@ export default function PreludeSession({ character, onBack }) {
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [showSetup, setShowSetup] = useState(false)
+  const [showLore, setShowLore] = useState(false)
   const [values, setValues] = useState([])
   const [canonFacts, setCanonFacts] = useState([])
-  // model = the MODE the player has selected ('auto' | 'sonnet' | 'opus').
-  // resolvedModel = what the server actually called on the last turn
-  // ('sonnet' | 'opus'). In auto mode these can differ — e.g. mode='auto'
-  // and resolvedModel='opus' when the last turn escalated. resolveReason
-  // carries a short string ('chapter-4', 'heavy-weight', 'hp-drop', etc.)
-  // for the "Auto → Opus (reason)" indicator.
-  const [model, setModel] = useState('sonnet')
+  // v1.0.75 — simplified to a two-state toggle: 'auto' (default — Sonnet,
+  // escalating to Opus on heavy beats) or 'sonnet' (always Sonnet).
+  // The server still accepts 'opus' for legacy session state, but the UI
+  // no longer surfaces it. resolvedModel/resolveReason still carry the
+  // server's last-turn decision so the UI can show why Auto escalated.
+  const [model, setModel] = useState('auto')
   const [resolvedModel, setResolvedModel] = useState('sonnet')
   const [resolveReason, setResolveReason] = useState(null)
   const scrollerRef = useRef(null)
@@ -337,41 +338,41 @@ export default function PreludeSession({ character, onBack }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {/* Model toggle — three modes:
-              • Auto   — Sonnet by default, escalate to Opus on heavy scenes
-              • Sonnet — always Sonnet (fast, cheap)
-              • Opus   — always Opus (richer prose, ~5x cost, slower)
-              When Auto resolves to Opus, a subtle badge shows which trigger fired. */}
+          {/* v1.0.75 — Simplified to a two-state toggle:
+              • Auto (on, default)  — Sonnet for texture, Opus for heavy beats
+              • Auto (off)          — Sonnet always (faster, cheaper)
+              Manual Opus-always is no longer a UI option. When Auto resolves
+              to Opus, a subtle badge under the toggle shows the trigger. */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.15rem' }}>
-            <div style={{
-              display: 'inline-flex',
-              border: '1px solid rgba(139,92,246,0.4)',
-              borderRadius: '4px',
-              overflow: 'hidden',
-              fontSize: '0.78rem',
-              fontFamily: 'monospace'
-            }} title="AI model selection. Auto picks Sonnet by default, escalates to Opus for heavy scenes (chapter 4, cliffhanger approach, big HP drops, AI-tagged heavy scenes). Applies to your next message.">
-              {['auto', 'sonnet', 'opus'].map((m, i) => (
-                <button
-                  key={m}
-                  onClick={() => setModel(m)}
-                  disabled={sending}
-                  style={{
-                    padding: '0.4rem 0.65rem',
-                    background: model === m ? 'rgba(139,92,246,0.3)' : 'transparent',
-                    border: 'none',
-                    borderLeft: i === 0 ? 'none' : '1px solid rgba(139,92,246,0.4)',
-                    color: model === m ? '#e9d5ff' : '#9ca3af',
-                    cursor: sending ? 'not-allowed' : 'pointer',
-                    fontWeight: model === m ? 600 : 400,
-                    textTransform: 'capitalize'
-                  }}
-                >{m}</button>
-              ))}
-            </div>
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.35rem 0.7rem',
+                border: '1px solid rgba(139,92,246,0.4)',
+                borderRadius: '14px',
+                background: model === 'auto' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.04)',
+                cursor: sending ? 'not-allowed' : 'pointer',
+                fontSize: '0.78rem',
+                fontFamily: 'monospace',
+                color: model === 'auto' ? '#e9d5ff' : '#9ca3af',
+                userSelect: 'none'
+              }}
+              title="Auto mode: Sonnet by default for texture, escalating to Opus for heavy beats (chapter 4, cliffhanger approach, big HP drops, AI-tagged heavy scenes). Toggle off to always use Sonnet."
+            >
+              <input
+                type="checkbox"
+                checked={model === 'auto'}
+                disabled={sending}
+                onChange={e => setModel(e.target.checked ? 'auto' : 'sonnet')}
+                style={{ cursor: sending ? 'not-allowed' : 'pointer' }}
+              />
+              Auto
+            </label>
             {/* Auto-resolution indicator. Shows on last turn's result when
                 mode is 'auto' — e.g. "→ opus · heavy-weight" — so the player
-                can see why a beat went to Opus. Hidden when mode is manual. */}
+                can see why a beat went to Opus. Hidden when Auto is off. */}
             {model === 'auto' && resolvedModel && (
               <div style={{
                 fontSize: '0.68rem',
@@ -384,6 +385,15 @@ export default function PreludeSession({ character, onBack }) {
               </div>
             )}
           </div>
+          <button onClick={() => setShowLore(s => !s)} style={{
+            padding: '0.4rem 0.8rem',
+            background: showLore ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.1)',
+            border: '1px solid rgba(251,191,36,0.4)',
+            color: '#fbbf24',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.82rem'
+          }} title="View the canon ledger — named world events, places, people, relationships, traits, and items the DM has established.">{showLore ? 'Hide lore' : 'Lore'}</button>
           <button onClick={() => setShowSetup(s => !s)} style={{
             padding: '0.4rem 0.8rem',
             background: showSetup ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.1)',
@@ -413,6 +423,15 @@ export default function PreludeSession({ character, onBack }) {
           }}>Characters</button>
         </div>
       </div>
+
+      {/* v1.0.75 — Lore panel slide-in. Dedicated canon ledger view so the
+          player can reference world events, places, people, and historical
+          context the DM has established. */}
+      <PreludeLorePanel
+        characterId={character?.id}
+        visible={showLore}
+        onClose={() => setShowLore(false)}
+      />
 
       {/* Setup review — lets the player confirm what they picked. */}
       {showSetup && (() => {

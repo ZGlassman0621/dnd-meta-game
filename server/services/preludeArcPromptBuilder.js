@@ -353,11 +353,12 @@ function cardinalRules(character, setup, runtime) {
    - NO GUNS, firearms, cannons, or gunpowder (unless the player's setup established a gunpowder-aware setting, which none currently do).
    - NO MODERN TECH: no photos, telephones, cars, radios, computers, clocks (clocks exist as bells / sundials / candlemarks), "minutes" as precise units, kilometers, or "miles per hour."
    - NO INDUSTRIAL CONCEPTS: no factories, assembly lines, "shipping containers," steam engines, electricity, plastic.
+   - **NO MODERN LEGAL/BUREAUCRATIC VOCABULARY.** Medieval law is lord's-justice, church-justice, custom, oath, feud, writ, summons, oath-bond. It is NOT modern-code-of-law. Banned phrasings — even in dialogue played for humor: "statute," "statute of limitations," "jurisdiction" (modern civic sense), "plea," "prosecute," "indictment," "plaintiff," "code of law," "statutory," "legal precedent," "court date," "civil rights," "police," "detective," "officer" (as job title — use "guard," "watchman," "sergeant-of-the-watch"). When medieval-law humor is tempting, reach for period-correct terms: "the question hasn't been answered in three years — I'd say the matter has gone stale"; "ask the steward; he'll know what's owed"; "the old debt is dead now, I reckon." Wit and humor are welcome; modern framing is not.
    - Currency is gold/silver/copper ("gp", "sp", "cp") — never "dollars," "coins" as a generic unit is fine.
    - Time uses tenday, season, candlemark, watch, bell — not "week," "hour" (use "turn of the glass" or bell count).
    - Distance uses miles, leagues, bowshots, strides — not metric.
    - Animals do not speak. Magic follows 5e spell logic. Gods, planes, races, cosmology are canonical.
-   Whimsy lives in perception and atmosphere, not in rule-breaking or anachronism.
+   Whimsy lives in perception and atmosphere, not in rule-breaking or anachronism. Humor is welcome when it's period-correct humor (wry wit from a weary steward, a child mimicking an adult's pomposity, a grandmother's gallows joke) — NOT modern-law / modern-bureaucracy humor.
 
 15a. CANON FACTS — CHECK THE LEDGER BEFORE EVERY TURN, EMIT GENEROUSLY FOR MEMORY.
    A CANON FACTS block is injected into your prompt every turn (right above the MARKERS section, titled "CANON FACTS" or noted as "none yet"). This is GROUND TRUTH. Before generating, SCAN IT. If a fact there contradicts what you're about to write, defer to the canon — NOT the other way around. Drift on named details (ages, family relationships, physical traits, past events) is exactly what this prevents.
@@ -400,8 +401,10 @@ function cardinalRules(character, setup, runtime) {
      • Threats — the envoy arriving, the bandits on the road, the priest's influence
      • Discoveries — something noticed in passing that may matter later
      • Regional history — local legends, past wars, fallen dynasties
+     • **NAMED WORLD EVENTS the PC encounters in dialogue or narration** (v1.0.75 emphasis) — if an adult mentions "The Reaving," "the Year of Two Winters," "the Battle of Three Rivers," or any event the PC would be expected to know about, EMIT A CANON FACT for that event. The fact should capture what's commonly understood about the event in the PC's world (what happened, when, who was involved, consequences). The player needs these on the record so they have the context to make sense of later references. Do NOT introduce named world events without logging them.
      Example: [CANON_FACT: subject="the Envoy" category=event fact="Crown envoy expected in Karrow's Rest within 3 days of Eleint 12"]
      Example: [CANON_FACT: subject="Coldrun valley" category=location fact="two days north, where Davyr was last seen in military service"]
+     Example: [CANON_FACT: subject="The Reaving" category=event fact="the raid-year, ~40 years ago, when northern bands crossed the Spine and sacked three frontier holds; survivors fled south; still spoken of at hearths"]
 
    **(e) Named objects** — category=item
      • Heirlooms, gifts, mysterious tokens, named weapons, cursed items

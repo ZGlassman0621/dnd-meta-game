@@ -2,6 +2,60 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.75] - 2026-04-22 — Rule 2 state-attribution detector + Auto default + Lore panel + anachronism tightening
+
+Playtest #1 with the new tone preset system surfaced four distinct issues. Bundled into one release.
+
+### 1. Rule 2 detector missed non-quoted state attribution
+
+Transcript from the playtest: *"You like the stag. The stag is looking back over its shoulder..."* The old detector caught quoted dialogue (`"...", you say`) but not bare state assertions like *"you like,"* *"you remember,"* *"you decide."* The AI was declaring the PC's preferences and memories without the player having a say — exactly the violation Rule 2 forbids.
+
+**Pattern C added to `preludeViolationDetection.js`:** matches `\byou\s+(adverb?)\s+STATE_VERB\s+CONTENT` where STATE_VERB covers preferences (*like, love, hate, prefer, want, enjoy*) and cognition (*think, know, remember, decide, realize, believe, recognize, recall, wonder*). Includes the same inside-quote guard as Patterns A/B (so NPC dialogue containing *"you know what this means"* doesn't false-positive), plus a new interrogative guard — if the enclosing sentence ends in `?`, it's the AI asking the player something (*"Do you remember what Halda said?"*), not attributing state. Skip.
+
+**Kept allowed:** sensory (*you see, you hear, you feel the cold stone*) and movement (*you walk, you turn*) — per Rule 2's explicit carve-out for involuntary physical sensation and PC-body narration in service of player action.
+
+Tests grew 52 → 76 (+24), covering the user's stag transcript, preference/cognition verb coverage, legitimate perception+movement non-matches, question-mark guard, and NPC-dialogue inside-quote rejection.
+
+### 2. Auto mode now default + picker simplified to two-state toggle
+
+Auto-mode used to require a per-session opt-in via the 3-button picker (auto / sonnet / opus). User reported needing to manually re-enable it each session. Now:
+
+- New sessions default to `model: 'auto'`.
+- `getResumePayload` now returns `'auto'` as fallback for unrecognized/absent stored mode (was `'sonnet'`).
+- UI replaced the 3-button picker with a single checkbox-style toggle: **Auto (on)** or **Auto (off) = Sonnet always.**
+- Manual Opus-always is no longer a UI option (rarely the right choice; the auto escalator handles heavy beats). Server still accepts `'opus'` in the API for legacy session state.
+
+### 3. Anachronism tightening — modern legal/bureaucratic vocab explicitly banned
+
+Playtest produced a funny exchange — an NPC saying *"I thought the statute had run"* — which the user wanted to preserve the humor of (dry wit is welcome) but flagged as anachronistic (statutes of limitations are a modern legal concept).
+
+**Rule 15 updated** with a NO MODERN LEGAL/BUREAUCRATIC VOCABULARY section listing banned phrasings: *statute, statute of limitations, jurisdiction (modern civic sense), plea, prosecute, indictment, plaintiff, code of law, statutory, legal precedent, court date, civil rights, police, detective, officer (as job title — use guard, watchman, sergeant-of-the-watch).* Explicit instruction: **wit and humor are welcome; modern framing is not.** Worked examples of period-correct wit provided (*"the question hasn't been answered in three years — I'd say the matter has gone stale"* instead of *"the statute has run"*).
+
+### 4. New dedicated Lore panel
+
+User report: *"The Reaving"* was referenced by an NPC without the player having any context. The canon ledger existed in the Setup panel (v1.0.60) but was buried and compact. Now:
+
+- **New `PreludeLorePanel.jsx`** — dedicated slide-in, accessed via a new **Lore** button in the session top bar (amber accent, distinct from Setup's purple).
+- Groups canon facts by category with **Events & Lore** promoted to the top (the category that holds world-history facts).
+- Search filter across subject + fact text.
+- Larger typography than the Setup panel's compact ledger.
+- Each category has a hint line explaining what belongs there (e.g., *Events & Lore — "World happenings, named historical events, regional history, threats"*).
+
+**Rule 15a strengthened** to require canon-fact emission for **named world events** the PC encounters in dialogue or narration. If an adult mentions "The Reaving" / "the Year of Two Winters" / "the Battle of Three Rivers" / any event the PC would be expected to know about, the DM MUST emit `[CANON_FACT category=event]` capturing what's commonly understood (what happened, when, who was involved, consequences). Included a worked example for The Reaving.
+
+### Future work discussed (NOT in this release)
+
+- **Stratified lore by PC background** — descriptions of each event tailored to noble-child vs. common-child vs. noble-adult vs. common-adult. User-confirmed high-value but deferred. Would likely land as v2 after we've built up a body of canonical world events.
+- **Prelude structure rebalance** — user's critique that Ch1 is too long/meandering (6-year-olds see and learn; they don't DO as much as the current arc suggests). Separate design conversation deferred to a follow-up release.
+
+### Tests + build
+
+- New Pattern C tests in `prelude-violation-detection.test.js`: 52 → 76 (+24 tests).
+- Setup tests updated for v1.0.73+ preset system: 38 → 42 (+4 tests validating exact-1-preset rule).
+- All 6 prelude suites green: 42 + 15 + 130 + 130 + 33 + 76 = **426 prelude tests total**.
+- Client build clean.
+- No schema changes.
+
 ## [1.0.0.74] - 2026-04-22 — Hotfix: server-side tone validation still required 2-4 tags
 
 v1.0.73 replaced 16 combinable tags with a single preset everywhere except `server/services/preludeService.js`, which still rejected submissions with fewer than 2 tone_tags:

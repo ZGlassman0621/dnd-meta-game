@@ -233,6 +233,67 @@ console.log('\n=== buildViolationCorrectionNote ===\n');
   assert(!noteMany.includes('match-4'), 'fourth+ match truncated');
 }
 
+console.log('\n=== v1.0.75 Pattern C — state attribution without quotes ===\n');
+{
+  // Exact user-reported transcript from playtest #1 with tone presets
+  const stagExample = `You like the stag. The stag is looking back over its shoulder at something the weaver did not put in the picture.`;
+  const r = detectPlayerDialogueViolation(stagExample);
+  assert(r.violated, 'flags "You like the stag" — preference attribution');
+  assert(r.matches.some(m => m.pattern === 'state-attribution'), 'match is tagged state-attribution');
+
+  // Preference verbs
+  assert(detectPlayerDialogueViolation('You love your brother more than anyone.').violated, 'you love X');
+  assert(detectPlayerDialogueViolation('You hate when Vost speaks that way.').violated, 'you hate X');
+  assert(detectPlayerDialogueViolation('You prefer the quiet of the gallery.').violated, 'you prefer X');
+  assert(detectPlayerDialogueViolation('You want him to stop.').violated, 'you want X');
+
+  // Cognition verbs
+  assert(detectPlayerDialogueViolation('You remember the day she left.').violated, 'you remember X');
+  assert(detectPlayerDialogueViolation('You know he is lying.').violated, 'you know X');
+  assert(detectPlayerDialogueViolation('You decide to stay.').violated, 'you decide X');
+  assert(detectPlayerDialogueViolation('You realize what Halgrim was saying.').violated, 'you realize X');
+  assert(detectPlayerDialogueViolation('You believe her now.').violated, 'you believe X');
+  assert(detectPlayerDialogueViolation('You recognize the pattern on the cloak.').violated, 'you recognize X');
+
+  // Adverb between "you" and verb
+  assert(detectPlayerDialogueViolation('You quietly decide to follow him.').violated, 'handles adverb + verb');
+}
+
+console.log('\n=== v1.0.75 Pattern C — legitimate prose NOT flagged ===\n');
+{
+  // Sensory/physical (allowed per Rule 2 exception)
+  assert(!detectPlayerDialogueViolation('You see the tapestries on the north wall.').violated,
+    'you see X not flagged (perception)');
+  assert(!detectPlayerDialogueViolation('You feel the cold stone under your feet.').violated,
+    'you feel X not flagged (physical sensation)');
+  assert(!detectPlayerDialogueViolation('You hear footsteps on the stair.').violated,
+    'you hear X not flagged');
+
+  // Movement / physical body (describing PC body in service of player action)
+  assert(!detectPlayerDialogueViolation('You walk to the window.').violated,
+    'you walk X not flagged');
+  assert(!detectPlayerDialogueViolation('You turn toward the door.').violated,
+    'you turn X not flagged');
+
+  // Question prompt (AI asking the player)
+  assert(!detectPlayerDialogueViolation('What do you think?').violated,
+    'question "what do you think?" not flagged');
+  assert(!detectPlayerDialogueViolation("Do you remember what Halda said?").violated,
+    'question "do you remember?" not flagged');
+
+  // Verb followed by period/break (directive to player, not assertion)
+  assert(!detectPlayerDialogueViolation('You decide.').violated,
+    'bare "you decide." not flagged (directive)');
+  assert(!detectPlayerDialogueViolation('You choose.').violated,
+    'bare "you choose." not flagged (directive)');
+
+  // NPC dialogue containing "you [verb]" — inside-quote guard
+  assert(!detectPlayerDialogueViolation('"You know what this means," she says.').violated,
+    'NPC dialogue with "you know" inside quote not flagged');
+  assert(!detectPlayerDialogueViolation('"You remember her," Halgrim says quietly.').violated,
+    'NPC dialogue with "you remember" inside quote not flagged');
+}
+
 console.log('\n==================================================');
 console.log(`Prelude Violation Detection Tests: ${passed} passed, ${failed} failed`);
 console.log('==================================================\n');

@@ -119,11 +119,15 @@ export function pickAutoModel(sessionCfg, runtime, playSessionLength) {
   return { model: 'sonnet', reason: null, hard: false };
 }
 
+// v1.0.75 — Default mode for new sessions is now 'auto' (previously 'sonnet').
+// The client UI has been simplified to a two-state toggle: Auto (on) or
+// Sonnet-always (off). Manual 'opus' is still accepted here for legacy
+// session state, but the UI no longer emits it.
 function resolveModel(override, sessionCfg, runtime, playSessionLength) {
   const stored = sessionCfg?.model_preference;
   const mode = (override && VALID_MODES.has(override))
     ? override
-    : (stored && VALID_MODES.has(stored)) ? stored : 'sonnet';
+    : (stored && VALID_MODES.has(stored)) ? stored : 'auto';
   if (mode === 'sonnet') return { mode, model: 'sonnet', reason: null };
   if (mode === 'opus') return { mode, model: 'opus', reason: null };
   const { model, reason } = pickAutoModel(sessionCfg, runtime, playSessionLength);
@@ -302,10 +306,12 @@ export async function startSession(characterId) {
     opening: result.response,
     messages: result.messages,
     runtime: { ...buildRuntime(refreshedCharacter), sessionNumber },
-    // mode = 'sonnet' by default for a fresh session. The opening narrative
-    // was already generated with Opus (hardcoded above like the main DM's
-    // first session); `model` here is the mode going forward.
-    model: 'sonnet',
+    // v1.0.75 — mode = 'auto' by default for a fresh session (was 'sonnet').
+    // The opening narrative was already generated with Opus (hardcoded above
+    // like the main DM's first session); `model` here is the mode going
+    // forward. Auto escalates to Opus on heavy beats and stays on Sonnet
+    // for everything else.
+    model: 'auto',
     resolvedModel: 'sonnet',
     resolveReason: null
   };
@@ -367,7 +373,7 @@ export async function getResumePayload(sessionId) {
     runtime: { ...buildRuntime(character), sessionNumber },
     lastCliffhanger: cfg.lastCliffhanger || null,
     lastSessionRecap: cfg.lastSessionRecap || null,
-    model: VALID_MODES.has(cfg.model_preference) ? cfg.model_preference : 'sonnet'
+    model: VALID_MODES.has(cfg.model_preference) ? cfg.model_preference : 'auto'
   };
 }
 

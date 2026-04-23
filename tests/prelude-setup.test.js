@@ -47,7 +47,7 @@ function validPayload() {
     siblings: [{ name: 'Mara', relative_age: 'older' }],
     talents: ['Reading', 'Making friends', 'Noticing things'],
     cares: ['Family', 'Truth', 'Honor'],
-    tone_tags: ['political', 'tender_intimate', 'tragic']
+    tone_tags: ['brutal_gritty']  // v1.0.73+ — single preset
   };
 }
 
@@ -157,17 +157,25 @@ console.log('\n=== Test 7: Cares (3 required) ===\n');
   assert(validateSetupPayload(p).ok === true, 'Exactly 3 cares accepted');
 }
 
-console.log('\n=== Test 8: Tone tags (2-4 required) ===\n');
+console.log('\n=== Test 8: Tone preset (v1.0.73+ — exactly 1 required from 4 presets) ===\n');
 {
   const p = validPayload();
-  p.tone_tags = ['gritty'];
-  assert(validateSetupPayload(p).ok === false, '1 tone tag rejected');
-  p.tone_tags = ['gritty', 'hopeful', 'epic', 'tragic', 'mystical'];
-  assert(validateSetupPayload(p).ok === false, '5 tone tags rejected');
-  p.tone_tags = ['gritty', 'hopeful'];
-  assert(validateSetupPayload(p).ok === true, '2 tone tags accepted');
-  p.tone_tags = ['gritty', 'hopeful', 'epic', 'tragic'];
-  assert(validateSetupPayload(p).ok === true, '4 tone tags accepted');
+  p.tone_tags = [];
+  assert(validateSetupPayload(p).ok === false, 'empty tone_tags rejected');
+  p.tone_tags = ['brutal_gritty', 'epic_fantasy'];
+  assert(validateSetupPayload(p).ok === false, 'two tone presets rejected');
+  p.tone_tags = ['not_a_real_preset'];
+  assert(validateSetupPayload(p).ok === false, 'unknown preset value rejected');
+  p.tone_tags = ['gritty'];  // legacy 16-tag value
+  assert(validateSetupPayload(p).ok === false, 'legacy 16-tag value rejected');
+  p.tone_tags = ['brutal_gritty'];
+  assert(validateSetupPayload(p).ok === true, 'brutal_gritty preset accepted');
+  p.tone_tags = ['epic_fantasy'];
+  assert(validateSetupPayload(p).ok === true, 'epic_fantasy preset accepted');
+  p.tone_tags = ['rustic_spiritual'];
+  assert(validateSetupPayload(p).ok === true, 'rustic_spiritual preset accepted');
+  p.tone_tags = ['tender_hopeful'];
+  assert(validateSetupPayload(p).ok === true, 'tender_hopeful preset accepted');
 }
 
 console.log('\n=== Test 9: Empty/null payload ===\n');

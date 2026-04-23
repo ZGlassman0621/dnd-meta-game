@@ -63,6 +63,53 @@ const THOUGHT_VERBS = [
   'decided', 'decide', 'decides', 'deciding'
 ];
 
+// v1.0.75 — PC state/preference attribution verbs. These are Rule 2
+// violations even WITHOUT quoted text: "You like the stag." "You
+// remember the day." "You decide to stay." "You know he's lying."
+// The AI is attributing preferences / decisions / knowledge /
+// memory to the PC — the player's domain, not the AI's.
+//
+// Carefully curated to avoid false positives on legitimate narration:
+//   - Sensory ("you see," "you hear," "you feel the cold stone") is OK.
+//     Physical sensation is environment per Rule 2 exception.
+//   - Movement ("you walk," "you turn") is OK — describing the PC's
+//     body in service of the player's stated action, usually. (Edge
+//     cases like "you turn and leave" are arguably violations but
+//     produce too many false positives to catch cleanly.)
+//   - PREFERENCES (like/love/hate/prefer/dislike/enjoy/want) are
+//     ALWAYS violations.
+//   - COGNITION (think/know/remember/decide/realize/understand/
+//     wonder/doubt/believe/suspect/recognize/recall) is almost always
+//     violation — the AI is declaring the PC's internal state.
+const STATE_ATTRIBUTION_VERBS = [
+  // Preferences / opinions / emotions
+  'like', 'likes', 'liked',
+  'love', 'loves', 'loved',
+  'hate', 'hates', 'hated',
+  'prefer', 'prefers', 'preferred',
+  'dislike', 'dislikes', 'disliked',
+  'enjoy', 'enjoys', 'enjoyed',
+  'adore', 'adores', 'adored',
+  'detest', 'detests', 'detested',
+  'want', 'wants', 'wanted',
+  'fancy', 'fancied',
+
+  // Cognition / knowledge / memory / decision (without requiring a quote)
+  'think', 'thinks', 'thought',
+  'know', 'knows', 'knew',
+  'remember', 'remembers', 'remembered',
+  'decide', 'decides', 'decided',
+  'choose', 'chooses', 'chose',
+  'realize', 'realizes', 'realized',
+  'understand', 'understands', 'understood',
+  'wonder', 'wonders', 'wondered',
+  'doubt', 'doubts', 'doubted',
+  'believe', 'believes', 'believed',
+  'suspect', 'suspects', 'suspected',
+  'recognize', 'recognizes', 'recognized',
+  'recall', 'recalls', 'recalled'
+];
+
 const ALL_VERBS = [...SPEECH_VERBS, ...THOUGHT_VERBS];
 const VERB_GROUP = ALL_VERBS.join('|');
 
@@ -137,6 +184,34 @@ const PATTERN_B = new RegExp(
 );
 
 /**
+ * Pattern C (v1.0.75) — state attribution WITHOUT quoted text.
+ *
+ *   "You like the stag."              ← preference attribution
+ *   "You remember the day she left."  ← memory attribution
+ *   "You decide to stay."             ← choice attribution
+ *   "You know he's lying."            ← knowledge attribution
+ *   "You think Moss is hiding something." ← internal monologue
+ *
+ * The pattern matches "you [optional adverb] STATE_VERB" when the verb
+ * is followed by something object-like (not a question mark, not a
+ * simple sentence-ending period, not a hand-off to the player). The
+ * test: is there a content word after the verb? If yes, the AI is
+ * asserting something about the PC's internal state.
+ *
+ * False-positive guards:
+ *   - Quoted-interior position is rejected (isInsideQuote).
+ *   - A question mark within the next ~50 chars suggests a prompt to
+ *     the player ("What do you think?") — don't flag.
+ *   - The verb followed immediately by a period/newline ("You decide.")
+ *     is a directive/prompt — don't flag.
+ */
+const STATE_VERB_GROUP = STATE_ATTRIBUTION_VERBS.join('|');
+const PATTERN_C = new RegExp(
+  `\\byou\\s+(?:\\w+\\s+){0,2}(?:${STATE_VERB_GROUP})\\b\\s+(?![\\?\\n]|$)(?:(?!\\.\\s|\\?)[^\\n]){2,120}`,
+  'gi'
+);
+
+/**
  * Run detection on a rendered response. Returns an object describing
  * any violations found — empty array if clean.
  *
@@ -177,6 +252,28 @@ export function detectPlayerDialogueViolation(response) {
     if (isInsideQuote(normalized, m.index)) continue;
     matches.push({
       pattern: 'verb-then-quote',
+      snippet: m[0].slice(0, 240) + (m[0].length > 240 ? '…' : '')
+    });
+  }
+
+  // v1.0.75 — Pattern C: state attribution without quotes.
+  PATTERN_C.lastIndex = 0;
+  while ((m = PATTERN_C.exec(normalized)) !== null) {
+    // Same inside-quote guard as patterns A/B — NPC dialogue that uses
+    // "you [state verb]" to address the PC in-character is not a
+    // violation ("she says: 'You know what this means.'").
+    if (isInsideQuote(normalized, m.index)) continue;
+
+    // Interrogative guard — if the enclosing sentence ends in a '?', this
+    // is the AI asking the player something ("Do you remember what Halda
+    // said?"), not attributing state. Look forward from the match to the
+    // next sentence-terminator; skip if it's a question mark.
+    const afterMatch = normalized.slice(m.index);
+    const terminatorMatch = afterMatch.match(/[.!?]/);
+    if (terminatorMatch && terminatorMatch[0] === '?') continue;
+
+    matches.push({
+      pattern: 'state-attribution',
       snippet: m[0].slice(0, 240) + (m[0].length > 240 ? '…' : '')
     });
   }
