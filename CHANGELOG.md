@@ -2,6 +2,81 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.76] - 2026-04-22 — Prelude restructure: 5 focused sessions + per-chapter engagement modes
+
+Playtest feedback: Ch1 was meandering and too ambitious. A 6-year-old's life doesn't have story-shaping choices (no factions, no quests, no world-changing decisions) — just character-shaping ones (hide or run, obey or defy, share or hoard, attentive or drift). The arc generator was designing Ch1 beats like adventure hooks, and the DM tried to make the PC own choices they couldn't honestly own. Meandering was the symptom; the actual problem was that no layer of the system knew what engagement-mode belonged to which chapter.
+
+This release condenses the prelude to 5 focused sessions and gives each chapter a dedicated engagement mode.
+
+### New structure — 5 focused sessions
+
+| Chapter | Mode | Sessions | Combat |
+|---|---|---|---|
+| **Ch1 — Foundations** | OBSERVE (+ character-shaping choices) | 1 | none — PC too young |
+| **Ch2 — Widening** | LEARN (+ training combat enters) | 1 | schoolyard scuffles, wooden swords, bruises not scars |
+| **Ch3 — Forging** | DECIDE (+ real combat) | 2 | bodies matter, wounds leave marks |
+| **Ch4 — Threshold** | COMMIT (+ varied non-tragic departure) | 1 | culmination |
+
+Total: 5 sessions at ~50 exchanges each (longer, focused).
+
+### Per-chapter engagement modes
+
+Each chapter has a primary mode that tells the AI what kinds of scenes and choices belong in it. Modes are injected dynamically into the DM prompt as Rule 5a based on `runtime.chapter` — only the CURRENT chapter's mode appears in the prompt, so there's no catalog pollution.
+
+**Ch1 — OBSERVE + character-shaping choices.** Primary engagement is witnessing and relationship-forming, NOT adventuring. YES to hide-or-run / obey-or-defy / speak-or-stay-silent / attentive-or-drift / which-chore-first / share-or-hoard. NO to picking factions, committing to quests, plot-shaping decisions. NO combat at this age. Roll prompts are frequent (Perception, Intelligence, Insight, Dexterity, Wisdom, Athletics) for noticing / recalling / calming / slipping past / carrying.
+
+**Ch2 — LEARN + training combat.** The world widens. First friend outside family, skill learned from an elder, first secret kept, first lie attempted. Training combat enters — schoolyard scuffles, wooden swords, real dice, low stakes. Bruises not scars.
+
+**Ch3 — DECIDE + real combat.** Real agency, real consequences. First alliance forged, first oath, first irreversible act. Real combat: bodies matter, wounds leave marks, the PC can be hurt. Chapter opens with CHAPTER_PROMISE.
+
+**Ch4 — COMMIT + varied non-tragic departure.** The question is no longer "what will I do" but "who am I leaving as." Departure options expanded and explicitly non-tragic-default:
+
+- Enlistment (call to military service)
+- Apprenticeship posting (craft/smithy/temple)
+- Pilgrimage (faith or self-discovery)
+- Finding a cure (for a loved one, for oneself)
+- Leaving to learn (academy, temple, master, library)
+- Leaving to explore (wanderlust, map, rumor)
+- Coming-of-age quest or test
+- Political match (betrothal journey)
+- Conscription (world calls, PC answers)
+- Exile (when story earned it)
+- Tragedy (ONE option among many — NEVER default)
+
+The tone preset shapes which options fit: Brutal & Gritty leans conscription/flight; Tender & Hopeful leans apprenticeship/pilgrimage; Epic Fantasy leans call-to-adventure/quest; Rustic & Spiritual leans pilgrimage/vision-quest.
+
+### Arc-plan generator updates
+
+`preludeArcService.js` cardinal rules grew a new rule 11 — PER-CHAPTER ENGAGEMENT MODES — spelling out the YES/NO beat criteria for each chapter. Opus now designs Ch1 arcs with observational beats only, Ch4 arcs with multiple non-tragic departure alternatives, etc.
+
+### DM session prompt updates
+
+`preludeArcPromptBuilder.js`:
+- New `engagementModeBlock(chapter, age)` helper renders the per-chapter mode with concrete examples, YES/NO lists, roll-prompt guidance, and target beat count.
+- Injected as Rule 5a in the cardinal rules.
+- Rule 11a (per-chapter session budget) updated from `~7-10 sessions, Ch1 1-2, Ch2 2, Ch3 2-3, Ch4 2-3` to the new `5 focused sessions, Ch1 1, Ch2 1, Ch3 2, Ch4 1` distribution.
+- Opening line reduced from "7-10 sessions" to "5 focused sessions."
+- Character block session counter switched from "X of ~7-10" to "X of 5."
+
+### PRELUDE_IMPLEMENTATION_PLAN.md
+
+Added design goal **#28** capturing the 5-session condensed structure + per-chapter engagement modes.
+
+### Tests
+
+- `prelude-prompt.test.js` grew 130 → 161 (+31 tests covering all 4 chapter mode blocks, the YES/NO example checks, Ch1 no-combat, Ch2 training-combat, Ch3 real-combat / bodies-matter / 2-session-target, Ch4 departure-options count ≥ 8 / tragedy-never-default / DEPARTURE+PRELUDE_END markers, and 5-session structure references at the prompt-opening + character block + rule 11a).
+- All 6 prelude suites green: 42 + 15 + 130 + 161 + 33 + 76 = **457 prelude tests total**.
+- Client build clean.
+- No schema changes; no UI changes; purely a prompt/guidance restructure.
+
+### What this fixes
+
+- Ch1 stops trying to be a mini-adventure. It becomes what it's supposed to be: a tight, atmospheric, character-revealing session that shapes relationships and ends on a first-crack — not a quest.
+- Combat has a proper ladder: absent at 5-8, training-only at 9-12, real at 13+.
+- Departures get proper variety. Tragedy is one option among many, not the default.
+- The arc and DM layers now speak the same language — each chapter has a named mode that both sides honor.
+- Total playtime is more manageable: 5 sessions of ~50 exchanges = ~250 exchanges to get through the prelude, vs. an ambiguous "7-10" that was sliding toward 10+.
+
 ## [1.0.0.75] - 2026-04-22 — Rule 2 state-attribution detector + Auto default + Lore panel + anachronism tightening
 
 Playtest #1 with the new tone preset system surfaced four distinct issues. Bundled into one release.

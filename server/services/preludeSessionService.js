@@ -181,7 +181,7 @@ function buildRuntime(character, playSessionLength = 0) {
 /**
  * Return the session ordinal for a character — "which play-session of the
  * prelude are we currently in." Used in the UI top bar so the player can
- * see "Session 3 of ~7-10."
+ * see "Session 3 of 5."
  *
  * The prelude uses a SINGLE `dm_sessions` row per character (paused/resumed
  * as a state machine), so "session number" isn't the DB row count. It's
@@ -1002,7 +1002,7 @@ RULES:
 - Name key NPCs by name. Use tone that matches the session's tone.
 - If emergences were accepted, weave them into prose naturally — "the running and climbing have made you quicker" — don't list them like a report.
 
-This is Session ${sessionNumber} of ~7-10 · Chapter ${chapter} of 4 · ${playerName} is ${age} years old.`;
+This is Session ${sessionNumber} of 5 · Chapter ${chapter} of 4 · ${playerName} is ${age} years old.`;
 
   const userPrompt = `Here is the session transcript. Write the recap now.
 

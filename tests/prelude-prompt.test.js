@@ -720,6 +720,75 @@ console.log('\n=== v1.0.73 invalid preset → placeholder ===\n');
   );
 }
 
+console.log('\n=== v1.0.76 per-chapter engagement mode block ===\n');
+{
+  // Ch1 — OBSERVE + character-shaping choices
+  const p1 = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(),
+    makeRuntime({ chapter: 1, age: 7 }));
+  assert(p1.includes('MODE: OBSERVE'), 'Ch1 block says MODE: OBSERVE');
+  assert(p1.includes('character-shaping choices'), 'Ch1 surfaces character-shaping-choices language');
+  assert(p1.includes('Hide and listen, or run'), 'Ch1 includes hide-or-run example');
+  assert(p1.includes('Obey the rule, or slip around it'), 'Ch1 includes obey-or-defy example');
+  assert(p1.includes('NO COMBAT'), 'Ch1 explicitly forbids combat');
+  assert(!p1.includes('MODE: LEARN'), 'Ch1 does NOT include Ch2 mode (no catalog pollution)');
+  assert(!p1.includes('MODE: DECIDE'), 'Ch1 does NOT include Ch3 mode');
+  assert(!p1.includes('MODE: COMMIT'), 'Ch1 does NOT include Ch4 mode');
+  assert(p1.includes('first-crack'), 'Ch1 references first-crack chapter end');
+
+  // Ch2 — LEARN + training combat
+  const p2 = createPreludeSystemPrompt(makeCharacter({ prelude_chapter: 2, prelude_age: 10 }),
+    makeSetup(), makeArcPlan(), makeRuntime({ chapter: 2, age: 10 }));
+  assert(p2.includes('MODE: LEARN'), 'Ch2 block says MODE: LEARN');
+  assert(p2.includes('TRAINING COMBAT') || p2.includes('training combat'),
+    'Ch2 mentions training combat');
+  assert(p2.includes('schoolyard') || p2.includes('wooden-sword'),
+    'Ch2 references low-stakes combat examples');
+  assert(p2.includes('Bruises, not scars'), 'Ch2 specifies low-stakes combat intensity');
+  assert(p2.includes('first-rupture'), 'Ch2 references first-rupture chapter end');
+  assert(!p2.includes('MODE: OBSERVE'), 'Ch2 does NOT include Ch1 mode');
+
+  // Ch3 — DECIDE + real combat
+  const p3 = createPreludeSystemPrompt(makeCharacter({ prelude_chapter: 3, prelude_age: 14 }),
+    makeSetup(), makeArcPlan(), makeRuntime({ chapter: 3, age: 14 }));
+  assert(p3.includes('MODE: DECIDE'), 'Ch3 block says MODE: DECIDE');
+  assert(p3.includes('REAL COMBAT'), 'Ch3 mentions real combat');
+  assert(p3.includes('Bodies matter'), 'Ch3 says bodies matter');
+  assert(p3.includes('irreversible act'), 'Ch3 references irreversible-act chapter end');
+  assert(p3.includes('TWO sessions'), 'Ch3 specifies 2-session target');
+
+  // Ch4 — COMMIT + varied departure
+  const p4 = createPreludeSystemPrompt(makeCharacter({ prelude_chapter: 4, prelude_age: 18 }),
+    makeSetup(), makeArcPlan(), makeRuntime({ chapter: 4, age: 18 }));
+  assert(p4.includes('MODE: COMMIT'), 'Ch4 block says MODE: COMMIT');
+  assert(p4.includes('varied') && p4.includes('non-tragic'),
+    'Ch4 emphasizes varied non-tragic departure');
+  // Check for 4+ of the departure options
+  const departureOptions = ['ENLISTMENT', 'APPRENTICESHIP', 'PILGRIMAGE', 'FINDING A CURE',
+    'LEAVING TO LEARN', 'LEAVING TO EXPLORE', 'COMING-OF-AGE', 'POLITICAL MATCH',
+    'CONSCRIPTION', 'EXILE', 'TRAGEDY'];
+  const optionsFound = departureOptions.filter(opt => p4.includes(opt));
+  assert(optionsFound.length >= 8, `Ch4 lists at least 8 departure options (found ${optionsFound.length})`);
+  assert(p4.includes('NEVER default'), 'Ch4 says tragedy is NEVER the default');
+  assert(p4.includes('[DEPARTURE:'), 'Ch4 references [DEPARTURE] marker');
+  assert(p4.includes('[PRELUDE_END]'), 'Ch4 references [PRELUDE_END] marker');
+}
+
+console.log('\n=== v1.0.76 5-session structure references ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(),
+    makeRuntime({ chapter: 1, sessionNumber: 1 }));
+  assert(p.includes('5 focused sessions'),
+    'prompt opening references 5-session structure');
+  assert(p.includes('play-session 1 of 5'),
+    'character block uses 5-session denominator');
+  assert(p.includes('Chapter 1 (Early Childhood, OBSERVE):     1 session'),
+    '11a lists Ch1 as 1 session');
+  assert(p.includes('Chapter 3 (Adolescence, DECIDE):          2 sessions'),
+    '11a lists Ch3 as 2 sessions');
+  assert(!p.includes('7-10'),
+    'prompt no longer references the old 7-10 session range');
+}
+
 console.log('\n==================================================');
 console.log(`Prelude Prompt Tests: ${passed} passed, ${failed} failed`);
 console.log('==================================================\n');

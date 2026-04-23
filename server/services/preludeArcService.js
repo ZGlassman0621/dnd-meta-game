@@ -118,6 +118,44 @@ ABSOLUTE RULES:
 9. **DON'T INVENT CHARACTER TRAITS NOT IN THE SETUP.** The player's race, gender, parents, siblings, setting, talents, cares, and tone are canon. Canonical 5e race features (darkvision, breath weapons, etc.) are fair game. But do NOT invent specific physical markers (veins, birthmarks, glowing eyes, fevers, scars) or family secrets (hidden bloodlines, prophecies, royal parentage) that the player didn't establish. If the player wanted a scourge aasimar with burning veins, they'd have said so. Stay inside the lines they drew.
 10. **TRAJECTORY NUDGES MUST CITE PLAYER SETUP EXPLICITLY.** Do not suggest "paladin because the character is a scourge aasimar." Suggest "paladin because you said you care about Justice and Protecting the Weak, and Chapter 3 puts Zalyere between a fallen institution (the dye-works crew) and a quiet faith (Sister Halene) — that tension pays out as paladin." Cite talents, cares, or tone tags by name.
 
+11. **PER-CHAPTER ENGAGEMENT MODES (v1.0.76 — critical for 5-session condensed structure).** Each chapter has a PRIMARY MODE that dictates what kinds of beats belong in it. Beats that violate a chapter's mode are bad beats — rewrite them.
+
+   **Chapter 1 — OBSERVE (+ character-shaping choices).** Target: 1 session.
+     The PC is in early childhood. Primary engagement is WITNESSING and RELATIONSHIP-FORMING — not adventuring.
+     YES beats: atmospheric grounding, NPC-revealed-in-unguarded-moment, world-hint (a stranger passes, a letter arrives), character-shaping choice (hide-and-listen vs. run-back-to-safety; which chore first; obey-the-rule or slip-around-it; speak-up or stay-silent; share or hoard; attentive or daydreaming).
+     NO story-shaping choices (picking factions, committing to quests, making enemies). NO COMBAT — the PC is too small. Fights happen AROUND them, not with them.
+     chapter_end_moment: a "first-crack" — a small disruption in the routine that opens the door to Ch2. Not a crisis. A letter, a relative's visit with news, an overheard adult secret, a stranger at the gate.
+
+   **Chapter 2 — LEARN (+ training combat enters).** Target: 1 session.
+     The PC is in middle childhood. The world widens beyond the home.
+     YES beats: injustice-seen, first-friend-made-outside-family, skill-learned-from-elder, opinion-formed, loyalty-tested (small-scale), first SCHOOLYARD / TRAINING-SWORD COMBAT (survivable, bruises-not-scars). First secret kept or told. First lie attempted.
+     Choices get more consequential within relationships and personal code — not yet plot-shaping.
+     chapter_end_moment: a "first-rupture" — a bigger event the PC can't fix but has to understand. A death, a betrayal, an adult crisis that reshapes home.
+
+   **Chapter 3 — DECIDE (+ real combat).** Target: 2 sessions.
+     The PC is adolescent. Real agency, real consequences.
+     YES beats: real alliance forged, first oath made, first-blood combat with real stakes and survivable wounds, moral-cost choice, loss available, act that cannot be undone.
+     REAL COMBAT — bodies matter, wounds leave marks. The PC can be hurt; the PC can hurt others.
+     chapter_end_moment: an irreversible act — a choice made with real cost that sets up departure.
+
+   **Chapter 4 — COMMIT (+ varied departure).** Target: 1 session.
+     The PC is at threshold. Culmination + departure.
+     YES beats: recurring-thread-resolved, choice-sealed, departure-shaped.
+     DEPARTURE IS VARIED AND NOT DEFAULT-TRAGIC. Offer TWO OR THREE non-tragic departure alternatives in the departure_seed alongside whatever primary reason fits the arc:
+       - Enlistment (call to military service)
+       - Apprenticeship posting (craft / skill path)
+       - Pilgrimage (faith, self-discovery)
+       - Finding a cure (for family, for self)
+       - Leaving to learn (academy, temple, master)
+       - Leaving to explore (wanderlust, a map, a rumor)
+       - Coming-of-age quest or test
+       - Political match (betrothal journey)
+       - Conscription (world-driven)
+       - Exile (when story earned it)
+       - Tragedy (one option among many — not the default)
+     Match the tone preset: Brutal & Gritty might land on conscription or flight; Tender & Hopeful might land on apprenticeship or pilgrimage; Epic Fantasy often lands on a call-to-adventure or quest.
+     chapter_end_moment: the DEPARTURE itself — the PC leaving for their reason.
+
 BE CONCISE. Keep prose TIGHT. This is scaffolding, not the final story. Stay within the word/sentence limits below — long beats cause JSON truncation.
 
 OUTPUT FORMAT. Return a SINGLE JSON object. No prose before or after. No markdown fences.
