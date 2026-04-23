@@ -18,7 +18,7 @@
  *       For resumed sessions, use createPreludeResumePrompt instead.
  */
 
-import { BIRTH_CIRCUMSTANCES, HOME_SETTINGS, REGIONS, TONE_TAGS } from './preludeSetupLabels.js';
+import { BIRTH_CIRCUMSTANCES, HOME_SETTINGS, REGIONS, TONE_PRESETS, buildTonePresetBlock, resolvePresetFromTags } from './preludeSetupLabels.js';
 
 // Same race-aware chapter age ranges as the arc generator, kept local so we
 // don't cross-depend on preludeArcService. Keep these in sync if they change.
@@ -115,11 +115,14 @@ function formatHomeWorld(hw) {
  */
 function cardinalRules(character, setup, runtime) {
   const { calledBy, pronouns } = resolveCharacterVoice(character, setup);
-  const tones = (setup?.tone_tags || [])
-    .map(t => TONE_TAGS.find(x => x.value === t))
-    .filter(Boolean)
-    .map(t => t.label)
-    .join(' + ') || '(none specified)';
+  // v1.0.73 — a single tone preset replaces the old 16-tag combinable
+  // system. `tones` here is just the preset's short label (e.g. "Brutal &
+  // Gritty") for quick reference in rules that name-drop the tone; the
+  // FULL register / vocabulary / scene-type / age-scaling bible is
+  // injected as its own dedicated TONE block in the system prompt.
+  const presetValue = resolvePresetFromTags(setup?.tone_tags);
+  const preset = presetValue ? TONE_PRESETS[presetValue] : null;
+  const tones = preset ? preset.label : '(none selected)';
 
   return `ABSOLUTE RULES (read every turn; these override anything that conflicts):
 
@@ -339,25 +342,11 @@ function cardinalRules(character, setup, runtime) {
    Don't explain mechanics in-narrative. NEVER say "a natural 20 is a critical success" or "roll above the DC." Narrate the OUTCOME when the roll comes in; the numbers stay yours.
    Don't name arc-plan beats to the player ("this is the First Blood beat"). Don't announce enemy stats ("goblin, AC 13, 7 HP"). Describe condition ("the goblin looks bloodied; it's weaving").
 
-14. TONE FIDELITY. Tone tags: ${tones}. Every scene should read like these tags, combined honestly.
-    HOW TONE ACTUALLY SHAPES PROSE (applied, not just described):
-    - **Gritty** — short sentences. Concrete nouns. Body details (callused, blood-scabbed, weather-split). No euphemism for hardship; name it. "Hunger" not "an empty feeling."
-    - **Dark humor** — one dry aside per scene, usually from an adult NPC or the narrator. Not full-on comic; salt, not sugar. The joke is how people cope.
-    - **Hopeful** — small kindnesses named explicitly. Someone gives something without being asked. A stranger is decent. The weather breaks. Light gets through.
-    - **Epic** — slightly elevated diction ("cold stone" over "rocks," "the wind out of the north" over "the wind"). Scenes end with weight — implications beyond the moment.
-    - **Quiet / melancholic** — long sentences. Pauses in dialogue. Things unsaid. Observation over action. The weight of time.
-    - **Tragic** — beautiful things named just before they break. Present-tense observation of loss (or loss about to happen).
-    - **Whimsical** — specific wonder-details (a forge that hums on feast days, a hen that always lays brown on Sundays). NEVER "magical realism" in ways that violate Faerûn canon.
-    - **Political** — always another agenda in the room. Everyone is negotiating something, even the children. Body language reads as tactics.
-    - **Rustic** — land details saturate the prose. Weather, harvest, livestock, seasons. Time measured in crops and snow, not clocks.
-    - **Mystical** — the world feels porous. Dreams carry weight. Old stones have names. The gods are present but indirect.
-    - **Brutal** — consequences land hard. Healing is slow. Mercy is rare. No scene resolves cleanly.
-    - **Tender / intimate** — close-up on faces and hands. Small touches named (a hand on a shoulder, a blanket tucked tighter). Warmth even in hardship.
-    - **Romantic** — yearning as a color running through scenes. What someone wanted to say and didn't. Eyes that look too long. Touch remembered.
-    - **Eerie / uncanny** — something faintly wrong. Repetition that shouldn't be there. The dreams of children. Details seen out of the corner of the eye.
-    - **Bawdy** — earthy dialogue, frank about bodies, unashamed. Working-class vigor. No euphemism.
-    - **Spiritual** — ritual details, prayers, icons, the weight of the sacred. Faith as a daily presence, not an optional concept.
-    COMBINED TAGS amplify each other. "Gritty + dark humor" is harder and drier than either alone. "Hopeful + rustic" is a warmer rural scene than either alone. Honour the combination, don't pick one tag and ignore the others.
+14. TONE FIDELITY — ${tones}. Every scene reads in this register.
+    The dedicated TONE block below (titled by the preset name — e.g. "TONE: BRUTAL & GRITTY") is authoritative. It specifies register rules (sentence length, diction), vocabulary anchors (words to lean toward), scene-type guidance (how combat, dialogue, travel, home, and ritual/politics each read in this tone), and AGE-SCALING (how the register's intensity grows across Chapters 1-4 without drifting off the rails).
+    BEFORE COMPOSING a scene, check the TONE block — what's the register posture, what vocabulary anchors fit here, what age-scale tier applies? Match those, consistently.
+    NEVER drift toward generic literary fantasy. You have ONE register; honor it scene after scene. Don't borrow from other presets. If the player picked Tender & Hopeful, don't suddenly write a Brutal & Gritty fight scene — handle the fight in-register (warm intervention, quick resolution, held afterward).
+    AGE-SCALING is critical: the register stays constant across the prelude, but INTENSITY grows with the character's age. A Brutal & Gritty Ch1 scene is proximity-to-violence (witnessing); a Brutal & Gritty Ch4 scene is ownership (the character IS the scarred young adult). Match the current chapter's tier.
 
 15. WORLD RULES = FAERÛN. This is a medieval-fantasy setting. Technology, culture, and vocabulary must fit. Banned anachronisms (common Sonnet drift):
    - NO TRAINS, rails, railways. Caravans move by wagon, ox, horse, or foot. A shipment is "a wagon train" at most — never a literal train.
@@ -671,7 +660,14 @@ export function createPreludeSystemPrompt(character, setup, arcPlan, runtime, ca
 
   const talents = (setup.talents || []).join(', ') || '—';
   const cares = (setup.cares || []).join(', ') || '—';
-  const tones = (setup.tone_tags || []).join(', ') || '—';
+  // v1.0.73 — tones field is just the preset label for short-form reference
+  // inside the character block. The FULL register bible (register rules,
+  // vocabulary, scene-type guidance, age-scaling, exemplars) is injected
+  // further down as a dedicated TONE block via buildTonePresetBlock.
+  const presetValue = resolvePresetFromTags(setup.tone_tags);
+  const presetLabel = presetValue ? TONE_PRESETS[presetValue].label : '(none selected)';
+  const tones = presetLabel;
+  const tonePresetBlock = buildTonePresetBlock(presetValue);
 
   return `You are a D&D storyteller running a prelude arc for one player. This prelude plays a single character's childhood through young adulthood across 4 chapters (life stages) and 7-10 sessions. Your job is to give ${v.calledBy} scenes with real texture — small moments and heavy ones — and let the player decide who they become.
 
@@ -693,7 +689,7 @@ ${parentLines}
   Siblings:${siblingLines}
   Things ${v.calledBy} is good at: ${talents}
   Things ${v.calledBy} cares about: ${cares}
-  Tone tags (combine these in your prose): ${tones}
+  Tone preset: ${tones} (full register bible below)
 
 HOME WORLD (Opus-generated, reference for this session):
 ${formatHomeWorld(arcPlan?.home_world)}
@@ -709,6 +705,8 @@ ${Array.isArray(arcPlan?.recurring_threads) && arcPlan.recurring_threads.length 
 ${canonFactsBlock || '(CANON FACTS: none yet — emit [CANON_FACT] markers as you establish named NPCs, places, events, relationships, traits, or items. See rule 15a.)'}
 
 ${emergenceSnapshotBlock || '(EMERGENCE SO FAR: none yet — lean upcoming scenes toward emerging strengths as the player accepts stat/skill hints and as class/theme tallies grow. See rule 15b.)'}
+
+${tonePresetBlock}
 
 ${markersBlock()}
 
@@ -736,7 +734,7 @@ FINAL REMINDER (read this every turn):
 - HONOR PRONOUNS: gendered NPCs get gendered pronouns.
 - FAERÛN CALENDAR: Marpenoth not October. Tenday not week.
 - RESPONSE LENGTH: 2-4 routine / 4-7 important / 5-8 openings.
-- TONE: ${tones}. Don't drift.
+- TONE: ${tones} — your one register. Consult the TONE block (register rules, vocabulary anchors, scene-type guidance, age-scaling) BEFORE each scene and match its posture. Never drift toward generic literary fantasy. A fight scene in Tender & Hopeful reads differently than a fight scene in Brutal & Gritty — honor the preset, not the scene type.
 - CANON FACTS: check the ledger BEFORE writing any named detail. Emit [CANON_FACT] GENEROUSLY (target 3-6/session, more in rich scenes) — NPC details (age/role/tone/flaw/personal history), conversation beats (plans/plot shifts/perception changes/promises), character moments (skills demonstrated/lore learned/lies told/secrets kept/body changes), world canon (settlements/holds/weather/threats/discoveries/history). Use [CANON_FACT_RETIRE] before contradicting an existing fact (e.g., after AGE_ADVANCE). Under-emission is the primary cause of drift.
 - MARKERS: [AGE_ADVANCE] for YEARS. [SESSION_END_CLIFFHANGER] only at a STRONG natural break (stakes spike, decision forced, chapter close) — target ~50 exchanges per play-session. Don't end early at the first lull. First pacing nudge is a HINT to start watching, not an order to close. Obey wrap / force notes when they arrive.
 - SELF-CORRECT: if you catch yourself mid-violation (especially player dialogue), ACKNOWLEDGE AND REWIND, don't hide it. "Apologies — I put words in your mouth. Let me rewind." Same when the player corrects you ("Moss is nine, not twelve") — "You're right, [correction]. [Continue]." Short, don't over-explain.`;
@@ -778,7 +776,10 @@ Must include:
 
 End on engagement — a direct question to the player, a concrete pressure, or something happening to/around the character that demands response. NEVER offer menus of actions the character could take. NEVER end on atmosphere ("the morning stretches out..."). Don't narrate the character's reaction. Describe the situation, force the beat, and stop.
 
-Tone tags the player picked: ${(setup?.tone_tags || []).join(', ') || 'unspecified'}. Feel like those tags combined, not generic fantasy.`;
+Tone preset: ${(() => {
+    const pv = resolvePresetFromTags(setup?.tone_tags);
+    return pv ? TONE_PRESETS[pv].label : 'unspecified';
+  })()}. Open the scene IN-REGISTER per the TONE block in the system prompt — match the register rules, vocabulary anchors, and Chapter 1 age-scaling tier. Not generic literary fantasy.`;
 }
 
 /**

@@ -57,21 +57,18 @@ export const REGIONS = [
   { value: 'evermeet', label: 'Evermeet', description: 'The elven island kingdom beyond the Trackless Sea — effectively elves-only, withdrawn from the world of men.' }
 ];
 
-export const TONE_TAGS = [
-  { value: 'gritty', label: 'Gritty', description: 'Blunt, unvarnished, realistic. Hardships named plainly. No softening the edges.' },
-  { value: 'dark_humor', label: 'Dark humor', description: 'Wry relief in bad situations. Characters make jokes at funerals. Gallows wit.' },
-  { value: 'hopeful', label: 'Hopeful', description: 'Darkness exists but light does too. People try. Kindness matters.' },
-  { value: 'epic', label: 'Epic', description: 'Elevated stakes, weight, legend-shaped moments. Your childhood matters in a big way.' },
-  { value: 'quiet_melancholic', label: 'Quiet / melancholic', description: 'Small, sad, tender. Slow attention. Loss carried softly.' },
-  { value: 'tragic', label: 'Tragic', description: 'Beautiful things break. Love costs. The shape of a story is loss.' },
-  { value: 'whimsical', label: 'Whimsical / fable-like', description: 'Wonder is close to the surface — small omens in the wheat, a forge that sings on feast days, folk tales half-remembered from old grandmothers. Tender and curious, not twee.' },
-  { value: 'political', label: 'Political / intrigue', description: 'Power is the weather. Alliances matter. Children learn to read rooms early.' },
-  { value: 'rustic', label: 'Rustic', description: 'Earth under fingernails. Long fields. Simple pleasures and long winters.' },
-  { value: 'mystical', label: 'Mystical', description: 'The world is porous. Dreams bleed through. Old gods notice children.' },
-  { value: 'brutal', label: 'Brutal', description: 'Violence is common and real. Survival is not assumed.' },
-  { value: 'tender_intimate', label: 'Tender / intimate', description: 'Close-up on faces and hands. Relationships at center. Warmth even in hardship.' },
-  { value: 'romantic', label: 'Romantic', description: 'Loves — young, fierce, confused, lasting. Yearning is a thread through the childhood.' },
-  { value: 'eerie_uncanny', label: 'Eerie / uncanny', description: 'Something is wrong with the village, the woods, the dreams. Children notice.' },
-  { value: 'bawdy', label: 'Bawdy', description: 'Earthy, irreverent, frank about bodies and appetites. Working-class vigor.' },
-  { value: 'spiritual', label: 'Spiritual', description: 'Faith, ritual, and the presence of the divine (or its absence) shape daily life.' }
-];
+// v1.0.73 — replaced 16 combinable tone tags with 4 curated presets. See
+// `server/data/tonePresets.js` for the full tone-bible definitions (prose
+// register, vocabulary anchors, scene-type guidance, age-scaling,
+// exemplars). TONE_TAGS is re-exported here as a backward-compatible alias
+// (player-facing slice of each preset — value/label/description) so any
+// legacy consumer keeps working without churn.
+import { TONE_PRESET_LIST } from '../data/tonePresets.js';
+
+export const TONE_TAGS = TONE_PRESET_LIST.map(p => ({
+  value: p.value,
+  label: p.label,
+  description: p.description
+}));
+
+export { TONE_PRESETS, TONE_PRESET_LIST, buildTonePresetBlock, buildTonePresetShortBlock, resolvePresetFromTags } from '../data/tonePresets.js';

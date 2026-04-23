@@ -2,6 +2,60 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.73] - 2026-04-22 — Tone preset system: 4 curated presets with full "tone bibles"
+
+Play-test feedback: the old 16-tag combinable tone system wasn't landing. Selecting "gritty + hopeful" vs "epic + mystical + tragic" didn't produce noticeably different prose — the AI defaulted to a mid-register literary fantasy regardless of tags. Three compounding reasons: the AI saw all 16 tag definitions every turn (14 of them irrelevant — signal polluted by noise); guidance was abstract, not exemplified; combinations were under-specified so the AI picked one tag and ignored the rest.
+
+v1.0.73 replaces the system entirely.
+
+### 4 curated presets replace 16 combinable tags
+
+Player picks ONE at setup time. Each preset is a fully designed "tone bible":
+
+- **Brutal & Gritty** — Medieval realism, no softening. Political intrigue, real violence, lean years. *Reference works: early ASOIAF, The Witcher, Joe Abercrombie.*
+- **Epic Fantasy** — Mythic weight in small moments. The big currents of the world touch the village. *Reference works: Tolkien, Brian Staveley, Robert Jordan.*
+- **Rustic & Spiritual** — Land, faith, and season. Priests, elders, and dreams are trusted. *Reference works: Patricia McKillip, Le Guin's Earthsea, Naomi Novik's Uprooted.*
+- **Tender & Hopeful** — Small-scale, warm, intimate. Family-scale stakes. *Reference works: T. Kingfisher's Saint of Steel, Katherine Addison's Goblin Emperor, Becky Chambers.*
+
+### What "tone bible" means structurally
+
+Each preset has server-side content (`server/data/tonePresets.js`) with:
+
+- **Register rules** — sentence length, diction level, figurative-language budget, prose rhythm.
+- **Vocabulary anchors** — 10-15 words/phrases that signal the register (Brutal & Gritty: *callused, scabbed, lean year, heel of bread, watery, threadbare*; Epic Fantasy: *storm-colored, old as stone, the weight of, out of the north*).
+- **Scene-type guidance** — per-scene-kind posture (combat, dialogue, travel, home, ritual/politics). A fight scene in Tender & Hopeful reads differently than a fight scene in Brutal & Gritty.
+- **Age-scaling across chapters** — the register persists; intensity grows. Brutal & Gritty at Ch1 is PROXIMITY (child witnesses violence at a distance); at Ch4 it's OWNERSHIP (character IS the scarred young adult). Epic Fantasy at Ch1 is "the epic LEAKS IN"; at Ch4 "the epic COMMITS." User-requested addition — the register stays constant, but intensity scales with age.
+- **Exemplar prose** — 2 sample paragraphs (Ch1 opening + mid-chapter) so the AI has a concrete anchor.
+
+### Prompt-level changes
+
+- **Rule 14 rewritten** — no longer dumps all 16 tag definitions. Now names the selected preset and points at the dedicated TONE block below.
+- **New dedicated TONE block** — injected into every system prompt between the EMERGENCE block and the MARKERS block. Renders the full bible for the ONE preset the player picked. The other 14 unrelated tag definitions are gone from the prompt.
+- **FINAL REMINDER** — applied direction ("A fight scene in Tender & Hopeful reads differently than a fight scene in Brutal & Gritty — honor the preset, not the scene type"), not just a tag list.
+- **Opening prompt** — "Open IN-REGISTER per the TONE block... match register rules, vocabulary anchors, and Chapter 1 age-scaling tier. Not generic literary fantasy."
+- **Arc-plan generator** — receives the preset short-block (label + description + references) instead of concatenated tag labels. Opus shapes home world and chapter arcs in-register at setup time, baking tone into ground truth (not just a runtime rule).
+
+### UI changes
+
+- `PreludeSetupWizard` Q11 converted from multi-select chip bar (pick 2-4 of 16) to a single-select card grid (pick 1 of 4). Each card shows label, full description, and reference works inline.
+- Storage shape unchanged — `prelude_setup_data.tone_tags` is still an array; now always length 1 with a preset value (e.g. `['brutal_gritty']`). No migration needed since no surviving playtest characters.
+
+### Back-compat posture
+
+- No migration layer. User confirmed no existing characters — each playtest is fresh.
+- If a character somehow has legacy multi-tag data, `resolvePresetFromTags` returns null and the prompt falls back to a placeholder TONE block (no crash).
+- `TONE_TAGS` re-exported as a back-compat alias (player-facing slice of each preset) so any legacy consumer keeps working.
+
+### Tests
+
+- `tests/prelude-prompt.test.js` grew 86 → 130 (+44 tests). Coverage for all 4 presets — TONE block heading, REGISTER RULES / VOCABULARY ANCHORS / SCENE-TYPE GUIDANCE / AGE-SCALING / EXEMPLAR PROSE sections, preset-specific vocabulary anchors, preset-specific scene guidance. Plus: only one preset injects (no catalog pollution), old 16-tag catalog explicitly gone (quiet/melancholic, bawdy not in prompt), invalid preset falls back to placeholder, brutal-specific age-scaling terms (PROXIMITY → OWNERSHIP) present, all 4 chapter tiers present.
+- All 6 prelude suites green: 38 + 15 + 130 + 130 + 33 + 52 = **398 prelude tests total**.
+- Client build clean. No schema changes.
+
+### Why this matters
+
+Most impactful prompt change since v1.0.56 (Phase 3 mechanical emergence). State tracking was already solid (canon facts v1.0.60, session position v1.0.70, emergence snapshot v1.0.63) but actual *prose register* was drifting toward a single mid-fantasy voice regardless of tone preference. This is Option C from the v1.0.72 design conversation — bake tone into the prompt structurally, not just as a rule to obey. One preset, one full bible, rendered authoritatively. The noise floor is much lower; the signal-per-token is much higher.
+
 ## [1.0.0.72] - 2026-04-22 — Sibling nickname field in prelude setup
 
 Siblings can now have an optional nickname (e.g., `Moira Astaron` called `"Mo"`). Parents already had a name field; siblings had only a formal name. Families use nicknames; the DM should too.

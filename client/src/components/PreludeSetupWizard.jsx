@@ -10,7 +10,7 @@ import {
   SIBLING_GENDERS,
   CHILDHOOD_TALENTS,
   CHILDHOOD_CARES,
-  TONE_TAGS
+  TONE_PRESETS
 } from '../data/preludeSetup'
 
 /**
@@ -49,7 +49,8 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
     talent_other: '',
     cares: [], // 3 items
     care_other: '',
-    tone_tags: [], // 2-4 items
+    tone_preset: '', // v1.0.73 — single preset selection; stored as
+    // tone_tags: [preset] on the server to preserve the existing JSON shape.
     // Testing flag — when true, the arc preview screen is shown between
     // setup and the first session. Defaults to ON while we're play-testing;
     // uncheck for a production-feeling flow where the player learns their
@@ -137,7 +138,10 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       })).filter(s => s.name),
       talents,
       cares,
-      tone_tags: form.tone_tags
+      // v1.0.73 — single-preset tone, serialized as a single-item array to
+      // match the legacy column shape. buildPayload() always emits a valid
+      // array (empty if the player hasn't picked yet; validate() catches).
+      tone_tags: form.tone_preset ? [form.tone_preset] : []
     }
   }
 
@@ -153,7 +157,7 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
     if (!p.region) return 'Please pick a region (or write your own).'
     if (p.talents.length !== 3) return 'Pick exactly 3 things they\'re good at.'
     if (p.cares.length !== 3) return 'Pick exactly 3 things they care about.'
-    if (p.tone_tags.length < 2 || p.tone_tags.length > 4) return 'Pick 2-4 tone tags.'
+    if (p.tone_tags.length !== 1) return 'Please pick one tone preset.'
     return ''
   }
 
@@ -522,52 +526,57 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
         />
       </div>
 
-      {/* Q11: Tone tags */}
+      {/* Q11: Tone preset (v1.0.73 — single-select cards) */}
       <div style={cardStyle}>
         <label style={labelStyle}>11. Tone</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
-          Pick 2-4 tone tags. These shape both the AI-generated arc plan and how scenes are written.
-          Combinations matter: "gritty + dark humor" plays very differently from "epic + tragic + mystical."
-          Currently picked: {form.tone_tags.length}/4.
+        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.75rem 0' }}>
+          Pick the register your prelude will play in. This shapes how scenes are written —
+          prose rhythm, vocabulary, stakes, and how intensity scales as you grow across the four chapters.
+          Each tone bundles register, scene-behavior, and age-scaling rules the DM will honor.
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-          {TONE_TAGS.map(t => {
-            const picked = form.tone_tags.includes(t.value)
-            const disabled = !picked && form.tone_tags.length >= 4
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.7rem' }}>
+          {TONE_PRESETS.map(preset => {
+            const picked = form.tone_preset === preset.value
             return (
-              <button
-                key={t.value}
-                type="button"
-                disabled={disabled}
-                onClick={() => togglePick('tone_tags', t.value, 4)}
-                title={t.description}
+              <div
+                key={preset.value}
+                onClick={() => set('tone_preset', preset.value)}
                 style={{
-                  padding: '0.4rem 0.7rem',
-                  borderRadius: '16px',
-                  border: picked ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.2)',
-                  background: picked ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.04)',
-                  color: picked ? '#e9d5ff' : (disabled ? '#555' : '#ccc'),
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  fontSize: '0.8rem'
+                  padding: '0.85rem 1rem',
+                  borderRadius: '10px',
+                  border: picked ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.15)',
+                  background: picked ? 'rgba(139,92,246,0.18)' : 'rgba(255,255,255,0.04)',
+                  cursor: 'pointer',
+                  transition: 'border-color 120ms, background 120ms'
                 }}
               >
-                {t.label}
-              </button>
+                <div style={{
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  color: picked ? '#e9d5ff' : '#e4e4e4',
+                  marginBottom: '0.3rem'
+                }}>
+                  {preset.label}
+                </div>
+                <div style={{
+                  fontSize: '0.82rem',
+                  color: picked ? '#d4d4d8' : '#aaa',
+                  lineHeight: 1.45,
+                  marginBottom: '0.4rem'
+                }}>
+                  {preset.description}
+                </div>
+                <div style={{
+                  fontSize: '0.72rem',
+                  fontStyle: 'italic',
+                  color: picked ? '#c4b5fd' : '#888'
+                }}>
+                  Reference works: {preset.inspirations}
+                </div>
+              </div>
             )
           })}
         </div>
-        {form.tone_tags.length > 0 && (
-          <div style={{ marginTop: '0.5rem' }}>
-            {form.tone_tags.map(tag => {
-              const t = TONE_TAGS.find(x => x.value === tag)
-              return t ? (
-                <p key={tag} style={{ ...descStyle, marginTop: '0.15rem' }}>
-                  <strong style={{ color: '#c4b5fd', fontStyle: 'normal' }}>{t.label}:</strong> {t.description}
-                </p>
-              ) : null
-            })}
-          </div>
-        )}
       </div>
 
       {/* Dev/testing toggle — show the arc preview screen between setup and

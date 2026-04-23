@@ -39,7 +39,9 @@ import {
   BIRTH_CIRCUMSTANCES,
   HOME_SETTINGS,
   REGIONS,
-  TONE_TAGS
+  TONE_PRESETS,
+  buildTonePresetShortBlock,
+  resolvePresetFromTags
 } from './preludeSetupLabels.js';
 
 // Re-roll cap. Keep this low to avoid "shopping" behaviour where the player
@@ -89,11 +91,11 @@ function getChapterAges(race) {
  * out the rules Opus must honour; recency block at the end reinforces them.
  */
 function buildArcSystemPrompt(setup, race) {
-  const toneLabels = (setup.tone_tags || [])
-    .map(t => TONE_TAGS.find(x => x.value === t))
-    .filter(Boolean)
-    .map(t => `${t.label} (${t.description})`)
-    .join('\n  - ');
+  // v1.0.73 — single tone preset replaces the old multi-tag combine-logic.
+  // buildTonePresetShortBlock returns a 2-line label + description +
+  // inspirations snippet — enough for Opus to shape the home world in-register
+  // without the full bible contaminating the JSON output schema.
+  const toneBlock = buildTonePresetShortBlock(resolvePresetFromTags(setup.tone_tags));
 
   const ages = getChapterAges(race);
 
@@ -101,7 +103,7 @@ function buildArcSystemPrompt(setup, race) {
 
 ABSOLUTE RULES:
 1. NON-BINARY CHOICES. Every significant decision seeded must have real cost AND real benefit on every side. Never design "the right thing to do" vs "the wrong thing." Criminals may be surviving. Guards may abuse power. Family may disappoint. Strangers may save.
-2. TONE FIDELITY. Honor the player's tone tags, combined: ${toneLabels ? '\n  - ' + toneLabels : '(none provided)'}. A "gritty + dark humor" plan should not read "epic + mystical."
+2. TONE FIDELITY. The player selected this tone preset — shape the arc plan in this register:\n${toneBlock.split('\n').map(l => '  ' + l).join('\n')}\nA Brutal & Gritty plan should not read Epic Fantasy. Honor it.
 3. NON-TRAGIC DEPARTURES. Chapter 4 must end with a departure, but tragedy is one option among many: pilgrimage, test, conscription, exile, political match, apprenticeship posting, call to adventure, flight, tragedy. Match the tone.
 4. ANCHORED TO SETUP. Home, region, parents (by name + role), siblings, talents, values, and tone the player chose are CANON. Build on them. Use names where given — don't substitute generic placeholders.
 5. AGE-APPROPRIATE PER RACE. This character is a ${race}. Chapter 1 = "early childhood for a ${race}" (${ages.ch1}). Chapter 4 = "threshold of adulthood for a ${race}" (${ages.ch4}). ${race === 'elf' ? 'An elf of 35 is still a small child by elven standards — treat them accordingly.' : race === 'dwarf' ? 'A dwarf of 20 is still pre-adolescent by dwarven standards.' : ''} Early-chapter beats scale to the character's developmental stage, not Earth-child tropes.
@@ -234,7 +236,10 @@ SIBLINGS: ${siblingsDesc}
 THREE THINGS YOU'RE GOOD AT: ${(setup.talents || []).join(', ')}
 THREE THINGS YOU CARE ABOUT: ${(setup.cares || []).join(', ')}
 
-TONE TAGS (combined): ${(setup.tone_tags || []).join(', ')}
+TONE PRESET: ${(() => {
+  const pv = resolvePresetFromTags(setup.tone_tags);
+  return pv ? TONE_PRESETS[pv].label : '(none selected)';
+})()}
 
 Output the JSON arc plan now. No preamble, no epilogue — just the JSON object.`;
 }

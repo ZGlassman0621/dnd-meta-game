@@ -199,27 +199,42 @@ export const CHILDHOOD_CARES = [
 ];
 
 // ==========================================================================
-// Q12: Tone tags (pick 2-4 — closed vocabulary, no free-text fallback)
+// Q12: Tone preset (v1.0.73 — pick ONE from 4 curated options)
 // ==========================================================================
-// These shape both Opus arc-plan generation and Sonnet's scene-level prose.
-// The AI receives the composite as a tone signal — "gritty + dark humor"
-// produces different writing than "epic + mystical + tragic."
+// Replaces the old 16-tag combinable system. Each preset is a full "tone
+// bible" shaping Opus's arc-plan generation and Sonnet's scene-level prose.
+// Presets bundle register, vocabulary, scene-type behavior, and age-scaling
+// rules — server-side content lives in `server/data/tonePresets.js`.
+//
+// Stored on `characters.prelude_setup_data.tone_tags` as a single-element
+// array (e.g. `['brutal_gritty']`) to preserve the existing column shape.
 
-export const TONE_TAGS = [
-  { value: 'gritty', label: 'Gritty', description: 'Blunt, unvarnished, realistic. Hardships named plainly. No softening the edges.' },
-  { value: 'dark_humor', label: 'Dark humor', description: 'Wry relief in bad situations. Characters make jokes at funerals. Gallows wit.' },
-  { value: 'hopeful', label: 'Hopeful', description: 'Darkness exists but light does too. People try. Kindness matters.' },
-  { value: 'epic', label: 'Epic', description: 'Elevated stakes, weight, legend-shaped moments. Your childhood matters in a big way.' },
-  { value: 'quiet_melancholic', label: 'Quiet / melancholic', description: 'Small, sad, tender. Slow attention. Loss carried softly.' },
-  { value: 'tragic', label: 'Tragic', description: 'Beautiful things break. Love costs. The shape of a story is loss.' },
-  { value: 'whimsical', label: 'Whimsical / fable-like', description: 'Wonder is close to the surface — small omens in the wheat, a forge that sings on feast days, folk tales half-remembered from old grandmothers. Tender and curious, not twee.' },
-  { value: 'political', label: 'Political / intrigue', description: 'Power is the weather. Alliances matter. Children learn to read rooms early.' },
-  { value: 'rustic', label: 'Rustic', description: 'Earth under fingernails. Long fields. Simple pleasures and long winters.' },
-  { value: 'mystical', label: 'Mystical', description: 'The world is porous. Dreams bleed through. Old gods notice children.' },
-  { value: 'brutal', label: 'Brutal', description: 'Violence is common and real. Survival is not assumed.' },
-  { value: 'tender_intimate', label: 'Tender / intimate', description: 'Close-up on faces and hands. Relationships at center. Warmth even in hardship.' },
-  { value: 'romantic', label: 'Romantic', description: 'Loves — young, fierce, confused, lasting. Yearning is a thread through the childhood.' },
-  { value: 'eerie_uncanny', label: 'Eerie / uncanny', description: 'Something is wrong with the village, the woods, the dreams. Children notice.' },
-  { value: 'bawdy', label: 'Bawdy', description: 'Earthy, irreverent, frank about bodies and appetites. Working-class vigor.' },
-  { value: 'spiritual', label: 'Spiritual', description: 'Faith, ritual, and the presence of the divine (or its absence) shape daily life.' }
+export const TONE_PRESETS = [
+  {
+    value: 'brutal_gritty',
+    label: 'Brutal & Gritty',
+    description: "Medieval realism, no softening. Violence is common, winters bite, food is scarce, politics are zero-sum. Adults extract, endure, betray, and sometimes prevail. Prose is short, unembellished, body-focused — hunger, blood, cold floors, threadbare cloaks. Even a child's life has real weight: a bruise that stays, an adult's lie overheard, a neighbor who stops speaking to your father. Political intrigue, cruel pragmatism, wary trust. Not grim for grim's sake — grim because the world is real.",
+    inspirations: 'early ASOIAF, The Witcher, Joe Abercrombie'
+  },
+  {
+    value: 'epic_fantasy',
+    label: 'Epic Fantasy',
+    description: "Mythic weight in small moments. The big currents of the world touch your village. A dragon passes overhead. A visiting paladin notices you. A dream-god knows your name before you do. Prose is elevated — \"cold stone\" over \"rocks,\" \"the wind out of the north\" over \"the wind.\" Scenes end with weight — implications stretching beyond the moment. Even a child's beats carry shadow-of-something-larger. Legend-shaped without being sentimental.",
+    inspirations: 'Tolkien, Brian Staveley, Robert Jordan'
+  },
+  {
+    value: 'rustic_spiritual',
+    label: 'Rustic & Spiritual',
+    description: "Land, faith, and season. The earth is close, the gods closer. Time is measured in crops, feast days, and prayers rather than hours. Priests, elders, and dreams are trusted. Gods are not abstract — they're present in the barn at calving, the river at baptism, the old shrine where offerings still accumulate. Monsters are folklore-shaped; the sacred has weight. The thin membrane between this world and the next.",
+    inspirations: "Patricia McKillip, Le Guin's Earthsea, Naomi Novik's Uprooted"
+  },
+  {
+    value: 'tender_hopeful',
+    label: 'Tender & Hopeful',
+    description: "Small-scale, warm, intimate. The stakes are the ones that matter to a child — a sibling fight, a cold supper, a friend's laugh, a parent's praise, a lost kitten. Kindnesses are named explicitly. People try. Life is hard but not cruel; even the rough characters have decent moments. Prose stays close to faces and hands, small touches, the shapes of rooms you love. Your childhood is yours, and it matters, and it's safe enough for you to have one.",
+    inspirations: "T. Kingfisher's Saint of Steel, Katherine Addison's Goblin Emperor, Becky Chambers"
+  }
 ];
+
+// Back-compat alias for any code still importing TONE_TAGS.
+export const TONE_TAGS = TONE_PRESETS;

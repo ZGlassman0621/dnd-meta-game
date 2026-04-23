@@ -59,7 +59,7 @@ function makeSetup(overrides = {}) {
     siblings: [{ name: 'Moss', gender: 'brother', relative_age: 'two years older' }],
     talents: ['Noticing things', 'Patience', 'Memory'],
     cares: ['Family', 'Home', 'Truth'],
-    tone_tags: ['gritty', 'hopeful'],
+    tone_tags: ['tender_hopeful'],  // v1.0.73 — single preset value
     ...overrides
   };
 }
@@ -622,6 +622,101 @@ console.log('\n=== v1.0.72 sibling nickname field ===\n');
   assert(
     emptyNickname.includes('• Brenn ('),
     'empty-string nickname still renders the name'
+  );
+}
+
+console.log('\n=== v1.0.73 tone presets — single-preset system replaces 16 tags ===\n');
+{
+  // Each of the 4 presets should inject a distinct TONE block
+  const presets = [
+    { value: 'brutal_gritty', label: 'BRUTAL & GRITTY', vocab: 'callused', scene: 'body-focused' },
+    { value: 'epic_fantasy', label: 'EPIC FANTASY', vocab: 'storm-colored', scene: 'Weight and consequence' },
+    { value: 'rustic_spiritual', label: 'RUSTIC & SPIRITUAL', vocab: 'feast day', scene: 'Pilgrimage-coded' },
+    { value: 'tender_hopeful', label: 'TENDER & HOPEFUL', vocab: 'tucked', scene: 'Center of gravity' }
+  ];
+
+  for (const { value, label, vocab, scene } of presets) {
+    const p = createPreludeSystemPrompt(
+      makeCharacter(),
+      makeSetup({ tone_tags: [value] }),
+      makeArcPlan(),
+      makeRuntime()
+    );
+    assert(p.includes(`TONE: ${label}`), `${value}: TONE block heading present`);
+    assert(p.includes('REGISTER RULES'), `${value}: REGISTER RULES section present`);
+    assert(p.includes('VOCABULARY ANCHORS'), `${value}: VOCABULARY ANCHORS section present`);
+    assert(p.includes('SCENE-TYPE GUIDANCE'), `${value}: SCENE-TYPE GUIDANCE section present`);
+    assert(p.includes('AGE-SCALING'), `${value}: AGE-SCALING section present`);
+    assert(p.includes('EXEMPLAR PROSE'), `${value}: EXEMPLAR PROSE section present`);
+    assert(p.includes(vocab), `${value}: preset-specific vocabulary anchor "${vocab}" present`);
+    assert(p.includes(scene), `${value}: preset-specific scene guidance "${scene}" present`);
+  }
+
+  // Only ONE preset injects — not a catalog of all 4
+  const brutalPrompt = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ tone_tags: ['brutal_gritty'] }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    brutalPrompt.includes('TONE: BRUTAL & GRITTY'),
+    'brutal_gritty: correct block rendered'
+  );
+  assert(
+    !brutalPrompt.includes('TONE: TENDER & HOPEFUL'),
+    'brutal_gritty: unrelated preset NOT in prompt (no catalog pollution)'
+  );
+  assert(
+    !brutalPrompt.includes('TONE: EPIC FANTASY'),
+    'brutal_gritty: unrelated preset (epic) NOT in prompt'
+  );
+  // Old 16-tag Rule 14 catalog explicitly gone
+  assert(
+    !brutalPrompt.includes('**Quiet / melancholic**'),
+    'v1.0.72 "16-tag" catalog no longer in prompt (quiet/melancholic absent)'
+  );
+  assert(
+    !brutalPrompt.includes('**Bawdy**'),
+    'v1.0.72 "16-tag" catalog no longer in prompt (bawdy absent)'
+  );
+
+  // Character block shows the preset label
+  assert(
+    brutalPrompt.includes('Tone preset: Brutal & Gritty'),
+    'character block shows preset label'
+  );
+}
+
+console.log('\n=== v1.0.73 age-scaling guidance per preset ===\n');
+{
+  const p = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ tone_tags: ['brutal_gritty'] }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  // All four age tiers present in the block
+  assert(p.includes('Chapter 1 (early childhood)'), 'Ch1 tier present');
+  assert(p.includes('Chapter 2 (middle childhood)'), 'Ch2 tier present');
+  assert(p.includes('Chapter 3 (adolescence)'), 'Ch3 tier present');
+  assert(p.includes('Chapter 4 (threshold)'), 'Ch4 tier present');
+  // Brutal-specific scaling semantics
+  assert(p.includes('PROXIMITY') && p.includes('OWNERSHIP'),
+    'brutal age-scaling terms (PROXIMITY → OWNERSHIP) present');
+}
+
+console.log('\n=== v1.0.73 invalid preset → placeholder ===\n');
+{
+  const p = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ tone_tags: ['not_a_preset'] }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    p.includes('TONE: (no preset selected'),
+    'unknown preset falls back to placeholder'
   );
 }
 
