@@ -2,6 +2,26 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.74] - 2026-04-22 — Hotfix: server-side tone validation still required 2-4 tags
+
+v1.0.73 replaced 16 combinable tags with a single preset everywhere except `server/services/preludeService.js`, which still rejected submissions with fewer than 2 tone_tags:
+
+```
+Error: Invalid setup: Pick 2-4 tone tags
+```
+
+### Fix
+
+`validateSetupPayload()` now checks for exactly 1 tone_tag and that the value is one of the four known preset keys (`brutal_gritty`, `epic_fantasy`, `rustic_spiritual`, `tender_hopeful`). Any unknown preset is rejected with a clear error including the unknown value.
+
+Client-side and server-side validation now match.
+
+### Tests + build
+
+- No new tests — existing suites already covered prompt rendering with single preset values. The validation path is exercised by the `POST /api/prelude/setup` endpoint, which wasn't test-instrumented before and still isn't (server integration test follow-up noted).
+- All 6 prelude suites still green (398 tests).
+- Client build clean.
+
 ## [1.0.0.73] - 2026-04-22 — Tone preset system: 4 curated presets with full "tone bibles"
 
 Play-test feedback: the old 16-tag combinable tone system wasn't landing. Selecting "gritty + hopeful" vs "epic + mystical + tragic" didn't produce noticeably different prose — the AI defaulted to a mid-register literary fantasy regardless of tags. Three compounding reasons: the AI saw all 16 tag definitions every turn (14 of them irrelevant — signal polluted by noise); guidance was abstract, not exemplified; combinations were under-specified so the AI picked one tag and ignored the rest.

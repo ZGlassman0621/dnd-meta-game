@@ -121,8 +121,14 @@ export function validateSetupPayload(payload) {
     return { ok: false, field: 'cares', reason: 'Pick exactly 3 things they care about' };
   }
 
-  if (!Array.isArray(payload.tone_tags) || payload.tone_tags.length < 2 || payload.tone_tags.length > 4) {
-    return { ok: false, field: 'tone_tags', reason: 'Pick 2-4 tone tags' };
+  // v1.0.73 — tone is a single curated preset (stored as a single-item
+  // array to match the legacy column shape).
+  if (!Array.isArray(payload.tone_tags) || payload.tone_tags.length !== 1) {
+    return { ok: false, field: 'tone_tags', reason: 'Pick one tone preset' };
+  }
+  const validPresetValues = ['brutal_gritty', 'epic_fantasy', 'rustic_spiritual', 'tender_hopeful'];
+  if (!validPresetValues.includes(payload.tone_tags[0])) {
+    return { ok: false, field: 'tone_tags', reason: `Unknown tone preset: ${payload.tone_tags[0]}` };
   }
 
   return { ok: true };
