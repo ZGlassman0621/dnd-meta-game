@@ -2,6 +2,18 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.85] - 2026-04-22 — Hotfix (cont.): CharacterManager was still wrapping PreludeSession in `.container`
+
+v1.0.84 removed the `.container` className from PreludeSession's OWN outer shell — but `CharacterManager.jsx` (the parent) was ALSO wrapping the session in `<div className="container">` at line 203. That outer wrapper is what drew the big dark outlined box around the play+Lore flex row in the playtest screenshot.
+
+Fix: when `preludeSessionCharacter` is active, CharacterManager now returns PreludeSession directly (no `.container` wrapper). The session owns its own layout + chrome. When preludeSessionCharacter is null, CharacterManager uses the `.container` wrapper as before for the character-list view.
+
+This is an early-return pattern — the expansive PreludeSession gets full page control; the narrower CharacterManager views keep their container chrome.
+
+### Tests + build
+
+Pure UI fix. All 7 prelude suites still green (516 tests). Client build clean.
+
 ## [1.0.0.84] - 2026-04-22 — Hotfix: container chrome was wrapping the outer shell instead of each panel
 
 v1.0.83 broke the visual layout. The `.container` CSS class from `index.css` adds background + border + 2rem padding + backdrop-filter — and I was applying it to the OUTER shell (now 1668px wide with a centered flex row inside). Result: a huge dark rounded box with the play area centered in it and a big empty region visible beside it (especially obvious when Lore was closed — the shell was drawing its chrome around the empty flex space).

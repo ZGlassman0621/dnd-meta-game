@@ -199,17 +199,27 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
   }
 
 
+  // v1.0.85 — PreludeSession renders its own panel chrome (per-panel now
+  // that Lore pops out to the right). Wrapping it in <div className="container">
+  // double-wraps and draws the parent chrome around the play+Lore flex row,
+  // which looks like a big empty outlined box when Lore is closed. Skip the
+  // container wrapper when PreludeSession is active; the session owns its
+  // own layout.
+  if (preludeSessionCharacter) {
+    return (
+      <PreludeSession
+        character={preludeSessionCharacter}
+        onBack={() => {
+          setPreludeSessionCharacter(null)
+          if (onCreationFormChange) onCreationFormChange(false)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="container">
-      {preludeSessionCharacter ? (
-        <PreludeSession
-          character={preludeSessionCharacter}
-          onBack={() => {
-            setPreludeSessionCharacter(null)
-            if (onCreationFormChange) onCreationFormChange(false)
-          }}
-        />
-      ) : preludeArcCharacter ? (
+      {preludeArcCharacter ? (
         <PreludeArcPreview
           character={preludeArcCharacter}
           onBegin={() => {
