@@ -2,6 +2,56 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.78] - 2026-04-22 — Proper session wrap-up screen
+
+The pre-existing session-end banner was thin: session number, a chapter/age line (still referencing the outdated "~7-10 sessions" from before v1.0.76), AI-generated prose recap, cliffhanger, two action buttons. No sense of what happened mechanically — which emergences got accepted, what canon facts landed, which NPCs the player met, how HP trended, whether a chapter or age advanced.
+
+Upgraded to a proper wrap-up screen.
+
+### What's new on the wrap-up screen
+
+- **Progress indicator** — 5-segment bar showing session N of 5. Filled purple through the just-completed session, dim for future sessions.
+- **Prose recap** — unchanged (v1.0.55 Sonnet-generated, with accepted emergences woven in per v1.0.56).
+- **SESSION HIGHLIGHTS** — new structured section (amber accent, only renders sections with content):
+  - ⚑ **Path chosen** — if theme committed during the session (v1.0.77 ceremony), shown here
+  - ↑ **Chapter advanced** — e.g. "Chapter 1 → 2"
+  - ⏳ **Age advanced** — "+3 years — age 9"
+  - ✦ **Emergences accepted** — each stat/skill the player accepted, with reason
+  - 👥 **Met** — NPCs canonized this session, with relationships
+  - 🗺️ **Places named** — locations canonized
+  - 📜 **Canon facts added** — count + pointer to Lore panel
+  - 💔 **Net HP change** — total delta across the session + recent reasons
+- **Cliffhanger** — moved to its own card (purple accent, "CARRIED FORWARD" header)
+- **Action footer** — "Begin Session N+1" + "Back to characters"
+
+### How it's wired
+
+Client-side accumulation — no extra server endpoints needed. A new `sessionSummary` state in `PreludeSession.jsx` accumulates as each turn's marker payload flows through:
+
+- `markers.canonFactsAdded` / `markers.npcsCreated` / `markers.locationsCreated` → appended to running arrays
+- `markers.hpDelta` → summed into `totalHpDelta`
+- `markers.hpReasons` → kept as a rolling last-10
+- `markers.chapterAdvanced` / `markers.ageAdvanced` → latched (last value wins per session)
+- Emergence acceptances → pushed when the player clicks Accept (captured from the message-feed record at commit time)
+- Theme commitments → pushed when the Choose Your Path card fires `onCommit`
+
+Reset at resume: when the player begins a new play-session (`handleResumeSession`), the summary clears so the next wrap-up starts fresh.
+
+### The "7-10" copy fix
+
+Previous copy: *"Chapter X of 4 · chapterName · Age Y · ~7-10 sessions total in a prelude"* and *"Ready for Session N+1? Or pick this up later."* The "7-10" was left over from the pre-v1.0.76 structure. Now reads *"Session N of 5 complete"* at the top, *"Ready for Session N+1 of 5?"* as the next-step prompt, and *"This is the final session of the prelude — the arc approaches the Threshold."* at session 5.
+
+### What's NOT in this release
+
+- **Character state snapshot** (current stats, accumulated skills, theme trajectory top-3) — the Setup panel already shows these, so not duplicated here. Could add if the wrap-up feels thin during playtest.
+- **Server-computed session summary** — pushed off; client-side accumulation is sufficient and needs no DB round-trip. Can convert later if client state proves unreliable (e.g., the player reloads mid-session).
+- **Final-session wrap-up** (after `[PRELUDE_END]`) — deferred to Phase 5's transition-to-primary-campaign flow. This release covers intermediate-session wrap-ups only.
+
+### Tests + build
+
+- Tests unchanged — wrap-up is pure UI with no new server logic to exercise. All 7 prelude suites stay green (516 tests).
+- Client build clean. No schema changes.
+
 ## [1.0.0.77] - 2026-04-22 — Theme commitment at Ch3 wrap-up drives Ch4 departure
 
 User insight (from playtest discussion): tone shouldn't deterministically shape the departure — that makes Brutal & Gritty always conscription, Tender & Hopeful always apprenticeship. Instead, the player's character choices throughout the story should drive which theme emerges, and the theme should drive the departure. A Brutal & Gritty Soldier departs for war. A Tender & Hopeful Soldier departs for a quiet enlistment. A Brutal & Gritty Acolyte might go on a grim pilgrimage; a Tender & Hopeful Acolyte to a pastoral apprenticeship. Theme drives TYPE, tone drives FEEL.

@@ -32,6 +32,21 @@ export default function PreludeSession({ character, onBack }) {
   const [sessionEnded, setSessionEnded] = useState(false)
   const [lastCliffhanger, setLastCliffhanger] = useState(null)
   const [sessionRecap, setSessionRecap] = useState(null)
+  // v1.0.78 — session highlights accumulator. Populated per-turn from
+  // data.markers so the wrap-up screen can show "what happened this play-
+  // session" without any extra server round-trips. Reset on session start
+  // and on resume (new play-session). Never persisted.
+  const [sessionSummary, setSessionSummary] = useState({
+    emergencesAccepted: [],     // { kind, target, magnitude, reason }
+    canonFactsAdded: [],        // { subject, fact, category }
+    npcsCanonized: [],          // { name, relationship }
+    locationsCanonized: [],     // { name, type }
+    totalHpDelta: 0,            // net across all HP_CHANGE markers
+    hpReasons: [],              // most recent reason strings
+    chapterAdvanced: null,      // { from, to }
+    ageAdvanced: null,          // { from, to, years }
+    themeCommitted: null        // theme id, if committed this session
+  })
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [showSetup, setShowSetup] = useState(false)
@@ -196,6 +211,30 @@ export default function PreludeSession({ character, onBack }) {
         notices.push({ role: 'notice', content: label })
       }
       setMessages(prev => [...prev, ...notices, newAssistant])
+
+      // v1.0.78 — accumulate session highlights from this turn's markers.
+      // The wrap-up screen will render these so the player sees what
+      // happened mechanically this play-session, not just the prose recap.
+      const m = data.markers || {}
+      setSessionSummary(prev => ({
+        ...prev,
+        canonFactsAdded: m.canonFactsAdded?.length
+          ? [...prev.canonFactsAdded, ...m.canonFactsAdded]
+          : prev.canonFactsAdded,
+        npcsCanonized: m.npcsCreated?.length
+          ? [...prev.npcsCanonized, ...m.npcsCreated]
+          : prev.npcsCanonized,
+        locationsCanonized: m.locationsCreated?.length
+          ? [...prev.locationsCanonized, ...m.locationsCreated]
+          : prev.locationsCanonized,
+        totalHpDelta: prev.totalHpDelta + (m.hpDelta || 0),
+        hpReasons: m.hpReasons?.length
+          ? [...prev.hpReasons, ...m.hpReasons].slice(-10)
+          : prev.hpReasons,
+        chapterAdvanced: m.chapterAdvanced || prev.chapterAdvanced,
+        ageAdvanced: m.ageAdvanced || prev.ageAdvanced
+      }))
+
       if (data.runtime) setRuntime(data.runtime)
       if (data.model === 'sonnet' || data.model === 'opus' || data.model === 'auto') setModel(data.model)
       if (data.resolvedModel === 'sonnet' || data.resolvedModel === 'opus') setResolvedModel(data.resolvedModel)
@@ -260,6 +299,25 @@ export default function PreludeSession({ character, onBack }) {
           )
         }
       }))
+      // v1.0.78 — track accepted emergences for the wrap-up screen.
+      if (decision === 'accept') {
+        // Find the full emergence record in the message feed so we can
+        // capture kind/target/magnitude/reason for the highlights list.
+        const found = messages
+          .flatMap(m => m.offeredEmergences || [])
+          .find(e => e.emergenceId === emergenceId)
+        if (found) {
+          setSessionSummary(prev => ({
+            ...prev,
+            emergencesAccepted: [...prev.emergencesAccepted, {
+              kind: found.kind,
+              target: found.kind === 'stat' ? found.stat : found.skill || found.target,
+              magnitude: found.magnitude,
+              reason: found.reason
+            }]
+          }))
+        }
+      }
     } catch (e) {
       setError(e.message)
     }
@@ -277,6 +335,20 @@ export default function PreludeSession({ character, onBack }) {
       // Clear the cliffhanger from the UI — the prompt builder already
       // injects it into the next Sonnet call via session_config.lastCliffhanger,
       // so we don't need to show it as a banner anymore.
+      // v1.0.78 — reset session highlights accumulator for the new
+      // play-session. The wrap-up screen for the upcoming session starts
+      // fresh; the completed session's summary was already shown.
+      setSessionSummary({
+        emergencesAccepted: [],
+        canonFactsAdded: [],
+        npcsCanonized: [],
+        locationsCanonized: [],
+        totalHpDelta: 0,
+        hpReasons: [],
+        chapterAdvanced: null,
+        ageAdvanced: null,
+        themeCommitted: null
+      })
     } catch (e) {
       setError(e.message)
     }
@@ -635,7 +707,11 @@ export default function PreludeSession({ character, onBack }) {
                 <PreludeThemeCommitCard
                   characterId={character?.id}
                   offer={m.themeCommitmentOffer}
-                  onCommit={() => { /* card self-dismisses; no state change needed */ }}
+                  onCommit={({ theme }) => {
+                    if (theme) {
+                      setSessionSummary(prev => ({ ...prev, themeCommitted: theme }))
+                    }
+                  }}
                 />
               )}
               {/* Phase 3 — emergence offer cards. Stat/skill hints get
@@ -746,42 +822,159 @@ export default function PreludeSession({ character, onBack }) {
         <p style={{ color: '#fca5a5', marginBottom: '0.5rem', fontSize: '0.85rem' }}>{error}</p>
       )}
 
-      {/* Session ended banner */}
+      {/* v1.0.78 — Session wrap-up screen. Expanded from the old single-
+          banner into a structured recap with progress bar, session-
+          highlights section, cliffhanger, and action buttons. */}
       {sessionEnded && (
         <div style={{
-          padding: '1rem 1.1rem',
+          padding: '1.25rem 1.3rem',
           background: 'rgba(139,92,246,0.12)',
           border: '1px solid rgba(139,92,246,0.5)',
-          borderRadius: '8px',
+          borderRadius: '10px',
           marginBottom: '1rem'
         }}>
-          <p style={{ margin: 0, fontSize: '1rem', color: '#e9d5ff', fontWeight: 700 }}>
-            ✦ Session {sessionNum} complete
+          {/* Header + progress bar */}
+          <p style={{ margin: 0, fontSize: '1.05rem', color: '#e9d5ff', fontWeight: 700 }}>
+            ✦ Session {sessionNum} of 5 complete
           </p>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#9fa3a8' }}>
-            (Chapter {runtime.chapter} of 4 · {chapterName} · Age {runtime.age} · ~7-10 sessions total in a prelude)
+          <p style={{ margin: '0.25rem 0 0.6rem', fontSize: '0.8rem', color: '#9fa3a8' }}>
+            Chapter {runtime.chapter} of 4 · {chapterName} · Age {runtime.age}
           </p>
+          <div style={{
+            display: 'flex',
+            gap: '4px',
+            marginBottom: '1rem',
+            height: '8px'
+          }}>
+            {[1, 2, 3, 4, 5].map(n => (
+              <div key={n} style={{
+                flex: 1,
+                background: n <= sessionNum ? '#a78bfa' : 'rgba(167,139,250,0.18)',
+                borderRadius: '3px'
+              }} />
+            ))}
+          </div>
+
+          {/* AI-generated prose recap (v1.0.55) */}
           {sessionRecap && (
-            <div style={{ margin: '0.75rem 0 0', padding: '0.75rem 0.9rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', borderLeft: '3px solid #a78bfa' }}>
+            <div style={{ margin: '0 0 0.85rem', padding: '0.75rem 0.9rem', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', borderLeft: '3px solid #a78bfa' }}>
               <p style={{ margin: 0, fontSize: '0.72rem', color: '#a78bfa', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
                 SESSION {sessionNum} RECAP
               </p>
-              <p style={{ margin: 0, fontSize: '0.88rem', color: '#ddd', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#ddd', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                 {sessionRecap}
               </p>
             </div>
           )}
+
+          {/* v1.0.78 — Session highlights ("what happened mechanically").
+              Accumulated client-side from per-turn marker payloads. Only
+              renders sections that have something to show. */}
+          {(() => {
+            const s = sessionSummary
+            const hasAny =
+              s.emergencesAccepted.length > 0 ||
+              s.canonFactsAdded.length > 0 ||
+              s.npcsCanonized.length > 0 ||
+              s.locationsCanonized.length > 0 ||
+              s.totalHpDelta !== 0 ||
+              s.chapterAdvanced ||
+              s.ageAdvanced ||
+              s.themeCommitted
+            if (!hasAny) return null
+            return (
+              <div style={{ margin: '0 0 0.85rem', padding: '0.75rem 0.9rem', background: 'rgba(0,0,0,0.15)', borderRadius: '6px', borderLeft: '3px solid #fbbf24' }}>
+                <p style={{ margin: 0, fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                  SESSION HIGHLIGHTS
+                </p>
+
+                {s.themeCommitted && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.85rem', color: '#e4e4e4' }}>
+                    ⚑ <strong style={{ color: '#c4b5fd' }}>Path chosen:</strong> {s.themeCommitted.replace(/_/g, ' ')}
+                  </div>
+                )}
+
+                {s.chapterAdvanced && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.85rem', color: '#e4e4e4' }}>
+                    ↑ <strong style={{ color: '#86efac' }}>Chapter {s.chapterAdvanced.from} → {s.chapterAdvanced.to}</strong>
+                  </div>
+                )}
+
+                {s.ageAdvanced && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.85rem', color: '#e4e4e4' }}>
+                    ⏳ <strong style={{ color: '#86efac' }}>
+                      +{s.ageAdvanced.years} year{s.ageAdvanced.years === 1 ? '' : 's'} — age {s.ageAdvanced.to}
+                    </strong>
+                  </div>
+                )}
+
+                {s.emergencesAccepted.length > 0 && (
+                  <div style={{ marginBottom: '0.4rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#c4b5fd', marginBottom: '0.2rem' }}>✦ Emergences accepted</div>
+                    {s.emergencesAccepted.map((e, i) => (
+                      <div key={i} style={{ fontSize: '0.82rem', color: '#ddd', marginLeft: '0.8rem', lineHeight: 1.4 }}>
+                        {e.kind === 'stat' && <>• <strong>{String(e.target).toUpperCase()}</strong> +{e.magnitude}{e.reason ? <span style={{ color: '#9fa3a8', fontStyle: 'italic' }}> — {e.reason}</span> : null}</>}
+                        {e.kind === 'skill' && <>• <strong>{String(e.target).replace(/_/g, ' ')}</strong> (skill){e.reason ? <span style={{ color: '#9fa3a8', fontStyle: 'italic' }}> — {e.reason}</span> : null}</>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {s.npcsCanonized.length > 0 && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.82rem', color: '#ddd' }}>
+                    <span style={{ color: '#c4b5fd' }}>👥 Met:</span>{' '}
+                    {s.npcsCanonized.map(n => `${n.name}${n.relationship ? ` (${n.relationship})` : ''}`).join(', ')}
+                  </div>
+                )}
+
+                {s.locationsCanonized.length > 0 && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.82rem', color: '#ddd' }}>
+                    <span style={{ color: '#c4b5fd' }}>🗺️ Places named:</span>{' '}
+                    {s.locationsCanonized.map(l => l.name).join(', ')}
+                  </div>
+                )}
+
+                {s.canonFactsAdded.length > 0 && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.82rem', color: '#ddd' }}>
+                    <span style={{ color: '#c4b5fd' }}>📜 Canon facts added:</span>{' '}
+                    <span style={{ color: '#e4e4e4' }}>{s.canonFactsAdded.length}</span>
+                    <span style={{ color: '#9fa3a8', fontSize: '0.78rem' }}> (see Lore panel for full ledger)</span>
+                  </div>
+                )}
+
+                {s.totalHpDelta !== 0 && (
+                  <div style={{ marginBottom: '0.4rem', fontSize: '0.82rem', color: '#ddd' }}>
+                    <span style={{ color: '#c4b5fd' }}>💔 Net HP change:</span>{' '}
+                    <span style={{ color: s.totalHpDelta > 0 ? '#86efac' : '#fca5a5' }}>
+                      {s.totalHpDelta > 0 ? `+${s.totalHpDelta}` : s.totalHpDelta}
+                    </span>
+                    {s.hpReasons.length > 0 && (
+                      <span style={{ color: '#9fa3a8', fontSize: '0.78rem', fontStyle: 'italic' }}> — {s.hpReasons.slice(-3).join('; ')}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Cliffhanger (unchanged position) */}
           {lastCliffhanger && (
-            <p style={{ margin: '0.55rem 0 0', fontSize: '0.88rem', color: '#ddd', fontStyle: 'italic', lineHeight: 1.45 }}>
-              <strong style={{ color: '#c4b5fd', fontStyle: 'normal' }}>Carried forward:</strong> {lastCliffhanger}
-            </p>
+            <div style={{ margin: '0 0 0.85rem', padding: '0.65rem 0.9rem', background: 'rgba(0,0,0,0.15)', borderRadius: '6px', borderLeft: '3px solid #c4b5fd' }}>
+              <div style={{ fontSize: '0.72rem', color: '#c4b5fd', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
+                CARRIED FORWARD
+              </div>
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#ddd', fontStyle: 'italic', lineHeight: 1.5 }}>
+                {lastCliffhanger}
+              </p>
+            </div>
           )}
-          <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: '#9fa3a8' }}>
-            {sessionNum < 10
-              ? `Ready for Session ${sessionNum + 1}? Or pick this up later from the character list.`
-              : 'This is a late session — the arc may be approaching the Threshold.'}
+
+          <p style={{ margin: '0.5rem 0 0.75rem', fontSize: '0.8rem', color: '#9fa3a8' }}>
+            {sessionNum < 5
+              ? `Ready for Session ${sessionNum + 1} of 5? Or pick this up later from the character list.`
+              : 'This is the final session of the prelude — the arc approaches the Threshold.'}
           </p>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button onClick={handleResumeSession} className="button" style={{ background: '#8b5cf6', color: '#fff', flex: 1 }}>
               ▶ Begin Session {sessionNum + 1}
             </button>
