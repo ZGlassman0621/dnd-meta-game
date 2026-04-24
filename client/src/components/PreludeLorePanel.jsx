@@ -30,7 +30,7 @@ const CATEGORY_META = {
   item: { label: 'Items', color: '#c084fc', hint: 'Named objects, heirlooms, tokens' }
 }
 
-export default function PreludeLorePanel({ characterId, visible, onClose }) {
+export default function PreludeLorePanel({ characterId, visible, onClose, docked = false }) {
   const [canonFacts, setCanonFacts] = useState([])
   const [filter, setFilter] = useState('')
   const [error, setError] = useState('')
@@ -73,35 +73,55 @@ export default function PreludeLorePanel({ characterId, visible, onClose }) {
 
   if (!visible) return null
 
+  // v1.0.82 — docked mode uses an inline/sticky container (shares the flex
+  // row with the narrative column). Overlay mode (default) uses the old
+  // position:fixed slide-in — kept for back-compat if any consumer still
+  // uses it. The close button is only rendered in overlay mode; docked
+  // mode relies on the host page's toggle button in the top bar.
+  const containerStyle = docked
+    ? {
+        position: 'sticky',
+        top: '0.5rem',
+        height: 'calc(100vh - 1rem)',
+        background: 'rgba(15,15,20,0.85)',
+        border: '1px solid rgba(251,191,36,0.3)',
+        borderRadius: '8px',
+        overflowY: 'auto',
+        padding: '1.1rem 1rem 2rem'
+      }
+    : {
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: '460px',
+        maxWidth: '90vw',
+        background: 'rgba(15,15,20,0.98)',
+        borderLeft: '1px solid rgba(251,191,36,0.4)',
+        boxShadow: '-4px 0 20px rgba(0,0,0,0.5)',
+        overflowY: 'auto',
+        zIndex: 100,
+        padding: '1.25rem 1.1rem 2rem'
+      }
+
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: '460px',
-      maxWidth: '90vw',
-      background: 'rgba(15,15,20,0.98)',
-      borderLeft: '1px solid rgba(251,191,36,0.4)',
-      boxShadow: '-4px 0 20px rgba(0,0,0,0.5)',
-      overflowY: 'auto',
-      zIndex: 100,
-      padding: '1.25rem 1.1rem 2rem'
-    }}>
+    <div style={containerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.75rem' }}>
         <h3 style={{ margin: 0, color: '#fbbf24', fontSize: '1.1rem' }}>Lore & Canon</h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'transparent',
-            border: '1px solid rgba(251,191,36,0.3)',
-            color: '#fbbf24',
-            padding: '0.2rem 0.6rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.8rem'
-          }}
-        >Close</button>
+        {!docked && (
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(251,191,36,0.3)',
+              color: '#fbbf24',
+              padding: '0.2rem 0.6rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.8rem'
+            }}
+          >Close</button>
+        )}
       </div>
 
       <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.9rem' }}>

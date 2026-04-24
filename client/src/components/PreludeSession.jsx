@@ -356,7 +356,12 @@ export default function PreludeSession({ character, onBack }) {
 
   // ---- Render ------------------------------------------------------------
 
-  const shellStyle = { maxWidth: '860px', margin: '0 auto' }
+  // v1.0.82 — widened shell to use desktop real estate. Max 1800px to
+  // prevent ultra-wide stretching but otherwise fills the viewport.
+  // Main content renders as a flex row: narrative column (grows) + Lore
+  // column (420px, only when showLore is true). Header and wrap-up stay
+  // full-width above/below.
+  const shellStyle = { maxWidth: '1800px', margin: '0 auto', padding: '0 1rem' }
 
   if (loading) {
     // When the arc preview was skipped, this call generates the arc plan
@@ -450,68 +455,79 @@ export default function PreludeSession({ character, onBack }) {
               />
               Auto
             </label>
-            {/* Auto-resolution indicator. Shows on last turn's result when
-                mode is 'auto' — e.g. "→ opus · heavy-weight" — so the player
-                can see why a beat went to Opus. Hidden when Auto is off. */}
-            {model === 'auto' && resolvedModel && (
+            {/* v1.0.82 — auto-resolution indicator. Shows ONLY when Auto
+                is on AND last-turn escalated to Opus (or for any non-null
+                resolve reason). Sonnet→Sonnet is the uninteresting default;
+                hiding it keeps the top bar less noisy. */}
+            {model === 'auto' && resolvedModel === 'opus' && (
               <div style={{
-                fontSize: '0.68rem',
-                color: resolvedModel === 'opus' ? '#c4b5fd' : '#6b7280',
+                fontSize: '0.66rem',
+                color: '#c4b5fd',
                 fontFamily: 'monospace',
                 lineHeight: 1
               }}>
-                last turn → {resolvedModel}
-                {resolveReason ? ` · ${resolveReason}` : ''}
+                → opus{resolveReason ? ` · ${resolveReason}` : ''}
               </div>
             )}
           </div>
-          <button onClick={() => setShowLore(s => !s)} style={{
-            padding: '0.4rem 0.8rem',
-            background: showLore ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.1)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            color: '#fbbf24',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.82rem'
-          }} title="View the canon ledger — named world events, places, people, relationships, traits, and items the DM has established.">{showLore ? 'Hide lore' : 'Lore'}</button>
-          <button onClick={() => setShowSetup(s => !s)} style={{
-            padding: '0.4rem 0.8rem',
-            background: showSetup ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.1)',
-            border: '1px solid rgba(139,92,246,0.4)',
-            color: '#c4b5fd',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.82rem'
-          }}>{showSetup ? 'Hide setup' : 'Setup'}</button>
-          <button onClick={handleEndSession} disabled={sessionEnded} style={{
-            padding: '0.4rem 0.8rem',
-            background: 'rgba(239,68,68,0.15)',
-            border: '1px solid rgba(239,68,68,0.4)',
-            color: sessionEnded ? '#6b7280' : '#fca5a5',
-            borderRadius: '4px',
-            cursor: sessionEnded ? 'not-allowed' : 'pointer',
-            fontSize: '0.82rem'
-          }}>End session</button>
-          <button onClick={onBack} style={{
-            padding: '0.4rem 0.8rem',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            color: '#ccc',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.82rem'
-          }}>Characters</button>
+          {(() => {
+            // v1.0.82 — compact uniform button styling
+            const btn = (bg, border, color, extra = {}) => ({
+              padding: '0.35rem 0.65rem',
+              background: bg,
+              border: `1px solid ${border}`,
+              color,
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              whiteSpace: 'nowrap',
+              ...extra
+            })
+            return (
+              <>
+                <button
+                  onClick={() => setShowLore(s => !s)}
+                  title="Toggle the Lore panel — canon, world events, relationships."
+                  style={btn(
+                    showLore ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.1)',
+                    'rgba(251,191,36,0.4)',
+                    '#fbbf24'
+                  )}
+                >Lore</button>
+                <button
+                  onClick={() => setShowSetup(s => !s)}
+                  title="Toggle the Setup review — character details, canon ledger, emerging values."
+                  style={btn(
+                    showSetup ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.1)',
+                    'rgba(139,92,246,0.4)',
+                    '#c4b5fd'
+                  )}
+                >Setup</button>
+                <button
+                  onClick={handleEndSession}
+                  disabled={sessionEnded}
+                  title="End this play-session and save."
+                  style={btn(
+                    'rgba(239,68,68,0.15)',
+                    'rgba(239,68,68,0.4)',
+                    sessionEnded ? '#6b7280' : '#fca5a5',
+                    { cursor: sessionEnded ? 'not-allowed' : 'pointer' }
+                  )}
+                >End</button>
+                <button
+                  onClick={onBack}
+                  title="Back to character list."
+                  style={btn(
+                    'rgba(255,255,255,0.05)',
+                    'rgba(255,255,255,0.15)',
+                    '#ccc'
+                  )}
+                >Characters</button>
+              </>
+            )
+          })()}
         </div>
       </div>
-
-      {/* v1.0.75 — Lore panel slide-in. Dedicated canon ledger view so the
-          player can reference world events, places, people, and historical
-          context the DM has established. */}
-      <PreludeLorePanel
-        characterId={character?.id}
-        visible={showLore}
-        onClose={() => setShowLore(false)}
-      />
 
       {/* Setup review — lets the player confirm what they picked. */}
       {showSetup && (() => {
@@ -630,11 +646,19 @@ export default function PreludeSession({ character, onBack }) {
         )
       })()}
 
+      {/* v1.0.82 — Main content flex row. Narrative column grows; Lore
+          column (420px) renders alongside when toggled on. Input bar
+          lives in the narrative column so its width matches the scroller
+          and doesn't extend under the Lore panel. */}
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'stretch' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+
       {/* Message scroller */}
       <div
         ref={scrollerRef}
         style={{
-          maxHeight: '60vh',
+          flex: 1,
+          minHeight: '60vh',
           overflowY: 'auto',
           padding: '0.5rem 0.25rem',
           marginBottom: '1rem'
@@ -1027,6 +1051,23 @@ export default function PreludeSession({ character, onBack }) {
           </button>
         </div>
       )}
+
+        </div>{/* /narrative column */}
+
+        {/* v1.0.82 — Docked Lore panel. Renders as a 420px side column
+            when showLore is true; closes to full-width narrative when
+            toggled off. No fixed-position overlay anymore. */}
+        {showLore && (
+          <div style={{ width: '420px', flexShrink: 0 }}>
+            <PreludeLorePanel
+              characterId={character?.id}
+              visible={showLore}
+              onClose={() => setShowLore(false)}
+              docked={true}
+            />
+          </div>
+        )}
+      </div>{/* /flex row */}
     </div>
   )
 }

@@ -2,6 +2,42 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.82] - 2026-04-22 — Desktop-friendly play area: wider shell, docked Lore panel, compact top bar
+
+Player feedback: the 860px-max narrative column left most of a desktop monitor empty, and the Lore slide-in panel wasted the natural right-hand rail that was sitting right there. Top bar buttons were also bulkier than they needed to be.
+
+### Shell — widened to use desktop real estate
+
+`shellStyle.maxWidth` changed from 860px → 1800px with 1rem side padding. Content centers on truly wide monitors (ultra-wide doesn't stretch forever) but fills everything up to ~1800px of horizontal space.
+
+### Flex two-column content row
+
+Content area below the top bar is now a flex row:
+
+- **Narrative column** — `flex: 1`, grows to fill available space. Contains the message scroller (now `flex: 1, minHeight: 60vh` instead of `maxHeight: 60vh`), the session wrap-up banner, and the input bar. Input width tracks the narrative column so it doesn't extend under the Lore panel.
+- **Lore column** — 420px fixed width, `flex-shrink: 0`, only rendered when Lore is toggled on. No longer a `position: fixed` slide-in overlay.
+
+When Lore is closed, the narrative column takes the full width. When Lore is open, narrative shrinks to leave room and Lore sits sticky at the right.
+
+### PreludeLorePanel — new `docked` mode
+
+`PreludeLorePanel` takes a new `docked` prop. When `true`, container uses `position: sticky` + rounded border + height-constrained overflow, rendering inline inside its parent column. When `false` (default), the old fixed-position slide-in behavior is preserved for any consumer that still uses it. Close button is hidden in docked mode since the top bar's Lore toggle does the toggling.
+
+### Top bar — compact uniform buttons
+
+All action buttons (Lore / Setup / End / Characters) now use a shared compact spec: `0.35rem 0.65rem` padding, `0.78rem` font, `nowrap` whitespace. Smaller without feeling cramped. Renamed *"End session"* → *"End"* for visual weight balance. Tooltips added on hover for each button.
+
+The "last turn → sonnet" indicator under the Auto toggle now only shows when Auto is on AND the last turn resolved to Opus (or had a non-null resolve reason). Sonnet→Sonnet is the uninteresting default; hiding it cuts noise. Text also compacted from *"last turn → opus · heavy-weight"* → *"→ opus · heavy-weight"*.
+
+### No schema or API changes
+
+Pure UI restructure. All 7 prelude suites still green (516 tests). Client build clean.
+
+### Known follow-ups (not shipped here)
+
+- The Setup panel is still an inline expanded section above the message feed. Could also be converted to a dockable right-side panel (sibling to Lore), but one-at-a-time or two-column right-side is a bigger UX decision — deferring to a future round based on playtest feedback.
+- Wrap-up screen and setup panel span only the narrative column width. If you find wrap-ups feel cramped at certain viewport sizes, they can be expanded.
+
 ## [1.0.0.81] - 2026-04-22 — Hotfixes: tone_reflection storage column + departure seed is a seed, not a verdict
 
 Two bugs surfaced in the next playtest of v1.0.80:
