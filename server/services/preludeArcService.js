@@ -161,6 +161,7 @@ BE CONCISE. Keep prose TIGHT. This is scaffolding, not the final story. Stay wit
 OUTPUT FORMAT. Return a SINGLE JSON object. No prose before or after. No markdown fences.
 
 {
+  "tone_reflection": "2-3 sentences showing HOW you interpreted the player's tone preset for THIS character's arc. Reference the preset name AND cite at least one specific register choice you're leaning into (a vocabulary anchor, a scene-type treatment, an age-scaling approach). E.g., 'Rustic & Spiritual shapes this arc around the temple calendar — feast days mark time, Sister Halene's prayers frame the home, and the first-rupture at chapter 2 will be a crisis of faith when a shrine goes cold.' Makes the tone visible to the player so they can see you're honoring it.",
   "home_world": {
     "description": "2-3 sentences, physical + social",
     "locals": [ { "name": "...", "role": "...", "description": "1 short sentence" } ],
@@ -211,6 +212,7 @@ QUANTITY LIMITS:
 - seeded_emergences per chapter: 1-2 entries
 
 FINAL REMINDER:
+- **tone_reflection is required.** 2-3 sentences citing the tone preset BY NAME and naming at least one specific register choice (vocabulary, scene-type treatment, age-scaling approach) you're leaning into. This shows the player the AI understands the tone before they commit to playing the arc.
 - **Beats are SITUATIONS the player walks into, not scripted outcomes.** If a beat says what the character does, says, feels, or decides — rewrite it. Describe the pressure. Leave the answer.
 - **No invented character traits.** Physical markers, family secrets, hidden bloodlines, prophecies — none of these unless the player put them in setup. Respect their authorship.
 - **Trajectory nudges cite player setup by name.** Say "because you said you care about X" — not "because the character is aasimar."

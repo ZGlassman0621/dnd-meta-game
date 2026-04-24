@@ -2,6 +2,36 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.79] - 2026-04-22 — Arc preview: 5-session copy fix + visible tone reflection
+
+Two small but important fixes to the post-setup arc preview (what the player sees after the 12-question setup wizard, before they begin playing).
+
+### The "seven-to-ten-session" copy bug
+
+`PreludeArcPreview.jsx` still said *"A seven-to-ten-session shape for your character's first twenty years"* — left over from before v1.0.76's 5-session restructure. Setup wizard also still said *"You'll play through 7-10 sessions of their growing up."* Both updated to "five" / "5 focused sessions."
+
+### Tone reflection — the AI's understanding made visible
+
+User feedback: they couldn't tell from the arc preview whether the AI had actually internalized the tone preset or was just running a generic arc with tone as decoration. Fix: Opus now emits a `tone_reflection` field in the arc plan JSON — 2-3 sentences citing the preset BY NAME and naming at least one specific register choice (vocabulary, scene-type treatment, age-scaling approach) it's leaning into for THIS character's arc.
+
+Example output for a Rustic & Spiritual setup:
+> *"Rustic & Spiritual shapes this arc around the temple calendar — feast days mark time, Sister Halene's prayers frame the home, and the first-rupture at chapter 2 will be a crisis of faith when a shrine goes cold."*
+
+The arc preview now renders a dedicated **Tone** card at the top (purple accent) showing:
+- The selected preset's label + description + reference works (from the player-facing card)
+- A sub-panel titled *"HOW THE AI IS INTERPRETING THIS TONE"* with the `tone_reflection`
+
+Old arc plans (pre-v1.0.79) don't have this field — the card renders without the reflection sub-panel. Graceful fallback.
+
+### Schema + prompt changes
+
+`preludeArcService.buildArcSystemPrompt` adds `tone_reflection` to the top of the required JSON output schema and a FINAL REMINDER line flagging it as required with specific content requirements. No migration needed — the arc plan is stored as a JSON blob and just gets the new field.
+
+### Tests + build
+
+- Existing tests unchanged — no new server logic tested specifically for this schema change (the field either appears in Opus output or doesn't; failure mode is a missing UI section, not a crash).
+- All 7 prelude suites still green (516 tests). Client build clean.
+
 ## [1.0.0.78] - 2026-04-22 — Proper session wrap-up screen
 
 The pre-existing session-end banner was thin: session number, a chapter/age line (still referencing the outdated "~7-10 sessions" from before v1.0.76), AI-generated prose recap, cliffhanger, two action buttons. No sense of what happened mechanically — which emergences got accepted, what canon facts landed, which NPCs the player met, how HP trended, whether a chapter or age advanced.

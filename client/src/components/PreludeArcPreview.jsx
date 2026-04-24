@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TONE_PRESETS } from '../data/preludeSetup'
 
 /**
  * Post-setup arc preview.
@@ -155,10 +156,58 @@ export default function PreludeArcPreview({ character, onReturn, onBegin }) {
           ✦ The Arc of {character.nickname || character.first_name || character.name}
         </h2>
         <p style={{ color: '#bbb', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-          A seven-to-ten-session shape for your character's first twenty years. The beats here are <em>reference</em> —
+          A five-session shape for your character's first twenty years. The beats here are <em>reference</em> —
           your choices in play will bend them.
         </p>
       </div>
+
+      {/* v1.0.79 — Tone interpretation. Shows the player's selected preset
+          AND the AI's reflection on how it interpreted that tone for THIS
+          character's arc. Makes the AI's understanding of the tone visible
+          before the player commits to playing. */}
+      {(() => {
+        const toneTag = character.prelude_setup_data?.tone_tags?.[0]
+        const preset = TONE_PRESETS.find(p => p.value === toneTag)
+        const reflection = plan.tone_reflection
+        if (!preset && !reflection) return null
+        return (
+          <div style={{
+            ...card,
+            background: 'rgba(139, 92, 246, 0.08)',
+            borderLeft: '3px solid #a78bfa'
+          }}>
+            {preset && (
+              <>
+                <h3 style={{ ...heading, color: '#c4b5fd' }}>Tone: {preset.label}</h3>
+                <p style={{ ...beat, color: '#ddd', marginTop: '0.25rem' }}>
+                  {preset.description}
+                </p>
+                {preset.inspirations && (
+                  <p style={{ ...beat, color: '#9fa3a8', fontStyle: 'italic', fontSize: '0.78rem', marginTop: '0.3rem' }}>
+                    Reference works: {preset.inspirations}
+                  </p>
+                )}
+              </>
+            )}
+            {reflection && (
+              <div style={{
+                marginTop: preset ? '0.8rem' : 0,
+                padding: '0.6rem 0.8rem',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '6px',
+                borderLeft: '2px solid #c4b5fd'
+              }}>
+                <p style={{ margin: 0, fontSize: '0.7rem', color: '#c4b5fd', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.3rem' }}>
+                  HOW THE AI IS INTERPRETING THIS TONE
+                </p>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: '#ddd', lineHeight: 1.55 }}>
+                  {reflection}
+                </p>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Home world */}
       {plan.home_world && (

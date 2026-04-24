@@ -224,7 +224,7 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       <div style={{ marginBottom: '1rem' }}>
         <h2 style={{ margin: 0, color: '#a78bfa' }}>Start with a Prelude</h2>
         <p style={{ color: '#bbb', fontSize: '0.9rem', marginTop: '0.25rem', marginBottom: 0 }}>
-          Your character will begin as a child. You'll play through 7-10 sessions of
+          Your character will begin as a child. You'll play through 5 focused sessions of
           their growing up. Class, theme, stats, and values will emerge from what you
           actually do. These 12 questions set the stage.
         </p>
