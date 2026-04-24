@@ -2,6 +2,22 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.80] - 2026-04-22 — Tone card: arc-specific reflection only, no preset boilerplate
+
+v1.0.79's Tone card showed both the generic preset description (which the player had already read at setup) AND the AI's arc-specific `tone_reflection` below it. Result: redundant, and when the character had an old arc plan without the reflection, the card was just a repeat of the setup-time description with no arc-specific signal at all.
+
+Simplified to show ONLY arc-specific content:
+
+- **Header line**: preset name + reference works inline (compact — *"Tone: Epic Fantasy — ref: Tolkien, Brian Staveley, Robert Jordan"*)
+- **Body**: the `tone_reflection` from the arc plan as the primary content
+- **Fallback for old arc plans**: italic note — *"This arc plan was generated before tone reflection was added. Re-roll to see how the AI interprets this tone for your specific character."*
+
+If you have a pre-v1.0.79 arc plan, the fallback tells you to re-roll. If you generate a fresh arc, you see the AI's specific interpretation for your character.
+
+### Tests + build
+
+Pure UI change. Tests unchanged — all 7 prelude suites still green (516 tests). Client build clean.
+
 ## [1.0.0.79] - 2026-04-22 — Arc preview: 5-session copy fix + visible tone reflection
 
 Two small but important fixes to the post-setup arc preview (what the player sees after the 12-question setup wizard, before they begin playing).

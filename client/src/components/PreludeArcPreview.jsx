@@ -161,49 +161,38 @@ export default function PreludeArcPreview({ character, onReturn, onBegin }) {
         </p>
       </div>
 
-      {/* v1.0.79 — Tone interpretation. Shows the player's selected preset
-          AND the AI's reflection on how it interpreted that tone for THIS
-          character's arc. Makes the AI's understanding of the tone visible
-          before the player commits to playing. */}
+      {/* v1.0.79 (updated v1.0.80) — Tone interpretation card. Shows the
+          AI's arc-specific tone_reflection as the primary content; the
+          generic preset description is NOT repeated here (the player
+          already saw it at setup). Falls back to a helpful note if the
+          arc plan is old and lacks the reflection field. */}
       {(() => {
         const toneTag = character.prelude_setup_data?.tone_tags?.[0]
         const preset = TONE_PRESETS.find(p => p.value === toneTag)
         const reflection = plan.tone_reflection
-        if (!preset && !reflection) return null
+        if (!preset) return null
         return (
           <div style={{
             ...card,
             background: 'rgba(139, 92, 246, 0.08)',
             borderLeft: '3px solid #a78bfa'
           }}>
-            {preset && (
-              <>
-                <h3 style={{ ...heading, color: '#c4b5fd' }}>Tone: {preset.label}</h3>
-                <p style={{ ...beat, color: '#ddd', marginTop: '0.25rem' }}>
-                  {preset.description}
-                </p>
-                {preset.inspirations && (
-                  <p style={{ ...beat, color: '#9fa3a8', fontStyle: 'italic', fontSize: '0.78rem', marginTop: '0.3rem' }}>
-                    Reference works: {preset.inspirations}
-                  </p>
-                )}
-              </>
-            )}
-            {reflection && (
-              <div style={{
-                marginTop: preset ? '0.8rem' : 0,
-                padding: '0.6rem 0.8rem',
-                background: 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '6px',
-                borderLeft: '2px solid #c4b5fd'
-              }}>
-                <p style={{ margin: 0, fontSize: '0.7rem', color: '#c4b5fd', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.3rem' }}>
-                  HOW THE AI IS INTERPRETING THIS TONE
-                </p>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: '#ddd', lineHeight: 1.55 }}>
-                  {reflection}
-                </p>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+              <h3 style={{ ...heading, color: '#c4b5fd', margin: 0 }}>Tone: {preset.label}</h3>
+              {preset.inspirations && (
+                <span style={{ color: '#9fa3a8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+                  ref: {preset.inspirations}
+                </span>
+              )}
+            </div>
+            {reflection ? (
+              <p style={{ margin: 0, fontSize: '0.92rem', color: '#e4e4e4', lineHeight: 1.6 }}>
+                {reflection}
+              </p>
+            ) : (
+              <p style={{ margin: 0, fontSize: '0.82rem', color: '#9fa3a8', fontStyle: 'italic', lineHeight: 1.55 }}>
+                (This arc plan was generated before tone reflection was added. Re-roll to see how the AI interprets this tone for your specific character.)
+              </p>
             )}
           </div>
         )
