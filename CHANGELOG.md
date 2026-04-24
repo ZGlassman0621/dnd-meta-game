@@ -2,6 +2,44 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.83] - 2026-04-22 — Lore pops out right (doesn't shrink play area) + title/meta simplified + Auto alignment
+
+Three polish items from the v1.0.82 screenshot review.
+
+### Lore panel now pops out to the right without shrinking the play area
+
+v1.0.82's docked Lore shared the shell's flex row — so when Lore opened, the narrative column shrank to make room. User feedback: the play area should keep its width; Lore appears alongside it, not inside it.
+
+Restructure:
+
+- Shell wraps a single flex row with `justifyContent: center`.
+- **Play area wrapper**: fixed `width: 1200px`, `flex-shrink: 0`. Top bar, messages, wrap-up, and input all live inside this wrapper. The play area keeps this width regardless of Lore state.
+- **Lore popout**: 420px wide sibling of the play area. When toggled on, it appears to the right of the play area; the combined unit (play + gap + Lore = ~1636px) centers together inside the shell.
+- **Shell max-width**: bumped to accommodate play + gap + Lore + padding (~1700px).
+
+When Lore is closed, only the play area renders and it centers alone. When Lore is open, both render side-by-side and the combined unit centers. Play area width never changes.
+
+This is the sibling-dock pattern for future panels. Map panel (eventually) will slot into the same position or a third column using the same approach.
+
+### Title + meta simplified
+
+- **Title**: was *"✦ [Nickname or First Name]'s Prelude"* — now *"✦ [First Name] [Last Name]"* (with fallback to `character.name`).
+- **Meta line**: was *"Session X · Chapter X of 4 — Early Childhood · Age 6 [HP X/X]"* — now *"Session X - Chapter X - Age X - HP X/X"* (hyphen-separated, no "of 4", no chapter name).
+
+### Auto toggle flattened
+
+The column-wrapper around the Auto toggle + resolve-reason indicator was making the toggle taller than its sibling buttons, misaligning the row's baseline. Removed the wrapper; Auto is now a single-line label matching the other buttons' height.
+
+The resolve-reason indicator is gone from the UI (it was noise in common cases). When Auto is on AND last turn resolved to Opus, a tiny **"→opus"** marker appears inside the Auto label itself. The tooltip on hover carries the reason when one exists.
+
+### Tests + build
+
+Pure UI. All 7 prelude suites still green (516 tests). Client build clean.
+
+### Note on future Map panel
+
+User confirmed the map (if/when built in campaign play) would use this same pop-out-right pattern. Either as an alternate panel in the same slot as Lore (toggle between them) or as a second side panel (play + lore + map, three columns). The infrastructure here supports either.
+
 ## [1.0.0.82] - 2026-04-22 — Desktop-friendly play area: wider shell, docked Lore panel, compact top bar
 
 Player feedback: the 860px-max narrative column left most of a desktop monitor empty, and the Lore slide-in panel wasted the natural right-hand rail that was sitting right there. Top bar buttons were also bulkier than they needed to be.

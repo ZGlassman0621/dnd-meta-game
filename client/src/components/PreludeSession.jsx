@@ -356,12 +356,20 @@ export default function PreludeSession({ character, onBack }) {
 
   // ---- Render ------------------------------------------------------------
 
-  // v1.0.82 — widened shell to use desktop real estate. Max 1800px to
-  // prevent ultra-wide stretching but otherwise fills the viewport.
-  // Main content renders as a flex row: narrative column (grows) + Lore
-  // column (420px, only when showLore is true). Header and wrap-up stay
-  // full-width above/below.
-  const shellStyle = { maxWidth: '1800px', margin: '0 auto', padding: '0 1rem' }
+  // v1.0.83 — shell uses a fixed-width play area that DOESN'T change when
+  // the Lore panel toggles. Lore pops out to the right of the play area.
+  // Top bar and play-area footer live inside a fixed-width wrapper; the
+  // flex row that contains the play area + Lore sibling centers them
+  // together on a wide screen. Future "Map" panel will use the same
+  // sibling-dock pattern.
+  const PLAY_AREA_WIDTH = 1200
+  const SIDE_PANEL_WIDTH = 420
+  const SIDE_PANEL_GAP = 16
+  const shellStyle = {
+    maxWidth: `${PLAY_AREA_WIDTH + SIDE_PANEL_WIDTH + SIDE_PANEL_GAP + 32}px`,
+    margin: '0 auto',
+    padding: '0 1rem'
+  }
 
   if (loading) {
     // When the arc preview was skipped, this call generates the arc plan
@@ -395,6 +403,13 @@ export default function PreludeSession({ character, onBack }) {
 
   return (
     <div className="container" style={shellStyle}>
+      {/* v1.0.83 — Flex row wraps the ENTIRE play area + Lore. Lore pops
+          out to the right of the play area without shrinking it. The
+          combined unit (play + Lore) centers inside the shell. Future
+          Map panel will use the same sibling-dock pattern. */}
+      <div style={{ display: 'flex', gap: `${SIDE_PANEL_GAP}px`, justifyContent: 'center', alignItems: 'flex-start' }}>
+        <div style={{ width: `${PLAY_AREA_WIDTH}px`, flexShrink: 0, minWidth: 0 }}>
+
       {/* Top bar */}
       <div style={{
         display: 'flex',
@@ -406,70 +421,66 @@ export default function PreludeSession({ character, onBack }) {
       }}>
         <div>
           <h2 style={{ margin: 0, color: '#a78bfa' }}>
-            ✦ {character.nickname || character.first_name || character.name}'s Prelude
+            ✦ {[character.first_name, character.last_name].filter(Boolean).join(' ') || character.name}
           </h2>
+          {/* v1.0.83 — hyphen-separated meta, no "of 4" or chapter-name
+              (chapter number is enough; the name is known to the player
+              from the setup wizard and the wrap-up screen). */}
           <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#bbb' }}>
-            Session {sessionNum} · Chapter {runtime.chapter} of 4 — <em>{chapterName}</em> · Age {runtime.age}
+            Session {sessionNum} - Chapter {runtime.chapter} - Age {runtime.age}
             {runtime.currentHp != null && runtime.maxHp != null && (
-              <span style={{
-                marginLeft: '0.75rem',
-                color: runtime.currentHp <= 0 ? '#f87171' : runtime.currentHp < runtime.maxHp / 2 ? '#fbbf24' : '#86efac',
-                fontFamily: 'monospace',
-                fontWeight: 600
-              }}>
-                HP {runtime.currentHp}/{runtime.maxHp}
-              </span>
+              <>
+                {' - '}
+                <span style={{
+                  color: runtime.currentHp <= 0 ? '#f87171' : runtime.currentHp < runtime.maxHp / 2 ? '#fbbf24' : '#86efac',
+                  fontFamily: 'monospace',
+                  fontWeight: 600
+                }}>
+                  HP {runtime.currentHp}/{runtime.maxHp}
+                </span>
+              </>
             )}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {/* v1.0.75 — Simplified to a two-state toggle:
-              • Auto (on, default)  — Sonnet for texture, Opus for heavy beats
-              • Auto (off)          — Sonnet always (faster, cheaper)
-              Manual Opus-always is no longer a UI option. When Auto resolves
-              to Opus, a subtle badge under the toggle shows the trigger. */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.15rem' }}>
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.35rem 0.7rem',
-                border: '1px solid rgba(139,92,246,0.4)',
-                borderRadius: '14px',
-                background: model === 'auto' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.04)',
-                cursor: sending ? 'not-allowed' : 'pointer',
-                fontSize: '0.78rem',
-                fontFamily: 'monospace',
-                color: model === 'auto' ? '#e9d5ff' : '#9ca3af',
-                userSelect: 'none'
-              }}
-              title="Auto mode: Sonnet by default for texture, escalating to Opus for heavy beats (chapter 4, cliffhanger approach, big HP drops, AI-tagged heavy scenes). Toggle off to always use Sonnet."
-            >
-              <input
-                type="checkbox"
-                checked={model === 'auto'}
-                disabled={sending}
-                onChange={e => setModel(e.target.checked ? 'auto' : 'sonnet')}
-                style={{ cursor: sending ? 'not-allowed' : 'pointer' }}
-              />
-              Auto
-            </label>
-            {/* v1.0.82 — auto-resolution indicator. Shows ONLY when Auto
-                is on AND last-turn escalated to Opus (or for any non-null
-                resolve reason). Sonnet→Sonnet is the uninteresting default;
-                hiding it keeps the top bar less noisy. */}
+          {/* v1.0.83 — Auto toggle flattened: the column-wrapper and
+              resolve-reason indicator were making the button taller than
+              its siblings (misaligned row). If the player wants to see
+              last-turn resolution, server logs carry it. The Auto label
+              itself shows a tiny arrow-marker when last turn was Opus. */}
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.35rem 0.7rem',
+              border: '1px solid rgba(139,92,246,0.4)',
+              borderRadius: '14px',
+              background: model === 'auto' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.04)',
+              cursor: sending ? 'not-allowed' : 'pointer',
+              fontSize: '0.78rem',
+              fontFamily: 'monospace',
+              color: model === 'auto' ? '#e9d5ff' : '#9ca3af',
+              userSelect: 'none'
+            }}
+            title={
+              model === 'auto' && resolvedModel === 'opus' && resolveReason
+                ? `Auto mode on — last turn escalated to Opus (${resolveReason}). Toggle off for Sonnet-always.`
+                : 'Auto mode: Sonnet for texture, Opus for heavy beats. Toggle off to always use Sonnet.'
+            }
+          >
+            <input
+              type="checkbox"
+              checked={model === 'auto'}
+              disabled={sending}
+              onChange={e => setModel(e.target.checked ? 'auto' : 'sonnet')}
+              style={{ cursor: sending ? 'not-allowed' : 'pointer' }}
+            />
+            Auto
             {model === 'auto' && resolvedModel === 'opus' && (
-              <div style={{
-                fontSize: '0.66rem',
-                color: '#c4b5fd',
-                fontFamily: 'monospace',
-                lineHeight: 1
-              }}>
-                → opus{resolveReason ? ` · ${resolveReason}` : ''}
-              </div>
+              <span style={{ marginLeft: '0.15rem', color: '#c4b5fd', fontSize: '0.72rem' }}>→opus</span>
             )}
-          </div>
+          </label>
           {(() => {
             // v1.0.82 — compact uniform button styling
             const btn = (bg, border, color, extra = {}) => ({
@@ -646,19 +657,12 @@ export default function PreludeSession({ character, onBack }) {
         )
       })()}
 
-      {/* v1.0.82 — Main content flex row. Narrative column grows; Lore
-          column (420px) renders alongside when toggled on. Input bar
-          lives in the narrative column so its width matches the scroller
-          and doesn't extend under the Lore panel. */}
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'stretch' }}>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-
-      {/* Message scroller */}
+      {/* Message scroller (v1.0.83 — inside the fixed-width play area) */}
       <div
         ref={scrollerRef}
         style={{
-          flex: 1,
           minHeight: '60vh',
+          maxHeight: '70vh',
           overflowY: 'auto',
           padding: '0.5rem 0.25rem',
           marginBottom: '1rem'
@@ -1052,13 +1056,14 @@ export default function PreludeSession({ character, onBack }) {
         </div>
       )}
 
-        </div>{/* /narrative column */}
+        </div>{/* /play area wrapper */}
 
-        {/* v1.0.82 — Docked Lore panel. Renders as a 420px side column
-            when showLore is true; closes to full-width narrative when
-            toggled off. No fixed-position overlay anymore. */}
+        {/* v1.0.83 — Lore panel popout. Sibling of the fixed-width play
+            area. When Lore is toggled off, the play area centers alone.
+            When on, both center together as a unit; play area keeps its
+            width and Lore appears to its right. */}
         {showLore && (
-          <div style={{ width: '420px', flexShrink: 0 }}>
+          <div style={{ width: `${SIDE_PANEL_WIDTH}px`, flexShrink: 0 }}>
             <PreludeLorePanel
               characterId={character?.id}
               visible={showLore}
