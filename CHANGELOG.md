@@ -2,6 +2,66 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.88] - 2026-04-22 — No phantom canon + banned impactful-beat tics
+
+Two quality issues from playtest #3.
+
+### 1. Phantom canon via dialogue definite articles
+
+*"If she asks you about the letter, you don't know anything about the letter."* — But no letter had been mentioned in any prior scene. Definite article ("THE letter") tells the reader the thing is already known; when the AI cold-drops named references this way, it retcons canon that doesn't exist, and the player has no prior scene to anchor on.
+
+New sub-rule under Rule 15a — **DON'T RETCON CANON THROUGH DIALOGUE DEFINITE ARTICLES.** Before writing "the [noun]" in dialogue or narration, the AI must check: has this been established in prior narration, the CANON FACTS block, or the arc plan? If no, three fix options:
+
+1. **Establish first.** Write the scene that introduces the thing, emit a `[CANON_FACT]`, then reference it in dialogue.
+2. **Use indefinite article.** "A letter came this morning" signals first introduction cleanly.
+3. **Drop the reference.** If the scene doesn't support establishing it, the reference doesn't belong.
+
+Applies to people too — "THE rider" / "THE cleric" / "THE visitor" all need prior establishment. Worked examples (the Moss-letter scenario from the playtest) included.
+
+### 2. "Goes very still" and siblings banned
+
+Playtest feedback: *"'X character goes very still' whenever my character says or does anything unexpected."* This is Claude's single most recognizable narrative tic. New Rule 19a — **BANNED "IMPACTFUL BEAT" STOCK TICS** — lists the top offenders:
+
+- "X goes very still" / "X goes still" / "X stills" — most recognizable
+- "Something passes across X's face"
+- "X's smile doesn't (quite / fully) reach her eyes"
+- "The silence stretches"
+- "X sees you now, really sees you" / "X really looks at you"
+- "X's jaw tightens" / "X's eyes tighten"
+- "X exhales slowly" (as reaction-beat)
+- "X's hand / fingers tighten on your shoulder / arm / wrist"
+
+These are signal-shortcuts — they tell the reader "this moment is impactful" without earning it through observed detail.
+
+**What to do instead:** pick a specific physical gesture rooted in the character's body, occupation, and context. Worked examples:
+
+- WRONG: *"Moss goes very still."*
+- RIGHT: *"Moss sets the ladle down on the counter. Carefully. The way she does when she doesn't want someone downstairs to hear her put a thing down."*
+
+- WRONG: *"Something passes across Halgrim's face."*
+- RIGHT: *"Halgrim looks at the corner of the table. Not at you. The corner. For three breaths."*
+
+- WRONG: *"Her smile doesn't quite reach her eyes."*
+- RIGHT: *"She smiles. Her fingers keep folding the hem of her apron even while she smiles, tighter, a little faster than before."*
+
+### FINAL REMINDER updated
+
+Both rules surface at recency:
+
+- **NO "IMPACTFUL BEAT" STOCK TICS (rule 19a)** — lists the banned phrasings
+- **NO PHANTOM CANON (rule 15a carve-out)** — the "definite article = already known" test
+
+### Tests + build
+
+- `tests/prelude-prompt.test.js` grew 176 → 190 (+14 tests covering both rule headings, specific banned phrasings, worked replacement examples, FINAL REMINDER surfacing).
+- All 7 prelude suites green: 42 + 15 + 130 + 190 + 33 + 76 + 59 = **545 prelude tests total**.
+- Client build clean. No schema changes.
+
+### What to watch next playtest
+
+- Named things should appear in NARRATION before they appear in DIALOGUE. If an NPC says "the visitor," you should be able to scroll up and find where the visitor was first shown.
+- NPC reaction beats should read as *specific observed gestures* (hands, objects, eyes on a specific thing), not *"X goes still"* or *"something passes across X's face."*
+
 ## [1.0.0.87] - 2026-04-22 — Opening canon emission (louder) + Rule 2 violations retry server-side
 
 Two problems from playtest #2.

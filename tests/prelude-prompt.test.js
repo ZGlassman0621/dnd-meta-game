@@ -841,6 +841,67 @@ console.log('\n=== v1.0.86 opening prompt — canon emission directive ===\n');
   assert(examples.includes('category=trait'), 'example for traits');
 }
 
+console.log('\n=== v1.0.88 Rule 15a — no phantom canon via dialogue ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+  assert(
+    p.includes("DON'T RETCON CANON THROUGH DIALOGUE DEFINITE ARTICLES"),
+    'no-retcon heading present'
+  );
+  assert(
+    p.includes('the letter') && p.includes('the rider'),
+    'examples reference the letter/rider definite-article patterns'
+  );
+  assert(
+    p.includes('a letter came this morning') || p.includes('indefinite article'),
+    'fix option mentions indefinite-article alternative'
+  );
+  assert(
+    p.includes('retconned canon'),
+    'rule explicitly names the "retcon" failure mode'
+  );
+
+  // FINAL REMINDER surfaces phantom-canon rule
+  const tail = p.slice(p.indexOf('FINAL REMINDER'));
+  assert(
+    tail.includes('NO PHANTOM CANON'),
+    'FINAL REMINDER surfaces phantom-canon prohibition'
+  );
+}
+
+console.log('\n=== v1.0.88 Rule 19a — banned impactful-beat tics ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+  assert(
+    p.includes('19a. BANNED "IMPACTFUL BEAT" STOCK TICS'),
+    'Rule 19a heading present'
+  );
+  // The specific tics called out
+  assert(p.includes('goes very still'), 'bans "goes very still"');
+  assert(p.includes('Something passes across'), 'bans "something passes across X\'s face"');
+  assert(p.includes("doesn't (quite / fully) reach") || p.includes("doesn't quite reach"),
+    'bans "smile doesn\'t reach her eyes"');
+  assert(p.includes('silence stretches'), 'bans "silence stretches"');
+  assert(p.includes('really sees you') || p.includes('really looks at you'),
+    'bans "really sees/looks at you"');
+  // Replacement guidance
+  assert(
+    p.includes('WHAT TO DO INSTEAD'),
+    'rule 19a shows what to do instead'
+  );
+  assert(
+    p.includes('Moss sets the ladle down') || p.includes('specific physical gesture'),
+    'rule 19a gives worked replacement example'
+  );
+
+  // FINAL REMINDER surfaces banned tics
+  const tail = p.slice(p.indexOf('FINAL REMINDER'));
+  assert(
+    tail.includes('IMPACTFUL BEAT') && tail.includes('BANNED'),
+    'FINAL REMINDER surfaces impactful-beat ban'
+  );
+}
+
 console.log('\n==================================================');
 console.log(`Prelude Prompt Tests: ${passed} passed, ${failed} failed`);
 console.log('==================================================\n');
