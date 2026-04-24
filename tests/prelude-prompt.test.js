@@ -817,11 +817,11 @@ console.log('\n=== v1.0.86 opening prompt — canon emission directive ===\n');
     'opening prompt mentions present tense requirement'
   );
   assert(
-    opening.includes('CANON EMISSION IS ESSENTIAL'),
-    'opening prompt has canon-emission-essential heading'
+    opening.includes('MUST EMIT 8-15 [CANON_FACT]'),
+    'opening prompt has the must-emit-8-15 banner'
   );
   assert(
-    opening.includes('8-15 canon facts'),
+    opening.includes('8-15'),
     'opening prompt specifies quantitative canon target'
   );
   assert(
@@ -833,7 +833,7 @@ console.log('\n=== v1.0.86 opening prompt — canon emission directive ===\n');
     'opening prompt references the Lore panel as downstream consumer'
   );
   // The examples should cover NPCs, places, events, items, traits
-  const examples = opening.slice(opening.indexOf('Examples'));
+  const examples = opening.slice(opening.indexOf('Worked examples'));
   assert(examples.includes('category=npc'), 'example for NPCs');
   assert(examples.includes('category=location'), 'example for locations');
   assert(examples.includes('category=event'), 'example for events');

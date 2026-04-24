@@ -2,6 +2,50 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.87] - 2026-04-22 — Opening canon emission (louder) + Rule 2 violations retry server-side
+
+Two problems from playtest #2.
+
+### 1. Canon not populating after v1.0.86
+
+v1.0.86 added an opening-prompt directive for 8-15 canon facts. Playtest showed it still didn't fire. The instruction was in the middle of the opening prompt, surrounded by other requirements (body description, home senses, family member, first situation), and Opus was prioritizing prose density over markers.
+
+Fix: elevated the directive to the TOP of the opening prompt with authoritative framing.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚑⚑⚑ THIS RESPONSE MUST EMIT 8-15 [CANON_FACT] MARKERS. ⚑⚑⚑
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Sits right below the opening-line intro and PRESENT TENSE reminder. Explains that the opening is the single highest-density moment for canon establishment in the prelude. Names the downstream consequence: *"if you emit fewer than 8 canon facts, the Lore panel will be empty and the player will lose track of everyone."* Explicit *"EMIT EACH CANON FACT INLINE"* guidance so markers appear alongside the prose that introduces the entity, not dumped at the end. Required category coverage listed (npc / location / event / item / trait — hit each at least once). 13 worked examples (up from 8) showing the expected density. Ends with *"Before you submit: count your markers. If it's fewer than 8, STOP and add more."*
+
+### 2. Rule 2 violations now RETRY server-side
+
+User feedback: *"I don't want rules to get broken."* The existing architecture detected violations → flagged the UI → queued correction for next turn. That still lets the violation reach the player.
+
+New flow in `sendMessage`:
+
+1. Call the AI → get response.
+2. Run `detectPlayerDialogueViolation` on the response.
+3. If violated, re-call the AI with a correction preface that names the violating snippets and gives explicit DO-NOT / INSTEAD-DESCRIBE guidance. Retry's user message ends with *"Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowledgment — just the clean response the player should see."*
+4. Detect on retry response.
+   - If clean: use retry, no flag surfaced to the player.
+   - If retry still violates: use retry anyway (at least it tried), flag the player, inject next-turn correction (old behavior).
+5. Save messages, continue normal flow.
+
+Capped at 1 retry to prevent loops. Cost: one extra API call per violation, which is rare. Server logs show *"Rule 2 violation retry on session X: retry cleaned"* or *"retry still violates — flagged"* so we have observability.
+
+### What to look for
+
+**Opening scene**: Lore panel should now have 8-15 entries immediately after the opening renders. If it's still empty, the prompt still isn't loud enough and we need to go further (e.g., reject responses with <5 markers and retry).
+
+**Rule 2**: when a response would have violated, the player should see either (a) a clean response with no warning (retry worked) or (b) a flagged response with a warning badge (retry also failed — rare). Either way, the first attempt doesn't reach the player on its own.
+
+### Tests + build
+
+All 7 prelude suites green (531 tests). Client build clean. No schema changes.
+
 ## [1.0.0.86] - 2026-04-22 — Present-tense narration + opening-scene canon emission
 
 Playtest #1 surfaced two prompt gaps in the Thesalian opening:

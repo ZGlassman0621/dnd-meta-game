@@ -519,13 +519,75 @@ If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker
   const resolved = resolveModel(modelOverride, sessionCfg, runtime, playSessionLength);
   const modelChoice = resolved.model;
 
-  const result = await claudeContinueSession(
+  let result = await claudeContinueSession(
     systemPrompt,
     augmentedMessages,
     action,
     modelChoice,
     { sessionId }
   );
+
+  // v1.0.87 — Prevent Rule 2 violations from reaching the player. Detect
+  // immediately; if violated, re-call the AI with a correction note and
+  // replace the response with the rewrite. Capped at 1 retry: if the retry
+  // also violates, we ship the retry response anyway (degrades to the old
+  // flag + next-turn correction flow) so we don't loop indefinitely.
+  //
+  // The retry uses the SAME system prompt + message history, but the user
+  // action is augmented with an explicit correction preface that names the
+  // violating snippet. This gives the AI a concrete fix target rather than
+  // a general "try again."
+  let violation = detectPlayerDialogueViolation(result.response);
+  let retryAttempted = false;
+  let retryCleanedViolation = false;
+  if (violation.violated) {
+    retryAttempted = true;
+    const violatingSnippets = violation.matches.slice(0, 3).map(m => `  • "${m.snippet}"`).join('\n');
+    const correctionAction = `${action}
+
+[SYSTEM — CRITICAL CORRECTION]
+Your previous attempt at this response violated RULE 2 (player agency is sacred). You attributed dialogue, thought, knowledge, preference, memory, or decision to the player character. Specifically:
+${violatingSnippets}
+
+Rewrite the response from scratch, in direct answer to the player's action above. ABSOLUTELY DO NOT:
+- Put any quoted dialogue in the PC's mouth
+- Say "you like / love / hate / prefer / want / enjoy..."
+- Say "you think / know / knew / remember / decide / realize / understand / wonder / believe / recognize / recall..."
+- Describe the PC's internal state, feelings, or unsaid thoughts
+
+INSTEAD, describe:
+- What NPCs do and say
+- What happens in the environment
+- What the PC's body passively senses (allowed: "the air is cold on your face," "your breath fogs")
+- End on engagement (per Rule 6): a question, a roll prompt, or something happening TO/AROUND the PC
+
+Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowledgment — just the clean response the player should see.`;
+    const retry = await claudeContinueSession(
+      systemPrompt,
+      augmentedMessages,
+      correctionAction,
+      modelChoice,
+      { sessionId }
+    );
+    const retryViolation = detectPlayerDialogueViolation(retry.response);
+    if (!retryViolation.violated) {
+      // Retry cleaned the violation. Use the rewrite as-if-original and
+      // don't surface any flag to the player.
+      result = retry;
+      violation = { violated: false, matches: [] };
+      retryCleanedViolation = true;
+    } else {
+      // Retry still violates. Use the retry anyway (better than nothing
+      // since it at least attempted to correct) and let the flag + next-
+      // turn correction flow handle it.
+      result = retry;
+      violation = retryViolation;
+    }
+    console.warn(
+      `[prelude] Rule 2 violation retry on session ${sessionId}: ` +
+      (retryCleanedViolation ? 'retry cleaned' : 'retry still violates — flagged')
+    );
+  }
 
   // Persist the updated message history. dm_sessions doesn't have an
   // updated_at column (unlike `characters`), so we only write the messages
@@ -543,12 +605,8 @@ If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker
     });
   }
 
-  // v1.0.67 — Rule 2 (player agency) post-generation scan. Pattern-matches
-  // quoted dialogue / internal monologue attributed to the player character.
-  // If violated, the response still surfaces (the player sees what happened)
-  // but with a warning flag the UI can render, and we queue a correction
-  // [SYSTEM NOTE] for the NEXT turn so the AI acknowledges and stops.
-  const violation = detectPlayerDialogueViolation(result.response);
+  // v1.0.67 — post-generation violation status is already computed above
+  // (with retry). Just log the terminal state here for observability.
   if (violation.violated) {
     console.warn(
       `[prelude] Rule 2 violation detected on session ${sessionId}:`,

@@ -908,23 +908,43 @@ export function createPreludeOpeningPrompt(character, setup, arcPlan, runtime) {
   const raceLine = `${character.race}${character.subrace ? ` (${character.subrace})` : ''}`;
   return `Open Chapter 1 — ${v.calledBy}'s early childhood. Write the first scene of this life the player gets to inhabit. 5-8 paragraphs. Ground it physically.
 
-Narration uses SECOND PERSON ("you") for the player character. The one exception: the opening may introduce the full name + a physical description paragraph as establishing exposition, then shift to "you" for the rest of the scene and all future scenes.
+Narration uses SECOND PERSON ("you"). The one exception: the opening may introduce the full name + a physical description paragraph as establishing exposition, then shift to "you" for the rest of the scene and all future scenes.
 
-**PRESENT TENSE ONLY** (per Rule 1a). The player is LIVING this scene, not remembering it. Write "you stand / you can see / Moss tightens her hand / she says" — NOT "you stood / you could see / Moss tightened her hand / she said." Past tense reads as retrospective memoir. The one exception: dialogue about events that genuinely happened earlier, or content inside quoted NPC lines. Everything else present.
+**PRESENT TENSE ONLY** (per Rule 1a). "You stand / you can see / Moss tightens her hand / she says" — NOT "you stood / you could see / Moss tightened her hand / she said." Past tense reads as retrospective memoir.
 
-⚑ CANON EMISSION IS ESSENTIAL IN THE OPENING. The opening scene introduces a LOT of named entities at once — NPCs, places, cultural terms, heraldry, calendar references, historical events the PC would know about. EMIT [CANON_FACT] MARKERS FOR ALL OF THEM.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚑⚑⚑ THIS RESPONSE MUST EMIT 8-15 [CANON_FACT] MARKERS. ⚑⚑⚑
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Target: **8-15 canon facts** in this opening scene — one per named NPC, one per named place, one per cultural item/heraldry piece, one per historical or calendar reference the PC would be expected to know. Do not skimp. The opening is where the Lore panel gets seeded; if you omit canon facts here, the player has no context panel to reference when these names recur.
+The opening is the SINGLE highest-density moment for canon establishment in the entire prelude. Every named NPC, every named place, every cultural item, every heraldry piece, every calendar reference, every historical event you write into this scene — ALL of them need a [CANON_FACT] marker. The server reads these and persists them to the player's Lore panel, which is how the player keeps track of who's who when names recur.
 
-Examples for an Epic Fantasy noble-scion opening:
+If you emit fewer than 8 canon facts, the Lore panel will be empty and the player will lose track of everyone. That is a failure mode we cannot afford.
+
+EMIT EACH CANON FACT INLINE, at the end of or between the paragraphs that introduce the entity. Don't dump them all at the end.
+
+Required category coverage in the opening (hit each at least once):
+  • npc          — every named person (family, household, visiting, mentioned-but-offstage)
+  • location     — the hold/home + any named region, landmark, place referenced
+  • event        — named calendar references (Marpenoth, Kythorn), named feast days, named historical events the PC would know
+  • item         — heraldry, heirlooms, named objects
+  • trait        — PC's physical markers (scars, scourge-marks, distinguishing features) that will recur
+
+Worked examples for a noble-scion opening (pattern; produce 8-15 of your own):
   [CANON_FACT: subject="Mosstheliel" category=npc fact="older sister, age 10, tall for her years"]
   [CANON_FACT: subject="Valkineth Dawnbringer" category=npc fact="father, currently six days' ride east"]
   [CANON_FACT: subject="Diona" category=npc fact="mother, farther east than Valkineth"]
-  [CANON_FACT: subject="the Stonelands" category=location fact="region east of the hold; wind comes out of it"]
-  [CANON_FACT: subject="Marpenoth" category=event fact="Harptos month (Oct-equivalent); current month of this chapter"]
+  [CANON_FACT: subject="Benric" category=npc fact="hold steward; handles the household when the family is away"]
+  [CANON_FACT: subject="Ser Halrick" category=npc fact="garrison officer; sits in Father's chair tonight"]
+  [CANON_FACT: subject="Sister Alenne" category=npc fact="resident cleric; sits in Mother's chair tonight"]
+  [CANON_FACT: subject="Goodwife Thrale" category=npc fact="household servant; knew the old tongue"]
+  [CANON_FACT: subject="the Stonelands" category=location fact="region east of the hold; the wind comes out of it"]
+  [CANON_FACT: subject="Dawnbringer hold" category=location fact="family seat; three-floor manor with a chapel and garrison; sixty soldiers and families"]
+  [CANON_FACT: subject="Marpenoth" category=event fact="Harptos month (Oct-equivalent); current month"]
   [CANON_FACT: subject="Feast of the Lion" category=event fact="annual feast-day; requires the master's chair filled"]
   [CANON_FACT: subject="sun-in-splendor" category=item fact="Dawnbringer family heraldry, gold thread on deep blue"]
   [CANON_FACT: subject="scourge-mark" category=trait fact="darkened skin around the eyes — aasimar scourge variant"]
+
+Before you submit: count your markers. If it's fewer than 8, STOP and add more.
 
 DO NOT open with any of these banned constructions (they've been overused and need to be actively avoided):
   • "[Name] is [N] winters old and small for it…"
