@@ -789,6 +789,58 @@ console.log('\n=== v1.0.76 5-session structure references ===\n');
     'prompt no longer references the old 7-10 session range');
 }
 
+console.log('\n=== v1.0.86 Rule 1a — PRESENT TENSE narration ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+  assert(p.includes('1a. PRESENT TENSE'), 'Rule 1a heading present');
+  assert(p.includes('Thesalian stands at the arrow-slit') || p.includes('you stand'),
+    'Rule 1a gives a worked present-tense example');
+  assert(p.includes('you stood'), 'Rule 1a includes the WRONG past-tense example for contrast');
+  assert(
+    p.includes('LIVING the scene, not remembering') || p.includes('inhabited experience'),
+    'Rule 1a frames the "live vs memoir" distinction'
+  );
+
+  // FINAL REMINDER surfaces tense rule
+  const tail = p.slice(p.indexOf('FINAL REMINDER'));
+  assert(
+    tail.includes('PRESENT TENSE') && tail.includes('1a'),
+    'FINAL REMINDER surfaces present-tense rule'
+  );
+}
+
+console.log('\n=== v1.0.86 opening prompt — canon emission directive ===\n');
+{
+  const opening = createPreludeOpeningPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+  assert(
+    opening.includes('PRESENT TENSE'),
+    'opening prompt mentions present tense requirement'
+  );
+  assert(
+    opening.includes('CANON EMISSION IS ESSENTIAL'),
+    'opening prompt has canon-emission-essential heading'
+  );
+  assert(
+    opening.includes('8-15 canon facts'),
+    'opening prompt specifies quantitative canon target'
+  );
+  assert(
+    opening.includes('[CANON_FACT:'),
+    'opening prompt provides worked CANON_FACT examples'
+  );
+  assert(
+    opening.includes('Lore panel'),
+    'opening prompt references the Lore panel as downstream consumer'
+  );
+  // The examples should cover NPCs, places, events, items, traits
+  const examples = opening.slice(opening.indexOf('Examples'));
+  assert(examples.includes('category=npc'), 'example for NPCs');
+  assert(examples.includes('category=location'), 'example for locations');
+  assert(examples.includes('category=event'), 'example for events');
+  assert(examples.includes('category=item'), 'example for items');
+  assert(examples.includes('category=trait'), 'example for traits');
+}
+
 console.log('\n==================================================');
 console.log(`Prelude Prompt Tests: ${passed} passed, ${failed} failed`);
 console.log('==================================================\n');

@@ -2,6 +2,40 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.86] - 2026-04-22 — Present-tense narration + opening-scene canon emission
+
+Playtest #1 surfaced two prompt gaps in the Thesalian opening:
+
+### 1. Narration was in PAST TENSE
+
+The opening read *"Thesalian stood at the arrow-slit… you had to rise on your toes… you could hear the kitchen through the floor… Benric had sent word."* — past tense throughout. Combined with second person, this reads as retrospective memoir, not inhabited experience. The prompt had no explicit tense rule; the AI defaulted to past.
+
+Fixed with new **Rule 1a — PRESENT TENSE, ALWAYS.** Narration, description, and dialogue attribution are all present tense. Past tense is allowed ONLY inside quoted dialogue or when an NPC is genuinely referring to earlier events. Rule includes a worked wrong/right example comparison and a self-check: if you find yourself writing "stood / watched / heard / sent / had / was / were / could" for what the PC is experiencing now, rewrite to present.
+
+FINAL REMINDER surfaces the rule at recency position.
+
+### 2. Zero CANON_FACT markers emitted in the opening
+
+The opening introduced roughly a dozen named entities — Mosstheliel, Benric, Ser Halrick, Valkineth Dawnbringer, Diona, Sister Alenne, Goodwife Thrale, the Stonelands, Marpenoth, the Feast of the Lion, the sun-in-splendor heraldry, scourge-mark, the garrison, the chapel — and zero markers fired. The Lore panel was empty. Rule 15a's general canon-emission guidance wasn't loud enough to counter the AI's bias toward prose-over-markers in a dense opening scene.
+
+Strengthened the opening prompt with a dedicated **CANON EMISSION IS ESSENTIAL IN THE OPENING** section:
+
+- Quantitative target: **8-15 canon facts** in the opening scene (vs. the usual 3-6/session cadence — openings are denser).
+- Explicit instruction to emit one per named NPC, place, cultural item, heraldry piece, calendar reference, historical event.
+- Worked examples for all 5 category types (npc / location / event / item / trait) — Mosstheliel, Valkineth, the Stonelands, Marpenoth, Feast of the Lion, sun-in-splendor, scourge-mark.
+- Notes the downstream consequence: *"if you omit canon facts here, the player has no context panel to reference when these names recur."*
+
+### Tests + build
+
+- `tests/prelude-prompt.test.js` grew 161 → 176 (+15 tests for Rule 1a presence, worked example, live-vs-memoir framing, FINAL REMINDER surfacing, opening-prompt canon-emission heading, quantitative target, worked examples across all 5 categories, Lore-panel reference).
+- All 7 prelude suites green: 42 + 15 + 130 + 176 + 33 + 76 + 59 = **531 prelude tests total**.
+- Client build clean. No schema changes.
+
+### What to look for in the next opening
+
+- Narration in present tense: *"You stand at the arrow-slit…"* not *"You stood at the arrow-slit…"*
+- Lore panel populated with 8-15 canon facts after the opening renders — named NPCs, places, events, heraldry, cultural terms all visible for reference.
+
 ## [1.0.0.85] - 2026-04-22 — Hotfix (cont.): CharacterManager was still wrapping PreludeSession in `.container`
 
 v1.0.84 removed the `.container` className from PreludeSession's OWN outer shell — but `CharacterManager.jsx` (the parent) was ALSO wrapping the session in `<div className="container">` at line 203. That outer wrapper is what drew the big dark outlined box around the play+Lore flex row in the playtest screenshot.

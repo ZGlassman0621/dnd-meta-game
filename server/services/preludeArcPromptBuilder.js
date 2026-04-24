@@ -269,6 +269,12 @@ function cardinalRules(character, setup, runtime) {
 
 1. SECOND-PERSON NARRATION. Always address the player character as "you," never by name (except when another character speaks their name aloud). "Rook looks at you" — not "Rook looks at Zalyere" or "Rook looks at him." Third-person narration about the player character breaks immersion. The one exception: in an opening scene, the character's FULL name and physical description can appear as establishing text; after that, it's "you" from then on.
 
+1a. PRESENT TENSE, ALWAYS. Narration is in PRESENT TENSE — not past. The player is LIVING the scene, not remembering it.
+   WRONG (past): "Thesalian stood at the arrow-slit. Your eyes were grey. You could hear the kitchen through the floor. Benric had sent word."
+   RIGHT (present): "Thesalian stands at the arrow-slit. Your eyes are grey. You can hear the kitchen through the floor. Benric has sent word."
+   Applies to narration, description, and dialogue attribution. "'Hello,' she says" not "'Hello,' she said." "Moss tightens her hand on your shoulder" not "Moss tightened her hand on your shoulder." Past tense is allowed ONLY inside quoted dialogue or when an NPC is talking about something that genuinely happened earlier. The NARRATIVE VOICE itself — what the PC is experiencing right now — is present.
+   Check every paragraph. If you find yourself writing "stood / watched / heard / sent / had / was / were / could" for what the PC is experiencing in the moment, rewrite to "stands / watches / hears / sends / has / is / are / can." Past-tense slippage reads as memoir distance; present tense reads as inhabited experience.
+
 2. PLAYER AGENCY IS SACRED — THE DIVISION OF AUTHORSHIP.
    YOU CONTROL EVERYTHING IN THIS WORLD EXCEPT THE PLAYER CHARACTER. The world, NPCs, weather, rooms, smells, sounds, consequences, time passing, what other people say and do, what the PC's body passively senses — all yours. The PC's voice, thoughts, feelings, choices, and actions — NOT YOURS. Your job is to build a world the PC can experience and react to, placing them into situations with means of interacting, without EVER forcing the PC to do or say or think anything they haven't said they're doing.
    NEVER PUT WORDS IN THE PLAYER'S MOUTH. Direct dialogue attributed to the player character is an absolute violation. Not "very quiet," not "in Vask's tone," not any framing.
@@ -862,6 +868,7 @@ FINAL REMINDER (read this every turn):
 - ⚠ YOU CONTROL THE WORLD, NOT THE PLAYER CHARACTER (rule 2). You own every NPC, every setting detail, every consequence, every passing hour, every sound and smell — and the PC's involuntary physical sensations. You do NOT own the PC's voice, thoughts, feelings, choices, or reactions. Build the world; let the player inhabit it.
 - ⚠ BEFORE FINISHING: scan your last 3 paragraphs. Did you write QUOTED DIALOGUE attributed to the player character (with "you said/say/whisper/answer/reply/think/tell/ask/murmur/add/mutter/begin/continue/offer/breathe/call/realize/decide/wonder/remember") — OR internal thoughts/feelings/decisions framed as the PC's own? If YES → DELETE and rewrite that section to END at the point where the player would speak or react. This violation is most tempting in climactic moments (confession, revelation, breakthrough). The satisfying line belongs to the player, NOT to you.
 - SECOND PERSON: always "you" for the player character. "Rook looks at you," not "Rook looks at ${v.calledBy}."
+- PRESENT TENSE (rule 1a): "you stand / you see / she says" — NOT "you stood / you saw / she said." The player is LIVING the scene, not remembering it. Past-tense slippage on narration/dialogue-attribution is a regression — rewrite to present.
 - NPC QUESTIONS = HARD STOP: when an NPC asks a direct question, END THE RESPONSE. Don't continue past it.
 - END EVERY RESPONSE ON ENGAGEMENT (rule 6): one of (a) direct question to player, (b) roll prompt, (c) something happening TO/AROUND the PC that demands response. NEVER offer menus of actions the character could take — that's the AI playing the PC. If you end on atmosphere or on the PC being passively moved, you've failed.
 - CARVE-OUT 1 (NPC-directed tasks → roll): if an NPC asks the PC to perform a TASK with uncertain outcome where a skill applies ("Read it to me." "Can you sneak past?" "Convince her." "Tell me what you remember." "Try again." "Keep going."), DO NOT end on the NPC's request — that skips the roll. End on the ROLL PROMPT. Test: if the player's next move would require them to invent content they don't have (the words of a letter, a memory, a lie, a sneak outcome), you've skipped a roll — go back and call it.
@@ -902,6 +909,22 @@ export function createPreludeOpeningPrompt(character, setup, arcPlan, runtime) {
   return `Open Chapter 1 — ${v.calledBy}'s early childhood. Write the first scene of this life the player gets to inhabit. 5-8 paragraphs. Ground it physically.
 
 Narration uses SECOND PERSON ("you") for the player character. The one exception: the opening may introduce the full name + a physical description paragraph as establishing exposition, then shift to "you" for the rest of the scene and all future scenes.
+
+**PRESENT TENSE ONLY** (per Rule 1a). The player is LIVING this scene, not remembering it. Write "you stand / you can see / Moss tightens her hand / she says" — NOT "you stood / you could see / Moss tightened her hand / she said." Past tense reads as retrospective memoir. The one exception: dialogue about events that genuinely happened earlier, or content inside quoted NPC lines. Everything else present.
+
+⚑ CANON EMISSION IS ESSENTIAL IN THE OPENING. The opening scene introduces a LOT of named entities at once — NPCs, places, cultural terms, heraldry, calendar references, historical events the PC would know about. EMIT [CANON_FACT] MARKERS FOR ALL OF THEM.
+
+Target: **8-15 canon facts** in this opening scene — one per named NPC, one per named place, one per cultural item/heraldry piece, one per historical or calendar reference the PC would be expected to know. Do not skimp. The opening is where the Lore panel gets seeded; if you omit canon facts here, the player has no context panel to reference when these names recur.
+
+Examples for an Epic Fantasy noble-scion opening:
+  [CANON_FACT: subject="Mosstheliel" category=npc fact="older sister, age 10, tall for her years"]
+  [CANON_FACT: subject="Valkineth Dawnbringer" category=npc fact="father, currently six days' ride east"]
+  [CANON_FACT: subject="Diona" category=npc fact="mother, farther east than Valkineth"]
+  [CANON_FACT: subject="the Stonelands" category=location fact="region east of the hold; wind comes out of it"]
+  [CANON_FACT: subject="Marpenoth" category=event fact="Harptos month (Oct-equivalent); current month of this chapter"]
+  [CANON_FACT: subject="Feast of the Lion" category=event fact="annual feast-day; requires the master's chair filled"]
+  [CANON_FACT: subject="sun-in-splendor" category=item fact="Dawnbringer family heraldry, gold thread on deep blue"]
+  [CANON_FACT: subject="scourge-mark" category=trait fact="darkened skin around the eyes — aasimar scourge variant"]
 
 DO NOT open with any of these banned constructions (they've been overused and need to be actively avoided):
   • "[Name] is [N] winters old and small for it…"
