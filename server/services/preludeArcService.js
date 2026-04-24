@@ -138,23 +138,22 @@ ABSOLUTE RULES:
      REAL COMBAT — bodies matter, wounds leave marks. The PC can be hurt; the PC can hurt others.
      chapter_end_moment: an irreversible act — a choice made with real cost that sets up departure.
 
-   **Chapter 4 — COMMIT (+ varied departure).** Target: 1 session.
+   **Chapter 4 — COMMIT (+ varied departure, theme-driven).** Target: 1 session.
      The PC is at threshold. Culmination + departure.
      YES beats: recurring-thread-resolved, choice-sealed, departure-shaped.
-     DEPARTURE IS VARIED AND NOT DEFAULT-TRAGIC. Offer TWO OR THREE non-tragic departure alternatives in the departure_seed alongside whatever primary reason fits the arc:
-       - Enlistment (call to military service)
-       - Apprenticeship posting (craft / skill path)
-       - Pilgrimage (faith, self-discovery)
-       - Finding a cure (for family, for self)
-       - Leaving to learn (academy, temple, master)
-       - Leaving to explore (wanderlust, a map, a rumor)
-       - Coming-of-age quest or test
-       - Political match (betrothal journey)
-       - Conscription (world-driven)
-       - Exile (when story earned it)
-       - Tragedy (one option among many — not the default)
-     Match the tone preset: Brutal & Gritty might land on conscription or flight; Tender & Hopeful might land on apprenticeship or pilgrimage; Epic Fantasy often lands on a call-to-adventure or quest.
-     chapter_end_moment: the DEPARTURE itself — the PC leaving for their reason.
+
+     ⚠ IMPORTANT — DO NOT PRE-DECIDE THE DEPARTURE.
+     The FINAL departure is decided at Ch3 wrap-up by the theme-commitment ceremony (see rule 11 Chapter 3 section). The player picks a theme (soldier, sage, acolyte, etc.), and THAT theme drives the departure TYPE: soldier → enlistment, sage → academy, acolyte → pilgrimage, criminal → flight, and so on.
+     Your arc plan should NOT bake in a single "reason" for the departure. Instead, the departure_seed you emit offers a MENU of 3-4 plausible departure shapes that fit this character's setup, tone, and recurring threads. The committed theme at Ch3 picks from them (or an entirely different path the player chose via "Other").
+
+     DEPARTURE SEED SHAPE — seed the possibility space, don't close it:
+       - primary_thread: the recurring-thread or circumstance that MOST likely pulls the PC out (1 sentence, no theme-lock)
+       - plausible_shapes: 3-4 short one-liners — how the PC might leave, each theme-compatible with at least one part of their setup
+       - Examples (not exhaustive): enlistment, apprenticeship posting, pilgrimage, finding a cure, leaving to learn, leaving to explore, coming-of-age quest, political match, conscription, exile, tragedy (one option among many — NEVER default)
+
+     Match the tone preset as a WEIGHT, not a prescription: Brutal & Gritty tends to surface flight / conscription / exile as plausible shapes, but the player's committed theme OVERRIDES. A Brutal & Gritty + Sage departure is still an academy posting — just with grim weight in the prose.
+
+     chapter_end_moment: the DEPARTURE itself — but phrase it neutrally ("the PC leaves") rather than naming a specific type. The DM fills that in at play-time using the committed theme.
 
 BE CONCISE. Keep prose TIGHT. This is scaffolding, not the final story. Stay within the word/sentence limits below — long beats cause JSON truncation.
 
@@ -184,9 +183,9 @@ OUTPUT FORMAT. Return a SINGLE JSON object. No prose before or after. No markdow
     /* same shape (life stage: ${ages.ch4}) */,
     "chapter_promise_prompt": "...",
     "departure_seed": {
-      "reason": "pilgrimage | test | conscription | exile | apprenticeship_posting | political_match | call_to_adventure | flight | tragedy | other",
-      "tone": "1-3 words — hopeful / bitter / determined / numb / wistful / etc.",
-      "non_tragic_alternatives": [ "1 short sentence" ]
+      "primary_thread": "1 sentence — the recurring thread or circumstance that MOST likely pulls this PC out, without naming a specific departure type",
+      "plausible_shapes": [ "1 short sentence per entry — how the PC might leave, each compatible with at least one theme their setup could lean to. 3-4 entries. Never all the same type. NEVER default to tragedy." ],
+      "tone": "1-3 words — hopeful / bitter / determined / numb / wistful / etc."
     }
   },
   "recurring_threads": [
@@ -208,7 +207,7 @@ QUANTITY LIMITS:
 - threats: 1-2 entries
 - beats per chapter: exactly 2
 - recurring_threads: 2-3 entries
-- non_tragic_alternatives: 2 entries
+- plausible_shapes: 3-4 entries (departure seed — theme commitment at Ch3 picks from these or overrides)
 - seeded_emergences per chapter: 1-2 entries
 
 FINAL REMINDER:
@@ -219,6 +218,7 @@ FINAL REMINDER:
 - Tight prose. Short sentences. No flourish beyond the tone tags require.
 - Every entity named in the setup (parents, siblings) appears by name in at least one beat.
 - Departures are not default tragic.
+- **Departure is a SEED, not a verdict.** Emit departure_seed.plausible_shapes with 3-4 varied options — one per theme-direction the setup could lean to. The player's committed theme at Ch3 wrap-up drives the final departure type; the arc plan's job is to set up a possibility space, not to pre-decide.
 - Output JSON only. No markdown. No preamble. No epilogue.`;
 }
 
@@ -338,6 +338,7 @@ export async function getArcPlan(characterId) {
   return {
     ...row,
     tone_tags: (row.tone_tags || '').split(',').filter(Boolean),
+    tone_reflection: row.tone_reflection || null,
     home_world: parse(row.home_world),
     chapter_1_arc: parse(row.chapter_1_arc),
     chapter_2_arc: parse(row.chapter_2_arc),
@@ -419,15 +420,16 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
 
   await dbRun(
     `INSERT INTO prelude_arc_plans (
-      character_id, generated_at, model, tone_tags,
+      character_id, generated_at, model, tone_tags, tone_reflection,
       home_world, chapter_1_arc, chapter_2_arc, chapter_3_arc, chapter_4_arc,
       recurring_threads, character_trajectory, seed_emergences, departure_seed,
       regenerate_count
-    ) VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(character_id) DO UPDATE SET
       generated_at = CURRENT_TIMESTAMP,
       model = excluded.model,
       tone_tags = excluded.tone_tags,
+      tone_reflection = excluded.tone_reflection,
       home_world = excluded.home_world,
       chapter_1_arc = excluded.chapter_1_arc,
       chapter_2_arc = excluded.chapter_2_arc,
@@ -442,6 +444,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
       characterId,
       'claude-opus-4-7',
       toneCsv,
+      parsed.tone_reflection || null,
       serializeField(parsed.home_world),
       serializeField(parsed.chapter_1_arc),
       serializeField(parsed.chapter_2_arc),

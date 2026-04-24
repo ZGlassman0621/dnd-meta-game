@@ -280,14 +280,49 @@ export default function PreludeArcPreview({ character, onReturn, onBegin }) {
                 <strong style={{ color: '#9fa3a8', fontStyle: 'normal' }}>Chapter close:</strong> {c.arc.chapter_end_moment}
               </p>
             )}
-            {c.n === 4 && c.arc?.departure_seed && (
-              <div style={{ marginTop: '0.5rem', padding: '0.55rem', background: 'rgba(139,92,246,0.1)', borderLeft: '3px solid #8b5cf6', borderRadius: '3px' }}>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: '#e9d5ff' }}>
-                  <strong>Departure:</strong> {c.arc.departure_seed.reason}
-                  {c.arc.departure_seed.tone && <span style={{ color: '#a78bfa' }}> — {c.arc.departure_seed.tone}</span>}
-                </p>
-              </div>
-            )}
+            {c.n === 4 && c.arc?.departure_seed && (() => {
+              const seed = c.arc.departure_seed
+              // v1.0.81 — new schema uses `primary_thread` + `plausible_shapes[]`
+              // (a SEED, not a verdict). Old arc plans had `reason` + `non_tragic_alternatives`
+              // — show those gracefully too.
+              const shapes = Array.isArray(seed.plausible_shapes) && seed.plausible_shapes.length > 0
+                ? seed.plausible_shapes
+                : Array.isArray(seed.non_tragic_alternatives) ? seed.non_tragic_alternatives : []
+              return (
+                <div style={{ marginTop: '0.5rem', padding: '0.55rem 0.7rem', background: 'rgba(139,92,246,0.1)', borderLeft: '3px solid #8b5cf6', borderRadius: '3px' }}>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#c4b5fd', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '0.3rem' }}>
+                    DEPARTURE SEED
+                  </p>
+                  <p style={{ margin: '0 0 0.3rem', fontSize: '0.78rem', color: '#9fa3a8', fontStyle: 'italic' }}>
+                    The final departure is decided at Chapter 3's theme commitment. These are plausible shapes, not a verdict.
+                  </p>
+                  {seed.primary_thread && (
+                    <p style={{ margin: '0 0 0.35rem', fontSize: '0.82rem', color: '#ddd' }}>
+                      <strong style={{ color: '#e9d5ff' }}>What most likely pulls them out:</strong> {seed.primary_thread}
+                    </p>
+                  )}
+                  {shapes.length > 0 && (
+                    <>
+                      <p style={{ margin: '0.35rem 0 0.15rem', fontSize: '0.78rem', color: '#c4b5fd' }}>
+                        Plausible shapes (theme at Ch3 picks from these or overrides):
+                      </p>
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+                        {shapes.map((s, i) => (
+                          <li key={i} style={{ fontSize: '0.82rem', color: '#ddd', lineHeight: 1.5 }}>{s}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {/* Back-compat: if only the old `reason` field exists, show it as a single plausible-shape seed */}
+                  {shapes.length === 0 && seed.reason && (
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#ddd' }}>
+                      <em>Legacy seed:</em> {seed.reason}
+                      {seed.tone && <span style={{ color: '#a78bfa' }}> — {seed.tone}</span>}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         ))}
       </div>

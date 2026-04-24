@@ -2,6 +2,57 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.81] - 2026-04-22 — Hotfixes: tone_reflection storage column + departure seed is a seed, not a verdict
+
+Two bugs surfaced in the next playtest of v1.0.80:
+
+### 1. tone_reflection was being silently dropped on INSERT
+
+The tone card on re-rolled arc plans still showed the "pre-v1.0.79" fallback note. Cause: the arc plan is stored in NORMALIZED columns (`home_world`, `chapter_1_arc`, etc.), not a single JSON blob. The new `tone_reflection` field had no column, so the INSERT dropped it. `getArcPlan` returned null for the field. UI fell through to the fallback.
+
+Fix: migration 045 adds `tone_reflection TEXT` to `prelude_arc_plans`. INSERT writes `parsed.tone_reflection`, `getArcPlan` returns `row.tone_reflection`. Old arc plans have NULL — graceful fallback preserved. Next time you re-roll, the actual AI interpretation renders.
+
+### 2. departure was pre-deciding even though theme commitment should govern
+
+v1.0.77 added theme-commitment-at-Ch3 as the mechanism that decides the departure TYPE. But the arc plan still had `departure_seed.reason` as a single-valued field, and Opus was writing things like `reason: "call_to_adventure"` — locking in a departure before the theme-commitment ceremony ever fires. The preview rendered it as *"Departure: call_to_adventure — determined, weighted"* which looked (and was) authoritative.
+
+Fix: schema reshape.
+
+**Before (v1.0.77-80):**
+```json
+"departure_seed": {
+  "reason": "pilgrimage | test | conscription | exile | ...",
+  "tone": "hopeful | bitter | ...",
+  "non_tragic_alternatives": [ "..." ]
+}
+```
+
+**After (v1.0.81):**
+```json
+"departure_seed": {
+  "primary_thread": "what most likely pulls them out — 1 sentence, no theme-lock",
+  "plausible_shapes": [ "3-4 short lines, theme-compatible shapes, never all same type" ],
+  "tone": "1-3 words (hopeful / bitter / determined / numb / wistful)"
+}
+```
+
+No single "reason" field. Opus's new job: seed the possibility space, not close it. The prompt's rule 11 Ch4 section got a loud *"⚠ IMPORTANT — DO NOT PRE-DECIDE THE DEPARTURE"* warning plus a reminder that the committed theme drives the final type.
+
+Preview UI rewritten:
+
+- Card titled **DEPARTURE SEED** (not "Departure")
+- Italic caveat: *"The final departure is decided at Chapter 3's theme commitment. These are plausible shapes, not a verdict."*
+- "What most likely pulls them out: [primary_thread]"
+- "Plausible shapes (theme at Ch3 picks from these or overrides):" [bulleted list]
+- Back-compat: old arc plans with just `reason` still render under a *"Legacy seed:"* label so nothing crashes.
+
+### Tests + build
+
+- All 7 prelude suites still green (516 tests). Schema change is read-write-symmetric; existing tests didn't exercise the `reason` field specifically.
+- Client build clean.
+
+Combined effect: re-rolling now produces a proper tone_reflection (visible in the Tone card) AND a non-pre-decided departure seed (visible as plausible shapes, making the theme commitment moment feel earned).
+
 ## [1.0.0.80] - 2026-04-22 — Tone card: arc-specific reflection only, no preset boilerplate
 
 v1.0.79's Tone card showed both the generic preset description (which the player had already read at setup) AND the AI's arc-specific `tone_reflection` below it. Result: redundant, and when the character had an old arc plan without the reflection, the card was just a repeat of the setup-time description with no arc-specific signal at all.
