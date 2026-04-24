@@ -20,6 +20,7 @@ import QuickReferencePanel from './QuickReferencePanel';
 import CompanionsPanel from './CompanionsPanel';
 import ConditionPanel from './ConditionPanel';
 import { CONDITIONS, getConditionsToClear, reduceExhaustion } from '../data/conditions';
+import { useMerchantShop } from '../hooks/useMerchantShop';
 
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'gpt-oss:20b';
@@ -123,26 +124,27 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [weatherState, setWeatherState] = useState(null);
   const [survivalState, setSurvivalState] = useState(null);
 
-  // Merchant shop state
-  const [pendingMerchantShop, setPendingMerchantShop] = useState(null);
-  const [merchantInventory, setMerchantInventory] = useState([]);
-  const [buybackItems, setBuybackItems] = useState([]);
-  const [merchantLoading, setMerchantLoading] = useState(false);
-  const [shopCart, setShopCart] = useState({ buying: [], selling: [] });
-  // M3: bargaining state — reset when the shop closes
-  const [haggleRoller, setHaggleRoller] = useState('character'); // 'character' | 'companion:<id>'
-  const [haggleSkill, setHaggleSkill] = useState('Persuasion');
-  const [haggleResult, setHaggleResult] = useState(null);
-  const [hagglingInFlight, setHagglingInFlight] = useState(false);
-  const [haggleAttempts, setHaggleAttempts] = useState(0);
-  const [shopOpen, setShopOpen] = useState(false);
-  const [lastMerchantContext, setLastMerchantContext] = useState(null);
-  const [transactionProcessing, setTransactionProcessing] = useState(false);
-  const [merchantDbId, setMerchantDbId] = useState(null);
-  const [merchantPersonality, setMerchantPersonality] = useState(null);
-  const [merchantGold, setMerchantGold] = useState(null);
-  const [merchantPriceModifier, setMerchantPriceModifier] = useState(null);
-  const [merchantEconomyModifiers, setMerchantEconomyModifiers] = useState(null);
+  // Merchant shop state (see hooks/useMerchantShop.js)
+  const {
+    pendingMerchantShop, setPendingMerchantShop,
+    shopOpen, setShopOpen,
+    lastMerchantContext, setLastMerchantContext,
+    merchantInventory, setMerchantInventory,
+    buybackItems, setBuybackItems,
+    merchantLoading, setMerchantLoading,
+    merchantDbId, setMerchantDbId,
+    merchantPersonality, setMerchantPersonality,
+    merchantGold, setMerchantGold,
+    merchantPriceModifier, setMerchantPriceModifier,
+    merchantEconomyModifiers, setMerchantEconomyModifiers,
+    shopCart, setShopCart,
+    transactionProcessing, setTransactionProcessing,
+    haggleRoller, setHaggleRoller,
+    haggleSkill, setHaggleSkill,
+    haggleResult, setHaggleResult,
+    hagglingInFlight, setHagglingInFlight,
+    haggleAttempts, setHaggleAttempts
+  } = useMerchantShop();
 
   const messagesEndRef = useRef(null);
 

@@ -8,6 +8,7 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { randomUUID } from 'crypto';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 /**
  * Generate a complete backstory for a companion
@@ -237,22 +238,8 @@ async function generateWithAI(prompt) {
 // ============================================================
 
 function parseBackstoryResponse(response, context) {
-  let jsonStr = response;
-
-  // Handle markdown code blocks
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  // Find JSON object
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
 
     // Ensure all threads and secrets have unique IDs
     const threads = (parsed.unresolved_threads || []).map(thread => ({
@@ -291,20 +278,8 @@ function parseBackstoryResponse(response, context) {
 }
 
 function parseThreadsResponse(response) {
-  let jsonStr = response;
-
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
     const threads = parsed.threads || [];
 
     return threads.map(thread => ({
@@ -320,20 +295,8 @@ function parseThreadsResponse(response) {
 }
 
 function parseSecretResponse(response) {
-  let jsonStr = response;
-
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
     const secret = parsed.secret || parsed;
 
     return {

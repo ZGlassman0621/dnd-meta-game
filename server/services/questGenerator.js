@@ -8,6 +8,7 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { REQUIREMENT_TYPES } from '../config/eventTypes.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 /**
  * Generate a main quest (5-stage epic storyline)
@@ -551,21 +552,8 @@ async function generateWithAI(prompt) {
  * Parse AI response into quest data
  */
 function parseQuestResponse(response, questType, context) {
-  // Extract JSON from response (handle markdown code blocks)
-  let jsonStr = response;
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  // Try to find JSON object in response
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
 
     // Build quest data structure for questService
     const questData = {

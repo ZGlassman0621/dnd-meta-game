@@ -370,3 +370,54 @@ phrase; too loose = lets the same phrasing creep across sessions. The
 existing per-session ledger is intentionally short (30 entries, FIFO)
 to avoid this trap. Cross-session version would need a much tighter
 definition of "distinctive" to stay useful.
+
+---
+
+## Main-campaign tone preset integration
+
+**Priority:** Medium. **Status:** Deferred until prelude work is complete.
+
+**Context:** The prelude has a proper 4-preset tone system
+(`brutal_gritty`, `epic_fantasy`, `rustic_spiritual`, `tender_hopeful`)
+with full "tone bibles" in `server/data/tonePresets.js` — register
+rules, vocabulary anchors, scene-type guidance, age-scaling, exemplar
+paragraphs. `buildTonePresetBlock(presetValue)` formats them for
+injection.
+
+The MAIN DM prompt (post-prelude, ongoing campaign) currently has none
+of this. Tone reaches the main DM prompt only through scattered
+free-text fields (campaign.tone, campaignPlan.dm_notes.tone, module
+themes) and gets buried mid-prompt where it can't actually shape
+register. A Brutal & Gritty prelude graduates into a tonally
+agnostic main campaign, which is incoherent.
+
+**What we'd build:**
+
+1. Add `tone_preset` TEXT column to `campaigns` (one of the 4 canonical
+   values, or NULL).
+2. Capture the preset at campaign creation:
+   - If the campaign was seeded from a prelude character, inherit the
+     preset from `prelude_setup_data.tone_tags` automatically.
+   - Otherwise surface the 4-option picker in the campaign creation UI
+     (same label/description pattern as `PreludeSetupWizard.jsx`).
+3. In `createDMSystemPrompt`, when `sessionContext.tonePreset` is set,
+   inject `buildTonePresetBlock(preset)` at the TOP of the prompt
+   (before Cardinal Rules). Tone shapes BOTH register and scope, so
+   lead with it — every example and rule that follows reads through
+   that register.
+4. When `tonePreset` is unset (legacy campaigns, or user declined to
+   pick one), fall back to the current behavior — no tone preset
+   block, scattered inline tone guidance only.
+
+**Why deferred:** we're still iterating on the prelude experience
+itself (session loop, emergences, canon ledger, theme commitment at
+Ch3 wrap). Wiring tone presets into the main campaign before the
+prelude-to-campaign handoff is even finished (Phase 5 of
+PRELUDE_IMPLEMENTATION_PLAN) would mean reworking it. Do it once, after
+the handoff design is locked.
+
+**Note for the future reviewer:** v1.0.90 included a short-lived attempt
+at a 7-category tone system (gritty/epic/gothic/political/mystery/
+whimsical/default) inferred from free-text campaign tone. That was
+reverted as incoherent with the prelude's 4-preset system. Don't
+re-invent new categories — use the canonical 4.

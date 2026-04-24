@@ -1,5 +1,6 @@
 import { aggregateCampaignContext, dayToHarptosDate } from './metaGame.js';
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 // Ollama API endpoint (runs locally) - fallback when Claude is unavailable
 const OLLAMA_API = 'http://localhost:11434/api/generate';
@@ -118,23 +119,16 @@ Make the adventures interesting, varied, and thematically appropriate. Return ON
     console.log('LLM call successful!');
     console.log('Response text:', responseText.substring(0, 200) + '...');
 
-    // Try to extract JSON from the response - look for the adventures object
-    let jsonMatch = responseText.match(/\{\s*"adventures"\s*:\s*\[[\s\S]*?\]\s*\}/);
-
-    if (!jsonMatch) {
-      // Try alternate pattern - just an array
-      jsonMatch = responseText.match(/\[[\s\S]*?\]/);
-      if (jsonMatch) {
-        const adventuresArray = JSON.parse(jsonMatch[0]);
-        console.log('Parsed adventures array successfully:', adventuresArray.length, 'options');
-        return adventuresArray;
-      }
-      throw new Error('No JSON found in response');
+    // Opus may emit either { adventures: [...] } or a bare [...] — try object first, fall back to array.
+    let adventures;
+    try {
+      const parsed = extractLLMJson(responseText);
+      adventures = Array.isArray(parsed) ? parsed : parsed.adventures;
+    } catch {
+      adventures = extractLLMJson(responseText, { expect: 'array' });
     }
-
-    const adventures = JSON.parse(jsonMatch[0]);
-    console.log('Parsed adventures successfully:', adventures.adventures.length, 'options');
-    return adventures.adventures;
+    if (!Array.isArray(adventures)) throw new Error('No adventures array in response');
+    return adventures;
   } catch (error) {
     console.error('Error generating adventures:', error.message);
     console.error('Full response:', responseText);
@@ -287,22 +281,15 @@ Return ONLY valid JSON in this format:
     const responseText = await callLLM(prompt, 0.8);
     console.log('LLM call successful!');
 
-    // Parse JSON response
-    let jsonMatch = responseText.match(/\{\s*"adventures"\s*:\s*\[[\s\S]*?\]\s*\}/);
-
-    if (!jsonMatch) {
-      jsonMatch = responseText.match(/\[[\s\S]*?\]/);
-      if (jsonMatch) {
-        const adventuresArray = JSON.parse(jsonMatch[0]);
-        console.log('Parsed adventures array:', adventuresArray.length, 'options');
-        return adventuresArray;
-      }
-      throw new Error('No JSON found in response');
+    let adventures;
+    try {
+      const parsed = extractLLMJson(responseText);
+      adventures = Array.isArray(parsed) ? parsed : parsed.adventures;
+    } catch {
+      adventures = extractLLMJson(responseText, { expect: 'array' });
     }
-
-    const adventures = JSON.parse(jsonMatch[0]);
-    console.log('Parsed contextual adventures:', adventures.adventures.length, 'options');
-    return adventures.adventures;
+    if (!Array.isArray(adventures)) throw new Error('No adventures array in response');
+    return adventures;
   } catch (error) {
     console.error('Error generating contextual adventures:', error.message);
     // Fall back to basic generation using character data from context
@@ -503,57 +490,11 @@ Return ONLY valid JSON (no comments, no trailing commas):
     console.log('Generating adventures for all risk levels...');
     const responseText = await callLLM(prompt, 0.8);
 
-    console.log('Raw LLM response (first 500 chars):', responseText?.substring(0, 500));
-
-    // Clean up common JSON issues from LLM responses
-    let cleanedResponse = (responseText || '')
-      .replace(/```json\s*/g, '')
-      .replace(/```\s*/g, '')
-      .replace(/,\s*}/g, '}')  // Remove trailing commas before }
-      .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
-      .trim();
-
-    console.log('Cleaned response (first 500 chars):', cleanedResponse.substring(0, 500));
-
-    // Try multiple patterns to find JSON
-    let jsonStr = null;
-
-    // Pattern 1: Look for {"adventures": with flexible spacing
-    let match = cleanedResponse.match(/\{\s*"adventures"\s*:\s*\[/);
-    if (match) {
-      const startIdx = match.index;
-      // Find matching closing brace using brace counting
-      let braceCount = 0;
-      let endIdx = startIdx;
-      for (let i = startIdx; i < cleanedResponse.length; i++) {
-        if (cleanedResponse[i] === '{') braceCount++;
-        if (cleanedResponse[i] === '}') braceCount--;
-        if (braceCount === 0) {
-          endIdx = i + 1;
-          break;
-        }
-      }
-      jsonStr = cleanedResponse.substring(startIdx, endIdx);
-    }
-
-    // Pattern 2: Try to find any JSON object with adventures array
-    if (!jsonStr) {
-      const startIdx = cleanedResponse.indexOf('{');
-      const endIdx = cleanedResponse.lastIndexOf('}');
-      if (startIdx !== -1 && endIdx > startIdx) {
-        jsonStr = cleanedResponse.substring(startIdx, endIdx + 1);
-      }
-    }
-
-    if (!jsonStr) {
-      console.error('Could not find JSON in response:', cleanedResponse);
-      throw new Error('No JSON found in response');
-    }
-
-    console.log('Extracted JSON (first 300 chars):', jsonStr.substring(0, 300));
-
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(responseText);
     const adventures = parsed.adventures;
+    if (!Array.isArray(adventures)) {
+      throw new Error('Parsed response has no "adventures" array');
+    }
 
     // Ensure risk levels are set correctly
     if (adventures.length >= 3) {

@@ -417,7 +417,15 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // v1.0.60 — fetch the current canon-facts block. Injected into the
   // system prompt as ground truth so Sonnet checks against named details
   // (ages, relationships, traits, past events) before generating.
-  const canonBlock = await canonService.buildCanonFactsBlock(session.character_id);
+  // Wrapped: if the ledger DB query fails, we'd rather run the turn without
+  // ground-truth than fail the player's whole message. Drift risk is lower
+  // than the lost-response risk.
+  let canonBlock = '';
+  try {
+    canonBlock = await canonService.buildCanonFactsBlock(session.character_id);
+  } catch (err) {
+    console.error('[prelude] canon-facts block build failed (sendMessage):', err.message);
+  }
 
   // v1.0.63 — fetch the current emergence snapshot. Tells the AI which
   // stats, skills, class/theme/ancestry trajectories, and values have
@@ -614,8 +622,25 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
     );
   }
 
-  // Process markers on the AI response
-  const markerResults = await processMarkersForSession(session.character_id, sessionId, result.response);
+  // Process markers on the AI response. The messages blob is already
+  // persisted above, so even if marker processing throws the player's
+  // AI response reaches them. Wrap defensively: return an empty-results
+  // shape so the caller code below (config writes, UI return) doesn't
+  // crash on a missing field.
+  let markerResults;
+  try {
+    markerResults = await processMarkersForSession(session.character_id, sessionId, result.response);
+  } catch (err) {
+    console.error(`[prelude] marker processing failed for session ${sessionId}:`, err.message);
+    markerResults = {
+      ageAdvanced: null, chapterAdvanced: null, chapterEndSummary: null,
+      cliffhanger: null, npcsCreated: [], locationsCreated: [],
+      hpDelta: 0, hpAfter: null, hpReasons: [], chapterPromise: null,
+      canonFactsAdded: [], canonFactsRetired: [], offeredEmergences: [],
+      capViolations: [], nextSceneWeight: null,
+      markerProcessingError: err.message
+    };
+  }
 
   // Attach the violation flag to markerResults so the route returns it with
   // the response payload.

@@ -1374,18 +1374,6 @@ router.post('/:id/unequip', async (req, res) => {
   }
 });
 
-// Retired Phase 8 / Phase 9 endpoints — return 410 so stale integrations
-// fail loudly. Inventory + gold are party-wide now; equip/unequip replaces
-// give-item/take-item.
-const retiredHandler = (reason) => (_req, res) => res.status(410).json({
-  error: 'Endpoint retired in M1',
-  reason,
-  replacement: 'Party inventory is now shared via the recruiting character. Use /equip + /unequip for slot management.'
-});
-router.post('/:id/give-item', retiredHandler('Carried inventory is party-wide; items no longer need explicit transfer.'));
-router.post('/:id/take-item', retiredHandler('Carried inventory is party-wide; items no longer need explicit transfer.'));
-router.post('/:id/merchant-transaction', retiredHandler('Gold is party-wide; merchants transact via /api/dm-session/:id/merchant-transaction.'));
-
 // Dismiss companion - removes from party and makes NPC available for re-recruitment
 router.post('/:id/dismiss', async (req, res) => {
   try {

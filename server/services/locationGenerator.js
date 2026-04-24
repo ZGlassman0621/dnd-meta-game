@@ -7,6 +7,7 @@
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 /**
  * Generate locations for a region
@@ -277,26 +278,11 @@ async function generateWithAI(prompt) {
 // ============================================================
 
 function parseLocationsResponse(response, context) {
-  let jsonStr = response;
-
-  // Handle markdown code blocks
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  // Try to find JSON array or object
-  const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-
-  if (arrayMatch) {
-    jsonStr = arrayMatch[0];
-  } else if (objectMatch) {
-    jsonStr = `[${objectMatch[0]}]`;
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    // Opus may emit either a bare [...] array or a {...} object wrapping it.
+    let parsed;
+    try { parsed = extractLLMJson(response, { expect: 'array' }); }
+    catch { parsed = extractLLMJson(response); }
     const locations = Array.isArray(parsed) ? parsed : [parsed];
 
     return locations.map(loc => ({
@@ -328,20 +314,8 @@ function parseLocationsResponse(response, context) {
 }
 
 function parseConnectionsResponse(response) {
-  let jsonStr = response;
-
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
     return parsed.connections || [];
   } catch (error) {
     console.error('Failed to parse connections response:', error);

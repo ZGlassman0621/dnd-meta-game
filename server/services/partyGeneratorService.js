@@ -4,6 +4,7 @@
  */
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 const CHARACTER_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
 
@@ -123,23 +124,7 @@ Return ONLY this JSON structure:
 }
 
 function parsePartyResponse(response) {
-  // Try to extract JSON from the response
-  let jsonStr = response;
-
-  // Strip markdown code fences if present
-  const fenceMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) {
-    jsonStr = fenceMatch[1].trim();
-  }
-
-  // Find JSON object boundaries
-  const firstBrace = jsonStr.indexOf('{');
-  const lastBrace = jsonStr.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-  }
-
-  const parsed = JSON.parse(jsonStr);
+  const parsed = extractLLMJson(response);
 
   // Validate structure
   if (!parsed.party_name || !parsed.characters || parsed.characters.length !== 4) {

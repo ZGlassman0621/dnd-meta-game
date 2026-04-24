@@ -10,6 +10,7 @@ import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { dbGet, dbRun } from '../database.js';
 import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 /**
  * Parse a character's backstory into structured elements
@@ -344,22 +345,8 @@ async function generateWithAI(prompt) {
 // ============================================================
 
 function parseAIResponse(response, character) {
-  let jsonStr = response;
-
-  // Handle markdown code blocks
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  // Find JSON object
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
 
     // Process each element type to add IDs and ai_generated flag
     const processElements = (elements) => {

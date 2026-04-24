@@ -31,6 +31,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import * as claude from './claude.js';
+import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 // Occupations / relationship-types that warrant immediate palette generation.
 // The NPC will see enough dialogue time that a bespoke voice pays off.
@@ -148,14 +149,9 @@ export async function generateVoicePalette(npcId) {
     );
 
     const text = typeof response === 'string' ? response : (response?.content || '');
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    let palette;
-    try {
-      palette = JSON.parse(jsonMatch[0]);
-    } catch (err) {
-      console.warn(`[voicePalette] JSON parse failed for NPC ${npcId}:`, err.message);
+    const palette = tryExtractLLMJson(text);
+    if (!palette) {
+      console.warn(`[voicePalette] Could not extract JSON for NPC ${npcId}`);
       return null;
     }
 

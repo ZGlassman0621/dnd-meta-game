@@ -10,6 +10,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
+import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 const CHRONICLE_PROMPT = `You are analyzing a completed D&D session transcript. The USER was the Dungeon Master and the AI played 4 player characters. In the transcript, "DM" lines are the human Dungeon Master's narration and world description. "PARTY" lines are the AI characters' dialogue and actions.
 
@@ -123,13 +124,9 @@ export async function generateDMModeChronicle(sessionId, partyId) {
       true // raw response for JSON
     );
 
-    // Parse JSON response
-    let chronicle;
-    try {
-      const cleaned = response.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
-      chronicle = JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error('[DM Chronicle] Failed to parse AI response as JSON:', parseError.message);
+    const chronicle = tryExtractLLMJson(response);
+    if (!chronicle) {
+      console.error('[DM Chronicle] Failed to extract JSON from AI response');
       console.error('[DM Chronicle] Raw response (first 500 chars):', response.substring(0, 500));
       return null;
     }
@@ -333,12 +330,9 @@ export async function extractRelationshipEvolution(sessionId, partyId) {
       true
     );
 
-    let result;
-    try {
-      const cleaned = response.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
-      result = JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error('[DM Relationships] Failed to parse AI response:', parseError.message);
+    const result = tryExtractLLMJson(response);
+    if (!result) {
+      console.error('[DM Relationships] Failed to extract JSON from AI response');
       console.error('[DM Relationships] Raw (first 500):', response.substring(0, 500));
       return null;
     }

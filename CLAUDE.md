@@ -1,4 +1,4 @@
-# CLAUDE.md - Project Instructions for Claude Code
+# CLAUDE.md — Project Instructions for Claude Code
 
 ## Project Overview
 D&D Meta Game: AI-powered solo D&D 5e campaign management system.
@@ -15,225 +15,255 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - `npm run install-all` — Install root + client dependencies
 - Tests: `node tests/<testfile>.test.js` (no framework, custom assertions)
 
-## Architecture Rules
-- All JS uses ES modules (`import`/`export`, `"type": "module"` in package.json)
-- Claude model aliases (no date suffix): `claude-opus-4-7`, `claude-sonnet-4-6` — bump these manually when new Claude versions ship (date-suffix aliases auto-resolve to latest *build* within a major.minor, but major.minor itself is pinned)
-- Opus handles ALL generation (campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world)
-- Sonnet handles ONLY interactive DM sessions (except first session opening which uses Opus)
-- AI markers in DM responses: `[COMBAT_START]`, `[COMBAT_END]`, `[LOOT_DROP]`, `[MERCHANT_SHOP]`, `[MERCHANT_REFER]`, `[ADD_ITEM]`, `[MERCHANT_COMMISSION]`, `[BASE_DEFENSE_RESULT]`, `[WEATHER_CHANGE]`, `[SHELTER_FOUND]`, `[SWIM]`, `[EAT]`, `[DRINK]`, `[FORAGE]`, `[RECIPE_FOUND]`, `[MATERIAL_FOUND]`, `[CRAFT_PROGRESS]`, `[RECIPE_GIFT]`, `[MYTHIC_TRIAL]`, `[PIETY_CHANGE]`, `[ITEM_AWAKEN]`, `[MYTHIC_SURGE]`, `[PROMISE_MADE]`, `[PROMISE_FULFILLED]`, `[NOTORIETY_GAIN]`, `[NOTORIETY_LOSS]`
-- DM prompt uses primacy/recency reinforcement — critical rules at top (ABSOLUTE RULES) and bottom (FINAL REMINDER)
-- Event bus (`server/services/eventEmitter.js`) connects game systems
-- Error handling via `server/utils/errorHandler.js` (handleServerError, notFound, validationError)
-- Story Chronicle system: canon facts in `canon_facts` table, session chronicles in `story_chronicles` table
-- Context window management: adaptive budgeting (2K+ tokens, no hard cap, 40% of remaining context), sliding window compression for long sessions
-- No storage caps: campaign_notes, character_memories, and usedNames all grow without limit
-- NPC conversation memory: `npc_conversations` table stores dialogue summaries, topics, tone, key quotes per NPC per session (last 5 per NPC loaded into DM prompt)
-- Session memory: ALL canon facts loaded (no SQL limits), ALL chronicle summaries (300-500 word AI recaps with mood/cliffhanger/key decisions), up to 25 NPCs with 4 conversations each, standalone promises/debts summary, graduated absence annotations (7/14/30 day thresholds)
-- `getSessionSummariesForPrompt()` in storyChronicleService.js fetches rich chronicle summaries for DM prompt
-- Companion emotional state: mood columns on `companion_backstories` (mood, mood_cause, mood_intensity, mood_set_game_day) with time-based decay
-- NPC lifecycle state machine: `lifecycle_status` on `npcs` table (alive/deceased/missing/imprisoned/unknown), `npc_lifecycle_history` audit trail
-- NPC personality enrichment: session extraction fills voice/personality/mannerism/motivation/appearance over time (fill-not-overwrite), `enrichment_level` tracks depth
-- NPC death propagation: `propagateNpcDeath()` in `npcLifecycleService.js` cascades to companion status, canon facts, promises/debts, narrative queue, events
-- NPC voice differentiation: `generateNpcVoiceHint()` in dmPromptBuilder.js — enriched NPCs get personality RP hints, others get occupation-based voice guidance
-- Companion activities: `companion_activities` table tracks off-screen activities (training, scouting, etc.); companions can be 'away' status; activities resolve via Opus AI
-- Companion dismiss is soft-delete: status='dismissed' preserves history instead of DELETE
-- World event NPC effects: `worldEventNpcService.js` generates NPC effects (disposition shift, location change, status change, occupation change) when world events advance stages
-- NPC mail system: `npcMailService.js` scores NPC candidates (disposition/trust/absence/events), generates AI or template mail, queues via narrative_queue — runs as step 3.75 in living world tick
-- NPC aging/absence: `npcAgingService.js` decays disposition/trust based on days since last interaction (applied at session start like decayMoods), reunion boost (+3 disp) after 14+ day absence, relocation/forget thresholds for extreme absence
-- `last_interaction_game_day` INTEGER on `npc_relationships` — populated by `recordInteraction()`, used for absence math and [ABSENCE: X days] annotations in DM prompt
-- Weather system: `campaign_weather` table per campaign, season-based probability tables with region modifiers, temperature = base + weather mod + time-of-day mod, gear warmth scanned from inventory, exposure thresholds (extreme cold <0°F, cold <32°F, hot >85°F, extreme heat >100°F)
-- Survival system: D&D 5e PHB rules — 1 food + 1 water/day, starvation after 3+CON mod days, dehydration after 1 day, auto-consume during long rest, perishable food spoilage (heat wave halves shelf life), foraging DC by terrain
-- Crafting system: `crafting_recipes`/`character_recipes`/`crafting_projects`/`character_materials` tables, quality tiers (standard/fine/superior/masterwork) based on d20 roll margin, default vs discoverable recipes, tool proficiency requirements
-- Radiant recipes: AI-generated unique recipes via `[RECIPE_GIFT]` marker — `is_radiant=1`, `gifted_by` tracks NPC attribution, linked via `character_recipes` with `discovered_method='gift'`
-- Recipe data: 112 total recipes (42 default, 70 discoverable) across 3 data files — weapons (simple + martial), armor (light/medium/heavy + shields), ammunition, food, gear, potions, poisons, scrolls, alchemical
-- Mythic progression: 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only), Mythic Power resource pool (3 + 2×tier/day), Surge mechanic (bonus die d6→d12 by tier), trial-based advancement
-- Mythic paths: Hierophant, Angel, Aeon, Azata, Gold Dragon, Lich, Demon, Devil, Trickster, Legend (extra class levels), Redemption, Corrupted Dawn (consequence), Beast/Dark Hunt (DM), Swarm (DM)
-- Shadow-path interaction: light paths (hierophant/angel/azata/gold_dragon/redemption) need shadow ≤5 to select, full power at ≤2; dark paths powered by shadow; neutral unaffected
-- Piety system (Theros): score 1-50+ per deity, thresholds at 3/10/25/50 unlock abilities. 53 deities (all from character creator: Faerûnian, Draconic, Elven, Drow, Dwarven, Halfling, Orcish, Exandrian, Greyhawk)
-- Epic Boons (2024 PHB): 12 boons at Level 19+, each with +1 ability score (max 30)
-- Legendary items: 4 states (Dormant → Awakened → Exalted → Mythic), narrative milestone advancement
-- Consequence automation: overdue promises auto-break after 45 game days (warning at 21), explicit deadlines honored, expired quests auto-fail with escalation narratives
-- Promise tracking: `[PROMISE_MADE]` and `[PROMISE_FULFILLED]` markers create/resolve promise tracking with game_day, optional deadline_game_day, and weight (trivial/minor/moderate/major/critical)
-- Weighted promise system: AI assigns weight to promises; breaking/fulfilling scales disposition (-3 to -40 / +2 to +30), trust, reputation ripple to nearby NPCs, and faction standing changes
-- Reputation ripple: broken/fulfilled promises spread to nearby NPCs via `getNpcsByLocation()` with probability proportional to weight; adds rumors via `addRumorHeard()`
-- Faction standing propagation: NPC-linked factions (via `leader_npc_id` + `notable_members`) gain/lose standing proportional to promise weight; leaders incur 1.5x effect
-- Merchant price modifiers: disposition-based (-10% to +15%) + faction-based (-5% to +10%) multiplier, clamped [0.85, 1.25]; applied in `generate-merchant-inventory` endpoint
-- Consequence log: `consequence_log` table tracks all automated consequences (broken promises, quest expirations) with narrative queue integration
-- Faction-driven quests: milestone-based quest spawning at 25/50/75/100% goal progress, conflict quests when rival factions clash, quest completion feeds back into goal progress (regular +5/+10, conflict +8/-5), standing-based reward scaling (allied 1.5x, neutral 1.0x, hostile 0.75x)
-- Active quest injection: DM prompt includes active quests with type labels ([MAIN], [FACTION], [CONFLICT], [COMPANION], [SIDE]), stage progress, objectives, faction context; loaded from `getActiveQuests()` in session creation
-- Conflict quests: `faction_conflict` quest type with `aggressor_faction_id` + `defender_faction_id` + `linked_goal_id` in rewards JSON; opposing faction standing change on completion; deduplication prevents duplicate active conflicts between same factions
-- Economy simulation: dynamic per-category pricing from world events (military → weapons expensive), regional geography (coastal/mountain/desert), merchant memory (loyalty discounts, demand markups), bulk purchase discounts (3/5/10+ items)
-- Economy config: `server/config/economyConfig.js` — EVENT_PRICE_EFFECTS (5 event types × 3 stages), REGIONAL_MODIFIERS (11 region types), BULK_DISCOUNT_TIERS, MERCHANT_MEMORY constants
-- Economy service: `server/services/economyService.js` — calculates per-category price modifiers from events + region + memory, combined with reputation modifier multiplicatively, clamped [0.50, 2.00]
-- Transaction history: `transaction_history` JSON column on `merchant_inventories` (migration 011), records bought/sold per merchant per character, drives loyalty discounts and smart restocking
-- Party Base system (Blades in the Dark port): 6 base types (tavern/guild_hall/wizard_tower/temple/thieves_den/manor), levels 1-5 via renown thresholds (0/25/60/120/200), upgrades with hours-invested progress, staff with salary/morale, treasury, income/upkeep processed in living world tick step 3.6
-- Party Base upgrades: shared (fortifications/guest_quarters/storage_vault/training_ground/garden_kitchen) + type-specific, perk system grants mechanical bonuses (training_bonus_xp, crafting_speed, spy_network, etc.)
-- Notoriety/heat system: 0-100 score per source (City Watch, Thieves' Guild, etc.), 5 categories (criminal/political/arcane/religious/military), decays 1-2/day, entanglement checks at thresholds (21-40 10%/day, 41-60 20%, 61-80 35%, 81-100 50%), processed in living world tick step 3.85
-- Notoriety markers: `[NOTORIETY_GAIN: source=X, amount=N, category=Y]` and `[NOTORIETY_LOSS: source=X, amount=N]` detected in DM session responses
-- Long-term projects: Blades-style clock system with 4/6/8/12 segments, skill check advancement (d20 + mod vs DC → 0/1/2 segments), max 3 active per character
-- Downtime v2: 6 new activity types (faction_work, gather_intel, base_upgrade, long_project, recruit, network) extending existing 9 activities, perk bonuses applied during downtime
-- Authentication: JWT-based user accounts, bcryptjs password hashing, auto-generated JWT secret stored in `_app_settings` table
-- Auth middleware: `server/middleware/auth.js` verifies Bearer token on all `/api/*` routes except `/api/auth/*` and `/api/health`
-- Campaign ownership: `user_id` column on `campaigns` table, campaign list/create operations scoped to authenticated user
-- Frontend auth: global fetch interceptor injects Authorization header on all `/api` requests, LoginPage shown when no valid token
-- DM Mode: user is the DM, AI plays 4 characters. Separate from Player Mode (campaign-based sessions)
-- DM Mode party data: stored as JSON blob in `dm_mode_parties.party_data` — character stats (HP, XP, level, inventory, gold, spells) persist across sessions
-- DM Mode session continuity: structured chronicles extracted at session end via Sonnet (NPCs, locations, plot threads, decisions, character moments, mood, cliffhanger); all chronicles injected into next session's system prompt with aggregated NPC reference and plot thread tracking. Plain summaries used as fallback for pre-chronicle sessions. Summaries still editable by the DM
-- DM Mode chronicles: `dm_mode_chronicles` table stores structured session data; `dmModeChronicleService.js` handles extraction and retrieval; prompt builder aggregates NPCs and plot threads across all sessions
-- DM Mode relationship evolution: `extractRelationshipEvolution()` in `dmModeChronicleService.js` — Sonnet extracts warmth/trust deltas from session transcripts, updates `party_relationships` (warmth -5 to +5, trust -5 to +5, attitude, tension, history[]) and `party_dynamics` tensions (resolve/evolve/add). Runs at session end after chronicle generation. No new tables — extends existing party_data JSON.
-- DM Mode prompt: 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER) in `dmModePromptBuilder.js`; PLAYER INITIATIVE rule enforces proactive, curious behavior; 8-point FINAL REMINDER
-- DM Mode OOC (Out of Character): prefix messages with `OOC:` or `OOC CharName:` to speak to "players" about their characters. Server wraps with instructions for player-voice response. Purple-themed UI styling. Stored in transcript as `[OOC]` prefixed messages. No dice/markers processed for OOC.
-- DM Mode session resume: `/api/dm-mode/active/:partyId` returns full message history; auto-detected on party select
-- DM Mode XP/leveling: D&D 5e XP thresholds, party-split or individual XP awards, level-up with hit dice HP rolls
-- DM Mode spell slots: clickable slot circles in PartyView to use/restore; Long Rest button resets all slots and restores HP to max
-- DM Mode game day: `current_game_day` column on `dm_mode_parties`; manual counter (+/-) in gameplay top bar
-- DM Mode NPC Codex: `dm_mode_npcs` table stores NPCs auto-synced from chronicles (name, role, description, voice_notes, sessions_appeared); searchable panel with sort by name/frequency/recency
-- DM Mode NPC voice extraction: `extractNpcVoiceNotes()` in `dmModeNpcService.js` — Sonnet analyzes DM narration at session end for speech patterns, mannerisms, accents per NPC; accumulated in `voice_notes` column
-- DM Mode plot threads: `dm_mode_plot_threads` table with status (ongoing/resolved/abandoned/new), tags (JSON array), source (auto/manual); auto-synced from chronicles but manual status overrides prevent auto-updates; UI panel with filter tabs, status dropdown, tag management, manual thread creation
-- DM Mode campaign prep: `dm_mode_prep` table with type discriminator (npc/enemy/location/lore/treasure/session_notes) + JSON content blob; full-screen CampaignPrepScreen workspace accessible from party select; read-only PrepReferencePanel (420px) during sessions via "Prep" toolbar button
-- DM Mode enemy stat blocks: Full D&D 5e stat blocks in prep system — AC, HP, speed, ability scores, saves, skills, resistances, immunities, traits, actions, reactions, legendary actions, lair actions, CR/XP auto-lookup, loot
-- DM Mode reference panels: EquipmentReferencePanel (equipment.json, gold accent #d4af37), SpellReferencePanel (spells/index.js, indigo #6366f1, cantrip dedup, multi-filter), RulesReferencePanel (conditions.js + hardcoded rules, amber #f59e0b, 7 sections)
-- DM Mode effect tracker: EffectTracker component (orange #f97316) — inline bar between top bar and messages, tracks spell/condition durations with round countdown, concentration management (one per caster), auto-decrement on Advance Round, color-coded pills (green 3+, yellow 2, red 1, blue indefinite)
-- DM Mode sessions use `dm_sessions` table with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is NULL)
-- Migration 014: `dm_sessions.character_id` made nullable for DM Mode compatibility
-- Progression system (Themes / Ancestry Feats / Synergies): Phase 1 foundation shipped in v1.0.3, Phase 2 character creation shipped in v1.0.4, Phase 3 character sheet display shipped in v1.0.5, Phase 4 AI DM prompt integration shipped in v1.0.6, Phase 4.5 level-up flow cleanup shipped in v1.0.7, Phase 5 level-up progression shipped in v1.0.8, Phase 5.5 companion progression shipped in v1.0.9, Phase 5.6 DM prompt parity + typo fix shipped in v1.0.10, Phase 6 companion rest + spell slots shipped in v1.0.11, Phase 7 companion combat safety (conditions + death saves) shipped in v1.0.12, Phase 8 companion item transfer + inventory quick-view shipped in v1.0.13 (RETIRED in M1), Phase 9 companion merchant transactions shipped in v1.0.14 (RETIRED in M1), Phase 10 companion multiclass shipped in v1.0.15, M1 party inventory + equip/unequip shipped in v1.0.16. See IMPLEMENTATION_PLAN.md for remaining phases
-- Base threats / raids / sieges (v1.0.23, F3): migration 037 adds `base_threats` with status state machine (approaching → defending/resolving → resolved) and outcome enum (repelled/damaged/captured/abandoned). `server/config/raidConfig.js` defines `RAID_CAPABLE_EVENTS` (bandit_activity, war, undead_uprising, mercenary_incursion, cult_activity) each with category/force range/warning days/target preferences/per-tick probability; vulnerability multipliers (low defense, isolated subtype, no garrison); `SIEGE_FORCE_THRESHOLD=15`; `RECAPTURE_WINDOW_DAYS=14`. `server/services/baseThreatService.js` handles full lifecycle: `generateThreatsForCampaign` (tick step 3.95 scans active raid-capable world events, rolls against vulnerable bases, queues narrative warnings), `computeAutoResolveOutcome` (attackerForce+d20 vs defense_rating+garrison/4+d20, margin-to-outcome with siege -2 shift), `autoResolveThreat`/`autoResolveDueThreats` (applies building damage, treasury/garrison loss, narrative queue messages), `initiatePlayerDefense`+`recordPlayerDefenseOutcome` (player-led flow), `expireStaleCapturedBases` (14-day window → permanent abandonment). Endpoints: `GET /api/base/:id/threats`, `GET /api/threats/campaign/:campaignId`, `POST /api/threats/:id/defend`, `POST /api/threats/:id/resolve-defense`. AI marker `[BASE_DEFENSE_RESULT: Threat=X Outcome=Y Narrative="..."]` processed in dmSession for player-led defense outcomes. DM prompt has new BASE THREATS section; `getBaseForPrompt` shows per-base "⚔️ UNDER THREAT/DEFENDING/COMBAT IN PROGRESS" lines. UI: Garrison tab shows red Active Threats banner with Return to Defend buttons and recent-attacks history. Auto-generated recapture quests deferred to polish pass.
-- Base garrison + defense (v1.0.22, F2): migration 036 adds `defense_rating`/`garrison_strength`/`subtype_defense_bonus` columns to `party_bases`; new `base_officers` table (base_id, companion_id, role, notes; UNIQUE(base_id, companion_id)). Every subtype has a `defenseBonus` (watchtower 2 → castle 12). Three new buildings: palisade (+2), stone_walls (martial-only, +5), war_room (+1 to officer bonus). Perk parser `parseDefenseGarrisonPerk` recognizes `defense_rating_plus_N`, `garrison_capacity_N`, `officer_bonus_plus_N`. `recomputeDefenseAndGarrison(baseId)` sums subtype + completed-building perks + officer contributions (ceil(level/3) per officer + officer_bonus perks). Auto-fires on building complete/demolish and officer assign/unassign. Endpoints: `GET /api/base/:id/garrison` (snapshot), `POST /api/base/:id/officers` (validates: active status, same recruiter, no duplicate), `DELETE /api/base/:id/officers/:officerId`. DM prompt: `getBaseForPrompt` adds `Defense N · Garrison capacity M · Officers: X, Y` line per base. UI: new Garrison tab in PartyBasePage with 3 stat cards + officer roster + assign picker. Route fix: moved 2-param `GET /base/:char/:camp` to bottom of /base group to avoid swallowing 3-segment `/base/:id/garrison` and future `/base/:id/xxx` GETs.
-- Fortress-capable base system (v1.0.21, F1): migration 035 drops/recreates `party_bases` and `base_upgrades` (as `building_upgrades`), adds `base_buildings`. Bases now have `category` (civilian/martial/arcane/sanctified), `subtype` (13 options: watchtower/outpost/keep/fortress/castle/tavern/hall/manor/wizard_tower/academy/chapel/temple/sanctuary), `is_primary` flag (partial UNIQUE index on character+campaign), `building_slots` derived from subtype. The old 6 BitD base types are now BUILDINGS you install inside any compatible base via `allowedCategories` allowlist. `BUILDING_TYPES` config has 20 buildings with slots/cost/hours/perks. Service API: `getBase` (primary, back-compat) + `getBases`, `createBase({ category, subtype, ... })`, `setPrimaryBase`, `addBuilding`/`listBuildings`/`advanceBuildingConstruction`/`removeBuilding`. Construction flips status `planned → in_progress → completed` and merges perks into `base.active_perks`; demolish reverses. Endpoints: `GET /api/bases/:char/:campaign` (plural), `POST /api/base` (new signature), `POST /api/base/:id/set-primary`, `GET /api/base/:id/buildings/available` (filtered catalog + slot usage), `POST /api/base/:id/buildings`, `POST /api/base/:id/buildings/:bid/advance`, `DELETE /api/base/:id/buildings/:bid`. PartyBasePage UI: two-step Category→Subtype establish form, Buildings tab replacing Upgrades, slot usage header, inline +8/+16/+32-hour advance buttons. Known scope cuts: multi-base UI switcher (server supports it; UI still primary-only) lands with F2 garrison; `building_upgrades` table exists but unused until polish pass.
-- Merchant relationships (v1.0.20, M4): migration 034 adds `character_merchant_relationships` (character_id, merchant_id, notes, favorited, UNIQUE) for data that can't be derived. `server/services/merchantRelationshipService.js` composes per-merchant relationship rows by joining `merchant_inventories.transaction_history` (filtered to the character) + npc_relationships (disposition) + economy service (`getMerchantMemoryModifiers` for loyalty tier). Sorted favorites-first then by last_visit_game_day. Endpoints: `GET /api/merchant/relationships/character/:id`, `PUT /api/merchant/relationships/:merchantId` with `{ characterId, notes?, favorited? }`. `recordTransaction` now captures `total_spent_cp`/`total_earned_cp`/`at` on history entries; legacy entries tolerated with 0 totals. UI: `MerchantRelationshipsPanel` (gold-accented slide-in) with Favorites + All-Merchants sections, per-card disposition badge + loyalty discount + visit count + last-visit delta + gold flow + editable notes + favorite toggle. New "Merchants" toolbar button in DMSession.
-- Merchant bargaining (v1.0.19, M3): `server/services/bargainingService.js` is pure math — `calculateHaggleDC` uses disposition (hostile 20 → allied 10) + rarity (+0 to +8) + prosperity (-2 to +2); `resolveHaggle` rolls d20+ability+prof+theme vs DC; discount tiers by margin: 0-4=5%, 5-9=10%, 10-14=15%, 15+=20%; nat 20 auto-max, nat 1 auto-fail with disposition hit. Theme bonuses +2: Guild Artisan/Noble on Persuasion, Charlatan on Deception, Criminal/Mercenary Veteran on Intimidation. Intimidation failures always hit disposition; repeat attempts (attemptNumber > 1) stack penalties. Endpoint: `POST /api/merchant/:id/haggle` with `{ characterId, rollerType: 'character'|'companion', companionId?, skill, itemRarity?, attemptNumber?, rollValue? }`. Merchant-transaction endpoint accepts optional `haggleDiscountPercent` clamped server-side to [0, 20]; applied multiplicatively AFTER bulk discount. UI: inline Haggle card in merchant shop panel with roller + skill dropdowns, Roll button, result display; discount rides along to the transaction. Single-use per transaction.
-- Merchant commissions (v1.0.18, M2): migration 033 adds `merchant_orders` table with status state machine (pending → ready → collected; pending → cancelled; ready → expired after 30 days unclaimed). `server/services/merchantOrderService.js` owns lifecycle logic: `placeCommission` (deducts deposit from party purse, credits merchant, inserts pending), `collectOrder` (pays balance, adds to party inventory), `cancelOrder` (deposit forfeit), `processDueOrders` (pending → ready at deadline — called from living-world tick step 3.9), `expireStaleReadyOrders` (30-day hold). New `server/routes/merchant.js` mounts at `/api/merchant`: POST `/:id/commission`, GET `/orders/character/:id`, GET `/orders/:id`, POST `/orders/:id/collect`, POST `/orders/:id/cancel`. AI marker `[MERCHANT_COMMISSION: Merchant=X Item=Y Price_GP=N Deposit_GP=M Lead_Time_Days=D Quality=Q Hook=...]` detected in dmSessionService.js, processed in dmSession.js — finds/creates merchant, places order, feeds `[SYSTEM]` confirmation or rejection reason back to the AI. DM prompt has a CUSTOM ORDERS section with pricing + lead time guidance. UI: teal `CommissionsPanel` slide-in with Active + History sections, Collect/Cancel buttons per-order; new toolbar button in DMSession.
-- Party inventory (v1.0.16, M1): carried inventory + gold are party-wide, stored on the recruiting character's `inventory` / `gold_*` columns. Companions keep per-entity `equipment` slots (mainHand/offHand/armor) but no longer hold their own carried items or coin. Migration 032 performs a one-time merge of active companions' inventory + gold into the recruiter. New endpoints: `POST /api/companion/:id/equip` `{ slot, itemName }` moves one item from the party pool onto a companion's equipment slot (previously-equipped item returns to pool); `POST /api/companion/:id/unequip` `{ slot }` is the inverse. `POST /companion/create-party-member` accepts optional `starting_inventory` that merges into the party bucket. Retired (410 Gone): Phase 8 give-item/take-item, Phase 9 companion merchant-transaction. CompanionSheet UI replaces the old per-companion inventory card with an Equipment card (three slot rows + Unequip buttons + "equip from party pool" picker). DM prompt never surfaced per-companion inventory so unchanged. Foundation for merchant rework (M2-M4: custom orders, bargaining, relationship UI) and future fortress storage (F-phases).
-- Companion multiclass (v1.0.15, Phase 10): migration 031 adds `companion_class_levels` TEXT column (JSON array of `{ class, level, subclass }`). `parseCompanionClassLevels()` helper in `companion.js` falls back to legacy single-class columns for pre-Phase-10 recruits. `POST /:id/level-up` accepts optional `targetClass` — omit to advance primary, match to advance a secondary, or provide a new class name to add a multiclass entry at level 1. Semantics mirror character-side: `companion_level` = TOTAL level; `companion_class`/`companion_subclass` = primary (index 0); ASI / subclass / hit die / features key off TARGET class level (5e RAW); spell slots use `getMulticlassSpellSlots()` when >1 class. Theme tier + ancestry feat thresholds still key off TOTAL level. Recruit + create-party-member seed class_levels. DM prompt renders `Classes: Wizard 3 / Cleric 2 — total 5` for multiclass companions. UI: blue "Class to Advance" dropdown in CompanionSheet level-up modal with existing classes + 13 multiclass options.
-- Companion merchant transactions (v1.0.14, Phase 9): `POST /api/companion/:id/merchant-transaction` with `{ merchantId?, bought, sold }` — uses companion's own gold columns + inventory. Mirrors character-side flow from dmSession.js (same bulk discount via `getBulkDiscount()`, same optimistic-locking merchant update via `updateMerchantAfterTransaction()`), but skips NPC disposition ripple (companions aren't independent relationship holders). On merchant lock conflict, rolls companion state back to pre-transaction snapshot and returns 409. No UI integration yet — the in-session MerchantShop panel in DMSession.jsx is still character-only; wiring "shop as companion" into it is a deferred follow-up. Endpoint is callable via API or future AI markers.
-- Companion item transfer (v1.0.13, Phase 8): `POST /api/companion/:id/give-item` and `POST /api/companion/:id/take-item` move items between a character and a companion (both accept `{ characterId, itemName, quantity? }`, default quantity 1). Merge into existing stacks on the destination (case-insensitive name match); split partial stacks; fully remove source entry when quantity == total. Reject missing items, overdraws, non-positive quantities with 400. Shared helpers `inventoryAddItem` / `inventoryRemoveItem` in `companion.js` keep the merge/split logic DRY. UI: new green Inventory & Equipment card on CompanionSheet with gold total, equipped gear chips (🗡 🛡 🥼), carried items list, and per-item "Hand back" buttons. Card hides when companion has nothing.
-- Companion combat safety (v1.0.12, Phase 7): migration 030 adds `active_conditions` (JSON array), `death_save_successes`, `death_save_failures` to `companions`. Endpoints: `GET/POST /:id/conditions`, `POST /:id/conditions/add|remove`, `GET /:id/death-saves`, `POST /:id/death-save` (5e RAW: 10+ success, 20 revive, 1 = 2 failures, 3 success = stabilize, 3 failure = die), `POST /:id/stabilize`. Long rest clears conditions (petrified persists), decrements exhaustion by 1, resets death saves; short rest that brings HP above 0 also resets death saves. DM prompt adds two indented lines per companion via `formatCompanionActiveConditionsLine` + `formatCompanionDeathSavesLine`. UI: orange Active Conditions card (chips + dropdown) and red Death Saves card (visible only at 0 HP) on CompanionSheet.
-- Companion rest + spell slots (v1.0.11, Phase 6): migration 029 adds `companion_spell_slots`, `companion_spell_slots_used`, `companion_hit_dice` to the `companions` table (all nullable, persist used-map only, max computed on demand from class+level via shared `getSpellSlots()`). Endpoints: `GET /api/companion/:id/spell-slots`, `POST /api/companion/:id/spell-slots/use`, `POST /api/companion/:id/spell-slots/restore`, `POST /api/companion/:id/rest` (body `{ restType: 'long' | 'short' }`). Long rest = HP to max + used slots cleared. Short rest = +50% of missing HP (min 1); warlocks also reset pact slots. DM prompt includes each companion's slot state via `formatCompanionSpellSlotsLine()` in `dmPromptBuilder.js`; max + used are pre-computed in `dmSession.js` so the prompt builder remains import-free. UI: CompanionSheet has a purple Spell Slots section with Use/+1 buttons plus teal Long Rest and blue Short Rest action buttons.
-- Companion DM prompt parity (v1.0.10, Phase 5.6): each class-based companion's theme + unlocked abilities + ancestry feats are rendered into the DM system prompt via `formatCompanionProgressionLines()` in `dmPromptBuilder.js`. `dmSession.js` loads the snapshot per-companion at session start (with lazy backfill + silent failure). Source of truth: `getCompanionProgression()` in `progressionCompanionService.js`, the slim mirror of `getCharacterProgression()`. Also fixed a long-standing typo in `narrativeIntegration.js` (`getBackstoryByCompanion` → `getBackstoryByCompanionId`) that was silently disabling backstory generation on recruit
-- Companion progression (v1.0.9, Phase 5.5): companions get their own progression tables (`companion_themes`, `companion_theme_unlocks`, `companion_ancestry_feats` via migration 028), mirroring 023/024. On `POST /api/companion/recruit` and `POST /api/companion/create-party-member` the server auto-assigns a theme (from `companion_class` via `mapCompanionClassToTheme`) and seeds the L1 ancestry feat (from the linked NPC's race via `normalizeRaceToAncestryList`, which silently returns null for unmapped races like Goblin/Bugbear). On `POST /api/companion/:id/level-up` theme abilities auto-unlock at L5/L11/L17 and ancestry feats auto-pick at L3/L7/L13/L18 — `levelUpSummary` includes `themeTierUnlocked` and `ancestryFeatSelected`. `GET /api/companion/:id/level-up-info` returns a `progression` preview so `CompanionLevelUpModal` can render purple theme-tier and teal ancestry-feat notification cards. `GET /api/companion/:id/progression` returns a full read-only snapshot. Pre-5.5 companions are lazy-backfilled via `ensureCompanionProgressionInitialized` on their next level-up-info fetch. All progression side-effects are best-effort (silent failure / idempotent inserts) so recruit/level-up never blocks on a progression hiccup. Companion auto-pick feat is deterministic (choice_index=0).
-- Level-up endpoint (`POST /api/character/level-up/:id`) as of v1.0.8: pre-mutation validation (422 if subclass required but missing, 400 if ancestry feat required but missing or invalid), feat-instead-of-ASI support (asiChoice.type = 'asi' or 'feat'), `computeProgressionDecisions()` helper calculates theme tier unlocks (auto) and ancestry feat tier picks (player-chosen) for the target level, all writes in `db.transaction('write')` with rollback on error. `GET /api/character/level-up-info/:id` surfaces `progressionDecisions` so the UI knows what to prompt for. Theme tiers auto-insert into `character_theme_unlocks`; ancestry feat picks insert into `character_ancestry_feats`. `LevelUpPage.jsx` renders a notification card for auto-unlocked theme tiers and a selectable list for ancestry feat tiers; CharacterManager delegates to parent via `onShowLevelUp` prop
-- AI DM progression awareness (v1.0.6): `formatProgression()` in `dmPromptBuilder.js` renders theme + unlocked abilities + ancestry feats + Knight moral path guidance + resonant synergies + level-gated Mythic tier bonuses + per-theme narration hooks into the system prompt. All 21 themes have bespoke narration hooks. Knight paths get tailored DM directives (True/Reformer/Martyr/Complicit/Fallen/Redemption). DM session start pre-fetches progression for primary + secondary character via `progressionService.getCharacterProgression()` and injects into sessionConfig as `progression` + `secondaryProgression`
-- Progression tab on CharacterSheet (new in v1.0.5): theme identity, full 4-tier progression with unlocked/ready/future state, ancestry feats list, resonant Subclass×Theme synergy callout, Mythic×Theme amplification callout (resonant amber; dissonant red with arc threshold). Data from `GET /api/character/:id/progression`
-- QuickReferencePanel Abilities tab (extended in v1.0.5): inline Theme callout with unlocked abilities, Ancestry Feats summary, Resonant Synergy indicator — compact in-session display; silent fail if progression data unavailable
-- Progression tables (migrations 023-027): `themes`, `theme_abilities`, `character_themes`, `character_theme_unlocks`, `knight_moral_paths` (6-path tracker), `ancestry_feats`, `character_ancestry_feats`, `team_tactics`, `character_team_tactics`, `subclass_theme_synergies`, `mythic_theme_amplifications`, `mythic_arcs`, `mentor_imprints`, `prelude_unlock_flags`, `downtime_periods`, `downtime_activities`, `downtime_vignettes`
-- Progression seed data (`server/data/`): `themes.js` (21 themes × 4 tiers = 84 abilities), `ancestryFeats.js` (195 feats across 13 lists), `teamTactics.js` (20), `subclassThemeSynergies.js` (50), `mythicThemeAmplifications.js` (17) — loaded on startup via `progressionSeedService.js`, idempotent upsert
-- Progression API (`/api/progression/*`): read-only endpoints — themes, theme details, ancestry feats by race (optional tier filter), team tactics, subclass×theme synergies, mythic×theme amplifications. Character-specific progression state exposed via `GET /api/character/:id/progression`
-- Character creation persists theme_id / theme_path_choice / ancestry_feat_id on POST /api/character. Theme L1 ability auto-unlocked; Knight theme auto-inits knight_moral_paths row to 'true' path
-- Character creator descriptions (v1.0.40): `client/src/data/references.js` holds the single-source reference maps for ability scores (6), skills (18), tools (~27 + instruments), languages (~18), damage types (13), weapon properties (11), and Magic Initiate class flavors (6). `CharacterCreationWizard.jsx` uses these to surface 1-sentence explainers inline under pickers — theme sub-choices, base race descriptions, class features, ability scores, skill/tool/language/damage selections, and equipment items (damage/AC/cost/weight inline). Theme `creation_choice_options` schema upgraded from `string[]` to `{ value, label, description }[]` for Outlander (9 biomes), City Watch (10 cities), Knight (4 order types); wizard renders both shapes for back-compat
-- Prelude-forward character creator (v1.0.41-60, Phases 1+2a+2b-i+2b-ii+3+4 + canon ledger of 6): migration 042 adds `characters.creation_phase` (`'prelude' | 'ready_for_primary' | 'active'`, defaults to `'active'`), `prelude_age`, `prelude_chapter`, `prelude_setup_data` (JSON), plus 5 new tables (`prelude_emergences`, `prelude_values`, `prelude_canon_npcs`, `prelude_canon_locations`, `prelude_arc_plans`). `POST /api/prelude/setup` creates a prelude-phase character with placeholder class/level and provisional all-10s stats; `GET /api/prelude/list` + `GET /api/prelude/:id` read. `PreludeSetupWizard.jsx` is an 11-question mandatory-curated-plus-free-text wizard reached via a "✦ Start with a Prelude" button on `CharacterManager.jsx`. Starting age was removed in v1.0.43 — it's now race-derived server-side via `computeStartingAge()` (humans age 6, elves 30, dwarves 18, warforged 1, etc.). Curated data lives in `client/src/data/preludeSetup.js`. After setup, Opus generates a structured arc plan via `preludeArcService.js` (`POST /api/prelude/:id/arc-plan`, one re-roll allowed); `PreludeArcPreview.jsx` renders home world + 4 chapter arcs (each with theme/beats/chapter-end/seeded-emergences, chapters 3-4 include chapter_promise_prompt, chapter 4 includes departure_seed with non-tragic alternatives) + recurring threads + character trajectory. Server-side labels in `server/services/preludeSetupLabels.js` mirror the client's curated lists for prompt enrichment. Prelude characters render with a purple "✦ In Prelude" badge in the character list. Old single-session origin-story prelude (migration 022) was fully removed in v1.0.44 — `preludePromptBuilder.js`, `PreludeSetup.jsx`, `POST /api/dm-session/start-prelude`, and the `prelude_completed` hook are all gone. Migration 022's columns (`prelude_completed`, `prelude_config`) remain on the table but are unused and harmless. Phase 2b-i (v1.0.46) adds the session loop: `preludeArcPromptBuilder.js` (Sonnet system prompt + markers), `preludeSessionService.js` (start / resume / sendMessage / endSession), `preludeMarkerDetection.js` (lifecycle markers), `PreludeSession.jsx` UI. Sessions stored in `dm_sessions` with `session_type='prelude_arc'`. Endpoints: `POST /api/prelude/:id/sessions/start`, `GET /api/prelude/:id/sessions/active`, `GET /api/prelude/sessions/:sid`, `POST /api/prelude/sessions/:sid/message`, `POST /api/prelude/sessions/:sid/end`, `POST /api/prelude/sessions/:sid/resume`. Phase 2b-ii (v1.0.55) adds: HP tracking via `[HP_CHANGE: delta=-N reason="..."]` marker + top bar display (no manual +/- UI per user directive), age-scaled stat recompute on chapter advance (HP scales proportionally), per-chapter session budget (DM-side pacing guidance in prompt — Ch1 ~1-2 / Ch2 ~2 / Ch3 ~2-3 / Ch4 ~2-3 sessions), `[CHAPTER_PROMISE: theme="..." question="..."]` marker (fires only at chapter 3/4 opens, rendered inline as dashed-purple card), Sonnet-generated session-end recap (1-2 paragraphs persisted on `session_config.lastSessionRecap`, shown in paused banner), prelude-tuned rolling summary template in `rollingSummaryService` (session_type='prelude_arc' branches to character-development-weighted summarizer instead of plot/combat/quest template), notice pills for chapter/age/HP events. Dropped: dice roller + combat tracker UI (physical dice + narrative combat per user). Phase 3 (v1.0.56) adds mechanical emergence: 6 marker types (STAT_HINT, SKILL_HINT, CLASS_HINT, THEME_HINT, ANCESTRY_HINT, VALUE_HINT), `preludeEmergenceService.js` with caps (+2/stat, 2 skills total) and chapter-weighted tallies (ch1-2: 1x, ch3: 1.5x, ch4: 2x with recency tiebreak), API endpoints at `/api/prelude/:id/emergences/*` (offered/accept/decline) + `/api/prelude/:id/values`, inline accept/decline cards in the message feed for stat/skill hints, values tracker in the Setup panel (color-coded raw scores), cap-violation [SYSTEM NOTE] feedback loop so Sonnet stops firing rejected targets, session-end recap receives accepted emergences and weaves them into prose. Stat/skill bonuses don't apply to character sheet mid-prelude — they accumulate on prelude_emergences and flow through in Phase 5's transition to main creator. Phase 4 (v1.0.57) is prompt-only: expanded NPC voice rules with per-life-stage speech patterns (small child / tween / teen / young adult / adult / elder), 4 named time-compression techniques with worked examples (season-skip / rhythm-compression / selective-detail / [AGE_ADVANCE] jump) + when-to-compress-vs-scene-out decision ladder, and 16 tone tags each with applied prose-level guidance (gritty = short sentences + body details; epic = elevated diction; political = agendas in every room; etc.) with combination amplification. v1.0.58 hotfixed a TDZ error in sendMessage. v1.0.59 added session-length pacing (server tracks currentPlaySessionBaseline on session_config, injects escalating [SYSTEM NOTE] nudges at ≥30/≥50/≥70 messages pressuring Sonnet to fire [SESSION_END_CLIFFHANGER] before context drifts; each resume resets baseline) + preserved-self-correction rule (2a). v1.0.60 adds the canon-facts ledger: migration 043 creates `prelude_canon_facts` (character_id, category, subject, fact, established_age, status), two new markers `[CANON_FACT]` and `[CANON_FACT_RETIRE]`, service `preludeCanonService.js` (record / retire / getActive / buildCanonFactsBlock), ground-truth block injected into every Sonnet prompt (grouped by category: people/relationships/traits/places/items/events), API `GET /api/prelude/:id/canon-facts`, and a "Canon ledger" section in the UI's Setup panel showing live ground truth. Rule 15a teaches Sonnet to check the ledger before generating named details and emit facts/retires as canon shifts. Complementary to rolling summaries (prose memory vs. structured ground truth). Prevents "Moss is 12 now" drift class. See `PRELUDE_IMPLEMENTATION_PLAN.md` for the full 6-phase plan.
-- Design docs for progression system: THEME_DESIGNS.md, PARTY_SYNERGIES.md, ANCESTRY_FEATS.md, SUBCLASS_THEME_SYNERGIES.md, MYTHIC_THEME_AMPLIFICATIONS.md, DOWNTIME_DESIGN.md — source of truth for all mechanical content; seed data files are the code implementations
+## Architecture
 
-## Key Files
+### Stack & conventions
+- All JS is ES modules (`import`/`export`, `"type": "module"` in package.json). No TypeScript.
+- React functional components with hooks. No CSS framework — inline styles throughout.
+- SQLite queries use parameterized `?` placeholders. JSON is stored in TEXT columns for flexible fields (inventory, ability_scores, etc.).
+- API routes follow REST: `/api/<resource>/...`.
+- Migrations are numbered (`server/migrations/NNN_*.js`) and run in order via `server/migrationRunner.js`. Migrations are additive after ~011; early ones drop/recreate tables.
+
+### AI model discipline
+- Model aliases (no date suffix): `claude-opus-4-7`, `claude-sonnet-4-6` — major.minor is pinned; bump manually when a new Claude version ships.
+- **Opus handles ALL generation** — campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world, prelude arc plans.
+- **Sonnet handles ONLY interactive DM sessions** (including prelude sessions), plus chronicle extraction. Exception: the first session opening uses Opus for narrative richness.
+- Structured JSON from LLMs goes through `server/utils/llmJson.js` — `extractLLMJson()` / `tryExtractLLMJson()`. Don't write new ad-hoc parsers; Opus occasionally emits multi-block responses that naive extractors splice into invalid JSON.
+
+### Prompt structure
+- DM prompt uses **primacy/recency reinforcement**: critical rules appear at the top (ABSOLUTE RULES) AND bottom (FINAL REMINDER). Don't modify this structure without understanding the pattern — it's the main lever holding the AI to the rules.
+- DM Mode prompt uses a 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER).
+- Prompt caching via `claude.js` has three tiers (cache-break markers embedded in the prompt string): universal-static, per-character static, dynamic. Only blocks ≥1024 tokens are cached.
+
+### DM session markers
+Markers the DM AI emits during Player Mode sessions, each detected and processed server-side:
+`[COMBAT_START]` `[COMBAT_END]` `[LOOT_DROP]` `[MERCHANT_SHOP]` `[MERCHANT_REFER]` `[ADD_ITEM]` `[MERCHANT_COMMISSION]` `[BASE_DEFENSE_RESULT]` `[WEATHER_CHANGE]` `[SHELTER_FOUND]` `[SWIM]` `[EAT]` `[DRINK]` `[FORAGE]` `[RECIPE_FOUND]` `[MATERIAL_FOUND]` `[CRAFT_PROGRESS]` `[RECIPE_GIFT]` `[MYTHIC_TRIAL]` `[PIETY_CHANGE]` `[ITEM_AWAKEN]` `[MYTHIC_SURGE]` `[PROMISE_MADE]` `[PROMISE_FULFILLED]` `[NOTORIETY_GAIN]` `[NOTORIETY_LOSS]` `[CONDITION_ADD]` `[CONDITION_REMOVE]`.
+
+Prelude sessions have their own marker set (see prelude section below).
+
+### Memory systems
+Three layers of persistent world memory flow into the DM prompt:
+
+**Canon facts** (`canon_facts` table) — structured ground-truth: NPC details, location facts, relationships. Loaded in full, no SQL cap.
+
+**Story chronicles** (`story_chronicles` table) — 300–500-word Opus-generated session recaps with mood, cliffhanger, key decisions, NPCs involved. ALL chronicles load into session prompt.
+
+**NPC conversations** (`npc_conversations` table) — last ~5 per NPC, summaries + topics + tone + key quotes. Up to 25 NPCs × 4 conversations each injected into DM prompt.
+
+Plus: standalone promises/debts summary, graduated absence annotations (`[ABSENCE: X days]` at 7/14/30 day thresholds), per-NPC aging/decay of disposition when absent long enough.
+
+Context-window budgeting is adaptive: 40% of remaining context, no hard cap, sliding-window compression kicks in for long sessions.
+
+### Story / narrative systems
+- **NPC lifecycle** (`lifecycle_status` on `npcs`): alive/deceased/missing/imprisoned/unknown with `npc_lifecycle_history` audit trail. Death propagation cascades to companion status, canon facts, promises/debts, narrative queue, events.
+- **NPC enrichment**: session extraction fills voice/personality/mannerism/motivation/appearance over time (fill-not-overwrite).
+- **NPC aging/absence**: decays disposition/trust based on days since last interaction; reunion boost +3 after 14+ days; relocation/forget thresholds for extreme absence.
+- **Promises**: `[PROMISE_MADE]` / `[PROMISE_FULFILLED]` markers with weight (trivial→critical). Breaking/fulfilling scales disposition ±40, trust, reputation ripple to nearby NPCs, and faction standing. Overdue promises auto-break after 45 game days (warning at 21).
+- **Quests**: milestone-based faction-driven spawning at 25/50/75/100% goal progress; conflict quests when rival factions clash; standing-based reward scaling. Active quests injected into DM prompt with type labels `[MAIN]`/`[FACTION]`/`[CONFLICT]`/`[COMPANION]`/`[SIDE]`. Expired quests auto-fail with escalation narratives.
+- **Consequences**: `consequence_log` table tracks automated outcomes (broken promises, expired quests) with narrative queue integration.
+- **Narrative queue**: persistent priority-ordered queue for between-session developments; delivered at session start.
+
+### World simulation
+- **Living world tick pipeline** (`livingWorldService.js`): weather → factions → events → conflict quests → companions → NPC mail → consequences → survival → base income → base threats → notoriety → custom-order delivery → record.
+- **Weather**: season-based probability tables with region modifiers; exposure thresholds (extreme cold <0°F, hot >85°F, etc.); gear warmth scanned from inventory.
+- **Survival** (D&D 5e PHB rules): 1 food + 1 water/day; starvation after 3+CON mod days; dehydration after 1 day; auto-consume on long rest; perishable spoilage; foraging DC by terrain.
+- **World events**: multi-stage events with NPC effects (disposition shift, location change, status change, occupation change) when stages advance.
+- **NPC mail**: candidate scoring (disposition/trust/absence/events) → Opus or template content → narrative queue.
+
+### Economy & merchants
+- Persistent merchant inventories from loot tables (not AI-generated per visit). DMG + XGtE items across 5 rarities (common through legendary, 13 cursed items display as disguised forms).
+- `[MERCHANT_SHOP]` detection injects real inventory into the AI prompt; `[MERCHANT_REFER]` redirects to another merchant (auto-guarantees item exists there); `[ADD_ITEM]` adds custom narrative items with quality tiers.
+- **Economy simulation**: per-category pricing from world events × regional geography × merchant memory (loyalty discounts, demand markups); bulk discounts at 3/5/10+ items; disposition-based price modifier −10%..+15%, faction modifier −5%..+10%, clamped combined.
+- **Merchant commissions** (`merchant_orders` table): `[MERCHANT_COMMISSION]` marker places custom orders; pending → ready at deadline → collected/expired (30-day hold).
+- **Bargaining**: pure-math haggling in `bargainingService.js`; DC from disposition + rarity + prosperity; theme bonuses (+2 Persuasion for Guild Artisan/Noble; Deception for Charlatan; Intimidation for Criminal/Mercenary Veteran); single-use per transaction; clamped to [0, 20]%.
+- **Merchant relationships** panel composes per-merchant rows from transaction history + npc_relationships + loyalty tiers.
+
+### Party systems
+- **Shared party inventory** (M1): carried inventory + gold live on the recruiting character. Companions keep per-entity `equipment` slots (mainHand/offHand/armor) but no carried items or coin. Transfer is `POST /api/companion/:id/equip` / `/unequip`.
+- **Companions**: full 5e progression — multiclass via `companion_class_levels` JSON array; spell slots, hit dice, rest mechanics, conditions (JSON array), death saves, mood, loyalty. Mirror of the character-side system.
+- **Companion activities**: off-screen tasks (training, scouting) with away status; Opus-resolved outcomes.
+
+### Progression (themes / ancestry feats / synergies)
+- 21 themes × 4 tiers = 84 theme abilities. 195 ancestry feats across 13 lists. 20 team tactics. 50 subclass×theme synergies. 17 mythic×theme amplifications. All seed data in `server/data/*.js`, loaded idempotently on startup.
+- Themes auto-unlock at L5/L11/L17; ancestry feats at L3/L7/L13/L18. Character-side prompts the player at level-up; companion-side auto-picks deterministically.
+- Knight theme has 6 moral paths (True/Reformer/Martyr/Complicit/Fallen/Redemption) with tailored DM directives.
+- Resonant subclass×theme and mythic×theme amplifications surface in the DM prompt and on the Progression tab of the character sheet.
+
+### Mythic progression (endgame)
+- 5 tiers (Touched by Legend → Apotheosis), 14 paths (12 player + 2 DM-only: Hierophant, Angel, Aeon, Azata, Gold Dragon, Lich, Demon, Devil, Trickster, Legend, Redemption, Corrupted Dawn, Beast/Dark Hunt, Swarm).
+- Mythic Power resource pool (3 + 2×tier/day); Surge mechanic (bonus die d6→d12 by tier); trial-based advancement.
+- Shadow-path interaction: light paths require shadow ≤5 (full power at ≤2); dark paths powered by shadow; neutral unaffected.
+- Piety system (Theros): score 1–50+ per deity, thresholds at 3/10/25/50 unlock abilities; 53 deities covering the character-creator pantheons.
+- Epic Boons (2024 PHB): 12 boons at Level 19+, each with +1 ability score (max 30).
+- Legendary items: 4 states (Dormant → Awakened → Exalted → Mythic), narrative-milestone advancement.
+
+### Crafting
+- Tables: `crafting_recipes` / `character_recipes` / `crafting_projects` / `character_materials`.
+- 112 recipes total (42 default, 70 discoverable) — weapons (simple + martial), armor (light/medium/heavy + shields), ammunition, food, gear, potions, poisons, scrolls, alchemical.
+- Quality tiers (standard/fine/superior/masterwork) based on d20 roll margin. Tool proficiency required.
+- **Radiant recipes**: `[RECIPE_GIFT]` marker creates AI-generated unique recipes with `is_radiant=1` and NPC attribution.
+
+### Party bases / fortresses
+- Bases have `category` (civilian/martial/arcane/sanctified) and `subtype` (13 options: watchtower/outpost/keep/fortress/castle/tavern/hall/manor/wizard_tower/academy/chapel/temple/sanctuary). `is_primary` flag + `building_slots` derived from subtype.
+- **Buildings** inside a base via `BUILDING_TYPES` config (20 buildings with slots/cost/hours/perks). Construction status `planned → in_progress → completed`; perks merge into `base.active_perks`; demolish reverses.
+- **Garrison + defense**: `defense_rating` = subtype bonus + building perks + officer contributions. `base_officers` table assigns companions to roles.
+- **Base threats** (raids/sieges): `base_threats` table, status state machine (approaching → defending/resolving → resolved), outcome enum (repelled/damaged/captured/abandoned). Raid-capable world events spawn threats during the living-world tick; auto-resolve or player-led defense via `[BASE_DEFENSE_RESULT]` marker. 14-day recapture window for captured bases.
+- **Renown, levels, treasury, staff, income/upkeep** all processed in the living-world tick.
+
+### Notoriety / heat
+- 0–100 score per source (City Watch, Thieves' Guild, etc.), 5 categories (criminal/political/arcane/religious/military).
+- Decays 1–2/day; entanglement checks at thresholds (21–40: 10%/day, 41–60: 20%, 61–80: 35%, 81–100: 50%).
+- `[NOTORIETY_GAIN]` / `[NOTORIETY_LOSS]` markers detected in DM responses.
+
+### Authentication
+- JWT-based, bcryptjs hashing; secret auto-generated + stored in `_app_settings`.
+- Middleware (`server/middleware/auth.js`) verifies Bearer token on `/api/*` except `/api/auth/*` and `/api/health`.
+- Campaigns scoped to `user_id`.
+- Frontend intercepts `window.fetch` to inject Authorization header on `/api` requests; LoginPage renders when no valid token.
+
+### DM Mode (user-as-DM)
+Inverted game mode: user DMs, AI controls 4 distinct player characters.
+- `dm_mode_parties` table: name, setting, tone, level, `party_data` (JSON blob for stats/spells/inventory/gold — persists across sessions), `party_dynamics` (JSON).
+- `dm_sessions` with `session_type='dm_mode'` and `dm_mode_party_id` (character_id is nullable).
+- Opus generates the 4-character party with class/alignment/voice diversity + inter-party tensions.
+- **Chronicles** (`dm_mode_chronicles`): Sonnet-extracted structured session data (NPCs, locations, plot threads, character moments, mood, cliffhanger). All chronicles inject into next session's system prompt.
+- **Relationship evolution**: Sonnet extracts warmth/trust deltas at session end and updates `party_relationships` + `party_dynamics` (no new tables).
+- **NPC codex** (`dm_mode_npcs`): auto-synced from chronicles with voice extraction; searchable panel.
+- **Plot threads** (`dm_mode_plot_threads`): status/tags, auto-synced from chronicles with manual overrides.
+- **Campaign prep** (`dm_mode_prep`): 6 content types (npc/enemy/location/lore/treasure/session_notes) with full 5e enemy stat blocks.
+- **Reference panels** in-session: Equipment, Spells (300+), Rules, effect tracker (round countdown + concentration).
+- **OOC**: `OOC:` prefix speaks to players about their characters (purple UI, no marker processing).
+
+### Prelude-forward character creator
+Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions play ages 5–22 across four chapters before the character enters the main campaign.
+
+**Structure**: 5 play sessions — Chapter 1 (OBSERVE): 1 session, Chapter 2 (LEARN): 1 session, Chapter 3 (DECIDE): 2 sessions, Chapter 4 (COMMIT): 1 session.
+
+**Setup**: `POST /api/prelude/setup` creates a prelude-phase character from an 11-question wizard (`PreludeSetupWizard.jsx`). Starting age is race-derived server-side (humans 6, elves 30, dwarves 18, warforged 1, etc.).
+
+**Arc plan**: Opus generates a structured arc via `preludeArcService.js` — home world (4–6 locals, 2 tensions, 1–2 threats, mentor), 4 chapter arcs (2 beats each, seeded emergences), recurring threads, character trajectory. One re-roll allowed. Departure in Ch4 is a SEED of 3–4 plausible shapes; the actual departure type is driven by the player's committed theme at Ch3 wrap-up.
+
+**Sessions**: Sonnet plays within the arc via `preludeArcPromptBuilder.js`. Rolling summary is tuned for character-development weighting (`rollingSummaryService.js` branches on `session_type='prelude_arc'`).
+
+**Markers**:
+- `[AGE_ADVANCE]` — time jumps within or between chapters
+- `[HP_CHANGE]` — HP damage/healing during prelude
+- `[CHAPTER_END]` — chapter close, triggers session-end recap
+- `[CHAPTER_PROMISE]` — fires at Ch3/Ch4 opens; dashed-purple card asking the player what the chapter is about
+- `[SESSION_END_CLIFFHANGER]` — session boundary (server nudges with escalating `[SYSTEM NOTE]` at ≥30/50/70 messages)
+- 6 emergence markers (`[STAT_HINT]` / `[SKILL_HINT]` / `[CLASS_HINT]` / `[THEME_HINT]` / `[ANCESTRY_HINT]` / `[VALUE_HINT]`) — player-confirmable; caps +2/stat, 2 skills total; chapter-weighted tallies (ch1-2: 1x, ch3: 1.5x, ch4: 2x)
+- `[CANON_FACT]` / `[CANON_FACT_RETIRE]` — ground-truth ledger; injected into every Sonnet prompt grouped by category (people/relationships/traits/places/items/events)
+
+**Tables**: `prelude_emergences`, `prelude_values`, `prelude_canon_facts`, `prelude_canon_npcs`, `prelude_canon_locations`, `prelude_arc_plans`. Character columns: `creation_phase` ('prelude'/'ready_for_primary'/'active'), `prelude_age`, `prelude_chapter`, `prelude_setup_data`.
+
+**Prompt discipline**: tone-preset shapes prose register; per-life-stage NPC speech patterns (small child → elder); 4 named time-compression techniques (season-skip / rhythm-compression / selective-detail / AGE_ADVANCE jump); 16 tone tags with applied guidance; no invented character traits (physical markers, secret bloodlines, prophecies) unless in setup.
+
+## Key files
+
+### Server infrastructure
 - `server/index.js` — Express entry, route mounting
-- `server/database.js` — Schema (imports migrationRunner, ~35 lines)
-- `server/migrationRunner.js` — Numbered migration system with up/down
-- `server/services/claude.js` — Claude API client
-- `server/routes/progression.js` — Read-only progression API (themes, ancestry feats, team tactics, synergies, amplifications)
-- `server/services/progressionSeedService.js` — Idempotent seed runner; wired into initDatabase()
-- `server/services/progressionService.js` — Reusable `getCharacterProgression(id)` snapshot builder; used by both the character progression endpoint and DM session start
-- `server/services/progressionCompanionService.js` — Companion analog (Phase 5.5): `mapCompanionClassToTheme`, `normalizeRaceToAncestryList`, `autoAssignCompanionTheme`, `autoSeedCompanionAncestryFeatTier1`, `computeCompanionProgressionDecisions`, `ensureCompanionProgressionInitialized`
-- `server/migrations/028_companion_progression.js` — `companion_themes`, `companion_theme_unlocks`, `companion_ancestry_feats`
-- `server/services/dmPromptBuilder.js` — DM system prompt (~600 lines)
-- `server/services/dmSessionService.js` — Session logic, marker detection
-- `server/services/storyChronicleService.js` — Canon fact database, session chronicles, context retrieval, NPC conversation + mood extraction
-- `server/services/npcRelationshipService.js` — NPC relationship CRUD, conversation memory
-- `server/services/npcLifecycleService.js` — NPC lifecycle transitions, death propagation cascade, canon fact sync
-- `server/services/companionBackstoryService.js` — Companion backstories, loyalty, mood system
-- `server/services/companionActivityService.js` — Away companion activities, resolution, recall
-- `server/services/worldEventNpcService.js` — NPC effects from world event stage advances
-- `server/services/npcMailService.js` — NPC mail candidate scoring, AI/template content generation, narrative queue integration
-- `server/services/npcAgingService.js` — Absence-based disposition/trust decay, reunion boost, relocation/forget thresholds
-- `server/services/livingWorldService.js` — Living world tick pipeline (weather → factions → events → conflict quests → companions → NPC mail → consequences → survival → record)
-- `server/services/questService.js` — Quest CRUD, stage advancement, completion with auto-rewards + faction standing + goal progress feedback
-- `server/services/questGenerator.js` — AI quest generation (main, side, one-time, companion, faction, conflict)
-- `server/services/questProgressChecker.js` — Event-driven quest requirement checking, stage advancement
-- `server/services/narrativeQueueService.js` — Narrative queue CRUD, priority ordering, delivery tracking, AI context formatting
-- `server/services/weatherService.js` — Weather state, generation, advance, temperature, exposure checks
-- `server/services/survivalService.js` — Hunger, thirst, food spoilage, auto-consume, foraging DC
-- `server/services/craftingService.js` — Recipes, projects, materials, quality, discovery
-- `server/config/weather.js` — Weather types, season tables, region mods, exposure rules, gear warmth
-- `server/data/craftingRecipes.js` — Main recipe catalog (imports + exports 112 recipes)
-- `server/data/weaponRecipes.js` — Simple + martial weapon recipes (32)
-- `server/data/armorGearRecipes.js` — Armor, ammunition, gear, food, alchemical recipes (38)
-- `server/migrations/009_radiant_recipes.js` — Radiant recipe columns + unique name index
-- `server/migrations/010_mythic_progression.js` — Mythic tables (7) + character columns
-- `server/config/mythicProgression.js` — Mythic tiers, 14 paths, piety, epic boons, shadow interaction, helpers
-- `server/services/mythicService.js` — Mythic CRUD, tier advancement, path selection, power tracking, legendary items
-- `server/services/pietyService.js` — Piety CRUD, threshold checks, history
-- `server/routes/mythic.js` — Mythic REST API (status, paths, trials, piety, boons, items)
-- `server/services/consequenceService.js` — Automated consequence processing (overdue promises, expired quests)
-- `server/services/economyService.js` — Dynamic economy (event/regional/memory modifiers, bulk discounts, transaction recording)
-- `server/config/economyConfig.js` — Economy constants (event price effects, regional modifiers, bulk tiers, merchant memory)
-- `server/migrations/011_consequence_automation.js` — Consequence log table + quest deadline_game_day
-- `server/migrations/012_economy_simulation.js` — Transaction history column on merchant_inventories
-- `server/migrations/013_user_accounts.js` — Users table, _app_settings table, user_id on campaigns
-- `server/services/authService.js` — Register, login, JWT token management, auto-generated secret
-- `server/middleware/auth.js` — JWT verification middleware for protected routes
-- `server/routes/auth.js` — Auth REST API (register, login, me)
-- `client/src/components/LoginPage.jsx` — Login/register form
-- `server/utils/contextManager.js` — Token estimation, context window compression, adaptive budgeting
-- `server/routes/dmSession.js` — DM session routes (~1700 lines)
-- `server/routes/dmMode.js` — DM Mode routes (party gen, sessions, XP/loot, coaching)
-- `server/services/dmModePromptBuilder.js` — DM Mode system prompt builder (3-point reinforcement)
-- `server/services/dmModeService.js` — DM Mode helpers (skill checks, attacks, narrative parsing)
-- `server/services/dmModeChronicleService.js` — DM Mode session chronicle extraction (Sonnet) and retrieval
-- `server/services/partyGeneratorService.js` — Opus-powered 4-character party generation
-- `server/services/dmCoachingService.js` — Sonnet-powered DM coaching tips, DC reference
-- `server/migrations/014_dm_sessions_nullable_character.js` — Nullable character_id for DM Mode sessions
-- `server/migrations/015_party_concept.js` — Party concept column on dm_mode_parties
-- `server/migrations/016_dm_mode_chronicles.js` — DM Mode chronicles table for persistent structured memory
-- `server/migrations/017_dm_mode_extensions.js` — NPC codex table, plot threads table, game day column
-- `server/migrations/018_dm_mode_prep.js` — Campaign prep table (type + JSON content)
-- `server/services/dmModeNpcService.js` — NPC codex sync/CRUD, plot thread management, NPC voice extraction
-- `server/services/dmModePrepService.js` — Campaign prep CRUD (create, update, archive, delete, duplicate, reorder, counts)
-- `server/routes/chronicle.js` — Chronicle API routes (timeline, search, facts)
-- `client/src/App.jsx` — SPA root, navigation, state
-- `client/src/components/DMMode.jsx` — DM Mode UI (party select, prep phase, session gameplay, history, summary editing, reference panels, effect tracker)
-- `client/src/components/PartyView.jsx` — DM Mode party display (stats, XP, inventory, spell slots, level-up)
-- `client/src/components/PartyLorePanel.jsx` — DM Mode backstory/lore panel (party concept, character backstories, relationships, tensions)
-- `client/src/components/NPCCodexPanel.jsx` — DM Mode NPC codex panel (search, sort, voice notes)
-- `client/src/components/PlotThreadPanel.jsx` — DM Mode plot thread tracker (status, tags, manual creation)
-- `client/src/components/CampaignPrepScreen.jsx` — Full-screen campaign prep workspace (6 content types, enemy stat block editor)
-- `client/src/components/PrepReferencePanel.jsx` — Read-only 420px prep reference panel for sessions
-- `client/src/components/EquipmentReferencePanel.jsx` — Equipment & prices reference panel (weapons, armor, gear, tools)
-- `client/src/components/SpellReferencePanel.jsx` — Spell reference panel (300+ spells, multi-filter, cantrip dedup)
-- `client/src/components/RulesReferencePanel.jsx` — Rules quick reference (conditions, combat, resting, vision, cover, travel, environment)
-- `client/src/components/EffectTracker.jsx` — Inline effect/duration tracker (round countdown, concentration)
-- `client/src/components/DMCoachingPanel.jsx` — DM coaching tips panel
-- `client/src/components/DMSession.jsx` — Main Player Mode DM session UI (~4300 lines)
-- `client/src/components/MythicProgressionPage.jsx` — Mythic progression UI (7 tabs)
-- `server/migrations/019_party_base_system.js` — Party base, upgrades, events, long-term projects, notoriety tables
-- `server/config/partyBaseConfig.js` — Base types, upgrade catalog, level thresholds, perk effects, entanglement tables
-- `server/services/partyBaseService.js` — Base CRUD, upgrades, income/upkeep, renown, staff, treasury, perks
-- `server/services/longTermProjectService.js` — Long-term project clock CRUD, progress rolls
-- `server/services/notorietyService.js` — Heat tracking, decay, entanglement generation
-- `server/routes/partyBase.js` — Party base REST API (base, projects, notoriety)
-- `client/src/components/PartyBasePage.jsx` — Party base management UI (6 tabs, Blades-style clocks)
-- `client/src/components/CharacterCreationWizard.jsx` — 4-step wizard (~4100 lines). Renders reference-map descriptions inline via `references.js` helpers; handles theme sub-choice object/string schemas for back-compat
-- `client/src/data/references.js` — SKILLS / TOOLS / LANGUAGES / DAMAGE_TYPES / ABILITY_SCORES / WEAPON_PROPERTIES / MAGIC_INITIATE_CLASSES reference maps + `formatWeaponLine/ArmorLine/GearLine` helpers (v1.0.40)
+- `server/database.js` — Schema, imports migrationRunner
+- `server/migrationRunner.js` — Numbered up/down migrations
+- `server/services/claude.js` — Claude API client (model aliases, 3-tier prompt caching)
+- `server/utils/llmJson.js` — **Shared robust JSON extractor for all LLM responses**
+- `server/utils/safeParse.js` — Safe JSON.parse for DB-stored JSON
+- `server/utils/contextManager.js` — Token estimation, adaptive budgeting
+- `server/utils/errorHandler.js` — `handleServerError`, `notFound`, `validationError`
+- `server/middleware/auth.js` — JWT middleware
+- `server/services/eventEmitter.js` — Event bus between game systems
 
-## Coding Conventions
-- No TypeScript — pure JavaScript throughout
-- React functional components with hooks (useState, useEffect)
-- Large monolithic components (DMSession, CharacterSheet, CharacterCreationWizard) — don't split unless asked
-- Inline styles in React components (no CSS framework)
-- SQLite queries use parameterized `?` placeholders
-- API routes follow REST patterns: `/api/<resource>/...`
-- JSON stored in TEXT columns for flexible data (inventory, ability_scores, etc.)
+### Prompt builders & session
+- `server/services/dmPromptBuilder.js` — Player Mode DM system prompt
+- `server/services/dmModePromptBuilder.js` — DM Mode system prompt
+- `server/services/preludeArcPromptBuilder.js` — Prelude session prompt
+- `server/services/dmSessionService.js` — Session logic, marker detection
+- `server/routes/dmSession.js` — DM session routes (main API surface)
+- `server/routes/dmMode.js` — DM Mode routes
+- `server/routes/prelude.js` — Prelude routes
+- `server/services/preludeSessionService.js` — Prelude session lifecycle
+- `server/services/preludeMarkerDetection.js` — Prelude-specific marker parsing
+- `server/services/preludeArcService.js` — Opus arc-plan generation
+- `server/services/preludeCanonService.js` — Canon-facts ledger
+- `server/services/preludeEmergenceService.js` — Stat/skill/theme hints with caps
+- `server/services/rollingSummaryService.js` — Per-session rolling summary (branches by session_type)
+
+### World / story
+- `server/services/storyChronicleService.js` — Canon facts, chronicles, NPC conversation extraction
+- `server/services/npcRelationshipService.js`, `npcLifecycleService.js`, `npcAgingService.js`, `npcMailService.js`, `npcVoiceService.js`
+- `server/services/companionBackstoryService.js`, `companionActivityService.js`, `companionBackstoryGenerator.js`, `progressionCompanionService.js`
+- `server/services/worldEventNpcService.js`
+- `server/services/livingWorldService.js` — Tick orchestration
+- `server/services/livingWorldGenerator.js` — Opus faction goals + world events
+- `server/services/questService.js`, `questGenerator.js`, `questProgressChecker.js`
+- `server/services/narrativeQueueService.js`
+- `server/services/consequenceService.js`
+- `server/services/campaignPlanService.js` — Opus campaign plan
+- `server/services/backstoryParserService.js` — Structured backstory extraction
+- `server/services/progressionService.js` — Character progression snapshot
+- `server/services/progressionSeedService.js` — Idempotent seed loader
+
+### Gameplay systems
+- `server/services/weatherService.js` + `server/config/weather.js`
+- `server/services/survivalService.js`
+- `server/services/craftingService.js` + `server/data/craftingRecipes.js` (+ weapon/armor/gear subfiles)
+- `server/services/merchantService.js`, `merchantOrderService.js`, `merchantRelationshipService.js`, `bargainingService.js`, `economyService.js`
+- `server/services/mythicService.js` + `pietyService.js` + `server/config/mythicProgression.js` + `server/routes/mythic.js`
+- `server/services/partyBaseService.js`, `longTermProjectService.js`, `notorietyService.js`, `baseThreatService.js`
+- `server/config/partyBaseConfig.js`, `raidConfig.js`, `economyConfig.js`
+- `server/routes/partyBase.js`
+
+### DM Mode
+- `server/services/partyGeneratorService.js` — Opus 4-character party gen
+- `server/services/dmModeService.js` — Marker detection, segment parsing
+- `server/services/dmModeChronicleService.js` — Session chronicle + relationship evolution
+- `server/services/dmModeNpcService.js` — NPC codex + plot threads + voice extraction
+- `server/services/dmModePrepService.js` — Campaign prep
+- `server/services/dmCoachingService.js` — Sonnet coaching tips
+
+### Progression seed data
+- `server/data/themes.js` (21 × 4 tiers), `ancestryFeats.js` (195), `teamTactics.js` (20), `subclassThemeSynergies.js` (50), `mythicThemeAmplifications.js` (17)
+
+### Frontend
+- `client/src/App.jsx` — SPA root, navigation, top-level state
+- `client/src/components/DMSession.jsx` — Main Player Mode session UI (~3000 lines, do not split further without plan)
+- `client/src/components/DMMode.jsx` — DM Mode UI
+- `client/src/components/CharacterCreationWizard.jsx` — 4-step wizard (~4300 lines)
+- `client/src/components/CharacterSheet.jsx` — Character view/edit (~3600 lines)
+- `client/src/components/PreludeSetupWizard.jsx`, `PreludeArcPreview.jsx`, `PreludeSession.jsx`
+- `client/src/components/MythicProgressionPage.jsx` — 7-tab mythic UI
+- `client/src/components/PartyBasePage.jsx` — 6-tab base management
+- Reference panels: `EquipmentReferencePanel`, `SpellReferencePanel`, `RulesReferencePanel`, `PrepReferencePanel`
+- `client/src/components/EffectTracker.jsx`, `CombatTracker.jsx`, `DiceRoller.jsx`
+- In-session overlays: `InventoryPanel`, `ConditionPanel`, `CampaignNotesPanel`, `QuickReferencePanel`, `CompanionsPanel`, `CommissionsPanel`, `MerchantRelationshipsPanel`, `DMCoachingPanel`
+- `client/src/data/references.js` — Ability scores, skills, tools, languages, damage types, weapon properties, magic initiate class flavors
+- `client/src/data/preludeSetup.js` — Curated prelude setup options
+- `client/src/data/campaignModules.js` — 16 published + 1 custom module definitions
+
+### Design docs (root)
+`THEME_DESIGNS.md`, `PARTY_SYNERGIES.md`, `ANCESTRY_FEATS.md`, `SUBCLASS_THEME_SYNERGIES.md`, `MYTHIC_THEME_AMPLIFICATIONS.md`, `DOWNTIME_DESIGN.md`, `PRELUDE_IMPLEMENTATION_PLAN.md`, `IMPLEMENTATION_PLAN.md`, `OPEN_QUESTIONS.md`, `FUTURE_FEATURES.md`, `LLM_SETUP.md`, `MYTHIC_PROGRESSION_GUIDE.md`, `CUSTOM_CLASSES.md`, `CHAR_CREATOR_DESCRIPTIONS_AUDIT.md`.
 
 ## Versioning & CHANGELOG
-- Every meaningful change gets logged in `CHANGELOG.md` with an incremented version
-- `package.json` and `client/package.json` must be bumped to match the current version in CHANGELOG
-- Version scheme: semver patch increments for iterative work (1.0.1, 1.0.2, 1.0.3...)
-- CHANGELOG uses a 4-part display format for readability (1.0.0.1, 1.0.0.2) but package.json uses strict semver (1.0.1, 1.0.2)
-- When finishing an implementation phase or shipping a feature: update CHANGELOG AND bump both package.json files in the same commit
-- **When finishing an implementation phase: also update `CLAUDE.md`** to reflect the new architecture — new tables, new routes, new services, new frontend components, and any new files of note. Add entries to the "Architecture Rules" section and the "Key Files" section so future context has an accurate snapshot of what exists.
+- Every meaningful change gets a CHANGELOG.md entry + matching version bump in `package.json` + `client/package.json`.
+- Semver patch increments for iterative work (1.0.1, 1.0.2, …). CHANGELOG uses a 4-part display format for readability (1.0.0.1) but package.json uses strict semver.
+- At phase/feature boundaries: update CHANGELOG **and** bump both package.json files **in the same commit**. Also update CLAUDE.md if architecture, new services, or new frontend components landed — keep this file a present-tense snapshot, NOT a per-version history (that's CHANGELOG's job).
+
+## Testing discipline
+Tests live in `tests/`, custom assertions, no framework. Real Turso DB with `TEST_`-prefixed data cleaned up per run.
+
+**Mandatory before push for any non-trivial change** (new endpoints, prompt changes, marker detection, loot/reward logic, schema changes):
+1. Add/update tests.
+2. Run the relevant suites.
+3. Build the client (`cd client && npx vite build`) to catch compile errors.
+4. Log results in `TEST_RESULTS.md`.
+
+Every new API endpoint gets integration tests in `tests/integration.test.js` (happy path, 404/400 errors, interactions, empty state).
 
 ## Don't
-- Don't add TypeScript
-- Don't add a CSS framework
-- Don't split large components unless explicitly asked
-- Don't change AI model aliases or add date suffixes
-- Don't modify the primacy/recency prompt structure without understanding the pattern
-- Don't create new documentation files unless asked
-- Don't forget to update CHANGELOG, CLAUDE.md, and package.json versions together at each phase boundary
+- Don't add TypeScript.
+- Don't add a CSS framework.
+- Don't split `DMSession.jsx`, `CharacterSheet.jsx`, or `CharacterCreationWizard.jsx` unless explicitly asked or working a state-refactor plan.
+- Don't change AI model aliases or add date suffixes.
+- Don't modify the primacy/recency prompt structure without understanding the pattern.
+- Don't write new ad-hoc JSON extractors — use `server/utils/llmJson.js`.
+- Don't create new documentation files unless asked.
+- Don't forget to update CHANGELOG, CLAUDE.md, and package.json versions together at each phase boundary.

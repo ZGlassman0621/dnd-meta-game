@@ -12,6 +12,7 @@
 import { dbAll, dbGet } from '../database.js';
 import { addToQueue } from './narrativeQueueService.js';
 import { chat as claudeChat } from './claude.js';
+import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 // ============================================================
 // MAIL TYPES
@@ -127,9 +128,8 @@ export async function generateMailContent(npc, rel, character, campaign, mailTyp
 
     if (response) {
       const text = typeof response === 'string' ? response : response.content?.[0]?.text || response.content || '';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = tryExtractLLMJson(text);
+      if (parsed) {
         return {
           subject: parsed.subject || `Letter from ${npc.name}`,
           body: parsed.body || `${npc.name} sends their regards.`,

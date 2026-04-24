@@ -10,6 +10,7 @@ import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
 import { createMerchantsFromPlan } from './merchantService.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 /**
  * Generate a comprehensive campaign plan using Opus
@@ -543,26 +544,8 @@ function parseAIResponse(response) {
     throw new Error(`Invalid response from AI: got ${typeof response}`);
   }
 
-  let jsonStr = response;
-
-  // Handle markdown code blocks
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  // Find JSON object - match from first { to last }
-  const firstBrace = jsonStr.indexOf('{');
-  const lastBrace = jsonStr.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-  }
-
-  // Fix common AI JSON issues: trailing commas before } or ]
-  jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
 
     // Ensure all arrays have IDs
     const ensureIds = (items) => {

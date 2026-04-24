@@ -440,7 +440,7 @@ console.log('\n=== Test 8: Full Prompt Generation ===\n');
   const prompt = createDMSystemPrompt(makeCharacter(), ctx);
 
   assert(typeof prompt === 'string' && prompt.length > 0, 'Full prompt is a non-empty string');
-  assert(prompt.includes('ABSOLUTE RULES'), 'Full prompt contains ABSOLUTE RULES section');
+  assert(prompt.includes('CARDINAL RULES'), 'Full prompt contains CARDINAL RULES section');
 }
 
 // ============================================================

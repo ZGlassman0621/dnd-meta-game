@@ -15,6 +15,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
 import { estimateTokens } from '../utils/contextManager.js';
+import { tryExtractLLMJson } from '../utils/llmJson.js';
 import { saveNpcConversation, recordInteraction } from './npcRelationshipService.js';
 import { setMood } from './companionBackstoryService.js';
 import { propagateNpcDeath } from './npcLifecycleService.js';
@@ -167,14 +168,9 @@ Guidelines for npc_deaths:
       true // raw response for JSON
     );
 
-    // Parse the JSON response
-    let chronicle;
-    try {
-      // Strip any markdown code fences if present
-      const cleaned = response.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
-      chronicle = JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error('[Chronicle] Failed to parse AI response as JSON:', parseError.message);
+    const chronicle = tryExtractLLMJson(response);
+    if (!chronicle) {
+      console.error('[Chronicle] Failed to extract JSON from AI response');
       console.error('[Chronicle] Raw response (first 500 chars):', response.substring(0, 500));
       return null;
     }

@@ -35,6 +35,8 @@ import { lookupItemByName } from '../data/merchantLootTables.js';
 import { getLootTableForLevel } from '../config/rewards.js';
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
+import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
+import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVerifiers.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
 import { resolveForNpcBatch as resolveNicknamesForNpcBatch } from '../services/nicknameService.js';
@@ -1149,6 +1151,26 @@ router.post('/:sessionId/message', async (req, res) => {
       // Silent-fail — ledger is polish.
     }
 
+    // Marker correction injection: if the previous turn emitted a marker that
+    // failed schema validation, the failure was stashed on session_config.
+    // Surface it in the system prompt now so the AI can re-emit correctly.
+    // Stripped after the turn regardless of whether the AI acted on it — we
+    // don't want the same correction note accreting turn after turn. Player
+    // never sees any of this; it lives entirely in the system-prompt layer.
+    try {
+      const cfg = safeParse(session.session_config, {});
+      const pendingCorrection = cfg.pendingMarkerCorrections;
+      if (pendingCorrection && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+        const correctionBlock = `\n\n══════════════ MARKER CORRECTION NEEDED (from last turn) ══════════════\n${pendingCorrection}\n═══════════════════════════════════════════════════════════════════════\n`;
+        augmentedMessages = [
+          { ...augmentedMessages[0], content: augmentedMessages[0].content + correctionBlock },
+          ...augmentedMessages.slice(1)
+        ];
+      }
+    } catch (err) {
+      // Silent-fail — correction is additive.
+    }
+
     // Apply the rolling session summary (Follow-up #3). If this session has
     // one, it replaces the summarized prefix with a compact "PREVIOUS SCENES —
     // SUMMARY" user message. Keeps the most recent KEEP_TAIL_MESSAGES turns
@@ -1201,6 +1223,43 @@ router.post('/:sessionId/message', async (req, res) => {
 
     // Update the session in the database
     await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+
+    // Validate every marker the AI emitted against its schema. Any failures
+    // (missing required fields, invalid enums, out-of-range numbers) get
+    // stashed on session_config so the NEXT turn's system prompt can ask the
+    // AI to re-emit. We also clear any previous-turn correction that was
+    // already served — either the AI acted on it and the new response will
+    // either include a corrected marker or not; either way, stale corrections
+    // shouldn't accrete. Both reads/writes are best-effort.
+    try {
+      const { failures } = validateDmMarkers(result.narrative || '');
+      const { violations: ruleViolations } = verifyDmResponse(result.narrative || '');
+      const cfg = safeParse(session.session_config, {});
+      const nextCfg = { ...cfg };
+      // Consume any previously-surfaced correction from this turn.
+      delete nextCfg.pendingMarkerCorrections;
+      // Queue any new failures for next turn (schema + rule combined).
+      const combinedNotes = [];
+      if (failures.length > 0) {
+        const msg = buildCorrectionMessage(failures);
+        if (msg) combinedNotes.push(msg);
+        console.warn(`[marker-schema] ${failures.length} malformed marker(s) on session ${sessionId}:`, failures.map(f => `${f.schemaKey}(${f.errors.map(e => e.field).join(',')})`).join(', '));
+      }
+      if (ruleViolations.length > 0) {
+        const msg = buildRuleCorrectionMessage(ruleViolations);
+        if (msg) combinedNotes.push(msg);
+        console.warn(`[rule-verify] ${ruleViolations.length} rule violation(s) on session ${sessionId}:`, ruleViolations.map(v => v.rule).join(', '));
+      }
+      if (combinedNotes.length > 0) {
+        nextCfg.pendingMarkerCorrections = combinedNotes.join('\n');
+      }
+      // Only write if something actually changed.
+      if (cfg.pendingMarkerCorrections !== nextCfg.pendingMarkerCorrections) {
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(nextCfg), sessionId]);
+      }
+    } catch (err) {
+      console.error('[marker-schema] validation pass failed (non-fatal):', err.message);
+    }
 
     // Check for downtime activity in the player action
     const downtimeDetected = detectDowntime(action);

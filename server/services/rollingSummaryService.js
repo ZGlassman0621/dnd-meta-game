@@ -89,7 +89,7 @@ function buildSummaryPrompt(existingSummary, newMessages, sessionType = 'player'
     : '';
 
   if (sessionType === 'prelude_arc') {
-    return `You are maintaining a rolling summary for a D&D prelude arc — a character's childhood played across 7-10 sessions. Your output is read ONLY by the AI DM (Sonnet), never by the player. Be dense, factual, and weighted toward what matters for CHARACTER DEVELOPMENT.
+    return `You are maintaining a rolling summary for a D&D prelude arc — a character's childhood played across 5 sessions (Ch1: 1, Ch2: 1, Ch3: 2, Ch4: 1). Your output is read ONLY by the AI DM (Sonnet), never by the player. Be dense, factual, and weighted toward what matters for CHARACTER DEVELOPMENT.
 
 ${priorBlock}NEW EXCHANGES TO INTEGRATE:
 ${transcript}

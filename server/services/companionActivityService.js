@@ -13,6 +13,7 @@ import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { adjustLoyalty, setMood } from './companionBackstoryService.js';
 import { emit } from './eventEmitter.js';
 import { GAME_EVENTS } from '../config/eventTypes.js';
+import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 const VALID_ACTIVITY_TYPES = [
   'training', 'scouting', 'personal_quest', 'guarding',
@@ -371,10 +372,8 @@ Return ONLY valid JSON:
     );
 
     const text = typeof response === 'string' ? response : response?.content?.[0]?.text || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
+    const parsed = tryExtractLLMJson(text);
+    if (parsed) return parsed;
   } catch (e) {
     console.error('Error generating activity outcomes via AI:', e);
   }

@@ -4,6 +4,7 @@
  */
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 
 const COACHING_SYSTEM_PROMPT = `You are an experienced, friendly D&D Dungeon Master coach. You're helping a new DM run their first games. Your tone is encouraging but practical — give specific, actionable advice, not vague platitudes.
 
@@ -56,17 +57,7 @@ Analyze this and provide coaching tips. What should the DM do next? What charact
       true      // rawResponse
     );
 
-    // Parse JSON response
-    let jsonStr = response;
-    const fenceMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-    const firstBrace = jsonStr.indexOf('{');
-    const lastBrace = jsonStr.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-    }
-
-    return JSON.parse(jsonStr);
+    return extractLLMJson(response);
   } catch (error) {
     console.error('Coaching tip generation failed:', error.message);
     return getOfflineTip(partyData);

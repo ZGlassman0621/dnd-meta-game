@@ -8,6 +8,7 @@
  */
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 
 // ============================================================
@@ -124,19 +125,8 @@ Return ONLY valid JSON in this exact format:
 }
 
 function parseFactionGoalResponse(response, context) {
-  let jsonStr = response;
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
 
     return {
       faction_id: context.faction.id,
@@ -334,19 +324,8 @@ Return ONLY valid JSON in this exact format:
 }
 
 function parseWorldEventResponse(response, context) {
-  let jsonStr = response;
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1];
-  }
-
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonStr = objectMatch[0];
-  }
-
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractLLMJson(response);
 
     return {
       campaign_id: context.campaign?.id || null,

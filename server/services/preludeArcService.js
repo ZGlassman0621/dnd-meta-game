@@ -34,6 +34,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
+import { extractLLMJson } from '../utils/llmJson.js';
 import { getPreludeCharacter } from './preludeService.js';
 import {
   BIRTH_CIRCUMSTANCES,
@@ -99,7 +100,7 @@ function buildArcSystemPrompt(setup, race) {
 
   const ages = getChapterAges(race);
 
-  return `You are a master D&D storyteller designing the structured arc for one character's childhood-to-young-adulthood. The arc will span 7-10 play sessions across four age brackets (life stages, not fixed Earth-year ranges — interpret per the character's race). Another AI (Sonnet) plays within your arc, so give them a cohesive spine with beginning, middle, and end that honours the player's setup and chosen tone.
+  return `You are a master D&D storyteller designing the structured arc for one character's childhood-to-young-adulthood. The arc will span 5 play sessions across four age brackets — Ch1: 1 session, Ch2: 1 session, Ch3: 2 sessions, Ch4: 1 session (life stages, not fixed Earth-year ranges — interpret per the character's race). Another AI (Sonnet) plays within your arc, so give them a cohesive spine with beginning, middle, and end that honours the player's setup and chosen tone.
 
 ABSOLUTE RULES:
 1. NON-BINARY CHOICES. Every significant decision seeded must have real cost AND real benefit on every side. Never design "the right thing to do" vs "the wrong thing." Criminals may be surviving. Guards may abuse power. Family may disappoint. Strangers may save.
@@ -285,37 +286,6 @@ Output the JSON arc plan now. No preamble, no epilogue — just the JSON object.
 }
 
 // ---------------------------------------------------------------------------
-// JSON extraction
-// ---------------------------------------------------------------------------
-
-/**
- * Strip common wrappers (```json fences, trailing prose) and parse.
- * Returns parsed object or throws with a descriptive error.
- */
-function extractJson(raw) {
-  if (!raw || typeof raw !== 'string') throw new Error('Empty model response');
-  let text = raw.trim();
-
-  // Remove common fence wrappers
-  if (text.startsWith('```')) {
-    const firstNl = text.indexOf('\n');
-    if (firstNl > 0) text = text.slice(firstNl + 1);
-    if (text.endsWith('```')) text = text.slice(0, -3);
-    text = text.trim();
-  }
-
-  // Find the outermost JSON object — first `{` to matching `}`
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('No JSON object found in response');
-  }
-  text = text.slice(start, end + 1);
-
-  return JSON.parse(text);
-}
-
-// ---------------------------------------------------------------------------
 // Persistence
 // ---------------------------------------------------------------------------
 
@@ -397,18 +367,44 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
   // Build prompts + call Opus
   const systemPrompt = buildArcSystemPrompt(setup, character.race);
   const userPrompt = buildArcUserPrompt(character, setup);
-  const messages = [{ role: 'user', content: userPrompt }];
 
   // 8192 tokens ≈ ~30KB of JSON — comfortable headroom for the structured
   // arc plan. Previous 4096 cap was truncating mid-array on wordier tones
   // like "political + mystical + tragic".
-  const raw = await chat(systemPrompt, messages, 3, 'opus', 8192, true);
+  //
+  // Retry policy: if the first response fails JSON extract or shape
+  // validation, send one corrective follow-up that quotes the offending
+  // response back at Opus and asks for a clean re-emission. This catches
+  // the common failure modes (multi-block output, mid-string newlines,
+  // shape drift on tough tone combos) without shopping indefinitely.
+  const MAX_PARSE_ATTEMPTS = 2;
+  const messages = [{ role: 'user', content: userPrompt }];
   let parsed;
-  try {
-    parsed = extractJson(raw);
-    validateParsedPlan(parsed);
-  } catch (err) {
-    throw new Error(`Arc plan parse failed: ${err.message}. First 300 chars of response: ${(raw || '').slice(0, 300)}`);
+  let lastRaw = '';
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
+    const raw = await chat(systemPrompt, messages, 3, 'opus', 8192, true);
+    lastRaw = raw;
+    try {
+      parsed = extractLLMJson(raw);
+      validateParsedPlan(parsed);
+      lastErr = undefined;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_PARSE_ATTEMPTS) {
+        console.warn(`[preludeArc] Parse attempt ${attempt} failed: ${err.message} — retrying with correction`);
+        messages.push({ role: 'assistant', content: raw });
+        messages.push({
+          role: 'user',
+          content: `Your previous response couldn't be parsed: ${err.message}\n\nPlease re-emit the arc plan as a SINGLE well-formed JSON object. No markdown fences, no preamble, no standalone sub-objects before or after. Every string must be on one line (no literal newlines inside strings). Start with { and end with }. All fields from the schema must be present.`
+        });
+      }
+    }
+  }
+  if (lastErr) {
+    const preview = (lastRaw || '').slice(0, 1500);
+    throw new Error(`Arc plan parse failed after ${MAX_PARSE_ATTEMPTS} attempts: ${lastErr.message}. First 1500 chars of last response: ${preview}`);
   }
 
   const toneCsv = Array.isArray(setup.tone_tags) ? setup.tone_tags.join(',') : '';

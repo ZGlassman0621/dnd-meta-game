@@ -2,7 +2,74 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
-## [1.0.0.88] - 2026-04-22 — No phantom canon + banned impactful-beat tics
+## [1.0.0.90] - 2026-04-24 — DM prompt rebuild + code-verified rules
+
+Six of the seven architectural weaknesses from the audit, fixed. Tone-preset unification (weakness 7) deferred to a proper follow-up once the prelude-to-campaign handoff design is locked — see `FUTURE_FEATURES.md`.
+
+### Weaknesses 1 & 3 — Rules consolidated, memory precedence explicit
+
+- Removed redundancy: duplicate BACKSTORY IS FUEL (had two instances), CONCRETE OVER VAGUE (dupe of SHOW DON'T TELL), LENGTH BY MODE (self-reference), TIMELINE FIDELITY (covered by worldSettingSection).
+- New **MEMORY HIERARCHY** section: explicit 6-level precedence for when canon facts, chronicles, conversations, promises, rolling summary, and campaign plan disagree. Removes a whole class of silent contradictions.
+- FINAL REMINDER remains 5 checks (tone-honor check pulled back with the tone rework — see FUTURE_FEATURES).
+
+### Weakness 2 — Dead markers moved to conditional injection
+
+Marker specs for WEATHER/SURVIVAL, CRAFTING, MYTHIC, NOTORIETY, and BASE THREATS are now only included in the system prompt when the corresponding session context is present (e.g., `sessionContext.mythicContext` exists). A character without crafting active no longer carries 8 lines of crafting marker spec on every turn. The 360-line always-on marker block is gone.
+
+### Weakness 4 — NPC voice unified
+
+`formatCustomNpcs` no longer renders three overlapping voice sources. When a voice palette exists, it's the single source of truth for how the NPC sounds; personality + background_notes render as "Character Context (background — the VOICE block below is how they sound)". No palette → personality becomes the voice fallback, clearly labelled. The prompt now explicitly says NPCs stay weak/quiet/humorous/taciturn per their palette — the VOICE block is "how they sound", Character Context is "who they are", and the VOICE block wins for speech when they conflict. Language is carefully worded to avoid "authoritative" as a voice directive (which would flatten NPCs toward a generic confident register).
+
+### Weakness 5 — Schema-driven marker validation with invisible correction
+
+New `server/services/markerSchemas.js`: typed schemas for 14 DM markers (required fields, enums, int ranges). `validateDmMarkers(text)` returns `{ validByKey, failures }`. Failures are **stashed on `session_config.pendingMarkerCorrections`** and surfaced in the NEXT turn's system prompt as a "MARKER CORRECTION NEEDED" block. This is invisible to the player — it lives entirely in the system-prompt layer, not in the transcript. Stops the silent-failure class of bug where `[PROMISE_MADE]` typos silently drop and plotholes emerge months later.
+
+### Weakness 6 — Code-verifiers for Cardinal Rules 2 and 4
+
+New `server/services/ruleVerifiers.js`:
+- `verifyHardStops` catches "Make a check / Roll your X" followed by >4 more words — Cardinal Rule 2 violation where the AI narrates past the stop point.
+- `verifyMetaCommentary` catches parenthetical DM notes, "you succeed on your check", narrated roll outcomes — Cardinal Rule 4 violations.
+- `verifyDmResponse(text)` runs all verifiers; violations plug into the same correction-feedback plumbing as marker schemas.
+
+This is the pattern extension the Rule 2 dialogue-violation detector demonstrated. Every mechanical rule that can be code-verified should be — the prompt stops carrying "please remember" for it.
+
+### Files
+
+- New: `server/services/markerSchemas.js`, `server/services/ruleVerifiers.js`, `tests/marker-schemas.test.js` (29 tests).
+- Modified: `server/services/dmPromptBuilder.js` (new memory-hierarchy section, conditional marker injection, unified NPC voice, consolidated craft principles), `server/routes/dmSession.js` (wired validators + correction-note injection), `FUTURE_FEATURES.md` (tone-preset integration deferred).
+
+## [1.0.0.89] - 2026-04-23 — Structural hardening pass
+
+Five concurrent improvements targeting the most fragile surfaces in the codebase. No new player-facing features; the point is to stop classes of production bugs from happening again.
+
+### 1. Shared LLM JSON extractor (`server/utils/llmJson.js`)
+
+Fixes the bug class that broke arc-plan generation yesterday. Opus occasionally emits structured responses as TWO separate JSON objects (e.g. `{tone_reflection}` followed by `{home_world, ...}`). The old ad-hoc parsers at every call site used `indexOf('{') / lastIndexOf('}')`, which spliced the two into invalid JSON. `JSON.parse` succeeded on the first object and then threw on the trailing content.
+
+New utility walks the string with a string-aware brace matcher, extracts every balanced top-level object, shallow-merges them, and repairs trailing commas. `tryExtractLLMJson(raw, fallback)` for paths that want graceful degradation.
+
+Migrated 15 services to the shared utility: `preludeArcService`, `partyGeneratorService`, `dmCoachingService`, `campaignPlanService`, `adventureGenerator` (3 parsers), `backstoryParserService`, `livingWorldGenerator` (2 parsers), `questGenerator`, `locationGenerator` (2 parsers), `npcVoiceService`, `npcMailService`, `companionActivityService`, `companionBackstoryGenerator` (3 parsers), `storyChronicleService`, `dmModeChronicleService` (2 parsers). 26 unit tests in `tests/llm-json.test.js`.
+
+### 2. Prelude session hardening
+
+- **Arc-plan generation** retries once with a corrective follow-up when the first JSON response fails extract/validate. The retry quotes the offending response back at Opus and asks for a clean re-emission. Two total attempts. Failure after both returns a descriptive error with 1500-char preview.
+- **Marker processing** in `sendMessage` now wraps `processMarkersForSession` and `canonService.buildCanonFactsBlock` in try/catch. A bad canon-fact insert or unexpected DB error no longer 500s the entire turn — the player's AI response still reaches them; marker failures are logged and a safe empty-results shape is returned.
+
+### 3. Prelude session count fixed across prompts
+
+Corrected stale "7-10 play sessions" references in `preludeArcService.js` and `rollingSummaryService.js`. The actual structure is **5 sessions** (Ch1: 1, Ch2: 1, Ch3: 2, Ch4: 1).
+
+### 4. DM session state — merchant shop extracted
+
+19 merchant-related `useState` calls extracted from `DMSession.jsx` (now at 3,011 lines) into `client/src/hooks/useMerchantShop.js`. Same semantics; destructured back into the component. First of a planned series of state-cluster extractions — grouped: shop lifecycle, loaded merchant record, cart drafts, haggle mechanic.
+
+### 5. CLAUDE.md rewritten + ghost-weight pass
+
+- `CLAUDE.md` reduced from 54KB → 24KB. Dropped per-version history (belongs in CHANGELOG), corrected stale claims (`DMSession.jsx` line count, test file count), organized into architecture subsections. Added `server/utils/llmJson.js` + "don't write ad-hoc JSON extractors" rule.
+- Deleted retired Phase 8/9 410-Gone handlers in `server/routes/companion.js` — they've been dead since v1.0.16 and any stale caller had plenty of time to update.
+- `OPEN_QUESTIONS.md` indexed in CLAUDE.md (previously untracked design doc).
+
+
 
 Two quality issues from playtest #3.
 
