@@ -432,3 +432,83 @@ Ready to start Phase 1 on your confirmation. First change would be the migration
 - Updated UI components (arc preview, chapter-promise beat)
 - Moved Opus arc-plan generation into Phase 2; restructured Phase 4 to focus on age-register voice + time compression; expanded Phase 5 with primary-campaign-gen integration
 - Scope estimate revised from 46-71 → 52-77 hours
+
+---
+
+## Round 3 (2026-04-24) — Structural reframe: Ch4 becomes the bridge to adventuring
+
+**Status:** Design decision logged. Implementation deferred — paired with Phase 5 (Transition / Primary campaign handoff), which is itself unbuilt. When Phase 5 is taken up, this reframe must be honored.
+
+### The core change
+
+The original 5-session structure put the departure in Ch4:
+- Ch1 OBSERVE → Ch2 LEARN → Ch3 DECIDE (irreversible act + theme commitment) → **Ch4 COMMIT (departure scene)**
+
+Round 3 moves the departure into Ch3 and repurposes Ch4 as a road-life bridge:
+- Ch1 OBSERVE → Ch2 LEARN → **Ch3 DECIDE (irreversible act + theme commitment + actual departure scene)** → **Ch4 BECOME (post-departure adjustment, thread wrap, runway to primary campaign)**
+
+### Why
+
+D&D characters at campaign start are not freshly-departed recruits. They've been on the road for some time. They have a reason they left, they've slept rough, they've already learned that the world doesn't shape itself around home. The original prelude design ended with the departure beat and immediately handed off to the main campaign — the player entered the campaign as someone who *just left*, which mismatches D&D campaign-start convention. Ch4-as-bridge gives the character time to *become* the adventurer they'll be when the campaign opens.
+
+### What Ch4 (BECOME) contains
+
+Six candidate beats, any 4-5 of which fit one session if paced well:
+
+1. **The first lonely beat.** First night truly alone. Home is gone; the larger world hasn't arrived. The character is nobody to anyone here.
+2. **The first identity test.** Someone asks who they are. The home identity ("Vask's daughter") doesn't translate. They have to answer with the new self — the one the theme commitment chose.
+3. **The first practical use of the theme.** Theme abilities used outside theory. Soldier marches with strangers. Criminal lifts in unfamiliar streets. Acolyte preaches to people who don't know their family's faith. Not heroic — competent in a small way.
+4. **The home echo.** Something triggers memory. Explicit slot for unresolved Ch1-3 threads to wrap (or deliberately leave open as load-bearing carry-forward into the campaign).
+5. **The first small adventure.** Not the campaign hook. A brief road encounter, a stranger needing help, a road puzzle. The character handles it on their own terms.
+6. **The arrival.** Ch4 ends with the character arriving somewhere bigger — a city, a crossroads, a frontier town. The first whisper of the campaign world. They are ready, and the world is finally large enough to contain them.
+
+### Pacing & time-compression
+
+Ch1-3 cover years of childhood. Ch4 covers weeks-to-months of road time. `[AGE_ADVANCE]` fires multiple times *within* Ch4 (currently rare). The time-compression techniques already in the toolkit (season-skip, rhythm-compression, selective-detail, AGE_ADVANCE jump) need explicit promotion to Ch4's prompt foreground.
+
+### Canon ledger — `transient` flag
+
+Ch4 introduces NEW NPCs (fellow travelers, road inn-keepers, strangers in the new town). Most won't carry into the campaign. Without a flag, the canon ledger pollutes the main campaign with one-shot road NPCs.
+
+Proposed: add a `transient` boolean to canon-fact records introduced in Ch4. Default ON for Ch4 NPCs/locations; player or AI can promote to permanent ("this trader becomes a recurring contact") via an explicit beat. The Phase 5 handoff filters out `transient: true` canon when seeding the primary campaign.
+
+### Open design choices for Phase 5 implementation
+
+- **Theme commitment UX moment.** Currently a discrete "Choose Your Path" card at Ch3 wrap-up (v1.0.77). Under the new structure, theme commitment + departure happen as a single scene cluster. Question: does the card stay as a discrete UI moment (player picks → AI plays the departure), or does it fold into the narrative ("you walk to the recruitment table and put your hand on the ledger" — theme implicit in player action)?
+- **Ch4 mode tag.** Replaces Ch4 COMMIT. Candidates: BECOME, BRIDGE, ARRIVE, ADJUST, SEEK. BECOME captures the transformation; BRIDGE captures the structural role; ARRIVE captures the endpoint. Pick one before Phase 5 implementation.
+- **Ch4 fixed beats vs emergent.** Three options: (a) all 6 beats mandatory; (b) Ch4 fully emergent shaped by theme + most resonant home thread; (c) hybrid — 2-3 mandatory beats + open space. Lean (c).
+
+### Implementation impact when Phase 5 ships
+
+1. **Arc plan generator** (`preludeArcService.js`):
+   - Ch3's `chapter_end_moment` absorbs the departure beat.
+   - The `departure_seed` field (`plausible_shapes`, `tone`, `primary_thread`) moves from Ch4 to Ch3.
+   - Ch4 gets new arc-plan fields: `thread_wrap_focus` (which Ch1-3 threads are explicitly addressed), `adjustment_beats` (which of the 6 BECOME beats Ch4 leans into), `arrival_destination` (the city/crossroads/region where Ch4 ends).
+
+2. **Chapter modes** (`preludeArcPromptBuilder.js`):
+   - Ch4 mode shifts from COMMIT to BECOME (or whichever tag is selected).
+   - YES beats: first lonely beat, first identity test, first practical use of theme, home echo, first small adventure, arrival.
+   - NO beats: returning home (unless thematically right), dragging unresolved home tension that should have closed in Ch3, full campaign-scale plot.
+   - Time-compression techniques promoted to Ch4 foreground.
+
+3. **Theme commitment service** (`preludeThemeService.js`):
+   - `[THEME_COMMITMENT_OFFERED]` marker still fires at Ch3 wrap-up.
+   - Theme commitment + departure shape happen as one scene cluster at Ch3 end (currently theme commits in Ch3, departure plays in Ch4 — these compress).
+   - Need explicit pacing guidance in the AI prompt: "irreversible act + theme commitment + departure are three distinct beats — give each its own scene weight, don't compress all three into one paragraph."
+
+4. **Canon ledger** (`preludeCanonService.js`):
+   - Add `transient` boolean column via migration.
+   - Default to TRUE for canon facts emitted in Ch4 (server-side based on character's `prelude_chapter`).
+   - Add a marker `[CANON_FACT_PROMOTE: subject="..."]` for the AI to promote a transient fact to permanent when the player invests in it.
+
+5. **Primary campaign handoff** (Phase 5):
+   - Becomes radically simpler. Campaign opens at the Ch4 `arrival_destination`, in-rhythm with the Ch4 ending. The character has been there for "some time" — adventures begin with the next quest, not with "you have just arrived."
+   - Filter out `transient: true` canon when seeding primary campaign world-gen.
+
+### Migration plan for existing prelude characters
+
+At the time of this writing: zero existing prelude characters in the system (DB is empty). When the reframe ships, no migration logic is needed — all preludes will run on the v3 structure from the start.
+
+### Reference
+
+This decision is paired with the deferred entry in `FUTURE_FEATURES.md` under "Main-campaign tone preset integration" + a new entry "Prelude → Primary Campaign Handoff (Phase 5)" that explicitly references this Round 3 reframe.

@@ -2,6 +2,59 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.91] - 2026-04-24 — Playtest logging + Ch4-as-bridge design logged
+
+Two pieces, both for playtest visibility and design continuity.
+
+### Playtest logging instrumentation
+
+New `server/utils/playtestLogger.js` surfaces context-drift signals during sessions. Two outputs:
+
+**Per-turn one-liner** (greppable, dense):
+```
+[playtest] s=99 t=12 type=prelude_arc prompt=24.1k canon+2 emerg=1 (CHAPTER+,Ch2->Ch3)
+[playtest] s=42 t=6 type=dm prompt=19.2k markers=1/1bad viol=1 will-correct
+[playtest] s=42 t=7 type=dm prompt=19.4k markers=1/0bad fixed-prev
+```
+
+**Session-end multi-line summary** (trajectory analysis):
+```
+═══ [playtest] SESSION SUMMARY · session 99 · prelude_arc · 28 turns ═══
+Duration: 47 minutes wall-clock
+Markers: 47 emitted, 3 malformed (6.4%)
+Rule violations: 4 caught (hard-stop / meta-commentary)
+Corrections: 6 queued, 5 acted on (83% self-corrected next turn)
+Canon: +23 added, -2 retired ⚠ retire = potential drift
+Emergences: 12 offered (8 accepted, 3 declined, 1 cap-blocked)
+Chapters: 1 advance(s) within session
+Prompt size: 11.2k → 18.4k (↑7.2k drift)
+Note: Theme committed: Acolyte (forest path)
+═══════════════════════════════════════════════════════════════════════
+```
+
+Wired into both DM session route and prelude session service. The `canon-N!` per-turn flag and the ⚠ session-end indicator highlight canon retirements specifically — the most direct context-drift signal.
+
+23-test coverage in `tests/playtest-logger.test.js`.
+
+### Prelude Round 3 design (Ch4 as bridge) logged
+
+`PRELUDE_IMPLEMENTATION_PLAN.md` Round 3 documents the structural reframe:
+- Ch1-3 = home arc; Ch3 ends with irreversible act + theme commitment + departure scene
+- Ch4 becomes BECOME — post-departure adjustment, thread wrap, runway to primary campaign
+- 6 candidate Ch4 beats sketched (lonely, identity test, theme in practice, home echo, small adventure, arrival)
+- Implementation impact mapped (arc plan generator, chapter modes, theme commitment, canon `transient` flag, Phase 5 handoff)
+- Migration plan: zero existing prelude characters, no migration needed
+
+`FUTURE_FEATURES.md` Phase 5 handoff entry now references the Round 3 reframe and includes a build checklist for when implementation begins.
+
+No code changes — design logged for the next implementation pass.
+
+### Files
+
+- New: `server/utils/playtestLogger.js`, `tests/playtest-logger.test.js`
+- Modified: `server/routes/dmSession.js` (per-turn + session-end logging), `server/services/preludeSessionService.js` (per-turn + session-end logging with prelude-specific canon/emergence signals)
+- Docs: `PRELUDE_IMPLEMENTATION_PLAN.md` (+Round 3), `FUTURE_FEATURES.md` (+Phase 5 handoff)
+
 ## [1.0.0.90] - 2026-04-24 — DM prompt rebuild + code-verified rules
 
 Six of the seven architectural weaknesses from the audit, fixed. Tone-preset unification (weakness 7) deferred to a proper follow-up once the prelude-to-campaign handoff design is locked — see `FUTURE_FEATURES.md`.

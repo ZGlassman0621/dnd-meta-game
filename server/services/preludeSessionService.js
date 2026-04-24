@@ -38,6 +38,7 @@ import * as emergenceService from './preludeEmergenceService.js';
 import * as canonService from './preludeCanonService.js';
 import { detectPlayerDialogueViolation, buildViolationCorrectionNote } from './preludeViolationDetection.js';
 import { THEME_DEPARTURE_MAP } from './preludeThemeService.js';
+import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
 
 // Play-session pacing thresholds. A "play-session" is one pause-to-pause
 // cycle; each resume starts a new play-session. Exchange count = messages
@@ -749,6 +750,36 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
   const updatedCharacter = await getPreludeCharacter(session.character_id);
   const sessionNumber = await getSessionOrdinal(sessionId);
 
+  // Per-turn playtest log — surfaces context-drift signals live in the terminal
+  try {
+    const turnNumber = Math.ceil(result.messages.length / 2);
+    const promptChars = systemPrompt?.length || 0;
+    const offered = (markerResults.offeredEmergences || []).length;
+    const cap = (markerResults.capViolations || []).length;
+    const canonAdded = (markerResults.canonFactsAdded || []).length;
+    const canonRetired = (markerResults.canonFactsRetired || []).length;
+    const chapterAdvanced = !!markerResults.chapterAdvanced;
+    const tagParts = [];
+    if (markerResults.chapterAdvanced) tagParts.push(`Ch${markerResults.chapterAdvanced.from}→Ch${markerResults.chapterAdvanced.to}`);
+    if (markerResults.cliffhanger) tagParts.push('CLIFFHANGER');
+    if (markerResults.themeCommitmentOffer) tagParts.push('THEME-OFFER');
+    if (markerResults.rule2Violation) tagParts.push('rule2!');
+    playtestLogTurn({
+      sessionId: parseInt(sessionId),
+      turnNumber,
+      sessionType: 'prelude_arc',
+      promptChars,
+      canonAdded,
+      canonRetired,
+      emergencesOffered: offered,
+      capViolations: cap,
+      chapterAdvanced,
+      tag: tagParts.join(',') || undefined
+    });
+  } catch (logErr) {
+    // Never break the session for a logging issue.
+  }
+
   return {
     response: result.response,
     messages: result.messages,
@@ -771,7 +802,7 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
  */
 export async function endSession(sessionId, { completed = false } = {}) {
   const session = await dbGet(
-    `SELECT id, status FROM dm_sessions WHERE id = ? AND session_type = 'prelude_arc'`,
+    `SELECT id, status, character_id, messages, start_time, session_config FROM dm_sessions WHERE id = ? AND session_type = 'prelude_arc'`,
     [sessionId]
   );
   if (!session) throw new Error('Prelude session not found');
@@ -781,6 +812,64 @@ export async function endSession(sessionId, { completed = false } = {}) {
     `UPDATE dm_sessions SET status = ?, end_time = datetime('now') WHERE id = ?`,
     [newStatus, sessionId]
   );
+
+  // Playtest session-end summary — surfaces canon/emergence/marker trajectory
+  // by walking the message history. Best-effort; never breaks the close.
+  try {
+    const messages = safeJsonParse(session.messages, []);
+    const allTurns = messages.filter(m => m.role === 'assistant');
+    const totals = {
+      markers_emitted: 0,
+      markers_malformed: 0,
+      canon_added: 0,
+      canon_retired: 0,
+      emergences_offered: 0,
+      cap_violations: 0
+    };
+    // Aggregate marker/canon/emergence counts from the message stream.
+    for (const turn of allTurns) {
+      const text = typeof turn.content === 'string' ? turn.content : '';
+      const detected = detectPreludeMarkers(text);
+      totals.canon_added += (detected.canonFacts || []).length;
+      totals.canon_retired += (detected.canonFactRetires || []).length;
+      const emergences = (detected.statHints || []).length
+        + (detected.skillHints || []).length
+        + (detected.classHints || []).length
+        + (detected.themeHints || []).length
+        + (detected.ancestryHints || []).length
+        + (detected.valueHints || []).length;
+      totals.emergences_offered += emergences;
+    }
+    // Acceptance / decline counts are query-able from the prelude_emergences table.
+    try {
+      const emergeRows = await dbAll(
+        `SELECT status FROM prelude_emergences WHERE character_id = ? AND session_id = ?`,
+        [session.character_id, sessionId]
+      );
+      totals.emergences_accepted = emergeRows.filter(r => r.status === 'accepted').length;
+      totals.emergences_declined = emergeRows.filter(r => r.status === 'declined').length;
+    } catch {/* best-effort */}
+
+    const character = await getPreludeCharacter(session.character_id);
+    const notes = [];
+    if (character) {
+      notes.push(`Character: ${character.name || '(unnamed)'} · ${character.race} · age ${character.prelude_age} · chapter ${character.prelude_chapter} · HP ${character.current_hp}/${character.max_hp}`);
+    }
+    const cfg = safeJsonParse(session.session_config, {});
+    if (cfg.lastSessionRecap) notes.push(`Recap was generated (${cfg.lastSessionRecap.length} chars)`);
+
+    playtestLogSessionEnd({
+      sessionId: parseInt(sessionId),
+      sessionType: 'prelude_arc',
+      totalTurns: allTurns.length,
+      startTimestamp: session.start_time,
+      totals,
+      notes
+    });
+  } catch (logErr) {
+    console.error('[playtest] prelude session-end summary failed (non-fatal):', logErr.message);
+  }
+
   return { sessionId, status: newStatus };
 }
 

@@ -1,5 +1,27 @@
 # Test Results Log
 
+## 2026-04-24 — v1.0.91 Playtest logging + Round 3 design
+
+**Change scope:** New `server/utils/playtestLogger.js` for per-turn and session-end context-drift instrumentation. Wired into both DM session route and prelude session service. PRELUDE_IMPLEMENTATION_PLAN.md Round 3 (Ch4-as-bridge) and FUTURE_FEATURES.md Phase 5 handoff entries logged — design only, no code changes there.
+
+**Client build:** ✅ passed.
+
+**New test file:** `tests/playtest-logger.test.js` — 23 passed, 0 failed.
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/playtest-logger.test.js`       | ✅ 23 passed (new) |
+| `tests/dm-prompt-builder.test.js`     | ✅ 30 passed |
+| `tests/marker-schemas.test.js`        | ✅ 29 passed |
+| `tests/llm-json.test.js`              | ✅ 26 passed |
+| `tests/prelude-prompt.test.js`        | ✅ 190 passed |
+| `tests/prelude-markers.test.js`       | ✅ 130 passed |
+| `tests/prelude-arc.test.js`           | ✅ 15 passed |
+
+**Net assessment:** Pure additive. No regressions. Logging is best-effort (try/catch around all log calls) — if anything in the formatter breaks, the session continues normally.
+
 ## 2026-04-24 — v1.0.90 DM prompt rebuild + code-verified rules
 
 **Change scope:** DM system prompt restructure (memory hierarchy, consolidated cardinal rules, unified NPC voice, conditional markers), new `markerSchemas.js` + `ruleVerifiers.js` for schema-driven and rule-verified marker/response validation with invisible-to-player correction feedback. Main-campaign tone preset integration (Weakness 7) deferred — noted in `FUTURE_FEATURES.md` until the prelude-to-campaign handoff design is locked.

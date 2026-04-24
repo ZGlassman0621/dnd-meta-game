@@ -37,6 +37,7 @@ import { detectConditionChanges, formatConditionsForAI } from '../data/condition
 import { safeParse } from '../utils/safeParse.js';
 import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
 import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVerifiers.js';
+import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
 import { resolveForNpcBatch as resolveNicknamesForNpcBatch } from '../services/nicknameService.js';
@@ -1231,11 +1232,14 @@ router.post('/:sessionId/message', async (req, res) => {
     // already served — either the AI acted on it and the new response will
     // either include a corrected marker or not; either way, stale corrections
     // shouldn't accrete. Both reads/writes are best-effort.
+    let validationSummary = null;  // captured for playtest logging below
     try {
-      const { failures } = validateDmMarkers(result.narrative || '');
+      const validateResult = validateDmMarkers(result.narrative || '');
+      const { failures, validByKey } = validateResult;
       const { violations: ruleViolations } = verifyDmResponse(result.narrative || '');
       const cfg = safeParse(session.session_config, {});
       const nextCfg = { ...cfg };
+      const hadPriorCorrection = !!cfg.pendingMarkerCorrections;
       // Consume any previously-surfaced correction from this turn.
       delete nextCfg.pendingMarkerCorrections;
       // Queue any new failures for next turn (schema + rule combined).
@@ -1257,8 +1261,36 @@ router.post('/:sessionId/message', async (req, res) => {
       if (cfg.pendingMarkerCorrections !== nextCfg.pendingMarkerCorrections) {
         await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(nextCfg), sessionId]);
       }
+      // Capture summary for playtest logger
+      const validMarkerCount = Object.values(validByKey).reduce((sum, arr) => sum + arr.length, 0);
+      validationSummary = {
+        markersValid: validMarkerCount,
+        markersMalformed: failures.length,
+        ruleViolations: ruleViolations.length,
+        correctionConsumed: hadPriorCorrection,
+        correctionQueued: combinedNotes.length > 0
+      };
     } catch (err) {
       console.error('[marker-schema] validation pass failed (non-fatal):', err.message);
+    }
+
+    // Per-turn playtest log line — surfaces context-drift signals live in the terminal
+    try {
+      const turnNumber = Math.ceil(result.messages.length / 2);
+      const promptChars = augmentedMessages[0]?.content?.length || 0;
+      playtestLogTurn({
+        sessionId: parseInt(sessionId),
+        turnNumber,
+        sessionType: 'dm',
+        promptChars,
+        markersValid: validationSummary?.markersValid,
+        markersMalformed: validationSummary?.markersMalformed,
+        ruleViolations: validationSummary?.ruleViolations,
+        correctionConsumed: validationSummary?.correctionConsumed,
+        correctionQueued: validationSummary?.correctionQueued
+      });
+    } catch (logErr) {
+      // Logging never breaks the session.
     }
 
     // Check for downtime activity in the player action
@@ -2913,6 +2945,54 @@ router.post('/:sessionId/end', async (req, res) => {
           end_time = datetime('now'), game_end_day = ?, game_end_year = ?
       WHERE id = ?
     `, [summary, JSON.stringify(rewards), hpChange, newGameDate.day, newGameDate.year, sessionId]);
+
+    // Playtest session-end summary — surfaces marker/rule/correction trajectory
+    // by walking the persisted message history. Best-effort; never breaks the
+    // end-session flow.
+    try {
+      const allTurns = messages.filter(m => m.role === 'assistant');
+      const totals = {
+        markers_emitted: 0,
+        markers_malformed: 0,
+        rule_violations: 0,
+        corrections_queued: 0,
+        corrections_consumed: 0
+      };
+      for (const turn of allTurns) {
+        const text = typeof turn.content === 'string' ? turn.content : '';
+        const { failures, validByKey } = validateDmMarkers(text);
+        const validCount = Object.values(validByKey).reduce((s, a) => s + a.length, 0);
+        const { violations } = verifyDmResponse(text);
+        totals.markers_emitted += validCount + failures.length;
+        totals.markers_malformed += failures.length;
+        totals.rule_violations += violations.length;
+        if (failures.length + violations.length > 0) totals.corrections_queued += 1;
+      }
+      // corrections_consumed — count turns where a previous turn had emitted a
+      // correction-worthy issue and the next turn was clean. Approximation: if
+      // turn N was malformed and turn N+1 was clean, count as consumed.
+      for (let i = 0; i < allTurns.length - 1; i++) {
+        const a = typeof allTurns[i].content === 'string' ? allTurns[i].content : '';
+        const b = typeof allTurns[i+1].content === 'string' ? allTurns[i+1].content : '';
+        const aHadIssue = validateDmMarkers(a).failures.length + verifyDmResponse(a).violations.length > 0;
+        const bClean = validateDmMarkers(b).failures.length + verifyDmResponse(b).violations.length === 0;
+        if (aHadIssue && bClean) totals.corrections_consumed += 1;
+      }
+      const firstSystemTurn = messages.find(m => m.role === 'system');
+      const firstPromptChars = firstSystemTurn?.content?.length;
+      playtestLogSessionEnd({
+        sessionId: parseInt(sessionId),
+        sessionType: 'dm',
+        totalTurns: allTurns.length,
+        startTimestamp: session.start_time,
+        totals,
+        firstPromptChars,
+        lastPromptChars: firstPromptChars,  // system prompt is sticky for DM sessions
+        notes: [`Reward summary: ${summary?.slice(0, 80) || '(none)'}…`]
+      });
+    } catch (logErr) {
+      console.error('[playtest] session-end summary failed (non-fatal):', logErr.message);
+    }
 
     res.json({
       success: true,

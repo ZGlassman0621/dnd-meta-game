@@ -421,3 +421,31 @@ at a 7-category tone system (gritty/epic/gothic/political/mystery/
 whimsical/default) inferred from free-text campaign tone. That was
 reverted as incoherent with the prelude's 4-preset system. Don't
 re-invent new categories — use the canonical 4.
+
+---
+
+## Prelude → Primary Campaign Handoff (Phase 5)
+
+**Priority:** High once prelude playtests stabilize. **Status:** Deferred (Phase 5 of `PRELUDE_IMPLEMENTATION_PLAN.md`, design work only — not yet implemented).
+
+**The handoff is the single most important integration point in the game.** The prelude builds a character with depth, relationships, place-in-world, and mechanical hooks (theme, ancestry feats, Expertise Die at L5 unlock). The primary campaign is where they live the rest of their story. If the handoff is rough, everything the prelude built leaks out.
+
+### MUST honor the Round 3 structural reframe
+
+When this is implemented, **Ch4 is the bridge to adventuring, not the departure scene.** The character arrives at the primary campaign already road-tested, weeks-to-months into independent life, with their theme committed and exercised, with their home threads either wrapped or deliberately carried forward.
+
+The campaign opener does NOT read as "you have just arrived" or "you have just left home." It reads as any other D&D session opener — the character has been here for some time, looking for work / a way forward / something worth doing. See `PRELUDE_IMPLEMENTATION_PLAN.md` Round 3 for the full design.
+
+### Build checklist when this is taken up
+
+- [ ] **Ch3 absorbs the departure scene.** Move `departure_seed` from Ch4 to Ch3 in the arc plan generator. Ch3's `chapter_end_moment` is now irreversible act + theme commitment + departure as one scene cluster (paced explicitly).
+- [ ] **Ch4 becomes BECOME (or BRIDGE / ARRIVE — pick a tag).** New mode in `preludeArcPromptBuilder.js` with the 6 candidate beats from the Round 3 reframe. Time-compression techniques promoted to Ch4 prompt foreground.
+- [ ] **Add `transient` flag to canon facts.** Migration adds the column; Ch4-emitted canon defaults to `transient=true`. New marker `[CANON_FACT_PROMOTE]` for the AI to surface road NPCs that the player has invested in.
+- [ ] **Primary campaign world-gen filters transient canon.** When seeding the campaign from prelude data, exclude `transient: true` canon facts so the campaign isn't polluted with one-shot road NPCs.
+- [ ] **Campaign opener writes from "already here for some time" position.** Not "you arrive" — "you have been here for ~weeks, looking for X." The Ch4 `arrival_destination` becomes the campaign's starting region.
+- [ ] **Prelude tone preset carries forward** (paired with the existing FUTURE_FEATURES entry on main-campaign tone preset integration). The committed tone from `prelude_setup_data.tone_tags` populates the new `campaigns.tone_preset` column automatically.
+- [ ] **Open design choice — theme commitment UX moment.** Currently a discrete "Choose Your Path" card. Under the new structure, theme + departure happen together. Decide: keep the card as a discrete UI moment, or fold it into narrative ("you put your hand on the recruitment ledger" — theme implicit in player action). Either is valid; pick before implementing.
+
+### Why this is paired with Round 3
+
+If Phase 5 is built without honoring the Ch4-as-bridge reframe, the campaign opener will keep reading like a fresh-departure scene — undermining the entire reason for the structural change. These two pieces of work need to ship together (or Phase 5 needs to ship AFTER Ch4 is restructured, never before).
