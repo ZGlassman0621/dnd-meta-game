@@ -376,7 +376,10 @@ export default function PreludeSession({ character, onBack }) {
     // AND the opening scene — can run 90-150s. When resuming or coming
     // from the arc preview, only the opening — 30-60s.
     return (
-      <div className="container" style={{ ...shellStyle, textAlign: 'center', padding: '3rem 1rem' }}>
+      // v1.0.84 — loading/error states use narrower width (shellStyle is
+      // sized for the play-area + Lore combo; these transient states don't
+      // need that width).
+      <div className="container" style={{ maxWidth: '860px', margin: '0 auto', textAlign: 'center', padding: '3rem 1rem' }}>
         <h2 style={{ color: '#a78bfa', margin: 0 }}>Opening the scene…</h2>
         <p style={{ color: '#bbb', marginTop: '0.5rem' }}>
           Opus is setting the stage for {character.nickname || character.first_name || character.name}. Typical: 30-60 seconds, or up to 2 minutes if the arc plan is being generated at the same time.
@@ -390,7 +393,7 @@ export default function PreludeSession({ character, onBack }) {
 
   if (error && messages.length === 0) {
     return (
-      <div className="container" style={shellStyle}>
+      <div className="container" style={{ maxWidth: '860px', margin: '0 auto' }}>
         <h2 style={{ color: '#f87171' }}>Couldn't open the session</h2>
         <p style={{ color: '#fca5a5', fontSize: '0.9rem' }}>{error}</p>
         <button className="button" onClick={onBack} style={{ background: '#95a5a6' }}>Back to characters</button>
@@ -402,13 +405,29 @@ export default function PreludeSession({ character, onBack }) {
   const sessionNum = runtime.sessionNumber || 1
 
   return (
-    <div className="container" style={shellStyle}>
+    // v1.0.84 — outer shell is pure layout (no `.container` chrome). The
+    // container CSS (background/border/padding) would otherwise wrap the
+    // WHOLE shell + Lore area, drawing a dark box around empty flex space
+    // when Lore is closed. Each panel now carries its own chrome.
+    <div style={shellStyle}>
       {/* v1.0.83 — Flex row wraps the ENTIRE play area + Lore. Lore pops
           out to the right of the play area without shrinking it. The
           combined unit (play + Lore) centers inside the shell. Future
           Map panel will use the same sibling-dock pattern. */}
       <div style={{ display: 'flex', gap: `${SIDE_PANEL_GAP}px`, justifyContent: 'center', alignItems: 'flex-start' }}>
-        <div style={{ width: `${PLAY_AREA_WIDTH}px`, flexShrink: 0, minWidth: 0 }}>
+        <div style={{
+          width: `${PLAY_AREA_WIDTH}px`,
+          flexShrink: 0,
+          minWidth: 0,
+          // v1.0.84 — play area gets its own container chrome (matches
+          // .container from index.css so the visual is identical to the
+          // pre-flex layout, just scoped to this wrapper).
+          background: 'rgba(255, 255, 255, 0.05)',
+          borderRadius: '12px',
+          padding: '2rem',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(10px)'
+        }}>
 
       {/* Top bar */}
       <div style={{

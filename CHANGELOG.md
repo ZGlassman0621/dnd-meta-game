@@ -2,6 +2,22 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.84] - 2026-04-22 — Hotfix: container chrome was wrapping the outer shell instead of each panel
+
+v1.0.83 broke the visual layout. The `.container` CSS class from `index.css` adds background + border + 2rem padding + backdrop-filter — and I was applying it to the OUTER shell (now 1668px wide with a centered flex row inside). Result: a huge dark rounded box with the play area centered in it and a big empty region visible beside it (especially obvious when Lore was closed — the shell was drawing its chrome around the empty flex space).
+
+Fix: outer shell drops the `.container` className and is pure layout (`margin: 0 auto`, `maxWidth`, `padding: 0 1rem`). The play-area wrapper inherits the same chrome as before (`background`, `border`, `borderRadius`, `padding`, `backdropFilter`) inline, so visually the play area looks identical to the pre-v1.0.82 layout — just scoped to the 1200px wrapper instead of the whole shell.
+
+PreludeLorePanel already had its own chrome in docked mode (from v1.0.82), so it's unchanged.
+
+### Loading + error states
+
+These still use `className="container"` since they're single-panel views that don't need the wide layout. Narrowed them explicitly to `maxWidth: 860px` so they don't stretch to the wide shell size.
+
+### Tests + build
+
+All 7 prelude suites still green (516 tests). Client build clean.
+
 ## [1.0.0.83] - 2026-04-22 — Lore pops out right (doesn't shrink play area) + title/meta simplified + Auto alignment
 
 Three polish items from the v1.0.82 screenshot review.
