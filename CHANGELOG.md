@@ -2,6 +2,41 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.95] - 2026-04-24 — Playtest fixes round 2 + transcript decoupling
+
+Eight fixes from the v1.0.94 playtest. Two infrastructure changes (transcript decoupling, accurate turn counter) plus six prompt + verifier fixes for issues observed in the actual play.
+
+### Infrastructure: append-only transcript (migration 046)
+
+`dm_sessions.messages` is the LLM-facing conversation array — gets compacted by the rolling summary at message 30+ for prompt budgeting. That's correct for the AI, but it meant anything downstream that wanted the full play history (chronicle gen, recap, transcript display, exports, the playtest turn counter) was reading a lossy view.
+
+Fix: new `dm_sessions.transcript` column that grows append-only with the actual full message history. `messages` continues to drive what the LLM sees (compacted, bounded). `transcript` is the source of truth for "what happened in this session." Both prelude and main DM session paths now write to both. Backfill: existing sessions bootstrap from current `messages` on first append.
+
+`getTurnCount(sessionId)` reads from the transcript and gives the authoritative turn number — unaffected by rolling-summary compaction. Wired into both per-turn and session-end playtest logs.
+
+### Prompt fixes (six prompt-side updates from playtest observations)
+
+**Cardinal Rule 13b — ROLL NUMBERS NEVER APPEAR IN NARRATION.** Playtest showed "You rolled an 11. The spoke seats — mostly..." — leaking the roll into prose. New rule explicitly bans the family ("you rolled X" / "with a 14" / "your roll of N" / "the dice land" / "you succeed on your check" / "your check succeeds"). The d20 result is INPUT to your generation, never OUTPUT. Includes worked WRONG/RIGHT pair from the actual playtest.
+
+**Rule 19a extended — still/freeze/spoon-stops variants.** Playtest showed "Toren is very still" + "Vess's spoon stops" slipping past the existing tic ban (which only matched "X goes still"). Now the full family is explicit: "X is very/suddenly/completely still," "X has gone still," "X freezes," "X holds completely still," "X stops moving," and the action-freeze cousin "X's [hand/spoon/sewing/breath/work] stops" as a reaction-beat.
+
+**Rule 6 strengthened — atmospheric endings are violations.** Playtest player wrote "I'm bored, the story isn't moving" after a passage that ended on cold weather + frozen mud + fogged breath + non-moving canvas. The rule already said this was bad; now it has the full WRONG passage as a worked example with three alternative RIGHT endings, plus an explicit test: "read your last 1-2 sentences. If they're describing weather, lighting, ambient sound, motion-of-objects-not-aimed-at-the-PC, or characters disengaging without a handoff — REWRITE."
+
+**OBSERVE mode clarified — choices must be PRESENTED.** Playtest showed Chapter 1 OBSERVE getting interpreted as "PC stands still while adults do things." OBSERVE is supposed to mean small character-shaping choices (hide/run, share/hoard, speak/stay silent). New "ENGAGEMENT TEST" subsection: every Ch1 response must end with one of {choice presented, NPC addressing the PC, roll prompt, physical pressure on the PC}. Atmosphere stays in the body, never the close.
+
+### New code-verifiers
+
+**`verifyNoMechanicalRoll`** — catches Rule 13b violations: "you rolled N" / "with a 14" / "your roll of 19" / "you succeed on your X check" / "your check succeeds" / "the dice land" / "on your 8" patterns. 10 unit tests covering the family + clean prose passing through.
+
+**`verifyNoStillFreezeTic`** — catches Rule 19a violations including the new variants: "X is very still" / "X freezes" / "X's [hand/spoon] stops" patterns. Carefully tuned to NOT flag legitimate "still" usage ("the lake is still," "Toren stops the wagon"). 10 unit tests.
+
+Both wired into `verifyDmResponse` so they run on every AI turn alongside the existing hard-stop and meta-commentary verifiers. Failures plug into the same invisible-correction-feedback loop — next turn's prompt gets a `[SYSTEM]` note explaining the violation.
+
+### Files
+
+- New: `server/migrations/046_session_transcript.js`, `server/utils/sessionTranscript.js`, `tests/session-transcript.test.js` (8 tests).
+- Modified: `server/services/preludeArcPromptBuilder.js` (Rule 13b, Rule 19a extension, Rule 6 stockyard worked example, OBSERVE mode ENGAGEMENT TEST), `server/services/preludeSessionService.js` (init + append + transcript-based turn counter), `server/routes/dmSession.js` (init + append + transcript-based turn counter + session-end walks transcript), `server/services/ruleVerifiers.js` (+verifyNoMechanicalRoll +verifyNoStillFreezeTic), `tests/marker-schemas.test.js` (+20 verifier tests, now 49 passed).
+
 ## [1.0.0.94] - 2026-04-24 — Anthropic 529 resilience + cleaner error surface
 
 Playtest hit Anthropic's `529 Overloaded` mid-session. The previous retry policy gave up after 3 attempts (8s total wait) and surfaced "Claude API error: Overloaded" to the player. Improved both layers.

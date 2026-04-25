@@ -146,13 +146,165 @@ export function verifyMetaCommentary(text) {
 }
 
 /**
+ * Detect mechanical roll-number leaks in narration. CARDINAL RULE 13b
+ * (added v1.0.95): the player's d20 result is INPUT to your generation,
+ * never OUTPUT. Phrases like "You rolled an 11" or "with a 14" or "your
+ * roll of 19" leak the mechanic into the prose — the player already
+ * knows their roll; they don't need it recited back.
+ *
+ * This is the v1.0.94 playtest failure mode where the AI wrote:
+ *   "You rolled an 11. The spoke seats — mostly..."
+ *
+ * Caught patterns (case-insensitive):
+ *   • "you rolled (a |an )?N"
+ *   • "with (a |an |your )?N" when N is 1-30 and followed by "you" / a verb
+ *   • "your roll of N"
+ *   • "the dice landed" / "the dice land at N"
+ *   • "on (a |an |your )?N(,)?" where it precedes outcome language
+ *   • "you succeed on your check" / "you fail your check" (mechanical-success leak)
+ *   • "your check succeeds" / "your check fails"
+ */
+export function verifyNoMechanicalRoll(text) {
+  if (!text || typeof text !== 'string') return { ok: true, violations: [] };
+  const violations = [];
+
+  const cleaned = text.replace(/\[[A-Z][A-Z_]+(?::[^\]]*)?\]/g, '');
+
+  const patterns = [
+    {
+      // "You rolled an 11" / "you rolled 17" / "you rolled a 20"
+      pattern: /\byou\s+rolled\s+(?:an?\s+)?\d{1,2}\b/i,
+      label: 'roll-number recited (e.g. "you rolled an 11")'
+    },
+    {
+      // "Your roll of 19" / "your roll of 8"
+      pattern: /\byour\s+roll\s+of\s+\d{1,2}\b/i,
+      label: 'roll-number narrated (e.g. "your roll of 19")'
+    },
+    {
+      // "With a 14, you" / "with an 11" / "with your 17"
+      pattern: /\bwith\s+(?:an?|your)\s+\d{1,2}[,\s]/i,
+      label: 'roll-number prefacing outcome (e.g. "with a 14, you...")'
+    },
+    {
+      // "On your 8" / "on a nat 1" — mechanical preface
+      pattern: /\bon\s+(?:your|a|an)\s+(?:nat\s+)?\d{1,2}[,\s]/i,
+      label: 'roll-number preface (e.g. "on your 8...")'
+    },
+    {
+      // "The dice land" / "the dice landed at N"
+      pattern: /\bthe\s+dice\s+(?:land(?:ed|s)?(?:\s+at)?|fall(?:s|en)?)\b/i,
+      label: 'dice mechanic narrated'
+    },
+    {
+      // "you succeed on your X check" / "you fail your X save" — mechanical success leak
+      pattern: /\byou\s+(?:succeed\s+on|fail)\s+(?:your\s+)?(?:[A-Z][a-z]+\s+)?(?:check|save|saving throw|roll)\b/i,
+      label: 'mechanical success/failure narrated'
+    },
+    {
+      // "Your X check succeeds/fails"
+      pattern: /\byour\s+(?:[A-Z][a-z]+\s+)?(?:check|roll|save|saving throw)\s+(?:succeeds?|fails?)\b/i,
+      label: 'mechanical outcome narrated'
+    }
+  ];
+
+  for (const { pattern, label } of patterns) {
+    const m = pattern.exec(cleaned);
+    if (m) {
+      violations.push({
+        rule: 'mechanical_roll_leak',
+        description: label,
+        snippet: cleaned.slice(Math.max(0, m.index - 20), m.index + m[0].length + 30).trim()
+      });
+    }
+  }
+
+  return violations.length === 0
+    ? { ok: true, violations: [] }
+    : { ok: false, violations };
+}
+
+/**
+ * Detect the "stillness as reaction-beat" tic family — Rule 19a violations
+ * including "X goes still / is still / freezes / X's [thing] stops" patterns.
+ * From v1.0.95 playtest: "Toren is very still" + "Vess's spoon stops".
+ *
+ * These are signal-shortcuts where the AI freezes a character's motion to
+ * communicate "the moment landed" without earning it through specific
+ * physical detail. Banned in any form when used as reaction-beat.
+ *
+ * NOT flagged: legitimate descriptive stillness in non-reaction contexts
+ * ("the lake is still" — weather/scene). The pattern requires a NAMED
+ * character or their possessive ("X's", "her", "his") to be the subject.
+ */
+export function verifyNoStillFreezeTic(text) {
+  if (!text || typeof text !== 'string') return { ok: true, violations: [] };
+  const violations = [];
+
+  const cleaned = text.replace(/\[[A-Z][A-Z_]+(?::[^\]]*)?\]/g, '');
+
+  const patterns = [
+    {
+      // "X goes (very) still" / "X goes still" / "X stills"
+      pattern: /\b(?:[A-Z][a-z]+|he|she|they|you)\s+goes\s+(?:very\s+|completely\s+|suddenly\s+)?still\b/i,
+      label: '"X goes (very) still" reaction-beat tic'
+    },
+    {
+      pattern: /\b(?:[A-Z][a-z]+|he|she|they|you)\s+stills\b/i,
+      label: '"X stills" reaction-beat tic'
+    },
+    {
+      // "X is (very/suddenly/completely) still" — v1.0.95 playtest variant
+      pattern: /\b(?:[A-Z][a-z]+|he|she|they|you)\s+is\s+(?:very|suddenly|completely)\s+still\b/i,
+      label: '"X is very/suddenly/completely still" reaction-beat tic'
+    },
+    {
+      // "X has gone still"
+      pattern: /\b(?:[A-Z][a-z]+|he|she|they|you)\s+has\s+gone\s+still\b/i,
+      label: '"X has gone still" reaction-beat tic'
+    },
+    {
+      // "X freezes" / "X holds completely still" / "X stops moving"
+      pattern: /\b(?:[A-Z][a-z]+|he|she|they|you)\s+(?:freezes|holds\s+completely\s+still|stops\s+moving)\b/i,
+      label: '"X freezes / holds still / stops moving" reaction-beat tic'
+    },
+    {
+      // "X's [hand|fingers|spoon|sewing|work|brush|...] stops" — v1.0.95 playtest variant
+      // Rejects only the action-freeze family. We require a possessive subject + a stoppable object/activity + "stops".
+      pattern: /\b(?:[A-Z][a-z]+'s|her|his|their|your)\s+(?:hand|hands|fingers|fist|spoon|knife|brush|needle|sewing|work|breath|breathing|whittling|stitching|writing|reading|chopping|kneading|hammering|pen|quill|ladle|bowl|cup|book|page)\s+stops\b/i,
+      label: '"X\'s [activity-object] stops" reaction-beat tic — same family as "goes still"'
+    }
+  ];
+
+  for (const { pattern, label } of patterns) {
+    const m = pattern.exec(cleaned);
+    if (m) {
+      violations.push({
+        rule: 'still_freeze_tic',
+        description: label,
+        snippet: cleaned.slice(Math.max(0, m.index - 20), m.index + m[0].length + 30).trim()
+      });
+    }
+  }
+
+  return violations.length === 0
+    ? { ok: true, violations: [] }
+    : { ok: false, violations };
+}
+
+/**
  * Run every verifier and return a consolidated result.
  * Usage:
  *   const { ok, violations } = verifyDmResponse(aiText);
  *   if (!ok) stash(violations) for next-turn correction feedback
  */
 export function verifyDmResponse(text) {
-  const verifiers = [verifyHardStops, verifyMetaCommentary];
+  const verifiers = [
+    verifyHardStops,
+    verifyMetaCommentary,
+    verifyNoMechanicalRoll,
+    verifyNoStillFreezeTic
+  ];
   const allViolations = [];
   for (const v of verifiers) {
     const result = v(text);
@@ -183,6 +335,12 @@ export function buildRuleCorrectionMessage(violations) {
     }
     if (v.rule === 'narrated_roll_outcome') {
       return `[SYSTEM] Your last response narrated a roll outcome: "${v.snippet}". Cardinal Rule 1: you never roll the player's dice. Let the player report their number; then narrate the fictional consequence.`;
+    }
+    if (v.rule === 'mechanical_roll_leak') {
+      return `[SYSTEM] Your last response leaked the roll number into the prose: ${v.description}. Snippet: "${v.snippet}". Cardinal Rule 13b: the d20 result is INPUT to your generation, never OUTPUT. Narrate the FICTIONAL outcome (the spoke seats; the door resists; the lie lands clean) — never recite "you rolled an 11" or "with a 14" or "you succeed on your check." Re-emit your last response with the roll number stripped and the outcome carried by the prose.`;
+    }
+    if (v.rule === 'still_freeze_tic') {
+      return `[SYSTEM] Your last response used the "stillness as reaction-beat" tic: ${v.description}. Snippet: "${v.snippet}". Rule 19a: this whole family — "X goes/is still," "X stills," "X freezes," "X's [hand/spoon/sewing] stops" — is banned. Replace with specific physical detail in the character's own body and context (what are their hands actually doing? where are their eyes going? what are they holding?). See Rule 19a for worked examples.`;
     }
     return `[SYSTEM] Rule violation (${v.rule}): ${JSON.stringify(v)}`;
   });

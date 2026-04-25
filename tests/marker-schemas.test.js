@@ -20,6 +20,8 @@ import {
   verifyHardStops,
   verifyMetaCommentary,
   verifyDmResponse,
+  verifyNoMechanicalRoll,
+  verifyNoStillFreezeTic,
   buildRuleCorrectionMessage
 } from '../server/services/ruleVerifiers.js';
 
@@ -240,6 +242,115 @@ test('buildRuleCorrectionMessage quotes the violating trigger for hard-stop', ()
 test('buildRuleCorrectionMessage returns null when no violations', () => {
   assert.equal(buildRuleCorrectionMessage([]), null);
   assert.equal(buildRuleCorrectionMessage(null), null);
+});
+
+console.log('\n=== verifyNoMechanicalRoll — Cardinal Rule 13b ===\n');
+
+// The actual v1.0.94 playtest violation:
+test('Playtest case: "You rolled an 11" is flagged', () => {
+  const txt = 'You rolled an 11. The spoke seats — mostly. It\'s in the groove, it\'s not walking.';
+  const r = verifyNoMechanicalRoll(txt);
+  assert.equal(r.ok, false);
+  assert.equal(r.violations[0].rule, 'mechanical_roll_leak');
+});
+
+test('"With a 14, you" is flagged', () => {
+  const txt = 'You step into the alley. With a 14, you spot the wire.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, false);
+});
+
+test('"Your roll of 19" is flagged', () => {
+  const txt = 'Your roll of 19 is nearly perfect — the lock springs open.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, false);
+});
+
+test('"You succeed on your Perception check" is flagged', () => {
+  const txt = 'You succeed on your Perception check. There\'s a hairline crack along the wall.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, false);
+});
+
+test('"Your check succeeds" is flagged', () => {
+  const txt = 'Your Stealth check succeeds and the guard turns away.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, false);
+});
+
+test('"On your 8" is flagged', () => {
+  const txt = 'On your 8, the door resists you.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, false);
+});
+
+test('"the dice land" is flagged', () => {
+  const txt = 'The dice land at 17 — you spot the loose tile.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, false);
+});
+
+test('Pure fictional outcome passes', () => {
+  const txt = 'The spoke seats — mostly. There\'s a fraction of tilt still in it. Toren brings the mallet down once, sharp.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, true);
+});
+
+test('Pre-roll narration without a number passes', () => {
+  const txt = 'You grip the spoke and press it into the hub. The wood is cold and smooth. Make an Athletics check.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, true);
+});
+
+test('Mention of a number that isn\'t a roll passes', () => {
+  const txt = 'There are six children in the room. The youngest is three.';
+  assert.equal(verifyNoMechanicalRoll(txt).ok, true);
+});
+
+console.log('\n=== verifyNoStillFreezeTic — Rule 19a extensions ===\n');
+
+test('Playtest case: "Toren is very still" is flagged', () => {
+  const txt = 'Toren is very still as the spoke seats.';
+  const r = verifyNoStillFreezeTic(txt);
+  assert.equal(r.ok, false);
+  assert.equal(r.violations[0].rule, 'still_freeze_tic');
+});
+
+test('Playtest case: "Vess\'s spoon stops" is flagged', () => {
+  const txt = 'Vess\'s spoon stops mid-stir. She looks up at you.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, false);
+});
+
+test('"X goes very still" still flagged (existing pattern)', () => {
+  const txt = 'Moss goes very still at the sound.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, false);
+});
+
+test('"X stills" still flagged', () => {
+  const txt = 'Halgrim stills, hand frozen on the latch.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, false);
+});
+
+test('"X freezes" flagged', () => {
+  const txt = 'Brann freezes when he sees you.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, false);
+});
+
+test('"his hand stops" flagged', () => {
+  const txt = 'His hand stops on the door handle.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, false);
+});
+
+test('"her sewing stops" flagged', () => {
+  const txt = 'Her sewing stops. She glances toward the window.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, false);
+});
+
+test('Specific physical detail passes', () => {
+  const txt = 'Moss sets the ladle down on the counter. Carefully. The way she does when she doesn\'t want someone downstairs to hear her put a thing down.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, true);
+});
+
+test('Lake/scene description with "still" passes', () => {
+  const txt = 'The lake is still. Mist rises off it.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, true);
+});
+
+test('NPC stopping the wagon — "stops" without action-freeze pattern passes', () => {
+  const txt = 'Toren stops the wagon at the crossroads.';
+  assert.equal(verifyNoStillFreezeTic(txt).ok, true);
 });
 
 console.log(`\n==================================================`);

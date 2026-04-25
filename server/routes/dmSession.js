@@ -38,6 +38,7 @@ import { safeParse } from '../utils/safeParse.js';
 import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
 import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVerifiers.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
+import { initTranscript, appendToTranscript, getTurnCount, getTranscript } from '../utils/sessionTranscript.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
 import { resolveForNpcBatch as resolveNicknamesForNpcBatch } from '../services/nicknameService.js';
@@ -1026,6 +1027,15 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
       gameStartYear
     ]);
 
+    // Initialize the append-only transcript with the opening exchange
+    // (migration 046). The LLM-facing `messages` blob may compact later;
+    // transcript stays complete.
+    try {
+      await initTranscript(Number(info.lastInsertRowid), result.messages);
+    } catch (err) {
+      console.error('[dm-session] failed to initialize transcript (non-fatal):', err.message);
+    }
+
     // Clear pending downtime narratives now that they've been included in the session
     if (pendingNarratives.length > 0) {
       await dbRun(`
@@ -1222,8 +1232,19 @@ router.post('/:sessionId/message', async (req, res) => {
       result = await ollama.continueSession(messagesToSend, action, session.model);
     }
 
-    // Update the session in the database
+    // Update the session in the database (LLM-facing, may be compacted)
     await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+
+    // Append this turn's user + assistant pair to the full transcript.
+    // Best-effort — never breaks the session for a persistence issue.
+    try {
+      await appendToTranscript(parseInt(sessionId), [
+        { role: 'user', content: action },
+        { role: 'assistant', content: result.narrative || '' }
+      ]);
+    } catch (err) {
+      console.error('[dm-session] transcript append failed (non-fatal):', err.message);
+    }
 
     // Validate every marker the AI emitted against its schema. Any failures
     // (missing required fields, invalid enums, out-of-range numbers) get
@@ -1274,9 +1295,16 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('[marker-schema] validation pass failed (non-fatal):', err.message);
     }
 
-    // Per-turn playtest log line — surfaces context-drift signals live in the terminal
+    // Per-turn playtest log line — surfaces context-drift signals live in the terminal.
+    // Turn number comes from the append-only transcript (authoritative,
+    // unaffected by rolling-summary compaction).
     try {
-      const turnNumber = Math.ceil(result.messages.length / 2);
+      let turnNumber;
+      try {
+        turnNumber = await getTurnCount(parseInt(sessionId));
+      } catch {
+        turnNumber = Math.ceil(result.messages.length / 2);
+      }
       const promptChars = augmentedMessages[0]?.content?.length || 0;
       // Best-effort character-name lookup for human-readable framing.
       let characterName = null;
@@ -2965,11 +2993,19 @@ router.post('/:sessionId/end', async (req, res) => {
       WHERE id = ?
     `, [summary, JSON.stringify(rewards), hpChange, newGameDate.day, newGameDate.year, sessionId]);
 
-    // Playtest session-end summary — surfaces marker/rule/correction trajectory
-    // by walking the persisted message history. Best-effort; never breaks the
-    // end-session flow.
+    // Playtest session-end summary — walks the FULL transcript (not the
+    // possibly-compacted LLM-facing messages) so totals reflect the whole
+    // session, not just the post-compaction tail. Falls back to messages
+    // for sessions that pre-date the transcript column.
     try {
-      const allTurns = messages.filter(m => m.role === 'assistant');
+      let walkable;
+      try {
+        const tr = await getTranscript(parseInt(sessionId));
+        walkable = tr.length > 0 ? tr : messages;
+      } catch {
+        walkable = messages;
+      }
+      const allTurns = walkable.filter(m => m.role === 'assistant');
       const totals = {
         markers_emitted: 0,
         markers_malformed: 0,

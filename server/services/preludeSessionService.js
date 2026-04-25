@@ -39,6 +39,7 @@ import * as canonService from './preludeCanonService.js';
 import { detectPlayerDialogueViolation, buildViolationCorrectionNote } from './preludeViolationDetection.js';
 import { THEME_DEPARTURE_MAP } from './preludeThemeService.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
+import { initTranscript, appendToTranscript, getTurnCount, getTranscript } from '../utils/sessionTranscript.js';
 
 // Play-session pacing thresholds. A "play-session" is one pause-to-pause
 // cycle; each resume starts a new play-session. Exchange count = messages
@@ -300,6 +301,15 @@ export async function startSession(characterId) {
   );
 
   const sessionId = Number(info.lastInsertRowid);
+
+  // Initialize the append-only transcript with the opening scene. The
+  // LLM-facing `messages` blob may be compacted later by rolling summary;
+  // this transcript stays complete (migration 046).
+  try {
+    await initTranscript(sessionId, result.messages);
+  } catch (err) {
+    console.error('[prelude] failed to initialize transcript (non-fatal):', err.message);
+  }
 
   // Process any markers the opening scene emitted (rare but possible for
   // [NPC_CANON] or [LOCATION_CANON] on home establishment).
@@ -598,13 +608,25 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
     );
   }
 
-  // Persist the updated message history. dm_sessions doesn't have an
-  // updated_at column (unlike `characters`), so we only write the messages
-  // blob. Timestamp tracking can be added later if telemetry needs it.
+  // Persist the updated LLM-facing message history. This blob may be
+  // compacted by the rolling summary on later turns — that's fine for
+  // prompt budgeting but means it's NOT a full record of what happened.
+  // The append-only transcript captures the full play history (below).
   await dbRun(
     `UPDATE dm_sessions SET messages = ? WHERE id = ?`,
     [JSON.stringify(result.messages), sessionId]
   );
+
+  // Append the new turn's user + assistant pair to the full transcript.
+  // Best-effort — never breaks the session for a logging/persistence issue.
+  try {
+    await appendToTranscript(sessionId, [
+      { role: 'user', content: action },
+      { role: 'assistant', content: result.response }
+    ]);
+  } catch (err) {
+    console.error('[prelude] transcript append failed (non-fatal):', err.message);
+  }
 
   // Fire-and-forget rolling summary. Uses the prelude-tuned summarizer
   // template (via session_type='prelude_arc' stored on the row).
@@ -750,9 +772,16 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
   const updatedCharacter = await getPreludeCharacter(session.character_id);
   const sessionNumber = await getSessionOrdinal(sessionId);
 
-  // Per-turn playtest log — surfaces context-drift signals live in the terminal
+  // Per-turn playtest log — surfaces context-drift signals live in the terminal.
+  // Turn number comes from the append-only transcript (authoritative) so it
+  // doesn't deflate when rolling summary compacts the LLM-facing messages blob.
   try {
-    const turnNumber = Math.ceil(result.messages.length / 2);
+    let turnNumber;
+    try {
+      turnNumber = await getTurnCount(sessionId);
+    } catch {
+      turnNumber = Math.ceil(result.messages.length / 2);  // fallback if transcript read fails
+    }
     const promptChars = systemPrompt?.length || 0;
     const offered = (markerResults.offeredEmergences || []).length;
     const cap = (markerResults.capViolations || []).length;
@@ -821,7 +850,17 @@ export async function endSession(sessionId, { completed = false } = {}) {
   // Playtest session-end summary — surfaces canon/emergence/marker trajectory
   // by walking the message history. Best-effort; never breaks the close.
   try {
-    const messages = safeJsonParse(session.messages, []);
+    // Use the append-only transcript when present — it's the authoritative
+    // record (the LLM-facing `messages` blob may have been compacted by the
+    // rolling summary). Fall back to messages for sessions that pre-date
+    // the transcript column.
+    let messages;
+    try {
+      const transcript = await getTranscript(sessionId);
+      messages = transcript.length > 0 ? transcript : safeJsonParse(session.messages, []);
+    } catch {
+      messages = safeJsonParse(session.messages, []);
+    }
     const allTurns = messages.filter(m => m.role === 'assistant');
     const totals = {
       markers_emitted: 0,
