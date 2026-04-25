@@ -272,6 +272,30 @@ export function detectPlayerDialogueViolation(response) {
     const terminatorMatch = afterMatch.match(/[.!?]/);
     if (terminatorMatch && terminatorMatch[0] === '?') continue;
 
+    // Sensory / established-knowledge whitelist (v1.0.92).
+    // Patterns like "merchants you know by face" or "the road you know
+    // from countless walks" are NOT novel state attribution — they're
+    // referencing knowledge the character would obviously have given
+    // their setup (merchant family, lifelong resident, etc.). The verb
+    // "know" / "remember" / "recognize" / "recall" with a sensory or
+    // long-association prepositional phrase is the player's biographical
+    // context being made visible, not the AI inventing inner state.
+    //
+    // Whitelist trigger: the matched span starts with "you (know|knew|
+    // knows|remember|...|recognize|...)" followed (within 3 intervening
+    // words) by the prepositions "by|from|as". These flag established
+    // sensory or biographical knowledge the character would obviously
+    // have given their setup — not novel state attribution by the AI.
+    //
+    // We DELIBERATELY do not whitelist "to" (e.g. "you remember to take
+    // the keys" attributes directive intent and IS still a violation).
+    const matched = m[0].toLowerCase();
+    const whitelistRe = new RegExp(
+      `^you\\s+(?:know|knew|knows|remember|remembers|remembered|recognize|recognizes|recognized|recall|recalls|recalled)\\s+(?:[a-z']+\\s+){0,3}(?:by|from|as)\\b`,
+      'i'
+    );
+    if (whitelistRe.test(matched)) continue;
+
     matches.push({
       pattern: 'state-attribution',
       snippet: m[0].slice(0, 240) + (m[0].length > 240 ? '…' : '')

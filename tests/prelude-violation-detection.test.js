@@ -294,6 +294,47 @@ console.log('\n=== v1.0.75 Pattern C — legitimate prose NOT flagged ===\n');
     'NPC dialogue with "you remember" inside quote not flagged');
 }
 
+console.log('\n=== v1.0.92 sensory / established-knowledge whitelist ===\n');
+{
+  // Patterns the player legitimately runs into that should NOT flag.
+  // Real playtest false-positive (v1.0.91):
+  const playtestText = 'Your eyes move down. There are merchants here you know by face and merchants you know only as a sound at the door, and the names run together in the candle-light: Ferin, Aldric, Busse, Tovar.';
+  assert(!detectPlayerDialogueViolation(playtestText).violated,
+    'playtest case: "merchants you know by face" not flagged');
+
+  // Whitelisted "by | from | as" + sensory/biographical context
+  const cleanCases = [
+    'merchants you know by face',
+    'the road you know from countless walks',
+    'names you remember from childhood',
+    'the song you know by heart',
+    'the smell you know from the kitchen',
+    'a face you recognize from years ago',
+    'the taste you remember from her bread',
+    'someone you know as a friend of the family'
+  ];
+  for (const text of cleanCases) {
+    const wrapped = 'She watches you. ' + text + ' is no help here.';
+    assert(!detectPlayerDialogueViolation(wrapped).violated,
+      `"${text}" not flagged (sensory whitelist)`);
+  }
+
+  // Real violations that must STILL fire — whitelist doesn't cover these
+  const stillFlagged = [
+    ['You know she is lying about the coin.',         'novel inference (no by/from/as)'],
+    ['You decide to go with him.',                    'novel decision'],
+    ['You remember the day your mother left.',        'novel memory (no by/from/as)'],
+    ['You think Halgrim is hiding something.',        'novel thought'],
+    ['You realize the letter was never meant for you.','novel realization'],
+    ['You remember to take the keys.',                'directive intent (to NOT whitelisted)']
+  ];
+  for (const [text, why] of stillFlagged) {
+    const wrapped = 'She watches you. ' + text + ' Then she speaks.';
+    assert(detectPlayerDialogueViolation(wrapped).violated,
+      `"${text}" still flagged (${why})`);
+  }
+}
+
 console.log('\n==================================================');
 console.log(`Prelude Violation Detection Tests: ${passed} passed, ${failed} failed`);
 console.log('==================================================\n');

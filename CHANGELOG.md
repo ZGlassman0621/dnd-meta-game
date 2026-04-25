@@ -2,6 +2,36 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.92] - 2026-04-24 — Playtest fixes: 5 issues from session 124
+
+Session 124 surfaced five fixable issues in one playtest. All addressed.
+
+### Rule 2c — PLAYER INPUT IS PLAYER AUTHORSHIP
+
+The most serious bug: the AI read player input as if the AI had written it, then apologized for "putting words in your mouth" — for words the PLAYER wrote. Cardinal Rule 2 (don't speak for player) had become so weighted that the AI was hallucinating violations in the player's own first-person input.
+
+New rule explicitly inverts: when the player writes their character's dialogue, internal monologue, decisions, or actions in any voice — that's the player AUTHORING their character, the OPPOSITE of a Rule 2 violation. The AI must never apologize for player-authored words. Read player input at face value; respond by narrating the world's reaction.
+
+### Whitelist for sensory "you know" patterns
+
+The violation detector flagged "merchants you know by face" as a Pattern C state-attribution violation (because `know` is in the cognition-verb list). It's not — it's biographical context the character would obviously have given their setup. Added a whitelist for `you (know|knew|...|recall) [up to 3 words] (by|from|as) ...` — covers "by face / from childhood / as a friend" patterns. Deliberately excluded `to` because "you remember to take the keys" attributes directive intent. 11 new tests in `prelude-violation-detection.test.js`.
+
+### Rule 6d — GIVE THE PLAYER WHAT THEY NEED TO ANSWER
+
+The AI asked the player to calculate "if a man already owes 2sp 4cp and wants three jugs of oil and a pound of nails on top of it..." — but never told the player what oil and nails cost. New rule: before asking the player to make a calculation/judgment/decision, give them the data needed in-scene, OR rewrite the question to one they can answer with what they know.
+
+### Rule 19b — Banned triadic-rhythm tic ("X and X and X")
+
+Extends the existing Rule 19a banned-tics list. The pattern "expected an answer and received the right one and is now thinking about something else entirely" — three parallel clauses joined by "and" for false weight — is now an explicit ban. Includes positive instructions and worked examples (write the one clause that matters, or break the rhythm with a genuine pause).
+
+### Toned down the canon-fact banner
+
+The ⚑⚑⚑ + ALL CAPS + "we cannot afford" banner in the opening prompt was an attention-sink that crowded out other constraints. Replaced with a calm one-line requirement (still requires 8-15 facts, still requires inline emission, still lists category coverage and worked examples — just stops screaming).
+
+### Files
+
+- Modified: `server/services/preludeArcPromptBuilder.js` (Rule 2c, Rule 6d, Rule 19b, calmer canon banner), `server/services/preludeViolationDetection.js` (sensory whitelist), `tests/prelude-violation-detection.test.js` (+11 whitelist tests, now 91 passed), `tests/prelude-prompt.test.js` (banner-text assertion updated for the toned-down version).
+
 ## [1.0.0.91] - 2026-04-24 — Playtest logging + Ch4-as-bridge design logged
 
 Two pieces, both for playtest visibility and design continuity.

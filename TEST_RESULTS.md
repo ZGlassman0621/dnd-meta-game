@@ -1,5 +1,30 @@
 # Test Results Log
 
+## 2026-04-24 — v1.0.92 Playtest fixes (5 issues from session 124)
+
+**Change scope:** Five prompt + detector fixes from playtest observations. Rule 2c (player input is player authorship), violation-detector whitelist for sensory "you know", Rule 6d (give player data to answer), Rule 19b (triadic-rhythm tic ban), toned-down canon banner.
+
+**Client build:** ✅ passed.
+
+**New tests:** 11 added to `tests/prelude-violation-detection.test.js` covering the whitelist (sensory cases pass clean, novel-attribution cases still flag, "remember to" still flagged as directive intent).
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed (was 76) |
+| `tests/prelude-prompt.test.js`              | ✅ 190 passed (assertion updated for toned-down canon banner) |
+| `tests/dm-prompt-builder.test.js`           | ✅ 30 passed |
+| `tests/marker-schemas.test.js`              | ✅ 29 passed |
+| `tests/llm-json.test.js`                    | ✅ 26 passed |
+| `tests/prelude-markers.test.js`             | ✅ 130 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/playtest-logger.test.js`             | ✅ 23 passed |
+| `tests/character-memory.test.js`            | ✅ 56 passed |
+| `tests/moral-diversity.test.js`             | ✅ 59 passed |
+
+**Net assessment:** Prompt + detector tweaks only. Whitelist is conservative (only `by | from | as`, never `to`). Rule 2c is additive — strengthens the existing Rule 2 / 2a / 2b cluster. Rule 19b extends Rule 19a banned-tics list. No behavioral regressions.
+
 ## 2026-04-24 — v1.0.91 Playtest logging + Round 3 design
 
 **Change scope:** New `server/utils/playtestLogger.js` for per-turn and session-end context-drift instrumentation. Wired into both DM session route and prelude session service. PRELUDE_IMPLEMENTATION_PLAN.md Round 3 (Ch4-as-bridge) and FUTURE_FEATURES.md Phase 5 handoff entries logged — design only, no code changes there.

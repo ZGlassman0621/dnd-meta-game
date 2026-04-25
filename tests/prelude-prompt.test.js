@@ -817,8 +817,8 @@ console.log('\n=== v1.0.86 opening prompt — canon emission directive ===\n');
     'opening prompt mentions present tense requirement'
   );
   assert(
-    opening.includes('MUST EMIT 8-15 [CANON_FACT]'),
-    'opening prompt has the must-emit-8-15 banner'
+    opening.includes('CANON FACTS') && opening.includes('8-15'),
+    'opening prompt requires 8-15 canon facts (banner toned down v1.0.92)'
   );
   assert(
     opening.includes('8-15'),
