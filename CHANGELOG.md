@@ -2,6 +2,31 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.93] - 2026-04-24 — Playtest log human-readable framing
+
+The `s=124` prefix in playtest log lines was the database row id (auto-incremented across all sessions ever), which read as "session 124" but was actually session 1 of a brand-new character. Logs now lead with character name + prelude session ordinal, with the DB id moved to the tail as `(sid=NNN)` for log cross-referencing.
+
+Before:
+```
+[playtest] s=124 t=3 type=prelude_arc prompt=82.1k canon+1 (rule2!)
+```
+
+After:
+```
+[playtest] Alexiel · prelude 1/5 · ch1 · t3 prompt=82.1k canon+1 (rule2!) (sid=124)
+```
+
+Session-end banner gets the same treatment:
+```
+═══ [playtest] · SESSION SUMMARY · Alexiel · prelude 1/5 · 14 turns · (sid=124) ═══
+```
+
+DM Mode sessions render as `Kaelen · dm · t12 ...` (no session ordinal — those are continuous campaigns).
+
+### Files
+
+- Modified: `server/utils/playtestLogger.js` (new optional `characterName` / `sessionOrdinal` / `sessionTotal` / `chapter` fields; head/tail formatting), `server/services/preludeSessionService.js` (passes character + ordinal in both per-turn + session-end logs), `server/routes/dmSession.js` (best-effort character name lookup at per-turn log site, character passed at session-end), `tests/playtest-logger.test.js` (+2 new tests, format assertions updated).
+
 ## [1.0.0.92] - 2026-04-24 — Playtest fixes: 5 issues from session 124
 
 Session 124 surfaced five fixable issues in one playtest. All addressed.

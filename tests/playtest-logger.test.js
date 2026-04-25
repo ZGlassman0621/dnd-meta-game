@@ -34,7 +34,17 @@ console.log('\n=== logTurn — per-turn line ===\n');
 test('Minimum required fields produce a line', () => {
   const out = capture(() => logTurn({ sessionId: 1, turnNumber: 1, sessionType: 'dm' }));
   assert.match(out, /\[playtest\]/);
-  assert.match(out, /s=1 t=1 type=dm/);
+  assert.match(out, /dm · t1/);            // human-readable head
+  assert.match(out, /\(sid=1\)/);          // db id at tail
+});
+
+test('Character name + prelude ordinal lead the line when present', () => {
+  const out = capture(() => logTurn({
+    sessionId: 124, turnNumber: 3, sessionType: 'prelude_arc',
+    characterName: 'Alexiel', sessionOrdinal: 1, sessionTotal: 5, chapter: 1
+  }));
+  assert.match(out, /Alexiel · prelude 1\/5 · ch1 · t3/);
+  assert.match(out, /\(sid=124\)/);
 });
 
 test('Prompt size renders in KB with one decimal', () => {
@@ -84,11 +94,19 @@ test('Custom tag appears in parens at end', () => {
 
 console.log('\n=== logSessionEnd — multi-line summary ===\n');
 
-test('Banner includes session id and turn count', () => {
+test('Banner includes session type and turn count when name absent', () => {
   const out = capture(() => logSessionEnd({
     sessionId: 99, sessionType: 'prelude_arc', totalTurns: 28
   }));
-  assert.match(out, /SESSION SUMMARY · session 99 · prelude_arc · 28 turns/);
+  assert.match(out, /SESSION SUMMARY · prelude_arc · 28 turns · \(sid=99\)/);
+});
+
+test('Banner leads with character + session ordinal when present', () => {
+  const out = capture(() => logSessionEnd({
+    sessionId: 124, sessionType: 'prelude_arc', characterName: 'Alexiel',
+    sessionOrdinal: 1, sessionTotal: 5, totalTurns: 28
+  }));
+  assert.match(out, /SESSION SUMMARY · Alexiel · prelude 1\/5 · 28 turns · \(sid=124\)/);
 });
 
 test('Duration computed when start timestamp provided', () => {

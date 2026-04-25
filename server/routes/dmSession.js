@@ -1278,10 +1278,19 @@ router.post('/:sessionId/message', async (req, res) => {
     try {
       const turnNumber = Math.ceil(result.messages.length / 2);
       const promptChars = augmentedMessages[0]?.content?.length || 0;
+      // Best-effort character-name lookup for human-readable framing.
+      let characterName = null;
+      if (session.character_id) {
+        try {
+          const ch = await dbGet('SELECT name, nickname FROM characters WHERE id = ?', [session.character_id]);
+          characterName = ch?.nickname || ch?.name || null;
+        } catch {/* swallow */}
+      }
       playtestLogTurn({
         sessionId: parseInt(sessionId),
         turnNumber,
         sessionType: 'dm',
+        characterName,
         promptChars,
         markersValid: validationSummary?.markersValid,
         markersMalformed: validationSummary?.markersMalformed,
@@ -2983,6 +2992,7 @@ router.post('/:sessionId/end', async (req, res) => {
       playtestLogSessionEnd({
         sessionId: parseInt(sessionId),
         sessionType: 'dm',
+        characterName: character?.nickname || character?.name || null,
         totalTurns: allTurns.length,
         startTimestamp: session.start_time,
         totals,

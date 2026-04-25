@@ -35,9 +35,13 @@ const TAG = '[playtest]';
  * fields you have — missing ones are simply omitted from the line.
  *
  * @param {object} d
- * @param {number} d.sessionId
+ * @param {number} d.sessionId                DB row id (for cross-referencing with server logs)
  * @param {number} d.turnNumber               1-indexed turn count
  * @param {string} d.sessionType              'dm' | 'prelude_arc' | 'dm_mode'
+ * @param {string} [d.characterName]          PC name for human-readable framing
+ * @param {number} [d.sessionOrdinal]         prelude — which play-session of N this is (1..N)
+ * @param {number} [d.sessionTotal]           prelude — N (5 for the standard prelude)
+ * @param {number} [d.chapter]                prelude — current chapter (1-4)
  * @param {number} [d.promptChars]            system prompt size in chars
  * @param {number} [d.outputTokens]           tokens generated this turn
  * @param {number} [d.markersValid]           markers that parsed cleanly
@@ -54,7 +58,22 @@ const TAG = '[playtest]';
  * @param {string}  [d.tag]                   short freeform note (e.g. "Ch3->Ch4")
  */
 export function logTurn(d) {
-  const parts = [`${TAG} s=${d.sessionId} t=${d.turnNumber} type=${d.sessionType}`];
+  // Lead with human-readable framing when we have it. The DB session id
+  // (s=NNN) is auto-incremented across ALL sessions ever — useful for
+  // grepping server logs, but misleading as a "which session is this" tell.
+  // Preferred: "Alexiel · prelude 1/5 · ch1 t3" with (sid=124) at the tail
+  // for cross-reference.
+  const head = [];
+  if (d.characterName) head.push(d.characterName);
+  if (d.sessionType === 'prelude_arc' && d.sessionOrdinal && d.sessionTotal) {
+    head.push(`prelude ${d.sessionOrdinal}/${d.sessionTotal}`);
+  } else if (d.sessionType) {
+    head.push(d.sessionType);
+  }
+  if (Number.isFinite(d.chapter)) head.push(`ch${d.chapter}`);
+  head.push(`t${d.turnNumber}`);
+
+  const parts = [`${TAG} ${head.join(' · ')}`];
 
   if (Number.isFinite(d.promptChars)) {
     const kb = (d.promptChars / 1000).toFixed(1);
@@ -81,6 +100,7 @@ export function logTurn(d) {
   if (d.chapterAdvanced) parts.push(`CHAPTER+`);
 
   if (d.tag) parts.push(`(${d.tag})`);
+  if (Number.isFinite(d.sessionId)) parts.push(`(sid=${d.sessionId})`);
 
   console.log(parts.join(' '));
 }
@@ -93,9 +113,12 @@ export function logTurn(d) {
  * Format and emit a session-end summary block.
  *
  * @param {object} d
- * @param {number} d.sessionId
- * @param {string} d.sessionType
+ * @param {number} d.sessionId                DB row id (cross-reference)
+ * @param {string} d.sessionType              'dm' | 'prelude_arc' | 'dm_mode'
  * @param {number} d.totalTurns
+ * @param {string} [d.characterName]          human-readable framing
+ * @param {number} [d.sessionOrdinal]         prelude — which play-session of N
+ * @param {number} [d.sessionTotal]           prelude — N (5 standard)
  * @param {number} [d.startTimestamp]         epoch ms or ISO string
  * @param {number} [d.endTimestamp]           epoch ms or ISO string (default: now)
  * @param {object} [d.totals]                 aggregate counters
@@ -113,7 +136,18 @@ export function logTurn(d) {
  */
 export function logSessionEnd(d) {
   const lines = [];
-  const banner = `═══ ${TAG} SESSION SUMMARY · session ${d.sessionId} · ${d.sessionType} · ${d.totalTurns} turns ═══`;
+  // Banner leads with character + session ordinal when available, falls back
+  // to type only. DB session id goes in the tail for cross-referencing.
+  const head = [TAG, 'SESSION SUMMARY'];
+  if (d.characterName) head.push(d.characterName);
+  if (d.sessionType === 'prelude_arc' && d.sessionOrdinal && d.sessionTotal) {
+    head.push(`prelude ${d.sessionOrdinal}/${d.sessionTotal}`);
+  } else {
+    head.push(d.sessionType);
+  }
+  head.push(`${d.totalTurns} turns`);
+  if (Number.isFinite(d.sessionId)) head.push(`(sid=${d.sessionId})`);
+  const banner = `═══ ${head.join(' · ')} ═══`;
   lines.push('');
   lines.push(banner);
 

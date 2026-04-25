@@ -764,10 +764,15 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
     if (markerResults.cliffhanger) tagParts.push('CLIFFHANGER');
     if (markerResults.themeCommitmentOffer) tagParts.push('THEME-OFFER');
     if (markerResults.rule2Violation) tagParts.push('rule2!');
+    const characterName = updatedCharacter?.nickname || updatedCharacter?.name || character?.name || null;
     playtestLogTurn({
       sessionId: parseInt(sessionId),
       turnNumber,
       sessionType: 'prelude_arc',
+      characterName,
+      sessionOrdinal: sessionNumber,
+      sessionTotal: 5,
+      chapter: updatedCharacter?.prelude_chapter,
       promptChars,
       canonAdded,
       canonRetired,
@@ -858,9 +863,18 @@ export async function endSession(sessionId, { completed = false } = {}) {
     const cfg = safeJsonParse(session.session_config, {});
     if (cfg.lastSessionRecap) notes.push(`Recap was generated (${cfg.lastSessionRecap.length} chars)`);
 
+    // Compute session ordinal for human-readable framing
+    let sessionOrdinal;
+    try {
+      sessionOrdinal = await getSessionOrdinal(sessionId);
+    } catch {/* best-effort */}
+
     playtestLogSessionEnd({
       sessionId: parseInt(sessionId),
       sessionType: 'prelude_arc',
+      characterName: character?.nickname || character?.name || null,
+      sessionOrdinal,
+      sessionTotal: 5,
       totalTurns: allTurns.length,
       startTimestamp: session.start_time,
       totals,
