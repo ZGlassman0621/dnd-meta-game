@@ -2138,6 +2138,16 @@ router.post('/:sessionId/message', async (req, res) => {
       notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined
     });
   } catch (error) {
+    // Anthropic 529 — surface as 503 with a clear retryable message.
+    // Player input is preserved client-side; manual retry works once the
+    // API recovers.
+    if (error?.message?.startsWith('OVERLOADED:')) {
+      return res.status(503).json({
+        error: 'AI temporarily overloaded',
+        message: 'Anthropic\'s API is temporarily at capacity. Your input has been preserved — please send again in a moment.',
+        retryable: true
+      });
+    }
     handleServerError(res, error, 'process DM session message');
   }
 });

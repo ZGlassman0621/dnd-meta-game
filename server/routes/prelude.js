@@ -227,6 +227,18 @@ router.post('/sessions/:sessionId/message', async (req, res) => {
     const msg = err?.message || '';
     if (msg.includes('not found')) return notFound(res, 'Prelude session');
     if (msg.includes('already completed')) return validationError(res, msg);
+    // Anthropic 529 — surface as 503 with a clear retryable message so the
+    // UI can show "AI temporarily overloaded — retry in a moment" instead
+    // of leaking the raw provider error. Player's input is preserved on
+    // the client (rolled back from the optimistic add); a manual retry
+    // works once the API recovers.
+    if (msg.startsWith('OVERLOADED:')) {
+      return res.status(503).json({
+        error: 'AI temporarily overloaded',
+        message: 'Anthropic\'s API is temporarily at capacity. Your input has been preserved — please send again in a moment.',
+        retryable: true
+      });
+    }
     handleServerError(res, err, 'send prelude message');
   }
 });

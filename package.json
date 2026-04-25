@@ -1,6 +1,6 @@
 {
   "name": "dnd-meta-game",
-  "version": "1.0.93",
+  "version": "1.0.94",
   "description": "D&D Meta Game - AI-powered solo D&D campaign management system",
   "type": "module",
   "scripts": {

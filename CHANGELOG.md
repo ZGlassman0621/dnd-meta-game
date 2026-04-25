@@ -2,6 +2,33 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.94] - 2026-04-24 — Anthropic 529 resilience + cleaner error surface
+
+Playtest hit Anthropic's `529 Overloaded` mid-session. The previous retry policy gave up after 3 attempts (8s total wait) and surfaced "Claude API error: Overloaded" to the player. Improved both layers.
+
+### `claude.js` retry policy
+
+529 specifically gets its own, more patient budget — Anthropic's docs say back off longer for overloads (they expect the API to be at capacity for tens of seconds, not transient seconds).
+
+- **Before:** 3 attempts, 2s + 4s backoff (8s total).
+- **After:** 5 attempts, 4s + 8s + 16s + 32s backoff (60s total max wait).
+- Other retryable errors (503, 500, network) keep the existing 3-attempt / 2s+4s policy — only overloaded gets the longer fuse.
+- When we do give up on 529, the thrown error is tagged `OVERLOADED:` so the route layer can map it to a clean user-facing string.
+
+### Cleaner error surface
+
+Both `server/routes/prelude.js` and `server/routes/dmSession.js` now intercept `OVERLOADED:`-tagged errors and respond with HTTP 503 + JSON `{ error, message, retryable: true }`. The user-facing `message` reads:
+
+> *"Anthropic's API is temporarily at capacity. Your input has been preserved — please send again in a moment."*
+
+Client-side, `PreludeSession.jsx` now prefers the friendlier `body.message` over `body.error` when surfacing the error to the player. They get an actionable message instead of a raw provider error.
+
+The player's input was already preserved in the textarea on error (rolled back from optimistic-add); this change makes the failure recoverable without confusion.
+
+### Files
+
+- Modified: `server/services/claude.js` (separate 529 retry budget + OVERLOADED tag), `server/routes/prelude.js` (503 mapping + clean message), `server/routes/dmSession.js` (same 503 mapping at the per-turn handler), `client/src/components/PreludeSession.jsx` (prefers `body.message` on error).
+
 ## [1.0.0.93] - 2026-04-24 — Playtest log human-readable framing
 
 The `s=124` prefix in playtest log lines was the database row id (auto-incremented across all sessions ever), which read as "session 124" but was actually session 1 of a brand-new character. Logs now lead with character name + prelude session ordinal, with the DB id moved to the tail as `(sid=NNN)` for log cross-referencing.

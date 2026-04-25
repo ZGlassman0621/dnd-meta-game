@@ -167,7 +167,9 @@ export default function PreludeSession({ character, onBack }) {
       })
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
-        throw new Error(body.error || `Server error (${resp.status})`)
+        // Prefer the user-friendly `message` field (set on retryable
+        // errors like 503 OVERLOADED) over the short `error` slug.
+        throw new Error(body.message || body.error || `Server error (${resp.status})`)
       }
       const data = await resp.json()
       // Chapter-promise marker fires at the opening of chapters 3/4 — surface

@@ -239,11 +239,26 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       });
 
       if (!response.ok) {
-        // Retry on overloaded (529) or server error (503, 500)
-        const isRetryableStatus = response.status === 529 || response.status === 503 || response.status === 500;
-        if (isRetryableStatus && attempt < maxRetries) {
-          const delay = Math.pow(2, attempt - 1) * 2000; // 2s, 4s, 8s for overloaded
-          console.log(`Claude API overloaded/error (${response.status}, attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+        // 529 (Overloaded) gets its own, more patient retry budget — Anthropic's
+        // docs explicitly recommend longer backoff for this status because it
+        // signals server-side load that may take tens of seconds to clear.
+        // Other retryable errors (503/500) use the caller's maxRetries.
+        const isOverloaded = response.status === 529;
+        const isOtherRetryable = response.status === 503 || response.status === 500;
+        const isRetryableStatus = isOverloaded || isOtherRetryable;
+
+        // Effective max attempts: bump the budget for 529 specifically so we
+        // ride out short Anthropic overloads. 5 attempts × backoff 4s/8s/16s/32s
+        // = up to ~60s total wait. Players are happier waiting than retyping
+        // and clicking Send again. Other errors keep the caller's policy.
+        const effectiveMax = isOverloaded ? Math.max(maxRetries, 5) : maxRetries;
+
+        if (isRetryableStatus && attempt < effectiveMax) {
+          // Overloaded uses 4s/8s/16s/32s; other retryables keep 2s/4s/8s.
+          const baseMs = isOverloaded ? 4000 : 2000;
+          const delay = Math.pow(2, attempt - 1) * baseMs;
+          const tag = isOverloaded ? 'overloaded' : 'error';
+          console.log(`Claude API ${tag} (${response.status}, attempt ${attempt}/${effectiveMax}), retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -253,7 +268,11 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         } catch {
           errorBody = { error: { message: `HTTP ${response.status}` } };
         }
-        throw new Error(`Claude API error: ${errorBody.error?.message || `HTTP ${response.status}`}`);
+        // Tag the error message with OVERLOADED so the route layer can map it
+        // to a clean user-facing string ("AI temporarily overloaded — please
+        // retry in a moment") instead of leaking the raw Anthropic error.
+        const tag = isOverloaded ? 'OVERLOADED: ' : '';
+        throw new Error(`${tag}Claude API error: ${errorBody.error?.message || `HTTP ${response.status}`}`);
       }
 
       const data = await response.json();
