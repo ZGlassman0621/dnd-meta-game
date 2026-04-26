@@ -2,6 +2,41 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.97] - 2026-04-26 — Documentation hygiene: BRIEF, DECISION_LOG, TODO, triage convention
+
+No code changes. Three new docs that change how this project is navigated and how strategic-role collaborators (Claude PM, future-me, designers) get oriented.
+
+### New top-level docs
+
+- **`PROJECT_BRIEF.md`** — strategic orientation for anyone joining the project in a non-coding role. ~2200 words. What this is (Player Mode + DM Mode + Prelude), why it exists (the user's "end-of-world game" framing), who it's for (one user, possibly friends, never marketed), what "done" looks like (3 north-star ambitions: years of context, official campaigns, lineages), the 5 decision principles, what we're NOT building, the high-level system inventory, the 3 strategic threads, and how a PM works on this project. Read once.
+
+- **`PROJECT_TODO.md`** — the single-entry-point for active work. Active Right Now (1-3 items max), Blocked / waiting, Parked / on deck, Backlog (pointer to FUTURE_FEATURES), Recently Shipped, Living Docs Map. Read every session.
+
+- **`DECISION_LOG.md`** — both retrospective and forward-looking record of the meaningful calls that shape this project. Open Decisions Pending at top (6 entries: Opus default, Lean retire, H7/H8 production fixes, project rename, Session Hi-Fi path). Decisions Log section with 18 retrospective entries spanning v1.0.96 (cache architecture, character info split, Sonnet/Opus toggle) back through project foundations (stack choices, marker system, three-tier cache, prelude-forward creator, Themes-replace-backgrounds, DM Mode, persistent merchants, living world, no-test-framework, JWT auth). Records the *why* — CHANGELOG records *what shipped*.
+
+### Triage folder convention clarified
+
+- **`triage/`** is for active diagnoses of broken systems. Not for design work or deferred builds.
+- Currently holds `prose-quality-triage.md`.
+- An earlier `session-hifi-triage.md` was moved out — Session Hi-Fi is design work, not a diagnosis. It now lives as a full entry in `FUTURE_FEATURES.md`.
+
+### FUTURE_FEATURES.md additions
+
+- **Session Hi-Fi implementation** — full design + scope analysis as a deferred feature entry. Covers the three-column cockpit redesign of `DMSession.jsx`, the design ↔ production mapping table, the 5 open questions that need user decisions before building, and the recommended Path A (phased, 3 commits) starting point. Source preserved in `Claude UX Design/D&D Meta Game (Remix)/Session-Design-Bundle/`.
+
+### Claude UX Design folder additions
+
+Two design-handoff artifacts now travel with the project (referenced from PROJECT_BRIEF, FUTURE_FEATURES, DECISION_LOG):
+
+- **`Claude UX Design/D&D Meta Game (Remix)/Themes-Replace-Backgrounds.md`** — design doc explaining the Themes system (4-tier progression replacing 5e backgrounds), the Expertise Die signature mechanic, the Knight Theme moral-paths variant, subclass × theme synergies, mythic × theme amplifications, party-level Team Tactics, and how Themes intersect with class/subclass/ancestry as braided progression rails. Includes 5 UX guidance principles for whoever's iterating on visuals.
+
+- **`Claude UX Design/D&D Meta Game (Remix)/Session-Design-Bundle/`** — preserved design source for the Session Hi-Fi work. Contains the full 1482-line `Session Hi-Fi.html` prototype, the design assistant's coding-agent handoff README, and the 1831-line chat transcript that captures the design intent.
+
+### Files
+
+- New: `PROJECT_BRIEF.md`, `PROJECT_TODO.md`, `DECISION_LOG.md`, `triage/prose-quality-triage.md`, `Claude UX Design/D&D Meta Game (Remix)/Themes-Replace-Backgrounds.md`, `Claude UX Design/D&D Meta Game (Remix)/Session-Design-Bundle/{README.md,Session Hi-Fi.html,chat-transcript.md}`.
+- Modified: `FUTURE_FEATURES.md` (Session Hi-Fi entry added).
+
 ## [1.0.0.96] - 2026-04-26 — Prose-quality diagnostic + prompt cache architecture fix
 
 User feedback: current sessions read thinner than the original "Order of Dawn's Light" Opus 4.5 baseline (December 2025 PDF in repo root). This release ships the diagnostic toolkit, the findings from running it, and the cache-architecture fix that came out of investigating Opus per-session cost. Net result: Opus is now the validated production direction at roughly half the previous cost.

@@ -1,0 +1,1482 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>DM Session — Hi-Fi</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Dark modern — matches Character Sheet hi-fis */
+      --bg:        #1b1f2a;
+      --bg-2:      #242938;
+      --surface:   #2b3143;
+      --surface-2: #343b51;
+      --surface-3: #3d4660;
+      --ink:       #e8edf7;
+      --ink-2:     #c9d1e0;
+      --ink-dim:   #8a95ad;
+      --ink-faint: #5a6378;
+
+      /* Accents */
+      --terracotta:   #ff8a5b;
+      --terracotta-2: #ffa27a;
+      --forest:       #7dd4a2;
+      --forest-2:     #9be8bc;
+      --ink-purple:   #b19cff;
+      --ink-purple-2: #c9b8ff;
+      --faction-blue: #6ca9ff;
+      --danger:       #ff7a7a;
+      --gold:         #f5c97a;
+
+      /* Chrome */
+      --line:       #4a5269;
+      --line-soft:  #3c4359;
+      --line-faint: #2e344a;
+
+      /* Type */
+      --display: "Fraunces", "Cormorant Garamond", Georgia, serif;
+      --body:    "Inter", system-ui, -apple-system, sans-serif;
+      --num:     "Inter", system-ui, -apple-system, sans-serif;
+      --mono:    "JetBrains Mono", ui-monospace, monospace;
+      --hand:    "Caveat", "Bradley Hand", cursive;
+
+      /* Shadow */
+      --sh-soft:  0 1px 2px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.18);
+      --sh-card:  0 1px 2px rgba(0,0,0,0.3), 0 8px 22px rgba(0,0,0,0.25);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--body);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "ss01", "ss02", "cv11";
+      min-height: 100vh;
+    }
+    body {
+      background-image:
+        radial-gradient(circle at 15% 0%, rgba(255,138,91,0.05), transparent 50%),
+        radial-gradient(circle at 85% 100%, rgba(177,156,255,0.04), transparent 50%);
+    }
+
+    /* ── Top bar ─────────────────────────────────────── */
+    .topbar {
+      position: sticky; top: 0; z-index: 30;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line-soft);
+      padding: 12px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .brand {
+      font-family: var(--display);
+      font-weight: 600;
+      font-variation-settings: "opsz" 144, "SOFT" 100;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+    .brand .amp { color: var(--terracotta); font-style: italic; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      padding: 3px 9px;
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .session-loc {
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 500;
+      font-size: 16px;
+      color: var(--ink-2);
+      letter-spacing: -0.005em;
+    }
+    .session-loc .sep { color: var(--ink-faint); margin: 0 8px; font-style: normal; }
+    .session-loc .place { color: var(--ink); }
+    .spacer { flex: 1; }
+    .topbar-link {
+      font-family: var(--body);
+      font-size: 13px;
+      color: var(--ink-dim);
+      text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .topbar-link:hover { color: var(--terracotta); }
+
+    /* ── Cockpit shell ───────────────────────────────── */
+    .cockpit {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px 16px 24px;
+      display: grid;
+      grid-template-columns: 248px 1fr 296px;
+      gap: 16px;
+      min-height: calc(100vh - 60px);
+    }
+
+    /* Common rail card */
+    .rail {
+      display: flex; flex-direction: column;
+      gap: 12px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: 14px 14px 12px;
+      box-shadow: var(--sh-soft);
+    }
+    .panel-head {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .panel-head .ph-title {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .panel-head .ph-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-faint);
+      margin-left: auto;
+    }
+    .panel-head .icon {
+      width: 13px; height: 13px;
+      color: var(--ink-faint);
+    }
+
+    /* ── LEFT RAIL · Party ───────────────────────────── */
+    .party-list { display: flex; flex-direction: column; gap: 8px; }
+    .party-mem {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: background 0.12s;
+    }
+    .party-mem:hover { background: color-mix(in oklab, var(--surface-2) 70%, transparent); }
+    .party-mem.you {
+      background: color-mix(in oklab, var(--terracotta) 8%, var(--surface-2));
+      border-color: color-mix(in oklab, var(--terracotta) 35%, var(--line-soft));
+    }
+    .party-mem.away { opacity: 0.55; }
+    .pm-portrait {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--surface-3);
+      border: 1px solid var(--line-soft);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--ink-2);
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .pm-portrait.kaelen { background: linear-gradient(135deg, #6b3a8a, #2b1a4a); color: #f5c97a; }
+    .pm-portrait.mira   { background: linear-gradient(135deg, #2a5a4a, #1a3a3a); color: #9be8bc; }
+    .pm-portrait.dorne  { background: linear-gradient(135deg, #4a3a2a, #2a1a1a); color: #c9a87a; }
+    .pm-portrait .turn-dot {
+      position: absolute; top: -2px; right: -2px;
+      width: 8px; height: 8px;
+      background: var(--terracotta);
+      border: 2px solid var(--surface);
+      border-radius: 50%;
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--terracotta) 60%, transparent); }
+      50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--terracotta) 0%, transparent); }
+    }
+    .pm-body { min-width: 0; }
+    .pm-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .pm-name .role {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--ink-faint);
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    .pm-meta {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--ink-dim);
+      margin-top: 2px;
+      letter-spacing: 0.02em;
+    }
+    .pm-hp-bar {
+      margin-top: 5px;
+      height: 4px;
+      background: var(--line-faint);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .pm-hp-bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--forest-2), var(--forest));
+      border-radius: 999px;
+    }
+    .pm-hp-bar.warn .fill { background: linear-gradient(90deg, var(--gold), #d99933); }
+    .pm-hp-bar.crit .fill { background: linear-gradient(90deg, var(--danger), #c4453a); }
+    .pm-tags {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      margin-top: 5px;
+    }
+    .pm-tag {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--surface-3);
+      color: var(--ink-2);
+      border: 1px solid var(--line-faint);
+      text-transform: lowercase;
+    }
+    .pm-tag.warn { color: var(--gold); border-color: color-mix(in oklab, var(--gold) 40%, var(--line-faint)); background: color-mix(in oklab, var(--gold) 8%, var(--surface-3)); }
+    .pm-tag.purple { color: var(--ink-purple); border-color: color-mix(in oklab, var(--ink-purple) 40%, var(--line-faint)); background: color-mix(in oklab, var(--ink-purple) 8%, var(--surface-3)); }
+    .pm-tag.away { color: var(--ink-faint); }
+
+    /* Quests */
+    .quest-list { display: flex; flex-direction: column; gap: 6px; }
+    .quest {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .quest:hover { background: var(--surface-2); }
+    .quest .badge {
+      font-family: var(--mono);
+      font-size: 8.5px;
+      letter-spacing: 0.1em;
+      padding: 1px 5px;
+      border-radius: 3px;
+      align-self: center;
+      font-weight: 600;
+    }
+    .quest .badge.main { background: color-mix(in oklab, var(--terracotta) 18%, var(--surface-2)); color: var(--terracotta); border: 1px solid color-mix(in oklab, var(--terracotta) 30%, transparent); }
+    .quest .badge.side { background: var(--surface-2); color: var(--ink-dim); border: 1px solid var(--line-soft); }
+    .quest .badge.faction { background: color-mix(in oklab, var(--faction-blue) 18%, var(--surface-2)); color: var(--faction-blue); border: 1px solid color-mix(in oklab, var(--faction-blue) 30%, transparent); }
+    .quest .qt {
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+
+    /* Effects + conditions */
+    .effect-list { display: flex; flex-direction: column; gap: 4px; }
+    .effect {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-faint);
+    }
+    .effect .icon { width: 12px; height: 12px; color: var(--ink-dim); flex-shrink: 0; }
+    .effect.buff   { border-left: 3px solid var(--forest); padding-left: 8px; }
+    .effect.debuff { border-left: 3px solid var(--danger); padding-left: 8px; }
+    .effect.conc   { border-left: 3px solid var(--ink-purple); padding-left: 8px; }
+    .effect .nm {
+      flex: 1;
+      color: var(--ink-2);
+      font-size: 12.5px;
+    }
+    .effect .nm em {
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .effect .ttl {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-dim);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── CENTER · narrative ──────────────────────────── */
+    .stage {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 14px;
+      box-shadow: var(--sh-card);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      min-height: 720px;
+    }
+    .stage-strip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line-soft);
+      background: color-mix(in oklab, var(--bg-2) 60%, var(--surface));
+      flex-wrap: wrap;
+    }
+    .strip-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      background: var(--surface);
+    }
+    .strip-pill .icon { width: 11px; height: 11px; }
+    .strip-pill.combat {
+      color: var(--terracotta);
+      border-color: var(--terracotta);
+      background: color-mix(in oklab, var(--terracotta) 10%, var(--surface));
+    }
+    .strip-pill.combat .pulse {
+      width: 6px; height: 6px;
+      background: var(--terracotta);
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .strip-pill.scene {
+      color: var(--ink-2);
+    }
+    .strip-pill.weather { font-family: var(--display); font-style: italic; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 12.5px; padding: 3px 10px; }
+    .strip-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+    /* Transcript */
+    .transcript {
+      flex: 1;
+      padding: 22px 32px;
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+      gap: 18px;
+      background:
+        radial-gradient(circle at 50% 0%, color-mix(in oklab, var(--terracotta) 4%, transparent), transparent 40%),
+        var(--surface);
+      max-height: calc(100vh - 280px);
+    }
+    .transcript::-webkit-scrollbar { width: 8px; }
+    .transcript::-webkit-scrollbar-track { background: transparent; }
+    .transcript::-webkit-scrollbar-thumb { background: var(--line-soft); border-radius: 999px; }
+
+    /* Scene break — narrative anchor */
+    .scene-break {
+      display: flex; align-items: center; gap: 14px;
+      color: var(--ink-faint);
+      margin: 6px 0 -2px;
+    }
+    .scene-break::before, .scene-break::after {
+      content: ""; flex: 1; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--line-soft), transparent);
+    }
+    .scene-break svg { width: 14px; height: 14px; opacity: 0.6; }
+    .scene-break .lbl {
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--ink-dim);
+      letter-spacing: 0.01em;
+    }
+
+    /* DM narration — the hero text */
+    .dm-block {
+      max-width: 680px;
+      align-self: flex-start;
+    }
+    .dm-block .who {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--terracotta);
+      margin-bottom: 6px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .dm-block .who::before {
+      content: "";
+      width: 14px; height: 1.5px;
+      background: var(--terracotta);
+    }
+    .dm-block .prose {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 18;
+      font-weight: 400;
+      font-size: 17.5px;
+      line-height: 1.55;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      text-wrap: pretty;
+    }
+    .dm-block .prose em {
+      font-style: italic;
+      color: var(--ink-2);
+    }
+    .dm-block .prose .dialog {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    /* Player action — second voice */
+    .you-block {
+      max-width: 600px;
+      align-self: flex-end;
+      padding: 12px 16px 12px 18px;
+      background: color-mix(in oklab, var(--ink-purple) 8%, var(--surface-2));
+      border: 1px solid color-mix(in oklab, var(--ink-purple) 25%, var(--line-soft));
+      border-radius: 14px 14px 4px 14px;
+      position: relative;
+    }
+    .you-block::before {
+      content: "";
+      position: absolute;
+      left: 12px; top: -1px; bottom: -1px; width: 3px;
+      background: var(--ink-purple);
+      border-radius: 999px;
+    }
+    .you-block .who {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-purple);
+      margin-bottom: 4px;
+      padding-left: 8px;
+    }
+    .you-block .body {
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: var(--ink);
+      padding-left: 8px;
+    }
+    .you-block .body em { font-family: var(--display); font-style: italic; color: var(--ink-2); }
+
+    /* System events — minimal, mechanical */
+    .sys-event {
+      display: inline-flex; align-items: center; gap: 8px;
+      align-self: center;
+      padding: 6px 12px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-faint);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--ink-2);
+      letter-spacing: 0.02em;
+      max-width: 580px;
+      flex-wrap: wrap;
+    }
+    .sys-event .icon { width: 12px; height: 12px; color: var(--ink-faint); flex-shrink: 0; }
+    .sys-event.combat { border-color: color-mix(in oklab, var(--terracotta) 50%, var(--line-faint)); color: var(--terracotta); background: color-mix(in oklab, var(--terracotta) 8%, var(--bg-2)); font-weight: 600; }
+    .sys-event.roll { color: var(--ink); }
+    .sys-event.roll .num { font-weight: 700; color: var(--gold); padding: 0 2px; }
+    .sys-event.roll .crit { color: var(--terracotta); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    .sys-event.roll .tot { font-weight: 600; color: var(--forest); }
+
+    /* Roll receipt — the detailed click-to-expand version */
+    .roll-receipt {
+      align-self: center;
+      max-width: 520px;
+      width: 100%;
+      background: var(--bg-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--ink-2);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px 14px;
+      align-items: center;
+    }
+    .roll-receipt .label {
+      font-size: 9.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .roll-receipt .what {
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .roll-receipt .what .die {
+      display: inline-block;
+      padding: 0 4px;
+      margin: 0 1px;
+      background: var(--surface-2);
+      border-radius: 3px;
+      color: var(--ink);
+    }
+    .roll-receipt .what .die.crit {
+      background: color-mix(in oklab, var(--terracotta) 30%, var(--surface-2));
+      color: var(--terracotta);
+      font-weight: 700;
+    }
+    .roll-receipt .total {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gold);
+      padding-left: 12px;
+      border-left: 1px solid var(--line-soft);
+    }
+    .roll-receipt .total.hit { color: var(--forest); }
+    .roll-receipt .total.miss { color: var(--ink-dim); }
+
+    /* Composer */
+    .composer-wrap {
+      border-top: 1px solid var(--line-soft);
+      padding: 14px 18px;
+      background: color-mix(in oklab, var(--bg-2) 50%, var(--surface));
+    }
+    .composer-mode {
+      display: inline-flex;
+      gap: 2px;
+      padding: 2px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .mode-tab {
+      padding: 4px 12px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .mode-tab.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .mode-tab .h { color: var(--ink-faint); margin-left: 5px; font-size: 9.5px; }
+
+    .composer {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .composer .input {
+      background: var(--surface);
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-family: var(--body);
+      font-size: 14.5px;
+      color: var(--ink);
+      min-height: 46px;
+      display: flex; align-items: center;
+      transition: border-color 0.15s;
+    }
+    .composer .input.focused {
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--terracotta) 18%, transparent);
+    }
+    .composer .input .placeholder { color: var(--ink-faint); font-family: var(--hand); font-size: 18px; }
+    .composer .input .draft { color: var(--ink); }
+    .composer .input .caret {
+      display: inline-block;
+      width: 1.5px; height: 18px;
+      background: var(--terracotta);
+      margin-left: 1px;
+      animation: blink 1.05s steps(1) infinite;
+      vertical-align: middle;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 0 16px;
+      font-family: var(--body);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.002em;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      cursor: pointer;
+      background: var(--surface-2);
+      color: var(--ink-2);
+      transition: all 0.12s;
+    }
+    .btn:hover { background: var(--surface); border-color: var(--line); color: var(--ink); }
+    .btn.primary {
+      background: var(--terracotta);
+      border-color: var(--terracotta);
+      color: #1b1f2a;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .btn.primary:hover { background: var(--terracotta-2); }
+    .btn .kbd {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 1px 5px;
+      background: rgba(0,0,0,0.18);
+      border-radius: 3px;
+      margin-left: 2px;
+    }
+    .btn .icon { width: 14px; height: 14px; }
+
+    .quick-row {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    .quick-row .ql {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-right: 4px;
+    }
+    .qchip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-2);
+      background: var(--surface-2);
+      border: 1px solid var(--line-faint);
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .qchip:hover { border-color: var(--line); color: var(--ink); background: var(--surface); }
+    .qchip .icon { width: 11px; height: 11px; color: var(--ink-faint); }
+    .qchip.slash { color: var(--terracotta); border-color: color-mix(in oklab, var(--terracotta) 30%, var(--line-faint)); }
+
+    /* ── RIGHT RAIL ──────────────────────────────────── */
+
+    /* Initiative */
+    .init-list { display: flex; flex-direction: column; gap: 3px; }
+    .init-row {
+      display: grid;
+      grid-template-columns: 22px 1fr auto auto;
+      gap: 10px; align-items: center;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-size: 13px;
+    }
+    .init-row.active {
+      background: color-mix(in oklab, var(--terracotta) 12%, var(--surface-2));
+      border-color: color-mix(in oklab, var(--terracotta) 35%, transparent);
+    }
+    .init-row.done { opacity: 0.45; }
+    .init-row.enemy .nm { color: var(--danger); font-weight: 500; }
+    .init-row .turn-marker {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--surface-3);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-dim);
+      font-weight: 600;
+    }
+    .init-row.active .turn-marker {
+      background: var(--terracotta);
+      color: #1b1f2a;
+      box-shadow: 0 0 0 2px color-mix(in oklab, var(--terracotta) 25%, transparent);
+    }
+    .init-row .nm { color: var(--ink-2); font-weight: 500; }
+    .init-row.active .nm { color: var(--ink); font-weight: 600; }
+    .init-row .hp-mini {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-faint);
+      letter-spacing: 0.02em;
+    }
+    .init-row .roll-num {
+      font-family: var(--num);
+      font-weight: 600;
+      font-feature-settings: "tnum";
+      font-size: 14px;
+      color: var(--ink-dim);
+      min-width: 22px; text-align: right;
+    }
+    .init-row.active .roll-num { color: var(--terracotta); }
+    .round-meta {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px 8px;
+      margin-bottom: 6px;
+      border-bottom: 1px dashed var(--line-faint);
+    }
+    .round-meta .num {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 22px;
+      color: var(--terracotta);
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .round-meta .lbl {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .round-meta .your-turn {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--terracotta);
+      margin-left: auto;
+      padding: 2px 8px;
+      background: color-mix(in oklab, var(--terracotta) 12%, transparent);
+      border: 1px solid color-mix(in oklab, var(--terracotta) 35%, transparent);
+      border-radius: 999px;
+    }
+
+    /* Actions / Bonus / Reaction tracker */
+    .turn-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--line-faint);
+    }
+    .ta {
+      padding: 6px 4px;
+      text-align: center;
+      border-radius: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-faint);
+    }
+    .ta .ta-lbl {
+      font-family: var(--mono);
+      font-size: 8.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 2px;
+    }
+    .ta .ta-state {
+      font-family: var(--display);
+      font-style: italic;
+      font-size: 11px;
+      color: var(--forest);
+      font-weight: 500;
+    }
+    .ta.spent { background: var(--bg-2); }
+    .ta.spent .ta-state { color: var(--ink-faint); }
+    .ta.spent .ta-lbl { color: var(--ink-faint); }
+
+    /* HP control */
+    .hp-block {
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      box-shadow: var(--sh-soft);
+    }
+    .hp-row {
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .hp-row .cur {
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 30px;
+      color: var(--forest);
+      letter-spacing: -0.025em;
+      font-feature-settings: "tnum";
+      line-height: 1;
+    }
+    .hp-row .slash { color: var(--ink-faint); font-size: 18px; }
+    .hp-row .max {
+      font-family: var(--num);
+      font-weight: 500;
+      font-size: 18px;
+      color: var(--ink-dim);
+      font-feature-settings: "tnum";
+    }
+    .hp-row .lbl {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-left: auto;
+    }
+    .hp-track {
+      height: 8px;
+      background: var(--bg-2);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--line-faint);
+      position: relative;
+    }
+    .hp-track .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--forest-2), var(--forest));
+      border-radius: 999px;
+    }
+    .hp-track .temp {
+      position: absolute; top: 0; left: 81%;
+      height: 100%; width: 6%;
+      background: repeating-linear-gradient(45deg, var(--ink-purple), var(--ink-purple) 3px, color-mix(in oklab, var(--ink-purple) 60%, transparent) 3px, color-mix(in oklab, var(--ink-purple) 60%, transparent) 6px);
+    }
+    .hp-extras {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 11.5px;
+    }
+    .hp-extras .extra {
+      display: inline-flex; align-items: center; gap: 5px;
+      color: var(--ink-dim);
+    }
+    .hp-extras .extra .v { color: var(--ink-2); font-weight: 600; font-feature-settings: "tnum"; }
+    .hp-extras .extra .v.purple { color: var(--ink-purple); }
+    .hp-extras .extra .icon { width: 11px; height: 11px; }
+    .hp-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .hp-btn {
+      padding: 6px;
+      font-family: var(--body);
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface-2);
+      color: var(--ink-2);
+      cursor: pointer;
+    }
+    .hp-btn:hover { background: var(--surface); }
+    .hp-btn.heal { color: var(--forest); border-color: color-mix(in oklab, var(--forest) 30%, var(--line-soft)); }
+    .hp-btn.dmg  { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 30%, var(--line-soft)); }
+
+    /* Spell slots */
+    .slot-block { display: flex; flex-direction: column; gap: 9px; }
+    .slot-row {
+      display: grid;
+      grid-template-columns: 50px 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .slot-row .lvl {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .slot-row .lvl .n { color: var(--ink); font-weight: 600; }
+    .slot-pips {
+      display: flex; gap: 4px;
+    }
+    .pip {
+      flex: 1;
+      height: 22px;
+      border-radius: 4px;
+      border: 1.5px solid var(--line);
+      background: transparent;
+      transition: all 0.12s;
+    }
+    .pip.full {
+      background: color-mix(in oklab, var(--terracotta) 30%, transparent);
+      border-color: var(--terracotta);
+      box-shadow: inset 0 0 6px color-mix(in oklab, var(--terracotta) 35%, transparent);
+    }
+    .slot-row .ct {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-dim);
+      letter-spacing: 0.04em;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    /* Quick spells */
+    .quick-spells { display: flex; flex-direction: column; gap: 4px; }
+    .qspell {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 7px;
+      border: 1px solid var(--line-faint);
+      background: var(--surface-2);
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+    .qspell:hover { border-color: var(--line); background: var(--surface); }
+    .qspell.cantrip { border-left: 3px solid var(--ink-dim); }
+    .qspell.l1 { border-left: 3px solid var(--faction-blue); }
+    .qspell.l3 { border-left: 3px solid var(--terracotta); }
+    .qspell.conc { border-left: 3px solid var(--ink-purple); }
+    .qspell .glyph {
+      width: 26px; height: 26px;
+      border-radius: 6px;
+      background: var(--surface-3);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ink-2);
+    }
+    .qspell .glyph .icon { width: 14px; height: 14px; }
+    .qspell .nm { color: var(--ink); font-weight: 500; }
+    .qspell .nm .sub { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; color: var(--ink-faint); margin-left: 5px; text-transform: uppercase; }
+    .qspell .cost {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-dim);
+      letter-spacing: 0.04em;
+    }
+
+    /* Rule snippet */
+    .rule-snip {
+      padding: 8px 10px;
+      background: var(--bg-2);
+      border-left: 2.5px solid var(--ink-purple);
+      border-radius: 0 6px 6px 0;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .rule-snip .rule-h {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-purple);
+      margin-bottom: 3px;
+    }
+    .rule-snip .rule-b em { font-family: var(--display); font-style: italic; color: var(--ink); }
+
+    /* Footnote */
+    .canvas-footer {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+      text-align: center;
+      font-family: var(--body);
+      font-size: 12px;
+      color: var(--ink-faint);
+      font-style: italic;
+    }
+    .canvas-footer a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px dashed var(--line-soft); }
+    .canvas-footer a:hover { color: var(--terracotta); border-color: var(--terracotta); }
+
+    /* Hand-written reviewer note (for design discussion) */
+    .reviewer-note {
+      position: fixed;
+      bottom: 18px; left: 18px;
+      max-width: 280px;
+      font-family: var(--hand);
+      font-size: 17px;
+      line-height: 1.25;
+      color: var(--gold);
+      background: rgba(27,31,42,0.85);
+      border: 1px dashed color-mix(in oklab, var(--gold) 50%, transparent);
+      backdrop-filter: blur(4px);
+      padding: 10px 14px;
+      border-radius: 8px;
+      transform: rotate(-1.2deg);
+      z-index: 20;
+      pointer-events: none;
+    }
+    .reviewer-note .nh {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: color-mix(in oklab, var(--gold) 75%, var(--ink-dim));
+      display: block;
+      margin-bottom: 2px;
+      transform: rotate(0.6deg);
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Reusable SVG defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+      <symbol id="i-skull" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="M12.5 17l-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+      <symbol id="i-sword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-snowflake" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M5 5l14 14M19 5L5 19"/><path d="M9 5l3-3 3 3M9 19l3 3 3-3"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.5-8.74A6 6 0 1 0 6 13.5h11.5z"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
+      <symbol id="i-cmd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/></symbol>
+      <symbol id="i-corner-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></symbol>
+      <symbol id="i-fleuron" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-1 2-3 3-5 3 2 0 4 1 5 3 1-2 3-3 5-3-2 0-4-1-5-3z"/><path d="M12 15c-1 2-3 3-5 3 2 0 4 1 5 3 1-2 3-3 5-3-2 0-4-1-5-3z"/><path d="M12 9v6"/></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+      <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+      <symbol id="i-die" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">D<span class="amp">&amp;</span>D Meta Game</div>
+    <span class="tag">Hi-Fi · Session</span>
+    <div class="session-loc">
+      <span style="color:var(--terracotta);font-weight:600;font-style:normal;font-family:var(--mono);font-size:11px;letter-spacing:0.12em;text-transform:uppercase">Crowned Shadow</span>
+      <span class="sep">·</span>
+      <span>Session 15</span>
+      <span class="sep">·</span>
+      <span class="place">Thornveil Gate</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" style="height:32px;padding:0 12px"><svg class="icon"><use href="#i-pause"/></svg>pause session</button>
+    <a class="topbar-link" href="Hi-Fi Index.html"><svg class="icon" style="width:14px;height:14px"><use href="#i-book"/></svg>back to index</a>
+  </header>
+
+  <main class="cockpit">
+
+    <!-- ─────────── LEFT RAIL · party + quests + effects ─────────── -->
+    <aside class="rail">
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-users"/></svg>
+          <span class="ph-title">Party</span>
+          <span class="ph-sub">3 here</span>
+        </div>
+        <div class="party-list">
+          <div class="party-mem you">
+            <div class="pm-portrait kaelen">K<span class="turn-dot"></span></div>
+            <div class="pm-body">
+              <div class="pm-name">Kaelen <span class="role">you · L7 lock</span></div>
+              <div class="pm-meta">HP 42/52 · AC 15</div>
+              <div class="pm-hp-bar"><div class="fill" style="width:81%"></div></div>
+              <div class="pm-tags">
+                <span class="pm-tag purple">concentrating</span>
+                <span class="pm-tag warn">poisoned 1hr</span>
+              </div>
+            </div>
+          </div>
+          <div class="party-mem">
+            <div class="pm-portrait mira">M</div>
+            <div class="pm-body">
+              <div class="pm-name">Mira <span class="role">L6 ranger</span></div>
+              <div class="pm-meta">HP 38/44 · AC 16</div>
+              <div class="pm-hp-bar"><div class="fill" style="width:86%"></div></div>
+              <div class="pm-tags">
+                <span class="pm-tag">hunter's mark</span>
+              </div>
+            </div>
+          </div>
+          <div class="party-mem away">
+            <div class="pm-portrait dorne">D</div>
+            <div class="pm-body">
+              <div class="pm-name">Dorne <span class="role">L7 fighter</span></div>
+              <div class="pm-meta">HP 24/58 · AC 18</div>
+              <div class="pm-hp-bar warn"><div class="fill" style="width:41%"></div></div>
+              <div class="pm-tags">
+                <span class="pm-tag away">scouting east</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-sparkles"/></svg>
+          <span class="ph-title">Effects</span>
+          <span class="ph-sub">round counters</span>
+        </div>
+        <div class="effect-list">
+          <div class="effect conc">
+            <svg class="icon"><use href="#i-flame"/></svg>
+            <span class="nm"><em>Hex</em> → cultist</span>
+            <span class="ttl">∞</span>
+          </div>
+          <div class="effect buff">
+            <svg class="icon"><use href="#i-sparkles"/></svg>
+            <span class="nm"><em>Bless</em></span>
+            <span class="ttl">3 rds</span>
+          </div>
+          <div class="effect debuff">
+            <svg class="icon"><use href="#i-cloud"/></svg>
+            <span class="nm"><em>Bane</em></span>
+            <span class="ttl">2 rds</span>
+          </div>
+          <div class="effect debuff">
+            <svg class="icon"><use href="#i-skull"/></svg>
+            <span class="nm">Poisoned</span>
+            <span class="ttl">52 min</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-flag"/></svg>
+          <span class="ph-title">Active Quests</span>
+        </div>
+        <div class="quest-list">
+          <div class="quest">
+            <span class="badge main">main</span>
+            <span class="qt">The Hollow Pact</span>
+          </div>
+          <div class="quest">
+            <span class="badge side">side</span>
+            <span class="qt">Find Mirabel before the thaw</span>
+          </div>
+          <div class="quest">
+            <span class="badge faction">iron</span>
+            <span class="qt">Recover the guild's stolen ledger</span>
+          </div>
+          <div class="quest">
+            <span class="badge side">side</span>
+            <span class="qt">A debt owed to Old Voren</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-pin"/></svg>
+          <span class="ph-title">Scene</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--ink-dim)">weather</span><span style="color:var(--ink-2);display:inline-flex;align-items:center;gap:5px"><svg class="icon" style="width:11px;height:11px;color:var(--faction-blue)"><use href="#i-snowflake"/></svg>snow · dusk</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--ink-dim)">light</span><span style="color:var(--ink-2)">dim · torches</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--ink-dim)">tension</span><span style="color:var(--terracotta)">high</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--ink-dim)">terrain</span><span style="color:var(--ink-2)">stone · slush</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─────────── CENTER · narrative theatre ─────────── -->
+    <section class="stage">
+
+      <div class="stage-strip">
+        <span class="strip-pill combat"><span class="pulse"></span>combat · round 3</span>
+        <span class="strip-pill scene"><svg class="icon"><use href="#i-pin"/></svg>Thornveil Gate · gatehouse</span>
+        <span class="strip-pill weather"><em>dusk · snow falling</em></span>
+        <div class="strip-end">
+          <span class="strip-pill"><svg class="icon"><use href="#i-clock"/></svg>1:42 played</span>
+          <button class="btn" style="height:28px;padding:0 10px;font-size:11.5px"><svg class="icon"><use href="#i-cmd"/></svg>K</button>
+        </div>
+      </div>
+
+      <div class="transcript">
+
+        <div class="scene-break">
+          <svg><use href="#i-fleuron"/></svg>
+          <span class="lbl">the gatehouse · round 3</span>
+          <svg><use href="#i-fleuron"/></svg>
+        </div>
+
+        <div class="dm-block">
+          <div class="who">Dungeon Master</div>
+          <div class="prose">
+            The cultist raises a twisted rod — shadow curls along its length like smoke from a wet fire. The temperature drops three degrees in a single breath, and you can see the ghost of his exhale catch the torchlight. <em>He has not finished casting.</em>
+          </div>
+        </div>
+
+        <div class="sys-event combat">
+          <svg class="icon"><use href="#i-zap"/></svg>
+          Cultist began casting <em style="font-family:var(--display);font-style:italic;color:var(--ink)">Bestow Curse</em> — interrupt window open
+        </div>
+
+        <div class="you-block">
+          <div class="who">Kaelen</div>
+          <div class="body">
+            I hit him with Eldritch Blast before he finishes — Agonizing Blast plus the Hex damage. <em>"You don't get to finish that one."</em>
+          </div>
+        </div>
+
+        <div class="roll-receipt">
+          <span class="label">attack</span>
+          <span class="what">
+            <span class="die">d20 → 19</span> + 4 prof + 4 cha&nbsp;
+            <span style="color:var(--ink-faint)">vs AC 13</span>
+          </span>
+          <span class="total hit">27 · hit</span>
+
+          <span class="label">damage</span>
+          <span class="what">
+            <span class="die">d10 → 8</span> + 4 force&nbsp;
+            <span style="color:var(--ink-faint)">+</span>&nbsp;
+            <span class="die" style="border-left:2px solid var(--ink-purple)">d6 → 4</span> necrotic <em style="font-family:var(--display);font-style:italic;color:var(--ink-purple)">(Hex)</em>
+          </span>
+          <span class="total">16 dmg</span>
+        </div>
+
+        <div class="dm-block">
+          <div class="who">Dungeon Master</div>
+          <div class="prose">
+            The beam tears through his shoulder before the syllable finishes — bone, robe, and shadow all scattering at once. The rod clatters to the stone, and the half-cast spell snaps back at him like a recoil; he <em>staggers</em>, snarling something in a language none of you recognize.
+            <br/><br/>
+            <span class="dialog">"You… should not have come. You don't know whose house this is."</span>
+          </div>
+        </div>
+
+        <div class="you-block">
+          <div class="who">Kaelen</div>
+          <div class="body">
+            Mira — pick up that rod, but don't touch the dark end. I want to know what he was casting <em>with</em>.
+          </div>
+        </div>
+
+        <div class="sys-event">
+          <svg class="icon"><use href="#i-corner-down"/></svg>
+          Mira <em style="font-family:var(--display);font-style:italic">moves 15 ft</em> &nbsp;·&nbsp; readies the rod (uses object interaction)
+        </div>
+
+        <div class="dm-block">
+          <div class="who">Dungeon Master</div>
+          <div class="prose">
+            Mira plucks the rod by its bone-pale haft. Even gloved, she feels the cold of it — and something <em>else</em>, something that hums faintly against her palm in a rhythm she can't quite place.
+            <br/><br/>
+            From the eastern corridor, two more sets of boots, hurrying. <em>Whoever was watching the door is no longer watching alone.</em>
+          </div>
+        </div>
+
+        <div class="sys-event combat">
+          <svg class="icon"><use href="#i-zap"/></svg>
+          2 reinforcements joined turn order &nbsp;·&nbsp; <em style="font-family:var(--display);font-style:italic;color:var(--ink)">Initiative 16, 9</em>
+        </div>
+
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer-mode">
+          <span class="mode-tab">Say<span class="h">⇧</span></span>
+          <span class="mode-tab active">Do<span class="h">↵</span></span>
+          <span class="mode-tab">OOC<span class="h">/</span></span>
+        </div>
+        <div class="composer">
+          <div class="input focused">
+            <span class="draft">I drop into a low stance and step between Mira and the corridor — Eldritch Blast ready for whoever comes through firs<span class="caret"></span></span>
+          </div>
+          <button class="btn" title="Roll a die"><svg class="icon"><use href="#i-die"/></svg></button>
+          <button class="btn primary">Act<span class="kbd">↵</span></button>
+        </div>
+        <div class="quick-row">
+          <span class="ql">quick</span>
+          <span class="qchip slash"><svg class="icon"><use href="#i-die"/></svg>/roll d20+4</span>
+          <span class="qchip slash">/perception</span>
+          <span class="qchip slash">/insight</span>
+          <span class="qchip">end turn</span>
+          <span class="qchip">help mira</span>
+          <span class="qchip">/ooc</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ─────────── RIGHT RAIL · combat + spells + rules ─────────── -->
+    <aside class="rail">
+
+      <div class="hp-block">
+        <div class="hp-row">
+          <span class="cur">42</span>
+          <span class="slash">/</span>
+          <span class="max">52</span>
+          <span class="lbl">Kaelen</span>
+        </div>
+        <div class="hp-track">
+          <div class="fill" style="width:81%"></div>
+          <div class="temp" title="3 temp HP"></div>
+        </div>
+        <div class="hp-extras">
+          <span class="extra"><svg class="icon" style="color:var(--ink-purple)"><use href="#i-shield"/></svg>temp <span class="v purple">+3</span></span>
+          <span class="extra">AC <span class="v">15</span></span>
+          <span class="extra">init <span class="v">+2</span></span>
+          <span class="extra" style="margin-left:auto;color:var(--gold)">inspired</span>
+        </div>
+        <div class="hp-controls">
+          <button class="hp-btn dmg">− damage</button>
+          <button class="hp-btn heal">+ heal</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="round-meta">
+          <span class="num">3</span>
+          <span class="lbl">round · combat</span>
+          <span class="your-turn">▸ your turn</span>
+        </div>
+        <div class="init-list">
+          <div class="init-row done">
+            <div class="turn-marker">22</div>
+            <div class="nm">Mira</div>
+            <div class="hp-mini">38/44</div>
+            <div class="roll-num">22</div>
+          </div>
+          <div class="init-row active">
+            <div class="turn-marker">▸</div>
+            <div class="nm">Kaelen <span style="color:var(--ink-faint);font-weight:400;font-size:11px">(you)</span></div>
+            <div class="hp-mini">42/52</div>
+            <div class="roll-num">18</div>
+          </div>
+          <div class="init-row enemy">
+            <div class="turn-marker">16</div>
+            <div class="nm">Cultist B</div>
+            <div class="hp-mini">unhurt</div>
+            <div class="roll-num">16</div>
+          </div>
+          <div class="init-row enemy">
+            <div class="turn-marker">14</div>
+            <div class="nm">Hexed Cultist</div>
+            <div class="hp-mini">12/28 <span style="color:var(--terracotta)">●</span></div>
+            <div class="roll-num">14</div>
+          </div>
+          <div class="init-row">
+            <div class="turn-marker">11</div>
+            <div class="nm">Dorne <span style="color:var(--ink-faint);font-weight:400;font-size:10.5px">(away)</span></div>
+            <div class="hp-mini">24/58</div>
+            <div class="roll-num">11</div>
+          </div>
+          <div class="init-row enemy">
+            <div class="turn-marker">9</div>
+            <div class="nm">Cultist C</div>
+            <div class="hp-mini">unhurt</div>
+            <div class="roll-num">9</div>
+          </div>
+        </div>
+        <div class="turn-actions">
+          <div class="ta"><div class="ta-lbl">action</div><div class="ta-state">ready</div></div>
+          <div class="ta"><div class="ta-lbl">bonus</div><div class="ta-state">ready</div></div>
+          <div class="ta spent"><div class="ta-lbl">reaction</div><div class="ta-state">spent</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-flame"/></svg>
+          <span class="ph-title">Slots</span>
+          <span class="ph-sub">warlock · pact</span>
+        </div>
+        <div class="slot-block">
+          <div class="slot-row">
+            <span class="lvl">3<span class="n">rd</span></span>
+            <div class="slot-pips">
+              <div class="pip full"></div>
+              <div class="pip full"></div>
+            </div>
+            <span class="ct">2/2</span>
+          </div>
+          <div class="slot-row">
+            <span class="lvl"><span class="n">cant</span></span>
+            <div class="slot-pips" style="opacity:0.5">
+              <div class="pip" style="background:var(--surface-2);border-color:var(--line-faint)"></div>
+              <div class="pip" style="background:var(--surface-2);border-color:var(--line-faint)"></div>
+            </div>
+            <span class="ct">at-will</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-target"/></svg>
+          <span class="ph-title">Quick Cast</span>
+          <span class="ph-sub">prepared</span>
+        </div>
+        <div class="quick-spells">
+          <div class="qspell cantrip">
+            <div class="glyph"><svg class="icon"><use href="#i-zap"/></svg></div>
+            <div class="nm">Eldritch Blast<span class="sub">cantrip</span></div>
+            <div class="cost">free</div>
+          </div>
+          <div class="qspell conc">
+            <div class="glyph"><svg class="icon"><use href="#i-flame"/></svg></div>
+            <div class="nm">Hex<span class="sub">conc · active</span></div>
+            <div class="cost">bonus</div>
+          </div>
+          <div class="qspell l3">
+            <div class="glyph"><svg class="icon"><use href="#i-shield"/></svg></div>
+            <div class="nm">Shield<span class="sub">reaction</span></div>
+            <div class="cost">slot 3</div>
+          </div>
+          <div class="qspell l3">
+            <div class="glyph"><svg class="icon"><use href="#i-eye"/></svg></div>
+            <div class="nm">Counterspell<span class="sub">reaction</span></div>
+            <div class="cost">slot 3</div>
+          </div>
+          <div class="qspell l3">
+            <div class="glyph"><svg class="icon"><use href="#i-sparkles"/></svg></div>
+            <div class="nm">Mislead<span class="sub">conc</span></div>
+            <div class="cost">slot 3</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <svg class="icon"><use href="#i-book"/></svg>
+          <span class="ph-title">Rules in play</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="rule-snip">
+            <div class="rule-h">cover</div>
+            <div class="rule-b">½ cover → <em>+2 AC</em>, ¾ → <em>+5 AC</em>. Behind ally counts as ½.</div>
+          </div>
+          <div class="rule-snip" style="border-left-color:var(--terracotta)">
+            <div class="rule-h" style="color:var(--terracotta)">opportunity</div>
+            <div class="rule-b">Reaction <em>already spent</em> on Shield last round — no opp. attack until next turn.</div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <div class="canvas-footer">
+    Session view · player mode &nbsp;·&nbsp; <a href="Hi-Fi Index.html">back to index</a> &nbsp;·&nbsp; <a href="Character Sheet Hi-Fi.html">open character sheet</a>
+  </div>
+
+  <div class="reviewer-note">
+    <span class="nh">design note</span>
+    Narrative is the hero. Sheet is calm reference. Combat reads as <em>edge condition</em>, not the default mode.
+  </div>
+
+</body>
+</html>

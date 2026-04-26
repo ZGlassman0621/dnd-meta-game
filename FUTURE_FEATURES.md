@@ -488,3 +488,75 @@ The home pill writes `dndForceOpus`; only [DMSession.jsx](client/src/components/
 ### Decision deferred
 
 - Should the lean toggle even exist as a user-facing thing once we know what it does? If lean prose is universally better, fold the relaxed Cardinal Rule 2 into production and don't make it a toggle. The toggle is a diagnostic, not a feature. Same question for forceOpus: if Opus is necessary for prose quality, the answer might be "always Opus" — making the toggle redundant. This whole entry is contingent on the diagnostic finding that *neither* lever fully closes the gap. If we ship lean+opus as the default for production, prelude needs to follow.
+
+---
+
+## Session Hi-Fi implementation (in-session three-column cockpit)
+
+**Priority:** Medium. **Status:** Design landed and scope analyzed (2026-04-26); awaiting user decisions on five questions before build. Design source preserved in `Claude UX Design/D&D Meta Game (Remix)/Session-Design-Bundle/` (HTML + chat transcript + handoff README).
+
+A fundamental restructure of the in-session play surface from a single-column message list into a **three-column cockpit**: passive party/effects/quests/scene context on the left (248px), narrative theatre in the center (flex), active tools (HP, init, slots, quick cast, rules) on the right (296px). Visual language: dark navy-slate with terracotta/forest/purple/gold accents, Fraunces display for DM voice, Inter body, JetBrains Mono labels.
+
+### Why deferred
+
+Scope is large enough that explicit user decisions are needed on the five open questions below before charging in. The README in the design bundle explicitly asks the implementer to confirm scope first.
+
+### Mapping table — design ↔ current production
+
+| Design element | Current backing in DMSession | Status |
+|---|---|---|
+| Left party panel | Companions data (in slide-in CompanionsPanel) | ✅ data exists, currently a slide-in |
+| Effects (round counters) | Condition tracking with TTL | ⚠ data exists; round counters not currently surfaced |
+| Active Quests | Active quests w/ [MAIN]/[FACTION]/[SIDE] labels | ✅ |
+| Scene meta (weather/light/tension/terrain) | Weather only | ⚠ light/tension/terrain are net-new |
+| Stage strip combat pulse | CombatTracker round | ✅ |
+| Scene breaks in transcript | (none) | ⚠ net-new — would need a marker or server beat |
+| DM serif blocks vs. player bubbles | All messages currently styled identically | ⚠ need to discriminate who-said-what visually |
+| Roll receipts | Dice results currently inline | ⚠ format change |
+| Say/Do/OOC composer modes | Single text input | ⚠ net-new — chat says these would shape AI interpretation |
+| HP block w/ temp HP overlay + heal/damage | HP shown in info-bar; no in-UI heal/damage | ⚠ partial |
+| Initiative panel + Action/Bonus/Reaction tracker | CombatTracker has init; no A/B/R surface | ⚠ partial |
+| Slot pips | Spell slots tracker | ✅ data + concept; visual is different |
+| Quick Cast | Prepared spells display in QuickReferencePanel | ✅ data; currently in a panel |
+| Rules in play | (none) | ⚠ net-new |
+| Cmd-K command palette | (none) | ⚠ net-new — designed in chat but not in HTML |
+| Right-rail collapse states (combat/roleplay/hidden) | (none) | ⚠ net-new — designed in chat but not in HTML |
+
+### Open questions (must answer before building)
+
+1. **Phased (Path A) or one-shot (Path B)?**
+   - **Path A** (recommended) — three commits: (1) layout + tokens + restyle existing data; (2) composer modes + scene-break renderer; (3) net-new features (Cmd-K, collapse, scene meta, rules-in-play) each as their own scope.
+   - **Path B** — one big effort that ships everything including the chat-only items.
+2. **Existing slide-in panels** — what happens to Inventory, Companions, Conditions, Campaign Notes, Quick Reference, Merchants, Commissions, Coaching panels? Hide, fold into rails where it fits, or coexist?
+3. **Visual language propagation** — should the SessionSetup and SessionRewards screens be restyled to match, or just the in-session view for now?
+4. **Pixel-perfect or pragmatic?** HTML is `max-width: 1440px`, desktop-only. Current app is responsive. User noted "I'll only ever use this on desktop" — probably accept desktop-only, but confirm.
+5. **Scene meta data** — weather we have. Light/tension/terrain don't exist as fields. Mock as static placeholders for v1, infer from session state, or design proper backing (`[SCENE_TENSION: high]` markers, etc.) before they land?
+
+### Recommended starting point — Path A, commit 1
+
+If Path A picked, the first commit (estimated 4-6 hours):
+
+1. New CSS tokens file: `client/src/styles/session-cockpit.css` (or inline in DMSession initially).
+2. Restructure `DMSession.jsx` JSX to a three-column grid (preserve all existing behavior).
+3. Build the rail components inline first, extract later if they grow:
+   - `<PartyRail>` — sources from existing companions state
+   - `<EffectsRail>` — sources from existing conditions state
+   - `<QuestsRail>` — sources from existing quests query
+   - `<SceneRail>` — weather only for now, placeholder light/tension/terrain
+   - `<HpBlock>` — sources from existing character HP
+   - `<InitPanel>` — pulls from existing CombatTracker state, restyled
+   - `<SlotsPanel>` — existing spell-slot data, repipped
+   - `<QuickCastPanel>` — existing prepared spells, restyled
+   - `<RulesPanel>` — placeholder for v1, no backing yet
+4. Restyle the message list:
+   - DM messages → serif Fraunces 17.5px in a left-aligned `<div class="dm-block">`
+   - Player messages → Inter 14.5px in a right-aligned purple-bordered bubble
+   - System events (combat starts, conditions, etc.) → centered mono pill
+   - Roll results → `<div class="roll-receipt">` grid
+5. Composer wrap with the visual mode-toggle (Say/Do/OOC) — **rendered but not yet behavior-wired** in commit 1. Existing input/send still works.
+6. Hide the old slide-in panel buttons (or keep them under a "legacy panels" expander).
+7. Don't touch Cmd-K, scene meta backend, rules-in-play, or right-rail collapse — those are commits 2+.
+
+### Related but separately scoped
+
+The same chat also discussed **Origin & Identity** tab (replaces standard "Background" — uses Themes system per `Themes-Replace-Backgrounds.md`) and **Progression** tab (the three-rail Class/Theme/Ancestry braid). These are natural follow-ons after Session Hi-Fi commit 1 lands the design system.
