@@ -449,3 +449,42 @@ The campaign opener does NOT read as "you have just arrived" or "you have just l
 ### Why this is paired with Round 3
 
 If Phase 5 is built without honoring the Ch4-as-bridge reframe, the campaign opener will keep reading like a fresh-departure scene — undermining the entire reason for the structural change. These two pieces of work need to ship together (or Phase 5 needs to ship AFTER Ch4 is restructured, never before).
+
+---
+
+## Unify Opus + Lean Prompt toggles across main campaign and prelude
+
+**Priority:** Low (diagnostic tooling, not user-facing). **Status:** Notes only — added during the v1.0.95 prose-quality investigation.
+
+The home-page Sonnet/Opus pill and the Lean Prompt toggle (both added April 2026) currently affect **only the main DM session**. Prelude has independent model selection and no lean equivalent. This is fine for the current diagnostic work but should be unified before either toggle ships as a real user-facing setting.
+
+### Current state (snapshot of the two systems)
+
+| Surface | State variable | localStorage key | API body param |
+|---|---|---|---|
+| Home pill / SessionSetup / in-session pill | `forceOpus: boolean` | `dndForceOpus` (`'1'` / `'0'`) | `modelOverride: 'opus' \| null` |
+| Home pill (Lean) | `leanPrompt: boolean` | `dndLeanPrompt` (`'1'` / `'0'`) | `leanPrompt: boolean` |
+| Prelude session UI ([PreludeSession.jsx:66](client/src/components/PreludeSession.jsx#L66)) | `model: 'auto' \| 'sonnet' \| 'opus'` | none — session-local only | `model: 'auto' \| 'sonnet' \| 'opus'` |
+
+The home pill writes `dndForceOpus`; only [DMSession.jsx](client/src/components/DMSession.jsx) and [SessionSetup.jsx](client/src/components/SessionSetup.jsx) read it. PreludeSession has its own internal Auto/Sonnet/Opus button that's untouched by the home pill, and there is no lean transform path through `preludeArcPromptBuilder.js` at all.
+
+### Why it's not unified yet
+
+1. **Prelude prompt has a different structure.** `applyLeanTransforms()` in `dmPromptBuilder.js` strips the `MECHANICAL MARKERS` section by regex and replaces the `2. HARD STOPS` Cardinal Rule. Neither heading exists in the prelude prompt — running the transform there is a silent no-op. A separate `applyPreludeLeanTransforms()` would need to identify the prelude-specific equivalents (the prelude marker block, the strict roll-stop discipline embedded in the prelude prompt's voice section).
+
+2. **Prelude already has its own model toggle.** The prelude UI exposes Auto / Sonnet / Opus as buttons inside the session view. This was built before the home pill and uses a different vocabulary (`'auto'` is meaningful in prelude — it picks Sonnet for continuations and Opus for chapter opens; in the main session there's just Sonnet-default-with-Opus-on-first-session, not exposed as a 3-way choice).
+
+3. **The user's diagnostic test (April 2026) is main-campaign focused.** The original prose baseline ("Order of Dawn's Light" PDF) is main-campaign play. So the toggles only needed to work where the test is happening.
+
+### Build checklist when this is taken up
+
+- [ ] **Decide on unified vocabulary.** Either lift main-session `forceOpus` boolean to a 3-way `'auto' | 'sonnet' | 'opus'` (matches prelude), or push prelude toward a binary `forceOpus` (matches main session). The 3-way is more expressive and `'auto'` is semantically useful — recommend that direction.
+- [ ] **Have PreludeSession read `dndForceOpus`** as its initial model state, falling through to its own Auto button as the override surface (or hide its button entirely once the home pill is canonical).
+- [ ] **Add `leanPrompt` body param to `/api/prelude/sessions/:sessionId/message`.** Wire through to `sendPreludeMessage` and the prelude prompt assembly.
+- [ ] **Author `applyPreludeLeanTransforms()`** in `preludeArcPromptBuilder.js` (or a sibling util). Identify which prelude prompt blocks are the prose-killers there — likely the per-life-stage NPC voice rules, the time-compression directives, or the canon-fact ledger injection. Empirical, not symmetric with the main-session lean.
+- [ ] **Update `PreludeSession.jsx`** to read `dndLeanPrompt` from localStorage at send time and pass `leanPrompt` in the body, mirroring the pattern in DMSession.
+- [ ] **Verify in `applyLeanTransforms()` dryrun** that prelude prompts don't accidentally match the main-session regex once both prompts coexist in the codebase. (They don't today, but a future refactor that aligns the two prompt builders' headings would silently start firing the wrong transform.)
+
+### Decision deferred
+
+- Should the lean toggle even exist as a user-facing thing once we know what it does? If lean prose is universally better, fold the relaxed Cardinal Rule 2 into production and don't make it a toggle. The toggle is a diagnostic, not a feature. Same question for forceOpus: if Opus is necessary for prose quality, the answer might be "always Opus" — making the toggle redundant. This whole entry is contingent on the diagnostic finding that *neither* lever fully closes the gap. If we ship lean+opus as the default for production, prelude needs to follow.

@@ -22,6 +22,10 @@ import PreludeThemeCommitCard from './PreludeThemeCommitCard'
  * Does NOT own (yet): dice rolling, combat tracker, condition panel,
  * emergence toasts, values tracker, chapter-promise UI.
  */
+// Shared text style for inline help/description copy. Mirrors the same
+// style in PreludeSetupWizard so the two surfaces feel consistent.
+const descStyle = { fontSize: '0.75rem', color: '#9fa3a8', fontStyle: 'italic', marginTop: '0.2rem', lineHeight: 1.4 }
+
 export default function PreludeSession({ character, onBack }) {
   const [sessionId, setSessionId] = useState(null)
   const [messages, setMessages] = useState([]) // {role, content}
@@ -52,7 +56,8 @@ export default function PreludeSession({ character, onBack }) {
   const [showSetup, setShowSetup] = useState(false)
   const [showLore, setShowLore] = useState(false)
   const [values, setValues] = useState([])
-  const [canonFacts, setCanonFacts] = useState([])
+  // Canon facts moved to PreludeLorePanel (v1.0.75 → fully migrated). The
+  // panel fetches its own data via /canon-facts when it opens.
   // v1.0.75 — simplified to a two-state toggle: 'auto' (default — Sonnet,
   // escalating to Opus on heavy beats) or 'sonnet' (always Sonnet).
   // The server still accepts 'opus' for legacy session state, but the UI
@@ -63,25 +68,18 @@ export default function PreludeSession({ character, onBack }) {
   const [resolveReason, setResolveReason] = useState(null)
   const scrollerRef = useRef(null)
 
-  // Fetch values + canon facts whenever the Setup panel opens, or after
-  // a player turn (to reflect possible new facts/values from the last AI
-  // response). Both endpoints are cheap.
+  // Fetch emerging values whenever the Setup panel opens, or after a player
+  // turn (to reflect new values from the last AI response). Canon facts are
+  // fetched independently by PreludeLorePanel.
   useEffect(() => {
     if (!showSetup || !character?.id) return
     let cancelled = false
     ;(async () => {
       try {
-        const [vResp, cResp] = await Promise.all([
-          fetch(`/api/prelude/${character.id}/values`),
-          fetch(`/api/prelude/${character.id}/canon-facts`)
-        ])
+        const vResp = await fetch(`/api/prelude/${character.id}/values`)
         if (vResp.ok) {
           const data = await vResp.json()
           if (!cancelled) setValues(data)
-        }
-        if (cResp.ok) {
-          const data = await cResp.json()
-          if (!cancelled) setCanonFacts(data)
         }
       } catch (_) { /* silent */ }
     })()
@@ -528,7 +526,7 @@ export default function PreludeSession({ character, onBack }) {
                 >Lore</button>
                 <button
                   onClick={() => setShowSetup(s => !s)}
-                  title="Toggle the Setup review — character details, canon ledger, emerging values."
+                  title="Toggle the Setup review — character details and emerging values. (Canon lore is in the Lore panel.)"
                   style={btn(
                     showSetup ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.1)',
                     'rgba(139,92,246,0.4)',
@@ -608,47 +606,10 @@ export default function PreludeSession({ character, onBack }) {
             {row('Cares about', (setup.cares || []).join(', ') || '—')}
             {row('Tone', (setup.tone_tags || []).join(', ') || '—')}
 
-            {/* v1.0.60 — canon ledger. Shows the ground truth Sonnet sees
-                every turn. Useful to verify drift hasn't happened ("did
-                Sonnet register Moss is 9?") and to trace what the AI has
-                established. Grouped by category. */}
-            {canonFacts.length > 0 && (() => {
-              const byCategory = new Map()
-              for (const f of canonFacts) {
-                if (!byCategory.has(f.category)) byCategory.set(f.category, [])
-                byCategory.get(f.category).push(f)
-              }
-              const CATEGORY_ORDER = ['npc', 'relationship', 'trait', 'location', 'item', 'event']
-              const CATEGORY_LABELS = {
-                npc: 'People', relationship: 'Relationships', trait: 'Traits',
-                location: 'Places', item: 'Items', event: 'Events'
-              }
-              return (
-                <div style={{ marginTop: '0.9rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(139,92,246,0.2)' }}>
-                  <h4 style={{ margin: '0 0 0.5rem', color: '#c4b5fd', fontSize: '0.9rem' }}>Canon ledger</h4>
-                  <p style={{ ...descStyle, marginTop: 0, marginBottom: '0.5rem' }}>
-                    What the AI has registered as ground truth. Re-checked every turn to prevent drift.
-                  </p>
-                  {CATEGORY_ORDER.filter(c => byCategory.has(c)).map(cat => (
-                    <div key={cat} style={{ marginBottom: '0.55rem' }}>
-                      <div style={{ fontSize: '0.72rem', color: '#a78bfa', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
-                        {CATEGORY_LABELS[cat] || cat.toUpperCase()}
-                      </div>
-                      {byCategory.get(cat).map(f => (
-                        <div key={f.id} style={{ fontSize: '0.78rem', color: '#ddd', lineHeight: 1.45, marginBottom: '0.15rem', paddingLeft: '0.5rem' }}>
-                          <strong style={{ color: '#e9d5ff' }}>{f.subject}:</strong> {f.fact}
-                          {f.established_age != null && (
-                            <span style={{ color: '#6b7280', fontSize: '0.7rem', marginLeft: '0.4rem' }}>
-                              (est. age {f.established_age})
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
+            {/* Canon ledger lived here in v1.0.60 but moved to PreludeLorePanel
+                in v1.0.75 for top-level access, search, and category grouping.
+                Only the character setup details and emerging values stay in
+                this panel — canon belongs in the Lore button. */}
 
             {/* Phase 3 — emergent values (accumulates during play). Raw scores
                 shown while playing; narrative paragraph at prelude end (Phase 5). */}

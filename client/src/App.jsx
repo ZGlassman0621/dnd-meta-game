@@ -88,6 +88,30 @@ function App() {
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
 
+  // Sonnet vs Opus selector. Persisted in localStorage and shared with
+  // DMSession's in-session pill via the same `dndForceOpus` key — toggling
+  // here updates the value the next session will pick up.
+  const [forceOpus, setForceOpus] = useState(() => {
+    try { return localStorage.getItem('dndForceOpus') === '1' } catch { return false }
+  })
+  const updateForceOpus = (next) => {
+    setForceOpus(next)
+    try { localStorage.setItem('dndForceOpus', next ? '1' : '0') } catch {}
+  }
+
+  // Lean prompt toggle (diagnostic). When on, server strips MECHANICAL
+  // MARKERS section + softens Cardinal Rule 2 (HARD STOPS). Markers like
+  // [COMBAT_START] / [LOOT_DROP] won't fire — that's the trade-off, used
+  // only for prose-quality A/B testing. DMSession reads localStorage at
+  // /start and /message call time so toggling mid-session takes effect.
+  const [leanPrompt, setLeanPrompt] = useState(() => {
+    try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false }
+  })
+  const updateLeanPrompt = (next) => {
+    setLeanPrompt(next)
+    try { localStorage.setItem('dndLeanPrompt', next ? '1' : '0') } catch {}
+  }
+
   // Check for existing auth token on mount
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -276,41 +300,88 @@ function App() {
       <header style={{ paddingTop: '3rem' }}>
         <h1>D&D Meta Game</h1>
         <p className="subtitle">Adventure awaits while you're away</p>
-        {llmStatus && (
-          <div style={{
+        {llmStatus && (() => {
+          // When Claude is available, the pill becomes a clickable Sonnet/Opus
+          // toggle (default Sonnet, toggle to force Opus every turn). Any other
+          // case stays a plain status indicator.
+          const isClickable = llmStatus.available && llmStatus.provider === 'claude'
+          const accent = !llmStatus.available
+            ? { bg: 'rgba(231, 76, 60, 0.2)', border: '#e74c3c', text: '#e74c3c', dot: '🔴', label: 'AI Offline' }
+            : isClickable && forceOpus
+              ? { bg: 'rgba(255, 140, 0, 0.2)', border: '#ff8c00', text: '#ff8c00', dot: '🟠', label: 'Opus' }
+              : isClickable
+                ? { bg: 'rgba(139, 92, 246, 0.2)', border: '#8b5cf6', text: '#a78bfa', dot: '🟣', label: 'Sonnet' }
+                : { bg: 'rgba(46, 204, 113, 0.2)', border: '#2ecc71', text: '#2ecc71', dot: '🟢', label: 'Ollama' }
+          const baseStyle = {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '0.4rem',
             padding: '0.25rem 0.75rem',
             borderRadius: '12px',
             fontSize: '0.75rem',
-            background: llmStatus.available
-              ? (llmStatus.provider === 'claude' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(46, 204, 113, 0.2)')
-              : 'rgba(231, 76, 60, 0.2)',
-            border: `1px solid ${llmStatus.available
-              ? (llmStatus.provider === 'claude' ? '#8b5cf6' : '#2ecc71')
-              : '#e74c3c'}`,
-            color: llmStatus.available
-              ? (llmStatus.provider === 'claude' ? '#a78bfa' : '#2ecc71')
-              : '#e74c3c',
-            marginTop: '0.5rem'
-          }}
-          title={llmStatus.provider === 'claude' && llmStatus.models
-            ? `Opus for new campaigns, Sonnet for gameplay`
-            : undefined}
-          >
-            <span style={{ fontSize: '0.8rem' }}>
-              {llmStatus.available
-                ? (llmStatus.provider === 'claude' ? '🟣' : '🟢')
-                : '🔴'}
-            </span>
-            <span>
-              {llmStatus.available
-                ? (llmStatus.provider === 'claude'
-                  ? (llmStatus.models ? 'Opus + Sonnet' : 'Claude AI')
-                  : 'Ollama')
-                : 'AI Offline'}
-            </span>
+            background: accent.bg,
+            border: `1px solid ${accent.border}`,
+            color: accent.text,
+            marginTop: '0.5rem',
+            cursor: isClickable ? 'pointer' : 'default'
+          }
+          const tooltip = isClickable
+            ? (forceOpus
+              ? 'Forcing Opus for every turn (denser prose, slower, costlier). Click to switch back to Sonnet.'
+              : 'Using Sonnet (default for continuations; Opus for first session of a new campaign). Click to force Opus for every turn.')
+            : undefined
+          const inner = (
+            <>
+              <span style={{ fontSize: '0.8rem' }}>{accent.dot}</span>
+              <span>{accent.label}</span>
+            </>
+          )
+          return isClickable ? (
+            <button
+              type="button"
+              onClick={() => updateForceOpus(!forceOpus)}
+              title={tooltip}
+              style={{ ...baseStyle, font: 'inherit', fontSize: '0.75rem' }}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div style={baseStyle} title={tooltip}>{inner}</div>
+          )
+        })()}
+
+        {/* Lean Prompt toggle — diagnostic. Sits below the Sonnet/Opus pill.
+            When on, the server strips MECHANICAL MARKERS + softens Cardinal
+            Rule 2 (HARD STOPS) for the next API call. Game-state markers
+            (combat, loot, merchant, etc.) won't fire while it's on — testing
+            only. Independent of the model choice; combine with Opus or Sonnet. */}
+        {llmStatus?.available && llmStatus.provider === 'claude' && (
+          <div>
+            <button
+              type="button"
+              onClick={() => updateLeanPrompt(!leanPrompt)}
+              title={leanPrompt
+                ? 'Lean prompt active: MECHANICAL MARKERS stripped + HARD STOPS softened. Combat/loot/merchant markers will NOT fire — diagnostic only.'
+                : 'Click to enable Lean Prompt (diagnostic): strips MECHANICAL MARKERS section + softens Cardinal Rule 2. Game-state markers will not fire.'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '12px',
+                fontSize: '0.75rem',
+                background: leanPrompt ? 'rgba(34, 197, 94, 0.18)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${leanPrompt ? '#22c55e' : 'rgba(255,255,255,0.2)'}`,
+                color: leanPrompt ? '#22c55e' : '#888',
+                marginTop: '0.4rem',
+                cursor: 'pointer',
+                font: 'inherit',
+                fontWeight: leanPrompt ? 'bold' : 'normal'
+              }}
+            >
+              <span style={{ fontSize: '0.8rem' }}>{leanPrompt ? '✂️' : '·'}</span>
+              <span>Lean prompt {leanPrompt ? 'ON' : 'OFF'}</span>
+            </button>
           </div>
         )}
         <NavigationMenu

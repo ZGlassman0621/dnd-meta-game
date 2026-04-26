@@ -2,6 +2,88 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.96] - 2026-04-26 — Prose-quality diagnostic + prompt cache architecture fix
+
+User feedback: current sessions read thinner than the original "Order of Dawn's Light" Opus 4.5 baseline (December 2025 PDF in repo root). This release ships the diagnostic toolkit, the findings from running it, and the cache-architecture fix that came out of investigating Opus per-session cost. Net result: Opus is now the validated production direction at roughly half the previous cost.
+
+### Diagnostic findings (in priority order — see `tests/output/prose-quality-analysis.md`)
+
+After reading the 416-page original campaign PDF and running a 3-scenarios × 5-variants automated A/B against Sonnet, **plus** a hands-on user playtest of all 4 Sonnet/Opus × Default/Lean combinations, the original 6-hypothesis list was reordered:
+
+| Original hypothesis | Verdict |
+|---|---|
+| Sonnet vs Opus is the biggest factor | **CONFIRMED** by user playtest. Opus is the lever. |
+| Word-count caps in CONVERSATION HANDLING | **DOWNGRADED** — caps barely bind in practice. |
+| Self-Check at prompt tail | **PARTIAL** — helps tavern openers (+27%), neutral elsewhere. |
+| Marker overhead | **UPGRADED** — strongest mutation in automated A/B, *but* lean prompt didn't move the needle in real playtest, suggesting markers help on edge cases not average turns. |
+| Memory plumbing | **MIXED** — depends on scenario. |
+| Tone presets | **FALSE** — confirmed by code audit, not wired into main DM sessions at all. |
+
+Two unexpected findings the data surfaced:
+
+- **`PLAYER OBSERVATION = ALWAYS A CHECK` + Cardinal Rule 2 HARD STOPS truncate atmospheric scene-opens.** Production V1 ended a tavern entry with "Make a Perception check." after the player just opened a door. Original PDF didn't gate observation behind checks. Lean prompt mode tests softening this.
+- **The "werewolf bias" the user observed in playtest was a methodology error in the seed script** — `current_quest = "Investigate the strange howls and missing livestock"` was hardcoded into the test-character template, which is a textbook werewolf-mystery prompt. Removed; tests now start with neutral state.
+
+### Prompt cache architecture fix (the big one)
+
+Investigation of production cache logs revealed two distinct issues, both fixed:
+
+**Issue 1: Tier 2 cache content was leaking dynamic state.** The character sheet was a single block in tier 2, with HP, gold, current location, current quest, and equipped weapon all baked in. Every state change (every turn) drifted tier 2's content, breaking the per-character cache.
+
+Fix: split `formatCharacterInfo()` in `dmPromptBuilder.js` into two return fields. `staticText` holds identity (name, race, class, level, abilities, skills, feats, spells, faith, alignment, demographics, personality/ideals/bonds/flaws, backstory) — lands in tier 2. `dynamicText` holds state (HP, AC, weapon, key equipment, current location, current quest) — lands in tier 3. Backwards-compat: `text` field still returned with the concatenation. Verified byte-stable across HP/gold/location/quest/inventory changes via `tests/cache-tier-diff.js`.
+
+**Issue 2: Tier 1 used 5-minute cache TTL.** During thoughtful play (3–10 minutes between turns), the cache evicted mid-session and rebuilt every ~5 turns. Production logs of session 144 showed eviction at t1, t5, t11, t18 — exactly the 5-minute boundaries.
+
+Fix: tier 1 now uses `cache_control: { type: 'ephemeral', ttl: '1h' }`. Anthropic charges 2× to write 1-hour cache vs 1.25× for 5-minute, but the 1-hour TTL survives between thoughtful turns and is net cheaper. Tier 2 keeps the default 5-minute TTL — smaller block, premium not worth it.
+
+**Cost impact (Opus, 15-turn session, with caching working):**
+
+| | Before | After |
+|---|---|---|
+| Cache hit rate | ~55% | ~95% |
+| Per-session cost | ~$1.55 | ~$0.85 |
+| Tier 1 evictions | every 5–6 turns | ~0 (1h TTL) |
+| Tier 2 cache | inconsistent (state leak) | byte-stable across turns |
+
+### Diagnostic toggles
+
+Three new user-facing toggles, all implemented as localStorage-backed pills with server-side body params:
+
+**Sonnet/Opus model selector** — replaces the old Auto/Claude/Ollama provider toggle on the SessionSetup screen. Three surfaces:
+- Home-page pill under the "Adventure awaits while you're away" subtitle (clickable).
+- SessionSetup screen status row (right-side Sonnet | Opus buttons).
+- In-session info bar pill (purple "Sonnet" / orange "Opus" — toggle mid-session for live A/B).
+- All three read/write the same `dndForceOpus` localStorage key.
+- Body param: `modelOverride: 'opus' | null` threaded through `/api/dm-session/start` and `/message`.
+- The previous Auto/Claude/Ollama button is gone from setup; the provider preference stays internally on `auto` so Ollama is still a fallback if Claude is unreachable.
+
+**Lean Prompt toggle** — diagnostic only, on the home page. When ON:
+- Strips the entire `MECHANICAL MARKERS` section (~5.5K chars / 23% of prompt).
+- Replaces strict Cardinal Rule 2 (`HARD STOPS`) with the soft `ROLL REQUESTS — DON'T SPOIL OUTCOMES` variant — allows continued narration around a check call as long as the outcome stays hidden.
+- Game-state markers (combat, loot, merchant, conditions, promises, weather) will NOT fire while it's on. Diagnostic only.
+- Implementation: `applyLeanTransforms()` post-processor in `dmPromptBuilder.js`. Applied per-turn on a copy of the system prompt, so the FULL prompt always stays in `messages[0]` and toggling lean off restores all rules immediately. 14/14 transform checks in `tests/lean-prompt-dryrun.js`.
+
+**Prelude/main toggle gap** — logged to `FUTURE_FEATURES.md` as deferred work. The Sonnet/Opus + Lean toggles only affect the main DM session, not prelude (different prompt builder, different model API param). Prelude has its own internal Auto/Sonnet/Opus button. Unification deferred until we know which toggle (if any) becomes a production default.
+
+### New diagnostic infrastructure
+
+- `tests/prose-quality.test.js` — re-runnable A/B harness, 3 scenarios × 5 variants against Sonnet, ~2 min / 15 API calls. Outputs to `tests/output/prose-quality-results.md` for human read-and-rank.
+- `tests/prose-quality-dryrun.js` — verifies regex transforms before burning API calls.
+- `tests/cache-tier-diff.js` — diagnoses cache content stability. Generates the prompt twice with the same character + once with simulated state changes; reports tier sizes and byte-level diffs. Confirmed tier 2 byte-stable across state changes after the architecture fix.
+- `tests/lean-prompt-dryrun.js` — 14 idempotent checks that lean transforms strip the right things and leave the right things alone.
+- `tests/seed-test-characters.js` — creates 4 identical Riv-style cleric characters (Riv (A) Sonnet/Default, (B) Sonnet/Lean, (C) Opus/Default, (D) Opus/Lean). Bypasses prelude (`creation_phase = 'active'`). Initial version had werewolf priming in the quest field — fixed. Backstory expanded to 1100 chars to ensure tier 2 exceeds the 1024-token cache threshold.
+- `tests/output/` — A/B run artifacts.
+
+### Pre-existing fixes that surfaced during this work
+
+- **`PreludeSession.jsx` runtime crash** — `descStyle` was referenced on lines 629 and 658 but never declared in the file (it lives in `PreludeSetupWizard.jsx`). Defined at module scope.
+- **Canon ledger duplicated in prelude Setup panel** — the v1.0.75 migration moved canon facts into `PreludeLorePanel` but left a copy in the Setup panel. Removed the duplicate; Setup now shows only character details + emerging values, canon lives exclusively in the Lore panel button.
+
+### Files
+
+- New: `server/services/dmPromptBuilder.js applyLeanTransforms()` export, `tests/prose-quality.test.js`, `tests/prose-quality-dryrun.js`, `tests/lean-prompt-dryrun.js`, `tests/cache-tier-diff.js`, `tests/seed-test-characters.js`, `tests/output/prose-quality-results.md`, `tests/output/prose-quality-analysis.md`.
+- Modified: `server/services/dmPromptBuilder.js` (formatCharacterInfo split into staticText + dynamicText, prompt template uses both across CACHE_BREAK:AFTER_CHARACTER), `server/services/claude.js` (TIER1_CACHE_CONTROL with `ttl: '1h'`, TIER2_CACHE_CONTROL default 5m), `server/routes/dmSession.js` (modelOverride + leanPrompt body params on /start + /message; full prompt restored to messages[0] post-call so toggles are reversible mid-session), `client/src/App.jsx` (Sonnet/Opus pill + Lean Prompt pill on home page), `client/src/components/DMSession.jsx` (forceOpus state + in-session pill + leanPrompt read from localStorage at send time), `client/src/components/SessionSetup.jsx` (Sonnet/Opus buttons replace Auto/Claude/Ollama), `client/src/components/PreludeSession.jsx` (descStyle declaration; canon ledger removed from Setup panel), `FUTURE_FEATURES.md` (prelude/main toggle unification entry).
+
 ## [1.0.0.95] - 2026-04-24 — Playtest fixes round 2 + transcript decoupling
 
 Eight fixes from the v1.0.94 playtest. Two infrastructure changes (transcript decoupling, accurate turn counter) plus six prompt + verifier fixes for issues observed in the actual play.

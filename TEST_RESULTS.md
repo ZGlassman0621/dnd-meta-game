@@ -1,5 +1,31 @@
 # Test Results Log
 
+## 2026-04-26 — v1.0.96 Prose-quality diagnostic + prompt cache architecture fix
+
+**Change scope:** Investigation of original "Order of Dawn's Light" Opus 4.5 baseline against current production. Three new diagnostic toggles (Force Opus, Lean Prompt) on home page. Cache architecture fix — split character info into static (tier 2) + dynamic (tier 3) blocks; tier 1 switched to 1-hour TTL. Pre-existing PreludeSession descStyle crash fixed; prelude canon ledger duplicate removed from Setup panel.
+
+**Client build:** ✅ passed.
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/character-memory.test.js`     | ✅ 56 passed |
+| `tests/moral-diversity.test.js`      | ✅ 59 passed |
+| `tests/combat-tracker.test.js`       | ✅ 26 passed |
+| `tests/loot-systems.test.js`         | ✅ 4 suites passed |
+| `tests/condition-tracking.test.js`   | ✅ 56 passed |
+| `tests/lean-prompt-dryrun.js`        | ✅ 14/14 transform checks passed |
+| `tests/cache-tier-diff.js`           | ✅ tier 2 byte-stable across simulated state changes (HP/gold/location/quest/inventory) |
+
+**Diagnostic harness output:**
+
+- `tests/prose-quality.test.js` re-run: 15/15 API calls completed. Subsequent turns hit cache at 60–83% (limited by harness's 3 scenarios × 5 variants — real sessions reuse the same prompt many more times).
+- `tests/output/prose-quality-results.md` — raw 15-output A/B against Sonnet, baseline + 4 mutations.
+- `tests/output/prose-quality-analysis.md` — verdicts on the 6 original hypotheses, 2 new findings (OBSERVATION-as-check truncation, HARD STOPS compressing cinematic build), recommended next experiments.
+
+**Net assessment:** No regressions. The character-info split is backward-compatible (`text` field still returned alongside new `staticText` / `dynamicText`) — any caller still using `char.text` continues to work. Prompt prompt-builder tests unchanged in count, all green. The cache architecture fix is verified by the new `cache-tier-diff.js` harness — tier 2 is now byte-identical across HP/gold/location/quest/inventory mutations, which was the source of the 55% cache hit rate the production logs surfaced.
+
 ## 2026-04-24 — v1.0.92 Playtest fixes (5 issues from session 124)
 
 **Change scope:** Five prompt + detector fixes from playtest observations. Rule 2c (player input is player authorship), violation-detector whitelist for sensory "you know", Rule 6d (give player data to answer), Rule 19b (triadic-rhythm tic ban), toned-down canon banner.

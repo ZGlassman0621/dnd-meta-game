@@ -15,6 +15,8 @@ export default function SessionSetup({
   providerPreference,
   onProviderChange,
   onCheckStatus,
+  forceOpus,
+  onForceOpusChange,
   // Campaign context
   campaignContext,
   continueCampaign,
@@ -102,36 +104,57 @@ export default function SessionSetup({
                 <strong>AI Provider:</strong> {llmStatus.provider === 'claude' ? 'Claude (Anthropic)' : 'Ollama (Local)'}
                 {llmStatus.model && <span style={{ opacity: 0.7 }}> • {llmStatus.model}</span>}
               </span>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.3rem' }}>
-                <button
-                  onClick={() => {
-                    const next = providerPreference === 'auto'
-                      ? 'ollama'
-                      : providerPreference === 'ollama'
-                        ? 'claude'
-                        : 'auto';
-                    onProviderChange(next);
-                  }}
-                  style={{
-                    padding: '0.2rem 0.5rem', borderRadius: '4px',
-                    border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)',
-                    color: '#ccc', fontSize: '0.75rem', cursor: 'pointer'
-                  }}
-                >
-                  {providerPreference === 'auto' ? 'Auto' : providerPreference === 'claude' ? 'Claude' : 'Ollama'}
-                </button>
-                <button
-                  onClick={onCheckStatus}
-                  title="Recheck provider availability"
-                  style={{
-                    padding: '0.2rem 0.4rem', borderRadius: '4px',
-                    border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)',
-                    color: '#ccc', fontSize: '0.75rem', cursor: 'pointer'
-                  }}
-                >
-                  ↻
-                </button>
-              </div>
+
+              {/* Model selector — Sonnet (default, Opus only for first session)
+                  vs Opus (every turn, denser prose, slower + costlier).
+                  Replaces the old Auto/Claude/Ollama provider toggle.
+                  Provider stays on 'auto' so Ollama is still a fallback if
+                  Claude is unreachable, but the user-visible knob is now
+                  the model decision — that's the lever that actually
+                  changes prose quality. */}
+              {llmStatus.provider === 'claude' && (
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem' }}>
+                  <button
+                    onClick={() => onForceOpusChange?.(false)}
+                    title="Sonnet — default. Opus is used only for the first session of a new campaign; continuations use Sonnet."
+                    style={{
+                      padding: '0.25rem 0.7rem', borderRadius: '4px',
+                      border: `1px solid ${!forceOpus ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
+                      background: !forceOpus ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.04)',
+                      color: !forceOpus ? '#a78bfa' : '#888',
+                      fontSize: '0.75rem', fontWeight: !forceOpus ? 'bold' : 'normal',
+                      cursor: 'pointer', letterSpacing: '0.03em'
+                    }}
+                  >
+                    Sonnet
+                  </button>
+                  <button
+                    onClick={() => onForceOpusChange?.(true)}
+                    title="Opus — every turn. Denser prose, slower, more expensive."
+                    style={{
+                      padding: '0.25rem 0.7rem', borderRadius: '4px',
+                      border: `1px solid ${forceOpus ? '#ff8c00' : 'rgba(255,255,255,0.2)'}`,
+                      background: forceOpus ? 'rgba(255, 140, 0, 0.2)' : 'rgba(255,255,255,0.04)',
+                      color: forceOpus ? '#ff8c00' : '#888',
+                      fontSize: '0.75rem', fontWeight: forceOpus ? 'bold' : 'normal',
+                      cursor: 'pointer', letterSpacing: '0.03em'
+                    }}
+                  >
+                    Opus
+                  </button>
+                  <button
+                    onClick={onCheckStatus}
+                    title="Recheck provider availability"
+                    style={{
+                      padding: '0.25rem 0.4rem', borderRadius: '4px',
+                      border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)',
+                      color: '#ccc', fontSize: '0.75rem', cursor: 'pointer'
+                    }}
+                  >
+                    ↻
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Campaign Continuity - Show if there are previous sessions */}

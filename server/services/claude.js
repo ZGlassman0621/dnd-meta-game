@@ -48,6 +48,19 @@ let cumulativeCacheStats = {
   output: 0
 };
 
+// Cache TTL — Anthropic supports '5m' (default, 1.25× write cost) and '1h'
+// (2× write cost). We use 1h for tier 1 because:
+//   • DM sessions often have multi-minute gaps between turns (player reads
+//     the response, thinks, types). With 5m TTL, the cache evicts mid-session
+//     and we pay for full rebuild every ~5–6 turns. The 2× write cost is
+//     amortized over 60 minutes vs 5 minutes — net cheaper for thoughtful play.
+//   • Tier 2 (per-character) uses 5m. It's smaller and only caches across
+//     same-character turns; the 1h premium isn't worth it.
+//   • Cumulative session log on master/main showed turn-1 cache eviction
+//     happening at t5, t11, t18, t27 — exactly the 5-minute boundaries.
+const TIER1_CACHE_CONTROL = { type: 'ephemeral', ttl: '1h' };
+const TIER2_CACHE_CONTROL = { type: 'ephemeral' };
+
 function buildSystemParam(systemPrompt) {
   // Backward-compat: no system prompt or non-string → pass through unchanged.
   if (!systemPrompt || typeof systemPrompt !== 'string') return systemPrompt;
@@ -81,7 +94,7 @@ function buildSystemParam(systemPrompt) {
   // 2-block form (only AFTER_CORE marker present)
   if (afterChar === null) {
     return [
-      { type: 'text', text: core, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: core, cache_control: TIER1_CACHE_CONTROL },
       { type: 'text', text: afterCore }
     ];
   }
@@ -91,14 +104,14 @@ function buildSystemParam(systemPrompt) {
   // the full 3-block form.
   if (!afterCoreBigEnough) {
     return [
-      { type: 'text', text: core, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: core, cache_control: TIER1_CACHE_CONTROL },
       { type: 'text', text: `${afterCore}\n\n${afterChar}` }
     ];
   }
 
   return [
-    { type: 'text', text: core, cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: afterCore, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: core, cache_control: TIER1_CACHE_CONTROL },
+    { type: 'text', text: afterCore, cache_control: TIER2_CACHE_CONTROL },
     { type: 'text', text: afterChar }
   ];
 }

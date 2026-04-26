@@ -28,6 +28,15 @@ const DEFAULT_MODEL = 'gpt-oss:20b';
 export default function DMSession({ character, allCharacters, onBack, onCharacterUpdated }) {
   const [llmStatus, setLlmStatus] = useState(null);
   const [providerPreference, setProviderPreference] = useState('auto'); // 'auto' | 'claude' | 'ollama'
+  // Diagnostic: force Opus for every turn (default Sonnet for continuations).
+  // Persisted in localStorage so the choice survives reload during a playtest.
+  const [forceOpus, setForceOpus] = useState(() => {
+    try { return localStorage.getItem('dndForceOpus') === '1'; } catch { return false; }
+  });
+  const updateForceOpus = (next) => {
+    setForceOpus(next);
+    try { localStorage.setItem('dndForceOpus', next ? '1' : '0'); } catch {}
+  };
 
   // Campaign module selection
   const [selectedModule, setSelectedModule] = useState('custom');
@@ -658,6 +667,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           customNpcs: selectedNpcs,
           model: DEFAULT_MODEL,
           providerPreference,
+          modelOverride: forceOpus ? 'opus' : null,
+          // Lean prompt is read fresh from localStorage at API-call time
+          // (not state) so the home-page toggle takes effect immediately
+          // without needing to re-thread state through DMSession.
+          leanPrompt: (() => { try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false } })(),
           // Campaign continuity
           continueCampaign: continueCampaign && campaignContext?.hasPreviousSessions,
           previousSessionSummaries: continueCampaign && campaignContext?.recentSummaries
@@ -736,6 +750,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         body: JSON.stringify({
           action,
           providerPreference,
+          modelOverride: forceOpus ? 'opus' : null,
+          // Lean prompt is read fresh from localStorage each turn so toggling
+          // the home-page pill mid-session takes effect on the very next /message.
+          leanPrompt: (() => { try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false } })(),
           activeConditions: {
             player: playerConditions,
             companions: companionConditions
@@ -2066,6 +2084,34 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             </div>
           )}
 
+          {/* Model toggle chip — diagnostic. Click to flip Opus/Sonnet for the next turn.
+              Lets the player A/B prose quality within a single session. Only shown when
+              Claude is the active provider. */}
+          {llmStatus?.provider === 'claude' && (
+            <button
+              onClick={() => updateForceOpus(!forceOpus)}
+              title={forceOpus
+                ? 'Forcing Opus for every turn. Click to switch back to Sonnet (default for continuations).'
+                : 'Using Sonnet (default for continuations). Click to force Opus for the next turn.'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                padding: '0.2rem 0.55rem',
+                background: forceOpus ? 'rgba(255, 140, 0, 0.18)' : 'rgba(139, 92, 246, 0.15)',
+                border: `1px solid ${forceOpus ? 'rgba(255, 140, 0, 0.5)' : 'rgba(139, 92, 246, 0.4)'}`,
+                color: forceOpus ? '#ff8c00' : '#a78bfa',
+                borderRadius: '999px',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                letterSpacing: '0.03em',
+                cursor: 'pointer'
+              }}
+            >
+              {forceOpus ? 'Opus' : 'Sonnet'}
+            </button>
+          )}
+
           {/* Spell Slots Display */}
           {Object.keys(spellSlots.max).length > 0 && (
             <div className="spell-slots-tracker" style={{
@@ -2981,6 +3027,8 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       providerPreference={providerPreference}
       onProviderChange={(next) => { setProviderPreference(next); checkLLMStatus(next); }}
       onCheckStatus={() => checkLLMStatus()}
+      forceOpus={forceOpus}
+      onForceOpusChange={updateForceOpus}
       campaignContext={campaignContext}
       continueCampaign={continueCampaign}
       onContinueCampaignChange={setContinueCampaign}

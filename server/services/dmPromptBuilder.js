@@ -264,25 +264,87 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     }
   }
 
+  // Split character info into two blocks for prompt-cache stratification:
+  //
+  //   staticText  — identity that does NOT change during a session: name,
+  //                 race, class, level, abilities, skills, feats, spells,
+  //                 alignment/faith/personality/ideals/bonds/flaws,
+  //                 backstory, demographics. Lands in tier 2 (per-character
+  //                 cache, stable across all turns of a session).
+  //
+  //   dynamicText — state that DOES change during play: HP, AC, weapon
+  //                 (depends on equipped item), key equipment, current
+  //                 location, current quest. Lands in tier 3 (uncached).
+  //
+  // Before this split (v1.0.95), char info was a single block in tier 2.
+  // Tier 2 size oscillated around the 1024-token cache minimum and tier 2
+  // contents drifted as state changed turn-to-turn — both broke the cache.
+  // After the split: tier 2 is byte-stable across turns AND padded above
+  // the 1024-token threshold by including the full identity bundle the
+  // character schema supports (ideals/bonds/flaws/personality/faith/etc).
+  //
+  // Parsing language tags + tool proficiencies the same way as other JSON
+  // fields so they can be folded into staticText safely.
+  const languages = typeof character.languages === 'string'
+    ? JSON.parse(character.languages || '[]')
+    : (character.languages || []);
+  const toolProfs = typeof character.tool_proficiencies === 'string'
+    ? JSON.parse(character.tool_proficiencies || '[]')
+    : (character.tool_proficiencies || []);
+
+  const identityLines = [
+    `${label}:`,
+    `- Full Name: ${fullName}`,
+    `- First Name: ${firstName}${nickname ? `\n- Nickname: ${nickname} (only close friends or those the character has shared this with would use it)` : ''}`,
+    `- Gender: ${character.gender || 'unspecified'} - USE ${pronouns.toUpperCase()} PRONOUNS FOR THIS CHARACTER`,
+    `- Race: ${character.race}${character.subrace ? ` (${character.subrace})` : ''}`,
+    `- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}`,
+    `- Level: ${character.level}`,
+    `- Background: ${character.background || 'Unknown'}`,
+    `- Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}`,
+    `- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}${keeperSection}`,
+    character.alignment ? `- Alignment: ${character.alignment}` : null,
+    character.faith ? `- Faith: ${character.faith}` : null,
+    character.lifestyle ? `- Lifestyle: ${character.lifestyle}` : null,
+    character.age ? `- Age: ${character.age}` : null,
+    [character.height, character.weight].filter(Boolean).length > 0
+      ? `- Build: ${[character.height, character.weight].filter(Boolean).join(', ')}` : null,
+    [
+      character.hair_color ? `hair ${character.hair_color}` : null,
+      character.eye_color ? `eyes ${character.eye_color}` : null,
+      character.skin_color ? `skin ${character.skin_color}` : null
+    ].filter(Boolean).length > 0
+      ? `- Appearance: ${[
+          character.hair_color ? `hair ${character.hair_color}` : null,
+          character.eye_color ? `eyes ${character.eye_color}` : null,
+          character.skin_color ? `skin ${character.skin_color}` : null
+        ].filter(Boolean).join(', ')}` : null,
+    languages.length > 0 ? `- Languages: ${languages.join(', ')}` : null,
+    toolProfs.length > 0 ? `- Tool Proficiencies: ${toolProfs.join(', ')}` : null,
+    character.personality_traits ? `- Personality: ${character.personality_traits}` : null,
+    character.ideals ? `- Ideals: ${character.ideals}` : null,
+    character.bonds ? `- Bonds: ${character.bonds}` : null,
+    character.flaws ? `- Flaws: ${character.flaws}` : null,
+    character.backstory ? `- Backstory: ${character.backstory}` : null
+  ].filter(Boolean);
+
+  const stateLines = [
+    `${label} — CURRENT STATE (live values, may change during play):`,
+    `- HP: ${character.current_hp}/${character.max_hp}`,
+    `- Armor Class: ${ac}`,
+    `- Weapon: ${weaponStr}`,
+    `- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}`,
+    `- Current Location: ${character.current_location || 'Unknown'}`,
+    `- Current Quest: ${character.current_quest || 'None'}`
+  ];
+
   return {
-    text: `${label}:
-- Full Name: ${fullName}
-- First Name: ${firstName}${nickname ? `\n- Nickname: ${nickname} (only close friends or those the character has shared this with would use it)` : ''}
-- Gender: ${character.gender || 'unspecified'} - USE ${pronouns.toUpperCase()} PRONOUNS FOR THIS CHARACTER
-- Race: ${character.race}
-- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}
-- Level: ${character.level}
-- Background: ${character.background || 'Unknown'}
-- Current HP: ${character.current_hp}/${character.max_hp}
-- Armor Class: ${ac}
-- Weapon: ${weaponStr}
-- Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}
-- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}${keeperSection}
-- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}
-- Current Location: ${character.current_location || 'Unknown'}
-- Current Quest: ${character.current_quest || 'None'}
-${character.personality_traits ? `- Personality: ${character.personality_traits}` : ''}
-${character.backstory ? `- Backstory: ${character.backstory}` : ''}`,
+    staticText: identityLines.join('\n'),
+    dynamicText: stateLines.join('\n'),
+    // Backwards-compat: anything reading `text` still works (full block,
+    // static + dynamic concatenated). Internal callers should switch to
+    // staticText/dynamicText to opt into the cache-friendly split.
+    text: identityLines.join('\n') + '\n' + stateLines.join('\n'),
     firstName,
     nickname
   };
@@ -2336,12 +2398,14 @@ END OF CORE RULES
 
 ${worldSettingSection}
 
-${char1.text}
-${char2 ? '\n' + char2.text : ''}${formatProgression(sessionContext.progression)}${char2 && sessionContext.secondaryProgression ? formatProgression(sessionContext.secondaryProgression) : ''}
+${char1.staticText}
+${char2 ? '\n' + char2.staticText : ''}${formatProgression(sessionContext.progression)}${char2 && sessionContext.secondaryProgression ? formatProgression(sessionContext.secondaryProgression) : ''}
 
 PLAYER NAME SPELLING:
 The player character's name is exactly "${characterNames}". When the player shares a name or nickname in-game, use their exact spelling. Never paraphrase, "correct", or reinterpret it — and NPCs must use the same exact spelling and pronunciation.
 <!-- CACHE_BREAK:AFTER_CHARACTER -->
+${char1.dynamicText}
+${char2 ? '\n\n' + char2.dynamicText : ''}
 ${sessionContext.usedNames?.length > 0 ? `\nNAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n` : ''}
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
@@ -2409,4 +2473,66 @@ export function formatMythicForPrompt(mythicStatus, character) {
 }
 
 export { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception };
+
+/**
+ * applyLeanTransforms — diagnostic post-processor. Strips two prose-killing
+ * constraints from a fully-built system prompt without rebuilding it:
+ *
+ *   1. The MECHANICAL MARKERS section (every-turn marker scan tax). The
+ *      [COMBAT_START] / [LOOT_DROP] / [MERCHANT_SHOP] / etc. systems will
+ *      not fire while lean is on — that's the trade-off. Acceptable for
+ *      narrative-quality testing.
+ *
+ *   2. Cardinal Rule 2 (HARD STOPS). The strict version forces the AI to
+ *      end the response immediately after any roll request, which compresses
+ *      cinematic build-ups (the body-approach scene from the original
+ *      campaign was 250 words of layered horror BEFORE the check call).
+ *      The lean version softens it to "don't reveal the outcome," allowing
+ *      continued narration around the request.
+ *
+ * Used by /start and /message routes when req.body.leanPrompt is true.
+ * Idempotent — running it twice is a no-op (the markers section is already
+ * gone the second time).
+ *
+ * Toggling lean off mid-session also works because the FULL prompt stays
+ * in messages[0]; we apply the transform per-turn on a copy.
+ */
+export function applyLeanTransforms(systemPrompt) {
+  if (!systemPrompt || typeof systemPrompt !== 'string') return systemPrompt;
+
+  let result = systemPrompt;
+
+  // (1) Strip the entire MECHANICAL MARKERS section.
+  result = result.replace(
+    /═══+\s*\nMECHANICAL MARKERS\s*\n═══+[\s\S]*?(?=\n═══+\s*\nEND OF CORE RULES|\n──────────── STORY MEMORY)/,
+    '═══════════════════════════════════════════════════════════════\nMECHANICAL MARKERS — DISABLED THIS SESSION\n═══════════════════════════════════════════════════════════════\nLean prompt mode is active. System markers (combat, loot, merchant, conditions, promises) are disabled — narrate cleanly without bracketed system tags. Game-state systems will not update from this session.\n\n'
+  );
+
+  // (2) Replace Cardinal Rule 2 (HARD STOPS) with the soft version.
+  // The lean rule preserves the no-spoiler discipline (don't reveal check
+  // outcomes before the player rolls) but lifts the "STOP after the request"
+  // constraint that was killing cinematic moments.
+  result = result.replace(
+    /─{3,}\s*\n2\. HARD STOPS\s*\n─{3,}[\s\S]*?(?=─{3,}\s*\n3\. SCENE INTEGRITY)/,
+    `─────────────────────────────────────────────
+2. ROLL REQUESTS — DON'T SPOIL OUTCOMES
+─────────────────────────────────────────────
+When you call for a dice roll, you may continue narrating the surrounding moment — environment, other characters' reactions, the player's posture as they prepare. Never reveal the *outcome* of the check before the player rolls.
+
+The roll request can sit in the middle of a paragraph. You don't need to STOP after asking for it. The constraint is only on outcomes — never describe what the check reveals/achieves until the player gives you their number.
+
+When an NPC asks the player a direct question, leave space for an answer — at most one short action beat from another character, then end the response so the player drives.
+
+EXAMPLE — RIGHT (cinematic build with check inside):
+> The barn door hangs crooked, half-torn from its hinges. The smell of blood reaches you before you see anything — heavy, iron, wrong. Make a Perception check as you cross the last twenty feet. The morning light catches something pale at the edge of the hayloft, but you can't make out what it is yet.
+
+EXAMPLE — WRONG (reveals the outcome):
+> Make a Perception check. You spot a hidden door behind the barrel.
+
+`
+  );
+
+  return result;
+}
+
 export default { createDMSystemPrompt };
