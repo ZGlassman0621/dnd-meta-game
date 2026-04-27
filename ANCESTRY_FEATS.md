@@ -1,6 +1,6 @@
 # Ancestry Feats Design
 
-Status: In review — design framework + Dwarf (first race) for pattern approval.
+Status: All 13 lists complete. Balance pass applied. Pending: cross-system integration check, AI memory architecture decisions, implementation.
 
 ## System Overview
 
@@ -22,9 +22,9 @@ Ancestry Feats are a progression layer parallel to class and theme. Each charact
 - Companions **auto-pick** based on personality — no menus to wade through when leveling up companions.
 
 **Scope:**
-- 10 major races + 2 subrace variations (Drow, Aasimar 3 paths) = ~12 lists
-- 5 tiers × 3 feats = 15 feats per list
-- Total: ~180 ancestry feats to design
+- 10 major races + Drow as a distinct list + Aasimar's three paths each as a distinct progression tree = **13 lists total**
+- 5 tiers × 3 feats baseline + 1 cross-pick at L13 ("Path Less Walked") = 16 feats per list
+- Total: **208 ancestry feats** across all 13 lists
 
 **Design principles:**
 1. **Complement, don't duplicate.** Feats expand on existing racial traits; they don't repeat them.
@@ -116,6 +116,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: Your ancestors bled in this war before you were born. The scar runs deep enough to shield you.*
 
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Some dwarves carry an old fire — a thread of something the mountain didn't put there. Most never see it surface. You did. The clan elders will not approve, and the stone will not forget.*
+
 ### L18 — Legendary
 
 **Walk in Stone** — Once per long rest, you can merge with a stone wall, floor, or ceiling as an action. You travel through stone at half your walking speed for up to 10 minutes. While merged, you can see and hear through 1 foot of stone in any direction. You cannot attack or cast spells while merged. You emerge at a point of your choice within movement range.
@@ -195,6 +199,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 **Elvensight** — Your Darkvision extends to 120 feet. You can see through magical darkness up to 30 feet, and you are immune to being magically blinded (though mundane blinding — like a flash of bright light into your eyes — still functions normally for 1 round).
 
 *Flavor: Your eyes remember a time before torches.*
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Eight hundred years is enough to brush against many bloodlines. Something you noticed in passing, lifetimes ago, has decided to make itself known in you now. The Trance shows you which thread, and where it leads.*
 
 ### L18 — Legendary
 
@@ -276,6 +284,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: The house is always part of you. Sometimes that protects you. Sometimes it marks you.*
 
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Lolth's children have always been changeable — exile, defiance, escape. What surfaces in you now is older than the spider's web. Something elven that the dark didn't quite kill, or something else entirely that the Underdark gathered up. You decide which.*
+
 ### L18 — Legendary
 
 **Spider Queen's Disciple (or Apostate)** — You gain **blindsight to 60 feet** when in darkness (natural or magical) — you perceive the vibrations of Lolth's web, the currents of fate itself. This sense functions even when you are blinded or surrounded by silence. For devout Drow, this is a boon from the Spider Queen. For apostate Drow, it is a scar of heritage they cannot fully escape.
@@ -305,6 +317,8 @@ This keeps companion progression meaningful without dumping mechanical choices o
 ### L1 — Foundational Identity
 
 **Jack of All Trades** *(fits Standard Human well)* — You can add half your proficiency bonus (rounded down) to any ability check that doesn't already include your proficiency bonus. This does not apply to attack rolls or saving throws.
+
+*Bard interaction:* If you take this feat as a Human Bard, you gain Jack of All Trades earlier than your class would grant it. When your Bard class would grant the feature at L2, your version upgrades — you now add half your proficiency bonus **rounded up** (instead of rounded down) to ability checks that don't already include your proficiency bonus. This represents the unique synergy between human breadth and bardic versatility.
 
 *Flavor: You've tried a little of everything. Some of it stuck.*
 
@@ -354,9 +368,13 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: You've been everywhere, and you've been paying attention.*
 
-**Forge of Will** — Once per long rest, you can use your reaction when you fail a saving throw to succeed instead. This represents the distinctly human capacity to push through what should stop you.
+**Forge of Will** — Once per long rest, when you fail a Constitution or Wisdom saving throw, you can use your reaction to succeed instead. This represents the distinctly human capacity to push through what should stop you — a defiance of body and mind both.
 
-*Flavor: Your body says no. You say "not today."*
+*Flavor: Your body says no. Your mind says no. You say "not today."*
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Humans don't keep clean bloodlines. Whatever your great-grandmother was — and her great-grandmother before her — you carry a thread of it. That thread has just learned how to do something. It picked its moment.*
 
 ### L18 — Legendary
 
@@ -435,6 +453,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 **The Scout's Eye** — You have advantage on Perception checks in any environment. You can attempt to hide when merely obscured by another creature, an object, or terrain — not just when fully out of sight. Your small size has always been your ally.
 
 *Flavor: Bigger folk hide behind cover. You hide behind *almost* cover.*
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Halflings are everywhere. The wandering ones bring back more than stories. Somewhere in your line, a halfling kept a stranger's child warm one winter, or married into a family they should not have, or simply listened too closely to a song from another country. You inherited what that ancestor carried.*
 
 ### L18 — Legendary
 
@@ -516,6 +538,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: The aspect is not a costume. It is a glimpse of what you have always been.*
 
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: The first dragons did not mate only with other dragons. Most of those bloodlines failed. A few survived — recessive, dormant, waiting. In you, something other than draconic stirs. The dragon-blood in you is curious about it, not threatened. Both can hold a body at once.*
+
 ### L18 — Legendary
 
 **Full Wings** — Your wings fully awaken. You gain a **flying speed equal to your walking speed**. Cannot fly while wearing heavy armor. Wings can be folded but are always visible.
@@ -562,7 +588,7 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: You have always been half-trained in everything. You have also always been trainable in anything.*
 
-**Fey Reflexes** — Your Fey Ancestry deepens. You have advantage on *all* Wisdom saving throws (not just charm-related), and you can sense the presence of fey creatures within 60 feet.
+**Fey Reflexes** — Your Fey Ancestry deepens. You have advantage on Wisdom saving throws against being **charmed, frightened, compelled, or magically read** (previously only charmed). You can also sense the presence of fey creatures within 60 feet of you.
 
 *Flavor: The Feywild thread in you pulls taut when something unnatural comes close.*
 
@@ -593,6 +619,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 **Inherited Spellwork** — Learn two 2nd-level spells from any single spell list (chosen at feat time). Cast each once per long rest without a spell slot. Charisma is your spellcasting ability.
 
 *Flavor: You dreamed them. Then you remembered them. Then you cast them.*
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Two heritages already. Why not a third? You have always been the kind of person something could surface in — half-belonging is a kind of openness that pure-blood races don't possess. The new thread settles in like it was waiting for room.*
 
 ### L18 — Legendary
 
@@ -660,7 +690,7 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 ### L13 — Deep Heritage
 
-**Bloodied and Unbroken** — Your Relentless Endurance (as enhanced by L1) now drops you to **half your HP maximum** instead of 1 HP. Once per long rest.
+**Bloodied and Unbroken** — Your Relentless Endurance (as enhanced by L1) now drops you to **half your HP maximum** instead of 1 HP. Once per long rest. *If you have taken Endurance of Blood (L1), this feat replaces its threshold (you now drop to half your HP maximum instead of 1 HP) but retains the once-per-short-rest recharge from Endurance of Blood, capped at 3 uses per long rest.*
 
 *Flavor: You stood up. The battlefield paused. You kept standing.*
 
@@ -672,13 +702,17 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: Most of you is a story the blades have already told.*
 
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Orc warbands have raided every coast for ten thousand years. They take captives. They take blood. The bloodlines of the world are tangled with orc heritage in ways the orcs themselves don't always know — and they are tangled with other things back. You carry one of those tangles, surfaced now.*
+
 ### L18 — Legendary
 
 **Unkillable** — Resistance to all physical damage (bludgeoning, piercing, slashing). Your Relentless Endurance activates **twice** between long rests.
 
 *Flavor: Something will eventually kill you. Not today. Probably not this year.*
 
-**Orc Blood Awakened** — Your orcish heritage fully manifests. You grow to 7+ feet tall, gain +2 STR (max 22), and your weapon attacks deal an additional die of damage. This is permanent, visible, and cannot be hidden.
+**Orc Blood Awakened** — Your orcish heritage fully manifests. You grow to 7+ feet tall, gain +2 STR (max 22), and your weapon attacks deal an additional die of damage. This transformation is permanent, visible, and cannot be hidden. You will be readily identifiable as Half-Orc to any creature that has previously known another Half-Orc — affecting Stealth, Disguise, and certain social interactions in cultures where Half-Orcs are uncommon or unwelcome.
 
 *Flavor: You woke one morning bigger than your armor. Your armor was the problem.*
 
@@ -700,7 +734,7 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 *Flavor: You learned Infernal before you learned not to ask about it.*
 
-**Charmer of the Damned** — Proficiency in Persuasion or Deception. Once per short rest, when you fail a Charisma check, you can **reroll without disadvantage** (even if you had disadvantage originally). The devilish charm in your blood makes you harder to dismiss.
+**Charmer of the Damned** — Proficiency in Persuasion or Deception. Once per short rest, when you fail a Charisma check, you may reroll the d20 once. The reroll is made at neutral — no advantage or disadvantage applies to the reroll, regardless of the original roll's status. The devilish charm in your blood makes you harder to dismiss.
 
 *Flavor: Every tiefling in your line sweet-talked their way past something. You inherited that.*
 
@@ -724,7 +758,7 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 ### L7 — Adolescent Mastery
 
-**Hellish Wrath** — Your racial Hellish Rebuke deals damage equal to your **character level** (instead of the normal scaling), and can now be used **once per short rest**.
+**Hellish Wrath** — Your racial Hellish Rebuke is now usable **once per short rest** (instead of once per long rest), and its damage equals your **character level** (instead of the standard scaling — neutral or slightly worse than upcasting at most levels, in exchange for the increased frequency).
 
 *Flavor: They hurt you. You remembered the old words. They stopped.*
 
@@ -749,6 +783,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 **Infernal Pact Magic** — Cast one 3rd-level or lower spell from the warlock spell list once per long rest without a spell slot. Choose at feat time. Charisma is your spellcasting ability.
 
 *Flavor: The pact was made before you were born. You just learned your end of it.*
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot.
+
+*Flavor: Devils trade in bloodlines. Somewhere in the long contract that made you a tiefling, your line was promised something else first — older, deeper, possibly forgotten by all parties. That promise is collecting now, in you. The devil's clerks have not noticed yet.*
 
 ### L18 — Legendary
 
@@ -815,6 +853,8 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 **Wall of the Righteous** — Once per long rest, create a 20-foot wall of radiant light within 60 feet. 30 ft long × 10 ft tall, lasts 1 minute. Creatures must DC 15 STR save to push through; deals 2d6 radiant damage to those starting their turn in or adjacent to it. Allies treat it as safe difficult terrain.
 
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot. *Flavor: The celestial blood does not always flow pure. Sometimes the watcher who guarded your ancestor was not alone — and another presence touched your line in passing, asking to be remembered. It surfaces now, asking nothing more than to do its work alongside the light.*
+
 ### L18 — Legendary
 
 **Wings of Eternal Grace** — Your wings are permanent — always visible, always functional. Flying speed equal to walking speed at all times.
@@ -860,6 +900,8 @@ This keeps companion progression meaningful without dumping mechanical choices o
 **Heart of the Furnace** — Immune to fire damage. Resistance to cold damage. Your body is always warm; you do not suffer from cold environments.
 
 **Scourge's Reach** — Radiant Consumption radius expands to **30 feet** (from 10). You can project it in a cone rather than a sphere to spare allies behind you.
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot. *Flavor: Sacred fire purifies what it touches. Your fire has touched things on its way to you, drawn them in, kept some — not as taint, but as shape. What it brought back is making itself known. It does not contradict your purpose. It complicates it.*
 
 ### L18 — Legendary
 
@@ -910,6 +952,10 @@ This keeps companion progression meaningful without dumping mechanical choices o
 - **Embraced Shadow** — You commit to the darkness. Gain +10 temporary HP at the start of each combat. Your necrotic damage bonuses increase by one die size (d6 → d8). Fiends may respect you; celestials may turn from you.
 
 *This choice is permanent and shapes your L18 options.*
+
+> **Design note — deliberate asymmetry:** Embraced Shadow's mechanical benefits at L13 are deliberately stronger than Redeemer's Path. The dark path mechanically tempts the player to embrace it. The L18 capstones (Final Fall, Final Rise) rebalance — both are symmetrically powerful at the legendary tier. The L13-to-L18 stretch represents the cost of choosing the harder path.
+
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot. *Flavor: Your blood is already complicated. Adding a thread doesn't surprise you. The fall taught you that bloodlines are negotiable — yours has negotiated again, in some quiet hour you didn't notice. You are still you. You are also more.*
 
 ### L18 — Legendary
 
@@ -966,6 +1012,8 @@ This keeps companion progression meaningful without dumping mechanical choices o
 
 **Constructed Will** — Immune to being charmed, exhausted, frightened, or possessed. Advantage on saves against psychic damage and mental effects. Your soul was not made for such bindings.
 
+**The Path Less Walked** *(class-flexible cross-pick)* — Choose one feat from another race's L1, L3, or L7 list. Treat it as if you were a member of that race for the purpose of taking it, and reflavor it as an unusual expression of your own bloodline (work the framing out with the AI DM at the moment of taking it). Only L1, L3, and L7 feats from other races are eligible — not L13 or L18. The chosen feat occupies a single L13 slot. *Flavor: Your maker drew on patterns, and the patterns were not all human or dwarven. Some came from elsewhere — from races whose blood the construction-magic could mimic without copying. Something in those patterns has activated. Your forge-makers would have called this a flaw. You are not sure they were right.*
+
 ### L18 — Legendary
 
 **Pinnacle of Design** — Composite Plating reaches **+3 AC** total. Resistance to bludgeoning/piercing/slashing from non-magical sources. Natural unarmed strike becomes 2d8 bludgeoning. You no longer require repair — your body is self-maintaining.
@@ -992,12 +1040,15 @@ This keeps companion progression meaningful without dumping mechanical choices o
 - Aasimar — Fallen Path (with Path's Choice at L13)
 - Warforged
 
-**Total:** 180 ancestry feats across 12 lists (15 per list: 5 tiers × 3 choices).
+**Total:** 208 ancestry feats across 13 lists (16 per list: L1/L3/L7/L18 = 3 choices each, L13 = 4 choices including the cross-pick "Path Less Walked").
+
+> *On Aasimar's three paths counting as three lists, not one:* Protector, Scourge, and Fallen are structurally distinct progression trees with different identity, mechanics, and L18 capstones — not flavor variants of a shared list. Each path has its own L1/L3/L7/L13/L18 feat set. They share only the L1 racial baseline and the same character creation point, similar to how subclasses share a class baseline but progress independently. Counting them as a single "Aasimar list" would obscure that structural reality, so this doc treats each as its own list throughout.
 
 ## Balance pass adjustments
 
 - **Elf Fey Reflexes (L3):** Advantage on "all WIS saves" narrowed to charm/frighten/compelled/magically-read only — was too broadly protective.
 - **Halfling Old Ones' Wisdom (L1):** Same narrowing as Elf — charm/frighten/compelled only, not all WIS saves.
+- **Half-Elf Fey Reflexes (L3):** Same narrowing as Elf — was missed in the original balance pass and corrected later (charm/frighten/compelled/magically-read, matching the Elf version exactly since the half-elven Fey Ancestry derives from the same source).
 - **Half-Elf Duality of Mind (L7):** Advantage on "all INT saves" narrowed to magically-read/compelled/detected.
 - **Halfling Second Luck (L3):** Reroll-2s now costs Luck charges (pool = proficiency bonus); reroll-1s remains unlimited via racial trait.
 - **Dwarf Stoneshaping Minor (L13):** Added 5 cubic feet limit per use.
@@ -1009,10 +1060,11 @@ This keeps companion progression meaningful without dumping mechanical choices o
 - **Protector Aasimar Miracle Hands (L13):** Scaling reduced from "2d6 + level × 2" to "2d6 + level."
 - **Scourge Aasimar Pillar of Light (L18):** "Immunity to all damage except necrotic/psychic" reduced to "resistance" — immunity was too strong even for a capstone.
 - **Warforged Modular Body Flight (L13):** Clarified "once per week" means selection frequency, not usage.
+- **All races — "Path Less Walked" L13 cross-pick (added):** Each L13 list gained a fourth feat option that lets the character pick any L1/L3/L7 feat from a different race's list, reflavored as an unusual surfacing of bloodline. Closes the "every race × every class works" hole without requiring a per-list audit. L13/L18 cross-picks deliberately excluded to prevent stacked-capstone abuse. Per-race flavor text written in matching voice; design lead may revise.
 
 ## Next phases
 
-1. **Balance pass** across all 12 lists (similar to what we did with Themes)
+1. **Balance pass** across all 13 lists (similar to what we did with Themes)
 2. **Cross-reference check** — ensure Ancestry Feats don't step on Theme abilities
 3. **Subclass × Theme synergy tags** (still pending from earlier decisions)
 4. **Mythic × Theme amplification combos** (still pending)
