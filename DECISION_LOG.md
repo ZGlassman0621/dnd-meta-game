@@ -24,9 +24,9 @@ Format per entry is light by design:
 These are the calls waiting on user input or external evidence. Listed newest-first.
 
 ### 🟡 Opus as production default for main DM sessions
-**Status:** Awaiting validation. **Owner:** User (after real-session testing).
-**Context:** v1.0.96 cache fix predicts Opus per-session cost drops from ~$1.55 → ~$0.85 (15-turn session). User playtest already confirmed Opus is the prose-quality lever. Question is whether the cost is acceptable as the always-on default.
-**Decision needed:** Make Opus the default for main DM session continuations, or keep Sonnet default with the home-page toggle.
+**Status:** Validation completed (v1.0.97 session 147 playtest); decision still open. **Owner:** User.
+**Context:** v1.0.96 cache fix delivered. Real measurement from 24-turn Opus playtest: ~71% average cache hit rate (close to the ~77% ceiling for thoughtful play), ~$2.89/session (~$1.50/hour). The original ~$0.85/session prediction was wrong because tier 3 dynamic content (chronicle context, narrative queue, world state) and accumulated message history grow per turn — they cap the achievable cache hit rate, not tier 1+2 alone. v1.0.98 adds tier 2 1-hour TTL (lever 1) which should reduce session cost by ~$0.20–$0.30. Three additional levers (rolling-summary-earlier, tier-3-trim, etc.) could push closer to ~$1.00/session if needed.
+**Decision needed:** Make Opus the default for main DM session continuations at the new measured cost (~$1.30–$1.50/hour after lever 1), or keep Sonnet default with the home-page toggle.
 **Related:** [`triage/prose-quality-triage.md`](triage/prose-quality-triage.md)
 
 ### 🟡 Lean Prompt toggle: keep as diagnostic or retire entirely
@@ -70,19 +70,28 @@ These are the calls waiting on user input or external evidence. Listed newest-fi
 **Why:** A single living "where are we" doc reduces session-startup cost and prevents lost work.
 **Implications:** Convention: items move *between* sections as state changes; never appended below stale entries. Maintained at session boundaries. PROJECT_TODO is the navigation hub; deeper docs (triage, brief, FUTURE_FEATURES) are pointed to from here.
 
-### 2026-04-26 — Tier 1 prompt cache uses 1-hour TTL; tier 2 stays at default 5-min (Architecture)
+### 2026-04-26 (v1.0.98) — Tier 2 prompt cache also moves to 1-hour TTL (Architecture)
+**Context:** v1.0.96 put tier 1 on 1-hour TTL but kept tier 2 at the default 5 minutes, on the assumption that tier 2's smaller size didn't justify the 2× write premium. The v1.0.97 session-147 playtest (24 turns, Opus) disproved that. Real cache log showed tier 2 re-creating ~6 times during the session — entries like `created 5221`, `created 2973`, `created 1927` at turns 10, 11, 18, 20, 22 — each costing ~$0.05. Pattern: thoughtful play gaps exceed 5 min, tier 2 expires, gets re-created on the next turn.
+**Decision:** Tier 2 now also uses `cache_control: { type: 'ephemeral', ttl: '1h' }`. Both tiers on 1-hour TTL.
+**Why:** Same reasoning as the v1.0.96 tier 1 decision, just confirmed empirically for tier 2: 2× write cost (1h) is amortized over 60 minutes vs 5; net cheaper for thoughtful play. The "smaller block, premium not worth it" intuition was wrong because tier 2 still gets re-created multiple times per session at 5m TTL during normal play, and each recreation pays the full block cost.
+**Implications:** Tier 2 re-creations during long pauses should drop from ~6/session to ~1/session. Per-session cost: ~$2.89 → ~$2.60 (~$0.20–$0.30 savings, depending on session length and pause distribution). Cross-session caching also benefits — the next session start can hit BOTH tiers from the prior session (session 147 t1 already showed 88% cache hit from tier 1 alone with 1-hour TTL; this should improve further now that tier 2 is included).
+**Related:** v1.0.98 changelog entry; [`triage/prose-quality-triage.md`](triage/prose-quality-triage.md)
+
+### 2026-04-26 (v1.0.96) — Tier 1 prompt cache uses 1-hour TTL (Architecture)
+> *Partially superseded 2026-04-26 (v1.0.98): tier 2 also moves to 1-hour TTL based on session-147 production data. See entry below for the new context.*
+
 **Context:** Production cache logs (session 144, Riv A playtest) showed tier 1 evicting every 5-6 turns. Anthropic's default ephemeral cache TTL is 5 minutes, and thoughtful play exceeds 5-minute boundaries between turns. Each eviction forced a full tier 1 rebuild (~5500 tokens).
-**Decision:** Use `cache_control: { type: 'ephemeral', ttl: '1h' }` on tier 1 (universal-static block). Tier 2 keeps the default 5-minute TTL.
-**Why:** Anthropic charges 2× to write 1-hour cache vs 1.25× for 5-minute, but 1-hour survives between thoughtful turns. Net cheaper for this play pattern. Tier 2 is smaller and per-character — the 1-hour premium isn't worth it.
-**Implications:** Per-session Opus cost drops meaningfully. If turns become rapid-fire (e.g., automated playtests), the math shifts — but real human play is the design target.
+**Decision:** Use `cache_control: { type: 'ephemeral', ttl: '1h' }` on tier 1 (universal-static block). Tier 2 keeps the default 5-minute TTL — assumption was that the smaller per-character block didn't justify the 2× write premium.
+**Why:** Anthropic charges 2× to write 1-hour cache vs 1.25× for 5-minute, but 1-hour survives between thoughtful turns. Net cheaper for tier 1.
+**Implications:** Tier 1 mid-session evictions eliminated. The tier 2 5-min decision turned out to be wrong — see v1.0.98 entry below.
 **Related:** v1.0.96 changelog entry; [`triage/prose-quality-triage.md`](triage/prose-quality-triage.md)
 
 ### 2026-04-26 — Split character info into static (tier 2) + dynamic (tier 3) for cache stability (Architecture)
 **Context:** Tier 2 cache hit rate was inconsistent in production (~55%). Investigation showed the entire character sheet (name, race, abilities, HP, gold, current location, current quest, equipped weapon) was a single block in tier 2. Every state change (every turn) drifted tier 2's content, forcing cache rebuilds.
 **Decision:** Split `formatCharacterInfo()` into `staticText` (identity that doesn't change session-to-session: name, race, class, abilities, skills, feats, spells, demographics, personality/ideals/bonds/flaws, backstory) → tier 2; and `dynamicText` (HP, AC, weapon, key equipment, current location, current quest) → tier 3. Backwards-compat: `text` field still returned with the concatenation so any caller still using it works.
 **Why:** Per-character cache should hit on every continuation turn within a session. With state mixed in, it never did. The split is the architecturally correct fix.
-**Implications:** Cache hit rate should rise to ~95% on Opus continuations. Pattern is now established — any future per-character static content should land in tier 2; per-turn state in tier 3.
-**Related:** v1.0.96 changelog entry; [`tests/cache-tier-diff.js`](tests/cache-tier-diff.js)
+**Implications:** Predicted at ~95% cache hit rate. Real measurement from session 147 (v1.0.97) was ~71% — close to the ~77% mathematical ceiling for this play pattern, since fresh-input from accumulated message history + tier 3 dynamic content (chronicle context, narrative queue, world state) caps the ratio. The ~95% prediction was wrong; ~71–77% is the realistic range. Pattern is now established — any future per-character static content should land in tier 2; per-turn state in tier 3.
+**Related:** v1.0.96 changelog entry; v1.0.97 session-147 production playtest; [`tests/cache-tier-diff.js`](tests/cache-tier-diff.js)
 
 ### 2026-04-26 — Sonnet/Opus model selector replaces Auto/Claude/Ollama provider toggle (UX + Direction)
 **Context:** During the prose-quality investigation, user needed to A/B Sonnet vs Opus across sessions. The existing setup-screen toggle was for *provider* (Auto/Claude/Ollama), not *model*.

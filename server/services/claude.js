@@ -49,17 +49,25 @@ let cumulativeCacheStats = {
 };
 
 // Cache TTL — Anthropic supports '5m' (default, 1.25× write cost) and '1h'
-// (2× write cost). We use 1h for tier 1 because:
-//   • DM sessions often have multi-minute gaps between turns (player reads
-//     the response, thinks, types). With 5m TTL, the cache evicts mid-session
-//     and we pay for full rebuild every ~5–6 turns. The 2× write cost is
-//     amortized over 60 minutes vs 5 minutes — net cheaper for thoughtful play.
-//   • Tier 2 (per-character) uses 5m. It's smaller and only caches across
-//     same-character turns; the 1h premium isn't worth it.
-//   • Cumulative session log on master/main showed turn-1 cache eviction
-//     happening at t5, t11, t18, t27 — exactly the 5-minute boundaries.
+// (2× write cost). Both tiers use 1h:
+//   • Tier 1 (universal-static) — DM sessions have multi-minute gaps between
+//     turns (player reads the response, thinks, types). With 5m TTL, cache
+//     evicts mid-session and we pay for full rebuild every ~5–6 turns. The
+//     v1.0.96 session-144 logs showed evictions at t1, t5, t11, t18 — exactly
+//     the 5-min boundaries. 1h TTL eliminated those.
+//   • Tier 2 (per-character) — initially kept at 5m on the assumption that
+//     the smaller block didn't justify the 2× write premium. The v1.0.97
+//     session-147 playtest disproved that: tier 2 re-created ~6 times in a
+//     single 24-turn session (entries like `created 5221` / `created 2973`
+//     in the cache log), each costing ~$0.05. Switching tier 2 to 1h
+//     consolidates re-creations to roughly one per session-hour and saves
+//     ~$0.20–$0.30 per session.
+//   • Net: both tiers on 1h. Cross-session caching benefits from this too —
+//     starting a new session ~30 min after the last one now hits both tiers
+//     on turn 1 (session 147 t1: 88% cache hit rate from the prior session's
+//     residual cache).
 const TIER1_CACHE_CONTROL = { type: 'ephemeral', ttl: '1h' };
-const TIER2_CACHE_CONTROL = { type: 'ephemeral' };
+const TIER2_CACHE_CONTROL = { type: 'ephemeral', ttl: '1h' };
 
 function buildSystemParam(systemPrompt) {
   // Backward-compat: no system prompt or non-string → pass through unchanged.

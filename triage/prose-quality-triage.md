@@ -34,7 +34,8 @@ Original 6, plus 2 surfaced by the diagnostic:
 **Prompt cache architecture fix** — the bigger win:
 - Tier 2 (per-character) was leaking dynamic state (HP, gold, location, equipped weapon). Split `formatCharacterInfo()` into `staticText` (tier 2) + `dynamicText` (tier 3). Verified byte-stable across state mutations via `tests/cache-tier-diff.js`.
 - Tier 1 (universal-static) was on 5-min TTL — evicting mid-session during thoughtful play (production logs showed eviction at t1, t5, t11, t18 — exactly the 5-minute boundaries). Switched to 1-hour TTL.
-- Cost impact for Opus, 15-turn session: ~$1.55 → ~$0.85, cache hit rate ~55% → ~95%.
+- Cost impact for Opus (measured in v1.0.97 session-147 playtest, 24 turns): ~$2.89/session (~$1.50/hour). Cache hit rate measured at ~71% — close to the ~77% mathematical ceiling for this play pattern (fresh-input from message history + tier 3 dynamic content limits achievable hit rate; tier 1+2 alone aren't the dominant input). The original v1.0.96 prediction of ~$0.85 / ~95% was based on wrong assumptions and has been corrected in CHANGELOG and DECISION_LOG.
+- Cross-session benefit confirmed: session 147 t1 hit 88% cache from prior session's residual tier 1 cache. v1.0.98 extending tier 2 to 1-hour TTL too should improve this further.
 
 **Test infrastructure**:
 - `tests/prose-quality.test.js` — 3 scenarios × 5 variants A/B harness against Sonnet, re-runnable.
@@ -48,7 +49,7 @@ Original 6, plus 2 surfaced by the diagnostic:
 
 ## Open questions
 
-1. **Does Opus-as-default hold up over a real week of play?** The cost math says yes (~$2/session at typical playthrough), but we need real session logs to confirm cache hit rate hits 95% in production-like turn cadence.
+1. **Is ~$1.50/hour acceptable as the always-on default?** Measured cost from v1.0.97 session 147 (24 turns Opus). Cache hit rate is at the achievable ceiling (~71%, close to the ~77% mathematical max). v1.0.98 lever 1 (tier 2 → 1-hour TTL) brings this down ~$0.20–$0.30 per session. Three more levers (rolling-summary-earlier, tier-3-trim) could push toward ~$1.00/hour if needed but trade cost for AI memory quality.
 2. **Should Lean Prompt be retired or kept as a diagnostic?** It didn't help the user's playtest. The automated A/B showed value only on edge moments. Recommend retire from production direction; possibly keep the toggle for future debugging.
 3. **H7 (OBSERVATION = ALWAYS A CHECK) — should we move it to JIT injection?** The rule kills tavern entries. Right answer might be: only inject when the player commits to a perception/investigation/stealth verb ("I sneak", "I search the body"), not on benign "I look around."
 4. **H8 (HARD STOPS) — should we soften in production?** The strict rule is correct in spirit (don't narrate the result before the player rolls) but applied too broadly (truncates the cinematic moment). Soft version exists in lean mode; could be folded into production Cardinal Rule 2.
@@ -97,7 +98,7 @@ Original 6, plus 2 surfaced by the diagnostic:
 This investigation closes when:
 1. A production decision is made on Opus vs Sonnet (and the toggles are either kept for debugging or retired).
 2. H7 (OBSERVATION-as-check) and H8 (HARD STOPS) are either fixed in production or deliberately deferred with rationale.
-3. Real-session cache metrics confirm the v1.0.96 cache fix delivers the predicted ~95% hit rate.
+3. Real-session cache metrics validated. (v1.0.97 session-147 measured ~71% hit rate at the ~77% ceiling — predicted ~95% was wrong, but the architecture fix did meaningfully improve from the pre-fix ~55% rate, and the cross-session caching benefit is real.)
 4. The findings + decisions are folded into the relevant design docs (CLAUDE.md, FUTURE_FEATURES.md as needed).
 
 When all four are done, this entry moves to a "Closed Investigations" archive at the bottom of TRIAGE.md (or the equivalent index of this folder), and a new file replaces it for the next investigation.

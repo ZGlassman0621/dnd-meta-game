@@ -2,6 +2,50 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.98] - 2026-04-26 — Tier 2 prompt cache to 1-hour TTL + cost-prediction corrections
+
+Single architecture change plus documentation corrections from the v1.0.97 session-147 playtest data.
+
+### Architecture: tier 2 prompt cache now uses 1-hour TTL
+
+In v1.0.96, tier 1 (universal-static) was put on 1-hour TTL but tier 2 (per-character) was kept at the default 5-minute TTL — the assumption was that the smaller block didn't justify the 2× write premium.
+
+The v1.0.97 session-147 playtest (24-turn Opus, character #1044 Riv C) disproved that assumption. Real cache logs showed tier 2 re-creating ~6 times during the session (entries like `created 5221`, `created 2973`, `created 1927` at turns 10, 11, 18, 20, 22) — each costing roughly $0.05. Pattern: thoughtful play gaps exceed 5 minutes, tier 2 expires, gets re-created on the next turn.
+
+Fix: tier 2 now also uses `cache_control: { type: 'ephemeral', ttl: '1h' }`. Both tiers on 1-hour TTL.
+
+**Expected savings:** ~$0.20–$0.30 per Opus session by consolidating tier 2 re-creations from ~6/session to ~1/session. Cross-session caching also benefits — the next session start can hit BOTH tiers from the prior session's residual cache (session 147 t1 already showed an 88% cache hit on tier 1 alone with 1-hour TTL; this should improve further with tier 2 also persisting).
+
+### Documentation: cost-prediction corrections
+
+The original v1.0.96 entries quoted "~$1.55 → ~$0.85 per session" as the predicted Opus cost improvement, with a ~95% cache hit rate target. Real session-147 data showed ~$2.89/session (~$1.50/hour) at ~71% cache hit rate.
+
+The prediction was wrong because it assumed tier 1+2 dominated the input. They don't — tier 3 dynamic content (chronicle context, narrative queue, world state, weather) and accumulated message history grow per turn, mathematically capping the cache hit ceiling at ~77% for thoughtful play. The 71% measured rate is close to that ceiling; the architecture fix is operating near optimal.
+
+Updated to reflect actual numbers:
+- `CHANGELOG.md` — v1.0.96 cost-impact table now shows measured numbers + a note explaining the prediction error.
+- `DECISION_LOG.md` — open Opus-default decision entry, character info split entry, and tier-1-TTL entry all updated with measured numbers; new tier-2-TTL entry added.
+- `PROJECT_TODO.md` — active item description updated; v1.0.96 in Recently Shipped reflects measured cost.
+- `triage/prose-quality-triage.md` — cost-impact bullet, open question 1, and closure criterion 3 all updated.
+
+### Strategic context (lever 1 of three)
+
+Per the cost analysis after session 147, three additional levers exist to push per-session cost lower if desired:
+
+1. **Tier 2 to 1-hour TTL** — this release. Saves ~$0.20–$0.30/session.
+2. Apply rolling summary earlier (currently triggers at turn 30; could trigger at turn 15). Would save ~$0.40–$0.60/session but trades cost for slightly weaker AI memory of recent turns.
+3. Trim tier 3 dynamic content (smarter pruning of chronicle context, narrative queue, world state). Would save ~$0.30–$0.50/session but is the most complex change and risks AI losing important context.
+
+This release ships only lever 1 — the cheap, behavior-risk-free fix. Levers 2 and 3 are deferred until we know whether the new measured cost is acceptable as a production default.
+
+### Files
+
+- Modified: `server/services/claude.js` (TIER2_CACHE_CONTROL now uses `ttl: '1h'`; comment block expanded with the v1.0.97 playtest reasoning).
+- Modified: `CHANGELOG.md` (v1.0.96 cost-impact table corrected; this v1.0.98 entry added).
+- Modified: `DECISION_LOG.md` (open Opus-default entry, character info split entry, tier-1-TTL entry updated; new tier-2-TTL entry added).
+- Modified: `PROJECT_TODO.md` (active item + Recently Shipped updated).
+- Modified: `triage/prose-quality-triage.md` (cost-impact bullet, open question, closure criterion updated).
+
 ## [1.0.0.97] - 2026-04-26 — Documentation hygiene: BRIEF, DECISION_LOG, TODO, triage convention
 
 No code changes. Three new docs that change how this project is navigated and how strategic-role collaborators (Claude PM, future-me, designers) get oriented.
@@ -71,14 +115,18 @@ Fix: split `formatCharacterInfo()` in `dmPromptBuilder.js` into two return field
 
 Fix: tier 1 now uses `cache_control: { type: 'ephemeral', ttl: '1h' }`. Anthropic charges 2× to write 1-hour cache vs 1.25× for 5-minute, but the 1-hour TTL survives between thoughtful turns and is net cheaper. Tier 2 keeps the default 5-minute TTL — smaller block, premium not worth it.
 
-**Cost impact (Opus, 15-turn session, with caching working):**
+**Cost impact (Opus, with caching working):**
 
-| | Before | After |
+> *Updated 2026-04-26 with v1.0.97 production data from session 147 (24-turn Opus playtest, character #1044 Riv C). The original prediction of ~$0.85/session and ~95% cache hit rate assumed tier 1+2 dominated the input. Real data showed they don't — tier 3 dynamic content (chronicle context, narrative queue, world state, weather) and accumulated message history grow per turn, mathematically capping the cache hit ceiling at ~77% for thoughtful play. Measured hit rate was 71% — close to the ceiling. Real per-session cost is closer to ~$1.50/hour of play (~$2.89 for the 24-turn session). Tier 2 is moving to 1-hour TTL in v1.0.98 (lever 1), which should save ~$0.20–$0.30 per session by consolidating tier 2 re-creations.*
+
+| | Before v1.0.96 | After v1.0.96 (measured in v1.0.97 playtest) |
 |---|---|---|
-| Cache hit rate | ~55% | ~95% |
-| Per-session cost | ~$1.55 | ~$0.85 |
-| Tier 1 evictions | every 5–6 turns | ~0 (1h TTL) |
-| Tier 2 cache | inconsistent (state leak) | byte-stable across turns |
+| Cache hit rate | ~55% | **~71% measured** (ceiling ~77%) |
+| Mid-session tier 1 evictions | every 5–6 turns | ~0 (1h TTL working as intended) |
+| Tier 2 cache stability | inconsistent (state leak) | byte-stable across turns |
+| Tier 2 re-creations during long pauses | n/a (always evicted anyway) | ~6 per 24-turn session (5m TTL) |
+| Per-session cost (24-turn Opus) | not previously measured at this fidelity | **~$2.89 measured** (~$1.50/hour) |
+| First-turn cache hit (cross-session) | 0% | **88% measured** (1h TTL keeps prior session's cache alive) |
 
 ### Diagnostic toggles
 
