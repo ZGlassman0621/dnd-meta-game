@@ -2,6 +2,40 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.100] - 2026-04-27 — Lean Prompt toggle retired from user-facing UI
+
+User decision logged in DECISION_LOG ("Retire Lean Prompt toggle as production direction"). The toggle was a diagnostic-only experiment that didn't move the needle in real playtest. Removing it from the UI clears the question of "which one should I use?" since it has been answered.
+
+### What changed
+
+**Removed from the user-facing surface (`client/src/App.jsx`):**
+- The "✂️ Lean prompt ON / · Lean prompt OFF" pill that lived under the home-page Sonnet/Opus pill
+- The `leanPrompt` React state and its `updateLeanPrompt` setter
+- The localStorage write path that was triggered by the toggle (the *read* path stays — see below)
+- Tooltip / help-text references to "Lean Prompt"
+
+**Kept intact as a diagnostic harness:**
+- `applyLeanTransforms()` in `server/services/dmPromptBuilder.js` — the post-processor that strips MECHANICAL MARKERS and softens Cardinal Rule 2. The function and its 14 dryrun checks (`tests/lean-prompt-dryrun.js`) still pass.
+- The `leanPrompt: true` body-param path through `/api/dm-session/start` and `/message`. Server still applies the transform when set.
+- The localStorage *read* in `DMSession.jsx` (two call sites — `/start` and `/message`). A developer can still trigger lean by setting `dndLeanPrompt=1` in the browser console for prompt-design experiments. Comments updated to explain the diagnostic-only framing.
+
+The split keeps the post-process-the-system-prompt-on-a-copy pattern available for future prompt-design experiments without surfacing a question to users that has been answered.
+
+### Why
+
+Lean didn't move the needle in user playtest. Automated A/B showed it helped edge cases (atmospheric scene-opens, cinematic build) but not the average turn. The H7 (OBSERVATION-as-check) and H8 (HARD STOPS) production fixes — currently pending in DECISION_LOG Open Decisions — will address the underlying prose-compression issues directly in the always-on prompt, which is the right shape of fix.
+
+### Migration note
+
+The previous `dndLeanPrompt` localStorage key is left orphan in user browsers. Any user who previously set the toggle ON will continue to send `leanPrompt: true` from DMSession (because the localStorage read path persists). To explicitly opt out, set `dndLeanPrompt=0` or remove the key via DevTools. For most users (toggle was off or never touched), no action needed — the transform won't apply.
+
+### Files
+
+- Modified: `client/src/App.jsx` (removed state + UI block; left explanatory comment).
+- Modified: `client/src/components/DMSession.jsx` (kept the two body-param call sites; updated comments to reflect diagnostic-only framing).
+- Modified: `CHANGELOG.md` (this entry).
+- Modified: `DECISION_LOG.md` ("Retire Lean Prompt toggle as production direction" entry already added 2026-04-26; Open Decisions section already cleared of the Lean question).
+
 ## [1.0.0.99] - 2026-04-26 — Opus is now the production default for main DM session continuations
 
 User decision logged in DECISION_LOG. Code now defaults to Opus on all three surfaces.

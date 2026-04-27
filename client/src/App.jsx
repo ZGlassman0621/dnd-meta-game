@@ -101,18 +101,14 @@ function App() {
     try { localStorage.setItem('dndUseSonnet', next ? '1' : '0') } catch {}
   }
 
-  // Lean prompt toggle (diagnostic). When on, server strips MECHANICAL
-  // MARKERS section + softens Cardinal Rule 2 (HARD STOPS). Markers like
-  // [COMBAT_START] / [LOOT_DROP] won't fire — that's the trade-off, used
-  // only for prose-quality A/B testing. DMSession reads localStorage at
-  // /start and /message call time so toggling mid-session takes effect.
-  const [leanPrompt, setLeanPrompt] = useState(() => {
-    try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false }
-  })
-  const updateLeanPrompt = (next) => {
-    setLeanPrompt(next)
-    try { localStorage.setItem('dndLeanPrompt', next ? '1' : '0') } catch {}
-  }
+  // (Lean Prompt UI toggle was removed in v1.0.100 per the "Retire Lean
+  // Prompt toggle as production direction" decision in DECISION_LOG. The
+  // underlying applyLeanTransforms() post-processor remains wired in
+  // dmPromptBuilder.js and the leanPrompt body param still works on the
+  // server — DMSession reads `dndLeanPrompt` from localStorage at API-call
+  // time, so a developer can still trigger lean by setting that key in the
+  // browser console for prompt-design experiments. The toggle is just no
+  // longer surfaced to users.)
 
   // Check for existing auth token on mount
   useEffect(() => {
@@ -353,40 +349,6 @@ function App() {
           )
         })()}
 
-        {/* Lean Prompt toggle — diagnostic. Sits below the Sonnet/Opus pill.
-            When on, the server strips MECHANICAL MARKERS + softens Cardinal
-            Rule 2 (HARD STOPS) for the next API call. Game-state markers
-            (combat, loot, merchant, etc.) won't fire while it's on — testing
-            only. Independent of the model choice; combine with Opus or Sonnet. */}
-        {llmStatus?.available && llmStatus.provider === 'claude' && (
-          <div>
-            <button
-              type="button"
-              onClick={() => updateLeanPrompt(!leanPrompt)}
-              title={leanPrompt
-                ? 'Lean prompt active: MECHANICAL MARKERS stripped + HARD STOPS softened. Combat/loot/merchant markers will NOT fire — diagnostic only.'
-                : 'Click to enable Lean Prompt (diagnostic): strips MECHANICAL MARKERS section + softens Cardinal Rule 2. Game-state markers will not fire.'}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.25rem 0.75rem',
-                borderRadius: '12px',
-                fontSize: '0.75rem',
-                background: leanPrompt ? 'rgba(34, 197, 94, 0.18)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${leanPrompt ? '#22c55e' : 'rgba(255,255,255,0.2)'}`,
-                color: leanPrompt ? '#22c55e' : '#888',
-                marginTop: '0.4rem',
-                cursor: 'pointer',
-                font: 'inherit',
-                fontWeight: leanPrompt ? 'bold' : 'normal'
-              }}
-            >
-              <span style={{ fontSize: '0.8rem' }}>{leanPrompt ? '✂️' : '·'}</span>
-              <span>Lean prompt {leanPrompt ? 'ON' : 'OFF'}</span>
-            </button>
-          </div>
-        )}
         <NavigationMenu
           activeView={activeView}
           onNavigate={navigateTo}

@@ -671,9 +671,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           providerPreference,
           // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
           modelOverride: useSonnet ? 'sonnet' : null,
-          // Lean prompt is read fresh from localStorage at API-call time
-          // (not state) so the home-page toggle takes effect immediately
-          // without needing to re-thread state through DMSession.
+          // Lean prompt — diagnostic-only path (UI toggle was retired in v1.0.100;
+          // see DECISION_LOG "Retire Lean Prompt toggle as production direction").
+          // Read fresh from localStorage so a developer can still trigger lean by
+          // setting `dndLeanPrompt=1` in the browser console for prompt-design
+          // experiments. applyLeanTransforms() is still wired server-side.
           leanPrompt: (() => { try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false } })(),
           // Campaign continuity
           continueCampaign: continueCampaign && campaignContext?.hasPreviousSessions,
@@ -755,8 +757,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           providerPreference,
           // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
           modelOverride: useSonnet ? 'sonnet' : null,
-          // Lean prompt is read fresh from localStorage each turn so toggling
-          // the home-page pill mid-session takes effect on the very next /message.
+          // Lean prompt — diagnostic-only (UI toggle retired v1.0.100). Read
+          // fresh from localStorage so `dndLeanPrompt=1` in browser console
+          // still triggers lean for prompt-design experiments. See /start
+          // body construction above for the full context.
           leanPrompt: (() => { try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false } })(),
           activeConditions: {
             player: playerConditions,

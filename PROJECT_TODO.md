@@ -54,6 +54,7 @@ Items in `FUTURE_FEATURES.md`. Skim that file periodically; pull items here when
 
 Three or four most recent versions. Older history in `CHANGELOG.md`.
 
+- **v1.0.100 (2026-04-27)** — Lean Prompt toggle retired from the home-page UI. `applyLeanTransforms()` and the `leanPrompt: true` API path stay as a diagnostic harness; a developer can still trigger lean via `dndLeanPrompt=1` in the browser console. H7/H8 production fixes (still pending) will address prose-compression directly.
 - **v1.0.99 (2026-04-26)** — Opus is now the production default for main DM session continuations. All three UI surfaces default to Opus; Sonnet is the opt-down. Server defaults flipped; client `forceOpus` → `useSonnet` rename. Decision logged in DECISION_LOG; supersedes the prior "Opus for ALL generation, Sonnet for sessions only" baseline.
 - **v1.0.98 (2026-04-26)** — Tier 2 prompt cache also moves to 1-hour TTL (was 5m). Lever 1 of three from session-147 cost analysis. Saves ~$0.20–$0.30 per Opus session by consolidating tier 2 re-creations. Cost numbers in CHANGELOG and DECISION_LOG corrected with actual playtest measurements.
 - **v1.0.97 (2026-04-26)** — Documentation hygiene: PROJECT_BRIEF, DECISION_LOG, PROJECT_TODO, triage convention.

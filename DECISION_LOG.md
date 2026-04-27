@@ -46,6 +46,13 @@ These are the calls waiting on user input or external evidence. Listed newest-fi
 
 ## Decisions log (newest first)
 
+### 2026-04-26 — Retire Lean Prompt toggle as production direction (Prompt design)
+**Context**: The Lean Prompt toggle was introduced as a diagnostic-only experiment (see earlier 2026-04-26 entry) to A/B-test whether stripping the MECHANICAL MARKERS section and softening Cardinal Rule 2 would improve prose quality. Automated A/B showed it helped edge cases (atmospheric scene-opens, cinematic build) but didn't move the needle in real user playtest at production cadence.
+Decision: Retire the Lean Prompt toggle as a production direction. Keep the underlying transform code wired in dmPromptBuilder.js as a debugging tool, but remove the toggle from the home-page surface so it's no longer user-facing.
+**Why**: The hypothesis (lean prompt → better prose) didn't hold up in practice. Continuing to surface the toggle invites confusion ("which one should I use?") for a question that has been answered. The H7 and H8 production fixes — currently pending — will address the underlying prose-compression issues directly in the always-on prompt, which is the right shape of fix.
+**Implications**: The applyLeanTransforms() post-processor pattern stays available in the codebase as a diagnostic harness — the same shape can be reused for future prompt-design experiments. H7 and H8 production fixes now carry the work the Lean toggle was meant to validate; getting them right matters more.
+**Related**: Earlier 2026-04-26 entry "Lean Prompt toggle as a diagnostic-only experiment"; H7/H8 open decisions; triage/prose-quality-triage.md.
+
 ### 2026-04-26 (v1.0.99) — Opus as production default for main DM session continuations (Direction)
 **Context:** v1.0.96 (cache architecture fix) + v1.0.98 (tier 2 → 1-hour TTL) brought Opus session cost to ~$1.30–$1.50/hour validated against real session 147 data. Original $0.85/session prediction was wrong; corrected numbers logged in CHANGELOG and the character-info-split entry. User's playtest confirmed Opus is the prose-quality lever the project needed; Sonnet is "good enough" for general interaction but doesn't deliver the narrative depth the brief calls for.
 **Decision:** Make Opus the default model for main DM session continuations on all three surfaces (home pill, setup screen, in-session info bar). Sonnet stays available via the toggle as an escape hatch.
