@@ -2,6 +2,65 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.101] - 2026-04-27 — H7 + H8 production fixes (verb-gated observation rule + soft Cardinal Rule 2)
+
+Two prompt-rule fixes shipping together. Both surfaced during the v1.0.96 prose-quality A/B testing as items that needed to leave the always-on prompt. Decisions were green-lit by the project-management layer; the prose-quality triage now closes.
+
+### H7 — `PLAYER OBSERVATION = ALWAYS A CHECK` is now verb-gated
+
+**Problem:** The rule lived in `formatMechanicalMarkers()` as an always-on block, so the AI treated every player observation as triggering a Perception/Investigation check — including atmospheric scene-opens like "I push open the tavern door and look around" where no check is warranted. Pre-fix V1 baselines in the A/B harness routinely ended with "Make a Perception check." after a benign look-around.
+
+**Fix:**
+- Removed the rule block from `formatMechanicalMarkers()`. It no longer appears in the canonical system prompt.
+- Added a verb detector — `detectObservationVerbs(action)` — exported from `dmPromptBuilder.js`. Word-stem regex against a narrow list of commitment verbs: search, examine, investigate, study, scrutinize, inspect, sneak, skulk, listen, peer, identify, track, persuade, intimidate, deceive, pick, disarm, climb.
+- Added the rule text as `OBSERVATION_AS_CHECK_BLOCK` (also exported), with wording updated for the v1.0.101 soft Cardinal Rule 2 (no longer says "STOP").
+- `/message` route now appends the block to the API call's system prompt only when the player's input matches a commitment verb. Block lands in tier 3 (uncached); restored to original `systemPrompt` before persisting to `messages[0]` so the block doesn't accumulate across turns.
+- 15/15 verb-detector smoke-test cases pass: triggers on "I search the body," "I'll investigate the desk," "I'm trying to sneak past the guard," etc. Ignores "I push open the tavern door and look around," "I walk into the tavern," "I sit at the bar."
+
+**Verification:** A/B harness V1 Scenario A now ends with the bartender asking *"Passing through, or staying?"* — natural conversational close. No spurious Perception-check demand.
+
+**Trade-off:** Verb detection is intentionally narrow. False negatives (rule doesn't fire when it would have helped) are recoverable — the AI can still call for a check on its own. False positives (firing on atmospheric narrative) were the bug we fixed.
+
+### H8 — Cardinal Rule 2 softened from "HARD STOPS" to "ROLL REQUESTS — DON'T SPOIL OUTCOMES"
+
+**Problem:** The strict Cardinal Rule 2 forced the AI to end its response immediately after any roll request. This compressed cinematic build-ups — pre-fix V1 baselines on Scenario C (body approach) truncated mid-scene to demand a Medicine check instead of continuing the layered horror.
+
+**Fix:** Replaced the strict version in the always-on prompt with the soft variant that was previously only available in `applyLeanTransforms()`. The soft version preserves the actual goal (don't let the AI narrate the outcome before the roll) while letting cinematic build-ups breathe:
+
+> *When you call for a dice roll, you may continue narrating the surrounding moment — environment, other characters' reactions, the player's posture as they prepare. Never reveal the outcome of the check before the player rolls. The roll request can sit in the middle of a paragraph. You don't need to STOP after asking for it. The constraint is only on outcomes.*
+
+**Verification:** A/B harness V1 Scenario C now reads:
+> "...You roll him carefully onto his back. Make a Medicine check as you work. **The wounds tell a story — you just need to read it.**"
+>
+> The check call is mid-paragraph; atmospheric prose continues after it without revealing the check's outcome.
+
+**applyLeanTransforms() reconciliation:** the function's H8 swap is now a no-op — its regex looks for the strict heading "2. HARD STOPS" which no longer appears in the canonical prompt. Left in place so a future revival of the strict rule would still be transformable. The function's primary role is now stripping `MECHANICAL MARKERS` (still works as a diagnostic). Toggle was retired from UI in v1.0.100; trigger via `dndLeanPrompt=1` in the browser console. Comment updated to reflect the new shape.
+
+### Test reconciliation
+
+- `tests/lean-prompt-dryrun.js` updated for the new H7/H8 production semantics. 14/14 checks pass: H7 rule absent from both full and lean canonical prompts; soft Cardinal Rule 2 present in both; strict version absent from both.
+- `tests/character-memory.test.js` line 178 updated: was asserting `prompt.includes('HARD STOPS')`; now asserts the soft variant `ROLL REQUESTS — DON'T SPOIL OUTCOMES`.
+- All other prompt-builder tests (`moral-diversity` 59, `combat-tracker` 26, `condition-tracking` 56) pass without modification.
+
+### Files
+
+- Modified: `server/services/dmPromptBuilder.js` (H7 block removed from `formatMechanicalMarkers`; `detectObservationVerbs` + `OBSERVATION_AS_CHECK_BLOCK` exported; H8 strict→soft swap in `createDMSystemPrompt` template; `applyLeanTransforms` comment updated).
+- Modified: `server/routes/dmSession.js` (verb-gated H7 injection wired into `/message`; `applyLeanTransforms` import line extended).
+- Modified: `tests/lean-prompt-dryrun.js` (assertions updated for new semantics; runner accepts `shouldBeIn: 'neither'`).
+- Modified: `tests/character-memory.test.js` (Cardinal Rule 2 assertion updated).
+- Modified: `CHANGELOG.md` (this entry).
+
+### Closes the prose-quality triage
+
+After this release, all four closure criteria from `triage/prose-quality-triage.md` are met:
+
+1. ✅ Path decisions made (Opus default, both tiers 1h TTL, Lean retired, H7 verb-gated, H8 softened).
+2. ✅ H7 + H8 production fixes shipped.
+3. ✅ Cost validated in real-session metrics (sessions 147 + 148).
+4. ✅ Findings folded into design docs (`CHANGELOG`, `DECISION_LOG`, `FUTURE_FEATURES`, `PROJECT_BRIEF`).
+
+Triage archives next; the prose-quality thread closes.
+
 ## [1.0.0.100] - 2026-04-27 — Lean Prompt toggle retired from user-facing UI
 
 User decision logged in DECISION_LOG ("Retire Lean Prompt toggle as production direction"). The toggle was a diagnostic-only experiment that didn't move the needle in real playtest. Removing it from the UI clears the question of "which one should I use?" since it has been answered.

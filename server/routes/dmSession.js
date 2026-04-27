@@ -53,7 +53,7 @@ import { handleServerError } from '../utils/errorHandler.js';
 import { getWeather, setWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
 import { getSurvivalStatus, consumeFood, consumeWater, formatSurvivalForPrompt } from '../services/survivalService.js';
 import { formatCraftingForPrompt, discoverRecipe, addMaterial, advanceProject, getProjectStatus, createRadiantRecipe } from '../services/craftingService.js';
-import { formatMythicForPrompt, applyLeanTransforms } from '../services/dmPromptBuilder.js';
+import { formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK } from '../services/dmPromptBuilder.js';
 import { getMythicStatus, recordTrial, useMythicPower, advanceTier, findLegendaryItemByName, advanceItemState } from '../services/mythicService.js';
 import { adjustPiety } from '../services/pietyService.js';
 import { FULFILL_WEIGHTS, spreadReputationRipple, spreadFactionStanding, calculatePriceModifier } from '../services/consequenceService.js';
@@ -1237,11 +1237,19 @@ router.post('/:sessionId/message', async (req, res) => {
       // `modelOverride` accepts 'sonnet' as the escape-hatch signal; 'opus' is
       // also accepted as a no-op. See DECISION_LOG under "Opus as production
       // default for main DM session continuations".
-      // leanPrompt=true strips MECHANICAL MARKERS + softens Cardinal Rule 2 for this call;
+      // leanPrompt=true strips MECHANICAL MARKERS for this call;
       //   we restore the full prompt to messages[0] before persisting so the toggle is reversible.
+      // v1.0.101 (H7): when the player's action commits to a perception/
+      //   investigation/stealth-class verb, append OBSERVATION_AS_CHECK_BLOCK
+      //   to the system prompt for this turn only. The block is appended in
+      //   tier 3 territory (uncached) so cache stays valid; we restore the
+      //   un-injected systemPrompt to messages[0] before persisting so the
+      //   block doesn't accumulate across turns.
       const systemMessage = messagesToSend.find(m => m.role === 'system');
       const systemPrompt = systemMessage?.content || '';
-      const apiSystemPrompt = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
+      const apiSystemPromptBase = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
+      const observationVerbInjection = detectObservationVerbs(action) ? OBSERVATION_AS_CHECK_BLOCK : '';
+      const apiSystemPrompt = apiSystemPromptBase + observationVerbInjection;
       const turnModel = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
       const claudeResult = await claude.continueSession(apiSystemPrompt, messagesToSend, action, turnModel, { sessionId });
       if (claudeResult.messages?.[0]?.role === 'system') {

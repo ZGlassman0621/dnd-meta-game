@@ -1,8 +1,8 @@
 # Prose Quality A/B Results
 
-Generated: 2026-04-26T15:02:48.403Z
+Generated: 2026-04-27T07:03:19.834Z
 Model under test: **Sonnet 4.6** (the model that runs continuations in production).
-Baseline prompt size: **25716 chars** (~6429 tokens).
+Baseline prompt size: **25107 chars** (~6277 tokens).
 
 ## How to read this
 
@@ -14,21 +14,21 @@ Scenario A is the original test the original Claude crushed (rich tavern intro w
 
 | Scenario | Variant | Words | Sentences | Avg w/s | Dialogue % | Prompt chars | Time |
 |----------|---------|-------|-----------|---------|------------|--------------|------|
-| A | V1 | 119 | 6 | 20 | 1% | 25716 | 5.5s |
-| A | V2 | 217 | 15 | 14 | 1% | 25609 | 9.5s |
-| A | V3 | 152 | 8 | 19 | 0% | 24898 | 6.7s |
-| A | V4 | 221 | 11 | 20 | 0% | 19582 | 8.6s |
-| A | V5 | 236 | 15 | 16 | 0% | 467 | 9.0s |
-| B | V1 | 211 | 21 | 10 | 74% | 25716 | 8.9s |
-| B | V2 | 208 | 20 | 10 | 70% | 25609 | 8.8s |
-| B | V3 | 213 | 19 | 11 | 70% | 24898 | 9.0s |
-| B | V4 | 203 | 22 | 9 | 72% | 19582 | 9.0s |
-| B | V5 | 214 | 22 | 10 | 58% | 467 | 8.3s |
-| C | V1 | 190 | 20 | 10 | 0% | 25716 | 9.4s |
-| C | V2 | 58 | 5 | 12 | 0% | 25609 | 3.5s |
-| C | V3 | 147 | 12 | 12 | 0% | 24898 | 6.4s |
-| C | V4 | 143 | 13 | 11 | 0% | 19582 | 6.0s |
-| C | V5 | 233 | 31 | 8 | 5% | 467 | 10.1s |
+| A | V1 | 195 | 11 | 18 | 3% | 25107 | 8.7s |
+| A | V2 | 217 | 14 | 16 | 0% | 25000 | 8.4s |
+| A | V3 | 168 | 9 | 19 | 3% | 24289 | 7.6s |
+| A | V4 | 211 | 14 | 15 | 4% | 19797 | 8.2s |
+| A | V5 | 225 | 14 | 16 | 2% | 467 | 9.1s |
+| B | V1 | 225 | 23 | 10 | 71% | 25107 | 9.8s |
+| B | V2 | 229 | 26 | 9 | 67% | 25000 | 11.0s |
+| B | V3 | 233 | 25 | 9 | 80% | 24289 | 9.4s |
+| B | V4 | 216 | 24 | 9 | 72% | 19797 | 9.6s |
+| B | V5 | 217 | 23 | 9 | 69% | 467 | 8.5s |
+| C | V1 | 96 | 8 | 12 | 0% | 25107 | 4.4s |
+| C | V2 | 186 | 19 | 10 | 11% | 25000 | 7.9s |
+| C | V3 | 210 | 20 | 11 | 4% | 24289 | 10.8s |
+| C | V4 | 121 | 15 | 8 | 3% | 19797 | 5.7s |
+| C | V5 | 236 | 23 | 10 | 6% | 467 | 9.6s |
 
 ## Variants
 
@@ -50,75 +50,90 @@ Scenario A is the original test the original Claude crushed (rich tavern intro w
 
 ### V1 — Baseline (current production prompt)
 
-*119 words, 6 sentences, 20 avg w/s, 1% dialogue, 5.5s, 25716 prompt chars*
+*195 words, 11 sentences, 18 avg w/s, 3% dialogue, 8.7s, 25107 prompt chars*
 
-The common room smells of tallow smoke and dried hops. Low ceiling, four tables scarred by years of use, a hearth that hasn't been fed enough wood for the cold night outside. Two men sit apart from each other — one nursing a tankard near the fire, boots still muddy from fieldwork, the other hunched over a table by the far wall with a ledger open in front of him.
+The common room is low and close, the ceiling cross-beamed with dark timber that holds the smoke near the rafters. Three tallow candles on the bar, one on each of the two occupied tables. The fire in the stone hearth has burned down to orange coals — enough to push the chill back but not enough to make anyone comfortable.
 
-Behind the bar, a broad woman with iron-grey hair scraped back from her face works a rag over an already-dry mug. She glances up the moment the door opens, reads you — dusty cloak, holy symbol, road-worn — and sets the mug down.
+A man behind the bar is wiping the same spot on the wood over and over without noticing. He's broad across the shoulders, gone soft at the middle, with a nose that's been broken at least twice. He glances up when the door swings open.
 
-"Door," she says, nodding at it.
+At the nearer table, two farmers sit with their ale untouched, speaking in the low, careful voices of men who don't want to be overheard. One of them keeps turning his cup in slow circles.
+
+At the far table, an old woman sits alone, a clay pipe dead in her hand, staring at the coals.
+
+The barman sets down his rag.
+
+"Passing through, or staying?" His voice is flat, not unfriendly — the voice of a man who asks the same question every night and stopped caring about the answer.
 
 ### V2 — No word-count caps in CONVERSATION HANDLING
 
-*217 words, 15 sentences, 14 avg w/s, 1% dialogue, 9.5s, 25609 prompt chars*
+*217 words, 14 sentences, 16 avg w/s, 0% dialogue, 8.4s, 25000 prompt chars*
 
-The common room is low-ceilinged and close, smoke-darkened beams overhead and a fire burning in the stone hearth on the far wall. It's late afternoon but the place feels like it hasn't seen full light in years — every window is shuttered, the gaps stuffed with rags. Three tallow candles on the bar do the work the sun should be doing.
+The door groans on its hinges and lets in a blade of late-afternoon light before swinging shut behind you.
 
-Four people are scattered across the room. Two men at a corner table, both leaning over their cups like they're having a private argument with their ale. An old woman near the fire, knitting something grey and shapeless, her needles clicking without pause. And behind the bar, a broad man in his forties wiping down the counter with a cloth that may be making things worse — he looks up when the door swings open, and his eyes track Riv with the tired wariness of someone who's been jumpy for a while.
+The common room is low-ceilinged and close, crossbeams dark with years of hearth smoke. Four tables, only two of them occupied. At the nearest, a pair of farmhands sit shoulder-to-shoulder over their ales, speaking in the particular murmur of men who've stopped expecting to be overheard. One of them glances up at you, then back down. The other doesn't bother.
 
-A mounted rack of antlers above the hearth has something new nailed to it: a scrap of parchment, edges curling in the heat. Even from the doorway, the writing on it is large enough to read.
+At the far table, an older woman in a grey wool shawl nurses something hot from a clay cup. Her eyes find you the moment you cross the threshold and don't let go — not hostile, just watchful, the way people in small villages look at faces they don't recognize.
 
-MISSING — FOUR SHEEP AND A MULE. EAST PASTURE. THIRD NIGHT RUNNING. ANY WITH KNOWLEDGE SEE ALDRIC BROWNWELL.
+The bar itself is a slab of dark wood running along the left wall. Behind it, a broad-shouldered man with a close-cropped grey beard is stacking cups with the methodical patience of someone who's been doing the same thing for thirty years. A boar's head is mounted above the shelves behind him, slightly crooked, one glass eye catching the firelight.
 
-The barman sets down his cloth.
+The hearth on the far wall is burning well despite the season. Someone wants it warm in here.
 
-"Stranger," he says. "Door."
+The barkeep sets down his stack and looks your way.
 
 ### V3 — No SELF-CHECK at prompt tail
 
-*152 words, 8 sentences, 19 avg w/s, 0% dialogue, 6.7s, 24898 prompt chars*
+*168 words, 9 sentences, 19 avg w/s, 3% dialogue, 7.6s, 24289 prompt chars*
 
-The common room is low-ceilinged and close, smelling of tallow smoke and old straw. A fire burns in a stone hearth on the far wall, doing its best against the damp chill that seems to live permanently in the bones of this place. Four or five locals sit scattered at rough-hewn tables — a pair of farmhands nursing ale by the window, an older woman working at something in her lap near the fire, a heavyset man eating alone at the far end.
+The common room is low-ceilinged and smoke-darkened, a fire burning too hot for the season in a stone hearth that takes up half the far wall. Someone has hung dried herbs from the rafters — lavender, maybe, or something trying to be lavender — but they've done nothing against the smell of tallow candles and old ale.
 
-Behind the bar, a broad-shouldered woman in her forties wipes down the counter with a rag that has seen better decades. She glances up when the door opens, reads you in a single sweep — road dust, holy symbol, the particular look of someone who's been walking — and gives a short nod.
+Four or five villagers sit scattered across mismatched tables. None of them look up when the door opens. That in itself is a thing worth noting — strangers don't come through Thornhaven often enough to ignore.
 
-The farmhands by the window have gone quiet. One nudges the other.
+A woman behind the bar is wiping a tankard with a rag that won't make it any cleaner. She's broad-shouldered, somewhere past fifty, with grey-streaked hair pinned back hard and the look of someone who has heard every kind of trouble walk through that door and stopped being surprised by any of it.
 
-Make a Perception check.
+She glances at Riv. Her eyes drop briefly to the holy symbol at his chest, then back up.
+
+"Traveling through, or staying?"
 
 ### V4 — No MECHANICAL MARKERS section
 
-*221 words, 11 sentences, 20 avg w/s, 0% dialogue, 8.6s, 19582 prompt chars*
+*211 words, 14 sentences, 15 avg w/s, 4% dialogue, 8.2s, 19797 prompt chars*
 
-The door swings into warmth and woodsmoke. The taproom is low-ceilinged, the beams dark with years of grease and smoke, and someone has hung dried bundles of sage along the rafters — whether for flavor or to cover some older smell is hard to say.
+The Common Hearth smells of tallow smoke, wet wool, and something roasting low and slow over the kitchen fire. It's a squat, low-beamed room — four tables, a bar of rough-hewn oak, shelves behind it holding mismatched clay mugs and a few dark bottles. A pair of oil lamps hang from the rafters, their light amber and unsteady.
 
-A fire burns in a wide stone hearth on the far wall. Three tables, two of them occupied. At the nearest, a pair of farmers sit with their heads together over half-empty tankards, speaking too quietly to catch. At the far table, an old woman in a wool shawl nurses something hot from a clay cup, her eyes already on the door — on Riv — with the flat, measuring look of someone who has lived long enough to find strangers interesting rather than threatening.
+Three people inside, besides yourself.
 
-Behind the bar, a broad man in his forties is wiping down a section of counter he has clearly already wiped. He has a blacksmith's forearms and a barkeep's careful stillness. He glances up when the door opens, takes in Riv's road-worn cloak, the holy symbol, the mace — a full assessment in about a second — and gives a short nod of acknowledgment before going back to the counter.
+A woman behind the bar, somewhere past fifty, wiping down the counter with a rag that's doing more harm than good. Her grey hair is pinned back with what appears to be a whittled stick. She glances up when the door opens — sharp eyes, measuring.
 
-The fire pops. Outside, the wind moves through the eaves with a sound that is almost, but not quite, a voice.
+At the table nearest the fire, a heavyset man in a farmer's coat sits hunched over a bowl of something, eating without apparent pleasure. Mud on his boots. A long scratch across the back of his left hand, red and recent.
+
+In the far corner, away from the lamplight, a younger man — maybe twenty, maybe less — nurses a cup and stares at the tabletop like it owes him money. He doesn't look up when you enter.
+
+The woman behind the bar is the first to speak.
+
+"Traveler." She sets down the rag. "You eating, or just out of the cold?"
 
 ### V5 — Bare prompt — original-style one-sentence brief
 
-*236 words, 15 sentences, 16 avg w/s, 0% dialogue, 9.0s, 467 prompt chars*
+*225 words, 14 sentences, 16 avg w/s, 2% dialogue, 9.1s, 467 prompt chars*
 
-# The Hanging Lantern Tavern
+# The Thorn & Thistle Tavern
 
-The door groans on iron hinges, and a wave of warm, smoky air washes over you — woodsmoke, tallow candles, and the sharp tang of cheap ale. After the cold bite of the Sword Coast wind, it settles on your skin like a blessing.
+The door groans on iron hinges, releasing a breath of woodsmoke and stale ale into the cold evening air behind you. You step inside.
 
-The common room is modest. Six rough-hewn tables, most empty. A stone hearth dominates the far wall, its fire burning **too high** for this hour of the evening, as though someone has been feeding it obsessively. Antlers and old farming tools hang on the walls as decoration, though one set of antlers near the window has been draped with **dried sprigs of wolfsbane.**
+The common room is **smaller than you expected** — a dozen rough-hewn tables, most empty. A fire crackles in a stone hearth wide enough to roast an ox, but tonight it holds only a modest blaze, as though even the flames are conserving their courage. Tallow candles gutter in iron sconces along the walls.
 
-Your eyes find the room's occupants:
+**Three patrons** occupy the room:
 
-- A **stout woman in an apron**, perhaps fifty, stands behind the plank bar. She's polishing the same pewter mug she's probably been polishing for an hour. Her eyes find yours immediately — sharp, assessing, not unfriendly but not warm.
+- An **old man** in a shepherd's smock sits alone near the fire, turning an empty cup in his weathered hands, staring at nothing. His eyes are red-rimmed.
+- Two **farmers** huddle close at a corner table, speaking in low, urgent voices. They glance up sharply when you enter, then look away just as quickly.
 
-- In the corner nearest the fire sit **two old men**, hunched over a shared loaf of bread, speaking in whispers too low to hear. One glances at you, then quickly looks away.
+Behind the bar, a **stout dwarven woman** with iron-grey braids and a no-nonsense expression wipes down the counter with a rag that looks dirtier than the wood itself. She eyes your holy symbol — the rose-and-sun of Lathander — with an expression somewhere between relief and wariness.
 
-- A **young farmer**, no older than eighteen, sits alone at the table closest to the door. His hands are wrapped around a cup he isn't drinking from. His eyes are red-rimmed.
+*"We're open,"* she says flatly. *"Barely."*
 
-The room goes **one notch quieter** when you enter.
+The howling from the forest this morning hasn't quite left the walls of this place. You can feel it in the silence between conversations.
 
-What do you do?
+**What do you do?**
 
 ---
 
@@ -168,105 +183,105 @@ He studies you for a moment, taking in your travel-worn clothes and the holy sym
 
 ### V1 — Baseline (current production prompt)
 
-*211 words, 21 sentences, 10 avg w/s, 74% dialogue, 8.9s, 25716 prompt chars*
+*225 words, 23 sentences, 10 avg w/s, 71% dialogue, 9.8s, 25107 prompt chars*
 
-Wren wraps both hands around the mug and leans back in his chair, studying you with those sharp gray eyes.
+Wren wraps both hands around the mug and takes a long pull before setting it down.
 
-"Riv." He tests the name. "Lathander's man. Good. We could use a god's attention right now."
+"Riv." He tests the name once, as if filing it away. "I'm Wren. No 'honored' necessary — I'm just an old man who's been here long enough that people started listening to me."
 
-He takes a long pull of mead before speaking again.
+He leans back, studying the fire for a moment.
 
-"Thornhaven's stood at the edge of Darkwood for sixty years. We've had wolves before, bears, even a pack of worgs once — eight years back, you can ask anyone. This is different." He taps the table with one knobbed finger. "The howling started the night of the new moon, two weeks past. Whatever makes that sound, it isn't a wolf. Wolves don't make the dogs hide under floorboards and refuse to come out."
+"Isolated? No. And yes." He taps a finger on the table. "Thornhaven's sat on the edge of Darkwood for sixty years. We've always had wolves, boars, the occasional worse thing drifting out from the deep wood. That's just the cost of the land here. But this—" He shakes his head. "Two weeks of it now, and it escalates. First small animals near the treeline. Then sheep from the middle pasture — not the edge, mind you, the *middle*. Whatever it is, it's growing bolder."
 
-He pauses, jaw tight.
+He glances toward the hunters' table, then back to you, dropping his voice slightly.
 
-"The livestock vanishes clean. No blood, no tracks worth following — Dagmar's the best hunter in three villages and she found nothing she could read. And three nights ago, young Petra saw something at the tree line. Wouldn't describe it properly. Just kept saying it was tall. Too tall."
+"Dagmar and Finn are good trackers. They followed the trail three days ago and lost it at Millbrook — the creek that runs along the forest's edge. Like whatever made those tracks just... stopped existing at the waterline."
 
-He sets the mug down.
+He takes another sip.
 
-"Isolated?" He shakes his head slowly. "Not entirely. There's a hamlet called Millfield, four miles north along the forest road. We sent a boy to trade there six days ago. He hasn't come back."
+"The howling started before the livestock went missing. That's what troubles me most. It was never hungry-sounding. It was more like—" He searches for the word. "Deliberate."
 
 ### V2 — No word-count caps in CONVERSATION HANDLING
 
-*208 words, 20 sentences, 10 avg w/s, 70% dialogue, 8.8s, 25609 prompt chars*
+*229 words, 26 sentences, 9 avg w/s, 67% dialogue, 11.0s, 25000 prompt chars*
 
-Wren wraps both hands around the mug and takes a slow pull before he answers. The firelight catches the deep lines around his eyes.
+Wren wraps both hands around the mug and takes a long sip before setting it down. He looks at you steadily.
 
-"Riv." He tests the name once, then nods. "I'm Wren. Been elder here for twenty-two years, and in those twenty-two years Thornhaven has had wolves, foxes, even a bear once. This is none of those things."
+"Riv." He repeats the name as though weighing it. "Well met. I'm Wren — Aldor Wren, if we're being formal, though nobody bothers."
 
-He lowers his voice, leaning forward slightly.
+He leans back in his chair, the firelight deepening the lines on his face.
 
-"It started with the howling — wrong hour, wrong sound. Then the livestock. Whatever it is, it doesn't eat what it takes. Brennan found feathers scattered a hundred yards from his coop. No blood, no tracks worth following. Just — gone." He taps the table once. "Dagmar's the best tracker in three villages. She followed a trail into Darkwood two days ago and came back before dark. Wouldn't tell me what she saw. Just said the reward wasn't enough."
+"Isolated? No. And yes." He pauses, choosing his words. "Thornhaven has stood at this edge of the Darkwood for sixty years. We've had wolves before. We've had worse than wolves before. But this — " he shakes his head slowly — "this is different in character."
 
-He sits back and regards you steadily.
+He holds up one finger. "It started with the howling. Not the sound of a hunting pack. Something slower. More deliberate, almost." A second finger. "Then the livestock. No blood left behind. No tracks that mean anything to Dagmar, and that man can read forest ground like scripture." A third finger. "And three nights ago, young Petra — she's eleven — says she saw something at the treeline. Tall. Standing upright. She won't say more than that, and the girl isn't prone to invention."
 
-"As for history — there are old stories about that forest. There always are. But nothing living memory. The last time Thornhaven had real trouble was before my father's time."
+He takes another drink, quieter now.
 
-He takes another drink, watching you over the rim of the mug.
-
-"What brings a cleric of the Morninglord to the edge of Darkwood, Riv?"
+"There's an old shrine to Mielikki half a mile into the Darkwood. Tended it myself for years. I haven't been able to go since this started." He glances toward the door. "The forest feels closed."
 
 ### V3 — No SELF-CHECK at prompt tail
 
-*213 words, 19 sentences, 11 avg w/s, 70% dialogue, 9.0s, 24898 prompt chars*
+*233 words, 25 sentences, 9 avg w/s, 80% dialogue, 9.4s, 24289 prompt chars*
 
-Wren wraps both hands around the mug and takes a slow sip before setting it down.
+Wren wraps both hands around the mug and takes a slow sip before answering. He sets it down and looks at you steadily.
 
-"Riv." He turns the name over once, like he's weighing it. "I'm Wren. Just Wren — I've been telling people to drop the 'honored' for thirty years and nobody listens." A faint smile, then it fades.
+"Riv. Good name for a traveler." He pauses, collecting his thoughts.
 
-"Isolated." He looks at the fire. "That's the question, isn't it." His thumb traces the rim of the mug. "The livestock started two weeks back. But the howling — the *wrong* howling, as Gerda likely put it — that started a month ago, maybe five weeks. Well before any animal went missing."
-
-He pauses.
-
-"As for history." His gray eyes come back to you. "Thornhaven has sat on the edge of that forest for a hundred and forty years. We've had wolves. We've had a bad winter or two where something came out of the trees looking for food. This is different." He sets the mug down with a quiet thunk. "Dagmar — the hunter, you may have seen her — she tracked the prints to the treeline. Said they started as wolf prints and then just... changed. She wouldn't say into what."
-
-He leans forward slightly.
-
-"You rode in from the south. Did you pass through Millford before coming here?"
-
-### V4 — No MECHANICAL MARKERS section
-
-*203 words, 22 sentences, 9 avg w/s, 72% dialogue, 9.0s, 19582 prompt chars*
-
-Wren wraps both hands around the mug and regards you steadily.
-
-"Riv Freeborn." He tests the name once, then nods. "Sit well with me, that name does."
-
-He takes a slow drink before setting the mug down.
-
-"Isolated? No. That's what troubles me most." His gray eyes drop to the table. "Thirty years I've kept records of this village. Strange seasons come and go. Wolves push out of Darkwood when prey is lean. That's nature — I understand nature."
-
-He taps a gnarled finger on the wood.
-
-"This is something else. The livestock aren't being eaten where they stand. They're taken *whole* — dragged into the wood without a drop of blood left behind. Brennan's field fence was bent *outward*, not broken through. Something carried those animals out."
-
-He pauses, letting that settle.
-
-"As for history —" his voice drops slightly. "There are old stories about Darkwood. Older than this village. My grandfather spoke of a time, perhaps a century past, when the forest went quiet for a full season. No birdsong. No deer at the tree line. Then it passed and folk forgot."
-
-He looks up at you directly.
-
-"Did you come because of the reward posting, Riv, or for another reason?"
-
-### V5 — Bare prompt — original-style one-sentence brief
-
-*214 words, 22 sentences, 10 avg w/s, 58% dialogue, 8.3s, 467 prompt chars*
-
-Wren wraps both hands around the mug and regards you with those sharp eyes for a long moment. He seems to be weighing you — deciding how much to trust a stranger who walked in off the road.
-
-Whatever he sees appears to satisfy him.
-
-"Riv Freeborn," he repeats, tasting the name. "Well met." He takes a slow drink, then sets the mug down carefully.
-
-"Isolated." He lets out a short, humorless breath. "No. Not entirely." He leans forward, lowering his voice. "Thirty years ago, when I was a younger man, something similar happened. Three weeks of missing animals. One missing child — a girl named Sera. She came back, praise the gods, but she was... changed. Wouldn't speak of where she'd been. She passed on years ago now."
+"Isolated? No, I wouldn't call it that. Thirty years I've been elder here, and Darkwood has always had its teeth. But this is different. The howling started the night of the last new moon — three weeks back now. Not wolves. I know wolves. This is something else. Something that doesn't care about torches or dogs or a man standing his ground."
 
 He turns the mug slowly in his hands.
 
-"The old-timers called the Darkwood cursed ground. There's a ruined shrine in there — old, older than this village. Nobody knows which god it honored. Some say it was never a place of worship at all." His jaw tightens. "The hunters won't go back in. I can't blame them."
+"The livestock started going the next morning. Clean disappearances — no blood, no drag marks, no tracks worth following. Dagmar and Finn are the best hunters in Thornhaven, and they came back from the wood looking like men who'd seen a grave dug for them personally. Won't say much about what they saw."
 
-He fixes you with a direct stare.
+His gray eyes settle on yours.
 
-"Whatever is in that forest, cleric, it isn't wolves. Wolves don't leave tracks that *stop* in the middle of a clearing."
+"As for history — " he hesitates. "There's an old shrine deeper in the wood. To what, I couldn't tell you. Older than Thornhaven. Older than most things. The elders before me said to leave it alone, and we have. But two weeks ago, young Tomás swore he saw lights out that direction. Blue-white lights, drifting between the trees."
+
+He leans back.
+
+"Is that the kind of history you mean?"
+
+### V4 — No MECHANICAL MARKERS section
+
+*216 words, 24 sentences, 9 avg w/s, 72% dialogue, 9.6s, 19797 prompt chars*
+
+Wren wraps both hands around the mug and leans back slowly.
+
+"Riv." He tests the name once, then nods. "I'm Wren. Been elder here thirty-one years, and no — in thirty-one years, nothing like this." He takes a long pull of mead before continuing.
+
+"Thornhaven sits on the edge of that forest. Always has. We've had wolves before, the odd bear, a boar that killed a man's dog once. That's the cost of living where we live." His gray eyes drift toward the window, toward the dark tree line just visible through the glass. "This is different. The howling started the night after Jorin's boy came back from the forest with a fever and a bite on his arm he couldn't explain. Three days later — livestock gone. Then more. Every few nights now."
+
+He turns back to you.
+
+"Jorin's boy is Cael. Fourteen years old. The fever broke after a week but the boy's not right since. Jumpy. Pale. Stops speaking mid-sentence sometimes and just... listens. To nothing anyone else can hear."
+
+Wren sets down the mug.
+
+"The forest has always had its dangers but it kept to itself. Something changed. Something moved in, or something woke up." He fixes you with those sharp eyes. "What brings a Dawnbringer to a village like ours, Riv?"
+
+### V5 — Bare prompt — original-style one-sentence brief
+
+*217 words, 23 sentences, 9 avg w/s, 69% dialogue, 8.5s, 467 prompt chars*
+
+Wren wraps both hands around the mug and regards you with the careful assessment of a man who has learned to weigh strangers slowly.
+
+"Riv Freeborn." He repeats your name as though testing its weight. "Well met. And my thanks for the mead."
+
+He takes a long pull and sets the mug down carefully.
+
+"Isolated?" He shakes his head. "That's the troubling part. Twenty years I've lived in Thornhaven. Before that, my father's father helped found it. The Darkwood has always been... uneasy. Strange lights on moonless nights. Travelers who took the forest path sometimes arrived late, or not at all. We learned to leave it alone and it left us alone."
+
+He pauses, staring into his mug.
+
+"That arrangement held until a fortnight ago. Around the same time the howling started, young Petyr — a woodcutter's boy, twelve years old — said he saw lights moving deep in the trees. Then the livestock began disappearing." His jaw tightens. "No blood. No tracks worth following. Just... gone."
+
+He fixes you with those sharp gray eyes.
+
+"Three nights ago, my neighbor's dog wouldn't stop barking toward the treeline. Come morning, the dog was gone too. Whatever is in that forest, Cleric, it is getting closer."
+
+He leans forward slightly.
+
+"What brings a servant of the Morninglord to Thornhaven?"
 
 ---
 
@@ -314,92 +329,80 @@ What do you do?
 
 ### V1 — Baseline (current production prompt)
 
-*190 words, 20 sentences, 10 avg w/s, 0% dialogue, 9.4s, 25716 prompt chars*
+*96 words, 8 sentences, 12 avg w/s, 0% dialogue, 4.4s, 25107 prompt chars*
 
-Dagmar drops into a low crouch behind a fence post, arrow already at her cheek. Voss peels left toward the barn wall without a word, moving in a practiced half-crouch.
+Dagmar peels right without a word, finding a rise behind a fence post with clear sightlines to the body and the barn door both. Voss gives a short nod and angles wide toward the barn, keeping the wall between himself and whatever might be inside.
 
-Finn stays back at the tree line, eyes sweeping the farmhouse windows.
+Finn stays low in the treeline, arrows ready.
 
-You cross the open ground in a wide arc, keeping the body between you and the barn. The scratch marks on the farmhouse door are deeper than they looked from a distance — gouged wood, not clawed, more like something large threw itself against it repeatedly.
+You cross the open ground quickly, crouching as you reach the body. Male, mid-forties, big-boned farmer's build. You roll him carefully onto his back.
 
-You reach the body and kneel.
-
-The man is broad-shouldered, somewhere in his forties. A farmer, callused hands, worn boots. There's no obvious wound on his back. You roll him carefully and find his face — expression not frightened, not anguished. Slack. Almost peaceful.
-
-But there's a bite on his forearm. A single bite, deep and clean, already showing the bruised, discolored ring that you recognize.
-
-Wolfsbite.
-
-From the barn, Voss hisses sharply. He's pressed against the broken door, not going in. He holds up one finger, then points inside.
-
-Someone — or something — is in there.
-
-Make a Perception check.
+Make a Medicine check as you work. The wounds tell a story — you just need to read it.
 
 ### V2 — No word-count caps in CONVERSATION HANDLING
 
-*58 words, 5 sentences, 12 avg w/s, 0% dialogue, 3.5s, 25609 prompt chars*
+*186 words, 19 sentences, 10 avg w/s, 11% dialogue, 7.9s, 25000 prompt chars*
 
-Dagmar's already moving before you finish, threading through the fence posts to find a clean sightline. Voss peels left toward the barn without a word, low and quiet for a man in chainmail.
+Dagmar moves without a word, angling wide to find elevation — she climbs the fence rail of the goat pen and gets her bow up, scanning the treeline. Voss peels off toward the barn in a low crouch, staying close to the fence line.
 
-Finn stays at the treeline, arrow half-drawn, watching the house.
+Finn stays at your back as you advance toward the body.
 
-You cross the open ground quickly and crouch beside the body.
+The closer you get, the worse it looks. The man — broad-shouldered, maybe fifty, with calloused hands and a leather work apron — is face down in the dirt. His back is torn open. Deep lacerations, the kind no animal you've ever treated makes cleanly. Something with considerable strength did this, and recently. The ground around him is dark and saturated.
 
-Make a Medicine check.
+You kneel. Make a Medicine check as you examine him — the wounds tell a story if you can read it.
+
+From the barn, Voss calls out, low and tight: "Barn's empty. Livestock gone or dead. There's blood in here too — older than out there. And tracks." A pause. "Big ones."
+
+The farmhouse door is fifteen feet away. Still closed. Still no movement inside. The goats have gone quiet.
 
 ### V3 — No SELF-CHECK at prompt tail
 
-*147 words, 12 sentences, 12 avg w/s, 0% dialogue, 6.4s, 24898 prompt chars*
+*210 words, 20 sentences, 11 avg w/s, 4% dialogue, 10.8s, 24289 prompt chars*
 
-Dagmar moves into position behind a fence post, arrow half-drawn, eyes sweeping the treeline. Finn drops to one knee in the grass, watching the farmhouse windows.
+Dagmar peels off wordlessly, finding a low stone wall that gives her sightlines across the whole yard. Her bow comes up — not drawn, but ready. Finn holds position at the tree line, eyes moving between the barn roof and the treeline opposite.
 
-Voss gives a single nod and peels off toward the barn at a low run, pressing his back against the wall when he reaches it. He edges toward the broken door, peers inside, then holds up a closed fist. Wait.
+Voss nods once and begins his own arc toward the barn, low and careful, hand resting on his sword hilt.
 
-You circle wide around the body, approaching from the south to keep the house in view. Up close, the damage to the farmhouse door is unmistakable — deep gouges in the wood, some at shoulder height, some lower. Not an axe. Something with fingers.
+You move.
 
-The man is middle-aged, heavyset, wearing a leather work apron. There's blood on the back of his shirt, dried dark. When you crouch beside him and press two fingers to his throat —
+The yard is quiet in a way that feels deliberate. The goats track you with wide nervous eyes but don't scatter. Chickens have retreated into their coop and won't come out. Even the wind seems to have stilled.
 
-Make a Medicine check.
+The body resolves as you close the distance. Male, mid-forties, heavy-set, working clothes. One arm is stretched out toward the farmhouse door as though he was crawling when he stopped. His back is badly torn — three deep lacerations across the shoulders, through the fabric, the kind a large animal makes.
+
+But he's breathing. Barely. A shallow, wet rasp that you hear as you kneel beside him.
+
+From the barn, Voss calls out in a hushed, controlled voice — the tone of a man keeping himself calm. "There's a woman in here. Alive. Hiding in the hay."
+
+Make a Medicine check as you assess the farmer's wounds.
 
 ### V4 — No MECHANICAL MARKERS section
 
-*143 words, 13 sentences, 11 avg w/s, 0% dialogue, 6.0s, 19582 prompt chars*
+*121 words, 15 sentences, 8 avg w/s, 3% dialogue, 5.7s, 19797 prompt chars*
 
-Dagmar slides left without a word, arrow half-drawn, watching the treeline and the barn door simultaneously.
+Dagmar drops to one knee behind a fence post, arrow half-drawn, eyes sweeping the treeline. Voss peels left without a word, moving in a low crouch toward the barn's shadowed wall.
 
-Voss gives a curt nod and breaks right, moving low along the fence line toward the broken barn door.
+Finn stays at the tree line. "I've got the house," he mutters, fixing his gaze on the upper window.
 
-Finn stays back at the tree line, arrow trained on the farmhouse windows.
+You move out across open ground toward the body. Thirty feet. Twenty. Ten.
 
-You circle wide and approach the body from the south, mace in hand. Up close it's worse than it looked at distance. The man — mid-forties, calloused hands, a farmer's build — has been dead for hours. The ground beneath him is dark and dry. Three deep lacerations cross his back, tearing through both coat and flesh. Too wide for any wolf you've seen. Too deliberate in their spacing.
+The man is face-down in the dirt, one arm stretched out ahead of him as though he was crawling when he fell. His back is shredded — three deep gouges through his shirt, dried brown with old blood. Not fresh. Hours old, at least. The wounds are wide-spaced. Large.
 
-His right hand is outstretched, fingers curled around a pitchfork handle. He made it this far from the barn and no further.
-
-Make a Medicine check.
+Make a Medicine check as you crouch over him.
 
 ### V5 — Bare prompt — original-style one-sentence brief
 
-*233 words, 31 sentences, 8 avg w/s, 5% dialogue, 10.1s, 467 prompt chars*
+*236 words, 23 sentences, 10 avg w/s, 6% dialogue, 9.6s, 467 prompt chars*
 
-Dagmar moves smoothly to an elevated position on a low stone wall to your right, arrow drawn and scanning the tree line. "I've got you," she says quietly.
+Dagmar nods once and moves to a low stone wall, setting an arrow to her bowstring and scanning the treeline. "I've got you," she says quietly.
 
-Voss nods once and begins working around the barn's far side, shield up, moving in a low crouch with practiced discipline.
+Voss peels off toward the barn at a low crouch, hand on his sword hilt. Finn stays back at the wood's edge, watching the farmhouse windows.
 
-Finn stays back at the tree line, watching the farmhouse windows and roof line. Smart instinct from the boy.
+You move in a wide arc, keeping low, approaching the body from the south so Dagmar maintains a clear line of sight over you. The goats scatter at your approach, bleating and stumbling over one another. The smell hits you first — blood, and something animal and musky beneath it. Familiar in the way a hunter learns a predator's scent.
 
-You approach the body. The ground around it is churned — heavy boot prints, animal tracks overlapping. As you get closer you can see the man's right hand is outstretched toward the farmhouse, fingers clawed into the dirt. Like he was trying to crawl toward it.
+You reach the body and kneel. It's a man in his fifties, powerfully built even in death. Harrow himself, by the description Elder Wren gave you. He's been dead several hours at least — the chill is in him. The wounds on his back and shoulders are deep. Claw marks, four parallel lines, spaced wide. Whatever made them was large.
 
-You kneel. You check for breath, for pulse.
+But something else catches your eye. His right hand is closed in a fist. And clutched in that fist, barely visible between his fingers, is a scrap of cloth — deliberately placed, or desperately grabbed. Dark wool, coarsely woven.
 
-He's alive. Barely. His breathing is shallow and ragged. When you ease him onto his side you find deep lacerations across his back and left shoulder — three parallel gouges, wide-spaced. Claws. But something catches your eye immediately. The wounds are already closing. Slowly, imperfectly, but closing. No man heals like that naturally.
-
-He's been bitten too. Left forearm. The bite is deep.
-
-His eyes flutter open. He looks at you — confused, frightened, in pain. His lips move.
-
-*"My family,"* he whispers. *"Are they—"*
-
-From the barn, Voss calls out. His voice is carefully controlled but the urgency is unmistakable. *"Cleric. You need to see this."*
+From the barn, Voss calls in a low urgent voice. "Cleric. You need to see this. And bring your holy symbol."
 
 What do you do?

@@ -1950,15 +1950,13 @@ Plus: "[OOC: Would you like to formally recruit [Name] as a companion?]"
 
 Both required. Wait for answer.`);
 
-  blocks.push(`──────────── PLAYER OBSERVATION = ALWAYS A CHECK ────────────
-Any player question asking what they perceive, notice, sense, identify, or learn requires the appropriate check BEFORE you reveal anything.
-
-• Observe → Perception  • Examine → Investigation  • Identify magic/creature/lore → Arcana/Nature/Religion/History
-• Read a person → Insight  • Lie → Deception / Persuade → Persuasion / Intimidate → Intimidation
-• Hide → Stealth  • Physical → Athletics/Acrobatics  • Lock/trap → Thieves' Tools
-• Track/wilderness → Survival  • Treat wounds → Medicine  • Animal → Animal Handling
-
-Call for the check, then STOP (Cardinal Rule 2). Never narrate the answer before the number arrives. Companions with matching proficiencies may also attempt — if the player fails but a companion succeeds, narrate the companion stepping in.`);
+  // PLAYER OBSERVATION = ALWAYS A CHECK rule was in this always-on block
+  // until v1.0.101 (H7 fix). Removed because it fired too aggressively on
+  // atmospheric scene-opens — the AI demanded "Make a Perception check"
+  // after a player just opened a tavern door. The rule still applies; it's
+  // now verb-gated via OBSERVATION_AS_CHECK_BLOCK and detectObservationVerbs(),
+  // injected at /message time only when the player commits to a perception/
+  // investigation/stealth-class action verb.
 
   blocks.push(`──────────── NPC NAMING & APPEARANCE ────────────
 Every NPC must have a unique name within this campaign. Once a name appears, it's off-limits forever — see "NAMES ALREADY USED" later in the prompt.
@@ -2205,24 +2203,19 @@ EXAMPLE — RIGHT:
 The only place you "act" for the player is mechanical execution of a declared intent — "I attack the bandit" → you ask for the attack roll. Everything else is theirs.
 
 ─────────────────────────────────────────────
-2. HARD STOPS
+2. ROLL REQUESTS — DON'T SPOIL OUTCOMES
 ─────────────────────────────────────────────
-Some moments are terminal. Write them, then end your response.
+When you call for a dice roll, you may continue narrating the surrounding moment — environment, other characters' reactions, the player's posture as they prepare. Never reveal the *outcome* of the check before the player rolls.
 
-• NPC asks the player a direct question → one short action tag allowed, then STOP.
-• You call for a dice roll (skill, attack, save, initiative) → the roll request is your LAST sentence. No atmospheric follow-up.
+The roll request can sit in the middle of a paragraph. You don't need to STOP after asking for it. The constraint is only on outcomes — never describe what the check reveals/achieves until the player gives you their number.
 
-EXAMPLE — WRONG (continues past the question):
-> "Do you know how to fight?" Corvin asks. He glances at the alley mouth, brushing dust from his sleeve. "Because Greta will be back soon with more kids. We should think about where to sleep tonight, somewhere with a door..."
+When an NPC asks the player a direct question, leave space for an answer — at most one short action beat from another character, then end the response so the player drives.
 
-EXAMPLE — RIGHT:
-> "Do you know how to fight?" Corvin asks, his eyes not quite meeting yours.
+EXAMPLE — RIGHT (cinematic build with check inside):
+> The barn door hangs crooked, half-torn from its hinges. The smell of blood reaches you before you see anything — heavy, iron, wrong. Make a Perception check as you cross the last twenty feet. The morning light catches something pale at the edge of the hayloft, but you can't make out what it is yet.
 
-EXAMPLE — WRONG (narrates after roll request):
-> The lock is old, the mechanism corroded. Make a Thieves' Tools check. The tumblers feel stubborn as you work at them.
-
-EXAMPLE — RIGHT:
-> The lock is old, the mechanism corroded. Make a Thieves' Tools check.
+EXAMPLE — WRONG (reveals the outcome):
+> Make a Perception check. You spot a hidden door behind the barrel.
 
 ─────────────────────────────────────────────
 3. SCENE INTEGRITY
@@ -2475,24 +2468,113 @@ export function formatMythicForPrompt(mythicStatus, character) {
 export { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception };
 
 /**
- * applyLeanTransforms — diagnostic post-processor. Strips two prose-killing
- * constraints from a fully-built system prompt without rebuilding it:
+ * H7 — verb-gated PLAYER OBSERVATION = ALWAYS A CHECK injection.
  *
- *   1. The MECHANICAL MARKERS section (every-turn marker scan tax). The
- *      [COMBAT_START] / [LOOT_DROP] / [MERCHANT_SHOP] / etc. systems will
- *      not fire while lean is on — that's the trade-off. Acceptable for
- *      narrative-quality testing.
+ * Until v1.0.101 this rule lived in the always-on system prompt
+ * (`formatMechanicalMarkers`). The prose-quality A/B test surfaced a
+ * problem: the rule fired on atmospheric scene-opens. A player saying
+ * "I push open the tavern door and look around" would get back "Make a
+ * Perception check." — killing the cinematic moment for an ambient look.
  *
- *   2. Cardinal Rule 2 (HARD STOPS). The strict version forces the AI to
- *      end the response immediately after any roll request, which compresses
- *      cinematic build-ups (the body-approach scene from the original
- *      campaign was 250 words of layered horror BEFORE the check call).
- *      The lean version softens it to "don't reveal the outcome," allowing
- *      continued narration around the request.
+ * Fix: only inject this rule when the player commits to a clear
+ * skill-check verb. Detection runs at /message time on the user's input;
+ * if a commitment verb is detected, the rule block is appended to the
+ * system prompt (tier 3, uncached) for that turn only.
  *
- * Used by /start and /message routes when req.body.leanPrompt is true.
- * Idempotent — running it twice is a no-op (the markers section is already
- * gone the second time).
+ * Verb list is intentionally narrow — false positives (injecting when it
+ * isn't needed) are the bug we're trying to avoid. False negatives (the
+ * rule not firing when it would have helped) are recoverable: the AI can
+ * still call for a check on its own; the always-on prompt no longer
+ * forces it to.
+ */
+const OBSERVATION_COMMITMENT_VERBS = [
+  // Investigation / examination
+  'search', 'examine', 'investigate', 'study', 'scrutinize', 'inspect',
+  // Stealth
+  'sneak', 'skulk',
+  // Active perception (only when the verb signals an attempt, not passive sight)
+  'listen', 'peer',
+  // Knowledge / lore identification
+  'identify',
+  // Survival
+  'track',
+  // Social-skill commitment (when the player explicitly attempts the skill)
+  'persuade', 'intimidate', 'deceive',
+  // Thieves' tools
+  'pick', 'disarm',
+  // Athletics (effortful)
+  'climb'
+];
+
+const OBSERVATION_VERB_REGEX = new RegExp(
+  `\\b(${OBSERVATION_COMMITMENT_VERBS.join('|')})\\w*\\b`,
+  'i'
+);
+
+/**
+ * Detect whether the player's input commits to a perception/investigation/
+ * stealth-class action verb that should trigger the OBSERVATION = CHECK rule.
+ *
+ * Returns true for inputs like:
+ *   "I search the body."
+ *   "I'm trying to sneak past the guard."
+ *   "Let me examine the rune carefully."
+ *   "I'll investigate the desk."
+ *
+ * Returns false for ambient/atmospheric narrative like:
+ *   "I open the door and look around."
+ *   "I walk into the tavern."
+ *   "I sit at the bar."
+ *
+ * @param {string} action - the player's input message
+ * @returns {boolean}
+ */
+export function detectObservationVerbs(action) {
+  if (!action || typeof action !== 'string') return false;
+  return OBSERVATION_VERB_REGEX.test(action);
+}
+
+/**
+ * The PLAYER OBSERVATION = ALWAYS A CHECK rule block, injected at /message
+ * time when `detectObservationVerbs(action)` returns true. Wording updated
+ * for the v1.0.101 soft Cardinal Rule 2 ("ROLL REQUESTS — DON'T SPOIL
+ * OUTCOMES") — no longer says "STOP."
+ */
+export const OBSERVATION_AS_CHECK_BLOCK = `
+
+──────────── PLAYER OBSERVATION = SKILL CHECK ────────────
+The player's input commits to a perception, investigation, stealth, or related skill action. Call for the appropriate check before revealing what the action discovers.
+
+• Search/examine/investigate/study → Investigation  • Identify magic/creature/lore → Arcana/Nature/Religion/History
+• Listen/peer → Perception  • Sneak/skulk → Stealth  • Track → Survival
+• Persuade → Persuasion / Intimidate → Intimidation / Deceive → Deception
+• Pick lock / disarm trap → Thieves' Tools  • Climb → Athletics
+
+Per Cardinal Rule 2 (ROLL REQUESTS — DON'T SPOIL OUTCOMES): you may narrate the surrounding moment, but never describe what the check reveals/achieves until the player gives you their number. Companions with matching proficiencies may also attempt — if the player fails but a companion succeeds, narrate the companion stepping in.
+`;
+
+/**
+ * applyLeanTransforms — diagnostic post-processor.
+ *
+ * History: in v1.0.95 this stripped TWO things from the system prompt —
+ * the MECHANICAL MARKERS section (transform 1) and Cardinal Rule 2's
+ * strict "HARD STOPS" version (transform 2). The Cardinal-Rule-2 swap
+ * was the dominant reason the lean toggle existed.
+ *
+ * Post-v1.0.101 (H8 production fix): the soft Cardinal Rule 2 variant
+ * ("ROLL REQUESTS — DON'T SPOIL OUTCOMES") is now the production default.
+ * Transform 2's regex no longer matches the canonical prompt (the strict
+ * heading "2. HARD STOPS" is gone). It silently no-ops, which is fine —
+ * we deliberately left it in place so a future revival of the strict
+ * version would still be transformable. Effectively, this function now
+ * only meaningfully strips MECHANICAL MARKERS (transform 1) and stays
+ * available as a diagnostic harness for that single behavior.
+ *
+ * Used by /message route when req.body.leanPrompt is true (the
+ * user-facing toggle was retired in v1.0.100; trigger via
+ * `dndLeanPrompt=1` in the browser console).
+ *
+ * Idempotent — running it twice is a no-op.
  *
  * Toggling lean off mid-session also works because the FULL prompt stays
  * in messages[0]; we apply the transform per-turn on a copy.

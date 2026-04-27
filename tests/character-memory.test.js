@@ -175,7 +175,11 @@ console.log('\n=== Test 4: Player Autonomy Enforcement (Strengthened) ===\n');
   assert(prompt.includes('Never write player thoughts or feelings'), 'Cardinal Rules: no player thoughts/feelings');
   assert(prompt.includes('Never write implied player decisions'), 'Cardinal Rules: no implied decisions');
   assert(prompt.includes('Never roll the player\'s dice'), 'Cardinal Rules: never roll for player');
-  assert(prompt.includes('HARD STOPS'), 'Cardinal Rules: hard stops section present');
+  // Updated for v1.0.101 (H8 fix): "HARD STOPS" was the strict Cardinal Rule 2
+  // heading; production now uses the soft variant "ROLL REQUESTS — DON'T SPOIL
+  // OUTCOMES." The intent (don't let the AI narrate the outcome before the roll)
+  // is preserved; the strict "stop after the request" is gone.
+  assert(prompt.includes("ROLL REQUESTS — DON'T SPOIL OUTCOMES"), 'Cardinal Rules: soft Cardinal Rule 2 (roll requests) present');
 
   // SELF-CHECK RUBRIC section (new architecture — was FINAL REMINDER)
   const selfCheckPos = prompt.indexOf('BEFORE YOU SEND');

@@ -41,16 +41,24 @@ console.log(`Full prompt:  ${full.length} chars`)
 console.log(`Lean prompt:  ${lean.length} chars`)
 console.log(`Saved:        ${full.length - lean.length} chars (${Math.round((1 - lean.length/full.length) * 100)}%)\n`)
 
+// Updated for v1.0.101 (H7 + H8 production fixes):
+//   • H7: PLAYER OBSERVATION = ALWAYS A CHECK rule moved out of always-on
+//     prompt to verb-gated injection. Should NOT appear in either full or
+//     lean canonical-prompt builds.
+//   • H8: Soft Cardinal Rule 2 ("ROLL REQUESTS — DON'T SPOIL OUTCOMES") is
+//     now the production default. Should appear in BOTH full and lean.
+//     The strict "2. HARD STOPS" heading and "No atmospheric follow-up"
+//     prohibition should NOT appear in either.
 const checks = [
   { needle: 'MERCHANT SHOPPING', shouldBeIn: 'full', shouldNotBeIn: 'lean', label: '[markers] MERCHANT SHOPPING block' },
-  { needle: 'PLAYER OBSERVATION = ALWAYS A CHECK', shouldBeIn: 'full', shouldNotBeIn: 'lean', label: '[markers] PLAYER OBSERVATION rule' },
+  { needle: 'PLAYER OBSERVATION = ALWAYS A CHECK', shouldBeIn: 'neither', label: '[markers] PLAYER OBSERVATION rule (H7 — moved to verb-gated injection at /message time)' },
   // Match the actual marker spec format ("[LOOT_DROP: Item=..."), not the
   // example reference in Cardinal Rule 5 which intentionally survives.
   { needle: '[LOOT_DROP: Item=', shouldBeIn: 'full', shouldNotBeIn: 'lean', label: '[markers] LOOT_DROP marker spec' },
-  { needle: '2. HARD STOPS', shouldBeIn: 'full', shouldNotBeIn: 'lean', label: '[rules] strict Cardinal Rule 2 heading' },
-  { needle: 'No atmospheric follow-up', shouldBeIn: 'full', shouldNotBeIn: 'lean', label: '[rules] strict Rule 2 prohibition' },
-  { needle: '2. ROLL REQUESTS — DON\'T SPOIL OUTCOMES', shouldBeIn: 'lean', shouldNotBeIn: 'full', label: '[rules] soft Cardinal Rule 2 heading' },
-  { needle: 'you may continue narrating the surrounding moment', shouldBeIn: 'lean', shouldNotBeIn: 'full', label: '[rules] soft Rule 2 permission' },
+  { needle: '2. HARD STOPS', shouldBeIn: 'neither', label: '[rules] strict Cardinal Rule 2 heading (H8 — replaced by soft variant in production)' },
+  { needle: 'No atmospheric follow-up', shouldBeIn: 'neither', label: '[rules] strict Rule 2 prohibition (H8)' },
+  { needle: '2. ROLL REQUESTS — DON\'T SPOIL OUTCOMES', shouldBeIn: 'both', label: '[rules] soft Cardinal Rule 2 heading (H8 — now production default)' },
+  { needle: 'you may continue narrating the surrounding moment', shouldBeIn: 'both', label: '[rules] soft Rule 2 permission (H8 — now production default)' },
   { needle: 'MECHANICAL MARKERS — DISABLED THIS SESSION', shouldBeIn: 'lean', shouldNotBeIn: 'full', label: '[markers] disabled-stub heading' },
   { needle: 'CARDINAL RULES', shouldBeIn: 'both', label: '[rules] CARDINAL RULES heading (preserved)' },
   { needle: '3. SCENE INTEGRITY', shouldBeIn: 'both', label: '[rules] Cardinal Rule 3 (untouched)' },
@@ -65,6 +73,7 @@ let failed = 0
 for (const c of checks) {
   const inFull = full.includes(c.needle)
   const inLean = lean.includes(c.needle)
+  // shouldBeIn supports: 'full' | 'lean' | 'both' | 'neither'
   const expectFull = c.shouldBeIn === 'full' || c.shouldBeIn === 'both'
   const expectLean = c.shouldBeIn === 'lean' || c.shouldBeIn === 'both'
   const ok = inFull === expectFull && inLean === expectLean
