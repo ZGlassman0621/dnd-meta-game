@@ -88,15 +88,17 @@ function App() {
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
 
-  // Sonnet vs Opus selector. Persisted in localStorage and shared with
-  // DMSession's in-session pill via the same `dndForceOpus` key — toggling
-  // here updates the value the next session will pick up.
-  const [forceOpus, setForceOpus] = useState(() => {
-    try { return localStorage.getItem('dndForceOpus') === '1' } catch { return false }
+  // Sonnet vs Opus selector. Opus is the production default (v1.0.99 — see
+  // DECISION_LOG "Opus as production default for main DM session continuations").
+  // The toggle is now an opt-down to Sonnet, not an opt-up to Opus. Persisted
+  // in localStorage as `dndUseSonnet` ('1' = use Sonnet override, '0' or absent
+  // = use Opus default). Shared with DMSession's in-session pill via the same key.
+  const [useSonnet, setUseSonnet] = useState(() => {
+    try { return localStorage.getItem('dndUseSonnet') === '1' } catch { return false }
   })
-  const updateForceOpus = (next) => {
-    setForceOpus(next)
-    try { localStorage.setItem('dndForceOpus', next ? '1' : '0') } catch {}
+  const updateUseSonnet = (next) => {
+    setUseSonnet(next)
+    try { localStorage.setItem('dndUseSonnet', next ? '1' : '0') } catch {}
   }
 
   // Lean prompt toggle (diagnostic). When on, server strips MECHANICAL
@@ -302,15 +304,16 @@ function App() {
         <p className="subtitle">Adventure awaits while you're away</p>
         {llmStatus && (() => {
           // When Claude is available, the pill becomes a clickable Sonnet/Opus
-          // toggle (default Sonnet, toggle to force Opus every turn). Any other
-          // case stays a plain status indicator.
+          // toggle. Opus is the production default (v1.0.99); the toggle now
+          // selects Sonnet as an opt-down. Any non-Claude case stays a plain
+          // status indicator.
           const isClickable = llmStatus.available && llmStatus.provider === 'claude'
           const accent = !llmStatus.available
             ? { bg: 'rgba(231, 76, 60, 0.2)', border: '#e74c3c', text: '#e74c3c', dot: '🔴', label: 'AI Offline' }
-            : isClickable && forceOpus
-              ? { bg: 'rgba(255, 140, 0, 0.2)', border: '#ff8c00', text: '#ff8c00', dot: '🟠', label: 'Opus' }
+            : isClickable && useSonnet
+              ? { bg: 'rgba(139, 92, 246, 0.2)', border: '#8b5cf6', text: '#a78bfa', dot: '🟣', label: 'Sonnet' }
               : isClickable
-                ? { bg: 'rgba(139, 92, 246, 0.2)', border: '#8b5cf6', text: '#a78bfa', dot: '🟣', label: 'Sonnet' }
+                ? { bg: 'rgba(255, 140, 0, 0.2)', border: '#ff8c00', text: '#ff8c00', dot: '🟠', label: 'Opus' }
                 : { bg: 'rgba(46, 204, 113, 0.2)', border: '#2ecc71', text: '#2ecc71', dot: '🟢', label: 'Ollama' }
           const baseStyle = {
             display: 'inline-flex',
@@ -326,9 +329,9 @@ function App() {
             cursor: isClickable ? 'pointer' : 'default'
           }
           const tooltip = isClickable
-            ? (forceOpus
-              ? 'Forcing Opus for every turn (denser prose, slower, costlier). Click to switch back to Sonnet.'
-              : 'Using Sonnet (default for continuations; Opus for first session of a new campaign). Click to force Opus for every turn.')
+            ? (useSonnet
+              ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (the production default).'
+              : 'Using Opus (production default — better prose at ~$1.50/hour). Click to opt down to Sonnet.')
             : undefined
           const inner = (
             <>
@@ -339,7 +342,7 @@ function App() {
           return isClickable ? (
             <button
               type="button"
-              onClick={() => updateForceOpus(!forceOpus)}
+              onClick={() => updateUseSonnet(!useSonnet)}
               title={tooltip}
               style={{ ...baseStyle, font: 'inherit', fontSize: '0.75rem' }}
             >

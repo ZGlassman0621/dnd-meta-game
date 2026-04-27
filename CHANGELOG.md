@@ -2,6 +2,41 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.99] - 2026-04-26 — Opus is now the production default for main DM session continuations
+
+User decision logged in DECISION_LOG. Code now defaults to Opus on all three surfaces.
+
+### What changed
+
+**Server (`server/routes/dmSession.js`):** both `/start` and `/message` endpoints now default to Opus for all turns. The `modelOverride` body param vocabulary is now `'opus' | 'sonnet' | null` (was `'opus' | null`); `'sonnet'` is the explicit opt-down signal, `'opus'` is accepted as a no-op, `null` falls through to the Opus default.
+
+**Client (3 surfaces):** the `forceOpus` boolean has been renamed to `useSonnet` with inverted meaning across `App.jsx`, `DMSession.jsx`, and `SessionSetup.jsx`. localStorage key migrated from `dndForceOpus` to `dndUseSonnet`. Default is now Opus on every surface; the toggle selects Sonnet as an opt-down.
+
+- **Home pill** — defaults to "🟠 Opus" with terracotta accent. Click to switch to "🟣 Sonnet."
+- **Setup screen** — Opus button is the bold/selected state by default; Sonnet button is the opt-down.
+- **In-session info bar pill** — same Opus default, click to opt down to Sonnet.
+
+Tooltips updated to reflect the new framing ("production default" vs "opt-down for cost").
+
+### Why
+
+User playtest confirmed Opus is the prose-quality lever the project needed. Sonnet's "good enough" wasn't actually good enough for the brief's ambition of an end-of-world game playable for years on a single character. v1.0.96's cache architecture fix and v1.0.98's tier 2 1-hour TTL brought Opus session cost to ~$1.30–$1.50/hour validated against real session-147 data — acceptable for the user's most-played hobby project (~$300–700/year for 2–3 sessions/week).
+
+Levers 2 and 3 (rolling-summary-earlier, tier-3-trim) were considered as further cost reductions but deferred. Both trade cost for AI memory quality, which is the central engineering problem the brief flags as load-bearing — those need their own scoped investigation, not casual inclusion in the default-flip.
+
+### Migration note
+
+The previous `dndForceOpus` localStorage key is left orphan in user browsers; it's not read by any v1.0.99+ code. Any user who previously toggled the old "Force Opus" pill ON will now see the new Opus default (matching their prior intent). Users who previously had the old toggle OFF (Sonnet) will see Opus on first load — they can opt down via the toggle if they want Sonnet back. The orphan key will eventually be cleaned up via a future minor pass.
+
+### Files
+
+- Modified: `server/routes/dmSession.js` (server defaults, body param vocabulary).
+- Modified: `client/src/App.jsx` (home pill: rename + invert + default Opus).
+- Modified: `client/src/components/DMSession.jsx` (in-session pill + state + API calls).
+- Modified: `client/src/components/SessionSetup.jsx` (setup-screen Opus/Sonnet selector).
+- Modified: `CHANGELOG.md` (this entry).
+- Modified: `DECISION_LOG.md` (new "Opus as production default" entry; supersedes the older "Opus for ALL generation, Sonnet for sessions only" entry which moved to Closed/superseded).
+
 ## [1.0.0.98] - 2026-04-26 — Tier 2 prompt cache to 1-hour TTL + cost-prediction corrections
 
 Single architecture change plus documentation corrections from the v1.0.97 session-147 playtest data.

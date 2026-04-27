@@ -15,8 +15,8 @@ export default function SessionSetup({
   providerPreference,
   onProviderChange,
   onCheckStatus,
-  forceOpus,
-  onForceOpusChange,
+  useSonnet,
+  onUseSonnetChange,
   // Campaign context
   campaignContext,
   continueCampaign,
@@ -105,38 +105,36 @@ export default function SessionSetup({
                 {llmStatus.model && <span style={{ opacity: 0.7 }}> • {llmStatus.model}</span>}
               </span>
 
-              {/* Model selector — Sonnet (default, Opus only for first session)
-                  vs Opus (every turn, denser prose, slower + costlier).
-                  Replaces the old Auto/Claude/Ollama provider toggle.
+              {/* Model selector — Opus is the production default (v1.0.99).
+                  The toggle now selects Sonnet as an opt-down for cost.
                   Provider stays on 'auto' so Ollama is still a fallback if
-                  Claude is unreachable, but the user-visible knob is now
-                  the model decision — that's the lever that actually
-                  changes prose quality. */}
+                  Claude is unreachable. Sonnet button = explicit opt-down;
+                  Opus button = production default. */}
               {llmStatus.provider === 'claude' && (
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem' }}>
                   <button
-                    onClick={() => onForceOpusChange?.(false)}
-                    title="Sonnet — default. Opus is used only for the first session of a new campaign; continuations use Sonnet."
+                    onClick={() => onUseSonnetChange?.(true)}
+                    title="Sonnet — opt-down for cost. Cheaper, but thinner prose. Production default is Opus."
                     style={{
                       padding: '0.25rem 0.7rem', borderRadius: '4px',
-                      border: `1px solid ${!forceOpus ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
-                      background: !forceOpus ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.04)',
-                      color: !forceOpus ? '#a78bfa' : '#888',
-                      fontSize: '0.75rem', fontWeight: !forceOpus ? 'bold' : 'normal',
+                      border: `1px solid ${useSonnet ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
+                      background: useSonnet ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.04)',
+                      color: useSonnet ? '#a78bfa' : '#888',
+                      fontSize: '0.75rem', fontWeight: useSonnet ? 'bold' : 'normal',
                       cursor: 'pointer', letterSpacing: '0.03em'
                     }}
                   >
                     Sonnet
                   </button>
                   <button
-                    onClick={() => onForceOpusChange?.(true)}
-                    title="Opus — every turn. Denser prose, slower, more expensive."
+                    onClick={() => onUseSonnetChange?.(false)}
+                    title="Opus — production default. Better prose at ~$1.50/hour."
                     style={{
                       padding: '0.25rem 0.7rem', borderRadius: '4px',
-                      border: `1px solid ${forceOpus ? '#ff8c00' : 'rgba(255,255,255,0.2)'}`,
-                      background: forceOpus ? 'rgba(255, 140, 0, 0.2)' : 'rgba(255,255,255,0.04)',
-                      color: forceOpus ? '#ff8c00' : '#888',
-                      fontSize: '0.75rem', fontWeight: forceOpus ? 'bold' : 'normal',
+                      border: `1px solid ${!useSonnet ? '#ff8c00' : 'rgba(255,255,255,0.2)'}`,
+                      background: !useSonnet ? 'rgba(255, 140, 0, 0.2)' : 'rgba(255,255,255,0.04)',
+                      color: !useSonnet ? '#ff8c00' : '#888',
+                      fontSize: '0.75rem', fontWeight: !useSonnet ? 'bold' : 'normal',
                       cursor: 'pointer', letterSpacing: '0.03em'
                     }}
                   >

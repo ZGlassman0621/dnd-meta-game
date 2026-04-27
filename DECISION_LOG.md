@@ -23,12 +23,6 @@ Format per entry is light by design:
 
 These are the calls waiting on user input or external evidence. Listed newest-first.
 
-### 🟡 Opus as production default for main DM sessions
-**Status:** Validation completed (v1.0.97 session 147 playtest); decision still open. **Owner:** User.
-**Context:** v1.0.96 cache fix delivered. Real measurement from 24-turn Opus playtest: ~71% average cache hit rate (close to the ~77% ceiling for thoughtful play), ~$2.89/session (~$1.50/hour). The original ~$0.85/session prediction was wrong because tier 3 dynamic content (chronicle context, narrative queue, world state) and accumulated message history grow per turn — they cap the achievable cache hit rate, not tier 1+2 alone. v1.0.98 adds tier 2 1-hour TTL (lever 1) which should reduce session cost by ~$0.20–$0.30. Three additional levers (rolling-summary-earlier, tier-3-trim, etc.) could push closer to ~$1.00/session if needed.
-**Decision needed:** Make Opus the default for main DM session continuations at the new measured cost (~$1.30–$1.50/hour after lever 1), or keep Sonnet default with the home-page toggle.
-**Related:** [`triage/prose-quality-triage.md`](triage/prose-quality-triage.md)
-
 ### 🟡 Lean Prompt toggle: keep as diagnostic or retire entirely
 **Context:** Lean prompt (strips MECHANICAL MARKERS + softens Cardinal Rule 2) didn't move the needle in user playtest. Automated A/B showed it helps edge cases (atmospheric scene-opens, cinematic build) but not the average turn.
 **Decision needed:** Retire as a production direction, OR keep the toggle as a debugging tool, OR fold the relaxed Cardinal Rule 2 into production permanently.
@@ -51,6 +45,13 @@ These are the calls waiting on user input or external evidence. Listed newest-fi
 ---
 
 ## Decisions log (newest first)
+
+### 2026-04-26 (v1.0.99) — Opus as production default for main DM session continuations (Direction)
+**Context:** v1.0.96 (cache architecture fix) + v1.0.98 (tier 2 → 1-hour TTL) brought Opus session cost to ~$1.30–$1.50/hour validated against real session 147 data. Original $0.85/session prediction was wrong; corrected numbers logged in CHANGELOG and the character-info-split entry. User's playtest confirmed Opus is the prose-quality lever the project needed; Sonnet is "good enough" for general interaction but doesn't deliver the narrative depth the brief calls for.
+**Decision:** Make Opus the default model for main DM session continuations on all three surfaces (home pill, setup screen, in-session info bar). Sonnet stays available via the toggle as an escape hatch.
+**Why:** The brief frames this as the user's end-of-world game — playable for years on a single character. Prose quality is the heart of that experience; mechanics exist to support it. ~$1.50/hour is acceptable for that framing, especially given 2–3 sessions/week translates to ~$300–700/year for the user's most-played game. Levers 2 and 3 (rolling summary earlier; tier 3 trim) were considered as further cost reductions but deferred — both trade cost for AI memory quality, which is exactly the central engineering problem the brief flags as load-bearing. Those changes need their own scoped investigation, not casual inclusion here.
+**Implications:** Supersedes the earlier "Opus for ALL generation, Sonnet for sessions only" decision (now closed). New baseline cost expectation is ~$1.50/hour of Opus play. Future cost-reduction work happens in a dedicated memory-quality investigation, not in the prose-quality thread. Code change: server `/start` and `/message` both default to Opus; the body param `modelOverride` now accepts `'sonnet'` as the escape-hatch signal (was `'opus' | null`). Client toggle inverted: `forceOpus` boolean → `useSonnet` boolean (semantically: the toggle now selects the override, not the default). localStorage key migrated from `dndForceOpus` to `dndUseSonnet`.
+**Related:** v1.0.96 + v1.0.98 changelog entries; v1.0.99 changelog entry; [`triage/prose-quality-triage.md`](triage/prose-quality-triage.md); session 147 playtest data.
 
 ### 2026-04-26 — PROJECT_BRIEF.md and DECISION_LOG.md introduced (Process)
 **Context:** Project complexity has grown to multiple parallel strategic threads, multi-session investigations, and recurring AI collaborators (Claude Code, Claude Design, Claude PM). Onboarding a strategic-role collaborator was forcing them to re-derive context every time.
@@ -193,15 +194,15 @@ These are the calls waiting on user input or external evidence. Listed newest-fi
 **Why:** Standard pattern, low complexity, ready for multi-user without refactor.
 **Implications:** Anything new touching `/api/*` automatically requires auth. New tables that store user-specific data should include a `user_id` column.
 
-### 2026 (early baseline — being challenged) — Opus for ALL generation, Sonnet for sessions only (Direction)
-**Context:** Cost discipline. Opus is ~10× Sonnet at runtime. Generation tasks (campaign plan, NPCs, quests, locations, companions, adventures, prelude arc) run once and are heavy; sessions run many times and need to be cheap.
-**Decision:** Opus handles ALL generation tasks (one-shot heavy lifting). Sonnet handles ALL interactive DM sessions. Exception: the first session opening uses Opus for narrative richness.
-**Why:** Cost-aware (principle #3). Sonnet is "good enough" for ongoing interaction.
-**Status:** **Being challenged** by the v1.0.96 prose-quality investigation. User playtest confirmed Opus is the prose-quality lever. The cache fix made Opus tenable as a continuation default. Pending decision in Open Decisions above.
-**Implications:** If Opus becomes the new default for sessions, this entry gets superseded. If Sonnet stays default, the home-page toggle stays as the user's escape hatch.
-
 ---
 
 ## Closed / superseded
 
-(Nothing yet — when a decision is reversed or replaced, move it here with a note pointing to the replacement.)
+### 2026 (early baseline) — Opus for ALL generation, Sonnet for sessions only (Direction) — SUPERSEDED 2026-04-26 (v1.0.99)
+> *Replaced by:* "Opus as production default for main DM session continuations" (newest entry in the Decisions Log section).
+
+**Context:** Cost discipline. Opus is ~10× Sonnet at runtime. Generation tasks (campaign plan, NPCs, quests, locations, companions, adventures, prelude arc) run once and are heavy; sessions run many times and need to be cheap.
+**Decision:** Opus handles ALL generation tasks (one-shot heavy lifting). Sonnet handles ALL interactive DM sessions. Exception: the first session opening uses Opus for narrative richness.
+**Why:** Cost-aware (principle #3). Sonnet is "good enough" for ongoing interaction.
+**Why superseded:** The v1.0.96 prose-quality investigation showed Sonnet's "good enough" wasn't actually good enough for the brief's narrative ambitions. User's session-147 playtest confirmed Opus is the prose-quality lever. Cache architecture fix (v1.0.96) + tier 2 1h TTL (v1.0.98) brought Opus session cost to ~$1.50/hour — acceptable for the user's central-experience hobby project. The "Sonnet good enough" framing was wrong; the actual right framing is "Opus required, with cache discipline making it affordable."
+**Implications of supersession:** Generation still uses Opus (no change). Sessions now also use Opus by default. Sonnet is still callable via the toggle as an escape hatch. The "Opus for generation, Sonnet for sessions" mental model no longer applies — it's now "Opus everywhere, with toggle to opt down to Sonnet for cost."

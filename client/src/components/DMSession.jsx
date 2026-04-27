@@ -28,14 +28,16 @@ const DEFAULT_MODEL = 'gpt-oss:20b';
 export default function DMSession({ character, allCharacters, onBack, onCharacterUpdated }) {
   const [llmStatus, setLlmStatus] = useState(null);
   const [providerPreference, setProviderPreference] = useState('auto'); // 'auto' | 'claude' | 'ollama'
-  // Diagnostic: force Opus for every turn (default Sonnet for continuations).
-  // Persisted in localStorage so the choice survives reload during a playtest.
-  const [forceOpus, setForceOpus] = useState(() => {
-    try { return localStorage.getItem('dndForceOpus') === '1'; } catch { return false; }
+  // Sonnet vs Opus selector. Opus is the production default (v1.0.99 — see
+  // DECISION_LOG "Opus as production default for main DM session continuations").
+  // The toggle is now an opt-down to Sonnet. Persisted in localStorage as
+  // `dndUseSonnet` so the choice survives reload.
+  const [useSonnet, setUseSonnet] = useState(() => {
+    try { return localStorage.getItem('dndUseSonnet') === '1'; } catch { return false; }
   });
-  const updateForceOpus = (next) => {
-    setForceOpus(next);
-    try { localStorage.setItem('dndForceOpus', next ? '1' : '0'); } catch {}
+  const updateUseSonnet = (next) => {
+    setUseSonnet(next);
+    try { localStorage.setItem('dndUseSonnet', next ? '1' : '0'); } catch {}
   };
 
   // Campaign module selection
@@ -667,7 +669,8 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           customNpcs: selectedNpcs,
           model: DEFAULT_MODEL,
           providerPreference,
-          modelOverride: forceOpus ? 'opus' : null,
+          // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
+          modelOverride: useSonnet ? 'sonnet' : null,
           // Lean prompt is read fresh from localStorage at API-call time
           // (not state) so the home-page toggle takes effect immediately
           // without needing to re-thread state through DMSession.
@@ -750,7 +753,8 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         body: JSON.stringify({
           action,
           providerPreference,
-          modelOverride: forceOpus ? 'opus' : null,
+          // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
+          modelOverride: useSonnet ? 'sonnet' : null,
           // Lean prompt is read fresh from localStorage each turn so toggling
           // the home-page pill mid-session takes effect on the very next /message.
           leanPrompt: (() => { try { return localStorage.getItem('dndLeanPrompt') === '1' } catch { return false } })(),
@@ -2084,23 +2088,23 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             </div>
           )}
 
-          {/* Model toggle chip — diagnostic. Click to flip Opus/Sonnet for the next turn.
-              Lets the player A/B prose quality within a single session. Only shown when
+          {/* Model toggle chip — Opus is the production default (v1.0.99).
+              Click to opt down to Sonnet for the next turn. Only shown when
               Claude is the active provider. */}
           {llmStatus?.provider === 'claude' && (
             <button
-              onClick={() => updateForceOpus(!forceOpus)}
-              title={forceOpus
-                ? 'Forcing Opus for every turn. Click to switch back to Sonnet (default for continuations).'
-                : 'Using Sonnet (default for continuations). Click to force Opus for the next turn.'}
+              onClick={() => updateUseSonnet(!useSonnet)}
+              title={useSonnet
+                ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (production default).'
+                : 'Using Opus (production default). Click to opt down to Sonnet for cost.'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.3rem',
                 padding: '0.2rem 0.55rem',
-                background: forceOpus ? 'rgba(255, 140, 0, 0.18)' : 'rgba(139, 92, 246, 0.15)',
-                border: `1px solid ${forceOpus ? 'rgba(255, 140, 0, 0.5)' : 'rgba(139, 92, 246, 0.4)'}`,
-                color: forceOpus ? '#ff8c00' : '#a78bfa',
+                background: useSonnet ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 140, 0, 0.18)',
+                border: `1px solid ${useSonnet ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 140, 0, 0.5)'}`,
+                color: useSonnet ? '#a78bfa' : '#ff8c00',
                 borderRadius: '999px',
                 fontSize: '0.75rem',
                 fontWeight: 'bold',
@@ -2108,7 +2112,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                 cursor: 'pointer'
               }}
             >
-              {forceOpus ? 'Opus' : 'Sonnet'}
+              {useSonnet ? 'Sonnet' : 'Opus'}
             </button>
           )}
 
@@ -3027,8 +3031,8 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       providerPreference={providerPreference}
       onProviderChange={(next) => { setProviderPreference(next); checkLLMStatus(next); }}
       onCheckStatus={() => checkLLMStatus()}
-      forceOpus={forceOpus}
-      onForceOpusChange={updateForceOpus}
+      useSonnet={useSonnet}
+      onUseSonnetChange={updateUseSonnet}
       campaignContext={campaignContext}
       continueCampaign={continueCampaign}
       onContinueCampaignChange={setContinueCampaign}

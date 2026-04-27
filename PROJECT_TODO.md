@@ -12,7 +12,7 @@
 
 What we're working on this session. Should be 1–3 items max.
 
-- [ ] **Decide on Opus as production default** — see [`triage/prose-quality-triage.md`](triage/prose-quality-triage.md). v1.0.97 session-147 playtest measured ~$2.89/session (~$1.50/hour) at 71% cache hit rate (close to the ~77% ceiling). v1.0.98 lever 1 (tier 2 → 1-hour TTL) should bring per-session cost down ~$0.20–$0.30. Three more levers exist if we want to push lower (rolling-summary-earlier, tier-3-trim).
+- [ ] *(none currently — prose-quality thread closure pending: H7 + H8 production fixes are the next active items if/when picked up; see DECISION_LOG Open Decisions)*
 
 ---
 
@@ -54,6 +54,7 @@ Items in `FUTURE_FEATURES.md`. Skim that file periodically; pull items here when
 
 Three or four most recent versions. Older history in `CHANGELOG.md`.
 
+- **v1.0.99 (2026-04-26)** — Opus is now the production default for main DM session continuations. All three UI surfaces default to Opus; Sonnet is the opt-down. Server defaults flipped; client `forceOpus` → `useSonnet` rename. Decision logged in DECISION_LOG; supersedes the prior "Opus for ALL generation, Sonnet for sessions only" baseline.
 - **v1.0.98 (2026-04-26)** — Tier 2 prompt cache also moves to 1-hour TTL (was 5m). Lever 1 of three from session-147 cost analysis. Saves ~$0.20–$0.30 per Opus session by consolidating tier 2 re-creations. Cost numbers in CHANGELOG and DECISION_LOG corrected with actual playtest measurements.
 - **v1.0.97 (2026-04-26)** — Documentation hygiene: PROJECT_BRIEF, DECISION_LOG, PROJECT_TODO, triage convention.
 - **v1.0.96 (2026-04-26)** — Prose-quality diagnostic + prompt cache architecture fix. Opus is the validated narrative lever. Cache hit rate measured at ~71% in production (close to the ~77% mathematical ceiling for thoughtful play); per-session cost ~$2.89 for 24-turn Opus session.

@@ -419,7 +419,7 @@ router.post('/start', async (req, res) => {
       customNpcs,
       model,
       providerPreference,  // 'auto' | 'claude' | 'ollama'
-      modelOverride,  // 'opus' | null — diagnostic override, forces Opus for all turns
+      modelOverride,  // 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch override (v1.0.99+)
       leanPrompt,  // boolean — diagnostic override, strips MECHANICAL MARKERS + softens HARD STOPS for prose-quality testing
       continueCampaign,  // If true, pull config from last session
       previousSessionSummaries  // Array of summaries to include in context
@@ -944,12 +944,11 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
         }
       }
 
-      // Use Opus for first campaign sessions (establishing the narrative arc)
-      // Use Sonnet for continuing sessions (regular gameplay)
-      // Imported mid-progress campaigns use Sonnet even for the first system session
-      // modelOverride='opus' forces Opus for all turns (diagnostic / prose-quality playtest)
-      const baseModelChoice = (isContinuing || isImportedMidProgress) ? 'sonnet' : 'opus';
-      const modelChoice = modelOverride === 'opus' ? 'opus' : baseModelChoice;
+      // v1.0.99: Opus is now the default for all DM session turns (decision logged
+      // in DECISION_LOG under "Opus as production default for main DM session
+      // continuations"). The body param `modelOverride` accepts 'sonnet' as the
+      // escape-hatch signal. 'opus' is also accepted (no-op since it's the default).
+      const modelChoice = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
 
       // Lean prompt: strips MECHANICAL MARKERS + softens Cardinal Rule 2.
       // Applied per-call only — the FULL prompt is what we store in messages[0]
@@ -1120,6 +1119,7 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
+    // modelOverride: 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch (v1.0.99+)
     const { action, providerPreference, modelOverride, leanPrompt, activeConditions } = req.body;
 
     if (!action || !action.trim()) {
@@ -1233,14 +1233,16 @@ router.post('/:sessionId/message', async (req, res) => {
     let result;
     if (provider === 'claude') {
       // Use Claude - extract system prompt from messages
-      // Default to Sonnet for ongoing session actions (cost-effective for gameplay)
-      // modelOverride='opus' forces Opus for diagnostic / prose-quality playtest
+      // v1.0.99: Opus is the default for all DM session turns. Body param
+      // `modelOverride` accepts 'sonnet' as the escape-hatch signal; 'opus' is
+      // also accepted as a no-op. See DECISION_LOG under "Opus as production
+      // default for main DM session continuations".
       // leanPrompt=true strips MECHANICAL MARKERS + softens Cardinal Rule 2 for this call;
       //   we restore the full prompt to messages[0] before persisting so the toggle is reversible.
       const systemMessage = messagesToSend.find(m => m.role === 'system');
       const systemPrompt = systemMessage?.content || '';
       const apiSystemPrompt = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
-      const turnModel = modelOverride === 'opus' ? 'opus' : 'sonnet';
+      const turnModel = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
       const claudeResult = await claude.continueSession(apiSystemPrompt, messagesToSend, action, turnModel, { sessionId });
       if (claudeResult.messages?.[0]?.role === 'system') {
         claudeResult.messages[0] = { role: 'system', content: systemPrompt };
