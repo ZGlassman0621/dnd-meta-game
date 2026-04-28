@@ -2,6 +2,66 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.102] - 2026-04-27 — LLM infrastructure phase-2 fixes (auth/rate-limit handling + Ollama model verification + doc drift)
+
+Phase 2 of the LLM infrastructure audit. Four high-priority fixes shipping in one commit. The Anthropic-console spending cap (the highest-leverage defense) was set separately by the user.
+
+### Fix 1 — Auth/billing failure handling (401/403)
+
+**Before:** failures from auth or billing problems surfaced as generic API errors mid-session. Users would see "Claude API error: invalid x-api-key" or similar, with no signal whether to check their key, their balance, or just wait.
+
+**After:**
+- `claude.js` now classifies 401/403 in the chat error path as a non-retryable `AUTH_FAILURE:` tagged error.
+- `dmSession.js` `/message` route catches the tag and returns a 503 with a clear user-facing message pointing at console.anthropic.com → Settings → Billing and Settings → API Keys.
+- `checkClaudeStatus()` was upgraded from "is `ANTHROPIC_API_KEY` set?" to a real probe via the `count_tokens` endpoint. Cost is effectively zero (count_tokens is metered as input only, ~10 tokens per probe). Returns distinct `error_code` values for `no_key`, `auth_failure`, `rate_limited`, `transient`, and `unreachable`.
+- The status indicator in the app header now reflects actual API health rather than just env-var presence. If the key is invalid, revoked, or the account has a billing issue, the indicator now says "AI Offline" before the user starts a session.
+
+### Fix 2 — 429 rate-limit retry handling
+
+**Before:** 429 was not in the retryable list. First 429 from Anthropic would fail-fast with the raw error message.
+
+**After:**
+- `claude.js` now treats 429 as retryable with a more patient backoff than 503/500: 3 attempts with 5s/15s/45s delays (~65 seconds total budget). Backoff is more patient than 529's because rate-limited callers should slow down rather than retry rapidly.
+- If retries exhaust, throws a `RATE_LIMITED:` tagged error.
+- Route layer maps the tag to a 503 with a clear message: "Wait ~30 seconds and try again. If this happens repeatedly, you may have an unusually high request rate or your account tier may need review."
+
+Low-frequency at solo-user volume, but ugly when it fires — now graceful.
+
+### Fix 3 — Ollama model verification in status check
+
+**Before:** `checkOllamaStatus()` only verified that `/api/tags` was reachable. Auto-fallback would happily route to Ollama with the configured `OLLAMA_MODEL` (default `gpt-oss:20b`), and the chat call would then fail with a model-not-found error if the model wasn't actually pulled.
+
+**After:** `checkOllamaStatus()` now parses the `/api/tags` response, verifies the configured `OLLAMA_MODEL` is in the installed list, and returns a distinct `error_code: 'no_model'` when reachable-but-missing. The auto-fallback path treats any `available: false` as "skip Ollama," so a doomed call no longer routes through. The descriptive error message tells the user exactly which model is missing and how to install it.
+
+### Fix 4 — LLM_SETUP.md drift
+
+Three high-priority doc edits aligning the doc with current code:
+- **Line 31 (architecture diagram):** "Gemma 3 12B" → `gpt-oss:20b` (the actual default).
+- **Line 54 (module structure paragraph):** Updated from "Only DM sessions use Claude Sonnet" to reflect the v1.0.99 reality — Opus is the default for DM sessions too, with a Sonnet opt-down toggle on the home pill, setup screen, and in-session info bar (sharing the `dndUseSonnet` localStorage key).
+- **Line 77 (cost claim):** "~$0.05–0.15 per session" → "~$2.50–$4.50 per Opus session, ~$1.30–$1.50/hour of play" with a pointer to the session 147/148 cost decomposition in `DECISION_LOG`. Added a recommendation to set a hard spending cap at console.anthropic.com.
+- **Section 3 (Verify Connection):** Added a note that `checkClaudeStatus()` now makes a real API call as of v1.0.102, so the status indicator is meaningful rather than just key-set/key-missing. Updated the indicator-color list to show Opus (orange) as the production default and Sonnet (purple) as the opt-down.
+
+### Files
+
+- Modified: `server/services/claude.js` (401/403 detection, AUTH_FAILURE tag, 429 retry with 5s/15s/45s backoff, RATE_LIMITED tag, `checkClaudeStatus` upgraded to live `count_tokens` probe with `error_code` taxonomy).
+- Modified: `server/services/llmClient.js` (`checkOllamaStatus` verifies configured model is installed, returns distinct `error_code: 'no_model'` when reachable but missing).
+- Modified: `server/routes/dmSession.js` (`/message` error handler now maps AUTH_FAILURE and RATE_LIMITED tags to clear user-facing 503 messages alongside the existing OVERLOADED handling).
+- Modified: `LLM_SETUP.md` (architecture diagram, module structure, cost considerations, verify-connection section).
+- Modified: `CHANGELOG.md`, `package.json`, `client/package.json`.
+
+### Verification
+
+- All prompt-builder + cache test suites pass: `character-memory` 56, `moral-diversity` 59, `lean-prompt-dryrun` 14, `combat-tracker` 26, `condition-tracking` 56.
+- Client builds clean.
+- Existing 529 retry behavior preserved (regression-tested implicitly via the OVERLOADED tag path staying intact).
+- New behaviors are observable from server logs (`Claude API rate-limited (429, attempt N/3), retrying in Ms…`) and from the status indicator (now reflects real API health).
+
+### Deferred
+
+- **Per-call cost calculation logging** — diminishing returns once Anthropic console cap is in place. May revisit if cost shape changes.
+- **Ollama smoke test with `gpt-oss:20b`** — requires the 12 GB model pull, scheduled separately.
+- **LLM_SETUP.md cosmetic edits** (line 49 module-structure description, line 71 status-indicator description) — nice-to-fix but lower priority.
+
 ## [1.0.0.101] - 2026-04-27 — H7 + H8 production fixes (verb-gated observation rule + soft Cardinal Rule 2)
 
 Two prompt-rule fixes shipping together. Both surfaced during the v1.0.96 prose-quality A/B testing as items that needed to leave the always-on prompt. Decisions were green-lit by the project-management layer; the prose-quality triage now closes.

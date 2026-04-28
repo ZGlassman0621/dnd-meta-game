@@ -9,23 +9,61 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
 
 /**
- * Check if Ollama is running and available
+ * Check if Ollama is running AND the configured model is installed.
+ *
+ * v1.0.102 — extends the previous "is /api/tags reachable" check to also
+ * verify the configured `OLLAMA_MODEL` (default `gpt-oss:20b`) is in the
+ * installed-models list. Without this, a system with Ollama running but
+ * the configured model NOT pulled would auto-fallback into a doomed
+ * chat call that fails with a model-not-found error. Now it fails fast
+ * with a specific message at status-check time.
+ *
+ * Distinguishes:
+ *   • Reachable + model installed → `{ available: true }`
+ *   • Reachable + model missing → `{ available: false, error_code: 'no_model', ... }`
+ *   • Unreachable → `{ available: false, error_code: 'unreachable', ... }`
+ *
+ * `getLLMProvider` upstream treats any `available: false` as "skip Ollama,"
+ * so the auto-fallback path no longer routes a doomed call. The distinct
+ * `error_code` lets the status indicator render an actionable message
+ * ("pull gpt-oss:20b") rather than a generic "Ollama not running."
  */
 export async function checkOllamaStatus() {
   try {
     const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
-    if (response.ok) {
-      const data = await response.json();
+    if (!response.ok) {
       return {
-        available: true,
-        models: data.models || [],
+        available: false,
+        error_code: 'unreachable',
+        error: `Ollama responded with HTTP ${response.status}`
+      };
+    }
+
+    const data = await response.json();
+    const models = data.models || [];
+    const installed = models.some(m => m.name === DEFAULT_MODEL || m.model === DEFAULT_MODEL);
+
+    if (!installed) {
+      return {
+        available: false,
+        error_code: 'no_model',
+        error: `Ollama is running but the configured model "${DEFAULT_MODEL}" is not installed. Run \`ollama pull ${DEFAULT_MODEL}\` or set OLLAMA_MODEL in .env to one of the installed models.`,
+        models,
+        configured_model: DEFAULT_MODEL,
         url: OLLAMA_BASE_URL
       };
     }
-    return { available: false, error: 'Ollama not responding' };
+
+    return {
+      available: true,
+      models,
+      configured_model: DEFAULT_MODEL,
+      url: OLLAMA_BASE_URL
+    };
   } catch (error) {
     return {
       available: false,
+      error_code: 'unreachable',
       error: `Cannot connect to Ollama at ${OLLAMA_BASE_URL}. Make sure Ollama is running.`
     };
   }

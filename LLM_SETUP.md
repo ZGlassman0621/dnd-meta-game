@@ -28,8 +28,8 @@ The D&D Meta Game uses a **multi-model AI architecture** with Claude as the prim
 │  ┌─────────────────┐  ┌──────────────────────┐  │
 │  │  Claude API      │  │  Ollama (Fallback)   │  │
 │  │  ┌────────────┐  │  │  ┌────────────────┐  │  │
-│  │  │ Opus       │  │  │  │ Gemma 3 12B    │  │  │
-│  │  │ (building) │  │  │  │ (all tasks)    │  │  │
+│  │  │ Opus       │  │  │  │ gpt-oss:20b    │  │  │
+│  │  │ (default)  │  │  │  │ (all tasks)    │  │  │
 │  │  ├────────────┤  │  │  └────────────────┘  │  │
 │  │  │ Sonnet     │  │  │                      │  │
 │  │  │ (sessions) │  │  │  localhost:11434      │  │
@@ -51,7 +51,7 @@ The AI DM backend is split into focused modules:
 | **Campaign Plan** | `server/services/campaignPlanService.js` | Claude Opus campaign plan generation |
 | **Backstory Parser** | `server/services/backstoryParserService.js` | Claude Opus backstory parsing into structured elements |
 
-All AI generators (quests, locations, companions, living world, adventures) use Claude Opus for generation with Ollama as offline fallback. Only DM sessions use Claude Sonnet.
+All AI generators (campaign plans, NPCs, quests, locations, companions, adventures) use Claude Opus. **DM sessions also default to Opus as of v1.0.99**, with a Sonnet opt-down toggle on the home pill, the SessionSetup screen, and the in-session info bar (toggle is shared across all three via `dndUseSonnet` localStorage). Ollama serves as the offline fallback when Anthropic is unreachable.
 
 ## Claude API Setup (Primary)
 
@@ -67,15 +67,20 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ### 3. Verify Connection
-Start the server and check the AI status indicator in the app header:
-- **Purple dot + "Opus + Sonnet"** = Claude API connected with both models
-- **Red dot + "AI Offline"** = No AI provider available
+Start the server and check the AI status indicator in the app header. As of v1.0.102, the indicator reflects a **real probe of the Anthropic API** (cheap `count_tokens` call) rather than just a check that the env var is set, so the displayed status accurately reflects auth/billing health:
+- **Orange dot + "Opus"** = Claude API connected, Opus is the active model (production default)
+- **Purple dot + "Sonnet"** = Claude API connected, Sonnet selected via toggle (opt-down for cost)
+- **Green dot + "Ollama"** = Claude unavailable, Ollama is being used as fallback
+- **Red dot + "AI Offline"** = No AI provider available (key missing, billing failure, or both)
+
+If the API key is invalid or the Anthropic account has a billing issue, the status indicator will say "AI Offline" even though the env var is set — this is intentional. Surfaces auth/billing problems before a session starts rather than mid-play.
 
 ### Cost Considerations
-- **Claude Opus** handles all world-building and content generation (campaign plans, backstory parsing, NPC/quest/location/companion generation)
-- **Claude Sonnet** handles only DM sessions (real-time interactive gameplay) at lower cost
-- Typical DM session: ~$0.05-0.15 depending on conversation length
-- Generation tasks (backstory parsing, quest creation, etc.) use Opus for higher quality output
+- **Claude Opus** handles all world-building and content generation, AND all DM session continuations as of v1.0.99 (the prose-quality investigation found Opus was the differentiator; cost was made tenable by the v1.0.96/v1.0.98 cache architecture work).
+- **Claude Sonnet** is available as an opt-down toggle if cost matters more than prose density on a particular session.
+- **Typical Opus DM session: ~$2.50–$4.50** depending on session length and cache hit rate. Roughly **~$1.30–$1.50/hour of play**. See session 147/148 analysis in `DECISION_LOG.md` for the underlying measurements and cost-decomposition math.
+- Sonnet sessions run roughly **1/5 to 1/10** the cost of Opus sessions.
+- A user-set spending cap at [console.anthropic.com](https://console.anthropic.com) → Settings → Billing is the recommended hard backstop. Independent of any code-level controls.
 
 ---
 

@@ -172,27 +172,91 @@ export function isClaudeAvailable() {
 }
 
 /**
- * Check Claude API status
+ * Check Claude API status.
+ *
+ * v1.0.102 — makes a real API call instead of just checking the env var. The
+ * cheap probe is the count_tokens endpoint, which validates the API key and
+ * billing state without spending output tokens. Cost is effectively zero
+ * (count_tokens is metered as input only, ~10 tokens for the probe payload).
+ *
+ * Distinguishes:
+ *   • Key missing → `error_code: 'no_key'`
+ *   • Auth/billing failure (401/403) → `error_code: 'auth_failure'`
+ *   • Rate limit on probe (429) → `error_code: 'rate_limited'`
+ *   • Anthropic overloaded (529/503/500) → `error_code: 'transient'`
+ *   • Network or other error → `error_code: 'unreachable'`
+ *
+ * Status indicators upstream can render these distinct cases differently if
+ * desired — the shared shape is `{ available, error_code, error, ... }`.
  */
 export async function checkClaudeStatus() {
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
       available: false,
+      error_code: 'no_key',
       error: 'ANTHROPIC_API_KEY not set in environment'
     };
   }
 
-  // API key is configured — report available without making a live API call.
-  // Actual API errors (invalid key, rate limit) will surface when the session starts.
-  return {
-    available: true,
-    model: DEFAULT_MODEL,
-    models: {
-      opus: OPUS_MODEL,
-      sonnet: SONNET_MODEL
-    },
-    provider: 'Anthropic Claude'
-  };
+  // Probe via count_tokens — costs effectively zero, returns 200 if key + billing
+  // are both valid, returns 401/403 if either is broken, returns 429 if our
+  // request rate is hot, returns 529 if Anthropic itself is overloaded.
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages/count_tokens', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: SONNET_MODEL,
+        messages: [{ role: 'user', content: 'ping' }]
+      })
+    });
+
+    if (response.ok) {
+      return {
+        available: true,
+        model: DEFAULT_MODEL,
+        models: { opus: OPUS_MODEL, sonnet: SONNET_MODEL },
+        provider: 'Anthropic Claude'
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        available: false,
+        error_code: 'auth_failure',
+        error: `Claude API authentication or billing issue (HTTP ${response.status}). Check your API key and account status at console.anthropic.com.`
+      };
+    }
+    if (response.status === 429) {
+      return {
+        available: false,
+        error_code: 'rate_limited',
+        error: 'Claude API rate-limited the status probe. Brief pause should clear it.'
+      };
+    }
+    if (response.status === 529 || response.status === 503 || response.status === 500) {
+      return {
+        available: false,
+        error_code: 'transient',
+        error: `Claude API temporarily unavailable (HTTP ${response.status}). Usually clears within seconds to minutes.`
+      };
+    }
+    return {
+      available: false,
+      error_code: 'unknown',
+      error: `Claude API returned HTTP ${response.status} on status probe.`
+    };
+  } catch (err) {
+    return {
+      available: false,
+      error_code: 'unreachable',
+      error: `Cannot reach Claude API: ${err?.message || err}`
+    };
+  }
 }
 
 /**
@@ -260,25 +324,44 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       });
 
       if (!response.ok) {
-        // 529 (Overloaded) gets its own, more patient retry budget — Anthropic's
-        // docs explicitly recommend longer backoff for this status because it
-        // signals server-side load that may take tens of seconds to clear.
-        // Other retryable errors (503/500) use the caller's maxRetries.
+        // Status-class triage:
+        //   • 401/403 — auth/billing failure. NOT retryable. Tag AUTH_FAILURE
+        //     so the route layer can surface a billing-or-key-specific message.
+        //   • 429 — rate limit. Retryable with longer backoff than 503/500
+        //     because rate-limited callers should slow down, not retry rapidly.
+        //     5s/15s/45s budget = up to ~65s total. Tag RATE_LIMITED if exhausted.
+        //   • 529 — Anthropic-side overload. Retryable with patient backoff.
+        //     5 attempts × 4s/8s/16s/32s = ~60s total. Tag OVERLOADED if exhausted.
+        //   • 503/500 — other transient. Retryable with caller's maxRetries.
+        //   • Everything else — fatal, surface raw error.
+        const isAuthFailure = response.status === 401 || response.status === 403;
+        const isRateLimited = response.status === 429;
         const isOverloaded = response.status === 529;
         const isOtherRetryable = response.status === 503 || response.status === 500;
-        const isRetryableStatus = isOverloaded || isOtherRetryable;
+        const isRetryableStatus = isRateLimited || isOverloaded || isOtherRetryable;
 
-        // Effective max attempts: bump the budget for 529 specifically so we
-        // ride out short Anthropic overloads. 5 attempts × backoff 4s/8s/16s/32s
-        // = up to ~60s total wait. Players are happier waiting than retyping
-        // and clicking Send again. Other errors keep the caller's policy.
-        const effectiveMax = isOverloaded ? Math.max(maxRetries, 5) : maxRetries;
+        // Effective max attempts per status class:
+        //   • 429 rate-limited → 3 attempts with 5s/15s/45s backoff
+        //   • 529 overloaded → 5 attempts with 4s/8s/16s/32s backoff
+        //   • 503/500 → caller's maxRetries (default 3) with 2s/4s backoff
+        let effectiveMax;
+        let baseMs;
+        let backoffMultiplier = 2; // exponential by default
+        if (isRateLimited) {
+          effectiveMax = Math.min(maxRetries, 3);
+          baseMs = 5000;
+          backoffMultiplier = 3; // 5s → 15s → 45s
+        } else if (isOverloaded) {
+          effectiveMax = Math.max(maxRetries, 5);
+          baseMs = 4000;
+        } else {
+          effectiveMax = maxRetries;
+          baseMs = 2000;
+        }
 
         if (isRetryableStatus && attempt < effectiveMax) {
-          // Overloaded uses 4s/8s/16s/32s; other retryables keep 2s/4s/8s.
-          const baseMs = isOverloaded ? 4000 : 2000;
-          const delay = Math.pow(2, attempt - 1) * baseMs;
-          const tag = isOverloaded ? 'overloaded' : 'error';
+          const delay = Math.pow(backoffMultiplier, attempt - 1) * baseMs;
+          const tag = isRateLimited ? 'rate-limited' : isOverloaded ? 'overloaded' : 'error';
           console.log(`Claude API ${tag} (${response.status}, attempt ${attempt}/${effectiveMax}), retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
@@ -289,10 +372,13 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         } catch {
           errorBody = { error: { message: `HTTP ${response.status}` } };
         }
-        // Tag the error message with OVERLOADED so the route layer can map it
-        // to a clean user-facing string ("AI temporarily overloaded — please
-        // retry in a moment") instead of leaking the raw Anthropic error.
-        const tag = isOverloaded ? 'OVERLOADED: ' : '';
+        // Tagged errors so the route layer can map to clean user-facing strings
+        // (instead of leaking raw Anthropic error text). Pattern matches the
+        // existing OVERLOADED: tag introduced in v1.0.94.
+        let tag = '';
+        if (isAuthFailure) tag = 'AUTH_FAILURE: ';
+        else if (isRateLimited) tag = 'RATE_LIMITED: ';
+        else if (isOverloaded) tag = 'OVERLOADED: ';
         throw new Error(`${tag}Claude API error: ${errorBody.error?.message || `HTTP ${response.status}`}`);
       }
 

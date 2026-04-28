@@ -2198,14 +2198,30 @@ router.post('/:sessionId/message', async (req, res) => {
       notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined
     });
   } catch (error) {
-    // Anthropic 529 — surface as 503 with a clear retryable message.
-    // Player input is preserved client-side; manual retry works once the
-    // API recovers.
+    // Tagged-error mapping (set by claude.js in service/claude.js error path).
+    // Each tag → distinct user-facing message + appropriate HTTP status.
+    // Player input is preserved client-side; retry works for retryable cases.
     if (error?.message?.startsWith('OVERLOADED:')) {
       return res.status(503).json({
         error: 'AI temporarily overloaded',
         message: 'Anthropic\'s API is temporarily at capacity. Your input has been preserved — please send again in a moment.',
         retryable: true
+      });
+    }
+    if (error?.message?.startsWith('RATE_LIMITED:')) {
+      return res.status(503).json({
+        error: 'AI rate limit hit',
+        message: 'Claude\'s rate limit was hit even after retries. Wait ~30 seconds and try again. If this happens repeatedly, you may have an unusually high request rate or your account tier may need review.',
+        retryable: true
+      });
+    }
+    if (error?.message?.startsWith('AUTH_FAILURE:')) {
+      // 503 (not 401) on the route — the failure is between us and Anthropic,
+      // not between the user and us. Authenticated user, broken upstream auth.
+      return res.status(503).json({
+        error: 'AI authentication or billing issue',
+        message: 'Claude API authentication or billing problem — the API key may be invalid, revoked, or your Anthropic account may need attention. Check console.anthropic.com → Settings → Billing and Settings → API Keys. The session is paused until this is resolved.',
+        retryable: false
       });
     }
     handleServerError(res, error, 'process DM session message');
