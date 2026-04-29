@@ -154,7 +154,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - 6 emergence markers (`[STAT_HINT]` / `[SKILL_HINT]` / `[CLASS_HINT]` / `[THEME_HINT]` / `[ANCESTRY_HINT]` / `[VALUE_HINT]`) — player-confirmable; caps +2/stat, 2 skills total; chapter-weighted tallies (ch1-2: 1x, ch3: 1.5x, ch4: 2x)
 - `[CANON_FACT]` / `[CANON_FACT_RETIRE]` — ground-truth ledger; injected into every Sonnet prompt grouped by category (people/relationships/traits/places/items/events)
 
-**Tables**: `prelude_emergences`, `prelude_values`, `prelude_canon_facts`, `prelude_canon_npcs`, `prelude_canon_locations`, `prelude_arc_plans`. Character columns: `creation_phase` ('prelude'/'ready_for_primary'/'active'), `prelude_age`, `prelude_chapter`, `prelude_setup_data`.
+**Tables**: `prelude_emergences`, `prelude_values`, `prelude_canon_facts`, `prelude_canon_npcs`, `prelude_canon_locations`, `prelude_arc_plans`. Character columns: `creation_phase` ('prelude'/'active'), `prelude_age`, `prelude_chapter`, `prelude_setup_data`.
 
 **Prompt discipline**: tone-preset shapes prose register; per-life-stage NPC speech patterns (small child → elder); 4 named time-compression techniques (season-skip / rhythm-compression / selective-detail / AGE_ADVANCE jump); 16 tone tags with applied guidance; no invented character traits (physical markers, secret bloodlines, prophecies) unless in setup.
 

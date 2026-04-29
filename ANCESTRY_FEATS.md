@@ -1,6 +1,6 @@
 # Ancestry Feats Design
 
-Status: All 13 lists complete. Balance pass applied. Pending: cross-system integration check, AI memory architecture decisions, implementation.
+Status: 195 feats implemented across 13 lists (15 per list × 13). The 4th L13 option per list ("Path Less Walked" cross-pick, 13 feats) is documented in this doc but **deferred for Phase 7** — revisit during playing-mode evaluation, no commitment in either direction (decision logged 2026-04-29). Balance pass applied to the 195 implemented feats. Pending: cross-system integration check, AI memory architecture decisions.
 
 ## System Overview
 
@@ -23,8 +23,9 @@ Ancestry Feats are a progression layer parallel to class and theme. Each charact
 
 **Scope:**
 - 10 major races + Drow as a distinct list + Aasimar's three paths each as a distinct progression tree = **13 lists total**
-- 5 tiers × 3 feats baseline + 1 cross-pick at L13 ("Path Less Walked") = 16 feats per list
-- Total: **208 ancestry feats** across all 13 lists
+- 5 tiers × 3 feats baseline = **15 feats per list × 13 lists = 195 implemented feats**
+- A 4th L13 option per list ("Path Less Walked" cross-pick) is documented for each race but **deferred for Phase 7** — design content remains in this doc as a parked idea, not currently implemented in code (decision logged 2026-04-29).
+- Total currently implemented: **195 ancestry feats**. With the deferred Path Less Walked cross-pick, the eventual cap would be 208.
 
 **Design principles:**
 1. **Complement, don't duplicate.** Feats expand on existing racial traits; they don't repeat them.
@@ -1040,7 +1041,7 @@ This keeps companion progression meaningful without dumping mechanical choices o
 - Aasimar — Fallen Path (with Path's Choice at L13)
 - Warforged
 
-**Total:** 208 ancestry feats across 13 lists (16 per list: L1/L3/L7/L18 = 3 choices each, L13 = 4 choices including the cross-pick "Path Less Walked").
+**Total:** 195 ancestry feats currently implemented across 13 lists (15 per list: L1/L3/L7/L13/L18 = 3 choices each). A 4th L13 option per list ("Path Less Walked" cross-pick, 13 feats) is documented in this file but **deferred for Phase 7** — see the inline "Path Less Walked" entries for design content. With the deferred cross-pick included, the eventual cap is 208.
 
 > *On Aasimar's three paths counting as three lists, not one:* Protector, Scourge, and Fallen are structurally distinct progression trees with different identity, mechanics, and L18 capstones — not flavor variants of a shared list. Each path has its own L1/L3/L7/L13/L18 feat set. They share only the L1 racial baseline and the same character creation point, similar to how subclasses share a class baseline but progress independently. Counting them as a single "Aasimar list" would obscure that structural reality, so this doc treats each as its own list throughout.
 
@@ -1060,7 +1061,7 @@ This keeps companion progression meaningful without dumping mechanical choices o
 - **Protector Aasimar Miracle Hands (L13):** Scaling reduced from "2d6 + level × 2" to "2d6 + level."
 - **Scourge Aasimar Pillar of Light (L18):** "Immunity to all damage except necrotic/psychic" reduced to "resistance" — immunity was too strong even for a capstone.
 - **Warforged Modular Body Flight (L13):** Clarified "once per week" means selection frequency, not usage.
-- **All races — "Path Less Walked" L13 cross-pick (added):** Each L13 list gained a fourth feat option that lets the character pick any L1/L3/L7 feat from a different race's list, reflavored as an unusual surfacing of bloodline. Closes the "every race × every class works" hole without requiring a per-list audit. L13/L18 cross-picks deliberately excluded to prevent stacked-capstone abuse. Per-race flavor text written in matching voice; design lead may revise.
+- **All races — "Path Less Walked" L13 cross-pick (designed, deferred for Phase 7):** Each L13 list has a designed fourth feat option that would let the character pick any L1/L3/L7 feat from a different race's list, reflavored as an unusual surfacing of bloodline. Intent: close the "every race × every class works" hole without requiring a per-list audit. L13/L18 cross-picks deliberately excluded to prevent stacked-capstone abuse. Per-race flavor text written in matching voice. **Status:** documented in this file (see each race's L13 section), not currently implemented in code (`server/data/ancestryFeats.js` ships 195 feats, no cross-pick). Decision logged 2026-04-29 to park this for Phase 7 review during playing-mode evaluation, with no commitment in either direction.
 
 ## Next phases
 

@@ -602,13 +602,17 @@ const CASTER_TYPE = {
   rogue: 'third', // Arcane Trickster (when subclass selected)
   barbarian: 'none',
   monk: 'none',
-  keeper: 'none'
+  keeper: 'third'
 }
 
-// Subclasses that grant spellcasting to martial classes
+// Subclasses that grant spellcasting to martial classes.
+// For Keeper, every L6 path (the four subclasses + Polymath) qualifies — Keeper IS the
+// casting class, so all paths count as third-caster for multiclass slot calculation
+// once the L6 specialization choice is made.
 const SPELLCASTING_SUBCLASSES = {
   fighter: ['Eldritch Knight'],
-  rogue: ['Arcane Trickster']
+  rogue: ['Arcane Trickster'],
+  keeper: ['Lorewarden', 'Mythslinger', 'Rhetorician', 'Versebinder', 'Polymath']
 }
 
 // Infusions known for artificers
