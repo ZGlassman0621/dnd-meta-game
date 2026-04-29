@@ -2,6 +2,29 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.103] - 2026-04-29 — Phase 0 cleanup (Keeper caster-type bug + doc reconciliation)
+
+Stop-the-bleeding cleanup before Phase 1 (Prelude reframe) opens. One real bug, three doc reconciliations, one retired file.
+
+### Fix — Keeper `CASTER_TYPE` multiclass exploit
+
+**Before:** `CASTER_TYPE: 'none'` for the Keeper. Multiclass spell-slot calculation skipped Keeper levels entirely. A Wizard 1 / Keeper 19 build kept full Wizard slot progression while gaining nearly the entire Keeper toolkit (Texts, Recitations, Passages, Genre Domain, subclass features).
+
+**After:**
+- `levelProgression.js` — Keeper `CASTER_TYPE` set to `'third'`. The four Keeper subclasses (Lorewarden / Mythslinger / Rhetorician / Versebinder) plus the Polymath alternative track are registered in `SPELLCASTING_SUBCLASSES.keeper` so the third-caster branch in `getMulticlassSpellSlots()` actually counts Keeper levels once the L6 specialization is chosen.
+- Math check: W1/K19 = 1 + floor(19/3) = 7 caster-equivalent levels (closes the original exploit). W5/K1 = 5 caster levels — a 1-level Keeper dip nets the toolkit but contributes zero to slot calc until L6, mirroring the Eldritch Knight / Arcane Trickster pattern. W5/K6 = 5 + floor(6/3) = 7 caster levels.
+- The Keeper itself uses no traditional spell slots (its resources are Texts/Passages on short-rest + Recitations always-available + Literary Recall on long-rest), so this change only affects multiclass interactions; single-class Keepers are unaffected.
+
+### Doc reconciliations
+
+- **CLAUDE.md** — `creation_phase` enum reduced to `'prelude' | 'active'` to match code. The aspirational `'ready_for_primary'` value referenced previously does not exist in any migration or service. May return in Phase 2 (Prelude → Primary transition work).
+- **ANCESTRY_FEATS.md** — count reconciled to **195 implemented feats** (15 per list × 13). The 13 "Path Less Walked" L13 cross-pick feats remain documented in-doc as a parked design idea but are clearly labeled as deferred for Phase 7. Status header, scope intro, total summary, and balance-pass note all updated.
+- **PRELUDE_IMPLEMENTATION_PLAN.md** — rule #23 (mentor seeds primary campaign's `mentor_imprints` table) gained an inline 2026-04-29 note flagging it as design-only until Phase 2; the `mentor_imprints` table and seeding service are not yet implemented.
+
+### Retired
+
+- **PM_TODO.md** — superseded by `CONSOLIDATED_TODO.md`. Removed.
+
 ## [1.0.0.102] - 2026-04-27 — LLM infrastructure phase-2 fixes (auth/rate-limit handling + Ollama model verification + doc drift)
 
 Phase 2 of the LLM infrastructure audit. Four high-priority fixes shipping in one commit. The Anthropic-console spending cap (the highest-leverage defense) was set separately by the user.
