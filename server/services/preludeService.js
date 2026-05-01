@@ -1,16 +1,27 @@
 /**
  * Prelude service.
  *
- * Phase 1 scope: create a prelude-phase character from the 12-question setup
- * wizard and read it back. Nothing playable yet — later phases add arc-plan
- * generation (Phase 2), gameplay (Phase 2), emergence tracking (Phase 3),
- * transition (Phase 5).
+ * Creates a prelude-phase character from the 10-question setup wizard
+ * (Phase 2 rewrite) and reads it back.
  *
  * A prelude character is a `characters` row with `creation_phase='prelude'`
  * and placeholder values in the usual class/level/hp/stats columns. The
- * whole 12-answer setup blob lives on `prelude_setup_data`. When the prelude
- * ends (Phase 5), the main character creator wizard opens pre-filled from
- * the emerged state and flips `creation_phase` to `'active'`.
+ * whole 10-answer setup blob lives on `prelude_setup_data`. When the prelude
+ * ends, the transition service flips `creation_phase` to `'ready_for_primary'`
+ * (Phase 2 chunk 2); the main character creator wizard opens pre-filled and
+ * flips it to `'active'` on submit.
+ *
+ * Setup blob shape (Phase 2 — see DECISION_LOG 2026-04-30 Decision A):
+ *   first_name, last_name, nickname, gender, race, subrace,
+ *   birth_circumstance, home_setting, region,
+ *   parents [{role, race, name, status}, ...],
+ *   siblings (single enum from SIBLING_OPTIONS),
+ *   authority_figure (single enum from AUTHORITY_FIGURES),
+ *   origin_freeform (optional, max 2000 chars).
+ *
+ * Cut from the v1.0.73 blob: talents (Q9), cares (Q10), tone_tags (Q11),
+ * per-sibling sub-form fields. Existing prelude characters' blobs are not
+ * migrated — readers default the cut fields safely.
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
@@ -101,34 +112,36 @@ export function validateSetupPayload(payload) {
     }
   }
 
-  if (!Array.isArray(payload.siblings)) {
-    return { ok: false, field: 'siblings', reason: 'Siblings must be an array (empty is fine for only children)' };
-  }
-  for (let i = 0; i < payload.siblings.length; i++) {
-    const s = payload.siblings[i];
-    if (!s || typeof s !== 'object') {
-      return { ok: false, field: `siblings[${i}]`, reason: 'Each sibling must be an object' };
-    }
-    if (s.relative_age && !['younger', 'older', 'twin'].includes(s.relative_age)) {
-      return { ok: false, field: `siblings[${i}].relative_age`, reason: 'relative_age must be younger, older, or twin' };
-    }
+  // Q8: siblings is now a single enum value (Phase 2 — Decision A). Replaces
+  // the v1.0.73 variable-length sub-form. Mirrors SIBLING_OPTIONS in
+  // client/src/data/preludeSetup.js.
+  const validSiblings = ['only_child', 'younger_one', 'younger_many', 'older_one', 'older_many', 'twin', 'mixed', 'lost_one', 'lost_many'];
+  if (!payload.siblings || typeof payload.siblings !== 'string' || !validSiblings.includes(payload.siblings)) {
+    return { ok: false, field: 'siblings', reason: 'Pick a sibling configuration' };
   }
 
-  if (!Array.isArray(payload.talents) || payload.talents.length !== 3) {
-    return { ok: false, field: 'talents', reason: 'Pick exactly 3 things they\'re good at' };
-  }
-  if (!Array.isArray(payload.cares) || payload.cares.length !== 3) {
-    return { ok: false, field: 'cares', reason: 'Pick exactly 3 things they care about' };
+  // Q9: authority_figure required (Phase 2 — Decision A). Mirrors
+  // AUTHORITY_FIGURES in client/src/data/preludeSetup.js.
+  const validAuthorityFigures = ['parent', 'sibling', 'mentor', 'guardian', 'captor', 'employer', 'rival', 'none'];
+  if (!payload.authority_figure || typeof payload.authority_figure !== 'string' || !validAuthorityFigures.includes(payload.authority_figure)) {
+    return { ok: false, field: 'authority_figure', reason: 'Pick an authority figure' };
   }
 
-  // v1.0.73 — tone is a single curated preset (stored as a single-item
-  // array to match the legacy column shape).
-  if (!Array.isArray(payload.tone_tags) || payload.tone_tags.length !== 1) {
-    return { ok: false, field: 'tone_tags', reason: 'Pick one tone preset' };
+  // Q8/Q9 contradiction check: only-child + older-sibling-as-authority is
+  // incoherent and would produce garbage arc plans. Blocking validation
+  // server-side; client surfaces the warning earlier.
+  if (payload.siblings === 'only_child' && payload.authority_figure === 'sibling') {
+    return { ok: false, field: 'authority_figure', reason: 'Only child cannot have an older sibling as authority figure — change Q8 or Q9' };
   }
-  const validPresetValues = ['brutal_gritty', 'epic_fantasy', 'rustic_spiritual', 'tender_hopeful'];
-  if (!validPresetValues.includes(payload.tone_tags[0])) {
-    return { ok: false, field: 'tone_tags', reason: `Unknown tone preset: ${payload.tone_tags[0]}` };
+
+  // Q10: origin_freeform optional, max 2000 chars when present.
+  if (payload.origin_freeform != null) {
+    if (typeof payload.origin_freeform !== 'string') {
+      return { ok: false, field: 'origin_freeform', reason: 'origin_freeform must be a string when provided' };
+    }
+    if (payload.origin_freeform.length > 2000) {
+      return { ok: false, field: 'origin_freeform', reason: 'origin_freeform exceeds 2000-character limit' };
+    }
   }
 
   return { ok: true };

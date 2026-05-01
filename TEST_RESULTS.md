@@ -1,5 +1,28 @@
 # Test Results Log
 
+## 2026-05-01 — v1.0.104 Phase 2 chunk 1: Setup wizard rebuild
+
+**Change scope:** Rewrote Prelude setup wizard from 11 questions to 10 per DECISION_LOG 2026-04-30 Decision A. Cut talents/cares/tone-preset; added authority figure (Q9) and free-text escape valve (Q10); replaced sibling sub-form with single dropdown. Server-side validator updated. `PreludeArcPreview` lost its tone card (orphaned by the tone-preset cut).
+
+**Client build:** ✅ passed (`cd client && npx vite build`).
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-setup.test.js`              | ✅ 59 passed (rewritten for new payload) |
+| `tests/prelude-arc.test.js`                | ✅ 15 passed |
+| `tests/prelude-markers.test.js`            | ✅ 130 passed |
+| `tests/prelude-prompt.test.js`             | ✅ 190 passed |
+| `tests/prelude-violation-detection.test.js`| ✅ 91 passed |
+
+**Total:** 485 prelude-related assertions green. No regressions.
+
+**Notes:**
+- Existing prelude characters' setup blobs are not migrated. Readers default cut fields safely; old preludes continue to work in degraded mode (no tone preset, no talent/cares-driven theme suggestion).
+- `PreludeArcPreview.jsx` lost its tone card; old preludes silently lose this UI element. Intentional.
+- Out-of-scope cleanup deferred to chunk 3: `preludeArcService.js` and `preludeThemeService.js` still reference the cut fields in their prompt prose, but graceful-degrades at runtime.
+
 ## 2026-04-26 — v1.0.96 Prose-quality diagnostic + prompt cache architecture fix
 
 **Change scope:** Investigation of original "Order of Dawn's Light" Opus 4.5 baseline against current production. Three new diagnostic toggles (Force Opus, Lean Prompt) on home page. Cache architecture fix — split character info into static (tier 2) + dynamic (tier 3) blocks; tier 1 switched to 1-hour TTL. Pre-existing PreludeSession descStyle crash fixed; prelude canon ledger duplicate removed from Setup panel.

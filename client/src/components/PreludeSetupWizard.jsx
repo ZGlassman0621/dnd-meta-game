@@ -6,24 +6,28 @@ import {
   REGIONS,
   PARENT_STATUS,
   PARENT_ROLES,
-  SIBLING_RELATIVE_AGES,
-  SIBLING_GENDERS,
-  CHILDHOOD_TALENTS,
-  CHILDHOOD_CARES,
-  TONE_PRESETS
+  SIBLING_OPTIONS,
+  AUTHORITY_FIGURES
 } from '../data/preludeSetup'
 
+const ORIGIN_FREEFORM_MAX = 2000
+
 /**
- * 12-question prelude setup wizard.
+ * 10-question prelude setup wizard.
  *
- * Every field is mandatory. Curated lists render as chips/selects with an
- * "Other (write your own)" free-text fallback for fields that allow one.
- * Tone tags (Q12) are closed-vocabulary multi-select (pick 2-4).
+ * Phase 2 rewrite of the v1.0.73 wizard. Q9 (talents), Q10 (cares), and
+ * Q11 (tone preset) cut; Q9 (authority figure) and Q10 (anything else?)
+ * added. Q8 (siblings) replaced variable-length sub-form with a single
+ * dropdown. See DECISION_LOG 2026-04-30 "Phase 2 Pre-Engineering Decision A:
+ * Setup Wizard Content Revisit" for the full content rationale.
+ *
+ * Q1, Q4-Q6 accept free text; Q4-Q6 also have curated options. Q7 keeps the
+ * two-slot parents sub-form. Q8, Q9 are pure dropdowns. Q10 is optional
+ * free text capped at 2000 characters.
  *
  * On submit, POSTs the full payload to /api/prelude/setup and hands the
  * created character back to the parent via `onPreludeCreated(character)`.
- * Parent is responsible for routing to the arc-preview / gameplay screen
- * (Phase 2 adds that); Phase 1 just confirms the character was saved.
+ * Parent is responsible for routing to the arc-preview / gameplay screen.
  */
 export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
   const [form, setForm] = useState({
@@ -44,13 +48,9 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       { role: 'mother', name: '', race: '', status: 'present' },
       { role: 'father', name: '', race: '', status: 'present' }
     ],
-    siblings: [], // { name, nickname, gender, race, relative_age }
-    talents: [], // 3 items
-    talent_other: '',
-    cares: [], // 3 items
-    care_other: '',
-    tone_preset: '', // v1.0.73 — single preset selection; stored as
-    // tone_tags: [preset] on the server to preserve the existing JSON shape.
+    siblings: '',          // single dropdown value (Decision A — one of SIBLING_OPTIONS)
+    authority_figure: '',  // Q9 — single-select (Decision A)
+    origin_freeform: '',   // Q10 — optional free text, 2000 char cap
     // Testing flag — when true, the arc preview screen is shown between
     // setup and the first session. Defaults to ON while we're play-testing;
     // uncheck for a production-feeling flow where the player learns their
@@ -66,30 +66,6 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
   const raceData = form.race ? racesData[form.race] : null
   const subraces = raceData?.subraces || []
 
-  const togglePick = (field, value, limit) => {
-    const current = form[field]
-    const has = current.includes(value)
-    if (has) {
-      set(field, current.filter(v => v !== value))
-    } else if (current.length < limit) {
-      set(field, [...current, value])
-    }
-  }
-
-  const addSibling = () => {
-    // Default sibling race to player's race — matches the typical case, and
-    // the player can override per-slot. Same pattern for parents.
-    set('siblings', [...form.siblings, { name: '', nickname: '', gender: 'sister', race: form.race || '', relative_age: 'younger' }])
-  }
-  const updateSibling = (idx, key, value) => {
-    const next = [...form.siblings]
-    next[idx] = { ...next[idx], [key]: value }
-    set('siblings', next)
-  }
-  const removeSibling = (idx) => {
-    set('siblings', form.siblings.filter((_, i) => i !== idx))
-  }
-
   // Build the payload sent to the server. Merges free-text fallbacks into
   // the curated fields (so the server sees one canonical value per question).
   const buildPayload = () => {
@@ -97,14 +73,6 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       if (form[otherKey] && form[otherKey].trim()) return form[otherKey].trim()
       return curated
     }
-    const talents = [
-      ...form.talents,
-      ...(form.talent_other.trim() ? [form.talent_other.trim()] : [])
-    ].slice(0, 3)
-    const cares = [
-      ...form.cares,
-      ...(form.care_other.trim() ? [form.care_other.trim()] : [])
-    ].slice(0, 3)
     // Parents: filter out empty rows (the schema allows 1-2 parents).
     // Default parent.race to the player's race when unset.
     const parents = form.parents
@@ -129,20 +97,17 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
       home_setting: resolved(form.home_setting, 'home_setting_other'),
       region: resolved(form.region, 'region_other'),
       parents: parentsFinal,
-      siblings: form.siblings.map(s => ({
-        name: (s.name || '').trim(),
-        nickname: (s.nickname || '').trim() || null,
-        gender: s.gender || 'sibling',
-        race: s.race || form.race,
-        relative_age: s.relative_age || 'younger'
-      })).filter(s => s.name),
-      talents,
-      cares,
-      // v1.0.73 — single-preset tone, serialized as a single-item array to
-      // match the legacy column shape. buildPayload() always emits a valid
-      // array (empty if the player hasn't picked yet; validate() catches).
-      tone_tags: form.tone_preset ? [form.tone_preset] : []
+      siblings: form.siblings,                                // Phase 2: single enum value
+      authority_figure: form.authority_figure,                // Phase 2: required
+      origin_freeform: form.origin_freeform.trim() || null    // Phase 2: optional
     }
+  }
+
+  // Q8/Q9 contradiction check — only-child + older-sibling-as-authority is
+  // incoherent and would produce garbage arc plans. Blocking validation per
+  // DECISION_LOG 2026-04-30 Decision A.
+  const siblingAuthorityContradiction = () => {
+    return form.siblings === 'only_child' && form.authority_figure === 'sibling'
   }
 
   // Client-side validation — mirrors server-side rules. Returns '' if OK,
@@ -155,9 +120,14 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
     if (!p.birth_circumstance) return 'Please pick a birth circumstance (or write your own).'
     if (!p.home_setting) return 'Please pick a home setting (or write your own).'
     if (!p.region) return 'Please pick a region (or write your own).'
-    if (p.talents.length !== 3) return 'Pick exactly 3 things they\'re good at.'
-    if (p.cares.length !== 3) return 'Pick exactly 3 things they care about.'
-    if (p.tone_tags.length !== 1) return 'Please pick one tone preset.'
+    if (!p.siblings) return 'Please pick a sibling configuration.'
+    if (!p.authority_figure) return 'Please pick who looms largest in your early life.'
+    if (siblingAuthorityContradiction()) {
+      return 'Q8 says only child but Q9 names an older sibling — one of those needs to change.'
+    }
+    if (p.origin_freeform && p.origin_freeform.length > ORIGIN_FREEFORM_MAX) {
+      return `Q10 is over the ${ORIGIN_FREEFORM_MAX}-character limit.`
+    }
     return ''
   }
 
@@ -199,38 +169,23 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
   }
   const labelStyle = { display: 'block', marginBottom: '0.35rem', color: '#c4b5fd', fontWeight: 600 }
   const descStyle = { fontSize: '0.75rem', color: '#9fa3a8', fontStyle: 'italic', marginTop: '0.2rem', lineHeight: 1.4 }
+  const helpStyle = { fontSize: '0.78rem', color: '#bbb', margin: '0.4rem 0 0 0', lineHeight: 1.45 }
 
-  const chip = (selected, disabled, onClick, children) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '0.4rem 0.7rem',
-        borderRadius: '16px',
-        border: selected ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.2)',
-        background: selected ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.04)',
-        color: selected ? '#e9d5ff' : (disabled ? '#555' : '#ccc'),
-        cursor: disabled && !selected ? 'not-allowed' : 'pointer',
-        fontSize: '0.8rem'
-      }}
-    >
-      {children}
-    </button>
-  )
+  const contradiction = siblingAuthorityContradiction()
+  const originLength = form.origin_freeform.length
 
   return (
     <div className="container" style={{ maxWidth: '820px', margin: '0 auto' }}>
       <div style={{ marginBottom: '1rem' }}>
         <h2 style={{ margin: 0, color: '#a78bfa' }}>Start with a Prelude</h2>
         <p style={{ color: '#bbb', fontSize: '0.9rem', marginTop: '0.25rem', marginBottom: 0 }}>
-          Your character will begin as a child. You'll play through 5 focused sessions of
-          their growing up. Class, theme, stats, and values will emerge from what you
-          actually do. These 12 questions set the stage.
+          Your character begins as a child. You'll play through four focused sessions of their formative years —
+          childhood, adolescence, and the threshold of adulthood. Class, theme, ancestry feat, and ability bumps
+          emerge from what you actually do. These ten questions set the stage; everything else gets discovered in play.
         </p>
       </div>
 
-      {/* Q1-3: Name + nickname */}
+      {/* Q1: Name */}
       <div style={cardStyle}>
         <label style={labelStyle}>1. Name</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
@@ -238,6 +193,10 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
           <input type="text" value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="Last name" />
           <input type="text" value={form.nickname} onChange={e => set('nickname', e.target.value)} placeholder="Nickname (optional)" />
         </div>
+        <p style={helpStyle}>
+          Some cultures don't use family surnames the way others do — leave Last name blank if that fits your character.
+          The DM will use just your first name (or invent a use-name with you in early scenes if it matters).
+        </p>
       </div>
 
       {/* Q2: Gender */}
@@ -287,6 +246,10 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
             )}
           </div>
         )}
+        <p style={helpStyle}>
+          Some races have their own naming conventions. If you leave Last name blank, the DM may introduce you
+          through play with a use-name (e.g. "Aelar of the Silver Glade") shaped by your race and where you grew up.
+        </p>
       </div>
 
       {/* Q4: Birth circumstance (starting age removed in v1.0.43 —
@@ -422,160 +385,100 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
         </p>
       </div>
 
-      {/* Q8: Siblings */}
+      {/* Q8: Siblings (single dropdown — Phase 2) */}
       <div style={cardStyle}>
         <label style={labelStyle}>8. Siblings</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
-          Only children can leave this empty. For each sibling, pick whether they're younger, older, or a twin.
+        <select value={form.siblings} onChange={e => set('siblings', e.target.value)} style={{ width: '100%' }}>
+          <option value="">Select sibling configuration</option>
+          {SIBLING_OPTIONS.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+        <p style={helpStyle}>
+          If your character had something more specific — adopted siblings, half-siblings from a different family,
+          etc. — you can describe it in question 10.
         </p>
-        {form.siblings.map((s, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.9fr 1fr 1fr 0.9fr auto', gap: '0.35rem', marginBottom: '0.35rem' }}>
-            <input type="text" value={s.name} onChange={e => updateSibling(i, 'name', e.target.value)} placeholder="Sibling name" />
-            <input
-              type="text"
-              value={s.nickname || ''}
-              onChange={e => updateSibling(i, 'nickname', e.target.value)}
-              placeholder="Nickname (optional)"
-              title="What family calls them — short, informal. Used by the DM alongside their full name."
-            />
-            <select
-              value={s.race || ''}
-              onChange={e => updateSibling(i, 'race', e.target.value)}
-              title="Defaults to player's race if left blank"
-            >
-              <option value="">(same as you)</option>
-              {raceKeys.map(k => (
-                <option key={k} value={k}>{racesData[k].name}</option>
-              ))}
-            </select>
-            <select value={s.gender} onChange={e => updateSibling(i, 'gender', e.target.value)}>
-              {SIBLING_GENDERS.map(g => (
-                <option key={g.value} value={g.value}>{g.label}</option>
-              ))}
-            </select>
-            <select value={s.relative_age} onChange={e => updateSibling(i, 'relative_age', e.target.value)}>
-              {SIBLING_RELATIVE_AGES.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-            <button type="button" onClick={() => removeSibling(i)} style={{ padding: '0.3rem 0.5rem', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', borderRadius: '4px', cursor: 'pointer' }}>✕</button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={addSibling}
-          style={{ padding: '0.4rem 0.75rem', background: 'rgba(139,92,246,0.15)', border: '1px dashed rgba(139,92,246,0.4)', color: '#c4b5fd', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
-        >
-          + Add sibling
-        </button>
       </div>
 
-      {/* Q9: Talents */}
+      {/* Q9: Authority figure (NEW — Phase 2) */}
       <div style={cardStyle}>
-        <label style={labelStyle}>9. Three things you're good at</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
-          Pick 3. These nudge the AI toward certain kinds of scenes — they do not lock in class or stats.
-          Currently picked: {form.talents.length + (form.talent_other.trim() ? 1 : 0)}/3.
+        <label style={labelStyle}>9. Who looms largest in your early life?</label>
+        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.7rem 0' }}>
+          The dominant adult presence — not necessarily the one who loved you most, but the one whose attention
+          shaped you most. The arc will give this person real weight in the story.
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-          {CHILDHOOD_TALENTS.map(t => {
-            const picked = form.talents.includes(t)
-            const limit = 3 - (form.talent_other.trim() ? 1 : 0)
-            const disabled = !picked && form.talents.length >= limit
+        <div style={{ display: 'grid', gap: '0.4rem' }}>
+          {AUTHORITY_FIGURES.map(opt => {
+            const picked = form.authority_figure === opt.value
             return (
-              <span key={t}>
-                {chip(picked, disabled, () => togglePick('talents', t, limit), t)}
-              </span>
-            )
-          })}
-        </div>
-        <input
-          type="text"
-          value={form.talent_other}
-          onChange={e => set('talent_other', e.target.value)}
-          placeholder="Or write your own (replaces one chip)"
-          style={{ width: '100%', marginTop: '0.5rem' }}
-        />
-      </div>
-
-      {/* Q10: Cares */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>10. Three things you care about</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
-          Pick 3. These seed the values profile that grows through play.
-          Currently picked: {form.cares.length + (form.care_other.trim() ? 1 : 0)}/3.
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-          {CHILDHOOD_CARES.map(t => {
-            const picked = form.cares.includes(t)
-            const limit = 3 - (form.care_other.trim() ? 1 : 0)
-            const disabled = !picked && form.cares.length >= limit
-            return (
-              <span key={t}>
-                {chip(picked, disabled, () => togglePick('cares', t, limit), t)}
-              </span>
-            )
-          })}
-        </div>
-        <input
-          type="text"
-          value={form.care_other}
-          onChange={e => set('care_other', e.target.value)}
-          placeholder="Or write your own (replaces one chip)"
-          style={{ width: '100%', marginTop: '0.5rem' }}
-        />
-      </div>
-
-      {/* Q11: Tone preset (v1.0.73 — single-select cards) */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>11. Tone</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.75rem 0' }}>
-          Pick the register your prelude will play in. This shapes how scenes are written —
-          prose rhythm, vocabulary, stakes, and how intensity scales as you grow across the four chapters.
-          Each tone bundles register, scene-behavior, and age-scaling rules the DM will honor.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.7rem' }}>
-          {TONE_PRESETS.map(preset => {
-            const picked = form.tone_preset === preset.value
-            return (
-              <div
-                key={preset.value}
-                onClick={() => set('tone_preset', preset.value)}
+              <label
+                key={opt.value}
                 style={{
-                  padding: '0.85rem 1rem',
-                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.6rem',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '8px',
                   border: picked ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.15)',
                   background: picked ? 'rgba(139,92,246,0.18)' : 'rgba(255,255,255,0.04)',
                   cursor: 'pointer',
                   transition: 'border-color 120ms, background 120ms'
                 }}
               >
-                <div style={{
-                  fontWeight: 700,
-                  fontSize: '0.95rem',
-                  color: picked ? '#e9d5ff' : '#e4e4e4',
-                  marginBottom: '0.3rem'
-                }}>
-                  {preset.label}
-                </div>
-                <div style={{
-                  fontSize: '0.82rem',
-                  color: picked ? '#d4d4d8' : '#aaa',
-                  lineHeight: 1.45,
-                  marginBottom: '0.4rem'
-                }}>
-                  {preset.description}
-                </div>
-                <div style={{
-                  fontSize: '0.72rem',
-                  fontStyle: 'italic',
-                  color: picked ? '#c4b5fd' : '#888'
-                }}>
-                  Reference works: {preset.inspirations}
-                </div>
-              </div>
+                <input
+                  type="radio"
+                  name="authority_figure"
+                  value={opt.value}
+                  checked={picked}
+                  onChange={() => set('authority_figure', opt.value)}
+                  style={{ marginTop: '0.2rem', accentColor: '#8b5cf6', cursor: 'pointer' }}
+                />
+                <span>
+                  <span style={{ fontWeight: 700, color: picked ? '#e9d5ff' : '#e4e4e4' }}>{opt.label}</span>
+                  <span style={{ color: picked ? '#d4d4d8' : '#aaa' }}> — {opt.description}</span>
+                </span>
+              </label>
             )
           })}
+        </div>
+        {contradiction && (
+          <p style={{ ...helpStyle, color: '#fca5a5', marginTop: '0.6rem' }}>
+            You picked "Only child" in Q8 — pick a different authority figure here, or change Q8.
+          </p>
+        )}
+      </div>
+
+      {/* Q10: Anything else? (NEW — Phase 2; optional free text) */}
+      <div style={cardStyle}>
+        <label style={labelStyle}>10. Anything else? <span style={{ fontWeight: 400, color: '#9fa3a8' }}>(optional)</span></label>
+        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
+          If you have a specific origin in mind, write it here. The DM will honor it. Leave blank if you don't —
+          your character will emerge through play.
+        </p>
+        <textarea
+          value={form.origin_freeform}
+          onChange={e => set('origin_freeform', e.target.value)}
+          placeholder="Optional. Any specifics about your character's origin the curated answers couldn't capture."
+          style={{
+            width: '100%',
+            minHeight: '5rem',
+            padding: '0.5rem',
+            fontFamily: 'inherit',
+            fontSize: '0.9rem',
+            background: 'rgba(0,0,0,0.2)',
+            color: '#e4e4e4',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '6px',
+            resize: 'vertical'
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+          <span style={{
+            fontSize: '0.72rem',
+            color: originLength > ORIGIN_FREEFORM_MAX ? '#fca5a5' : '#888'
+          }}>
+            {originLength} / {ORIGIN_FREEFORM_MAX}
+          </span>
         </div>
       </div>
 
@@ -613,8 +516,8 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
           type="button"
           onClick={handleSubmit}
           className="button"
-          disabled={submitting}
-          style={{ flex: 2, background: submitting ? '#6b7280' : '#8b5cf6', color: '#fff' }}
+          disabled={submitting || contradiction}
+          style={{ flex: 2, background: (submitting || contradiction) ? '#6b7280' : '#8b5cf6', color: '#fff' }}
         >
           {submitting ? 'Creating…' : 'Begin the Prelude'}
         </button>

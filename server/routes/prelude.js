@@ -1,17 +1,16 @@
 /**
  * Prelude API routes.
  *
- * Phase 1 endpoints:
+ * Endpoints:
  *   POST /api/prelude/setup         Create a new prelude-phase character
- *                                   from the 12-question setup wizard.
+ *                                   from the 10-question setup wizard
+ *                                   (Phase 2 rewrite).
  *   GET  /api/prelude/list          List all prelude-phase characters.
  *   GET  /api/prelude/:characterId  Fetch a single prelude character with
  *                                   parsed setup data.
  *
- * Later phases will add: arc-plan generation (/arc-plan), session
- * lifecycle (/sessions), emergence handling (/emergences), transition
- * (/end-prelude). Keeping those off the surface until the relevant phase
- * ships keeps the API clean.
+ * Plus arc-plan generation, session lifecycle, emergence handling, theme
+ * commitment, and canon endpoints below.
  */
 
 import express from 'express';
@@ -43,7 +42,7 @@ const router = express.Router();
 
 /**
  * POST /api/prelude/setup
- * Body: the full 12-answer setup payload. See `preludeService.validateSetupPayload`
+ * Body: the full 10-answer setup payload. See `preludeService.validateSetupPayload`
  * for field requirements.
  * Returns: the created prelude character row (with `creation_phase='prelude'`).
  */

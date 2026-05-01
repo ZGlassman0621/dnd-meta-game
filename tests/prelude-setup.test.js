@@ -1,19 +1,17 @@
 /**
- * Prelude Phase 1 — setup validation + character creation tests.
+ * Prelude setup validation + character creation tests.
  *
  * Exercises `validateSetupPayload` directly (pure, no DB) and covers the
  * happy path + key validation edges. The DB round-trip (createPreludeCharacter)
  * is covered by integration tests if/when they run, but validation itself is
  * testable in isolation and catches ~90% of regressions.
+ *
+ * Phase 2 rewrite: Q9 (talents), Q10 (cares), Q11 (tone preset) tests removed;
+ * Q8 (siblings as enum), Q9 (authority figure), Q10 (origin freeform), and
+ * Q8/Q9 contradiction tests added. See DECISION_LOG 2026-04-30 Decision A.
  */
 
 import { validateSetupPayload } from '../server/services/preludeService.js';
-
-// Indirectly check computeStartingAge via a quick lookup of the live
-// validator + payload behaviour. The helper itself isn't exported (it's an
-// internal impl detail); we verify it's driving age derivation correctly
-// by constructing payloads with different races and checking that
-// validation still passes (i.e. age is not required from the client).
 
 let passed = 0;
 let failed = 0;
@@ -28,7 +26,7 @@ function assert(condition, message) {
   }
 }
 
-// A complete, valid payload. Individual tests mutate this to isolate failures.
+// A complete, valid Phase 2 payload. Individual tests mutate this to isolate failures.
 function validPayload() {
   return {
     first_name: 'Alaric',
@@ -44,10 +42,9 @@ function validPayload() {
       { role: 'mother', name: 'Serafina Vermalen', status: 'present' },
       { role: 'father', name: 'Duran Vermalen', status: 'died_in_childhood' }
     ],
-    siblings: [{ name: 'Mara', relative_age: 'older' }],
-    talents: ['Reading', 'Making friends', 'Noticing things'],
-    cares: ['Family', 'Truth', 'Honor'],
-    tone_tags: ['brutal_gritty']  // v1.0.73+ — single preset
+    siblings: 'older_one',
+    authority_figure: 'mentor',
+    origin_freeform: null
   };
 }
 
@@ -115,67 +112,105 @@ console.log('\n=== Test 4: Parents ===\n');
   assert(validateSetupPayload(p).ok === true, 'Single unknown parent accepted (orphan case)');
 }
 
-console.log('\n=== Test 5: Siblings ===\n');
+console.log('\n=== Test 5: Siblings (Phase 2 — single enum value) ===\n');
 {
   const p = validPayload();
-  p.siblings = [];
-  assert(validateSetupPayload(p).ok === true, 'Empty siblings array accepted (only child)');
   delete p.siblings;
   assert(validateSetupPayload(p).ok === false, 'Missing siblings field rejected');
 
-  // v1.0.43: sibling relative_age validation
-  const p2 = validPayload();
-  p2.siblings = [{ name: 'Tam', relative_age: 'younger' }];
-  assert(validateSetupPayload(p2).ok === true, 'Valid relative_age (younger) accepted');
-  p2.siblings = [{ name: 'Tam', relative_age: 'older' }];
-  assert(validateSetupPayload(p2).ok === true, 'Valid relative_age (older) accepted');
-  p2.siblings = [{ name: 'Tam', relative_age: 'twin' }];
-  assert(validateSetupPayload(p2).ok === true, 'Valid relative_age (twin) accepted');
-  p2.siblings = [{ name: 'Tam', relative_age: 'weird' }];
-  assert(validateSetupPayload(p2).ok === false, 'Invalid relative_age rejected');
+  p.siblings = '';
+  assert(validateSetupPayload(p).ok === false, 'Empty siblings string rejected');
+
+  p.siblings = 'not_a_real_value';
+  assert(validateSetupPayload(p).ok === false, 'Unknown siblings value rejected');
+
+  // Legacy v1.0.73 array shape no longer accepted
+  p.siblings = [{ name: 'Tam', relative_age: 'younger' }];
+  assert(validateSetupPayload(p).ok === false, 'Legacy array-of-objects sibling shape rejected');
+
+  // Each canonical enum value accepts
+  for (const v of ['only_child', 'younger_one', 'younger_many', 'older_one', 'older_many', 'twin', 'mixed', 'lost_one', 'lost_many']) {
+    const p2 = validPayload();
+    p2.siblings = v;
+    // For only_child, default authority is 'mentor' from validPayload — no contradiction
+    assert(validateSetupPayload(p2).ok === true, `Sibling enum value "${v}" accepted`);
+  }
 }
 
-console.log('\n=== Test 6: Talents (3 required) ===\n');
+console.log('\n=== Test 6: Authority figure (Phase 2 — required, single enum) ===\n');
 {
   const p = validPayload();
-  p.talents = ['Reading', 'Running'];
-  assert(validateSetupPayload(p).ok === false, '2 talents rejected');
-  p.talents = ['Reading', 'Running', 'Climbing', 'Hiding'];
-  assert(validateSetupPayload(p).ok === false, '4 talents rejected');
-  p.talents = ['Reading', 'Running', 'Climbing'];
-  assert(validateSetupPayload(p).ok === true, 'Exactly 3 talents accepted');
+  delete p.authority_figure;
+  assert(validateSetupPayload(p).ok === false && validateSetupPayload(p).field === 'authority_figure', 'Missing authority_figure rejected');
+
+  p.authority_figure = '';
+  assert(validateSetupPayload(p).ok === false, 'Empty authority_figure rejected');
+
+  p.authority_figure = 'not_a_real_value';
+  assert(validateSetupPayload(p).ok === false, 'Unknown authority_figure value rejected');
+
+  // Each canonical enum value accepts (using only_child + non-sibling combos
+  // to avoid the contradiction rule)
+  for (const v of ['parent', 'mentor', 'guardian', 'captor', 'employer', 'rival', 'none']) {
+    const p2 = validPayload();
+    p2.authority_figure = v;
+    assert(validateSetupPayload(p2).ok === true, `authority_figure "${v}" accepted`);
+  }
+  // 'sibling' specifically — needs siblings to NOT be only_child
+  {
+    const p2 = validPayload();
+    p2.siblings = 'older_one';
+    p2.authority_figure = 'sibling';
+    assert(validateSetupPayload(p2).ok === true, `authority_figure "sibling" accepted with non-only-child siblings`);
+  }
 }
 
-console.log('\n=== Test 7: Cares (3 required) ===\n');
+console.log('\n=== Test 7: Q8/Q9 contradiction (only_child + sibling-as-authority) ===\n');
 {
   const p = validPayload();
-  p.cares = ['Family'];
-  assert(validateSetupPayload(p).ok === false, '1 care rejected');
-  p.cares = ['Family', 'Truth', 'Honor', 'Justice'];
-  assert(validateSetupPayload(p).ok === false, '4 cares rejected');
-  p.cares = ['Family', 'Truth', 'Honor'];
-  assert(validateSetupPayload(p).ok === true, 'Exactly 3 cares accepted');
+  p.siblings = 'only_child';
+  p.authority_figure = 'sibling';
+  const v = validateSetupPayload(p);
+  assert(v.ok === false, 'only_child + sibling-as-authority rejected');
+  assert(v.field === 'authority_figure', 'Contradiction field is authority_figure');
+
+  // Non-contradictory combinations should pass
+  p.authority_figure = 'parent';
+  assert(validateSetupPayload(p).ok === true, 'only_child + parent-as-authority accepted');
+  p.authority_figure = 'none';
+  assert(validateSetupPayload(p).ok === true, 'only_child + no-one-as-authority accepted');
 }
 
-console.log('\n=== Test 8: Tone preset (v1.0.73+ — exactly 1 required from 4 presets) ===\n');
+console.log('\n=== Test 8: origin_freeform (Phase 2 — optional, max 2000 chars) ===\n');
 {
   const p = validPayload();
-  p.tone_tags = [];
-  assert(validateSetupPayload(p).ok === false, 'empty tone_tags rejected');
-  p.tone_tags = ['brutal_gritty', 'epic_fantasy'];
-  assert(validateSetupPayload(p).ok === false, 'two tone presets rejected');
-  p.tone_tags = ['not_a_real_preset'];
-  assert(validateSetupPayload(p).ok === false, 'unknown preset value rejected');
-  p.tone_tags = ['gritty'];  // legacy 16-tag value
-  assert(validateSetupPayload(p).ok === false, 'legacy 16-tag value rejected');
-  p.tone_tags = ['brutal_gritty'];
-  assert(validateSetupPayload(p).ok === true, 'brutal_gritty preset accepted');
-  p.tone_tags = ['epic_fantasy'];
-  assert(validateSetupPayload(p).ok === true, 'epic_fantasy preset accepted');
-  p.tone_tags = ['rustic_spiritual'];
-  assert(validateSetupPayload(p).ok === true, 'rustic_spiritual preset accepted');
-  p.tone_tags = ['tender_hopeful'];
-  assert(validateSetupPayload(p).ok === true, 'tender_hopeful preset accepted');
+
+  // null/undefined accepted
+  p.origin_freeform = null;
+  assert(validateSetupPayload(p).ok === true, 'origin_freeform null accepted');
+  delete p.origin_freeform;
+  assert(validateSetupPayload(p).ok === true, 'origin_freeform missing accepted');
+
+  // Empty string accepted
+  p.origin_freeform = '';
+  assert(validateSetupPayload(p).ok === true, 'origin_freeform empty string accepted');
+
+  // Short text accepted
+  p.origin_freeform = 'A specific origin in mind: my character was raised by ravens.';
+  assert(validateSetupPayload(p).ok === true, 'Short origin_freeform accepted');
+
+  // Exactly 2000 chars accepted
+  p.origin_freeform = 'a'.repeat(2000);
+  assert(validateSetupPayload(p).ok === true, '2000-char origin_freeform accepted');
+
+  // 2001 chars rejected
+  p.origin_freeform = 'a'.repeat(2001);
+  const over = validateSetupPayload(p);
+  assert(over.ok === false && over.field === 'origin_freeform', '2001-char origin_freeform rejected');
+
+  // Non-string rejected when present
+  p.origin_freeform = 12345;
+  assert(validateSetupPayload(p).ok === false, 'Non-string origin_freeform rejected');
 }
 
 console.log('\n=== Test 9: Empty/null payload ===\n');
@@ -204,6 +239,26 @@ console.log('\n=== Test 10: Whitespace-only string fields ===\n');
   const p3 = validPayload();
   p3.region = '';
   assert(validateSetupPayload(p3).ok === false, 'Empty region rejected');
+}
+
+console.log('\n=== Test 11: Cut fields (talents/cares/tone_tags) are now ignored ===\n');
+{
+  // The Phase 2 wizard doesn't send these. The validator should NOT reject
+  // a payload that omits them, and SHOULD also not require them if they
+  // happen to come in (e.g., from a legacy client).
+  const p = validPayload();
+  // Inject cut fields with garbage — should be ignored, not rejected
+  p.talents = ['anything'];
+  p.cares = [];
+  p.tone_tags = ['legacy_value'];
+  assert(validateSetupPayload(p).ok === true, 'Legacy talents/cares/tone_tags fields ignored (not required, not rejected)');
+
+  // Confirm omitting them entirely is fine
+  const p2 = validPayload();
+  delete p2.talents;
+  delete p2.cares;
+  delete p2.tone_tags;
+  assert(validateSetupPayload(p2).ok === true, 'Payload omits talents/cares/tone_tags entirely — accepted');
 }
 
 console.log('\n==================================================');

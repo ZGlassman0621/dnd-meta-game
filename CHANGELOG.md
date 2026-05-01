@@ -2,6 +2,63 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.104] - 2026-05-01 — Phase 2 chunk 1: Setup wizard rebuild
+
+First Phase 2 engineering chunk. Rebuilds the Prelude setup wizard from 11 questions to 10 per DECISION_LOG 2026-04-30 Decision A. Other chunks (marker handling, prompt builder, transition service) follow.
+
+### Setup wizard content changes
+
+- **Cut Q9 (talents).** Pre-loaded class/theme expectations against Phase 1's "play sets the character" principle.
+- **Cut Q10 (cares).** Seeded the values tracker that Phase 1 Decision 3 cut. Orphaned.
+- **Cut Q11 (tone preset).** Replaced by the locked tone description in `preludePromptBuilder.js` (Phase 2 chunk 3 wires it).
+- **Added Q9 (authority figure).** Single-select, 8 curated options (`parent` / `sibling` / `mentor` / `guardian` / `captor` / `employer` / `rival` / `none`). `mentor` is the precondition for mentor-NPC seeding at handoff (chunk 2 work).
+- **Added Q10 (anything else?).** Optional free-text escape valve, 2000-character cap. The DM is instructed to honor it over conflicting curated answers.
+- **Restructured Q8 (siblings).** Variable-length sub-form replaced by a single dropdown with 9 enum values (`only_child` / `younger_one` / `younger_many` / `older_one` / `older_many` / `twin` / `mixed` / `lost_one` / `lost_many`). AI generates names and dynamics during Ch1 narrative play.
+- **Q1 / Q3 / Q8 help text additions** per Decision A: surname-blank guidance on Q1, race-naming-convention heads-up on Q3, pointer to Q10 on Q8.
+- **Validation rule added.** Q8 `only_child` + Q9 `sibling` is a blocking contradiction (would produce incoherent arc plans). Client surfaces inline warning; server rejects with 400.
+- **Wizard intro rewritten.** "Four focused sessions" / "ten questions" / "ancestry feat and ability bumps emerge from what you actually do."
+
+### Setup blob shape (`characters.prelude_setup_data` JSON)
+
+- **Dropped:** `talents`, `cares`, `tone_tags`, per-sibling sub-form fields.
+- **Added:** `authority_figure` (enum), `origin_freeform` (optional, ≤2000 chars). `siblings` is now a single string instead of an array of objects.
+- **Existing prelude characters' blobs are not migrated.** Readers (`preludeArcService`, `preludeThemeService`) already use null-safe fallbacks for the cut fields. Old preludes continue to work in degraded mode (no tone preset, no talent/cares-driven theme suggestion); new preludes use the new shape.
+- The `chapter_4_arc` JSON column on `prelude_arc_plans` and the `tone_reflection` column from migration 045 stay unused (additive-only schema convention).
+
+### Files
+
+- `client/src/data/preludeSetup.js` — added `SIBLING_OPTIONS` and `AUTHORITY_FIGURES`; removed `SIBLING_RELATIVE_AGES`, `SIBLING_GENDERS`, `CHILDHOOD_TALENTS`, `CHILDHOOD_CARES`, `TONE_PRESETS`, `TONE_TAGS`. Updated docstring.
+- `client/src/components/PreludeSetupWizard.jsx` — full rewrite to the 10-question structure. Dev-only `show_arc_preview` toggle preserved. Submit blocks while the Q8/Q9 contradiction is unresolved.
+- `client/src/components/PreludeArcPreview.jsx` — removed the `TONE_PRESETS`-backed tone card (orphaned by the tone-preset cut). The arc-preview UI no longer surfaces tone information; the locked tone description lives in the prompt only. Old preludes silently lose this card.
+- `server/services/preludeService.js` — `validateSetupPayload` updated: dropped talents/cares/tone validations; replaced sibling array validation with single-enum check; added `authority_figure` required + enum; added `origin_freeform` ≤2000 chars; added Q8/Q9 contradiction enforcement. Docstring updated to reflect 10-question shape.
+- `server/routes/prelude.js` — docstring updated.
+- `tests/prelude-setup.test.js` — rewritten for the new payload shape. Tests 6/7/8 (talents/cares/tone) replaced with siblings-enum, authority-figure, contradiction, and origin-freeform tests. Test 11 added: cut fields are ignored, not rejected (legacy compat).
+
+### Out of scope
+
+- Cleanup of `preludeArcService.js` and `preludeThemeService.js` references to the cut fields — chunk 3 work (prompt builder updates).
+- Mentor-NPC seeding from `authority_figure='mentor'` — chunk 3 (prompt builder) emits the canon NPC; chunk 2 (transition service) seeds `mentor_imprints` at handoff.
+- Removal of `prelude_values` table and `tone_reflection` column — additive-only schema convention; both stay unused.
+
+## v1.0.103 (2026-04-29) — Phase 0 stop-the-bleeding cleanup
+
+Commit: `099a22a`
+
+### Fixed
+- **Keeper multiclass spell-slot bug.** `CASTER_TYPE: 'none'` at `server/config/levelProgression.js:605` was a real bug — Keeper levels were entirely bypassed in multiclass slot calculations. Surfaced during the fix that Keeper's design intent is third caster, not full caster (see DECISION_LOG entry of same date). Set to `'third'`. Multiclass math verified: W1/K19 = 7 caster-equiv levels, W5/K1 = 5 (1-level dip earns toolkit, no slot bonus), W5/K6 = 7.
+- **Keeper subclass registration.** Lorewarden, Mythslinger, Rhetorician, Versebinder, and Polymath now registered in `SPELLCASTING_SUBCLASSES`. The base-class bug had a sibling at the subclass layer; both shipped together.
+
+### Changed (docs)
+- **CLAUDE.md `creation_phase` enum** reduced from `'prelude' | 'ready_for_primary' | 'active'` to `'prelude' | 'active'` to match code reality. The middle value may return in Phase 2 if Prelude → Primary transition work calls for it.
+- **ANCESTRY_FEATS.md** count reconciled to 195 (matching code and CLAUDE.md). The 13 "Path Less Walked" cross-pick feats remain documented as a parked-for-Phase-7 design idea, marked clearly as not currently implemented in 4 places (status header, scope intro, total summary, balance-pass note).
+- **PRELUDE_IMPLEMENTATION_PLAN.md rule #23** flagged inline as design-only until Phase 2; `mentor_imprints` table and seeding service do not yet exist in code.
+
+### Removed
+- **PM_TODO.md** retired. Superseded by `CONSOLIDATED_TODO.md` (durable seven-phase plan) and `PROJECT_TODO.md` (per-session view). Historical content preserved in git history.
+
+### Phase status
+- Phase 0 gate complete. Phase 1 (Prelude reframe game design) unblocked.
+
 ## [1.0.0.103] - 2026-04-29 — Phase 0 cleanup (Keeper caster-type bug + doc reconciliation)
 
 Stop-the-bleeding cleanup before Phase 1 (Prelude reframe) opens. One real bug, three doc reconciliations, one retired file.

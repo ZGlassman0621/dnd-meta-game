@@ -1,18 +1,21 @@
 /**
  * Prelude setup option lists.
  *
- * Data for the 12-question prelude setup wizard. Every field is mandatory.
- * Every curated list has a "free-text fallback" — the wizard renders an
- * "Other (write your own)" option beside the curated picker so the player
- * can override when nothing in the list fits.
+ * Data for the 10-question prelude setup wizard. Q1 (name) and Q10
+ * (anything else) take free text; everything else is curated. Q4-Q6
+ * (birth circumstance, home setting, region) accept an optional free-text
+ * override per question. Q7 (parents) is a small sub-form. Q8 (siblings)
+ * and Q9 (authority figure) are single-select drop-downs with no override.
  *
- * These lists are intentionally flavorful, not exhaustive. They're meant to
- * nudge the player toward specific, textured choices rather than present an
- * overwhelming menu. If a player wants "street prophet's orphan ward raised
- * in a condemned cathedral," they type it in the free-text box.
+ * Q9 (authority figure) is new in Phase 2; replaces Q11 (tone preset),
+ * Q9 (talents), and Q10 (cares) from the v1.0.73 wizard. Tone is now a
+ * locked description in `preludePromptBuilder.js`. Mentor-as-authority is
+ * the precondition for mentor-NPC seeding; see DECISION_LOG 2026-04-30
+ * "Phase 2 Pre-Engineering Decision A: Setup Wizard Content Revisit."
  *
- * The tone-tag list (Q12) is NOT free-text. The tags are a closed vocabulary
- * so the AI can reason about them consistently.
+ * Q10 (anything else?) is a free-text escape valve for players whose
+ * specific origin idea isn't captured by the curated lists. The DM is
+ * instructed to honor it over conflicting curated answers when present.
  */
 
 // ==========================================================================
@@ -34,7 +37,7 @@ export const BIRTH_CIRCUMSTANCES = [
 ];
 
 // ==========================================================================
-// Q6: Home setting
+// Q5: Home setting
 // ==========================================================================
 
 export const HOME_SETTINGS = [
@@ -53,7 +56,7 @@ export const HOME_SETTINGS = [
 ];
 
 // ==========================================================================
-// Q7: Region
+// Q6: Region
 // ==========================================================================
 // Forgotten Realms leaning, but the free-text fallback lets the player write
 // "a valley in a world that isn't the Realms" if they want.
@@ -82,7 +85,7 @@ export const REGIONS = [
 ];
 
 // ==========================================================================
-// Q8: Parent status (per parent)
+// Q7: Parent status (per parent)
 // ==========================================================================
 
 export const PARENT_STATUS = [
@@ -111,130 +114,42 @@ export const PARENT_ROLES = [
   { value: 'elder_sibling', label: 'Elder sibling (raised you)' }
 ];
 
-// Sibling relative ages — simpler and more natural than a signed number.
-export const SIBLING_RELATIVE_AGES = [
-  { value: 'younger', label: 'Younger' },
-  { value: 'older', label: 'Older' },
-  { value: 'twin', label: 'Twin' }
-];
-
-// Sibling gender. Separate from the player's gender picker (which has
-// free-text fallback) — this one stays closed-vocabulary for schema
-// consistency and to avoid a runaway wizard form.
-export const SIBLING_GENDERS = [
-  { value: 'sister', label: 'Sister' },
-  { value: 'brother', label: 'Brother' },
-  { value: 'sibling', label: 'Sibling (non-binary)' }
-];
-
 // ==========================================================================
-// Q10: Things they're good at (curated list — pick 3, free text allowed)
+// Q8: Siblings (Phase 2 — Decision A)
 // ==========================================================================
-// Ordered loosely by which classes/themes each might nudge toward, but the
-// mapping is intentionally fuzzy — play determines what actually emerges.
+// Replaces the variable-length per-sibling sub-form with a single dropdown.
+// AI generates names and dynamics during Ch1 narrative play. Free-text
+// override removed — Q10 (anything else?) catches edge cases.
 
-export const CHILDHOOD_TALENTS = [
-  'Running',
-  'Climbing',
-  'Hiding',
-  'Noticing things',
-  'Making friends',
-  'Making things with their hands',
-  'Numbers',
-  'Stories',
-  'Fixing things',
-  'Calming animals',
-  'Calming people',
-  'Fast hands',
-  'Patience',
-  'Courage',
-  'Singing',
-  'Reading',
-  'Fighting',
-  'Sneaking',
-  'Quick thinking',
-  'Remembering things exactly',
-  'Negotiating',
-  'Lying convincingly',
-  'Staying still',
-  'Knowing when to run',
-  'Helping others',
-  'Taking a hit',
-  'Finding things',
-  'Seeing through lies'
+export const SIBLING_OPTIONS = [
+  { value: 'only_child', label: 'Only child' },
+  { value: 'younger_one', label: 'Younger sibling' },
+  { value: 'younger_many', label: 'Younger siblings' },
+  { value: 'older_one', label: 'Older sibling' },
+  { value: 'older_many', label: 'Older siblings' },
+  { value: 'twin', label: 'Twin' },
+  { value: 'mixed', label: 'Mix of younger and older' },
+  { value: 'lost_one', label: 'Lost sibling (died or vanished)' },
+  { value: 'lost_many', label: 'Lost siblings (died or vanished)' }
 ];
 
 // ==========================================================================
-// Q11: Things they care about (curated list — pick 3, free text allowed)
+// Q9: Authority figure (Phase 2 — Decision A; new question)
 // ==========================================================================
-
-export const CHILDHOOD_CARES = [
-  'Family',
-  'Home',
-  'Freedom',
-  'Justice',
-  'Safety',
-  'Adventure',
-  'Learning',
-  'Friends',
-  'Animals',
-  'Honor',
-  'Faith',
-  'Power',
-  'Wealth',
-  'Art',
-  'Truth',
-  'Belonging',
-  'Proving themselves',
-  'Protecting the weak',
-  'Being left alone',
-  'Being known',
-  'Fairness',
-  'Revenge',
-  'Nature',
-  'Making something last',
-  'Not being like their parents',
-  'Being like their parents',
-  'Escape'
-];
-
-// ==========================================================================
-// Q12: Tone preset (v1.0.73 — pick ONE from 4 curated options)
-// ==========================================================================
-// Replaces the old 16-tag combinable system. Each preset is a full "tone
-// bible" shaping Opus's arc-plan generation and Sonnet's scene-level prose.
-// Presets bundle register, vocabulary, scene-type behavior, and age-scaling
-// rules — server-side content lives in `server/data/tonePresets.js`.
+// Single-select, curated, required. No free-text override.
 //
-// Stored on `characters.prelude_setup_data.tone_tags` as a single-element
-// array (e.g. `['brutal_gritty']`) to preserve the existing column shape.
+// 'mentor' is the precondition for mentor-NPC seeding. The arc plan
+// generator emits an [NPC_CANON] for the mentor in early Ch1 or Ch2
+// when this value is selected. At handoff, mentor_imprints is seeded
+// from the corresponding prelude_canon_npcs row (relationship='mentor').
 
-export const TONE_PRESETS = [
-  {
-    value: 'brutal_gritty',
-    label: 'Brutal & Gritty',
-    description: "Medieval realism, no softening. Violence is common, winters bite, food is scarce, politics are zero-sum. Adults extract, endure, betray, and sometimes prevail. Prose is short, unembellished, body-focused — hunger, blood, cold floors, threadbare cloaks. Even a child's life has real weight: a bruise that stays, an adult's lie overheard, a neighbor who stops speaking to your father. Political intrigue, cruel pragmatism, wary trust. Not grim for grim's sake — grim because the world is real.",
-    inspirations: 'early ASOIAF, The Witcher, Joe Abercrombie'
-  },
-  {
-    value: 'epic_fantasy',
-    label: 'Epic Fantasy',
-    description: "Mythic weight in small moments. The big currents of the world touch your village. A dragon passes overhead. A visiting paladin notices you. A dream-god knows your name before you do. Prose is elevated — \"cold stone\" over \"rocks,\" \"the wind out of the north\" over \"the wind.\" Scenes end with weight — implications stretching beyond the moment. Even a child's beats carry shadow-of-something-larger. Legend-shaped without being sentimental.",
-    inspirations: 'Tolkien, Brian Staveley, Robert Jordan'
-  },
-  {
-    value: 'rustic_spiritual',
-    label: 'Rustic & Spiritual',
-    description: "Land, faith, and season. The earth is close, the gods closer. Time is measured in crops, feast days, and prayers rather than hours. Priests, elders, and dreams are trusted. Gods are not abstract — they're present in the barn at calving, the river at baptism, the old shrine where offerings still accumulate. Monsters are folklore-shaped; the sacred has weight. The thin membrane between this world and the next.",
-    inspirations: "Patricia McKillip, Le Guin's Earthsea, Naomi Novik's Uprooted"
-  },
-  {
-    value: 'tender_hopeful',
-    label: 'Tender & Hopeful',
-    description: "Small-scale, warm, intimate. The stakes are the ones that matter to a child — a sibling fight, a cold supper, a friend's laugh, a parent's praise, a lost kitten. Kindnesses are named explicitly. People try. Life is hard but not cruel; even the rough characters have decent moments. Prose stays close to faces and hands, small touches, the shapes of rooms you love. Your childhood is yours, and it matters, and it's safe enough for you to have one.",
-    inspirations: "T. Kingfisher's Saint of Steel, Katherine Addison's Goblin Emperor, Becky Chambers"
-  }
+export const AUTHORITY_FIGURES = [
+  { value: 'parent', label: 'A parent', description: "the household's adult presence, for better or worse." },
+  { value: 'sibling', label: 'An older sibling', description: 'raised you in everything but name.' },
+  { value: 'mentor', label: 'A mentor', description: 'a teacher, master, priest, or elder who taught you something deliberately.' },
+  { value: 'guardian', label: 'A guardian', description: 'an adult who took responsibility for you without being family.' },
+  { value: 'captor', label: 'A captor', description: 'someone who held power over you against your will.' },
+  { value: 'employer', label: 'An employer', description: 'you worked for them young, and they shaped you through that work.' },
+  { value: 'rival', label: 'A rival', description: 'another child or adolescent whose presence defined yours.' },
+  { value: 'none', label: 'No one', description: 'you raised yourself.' }
 ];
-
-// Back-compat alias for any code still importing TONE_TAGS.
-export const TONE_TAGS = TONE_PRESETS;
