@@ -4,15 +4,33 @@
 
 **New here?** Start with [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the strategic context, then come back to this file. [`DECISION_LOG.md`](DECISION_LOG.md) explains why things are built the way they are.
 
-**Last updated:** 2026-04-26 (v1.0.96)
+**Last updated:** 2026-04-30 (Phase 1 complete; Phase 2 pre-engineering closed; engineering bootstrap drafted; per-step creator spec in design)
 
 ---
+
+## Where we are in the consolidated phase plan
+
+Phase 0 ✓ shipped (v1.0.103, commit `099a22a`). Phase 1 ✓ complete (game design only; no version bump). Currently entering **Phase 2** (Prelude → Primary transition engineering) in a fresh chat.
+
+Full phase sequence in [`CONSOLIDATED_TODO.md`](CONSOLIDATED_TODO.md):
+- ✓ Phase 0 — Stop-the-bleeding fixes
+- ✓ Phase 1 — Prelude reframe (game design)
+- **Phase 2** — Prelude → Primary transition (engineering) ← *next, fresh chat*
+- Phase 3 — AI Narrative Persistence foundation refactors
+- Phase 4 — AI behavior diagnostic
+- Phase 5 — Focus-area execution (selection deferred to end-of-Phase-4)
+- Phase 6 — DM Mode dedicated pass
+- Phase 7 — Playing mode
+
+Strict sequencing throughout — each phase ships before the next begins.
 
 ## Active right now
 
 What we're working on this session. Should be 1–3 items max.
 
-- [ ] *(none currently — prose-quality thread closure pending: H7 + H8 production fixes are the next active items if/when picked up; see DECISION_LOG Open Decisions)*
+- [ ] **Phase 2 PM design — per-step creator spec.** Continuing in the PM chat that drafted the engineering bootstrap. Closes Decision B by walking the 7-step creator structure step-by-step (each step's fields, manual vs. handoff modes, validation, help text); follows with empty-state home page design and full spec doc. Spec then goes to Claude Design as a clickable mockup brief. ~10–12 message rounds estimated. Gates Phase 2 engineering chunk 5 (main creator integration + home page redesign).
+
+- [ ] **Phase 2 engineering — chunks 1–4.** Fresh Code chat opening with the engineering bootstrap drafted in PM chat 2026-04-30. Chunks: setup wizard rebuild (per Decision A), transition service (`creation_phase` migration to three-state enum, payload persistence, gap-period UX with partial pre-fill), prompt builder (authority_figure + origin_freeform integration, mentor NPC trigger), marker handling (`[ANCESTRY_HINT].feat_id` server validation, `[NPC_CANON]` / `[CANON_THREAD]` / `[PRELUDE_END]` per plan §6). Chunk 5 stays gated until per-step creator spec is locked and mockup is approved. Living biography schema: `character_biography` table built in chunk 1, seeded in chunk 2.
 
 ---
 
@@ -52,16 +70,15 @@ Items in `FUTURE_FEATURES.md`. Skim that file periodically; pull items here when
 
 ## Recently shipped
 
+- **Phase 1 — Prelude reframe (2026-04-29)** — game-design-only phase; no version bump. Six structural decisions logged in `DECISION_LOG.md` (Decisions 1-6 dated 2026-04-29) plus tone description sub-deliverable. Outputs: locked outputs spec, three-chapter structure (Ch1 / Ch2 / Ch3; Ch4 collapsed), machinery audit (values + tone-tags + Ch4 transient flag cut; theme ceremony simplified; backstory repurposed as biography seed; chapter promises shifted to Ch2/Ch3; tally re-tuned), Ch3 beat sequence (irreversible act → theme commitment → departure), pacing (4 sessions: 1/1/2; intra-Ch2 AGE_ADVANCE), `[CANON_THREAD]` marker for long-term thread seeding, asymmetric NPC memory model parked for Phase 3, "epic fantasy in a lived-in world" tone description locked. `PRELUDE_IMPLEMENTATION_PLAN.md` rewritten as v4 (replaces v3 + three rounds of design history; DECISION_LOG carries the institutional memory).
+
 Three or four most recent versions. Older history in `CHANGELOG.md`.
 
-- **v1.0.101 (2026-04-27)** — H7 + H8 production fixes shipped. PLAYER OBSERVATION = ALWAYS A CHECK is now verb-gated (only injects when the player commits to perception/investigation/stealth-class verbs); Cardinal Rule 2 softened to "ROLL REQUESTS — DON'T SPOIL OUTCOMES." A/B harness validated both fixes — V1 baselines no longer truncate atmospheric scene-opens with auto-Perception demands, and cinematic build continues past check calls without spoiling outcomes. **Prose-quality triage closes with this release.**
-- **v1.0.100 (2026-04-27)** — Lean Prompt toggle retired from the home-page UI. `applyLeanTransforms()` and the `leanPrompt: true` API path stay as a diagnostic harness; a developer can still trigger lean via `dndLeanPrompt=1` in the browser console. H7/H8 production fixes (still pending) will address prose-compression directly.
-- **v1.0.99 (2026-04-26)** — Opus is now the production default for main DM session continuations. All three UI surfaces default to Opus; Sonnet is the opt-down. Server defaults flipped; client `forceOpus` → `useSonnet` rename. Decision logged in DECISION_LOG; supersedes the prior "Opus for ALL generation, Sonnet for sessions only" baseline.
-- **v1.0.98 (2026-04-26)** — Tier 2 prompt cache also moves to 1-hour TTL (was 5m). Lever 1 of three from session-147 cost analysis. Saves ~$0.20–$0.30 per Opus session by consolidating tier 2 re-creations. Cost numbers in CHANGELOG and DECISION_LOG corrected with actual playtest measurements.
-- **v1.0.97 (2026-04-26)** — Documentation hygiene: PROJECT_BRIEF, DECISION_LOG, PROJECT_TODO, triage convention.
-- **v1.0.96 (2026-04-26)** — Prose-quality diagnostic + prompt cache architecture fix. Opus is the validated narrative lever. Cache hit rate measured at ~71% in production (close to the ~77% mathematical ceiling for thoughtful play); per-session cost ~$2.89 for 24-turn Opus session.
-- **v1.0.95 (2026-04-24)** — Playtest fixes round 2 + transcript decoupling.
-- **v1.0.94 (2026-04-24)** — Anthropic 529 resilience + cleaner error surface.
+- **v1.0.103 (2026-04-29)** — Phase 0 stop-the-bleeding cleanup shipped (commit `099a22a`). Keeper `CASTER_TYPE` bug fixed: surfaced as third-caster (not full) per design; subclasses registered in `SPELLCASTING_SUBCLASSES`; multiclass math now correct. CLAUDE.md `creation_phase` enum reduced to two values to match code. ANCESTRY_FEATS.md count reconciled to 195 with Path Less Walked cross-pick deferred for Phase 7. PM_TODO.md retired. PRELUDE_IMPLEMENTATION_PLAN rule #23 flagged design-only inline. **Phase 0 gate complete; Phase 1 unblocked.**
+- **v1.0.102 (2026-04-27)** — LLM Setup tagged-error pattern shipped on `/message` path. `AUTH_FAILURE` / `RATE_LIMITED` / `OVERLOADED` tags wired through `claude.chat()` and surfaced to users at the dominant route. Coverage gaps remain at `/start`, `/restart`, DM Mode routes, 11 generator services — parked for later phase.
+- **v1.0.101 (2026-04-27)** — H7 + H8 production fixes shipped. PLAYER OBSERVATION = ALWAYS A CHECK is now verb-gated (only injects when the player commits to perception/investigation/stealth-class verbs); Cardinal Rule 2 softened to "ROLL REQUESTS — DON'T SPOIL OUTCOMES." A/B harness validated both fixes. **Prose-quality triage closes with this release.**
+- **v1.0.100 (2026-04-27)** — Lean Prompt toggle retired from the home-page UI. `applyLeanTransforms()` and the `leanPrompt: true` API path stay as a diagnostic harness.
+- **v1.0.99 (2026-04-26)** — Opus is now the production default for main DM session continuations. All three UI surfaces default to Opus; Sonnet is the opt-down.
 
 ---
 
