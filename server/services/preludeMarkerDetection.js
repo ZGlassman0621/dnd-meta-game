@@ -331,27 +331,50 @@ export function detectAncestryHints(text) {
   return results;
 }
 
+// [VALUE_HINT] detection removed in Phase 2 chunk 4 — values tracker cut
+// per DECISION_LOG 2026-04-29 Phase 1 Decision 3. The strip regex stays
+// in stripPreludeMarkers below so any old transcripts still render cleanly.
+
 /**
- * [VALUE_HINT: value="loyalty" delta=+1 reason="..."]
- * Returns array of { value, delta, reason }. Delta is +1 or -1; other
- * integer values accepted but clamped to [-3, +3] at service layer.
+ * [CANON_THREAD: kind="..." subject="..." condition="..." weight="..."]
+ * Phase 2 chunk 4 — long-term thread seeding (Decision 6).
+ *
+ * Detected during Prelude play when a beat creates a genuinely unresolved
+ * obligation the world will hold across years of main-campaign time.
+ * Persists into prelude_canon_threads; transferred to campaign_threads at
+ * handoff (chunk 2).
+ *
+ * Fields:
+ *   kind       Required. One of unresolved_loss / blood_debt / unfulfilled_oath /
+ *              unpaid_crime / unfinished_relationship / held_object / held_secret.
+ *   subject    Required. Free-text reference to an NPC, location, or abstract
+ *              noun. Service layer attempts to resolve to an existing
+ *              prelude_canon_npcs / prelude_canon_locations row.
+ *   condition  Required. Free-text trigger for ripening
+ *              ("PC returns to home region after 5+ years").
+ *   weight     Optional, defaults to "notable". One of minor/notable/major.
+ *
+ * Returns array of { kind, subject, condition, weight }. Service layer
+ * validates kind and weight enums; rows with unknown values are surfaced
+ * as cap violations so the AI gets [SYSTEM] feedback.
  */
-export function detectValueHints(text) {
+export function detectCanonThreads(text) {
   if (!text) return [];
   const results = [];
-  const re = /\[VALUE_HINT:\s*([^\]]+)\]/gi;
+  const re = /\[CANON_THREAD:\s*([^\]]+)\]/gi;
   let m;
   while ((m = re.exec(text)) !== null) {
     const fields = m[1];
-    const value = extractField(fields, 'value');
-    if (!value) continue;
-    const deltaRaw = extractField(fields, 'delta');
-    const delta = parseInt(deltaRaw || '1', 10);
-    if (!Number.isFinite(delta) || delta === 0) continue;
+    const kind = extractField(fields, 'kind');
+    const subject = extractField(fields, 'subject');
+    if (!kind || !subject) continue;
+    const condition = extractField(fields, 'condition');
+    const weight = extractField(fields, 'weight') || 'notable';
     results.push({
-      value: String(value).toLowerCase(),
-      delta,
-      reason: extractField(fields, 'reason')
+      kind: String(kind).toLowerCase(),
+      subject: String(subject).trim(),
+      condition: condition ? String(condition).trim() : null,
+      weight: String(weight).toLowerCase()
     });
   }
   return results;
@@ -414,13 +437,14 @@ export function detectPreludeMarkers(text) {
     locationCanons: detectLocationCanons(text),
     hpChanges: detectHpChanges(text),
     chapterPromise: detectChapterPromise(text),
-    // Phase 3 emergence markers
+    // Phase 3 emergence markers (Phase 2 chunk 4: [VALUE_HINT] dropped)
     statHints: detectStatHints(text),
     skillHints: detectSkillHints(text),
     classHints: detectClassHints(text),
     themeHints: detectThemeHints(text),
     ancestryHints: detectAncestryHints(text),
-    valueHints: detectValueHints(text),
+    // Phase 2 chunk 4 — long-term thread seeding (Decision 6)
+    canonThreads: detectCanonThreads(text),
     // v1.0.60 canon facts
     canonFacts: detectCanonFacts(text),
     canonFactRetires: detectCanonFactRetires(text),
@@ -465,10 +489,14 @@ export function stripPreludeMarkers(text) {
     .replace(/\[CLASS_HINT:[^\]]*\]/gi, '')
     .replace(/\[THEME_HINT:[^\]]*\]/gi, '')
     .replace(/\[ANCESTRY_HINT:[^\]]*\]/gi, '')
+    // [VALUE_HINT] detection dropped in Phase 2 chunk 4 (values tracker cut);
+    // strip kept so legacy transcripts and any stray AI emissions clean up.
     .replace(/\[VALUE_HINT:[^\]]*\]/gi, '')
     // v1.0.60 canon-facts markers
     .replace(/\[CANON_FACT:[^\]]*\]/gi, '')
     .replace(/\[CANON_FACT_RETIRE:[^\]]*\]/gi, '')
+    // Phase 2 chunk 4 — long-term thread seeding (Decision 6)
+    .replace(/\[CANON_THREAD:[^\]]*\]/gi, '')
     // v1.0.62 model auto-picker — AI's forward weight hint
     .replace(/\[NEXT_SCENE_WEIGHT:[^\]]*\]/gi, '')
     // v1.0.77 theme commitment — stripped from display; the UI renders a

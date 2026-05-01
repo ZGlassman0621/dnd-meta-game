@@ -2,6 +2,82 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.105] - 2026-05-01 — Phase 2 chunk 4: Marker handling
+
+Second Phase 2 engineering chunk. Wires the marker plumbing for the reframed Prelude — long-term thread seeding, ancestry-feat validation, chapter-promise gating, three-chapter tally weights, and `[VALUE_HINT]` removal. Chunks 3 (prompt builder) and 2 (transition service) follow.
+
+### Migration 047 — `prelude_canon_threads` + `campaign_threads` tables
+
+`prelude_canon_threads` persists `[CANON_THREAD]` markers fired during Prelude play (Phase 1 Decision 6 — DECISION_LOG 2026-04-29). Each thread is an unresolved obligation the world will hold across years of main-campaign time. Schema includes:
+
+- `kind` enum (`unresolved_loss` / `blood_debt` / `unfulfilled_oath` / `unpaid_crime` / `unfinished_relationship` / `held_object` / `held_secret`)
+- `subject_npc_id` / `subject_location_id` / `subject_text` (subject resolves to a `prelude_canon_npcs` or `prelude_canon_locations` row when the AI references an established entity; falls back to free text otherwise)
+- `condition` (free text — what triggers the thread to ripen)
+- `weight` enum (`minor` / `notable` / `major`)
+- `status` enum (`active` / `ripened` / `resolved` / `decayed`)
+- `created_at_age` / `created_at_chapter` / `session_id` for audit
+
+`campaign_threads` is the handoff target. Chunk 2 (transition service) transfers active prelude threads into this table when the primary campaign is created. Schema mirrors `prelude_canon_threads` plus a `campaign_id` reference and `ripened_at_game_day` / `resolved_at_game_day` columns. Both tables ship together to keep migration numbering tight.
+
+### `[CANON_THREAD]` marker — new
+
+Detected in [preludeMarkerDetection.js](server/services/preludeMarkerDetection.js) (`detectCanonThreads()`); processed in `preludeSessionService.processMarkers()` against the new `preludeCanonThreadService.recordCanonThread()`. Subject resolution attempts NPC name match → location name match → free-text fallback. Invalid `kind` or `weight` values are rejected and surface as cap violations so the AI gets `[SYSTEM]` feedback. Strip regex covers display.
+
+### `[ANCESTRY_HINT]` server-side validation — new
+
+Per Decision A. Markers carry a `feat_id` slug in the form `${list_id}_t${tier}_c${choice_index}` (e.g. `dwarf_t1_c2`). The validator:
+
+1. Maps the character's race → allowed ancestry list_id(s) (most races map 1:1; `aasimar` accepts all three paths until commitment; `drow` accepts whether stored as race or as elf subrace; `half-elf` / `half-orc` normalize to underscore form).
+2. Parses the slug; rejects malformed shapes.
+3. Confirms `(list_id, tier, choice_index)` resolves to an existing `ancestry_feats` row.
+4. Rejects mismatched list_id (e.g. an elf trying to claim a dwarf feat).
+
+Invalid hints are rejected; the session service surfaces them as cap violations. Tally degrades gracefully — rejected hints just don't accumulate. Chunk 3 will instruct the AI on the slug convention.
+
+### Chapter-weighted tally — three-chapter shape
+
+Phase 1 Decision 5: Ch1=1×, Ch2=1.5×, Ch3=2×. Updated `CHAPTER_WEIGHT` in [preludeEmergenceService.js](server/services/preludeEmergenceService.js). Ch4 stays mapped to 2× for any legacy hints from the old four-chapter shape — they tally the same as Ch3 hints (closest-living-stage match).
+
+### `[CHAPTER_PROMISE]` — Ch1 rejection added
+
+Per Phase 1 Decision 3. Chapter promises fire at Ch2 and Ch3 openings only (Ch1 is too young for self-reflection beats). Ch1 emissions are rejected and surfaced as cap violations rather than rendered to the UI; the AI gets `[SYSTEM]` feedback to stop firing them.
+
+### `[VALUE_HINT]` removal
+
+Per Phase 1 Decision 3 (values tracker cut). Detection function removed from `preludeMarkerDetection.js`; the `valueHints` field dropped from `detectPreludeMarkers()` roll-up. `recordValueHint` removed from `preludeEmergenceService.js`; session service no longer calls it. Strip regex stays so any legacy transcripts and stray AI emissions still clean up. The `prelude_values` table remains in schema but is no longer written.
+
+### Files
+
+- **NEW** `server/migrations/047_prelude_canon_threads.js` — `prelude_canon_threads` + `campaign_threads` tables, plus indices.
+- **NEW** `server/services/preludeCanonThreadService.js` — `recordCanonThread`, `getActiveThreads`, `getAllThreads`, `setThreadStatus`, with `_internals` exporting the kind/weight/status enums for tests.
+- **NEW** `tests/prelude-canon-threads.test.js` — enum integrity + presence checks (21 assertions).
+- `server/services/preludeMarkerDetection.js` — added `detectCanonThreads()`; removed `detectValueHints()`; updated `detectPreludeMarkers()` roll-up; added `[CANON_THREAD]` strip regex.
+- `server/services/preludeEmergenceService.js` — added `validateAncestryFeat()` + `allowedAncestryListIds()`; updated `recordAncestryHint()` to validate and return `invalid_feat` on rejection; updated `CHAPTER_WEIGHT` to three-chapter shape; removed `recordValueHint()`.
+- `server/services/preludeSessionService.js` — wired `[CANON_THREAD]` recording with cap-violation surfacing; wired ancestry-validation rejections into the cap-violation list; added Ch1 chapter-promise rejection; removed `[VALUE_HINT]` processing.
+- `tests/prelude-markers.test.js` — replaced `VALUE_HINT` test block with a `CANON_THREAD` test block; added `CANON_THREAD` strip assertion. Net +10 assertions.
+
+### Test sweep
+
+| Suite | Result |
+|---|---|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed (+10 net) |
+| `tests/prelude-prompt.test.js`              | ✅ 190 passed |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed (new) |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/marker-detection.test.js`            | ✅ 128 passed (DM-side smoke) |
+| `tests/marker-schemas.test.js`              | ✅ 49 passed |
+
+**Total:** 785 prelude assertions green; 177 DM-side marker assertions green. No regressions. Vite build clean.
+
+### Out of scope
+
+- Ancestry-feat slug DB-integration test (validator queries `ancestry_feats`). Pure-logic enum check shipped; full DB round-trip exercised by chunk 3 prompt-builder tests when the AI emits actual slugs against the prompt convention.
+- Prompt-builder updates that instruct the AI on the `[CANON_THREAD]` calibration examples (§5h of PRELUDE_IMPLEMENTATION_PLAN.md), the slug convention for `[ANCESTRY_HINT]`, and the new tone description — all chunk 3.
+
 ## [1.0.0.104] - 2026-05-01 — Phase 2 chunk 1: Setup wizard rebuild
 
 First Phase 2 engineering chunk. Rebuilds the Prelude setup wizard from 11 questions to 10 per DECISION_LOG 2026-04-30 Decision A. Other chunks (marker handling, prompt builder, transition service) follow.

@@ -36,6 +36,7 @@ import { detectPreludeMarkers } from './preludeMarkerDetection.js';
 import * as rollingSummary from './rollingSummaryService.js';
 import * as emergenceService from './preludeEmergenceService.js';
 import * as canonService from './preludeCanonService.js';
+import * as canonThreadService from './preludeCanonThreadService.js';
 import { detectPlayerDialogueViolation, buildViolationCorrectionNote } from './preludeViolationDetection.js';
 import { THEME_DEPARTURE_MAP } from './preludeThemeService.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
@@ -1108,11 +1109,23 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
   }
 
   // CHAPTER_PROMISE — surface to the UI so it can render as an opening
-  // beat in the message feed. Server-side: no persistence needed for
-  // Phase 2b-ii; the marker is informational for the UI. Future phases
-  // may store chapter promises for retrospective review.
+  // beat in the message feed. Phase 2 chunk 4: chapter promises are valid
+  // only at Ch2 and Ch3 openings (per Phase 1 Decision 3); Ch1 is too
+  // young for self-reflection beats. Ch1 emissions are rejected and
+  // surfaced as cap violations so the AI gets [SYSTEM] feedback. Server-
+  // side: no persistence needed; the marker is informational for the UI.
   if (detected.chapterPromise) {
-    results.chapterPromise = detected.chapterPromise;
+    const characterChapter = (await getPreludeCharacter(characterId))?.prelude_chapter || 1;
+    if (characterChapter === 1) {
+      results.capViolations = results.capViolations || [];
+      results.capViolations.push({
+        kind: 'chapter_promise',
+        target: detected.chapterPromise.theme || '(no theme)',
+        reason: 'Chapter promises fire at Ch2 and Ch3 openings only — Ch1 (early childhood) opens organically'
+      });
+    } else {
+      results.chapterPromise = detected.chapterPromise;
+    }
   }
 
   // v1.0.77 — THEME_COMMITMENT_OFFERED. Fires at Ch3 wrap-up. Server
@@ -1189,11 +1202,36 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
     await emergenceService.recordThemeHint(characterId, { ...hint, ...emergenceCtx });
   }
   for (const hint of (detected.ancestryHints || [])) {
-    await emergenceService.recordAncestryHint(characterId, { ...hint, ...emergenceCtx });
+    const res = await emergenceService.recordAncestryHint(characterId, { ...hint, ...emergenceCtx });
+    // Phase 2 chunk 4 — invalid feat_id surfaces as a cap violation so the
+    // AI gets [SYSTEM] feedback. Tally degrades gracefully (just nothing
+    // recorded for the rejected hint).
+    if (res.status === 'invalid_feat') {
+      capViolations.push({ kind: 'ancestry', target: hint.feat_id, reason: res.reason });
+    }
   }
-  for (const hint of (detected.valueHints || [])) {
-    await emergenceService.recordValueHint(characterId, { ...hint, ...emergenceCtx });
+  // Phase 2 chunk 4 — [VALUE_HINT] processing removed (values tracker cut
+  // per DECISION_LOG 2026-04-29 Phase 1 Decision 3). Marker detection is
+  // also removed, so detected.valueHints is undefined.
+
+  // Phase 2 chunk 4 — [CANON_THREAD]. Persist long-term thread seeds.
+  // Invalid kind/weight values surface as cap violations so the AI gets
+  // [SYSTEM] feedback. See preludeCanonThreadService for validation rules.
+  const recordedThreads = [];
+  for (const t of (detected.canonThreads || [])) {
+    const res = await canonThreadService.recordCanonThread(characterId, {
+      ...t,
+      sessionId,
+      age: character?.prelude_age || null,
+      chapter: character?.prelude_chapter || null
+    });
+    if (res.status === 'inserted') {
+      recordedThreads.push(res);
+    } else if (res.status === 'invalid_kind' || res.status === 'invalid_weight') {
+      capViolations.push({ kind: 'canon_thread', target: t.kind, reason: res.reason });
+    }
   }
+  results.canonThreadsAdded = recordedThreads;
 
   results.offeredEmergences = offeredEmergences;
   results.capViolations = capViolations;

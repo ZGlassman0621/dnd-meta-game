@@ -1,25 +1,33 @@
 /**
  * Prelude emergence service.
  *
- * Phase 3. Handles the lifecycle of mechanical emergence offers that Sonnet
+ * Handles the lifecycle of mechanical emergence offers that Sonnet
  * fires via markers during a prelude session: [STAT_HINT], [SKILL_HINT],
- * [CLASS_HINT], [THEME_HINT], [ANCESTRY_HINT], [VALUE_HINT].
+ * [CLASS_HINT], [THEME_HINT], [ANCESTRY_HINT].
  *
- * Data model (migration 042 ships these tables):
+ * [VALUE_HINT] dropped in Phase 2 chunk 4 (values tracker cut per
+ * DECISION_LOG 2026-04-29 Phase 1 Decision 3). The prelude_values table
+ * stays in the schema but is no longer written.
+ *
+ * Data model (migration 042 ships the tables):
  *   - prelude_emergences: one row per hint (offered / accepted / declined /
- *     declined_permanently). Stat, skill, class, theme, ancestry, value all
+ *     declined_permanently). Stat, skill, class, theme, ancestry all
  *     share this table keyed by `kind`.
- *   - prelude_values: denormalized rolling tally per value (loyalty, honor,
- *     etc.). Upserted by [VALUE_HINT] markers.
  *
  * Caps enforced server-side (rejected hints get a [SYSTEM] cap-violation
  * message injected back to Sonnet so it knows to stop):
  *   - +2 max per stat across the whole prelude
  *   - 2 accepted skills max total
  *   - Class/theme/ancestry hints: no cap on firing; winner determined at
- *     prelude end by chapter-weighted tally (ch1-2 = 1x, ch3 = 1.5x,
- *     ch4 = 2x). Recency breaks ties.
- *   - Values: no cap; every tick accumulates on prelude_values.
+ *     prelude end by chapter-weighted tally. Recency breaks ties.
+ *   - Ancestry hints additionally validated against the player's race's
+ *     allowed feat list (Phase 2 chunk 4 — DECISION_LOG 2026-04-30
+ *     Decision A); invalid feats rejected and surfaced as cap violations.
+ *
+ * Chapter tally weights (Phase 2 — Phase 1 Decision 5: three-chapter
+ * structure, Ch1=1×, Ch2=1.5×, Ch3=2×). Ch4 stays mapped to 2× for any
+ * legacy hints that fired against the old 4-chapter shape — they tally
+ * the same as Ch3 hints, which is the closest-living-stage match.
  *
  * Auto-accept policy for class/theme/ancestry hints: these are TALLY
  * signals, not player-facing accept-or-decline cards. They're recorded
@@ -36,11 +44,11 @@ import { getPreludeCharacter } from './preludeService.js';
 
 const MAX_STAT_BONUS_TOTAL = 2;   // per stat, across the prelude
 const MAX_SKILLS_TOTAL = 2;        // across the prelude
-const VALUE_DELTA_CLAMP = 3;       // single-marker absolute-value clamp
 
-// Chapter tally weights for class/theme/ancestry hints. Matches
-// PRELUDE_IMPLEMENTATION_PLAN.md §5d.
-const CHAPTER_WEIGHT = { 1: 1.0, 2: 1.0, 3: 1.5, 4: 2.0 };
+// Chapter tally weights for class/theme/ancestry hints. Phase 2 — Phase 1
+// Decision 5 (three-chapter structure: Ch1=1×, Ch2=1.5×, Ch3=2×). Ch4
+// kept at 2× for legacy hints that fired against the 4-chapter shape.
+const CHAPTER_WEIGHT = { 1: 1.0, 2: 1.5, 3: 2.0, 4: 2.0 };
 
 // ---------------------------------------------------------------------------
 // Record a hint (called from session service on marker detection)
@@ -175,55 +183,129 @@ export async function recordThemeHint(characterId, { theme, reason, chapter, ses
   return { status: 'tallied', theme: String(theme).toLowerCase() };
 }
 
-/** Persist an ANCESTRY_HINT (same auto-accept tally pattern). */
+/**
+ * Map a character's race (and subrace where relevant) to the ancestry
+ * feat list_id(s) that count as "in the player's race's allowed feat list."
+ * Phase 2 chunk 4.
+ *
+ * Most races map 1:1. Half-races normalize hyphen→underscore. Aasimar's
+ * three paths are kept open until path commitment lands at handoff —
+ * during Prelude play any aasimar feat from any of the three paths is
+ * accepted. Drow is its own list_id even though it's modeled as a subrace
+ * in some setups; we accept either 'drow' (as race) or 'elf' with subrace
+ * containing "drow".
+ */
+function allowedAncestryListIds({ race, subrace }) {
+  const r = String(race || '').toLowerCase().trim();
+  const sub = String(subrace || '').toLowerCase().trim();
+  // Aasimar: accept all three paths until commitment.
+  if (r === 'aasimar') return ['aasimar_protector', 'aasimar_scourge', 'aasimar_fallen'];
+  // Drow: accept whether stored as race or as elf subrace.
+  if (r === 'drow' || (r === 'elf' && sub.includes('drow'))) return ['drow'];
+  // Hyphenated races: normalize.
+  if (r === 'half-elf') return ['half_elf'];
+  if (r === 'half-orc') return ['half_orc'];
+  // Default 1:1 mapping. Unknown races yield empty array → all hints reject.
+  const direct = ['dwarf', 'elf', 'human', 'halfling', 'dragonborn', 'tiefling', 'warforged'];
+  if (direct.includes(r)) return [r];
+  // Underscore variants of half-* if they came in pre-normalized.
+  if (r === 'half_elf' || r === 'half_orc') return [r];
+  return [];
+}
+
+/**
+ * Validate an ANCESTRY_HINT feat_id against a character's race. Returns
+ * one of:
+ *   { ok: true, feat: { id, list_id, tier, choice_index, feat_name } }
+ *   { ok: false, reason }
+ *
+ * feat_id is expected as a slug `${list_id}_t${tier}_c${choice_index}`
+ * (e.g. "dwarf_t1_c2"). Phase 2 chunk 3 instructs the AI on this
+ * convention; until that ships, hints emitted in other shapes will
+ * reject and the AI gets [SYSTEM] feedback. Tally degrades gracefully
+ * (just nothing tallied for that hint).
+ */
+export async function validateAncestryFeat(characterId, featIdRaw) {
+  const character = await getPreludeCharacter(characterId);
+  if (!character) return { ok: false, reason: 'character not found' };
+
+  const allowedLists = allowedAncestryListIds(character);
+  if (allowedLists.length === 0) {
+    return { ok: false, reason: `no ancestry feat list for race "${character.race}"` };
+  }
+
+  const featId = String(featIdRaw || '').toLowerCase().trim();
+  // Slug form: ${list_id}_t${tier}_c${choice_index}
+  const slugMatch = /^([a-z_]+)_t(\d+)_c(\d+)$/.exec(featId);
+  if (!slugMatch) {
+    return { ok: false, reason: `feat_id "${featIdRaw}" is not in the expected ${listIdHint(allowedLists)}_tN_cN slug format` };
+  }
+  const [, listId, tierStr, choiceStr] = slugMatch;
+  const tier = parseInt(tierStr, 10);
+  const choice = parseInt(choiceStr, 10);
+
+  if (!allowedLists.includes(listId)) {
+    return { ok: false, reason: `feat_id "${featIdRaw}" belongs to ancestry list "${listId}", which is not allowed for race "${character.race}" (allowed: ${allowedLists.join('/')})` };
+  }
+  if (![1, 3, 7, 13, 18].includes(tier)) {
+    return { ok: false, reason: `feat_id "${featIdRaw}" has tier ${tier}, expected one of 1/3/7/13/18` };
+  }
+  if (![1, 2, 3].includes(choice)) {
+    return { ok: false, reason: `feat_id "${featIdRaw}" has choice_index ${choice}, expected one of 1/2/3` };
+  }
+
+  // Confirm the row exists in the catalog
+  const row = await dbGet(
+    `SELECT id, list_id, tier, choice_index, feat_name
+     FROM ancestry_feats
+     WHERE list_id = ? AND tier = ? AND choice_index = ?`,
+    [listId, tier, choice]
+  );
+  if (!row) {
+    return { ok: false, reason: `feat_id "${featIdRaw}" does not match any catalog row` };
+  }
+  return { ok: true, feat: row };
+}
+
+function listIdHint(allowed) {
+  return allowed.length === 1 ? allowed[0] : `(${allowed.join('|')})`;
+}
+
+/**
+ * Persist an ANCESTRY_HINT. Phase 2 chunk 4 adds server-side validation:
+ * feat_id must resolve to a real ancestry_feats row whose list_id matches
+ * the character's race. Invalid hints are rejected and surfaced as cap
+ * violations so the AI gets [SYSTEM] feedback.
+ *
+ * Returns:
+ *   { status: 'tallied', feat_id, feat: { ... } }   on success
+ *   { status: 'invalid_feat', reason }              on validation failure
+ */
 export async function recordAncestryHint(characterId, { feat_id, reason, chapter, sessionId, messageIndex }) {
+  const validation = await validateAncestryFeat(characterId, feat_id);
+  if (!validation.ok) {
+    return { status: 'invalid_feat', reason: validation.reason, feat_id };
+  }
+
+  // Store the slug form (lower-cased + trimmed) so the trajectory tally
+  // groups duplicates correctly even when AI emits inconsistent casing.
+  const normalizedFeatId = String(feat_id).toLowerCase().trim();
   await dbRun(
     `INSERT INTO prelude_emergences
        (character_id, kind, target, magnitude, reason, game_age, chapter, session_id, offered_at_message_index, status)
      VALUES (?, 'ancestry', ?, 1, ?, ?, ?, ?, ?, 'accepted')`,
     [
-      characterId, feat_id, reason || null,
+      characterId, normalizedFeatId, reason || null,
       (await getPreludeCharacter(characterId))?.prelude_age || null,
       chapter || null, sessionId || null, messageIndex || null
     ]
   );
-  return { status: 'tallied', feat_id };
+  return { status: 'tallied', feat_id: normalizedFeatId, feat: validation.feat };
 }
 
-/**
- * Persist a VALUE_HINT. Clamped and summed into the prelude_values table
- * immediately (no player-facing decision).
- */
-export async function recordValueHint(characterId, { value, delta, reason, chapter, sessionId, messageIndex }) {
-  const clamped = Math.max(-VALUE_DELTA_CLAMP, Math.min(VALUE_DELTA_CLAMP, delta));
-  const normalized = String(value).toLowerCase().replace(/\s+/g, '_');
-  const character = await getPreludeCharacter(characterId);
-  const age = character?.prelude_age || null;
-
-  // Also insert into prelude_emergences for audit trail
-  await dbRun(
-    `INSERT INTO prelude_emergences
-       (character_id, kind, target, magnitude, reason, game_age, chapter, session_id, offered_at_message_index, status)
-     VALUES (?, 'value', ?, ?, ?, ?, ?, ?, ?, 'accepted')`,
-    [
-      characterId, normalized, clamped, reason || null,
-      age, chapter || null, sessionId || null, messageIndex || null
-    ]
-  );
-
-  // Upsert the denormalized rolling tally
-  await dbRun(
-    `INSERT INTO prelude_values (character_id, value, score, last_changed_age)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT (character_id, value) DO UPDATE SET
-       score = score + excluded.score,
-       last_changed_age = excluded.last_changed_age,
-       last_changed_at = CURRENT_TIMESTAMP`,
-    [characterId, normalized, clamped, age]
-  );
-
-  return { status: 'accumulated', value: normalized, delta: clamped };
-}
+// recordValueHint removed in Phase 2 chunk 4 — values tracker cut per
+// DECISION_LOG 2026-04-29 Phase 1 Decision 3. Session service no longer
+// calls it; old prelude_values rows remain in DB untouched.
 
 // ---------------------------------------------------------------------------
 // Player decisions (accept / decline / never-offer) — only stats + skills

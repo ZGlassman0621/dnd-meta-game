@@ -1,5 +1,33 @@
 # Test Results Log
 
+## 2026-05-01 — v1.0.105 Phase 2 chunk 4: Marker handling
+
+**Change scope:** Migration 047 (`prelude_canon_threads` + `campaign_threads`). Added `[CANON_THREAD]` detection + persistence service. Added server-side validation for `[ANCESTRY_HINT]` `feat_id` slugs against the player's race's allowed feat list. Updated chapter-weighted tally to the three-chapter shape (Ch1=1×, Ch2=1.5×, Ch3=2×). Added Ch1 rejection for `[CHAPTER_PROMISE]`. Removed `[VALUE_HINT]` detection and recording.
+
+**Client build:** ✅ passed (`cd client && npx vite build`).
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed (+10 net for CANON_THREAD; -4 for VALUE_HINT removal) |
+| `tests/prelude-prompt.test.js`              | ✅ 190 passed |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed (new) |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/marker-detection.test.js`            | ✅ 128 passed (DM-side smoke) |
+| `tests/marker-schemas.test.js`              | ✅ 49 passed |
+
+**Total:** 785 prelude-related assertions green; 177 DM-side marker assertions green. No regressions.
+
+**Notes:**
+- Ancestry validator's full DB-round-trip path exercised end-to-end only by integration suites; chunk 3 prompt-builder tests will exercise the slug convention with real AI output when chunk 3 ships. Pure-logic and slug-format paths covered here.
+- `prelude_values` table stays in schema; no longer written.
+- Migration 047 is additive; existing prelude characters' data unaffected.
+
 ## 2026-05-01 — v1.0.104 Phase 2 chunk 1: Setup wizard rebuild
 
 **Change scope:** Rewrote Prelude setup wizard from 11 questions to 10 per DECISION_LOG 2026-04-30 Decision A. Cut talents/cares/tone-preset; added authority figure (Q9) and free-text escape valve (Q10); replaced sibling sub-form with single dropdown. Server-side validator updated. `PreludeArcPreview` lost its tone card (orphaned by the tone-preset cut).

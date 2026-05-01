@@ -25,7 +25,7 @@ import {
   detectClassHints,
   detectThemeHints,
   detectAncestryHints,
-  detectValueHints,
+  detectCanonThreads,
   detectCanonFacts,
   detectCanonFactRetires,
   detectNextSceneWeight,
@@ -196,18 +196,40 @@ console.log('\n=== CLASS_HINT / THEME_HINT / ANCESTRY_HINT ===\n');
   assert(a[0].feat_id === 'dwarf_l1_stone_sense', 'feat_id captured');
 }
 
-console.log('\n=== VALUE_HINT ===\n');
+console.log('\n=== CANON_THREAD (Phase 2 chunk 4) ===\n');
 {
-  const vs = detectValueHints('[VALUE_HINT: value="loyalty" delta=+1 reason="stayed for Rook"]');
-  assert(vs.length === 1, 'one marker → one entry');
-  assert(vs[0].value === 'loyalty', 'value lowercased');
-  assert(vs[0].delta === 1, 'positive delta parsed');
+  // Basic happy path
+  const t = detectCanonThreads(
+    '[CANON_THREAD: kind="unresolved_loss" subject="Father" condition="PC returns to home village" weight="major"]'
+  );
+  assert(t.length === 1, 'one marker → one entry');
+  assert(t[0].kind === 'unresolved_loss', 'kind lowercased');
+  assert(t[0].subject === 'Father', 'subject captured');
+  assert(t[0].condition === 'PC returns to home village', 'condition captured');
+  assert(t[0].weight === 'major', 'weight captured');
 
-  const neg = detectValueHints('[VALUE_HINT: value="self_preservation" delta=-2 reason="..."]');
-  assert(neg[0].delta === -2, 'negative delta parsed');
+  // Default weight when omitted
+  const def = detectCanonThreads('[CANON_THREAD: kind="held_secret" subject="The hidden ledger" condition="anyone asks about Sembia trade routes"]');
+  assert(def[0].weight === 'notable', 'default weight = notable');
 
-  assert(detectValueHints('[VALUE_HINT: delta=+1]').length === 0, 'missing value rejected');
-  assert(detectValueHints('[VALUE_HINT: value="x" delta=0]').length === 0, 'zero delta rejected');
+  // Multiple in one response
+  const multi = detectCanonThreads(
+    '[CANON_THREAD: kind="blood_debt" subject="Kael" condition="encounters anyone bearing the family name" weight="notable"] ' +
+    '[CANON_THREAD: kind="unfulfilled_oath" subject="Old shrine" condition="returns to the moors" weight="minor"]'
+  );
+  assert(multi.length === 2, 'two markers → two entries');
+  assert(multi[0].kind === 'blood_debt', 'first kind captured');
+  assert(multi[1].kind === 'unfulfilled_oath', 'second kind captured');
+  assert(multi[1].weight === 'minor', 'second weight captured');
+
+  // Missing required fields rejected
+  assert(detectCanonThreads('[CANON_THREAD: subject="x" condition="y"]').length === 0, 'missing kind rejected');
+  assert(detectCanonThreads('[CANON_THREAD: kind="held_object" condition="y"]').length === 0, 'missing subject rejected');
+
+  // Lowercase normalization on kind/weight
+  const upper = detectCanonThreads('[CANON_THREAD: kind="HELD_OBJECT" subject="The medallion" condition="x" weight="MAJOR"]');
+  assert(upper[0].kind === 'held_object', 'uppercase kind normalized');
+  assert(upper[0].weight === 'major', 'uppercase weight normalized');
 }
 
 console.log('\n=== CANON_FACT ===\n');
@@ -341,6 +363,10 @@ console.log('\n=== stripPreludeMarkers: inherited + catch-all markers ===\n');
   const cf = stripPreludeMarkers('[CANON_FACT: subject="Moss" category=npc fact="age 9"] Moss waits.');
   assert(!cf.includes('[CANON_FACT'), 'CANON_FACT stripped');
   assert(cf.includes('Moss waits.'), 'CANON_FACT surrounding prose kept');
+
+  const ct = stripPreludeMarkers('[CANON_THREAD: kind="held_secret" subject="x" condition="y" weight="major"] After.');
+  assert(!ct.includes('[CANON_THREAD'), 'CANON_THREAD stripped');
+  assert(ct.includes('After.'), 'CANON_THREAD trailing prose kept');
 
   const cfr = stripPreludeMarkers('[CANON_FACT_RETIRE: subject="Moss" fact_contains="age 9"] Three years on.');
   assert(!cfr.includes('[CANON_FACT_RETIRE'), 'CANON_FACT_RETIRE stripped');
