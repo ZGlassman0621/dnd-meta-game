@@ -181,9 +181,17 @@ function splitFeature(featureString) {
   }
 }
 
-function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null }) {
+function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter = null, preludePayload = null }) {
   // Check if we're in edit mode
   const isEditMode = !!editCharacter
+  // Phase 2 chunk 2 — handoff mode (option A2a (iv)). When `preludePayload`
+  // is set and we're not in edit mode, the wizard pre-fills what it can
+  // from the Prelude's handoff payload and submits via PUT (the prelude
+  // character row already exists with creation_phase='ready_for_primary').
+  // Theme + ancestry feat are NOT pre-filled here — the existing wizard
+  // doesn't write them; chunk 5's rebuilt creator handles the locked-with-
+  // celebration affordance for those.
+  const isHandoffMode = !!preludePayload && !isEditMode
 
   // Helper to parse ability scores from character
   const parseAbilityScores = (character) => {
@@ -215,20 +223,33 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   // Build initial form data - either from existing character or defaults
   const buildInitialFormData = () => {
     if (!editCharacter) {
+      // Phase 2 chunk 2 — when preludePayload is provided, pre-fill the
+      // wizard with what the existing creator can consume. Spread payload
+      // values over blank defaults; values not in the payload stay blank.
+      // Race/subrace come in as JSON keys (e.g. 'half_elf'), already in the
+      // normalized form the creator's selectors expect — preludeSetup
+      // persists them that way.
+      const p = preludePayload || {}
+      const locked = p.locked || {}
+      const suggested = p.suggested || {}
+      const biography = p.biography || {}
       return {
-        first_name: '',
-        last_name: '',
-        nickname: '',
-        gender: '',
-        race: '',
-        subrace: '',
+        first_name: locked.first_name || '',
+        last_name: locked.last_name || '',
+        nickname: locked.nickname || '',
+        gender: locked.gender || '',
+        race: locked.race || '',
+        subrace: locked.subrace || '',
         background: '',
         theme_id: '',
         theme_path_choice: '',
         ancestry_feat_id: null,
         ancestry_list_id: '',
         ancestry_feat_choices: {},
-        class: '',
+        // Suggested class from the Ch1-3 [CLASS_HINT] tally; the player
+        // can change it freely. Out of scope for this stop-gap: the
+        // locked/celebrated UI affordance for handoff fields — chunk 5.
+        class: suggested.class || '',
         subclass: '',
         level: 1,
         current_location: 'Starting Town',
@@ -241,23 +262,31 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         cha: null,
         avatar: null,
         avatarPreview: null,
-        alignment: '',
+        alignment: suggested.alignment || '',
         faith: '',
-        lifestyle: '',
-        hair_color: '',
-        skin_color: '',
-        eye_color: '',
-        height: '',
-        weight: '',
+        lifestyle: suggested.lifestyle || '',
+        hair_color: suggested.hair_color || '',
+        skin_color: suggested.skin_color || '',
+        eye_color: suggested.eye_color || '',
+        height: suggested.height || '',
+        weight: suggested.weight || '',
         age: '',
-        personality_traits: '',
-        ideals: '',
-        bonds: '',
-        flaws: '',
+        personality_traits: suggested.personality_traits || '',
+        ideals: suggested.ideals || '',
+        bonds: suggested.bonds || '',
+        flaws: suggested.flaws || '',
         organizations: '',
         allies: '',
         enemies: '',
-        backstory: '',
+        // Flatten the biography seed into the existing creator's backstory
+        // textarea. Note: this is a one-way mirror — the canonical record
+        // lives in `character_biography` (migration 048). Edits to this
+        // textarea do NOT round-trip back to that table; the table is the
+        // source of truth. Chunk 5's rebuilt creator reads the entries
+        // directly. If the player edits this textarea during the gap
+        // window between chunk 2 and chunk 5, those edits stay on the
+        // `backstory` column only.
+        backstory: biography.flattened_backstory || '',
         other_notes: '',
         equipment_choice: 'equipment',
         starting_equipment: [],
@@ -1155,10 +1184,26 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       dataToSubmit.equipment = JSON.stringify(startingEquipment)
     }
 
-    try {
-      const url = isEditMode ? `/api/character/${editCharacter.id}` : '/api/character'
-      const method = isEditMode ? 'PUT' : 'POST'
+    // Phase 2 chunk 2 — handoff mode: the prelude character row already
+    // exists with creation_phase='ready_for_primary'. Submit via PUT to
+    // update it in place AND flip creation_phase → 'active'. This avoids
+    // creating a duplicate character row and preserves any FK references
+    // (prelude_emergences, prelude_canon_*, character_biography, etc.)
+    // already pointing at the prelude row.
+    let url, method
+    if (isEditMode) {
+      url = `/api/character/${editCharacter.id}`
+      method = 'PUT'
+    } else if (isHandoffMode) {
+      url = `/api/character/${preludePayload.character_id}`
+      method = 'PUT'
+      dataToSubmit.creation_phase = 'active'
+    } else {
+      url = '/api/character'
+      method = 'POST'
+    }
 
+    try {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -1171,8 +1216,9 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
       }
       onCharacterCreated(character)
     } catch (error) {
-      console.error(`Error ${isEditMode ? 'updating' : 'creating'} character:`, error)
-      alert(`Failed to ${isEditMode ? 'update' : 'create'} character: ${error.message}`)
+      const verb = isEditMode ? 'updating' : (isHandoffMode ? 'finalizing' : 'creating')
+      console.error(`Error ${verb} character:`, error)
+      alert(`Failed to ${verb} character: ${error.message}`)
     }
   }
 

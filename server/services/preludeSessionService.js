@@ -37,6 +37,7 @@ import * as rollingSummary from './rollingSummaryService.js';
 import * as emergenceService from './preludeEmergenceService.js';
 import * as canonService from './preludeCanonService.js';
 import * as canonThreadService from './preludeCanonThreadService.js';
+import { executeTransition } from './preludeTransitionService.js';
 import { detectPlayerDialogueViolation, buildViolationCorrectionNote } from './preludeViolationDetection.js';
 import { THEME_DEPARTURE_MAP } from './preludeThemeService.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
@@ -1232,6 +1233,34 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
     }
   }
   results.canonThreadsAdded = recordedThreads;
+
+  // Phase 2 chunk 2 — [DEPARTURE] / [PRELUDE_END] handoff trigger.
+  // [DEPARTURE] is informational (the marker fires for narrative weight;
+  // server doesn't need to act on it directly — the transition service
+  // sees the same prelude state regardless). [PRELUDE_END] is the actual
+  // trigger for the handoff transition.
+  if (detected.departure) {
+    results.departure = detected.departure;
+  }
+  if (detected.preludeEnd) {
+    try {
+      const transitionResult = await executeTransition(characterId);
+      results.preludeEnd = {
+        signaled: true,
+        status: transitionResult.status,
+        biographyEntryCount: transitionResult.biographyEntries.length,
+        mentorImprintId: transitionResult.mentorImprintId,
+        // Don't return the full payload here — the client fetches it
+        // explicitly via GET /api/prelude/:characterId/handoff-payload
+        // when surfacing the transition screen. Keeping this response
+        // small keeps the message-flush payload manageable.
+        creationPhase: 'ready_for_primary'
+      };
+    } catch (err) {
+      console.error('[prelude] transition failed on [PRELUDE_END]:', err.message);
+      results.preludeEnd = { signaled: true, status: 'error', error: err.message };
+    }
+  }
 
   results.offeredEmergences = offeredEmergences;
   results.capViolations = capViolations;

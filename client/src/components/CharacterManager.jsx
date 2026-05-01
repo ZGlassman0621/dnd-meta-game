@@ -3,6 +3,7 @@ import CharacterCreationWizard from './CharacterCreationWizard'
 import PreludeSetupWizard from './PreludeSetupWizard'
 import PreludeArcPreview from './PreludeArcPreview'
 import PreludeSession from './PreludeSession'
+import PreludeTransitionScreen from './PreludeTransitionScreen'
 import classesData from '../data/classes.json'
 
 function CharacterManager({ characters, selectedCharacter, onSelectCharacter, onCharacterCreated, onCharacterUpdated, onCreationFormChange, editCharacterInWizard, onClearEditCharacter, onShowLevelUp }) {
@@ -10,6 +11,12 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
   const [showPrelude, setShowPrelude] = useState(false)
   const [preludeArcCharacter, setPreludeArcCharacter] = useState(null)
   const [preludeSessionCharacter, setPreludeSessionCharacter] = useState(null)
+  // Phase 2 chunk 2 — handoff state. `preludeTransitionCharacter` shows
+  // the transition summary screen for a character in 'ready_for_primary'
+  // phase. `handoffPayload` carries the payload from that screen into
+  // the existing creator's `preludePayload` prop.
+  const [preludeTransitionCharacter, setPreludeTransitionCharacter] = useState(null)
+  const [handoffPayload, setHandoffPayload] = useState(null)
   const [resting, setResting] = useState(false)
   const [canLevelUpStatus, setCanLevelUpStatus] = useState({})
 
@@ -217,6 +224,31 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
     )
   }
 
+  // Phase 2 chunk 2 — transition screen for a character in
+  // 'ready_for_primary' phase. Rendered when:
+  //   (a) the player clicks the "Finish creating [name]" home card, OR
+  //   (b) inline after PreludeSession exits with [PRELUDE_END] fired
+  //       (chunk 2 surfaces this only via the home-card path; the session
+  //        ends back at the home page and the new card invites re-entry).
+  if (preludeTransitionCharacter) {
+    return (
+      <PreludeTransitionScreen
+        character={preludeTransitionCharacter}
+        onLaunchCreator={(payload) => {
+          // Payload is the GET /handoff-payload result; keep it on
+          // state so the wizard can read it via preludePayload prop.
+          setHandoffPayload(payload)
+          setPreludeTransitionCharacter(null)
+          handleShowForm(true)
+        }}
+        onCancel={() => {
+          setPreludeTransitionCharacter(null)
+          if (onCreationFormChange) onCreationFormChange(false)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="container">
       {preludeArcCharacter ? (
@@ -256,10 +288,18 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
       ) : showForm ? (
         <CharacterCreationWizard
           editCharacter={editCharacterInWizard}
+          preludePayload={handoffPayload}
           onCharacterCreated={(char) => {
             if (editCharacterInWizard) {
               onCharacterUpdated(char)
               onClearEditCharacter && onClearEditCharacter()
+            } else if (handoffPayload) {
+              // Handoff finalize: the wizard PUT'd the existing prelude
+              // character row with creation_phase='active'. Treat it as
+              // an update (the row's character_id didn't change) so the
+              // app's character list refreshes correctly.
+              onCharacterUpdated(char)
+              setHandoffPayload(null)
             } else {
               onCharacterCreated(char)
             }
@@ -267,6 +307,7 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
           }}
           onCancel={() => {
             handleShowForm(false)
+            setHandoffPayload(null)
             onClearEditCharacter && onClearEditCharacter()
           }}
         />
@@ -330,6 +371,13 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
                     }
                   } catch (_) { /* fall through to arc preview */ }
                   setPreludeArcCharacter(char)
+                } else if (char.creation_phase === 'ready_for_primary') {
+                  // Phase 2 chunk 2 — handoff resume hook. The Prelude
+                  // ended; the transition service has already run; the
+                  // player is here to finalize the character creator.
+                  onSelectCharacter(char)
+                  if (onCreationFormChange) onCreationFormChange(true)
+                  setPreludeTransitionCharacter(char)
                 } else {
                   onSelectCharacter(char)
                 }
@@ -362,6 +410,10 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
                     <p style={{ margin: '0.25rem 0 0 0', color: '#bbb' }}>
                       {capitalize(char.race)}{char.subrace ? ` (${char.subrace})` : ''} · Age {char.prelude_age || '?'}
                     </p>
+                  ) : char.creation_phase === 'ready_for_primary' ? (
+                    <p style={{ margin: '0.25rem 0 0 0', color: '#c4b5fd', fontStyle: 'italic' }}>
+                      {capitalize(char.race)}{char.subrace ? ` (${char.subrace})` : ''} · Prelude complete — finish creating
+                    </p>
                   ) : (
                     <p style={{ margin: '0.25rem 0 0 0', color: '#bbb' }}>Level {char.level} {capitalize(char.race)} {capitalize(char.class)}</p>
                   )}
@@ -380,6 +432,22 @@ function CharacterManager({ characters, selectedCharacter, onSelectCharacter, on
                     title="Prelude in progress — gameplay arrives in Phase 2"
                   >
                     ✦ In Prelude
+                  </span>
+                )}
+                {char.creation_phase === 'ready_for_primary' && (
+                  <span
+                    style={{
+                      background: 'rgba(167,139,250,0.18)',
+                      border: '1px solid #a78bfa',
+                      color: '#e9d5ff',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold'
+                    }}
+                    title="Prelude complete — click to finish character creation"
+                  >
+                    ✦ Finish creating
                   </span>
                 )}
                 {canLevelUpStatus[char.id] && (

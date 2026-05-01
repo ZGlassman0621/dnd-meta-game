@@ -36,6 +36,7 @@ import * as emergenceService from '../services/preludeEmergenceService.js';
 import * as canonService from '../services/preludeCanonService.js';
 import * as themeService from '../services/preludeThemeService.js';
 import { stripPreludeMarkers } from '../services/preludeMarkerDetection.js';
+import { executeTransition, getHandoffPayload } from '../services/preludeTransitionService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -407,6 +408,77 @@ router.get('/:characterId/theme-offer', async (req, res) => {
     res.json(offer);
   } catch (err) {
     handleServerError(res, err, 'build theme offer');
+  }
+});
+
+// ==========================================================================
+// Handoff endpoints (Phase 2 chunk 2)
+// ==========================================================================
+
+/**
+ * GET /api/prelude/:characterId/handoff-payload
+ *
+ * Returns the persisted prelude_handoff_payload JSON for a character in
+ * 'ready_for_primary' or 'active' creation phase. The transition screen
+ * and the existing creator's preludePayload prop both read this. Returns
+ * 404 if the character doesn't exist or hasn't been transitioned yet.
+ */
+router.get('/:characterId/handoff-payload', async (req, res) => {
+  try {
+    const payload = await getHandoffPayload(req.params.characterId);
+    if (!payload) return notFound(res, 'Handoff payload (character may still be in prelude phase)');
+    res.json(payload);
+  } catch (err) {
+    handleServerError(res, err, 'fetch handoff payload');
+  }
+});
+
+/**
+ * POST /api/prelude/:characterId/transition
+ *
+ * Manually trigger the Prelude → Primary transition for a character.
+ * Normally fires automatically when [PRELUDE_END] is detected in a
+ * Sonnet response; this endpoint exists for recovery + testing flows
+ * (the player got stuck on a session that didn't fire the marker;
+ * QA wants to force the transition without playing through).
+ *
+ * Idempotent: re-running on a 'ready_for_primary' character refreshes
+ * the payload but does NOT regenerate the biography seed.
+ *
+ * Body: none.
+ * Returns: { status, payload, biographyEntries, mentorImprintId }.
+ */
+router.post('/:characterId/transition', async (req, res) => {
+  try {
+    const result = await executeTransition(req.params.characterId);
+    res.json(result);
+  } catch (err) {
+    if (String(err?.message || '').includes('not found')) return notFound(res, 'Character');
+    handleServerError(res, err, 'execute prelude transition');
+  }
+});
+
+/**
+ * GET /api/prelude/:characterId/biography
+ *
+ * Returns the character_biography entries for a character. Read-only
+ * for chunk 2. Phase 2 only writes seed entries (entry_type =
+ * 'seeded_from_prelude'); main-campaign-side append flows ship in
+ * later phases.
+ */
+router.get('/:characterId/biography', async (req, res) => {
+  try {
+    const { dbAll } = await import('../database.js');
+    const entries = await dbAll(
+      `SELECT id, entry_type, origin_age, origin_chapter, body, created_at
+       FROM character_biography
+       WHERE character_id = ?
+       ORDER BY id`,
+      [req.params.characterId]
+    );
+    res.json({ entries });
+  } catch (err) {
+    handleServerError(res, err, 'fetch character biography');
   }
 });
 

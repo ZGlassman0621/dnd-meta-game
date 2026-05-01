@@ -268,7 +268,11 @@ router.put('/:id', async (req, res) => {
       'class_levels', 'hit_dice',
       'campaign_config', 'languages', 'tool_proficiencies',
       'keeper_texts', 'keeper_recitations', 'keeper_genre_domain',
-      'keeper_genre_domain_2', 'keeper_genre_mastery', 'keeper_specialization'
+      'keeper_genre_domain_2', 'keeper_genre_mastery', 'keeper_specialization',
+      // Phase 2 chunk 2 — handoff transition. The (iv) preludePayload flow
+      // in CharacterCreationWizard sends `creation_phase = 'active'` on
+      // submit when finishing a 'ready_for_primary' character.
+      'creation_phase'
     ];
 
     for (const [key, value] of Object.entries(req.body)) {

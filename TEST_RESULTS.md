@@ -1,5 +1,35 @@
 # Test Results Log
 
+## 2026-05-01 — v1.0.107 Phase 2 chunk 2: Transition service + handoff
+
+**Change scope:** Migration 048 (character_biography + mentor_imprints + characters.prelude_handoff_payload column). New preludeTransitionService.js with idempotent `executeTransition()` (Opus biography seed; mentor imprint seeding when applicable; payload + creation_phase flip). [DEPARTURE] + [PRELUDE_END] detection wired through session service. New API endpoints: GET /handoff-payload, POST /transition, GET /biography. PreludeTransitionScreen.jsx surfaces post-Prelude summary. CharacterCreationWizard accepts preludePayload prop and PUTs `creation_phase='active'` on submit per A2a option (iv). Home page renders 'ready_for_primary' characters with a "Finish creating" badge.
+
+**Client build:** ✅ passed.
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 172 passed |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/prelude-transition.test.js` (new)    | ✅ 25 passed |
+
+**Total:** 615 prelude assertions green. No regressions.
+
+**Notes:**
+- `executeTransition` is idempotent. First call (`'prelude'` → `'ready_for_primary'`) generates biography + persists payload + flips phase. Subsequent calls on `'ready_for_primary'` characters refresh the payload but DON'T regenerate the biography (prevents conflicts with player edits to the existing creator's `backstory` textarea during the gap window).
+- The handoff path uses PUT to update the existing prelude character row in place rather than POST a new row — preserves FK references from `prelude_emergences`, `prelude_canon_*`, `character_biography`, etc.
+- Biography seed generation is a real Opus call; not unit-testable in isolation. Pure-logic tests (marker detection, strip, roll-up) shipped in prelude-transition.test.js. End-to-end DB exercise on first playtest.
+- Home page "Finish creating" hook avoids redesigning the home page (chunk 5 territory) — additive only.
+
+**Phase 2 closes with this release. Phase 3 (AI Narrative Persistence foundation refactors) is next per CONSOLIDATED_TODO.md.**
+
 ## 2026-05-01 — v1.0.106 Phase 2 chunk 3: Prompt builder
 
 **Change scope:** Locked tone description replaces 4-preset / 16-tag systems; Opus arc-plan generator switches to 3-chapter shape; per-turn Sonnet prompt updated for 3-chapter / 4-session boilerplate, new authority_figure + origin_freeform setup fields, Rule 5 (age-appropriate) folded into tone description, Rule 15c (CANON_THREAD calibration) + Rule 15d (ANCESTRY_HINT slug convention) added. preludeThemeService wildcard removed. Chunk-1 graceful-degrade window for talents/cares/tone_tags closed.

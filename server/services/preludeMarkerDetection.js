@@ -425,6 +425,40 @@ export function detectCanonFactRetires(text) {
 }
 
 /**
+ * Detect [DEPARTURE: reason="..." tone="..."] — Phase 2 chunk 2 wiring.
+ * Fires at the end of Ch3b (Phase 1 Decision 4 sequencing). The reason
+ * and tone are shaped by the committed theme; both fields are
+ * informational (the marker presence is what the server cares about).
+ *
+ * Returns { reason, tone } | null.
+ */
+export function detectDeparture(text) {
+  if (!text) return null;
+  const re = /\[DEPARTURE(?::\s*([^\]]*))?\]/i;
+  const m = re.exec(text);
+  if (!m) return null;
+  const fields = m[1] || '';
+  return {
+    reason: extractField(fields, 'reason'),
+    tone: extractField(fields, 'tone')
+  };
+}
+
+/**
+ * Detect [PRELUDE_END] — Phase 2 chunk 2 trigger for the transition
+ * service. Fires after [DEPARTURE] at the close of Ch3b. Presence is
+ * what matters; field-extraction is best-effort if the AI emits a
+ * field-bearing variant.
+ *
+ * Returns { signaled: true } | null.
+ */
+export function detectPreludeEnd(text) {
+  if (!text) return null;
+  const re = /\[PRELUDE_END(?::[^\]]*)?\]/i;
+  return re.test(text) ? { signaled: true } : null;
+}
+
+/**
  * One-call roll-up: returns an object summarising every marker detected in
  * the response. Fields are null / empty-array when nothing was detected.
  */
@@ -451,7 +485,10 @@ export function detectPreludeMarkers(text) {
     // v1.0.62 model auto-picker
     nextSceneWeight: detectNextSceneWeight(text),
     // v1.0.77 theme commitment (signal only; server recomputes the offer)
-    themeCommitmentOffered: detectThemeCommitmentOffered(text)
+    themeCommitmentOffered: detectThemeCommitmentOffered(text),
+    // Phase 2 chunk 2 — handoff transition triggers
+    departure: detectDeparture(text),
+    preludeEnd: detectPreludeEnd(text)
   };
 }
 
@@ -502,6 +539,10 @@ export function stripPreludeMarkers(text) {
     // v1.0.77 theme commitment — stripped from display; the UI renders a
     // Choose Your Path card instead after the narrative paragraph.
     .replace(/\[THEME_COMMITMENT_OFFERED(?::[^\]]*)?\]/gi, '')
+    // Phase 2 chunk 2 — handoff transition triggers (server processes,
+    // never displayed in narrative).
+    .replace(/\[DEPARTURE(?::[^\]]*)?\]/gi, '')
+    .replace(/\[PRELUDE_END(?::[^\]]*)?\]/gi, '')
     // Combat + loot markers inherited from the main DM prompt convention
     .replace(/\[COMBAT_START(?::[^\]]*)?\]/gi, '')
     .replace(/\[COMBAT_END(?::[^\]]*)?\]/gi, '')

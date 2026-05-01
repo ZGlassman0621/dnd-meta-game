@@ -2,6 +2,134 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.107] - 2026-05-01 — Phase 2 chunk 2: Transition service + handoff
+
+Final Phase 2 engineering chunk. Wires the Prelude → Primary handoff that closes the loop on Phase 1's reframe — `[PRELUDE_END]` now actually does something. Transition state, biography seeding, mentor imprint, home-page resume hook, and the (iv) preludePayload pre-fill into the existing creator all ship here. Phase 2 closes; chunk 5 (rebuilt main creator) remains gated until the per-step spec lands.
+
+### Migration 048
+
+Three additions:
+- **`character_biography` table** — appendable per-character biography entries. Phase 2 seeds entries from the Prelude (`entry_type='seeded_from_prelude'`); main-campaign-side append flows ship in later phases. Per Decision A3 option (ii).
+- **`mentor_imprints` table** — seeded at handoff when `authority_figure='mentor'` AND a `[NPC_CANON: relationship='mentor']` row exists. Mentor relationship arrives at the main campaign with prior history. Per PRELUDE_IMPLEMENTATION_PLAN rule #23 (the rule Phase 0 flagged as design-only-until-Phase-2 — this migration is the Phase-2 implementation).
+- **`characters.prelude_handoff_payload` JSON column** — the rich pre-fill blob the existing creator reads on resume.
+
+### `creation_phase` intermediate state
+
+Phase 2 Decision C lands. New value `'ready_for_primary'` between `'prelude'` and `'active'`. Lifecycle:
+- New character: `'prelude'` (set when Prelude begins)
+- `[PRELUDE_END]` fires: `'prelude'` → `'ready_for_primary'`
+- Main creator submit: `'ready_for_primary'` → `'active'`
+
+Lets the player close the browser between Prelude end and creator submit and resume later without losing Prelude play. CLAUDE.md updated to reflect the three-state shape.
+
+### `preludeTransitionService.js` (new)
+
+`executeTransition(characterId)` is the handoff workhorse. Idempotent:
+- Already `'active'` → no-op (returns existing payload).
+- Already `'ready_for_primary'` → refreshes payload, does NOT regenerate biography.
+- `'prelude'` → first transition: aggregates emergences (chapter-weighted class/ancestry winners + accepted stat/skill rows), reads canon NPCs/locations/threads/facts, reads committed theme + arc plan, calls Opus for the biography seed, writes `character_biography` rows, seeds `mentor_imprints` when applicable, persists the rich payload, flips `creation_phase`.
+
+Biography seed generation: 4–6 timestamped second-person entries written as the adult character looking back, with allowed gentle distortion. Replaces the v1.0.73 single-blob backstory output with the living biography per Phase 1 Decision 3.
+
+Cross-chunk surface: chunk 4's `prelude_canon_threads` rows are read here and pointed at by the handoff payload. Actual transfer of threads → `campaign_threads` happens at primary-campaign creation downstream of the existing creator's submit (out of scope for chunk 2; chunk 5 / chunk 7 territory).
+
+### Marker handling — `[PRELUDE_END]` + `[DEPARTURE]`
+
+Both detected in [preludeMarkerDetection.js](server/services/preludeMarkerDetection.js) and wired through [preludeSessionService.processMarkers()](server/services/preludeSessionService.js). `[PRELUDE_END]` triggers `executeTransition`; failures are caught and surfaced to the client in the `results.preludeEnd` payload (status='error') so the session message-flush still completes cleanly. Both markers are stripped from displayed narrative.
+
+### API endpoints (server/routes/prelude.js)
+
+- **GET `/api/prelude/:id/handoff-payload`** — returns the persisted handoff payload for a character in `'ready_for_primary'` or `'active'` phase. 404 if still in prelude.
+- **POST `/api/prelude/:id/transition`** — manually trigger the transition for recovery / QA flows (idempotent).
+- **GET `/api/prelude/:id/biography`** — returns `character_biography` entries for the character.
+
+### `PreludeTransitionScreen.jsx` (new)
+
+Renders the post-`[PRELUDE_END]` summary screen per PRELUDE_IMPLEMENTATION_PLAN.md §7a. Surfaces:
+- Biography seed entries with age + chapter timestamps
+- Canon NPCs (with relationship + status + age at prelude end)
+- Canon locations (with home flag)
+- Long-term threads the world will hold (kind + weight + ripening condition)
+- Emergence summary (stat bonuses, skills, class/theme/ancestry trajectories)
+- Mentor imprint surfaced when seeded
+
+CTA: "Begin character creation" → launches `CharacterCreationWizard` with the handoff payload as the `preludePayload` prop.
+
+### CharacterCreationWizard.jsx (iv) preludePayload pre-fill
+
+Per A2a option (iv). New `preludePayload` prop. When set without `editCharacter`, the wizard:
+- Pre-fills name parts, gender, race/subrace, suggested class (from `[CLASS_HINT]` tally), suggested alignment/lifestyle (placeholders for chunk 5), emerged personality fields, physical-detail emergences, and the flattened biography text into the `backstory` textarea.
+- Submits via PUT to `/api/character/{character_id}` with `creation_phase='active'` rather than POSTing a new row. Preserves all FK references from the prelude phase (`prelude_emergences`, `prelude_canon_*`, `character_biography`).
+
+Theme + ancestry feat are NOT pre-filled in the existing creator — chunk 5's rebuilt creator handles those with the locked-with-celebration affordance per Decision B. This was the explicit (iv) acceptance: "fields the existing creator can't consume just don't get pre-filled and the player fills them in manually like a normal character."
+
+The `backstory` textarea is a one-way mirror of `character_biography`. The table is canonical; edits to the textarea during the gap window between chunks 2 and 5 do not round-trip back to the table. Code comment near the projection logic documents this.
+
+### Home-page resume hook (CharacterManager.jsx)
+
+Per the agreed UX gap fix. ~50 lines of additions on the existing home page (no redesign — that's chunk 5):
+- New state `preludeTransitionCharacter` and `handoffPayload`.
+- Card click handler routes `'ready_for_primary'` characters into `PreludeTransitionScreen` (no transition screen re-show on resume — always-skip preserved by reading the persisted payload, never re-firing `executeTransition`).
+- New "✦ Finish creating" badge on the card. New italic subtitle "Prelude complete — finish creating".
+- `CharacterCreationWizard` mount accepts `preludePayload`; success dispatches via `onCharacterUpdated` (handoff finalize is an update of the prelude row, not a new character).
+
+### `character.js` PUT route
+
+Added `creation_phase` to the allowedFields list so the (iv) flow can flip `'ready_for_primary'` → `'active'` at submit.
+
+### Files
+
+- **NEW** `server/migrations/048_prelude_handoff.js`
+- **NEW** `server/services/preludeTransitionService.js`
+- **NEW** `client/src/components/PreludeTransitionScreen.jsx`
+- **NEW** `tests/prelude-transition.test.js`
+- `server/services/preludeMarkerDetection.js` — added `detectDeparture()` + `detectPreludeEnd()`; updated roll-up; strip regex extended.
+- `server/services/preludeSessionService.js` — wired `[DEPARTURE]` + `[PRELUDE_END]` handlers; calls `executeTransition` on prelude-end fire.
+- `server/routes/prelude.js` — added GET `/handoff-payload`, POST `/transition`, GET `/biography`.
+- `server/routes/character.js` — added `creation_phase` to PUT allowedFields.
+- `client/src/components/CharacterCreationWizard.jsx` — new `preludePayload` prop + handoff-mode submit (PUT with `creation_phase='active'`).
+- `client/src/components/CharacterManager.jsx` — transition screen routing, card click handler for `'ready_for_primary'`, "Finish creating" badge.
+- `CLAUDE.md` — `creation_phase` enum updated to three values; handoff transition flow documented.
+
+### Test sweep
+
+| Suite | Result |
+|---|---|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 172 passed |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/prelude-transition.test.js`          | ✅ 25 passed (new — DEPARTURE + PRELUDE_END detection + roll-up + strip) |
+
+**Total:** 615 prelude assertions green. Vite build clean.
+
+### What ships in production
+
+End-to-end Prelude → existing-creator-with-pre-fill is functional:
+1. Player completes Prelude setup → arc preview → 4 sessions of play
+2. `[DEPARTURE]` and `[PRELUDE_END]` fire at the close of Ch3b
+3. Transition service runs: biography seeded, payload persisted, phase flipped
+4. Player exits or stays
+5. Home page shows "Finish creating [name]" card
+6. Click → transition screen surfaces summary
+7. "Begin character creation" → existing creator, pre-filled with handoff payload
+8. Submit → creator PUTs with `creation_phase='active'`
+9. Character appears in normal "Your Characters" list, ready for main play
+
+### Out of scope (chunk 5 territory)
+
+- Locked-with-celebration UI for theme and ancestry feat in the creator — chunk 5's rebuild handles these with the proper affordance.
+- AI-introduced use-name with revert affordance on Step 1 — chunk 5.
+- Empty-state home page redesign + section-based "Your characters" / "In progress" structure — chunk 5.
+- Canon NPC/location/thread → `npcs` / `locations` / `campaign_threads` actual transfer at primary-campaign creation — happens downstream when the campaign is generated; chunk 5 or chunk 7 territory.
+- Living biography UI (Origin & Identity tab) — out of scope for the creator rebuild per Decision B; separate design pass.
+
+**Phase 2 closes here. Phase 3 (AI Narrative Persistence foundation refactors) is the next phase per CONSOLIDATED_TODO.md.**
+
 ## [1.0.0.106] - 2026-05-01 — Phase 2 chunk 3: Prompt builder
 
 Third Phase 2 engineering chunk. Reframes the Opus arc-plan generator and the per-turn Sonnet prompt around the locked tone description, the three-chapter shape, and the new setup fields (authority figure + free-text origin). Closes the chunk-1 graceful-degrade window for `talents` / `cares` / `tone_tags`. Chunk 2 (transition service) is the only Phase 2 chunk remaining.
