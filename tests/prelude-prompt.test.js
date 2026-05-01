@@ -56,10 +56,11 @@ function makeSetup(overrides = {}) {
     home_setting: 'village',
     region: 'sword_coast',
     parents: [{ name: 'Vask', role: 'father', status: 'living' }],
-    siblings: [{ name: 'Moss', gender: 'brother', relative_age: 'two years older' }],
-    talents: ['Noticing things', 'Patience', 'Memory'],
-    cares: ['Family', 'Home', 'Truth'],
-    tone_tags: ['tender_hopeful'],  // v1.0.73 — single preset value
+    // Phase 2 — siblings is single enum value (Decision A)
+    siblings: 'older_one',
+    // Phase 2 — Q9 (authority figure) added; talents/cares/tone_tags cut
+    authority_figure: 'parent',
+    origin_freeform: null,
     ...overrides
   };
 }
@@ -625,98 +626,151 @@ console.log('\n=== v1.0.72 sibling nickname field ===\n');
   );
 }
 
-console.log('\n=== v1.0.73 tone presets — single-preset system replaces 16 tags ===\n');
-{
-  // Each of the 4 presets should inject a distinct TONE block
-  const presets = [
-    { value: 'brutal_gritty', label: 'BRUTAL & GRITTY', vocab: 'callused', scene: 'body-focused' },
-    { value: 'epic_fantasy', label: 'EPIC FANTASY', vocab: 'storm-colored', scene: 'Weight and consequence' },
-    { value: 'rustic_spiritual', label: 'RUSTIC & SPIRITUAL', vocab: 'feast day', scene: 'Pilgrimage-coded' },
-    { value: 'tender_hopeful', label: 'TENDER & HOPEFUL', vocab: 'tucked', scene: 'Center of gravity' }
-  ];
-
-  for (const { value, label, vocab, scene } of presets) {
-    const p = createPreludeSystemPrompt(
-      makeCharacter(),
-      makeSetup({ tone_tags: [value] }),
-      makeArcPlan(),
-      makeRuntime()
-    );
-    assert(p.includes(`TONE: ${label}`), `${value}: TONE block heading present`);
-    assert(p.includes('REGISTER RULES'), `${value}: REGISTER RULES section present`);
-    assert(p.includes('VOCABULARY ANCHORS'), `${value}: VOCABULARY ANCHORS section present`);
-    assert(p.includes('SCENE-TYPE GUIDANCE'), `${value}: SCENE-TYPE GUIDANCE section present`);
-    assert(p.includes('AGE-SCALING'), `${value}: AGE-SCALING section present`);
-    assert(p.includes('EXEMPLAR PROSE'), `${value}: EXEMPLAR PROSE section present`);
-    assert(p.includes(vocab), `${value}: preset-specific vocabulary anchor "${vocab}" present`);
-    assert(p.includes(scene), `${value}: preset-specific scene guidance "${scene}" present`);
-  }
-
-  // Only ONE preset injects — not a catalog of all 4
-  const brutalPrompt = createPreludeSystemPrompt(
-    makeCharacter(),
-    makeSetup({ tone_tags: ['brutal_gritty'] }),
-    makeArcPlan(),
-    makeRuntime()
-  );
-  assert(
-    brutalPrompt.includes('TONE: BRUTAL & GRITTY'),
-    'brutal_gritty: correct block rendered'
-  );
-  assert(
-    !brutalPrompt.includes('TONE: TENDER & HOPEFUL'),
-    'brutal_gritty: unrelated preset NOT in prompt (no catalog pollution)'
-  );
-  assert(
-    !brutalPrompt.includes('TONE: EPIC FANTASY'),
-    'brutal_gritty: unrelated preset (epic) NOT in prompt'
-  );
-  // Old 16-tag Rule 14 catalog explicitly gone
-  assert(
-    !brutalPrompt.includes('**Quiet / melancholic**'),
-    'v1.0.72 "16-tag" catalog no longer in prompt (quiet/melancholic absent)'
-  );
-  assert(
-    !brutalPrompt.includes('**Bawdy**'),
-    'v1.0.72 "16-tag" catalog no longer in prompt (bawdy absent)'
-  );
-
-  // Character block shows the preset label
-  assert(
-    brutalPrompt.includes('Tone preset: Brutal & Gritty'),
-    'character block shows preset label'
-  );
-}
-
-console.log('\n=== v1.0.73 age-scaling guidance per preset ===\n');
+console.log('\n=== Phase 2 locked tone description — single fixed tone replaces preset system ===\n');
 {
   const p = createPreludeSystemPrompt(
     makeCharacter(),
-    makeSetup({ tone_tags: ['brutal_gritty'] }),
+    makeSetup(),
     makeArcPlan(),
     makeRuntime()
   );
-  // All four age tiers present in the block
-  assert(p.includes('Chapter 1 (early childhood)'), 'Ch1 tier present');
-  assert(p.includes('Chapter 2 (middle childhood)'), 'Ch2 tier present');
-  assert(p.includes('Chapter 3 (adolescence)'), 'Ch3 tier present');
-  assert(p.includes('Chapter 4 (threshold)'), 'Ch4 tier present');
-  // Brutal-specific scaling semantics
-  assert(p.includes('PROXIMITY') && p.includes('OWNERSHIP'),
-    'brutal age-scaling terms (PROXIMITY → OWNERSHIP) present');
+  // Locked tone block heading present
+  assert(p.includes('TONE: epic fantasy in a lived-in world'), 'locked TONE heading present');
+
+  // Three signature phrases from the locked description (Phase 1 Decision 3 sub-deliverable)
+  assert(
+    p.includes('epic fantasy in the Forgotten Realms'),
+    'locked tone: Forgotten Realms anchor present'
+  );
+  assert(
+    p.includes("wonder doesn't make the mundane less true"),
+    'locked tone: grand-and-granular framing present'
+  );
+  assert(
+    p.includes('Do not soften consequences because the protagonist is young'),
+    'locked tone: shelter-behavior corrective present (folded into paragraph 2)'
+  );
+
+  // Old preset machinery is gone
+  assert(!p.includes('REGISTER RULES'), 'old preset REGISTER RULES section removed');
+  assert(!p.includes('VOCABULARY ANCHORS'), 'old preset VOCABULARY ANCHORS section removed');
+  assert(!p.includes('EXEMPLAR PROSE'), 'old preset EXEMPLAR PROSE section removed');
+  assert(!p.includes('TONE: BRUTAL'), 'no Brutal & Gritty preset block leaks');
+  assert(!p.includes('TONE: TENDER'), 'no Tender & Hopeful preset block leaks');
+
+  // Character block no longer surfaces a tone preset line
+  assert(
+    !p.includes('Tone preset:'),
+    'character block no longer renders "Tone preset:" line (locked tone is implicit)'
+  );
+
+  // Cardinal Rule 5 (age-appropriate everything) superseded by tone description per Decision 3
+  assert(
+    !p.includes('5. AGE-APPROPRIATE EVERYTHING'),
+    'Cardinal Rule 5 (age-appropriate everything) removed; directive moved to tone description'
+  );
 }
 
-console.log('\n=== v1.0.73 invalid preset → placeholder ===\n');
+console.log('\n=== Phase 2 authority_figure injection (Decision A) ===\n');
 {
-  const p = createPreludeSystemPrompt(
+  // Mentor case — should trigger the special seeding instruction
+  const mentorPrompt = createPreludeSystemPrompt(
     makeCharacter(),
-    makeSetup({ tone_tags: ['not_a_preset'] }),
+    makeSetup({ authority_figure: 'mentor' }),
     makeArcPlan(),
     makeRuntime()
   );
   assert(
-    p.includes('TONE: (no preset selected'),
-    'unknown preset falls back to placeholder'
+    mentorPrompt.includes('Authority figure (Q9'),
+    'CHARACTER block surfaces Q9 authority figure'
+  );
+  assert(
+    mentorPrompt.includes('A mentor — a teacher, master, priest'),
+    'mentor: full label + clarifier rendered'
+  );
+  assert(
+    mentorPrompt.includes('mentor_imprints seeding') || mentorPrompt.includes('NPC_CANON: name="..." relationship="mentor"'),
+    'mentor: special seeding instruction rendered'
+  );
+
+  // Captor case — should trigger captivity-arc instruction
+  const captorPrompt = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ authority_figure: 'captor' }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    captorPrompt.includes('captivity arc'),
+    'captor: captivity arc instruction rendered'
+  );
+
+  // None case — should render placeholder text without special instruction
+  const nonePrompt = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ authority_figure: 'none' }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    nonePrompt.includes('No one') && nonePrompt.includes('raised yourself'),
+    'none: "No one — you raised yourself" rendered'
+  );
+  assert(
+    !nonePrompt.includes('mentor_imprints seeding'),
+    'none: mentor seeding instruction NOT rendered'
+  );
+}
+
+console.log('\n=== Phase 2 origin_freeform interpolation (Decision A Q10) ===\n');
+{
+  // With free text — should appear in CHARACTER block + override instruction
+  const withOrigin = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ origin_freeform: 'Raised by traveling sword-monks who recruited me at age 4 from a leper colony.' }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    withOrigin.includes('Anything else (Q10') && withOrigin.includes('Raised by traveling sword-monks'),
+    'Q10 free-text rendered verbatim in CHARACTER block'
+  );
+  assert(
+    withOrigin.includes('HONOR THIS') || withOrigin.includes('the free-text WINS'),
+    'Q10 override-curated instruction present when free text given'
+  );
+
+  // Without free text — block should not render
+  const withoutOrigin = createPreludeSystemPrompt(
+    makeCharacter(),
+    makeSetup({ origin_freeform: null }),
+    makeArcPlan(),
+    makeRuntime()
+  );
+  assert(
+    !withoutOrigin.includes('Anything else (Q10'),
+    'Q10 block omitted when no free text provided'
+  );
+}
+
+console.log('\n=== Phase 2 three-chapter shape boilerplate ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+  assert(
+    p.includes('Chapter ' + 1 + ' of 3'),
+    'CHARACTER block reflects Chapter X of 3 (not "of 4")'
+  );
+  assert(
+    p.includes('play-session ' + 1 + ' of 4'),
+    'CHARACTER block reflects play-session X of 4 (not "of 5")'
+  );
+  assert(
+    !p.includes('Chapter 1 of 4') && !p.includes('Chapter 2 of 4'),
+    'no leftover "Chapter X of 4" boilerplate'
+  );
+  assert(
+    !p.includes('5 focused sessions'),
+    'no leftover "5 focused sessions" prose'
   );
 }
 
@@ -773,18 +827,22 @@ console.log('\n=== v1.0.76 per-chapter engagement mode block ===\n');
   assert(p4.includes('[PRELUDE_END]'), 'Ch4 references [PRELUDE_END] marker');
 }
 
-console.log('\n=== v1.0.76 5-session structure references ===\n');
+console.log('\n=== Phase 2 — three-chapter / four-session structure references ===\n');
 {
   const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(),
     makeRuntime({ chapter: 1, sessionNumber: 1 }));
-  assert(p.includes('5 focused sessions'),
-    'prompt opening references 5-session structure');
-  assert(p.includes('play-session 1 of 5'),
-    'character block uses 5-session denominator');
-  assert(p.includes('Chapter 1 (Early Childhood, OBSERVE):     1 session'),
-    '11a lists Ch1 as 1 session');
-  assert(p.includes('Chapter 3 (Adolescence, DECIDE):          2 sessions'),
-    '11a lists Ch3 as 2 sessions');
+  assert(p.includes('4 focused sessions'),
+    'prompt opening references 4-session structure');
+  assert(p.includes('play-session 1 of 4'),
+    'character block uses 4-session denominator');
+  assert(p.includes('Chapter 1 (Childhood, OBSERVE'),
+    '11a lists Ch1 (Childhood, OBSERVE)');
+  assert(p.includes('Chapter 3 (Threshold, DECIDE'),
+    '11a lists Ch3 (Threshold, DECIDE)');
+  assert(!p.includes('Chapter 4 (Threshold, COMMIT'),
+    '11a no longer mentions Ch4 (collapsed into Ch3 per Decision 2)');
+  assert(!p.includes('5 focused sessions'),
+    'prompt no longer references 5-session structure');
   assert(!p.includes('7-10'),
     'prompt no longer references the old 7-10 session range');
 }

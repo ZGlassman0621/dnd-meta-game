@@ -1,5 +1,31 @@
 # Test Results Log
 
+## 2026-05-01 — v1.0.106 Phase 2 chunk 3: Prompt builder
+
+**Change scope:** Locked tone description replaces 4-preset / 16-tag systems; Opus arc-plan generator switches to 3-chapter shape; per-turn Sonnet prompt updated for 3-chapter / 4-session boilerplate, new authority_figure + origin_freeform setup fields, Rule 5 (age-appropriate) folded into tone description, Rule 15c (CANON_THREAD calibration) + Rule 15d (ANCESTRY_HINT slug convention) added. preludeThemeService wildcard removed. Chunk-1 graceful-degrade window for talents/cares/tone_tags closed.
+
+**Client build:** ✅ passed.
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 172 passed (rewrote 4-preset block as locked-tone block; added authority_figure / origin_freeform / 3-chapter coverage) |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed (relaxed wildcard / "Choose Your Path" wording per simplified ceremony) |
+
+**Total:** 590 prelude assertions green. No regressions.
+
+**Notes:**
+- `prelude_arc_plans.tone_tags` / `tone_reflection` / `chapter_4_arc` columns stay in schema; new preludes write NULL. Legacy 4-chapter plans remain readable.
+- `preludeThemeService` wildcard field returns `null` (Decision 3 simplified ceremony to "leading + 3 alternatives + choose-your-own").
+- Authority-figure-driven mentor seeding is wired in the prompt; chunk 2 will consume the resulting `[NPC_CANON: relationship="mentor"]` row at handoff to seed `mentor_imprints`.
+
 ## 2026-05-01 — v1.0.105 Phase 2 chunk 4: Marker handling
 
 **Change scope:** Migration 047 (`prelude_canon_threads` + `campaign_threads`). Added `[CANON_THREAD]` detection + persistence service. Added server-side validation for `[ANCESTRY_HINT]` `feat_id` slugs against the player's race's allowed feat list. Updated chapter-weighted tally to the three-chapter shape (Ch1=1×, Ch2=1.5×, Ch3=2×). Added Ch1 rejection for `[CHAPTER_PROMISE]`. Removed `[VALUE_HINT]` detection and recording.

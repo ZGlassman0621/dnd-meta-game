@@ -2,6 +2,89 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.106] - 2026-05-01 — Phase 2 chunk 3: Prompt builder
+
+Third Phase 2 engineering chunk. Reframes the Opus arc-plan generator and the per-turn Sonnet prompt around the locked tone description, the three-chapter shape, and the new setup fields (authority figure + free-text origin). Closes the chunk-1 graceful-degrade window for `talents` / `cares` / `tone_tags`. Chunk 2 (transition service) is the only Phase 2 chunk remaining.
+
+### Locked tone description
+
+New module `server/data/preludeToneDescription.js` exports the three-paragraph "epic fantasy in a lived-in world" description Phase 1 Decision 3 (sub-deliverable) locked in. Replaces the v1.0.73 four-preset selector and the v1.0.72 16-tag combinable system. The locked description is injected into both the Opus arc-plan prompt and the Sonnet per-turn prompt at the position previously occupied by tone-preset injection.
+
+The shelter-behavior corrective ("the protagonist's age affects what they understand and how they feel, not what the world is willing to do to them") lives in paragraph 2 of the description — at tone-setting altitude rather than as a separate Cardinal Rule. Phase 4's diagnostic tests whether this elevation is sufficient; if not, prompt-engineering work follows.
+
+### Three-chapter arc-plan generation
+
+`preludeArcService.js` now generates a 3-chapter plan (Ch1 Childhood, Ch2 Adolescence, Ch3 Threshold). The departure_seed moves from `chapter_4_arc` to `chapter_3_arc`, alongside two new Ch3-specific fields the Sonnet prompt consults:
+
+- **`irreversible_act_shape`** — described WITHOUT naming a theme; the act lands before the theme commitment ceremony per Phase 1 Decision 4.
+- **`theme_commitment_handoff`** — describes the aftermath state in which `[THEME_COMMITMENT_OFFERED]` will surface.
+
+`chapter_2_arc` gains `intra_age_jump_seed` per Phase 1 Decision 5 — Sonnet's intra-Ch2 `[AGE_ADVANCE]` splits the session into two emotional registers (e.g., 11-13 then 13-15).
+
+The `chapter_4_arc`, `tone_tags`, and `tone_reflection` columns on `prelude_arc_plans` stay in schema (additive-only) but are written `NULL` for new preludes. Legacy 4-chapter plans remain readable via `getArcPlan` for old prelude characters.
+
+### Setup field injection — `authority_figure` + `origin_freeform`
+
+Per Decision A, both fields shape the arc:
+
+- **`authority_figure`** (8-value enum from chunk 1). The Opus prompt receives explicit per-value instructions:
+  - `mentor` → seed a mentor figure in `home_world.locals` and at least one Ch1/Ch2 establishing beat. Mentor becomes the `mentor_imprints` seed at chunk 2's handoff.
+  - `captor` → captivity arc; Ch1 and Ch2 unfold under captivity; departure flows from captivity ending.
+  - `sibling` → load-bearing sibling in Ch1 with own pressures.
+  - `rival` → rival prominently seeded in Ch1-2.
+  - `employer` → home is partly the workplace.
+  - `none` → PC raised themselves; home is more chaos than structure.
+  - `parent` / `guardian` → no special instruction; fits default home shape.
+- **`origin_freeform`** — when present, injected with explicit "honor this over conflicting curated answers" instruction. Verbatim text rendered; not paraphrased.
+
+### Prompt builder updates (`preludeArcPromptBuilder.js`)
+
+- Cardinal Rule 5 ("AGE-APPROPRIATE EVERYTHING") removed; directive moved to tone description per Decision 3 sub-deliverable.
+- Cardinal Rule 5 (engagement mode) renumbered from 5a; chapter-of-3 / session-of-4 boilerplate updated throughout.
+- Cardinal Rule 11/11a session budget rewritten — three-chapter shape, intra-Ch2 age-jump guidance, three-beat Ch3 sequencing (irreversible act → theme commitment → departure as distinct scene weights).
+- Cardinal Rule 13 (roll surfacing) updated to "Ch 1-2 tutorial / Ch 3 fluent" gate (was Ch 1-2 / Ch 3-4).
+- Cardinal Rule 14 (TONE FIDELITY) rewritten to reference the locked tone description's structure rather than the four-preset bibles; explicit "don't soften consequences because the protagonist is young" directive surfaced.
+- Cardinal Rule 16 ("don't invent character traits") canon list updated — talents/cares/tone removed; authority figure + Q10 free-text added.
+- **NEW Cardinal Rule 15c** — `[CANON_THREAD]` calibration block per PRELUDE_IMPLEMENTATION_PLAN.md §5h. Explicit kind/weight enums, ✓/✗ examples, "err toward fewer-and-heavier" discipline.
+- **NEW Cardinal Rule 15d** — `[ANCESTRY_HINT]` `feat_id` slug convention (`${list_id}_t${tier}_c${choice_index}`). Cross-cuts with chunk 4's server-side validator.
+- CHARACTER block: `talents` / `cares` / `tone preset` lines removed; authority-figure line + conditional Q10 block added.
+- MARKERS section: `[VALUE_HINT]` removed; `[CANON_THREAD]` added; `[ANCESTRY_HINT]` updated to slug convention.
+
+### `preludeThemeService.js` cleanup
+
+Wildcard picker (which mapped `setup.talents` / `setup.cares` to themes) removed. Phase 1 Decision 3 simplified the theme commitment ceremony to "leading + 3 alternatives + choose-your-own" — no wildcard slot. The `wildcard` field on the offer payload returns `null` for Phase 2 callers; preserved in shape for backward-compat with any UI that still reads it. Chapter weights synced to chunk 4's three-chapter shape (Ch1=1×, Ch2=1.5×, Ch3=2×).
+
+### Files
+
+- **NEW** `server/data/preludeToneDescription.js` — locked 3-paragraph tone description + `buildLockedToneBlock()`.
+- **NEW** `server/data/preludeWizardEnums.js` — server-side mirror of `SIBLING_OPTIONS` and `AUTHORITY_FIGURES` with `findSiblingOption` / `findAuthorityFigure` helpers.
+- `server/services/preludeArcPromptBuilder.js` — full rewrite of CHARACTER block, tone block injection, Cardinal Rules 5 / 11 / 13 / 14 / 16, MARKERS section. Added 15c (CANON_THREAD calibration) and 15d (ANCESTRY_HINT slug convention).
+- `server/services/preludeArcService.js` — `buildArcSystemPrompt` rewritten for 3-chapter shape with locked tone block injected. `buildArcUserPrompt` drops talents/cares/tone-tags; adds authority_figure + origin_freeform. `validateParsedPlan` updated to require chapter_3_arc.departure_seed (not chapter_4_arc). Insert writes NULL for legacy columns.
+- `server/services/preludeThemeService.js` — wildcard picker removed; chapter weights updated to three-chapter shape; `wildcard: null` preserved in offer shape.
+- `tests/prelude-prompt.test.js` — replaced 4-preset test blocks with locked-tone-description tests; added authority_figure + origin_freeform tests; updated boilerplate-count tests to 3-chapter / 4-session shape. Updated `makeSetup()` default to Phase 2 payload.
+- `tests/prelude-theme-commitment.test.js` — relaxed "Choose Your Path" assertion to match Phase 2's "lightweight in-line commitment card" wording.
+
+### Test sweep
+
+| Suite | Result |
+|---|---|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 172 passed (+18 net for locked-tone / Q9 / Q10 / 3-chapter; -42 for old preset bibles) |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+
+**Total:** 590 prelude assertions green. Vite build clean.
+
+### Out of scope
+
+- Transition service (`[PRELUDE_END]` → `creation_phase = 'ready_for_primary'` flip; biography seed generation; canon NPC/location/thread transfer; mentor imprint seeding when authority_figure='mentor') — chunk 2.
+- `PreludeTransitionScreen.jsx` UI + minimal home-page resume hook — chunk 2.
+- Main creator pre-fill via `preludePayload` prop on existing `CharacterCreationWizard.jsx` — chunk 2.
+
 ## [1.0.0.105] - 2026-05-01 — Phase 2 chunk 4: Marker handling
 
 Second Phase 2 engineering chunk. Wires the marker plumbing for the reframed Prelude — long-term thread seeding, ancestry-feat validation, chapter-promise gating, three-chapter tally weights, and `[VALUE_HINT]` removal. Chunks 3 (prompt builder) and 2 (transition service) follow.

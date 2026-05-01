@@ -164,8 +164,10 @@ console.log('\n=== Ch3 engagement-mode block — theme commitment ceremony ===\n
     'Ch3 block names the marker');
   assert(p.includes('AT CH3 WRAP-UP'),
     'Ch3 block specifies wrap-up timing (not opening)');
-  assert(p.includes("Choose Your Path"),
-    'Ch3 block mentions the Choose Your Path card');
+  // Phase 2 Decision 3 simplified the v1.0.77 full-screen "Choose Your Path"
+  // to a lightweight in-line commitment card. Wording in the prompt updated.
+  assert(p.includes("commitment card") || p.includes("choose your own"),
+    'Ch3 block mentions the lightweight in-line commitment card (Phase 2 simplification)');
   assert(p.includes('Do NOT name specific themes in the narrative'),
     'Ch3 block tells AI not to list themes in narrative (the card does it)');
   assert(p.includes('AFTER the irreversible-act'),

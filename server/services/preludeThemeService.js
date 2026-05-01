@@ -104,8 +104,9 @@ export async function buildThemeOffer(characterId) {
     [characterId]
   );
 
-  // Chapter-weighted tally — same weights as preludeEmergenceService.
-  const CHAPTER_WEIGHT = { 1: 1.0, 2: 1.0, 3: 1.5, 4: 2.0 };
+  // Chapter-weighted tally — Phase 2 chunk 4 three-chapter shape:
+  // Ch1=1×, Ch2=1.5×, Ch3=2× (matches preludeEmergenceService).
+  const CHAPTER_WEIGHT = { 1: 1.0, 2: 1.5, 3: 2.0, 4: 2.0 };
   const tally = new Map();
   for (const row of hintRows) {
     const w = CHAPTER_WEIGHT[row.chapter] || 1.0;
@@ -119,18 +120,15 @@ export async function buildThemeOffer(characterId) {
   // Alternatives: up to 3 more from the trajectory, ALL distinct from leading.
   const alternatives = sorted.slice(1, 4).map(s => s.target);
 
-  // Wildcard: a theme that talents/cares suggest but the trajectory hasn't
-  // reached. Looks at setup.talents/setup.cares and maps them to themes.
-  // Falls back to null if nothing surprising surfaces.
-  const setup = character.prelude_setup_data || {};
-  const wildcard = pickWildcard({
-    setup,
-    excluded: new Set([leading, ...alternatives].filter(Boolean))
-  });
+  // Phase 2 chunk 3 — wildcard removed (Decision 3 simplified the theme
+  // commitment ceremony to "leading + 3 alternatives + choose-your-own").
+  // Returning null preserves the field for legacy callers / UI; client
+  // chunk 1 stops using it.
+  const wildcard = null;
 
   // Short reason strings — brief, not full narratives. Sonnet should
   // expand these in the marker text for richness.
-  const reason = buildSummaryReason(sorted, setup);
+  const reason = buildSummaryReason(sorted);
 
   return {
     leading,
@@ -141,59 +139,9 @@ export async function buildThemeOffer(characterId) {
   };
 }
 
-/**
- * Wildcard picker: surfaces a theme based on player setup (talents/cares)
- * that the trajectory hasn't reached. Keeps a moment of player surprise.
- * Returns a theme id or null.
- */
-function pickWildcard({ setup, excluded }) {
-  const talents = (setup.talents || []).map(t => String(t).toLowerCase());
-  const cares = (setup.cares || []).map(c => String(c).toLowerCase());
-
-  // Rough talent/care → theme lean mapping. Loose hints, not strong
-  // affinities; these are WILDCARDS, designed to be thought-provoking.
-  const TALENT_THEME_LEANS = {
-    running: 'urchin', climbing: 'outlander', hiding: 'criminal',
-    'noticing things': 'investigator', 'making friends': 'entertainer',
-    'making things': 'guild_artisan', numbers: 'sage',
-    stories: 'entertainer', 'fixing things': 'guild_artisan',
-    'calming animals': 'outlander', 'calming people': 'acolyte',
-    'fast hands': 'criminal', patience: 'sage', courage: 'folk_hero',
-    singing: 'entertainer', reading: 'sage', fighting: 'soldier',
-    sneaking: 'criminal', 'quick thinking': 'investigator',
-    memory: 'sage', negotiation: 'charlatan',
-    'lying convincingly': 'charlatan'
-  };
-  const CARE_THEME_LEANS = {
-    family: 'folk_hero', home: 'folk_hero', freedom: 'outlander',
-    justice: 'knight_of_the_order', safety: 'soldier',
-    adventure: 'outlander', learning: 'sage', friends: 'entertainer',
-    animals: 'outlander', honor: 'knight_of_the_order',
-    faith: 'acolyte', power: 'noble', wealth: 'charlatan',
-    art: 'entertainer', truth: 'sage', belonging: 'folk_hero',
-    'proving themselves': 'mercenary_veteran',
-    'protecting the weak': 'knight_of_the_order',
-    'being left alone': 'hermit', 'being known': 'noble'
-  };
-
-  const candidates = new Set();
-  for (const t of talents) {
-    const theme = TALENT_THEME_LEANS[t];
-    if (theme && !excluded.has(theme)) candidates.add(theme);
-  }
-  for (const c of cares) {
-    const theme = CARE_THEME_LEANS[c];
-    if (theme && !excluded.has(theme)) candidates.add(theme);
-  }
-
-  // Return the first candidate — if the player has multiple, any one is
-  // fine for "wildcard" purposes. Null if nothing.
-  return [...candidates][0] || null;
-}
-
-function buildSummaryReason(sorted, setup) {
+function buildSummaryReason(sorted) {
   if (sorted.length === 0) {
-    return 'No strong theme trajectory emerged from Ch1-2 play — the choices below are drawn from your setup (talents and cares).';
+    return 'No strong theme trajectory emerged from Ch1-2 play — pick from the alternatives below or write your own.';
   }
   const top = sorted[0];
   const leadPct = sorted.length > 1
