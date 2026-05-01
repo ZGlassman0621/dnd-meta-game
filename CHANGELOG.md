@@ -2,6 +2,62 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.108] - 2026-05-01 — Phase 2 follow-up: ANCESTRY_HINT reason as celebration beats
+
+Small post-Phase-2 patch from a design clarification surfaced during PM's per-step creator spec walkthrough. The chunk-5 creator's locked-feat celebration card needs to render past-tense narrative bullets justifying why play pointed at this ancestry feat. The infrastructure for that — `reason` field captured + persisted with chapter context — already shipped in chunk 4. This patch adds (a) explicit prompt-side style guidance for what makes a *good* reason, and (b) handoff-payload surfacing of the chapter beats so chunk 5 (and the gap-window transition screen) can render them.
+
+### Race reconciliation — no-op
+
+PM's "race system reconciliation" instructions in this clarification round turned out to be a no-op against current `races.json`. Drow is already not a standalone playable race; "Drow Descent" already exists as a Half-Elf subrace; the canonical race list matches the current data. PM withdrew the reconciliation request after I surfaced the actual data shape. The ancestry feat list_id `drow` and the `[ANCESTRY_HINT]` slug convention stay as-is.
+
+### Rule 15d-bis — ANCESTRY_HINT reason style guidance (chunk 3 patch)
+
+`preludeArcPromptBuilder.js` Rule 15d-bis added immediately after the slug-convention rule. Tells the AI:
+
+- The `reason` field is NOT optional flavor — it's load-bearing for the locked-feat celebration card at character creation.
+- Style: past-tense, single clause, names + actions (not abstractions), chapter-aware tone (Ch1 smaller/domestic, Ch3 stakes), no mechanic-talk, no DM-speak, no interpretive tail.
+- Worked good examples: *"Held the line when Brella was wounded, took a club to the ribs and didn't fall."*
+- Worked bad examples: *"Demonstrated resilience and physical endurance"* / *"Showed strong CON-based behavior pattern"*.
+- Same `feat_id` firing across multiple chapters is expected — the system picks the best 2-3 across chapters for the celebration; aim for one good reason per fire.
+
+### Chapter beats in the handoff payload (chunk 2 patch)
+
+`preludeTransitionService.js` adds `pickAncestryChapterBeats(characterId, winnerFeatId)` — reads `prelude_emergences` rows where `kind='ancestry'` AND `target=winnerSlug` AND `reason` is non-empty, picks ONE beat per chapter (the most recent fire within each chapter), orders chronologically Ch1 → Ch2 → Ch3, caps at 3.
+
+The result is surfaced in the handoff payload at `locked.ancestry_chapter_beats` — array of `{ chapter, reason }`. Chunk-5 creator reads this for the celebration card; for the gap window between chunks 2 and 5, `PreludeTransitionScreen.jsx` renders the same data as bullets under "Across your Prelude, you showed:" with chapter tags `(Ch1)` / `(Ch2)` / `(Ch3)`.
+
+### Selection rule (engineering call from PM's "you can refine")
+
+PM's intuition: "top 3 by chapter weight, ordered chronologically (Ch1 → Ch2 → Ch3) so the bullets tell a small arc." Refined to: **one beat per chapter MAX**, taking the LAST fire within each chapter (most recent fires are usually the most concrete beats; earlier fires happen as the player is still feeling out the affinity). This caps total beats at 3 (Ch1 + Ch2 + Ch3) and prevents Ch3-domination from repeated fires of the same feat in the climax chapter.
+
+### Files
+
+- `server/services/preludeArcPromptBuilder.js` — added Rule 15d-bis (style guidance for `reason`).
+- `server/services/preludeTransitionService.js` — added `pickAncestryChapterBeats()` helper; wired into `executeTransition()`; surfaced in `buildHandoffPayload()` at `locked.ancestry_chapter_beats`.
+- `client/src/components/PreludeTransitionScreen.jsx` — renders the chapter beats as bullets in the emergence summary card.
+- `tests/prelude-prompt.test.js` — added 8 assertions for Rule 15d-bis (heading + load-bearing framing + style markers + worked examples).
+
+### Test sweep
+
+| Suite | Result |
+|---|---|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 180 passed (+8 for Rule 15d-bis) |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/prelude-transition.test.js`          | ✅ 25 passed |
+
+**Total:** 623 prelude assertions green. Vite build clean.
+
+### Notes
+
+- Existing `prelude_emergences` rows from prior preludes have null/empty `reason` for some ancestry hints (the AI wasn't yet given Rule 15d-bis style guidance). The selection helper filters those out (`AND reason IS NOT NULL AND TRIM(reason) <> ''`); old preludes will surface fewer beats than newly-played ones. Acceptable degradation — no migration needed.
+- The `pickAncestryChapterBeats` query is read-only; idempotent re-runs of `executeTransition` (e.g., a manual POST `/transition` retry) refresh the beats automatically without regenerating the biography.
+
 ## [1.0.0.107] - 2026-05-01 — Phase 2 chunk 2: Transition service + handoff
 
 Final Phase 2 engineering chunk. Wires the Prelude → Primary handoff that closes the loop on Phase 1's reframe — `[PRELUDE_END]` now actually does something. Transition state, biography seeding, mentor imprint, home-page resume hook, and the (iv) preludePayload pre-fill into the existing creator all ship here. Phase 2 closes; chunk 5 (rebuilt main creator) remains gated until the per-step spec lands.

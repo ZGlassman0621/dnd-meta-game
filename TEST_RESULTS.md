@@ -1,5 +1,33 @@
 # Test Results Log
 
+## 2026-05-01 — v1.0.108 Phase 2 follow-up: ANCESTRY_HINT reason as celebration beats
+
+**Change scope:** Rule 15d-bis added to preludeArcPromptBuilder (style guidance for the `reason` field on `[ANCESTRY_HINT]`). `pickAncestryChapterBeats()` helper added to preludeTransitionService — picks one beat per chapter (most recent fire), chronologically ordered, max 3. Surfaced in the handoff payload at `locked.ancestry_chapter_beats` and rendered in PreludeTransitionScreen.
+
+**Race reconciliation:** no-op. Current `races.json` already matches the canonical worldbuilding shape; PM's reconciliation instructions hit `if`-guarded branches that resolved to no changes.
+
+**Client build:** ✅ passed.
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 180 passed (+8 for Rule 15d-bis) |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/prelude-transition.test.js`          | ✅ 25 passed |
+
+**Total:** 623 prelude assertions green. No regressions.
+
+**Notes:**
+- Old prelude characters with null/empty ancestry-hint reasons surface fewer beats. Helper filters those rows out. No migration needed.
+- The patch is additive on the read side; idempotent re-runs of `executeTransition` refresh `ancestry_chapter_beats` without regenerating the biography seed.
+
 ## 2026-05-01 — v1.0.107 Phase 2 chunk 2: Transition service + handoff
 
 **Change scope:** Migration 048 (character_biography + mentor_imprints + characters.prelude_handoff_payload column). New preludeTransitionService.js with idempotent `executeTransition()` (Opus biography seed; mentor imprint seeding when applicable; payload + creation_phase flip). [DEPARTURE] + [PRELUDE_END] detection wired through session service. New API endpoints: GET /handoff-payload, POST /transition, GET /biography. PreludeTransitionScreen.jsx surfaces post-Prelude summary. CharacterCreationWizard accepts preludePayload prop and PUTs `creation_phase='active'` on submit per A2a option (iv). Home page renders 'ready_for_primary' characters with a "Finish creating" badge.

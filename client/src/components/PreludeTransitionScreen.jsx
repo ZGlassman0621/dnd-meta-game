@@ -221,6 +221,19 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
           Ancestry feat trajectory: <strong>{locked.ancestry_feat_id || '(undecided)'}</strong>
           {suggested.ancestry_score != null ? <span style={sub}> ({suggested.ancestry_score.toFixed(1)} pts)</span> : null}
         </div>
+        {Array.isArray(locked.ancestry_chapter_beats) && locked.ancestry_chapter_beats.length > 0 && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <p style={subheading}>Across your Prelude, you showed:</p>
+            <ul style={{ margin: '0.2rem 0 0 0', paddingLeft: '1.2rem' }}>
+              {locked.ancestry_chapter_beats.map((beat, i) => (
+                <li key={i} style={{ ...body, marginBottom: '0.2rem' }}>
+                  {beat.reason}
+                  <span style={sub}> (Ch{beat.chapter})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Mentor imprint surfacing */}

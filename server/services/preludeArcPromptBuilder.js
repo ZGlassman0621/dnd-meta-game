@@ -697,6 +697,31 @@ ${engagementModeBlock(runtime.chapter, runtime.age, runtime.committedTheme, runt
    list_id values: dwarf / elf / drow / human / halfling / dragonborn / half_elf / half_orc / tiefling / aasimar_protector / aasimar_scourge / aasimar_fallen / warforged. Tier ∈ {1, 3, 7, 13, 18}. choice_index ∈ {1, 2, 3}.
    The server validates that the slug's list_id matches the player's race (aasimar accepts any of the three paths until commitment) and that the (list_id, tier, choice_index) tuple resolves to a real catalog row. Hints with malformed slugs or mismatched list_ids are rejected, and you'll receive a [SYSTEM] note. Keep firing — the next correctly-formed hint will tally.
 
+15d-bis. ANCESTRY_HINT REASON IS LOAD-BEARING — write it as a chapter beat.
+   The reason field is NOT optional flavor. The handoff transition stores each [ANCESTRY_HINT] reason alongside its chapter; at character creation, the locked-feat celebration card renders the top reasons as bullet points that justify why play pointed toward this feat. The player will read these verbatim. Write them like a small moment, not an abstract justification.
+
+   STYLE — every reason is ONE SENTENCE in this shape:
+     • Past-tense (the moment already happened — this is retrospective)
+     • A single clause (no compound structure, no "and" mid-clause unless the second half is essential)
+     • Names + actions, not abstractions ("Held the line when Brella was wounded" — NOT "Demonstrated resilience under pressure")
+     • Chapter-aware tone: Ch1 reasons are smaller and more domestic; Ch3 reasons carry real stakes
+     • No mechanic-talk: never write "demonstrated +CON," "showed Endurance proficiency," "qualifies for the feat"
+     • No DM-speak: never write "the player chose," "the PC opted to" — write what HAPPENED in the fiction
+     • No interpretive tail: don't end with "which suggests..." or "indicating an affinity for..."
+
+   GOOD (drop-in bullets the celebration card can render):
+     [ANCESTRY_HINT: feat_id="half_orc_t1_c1" reason="Held the line when Brella was wounded, took a club to the ribs and didn't fall."]
+     [ANCESTRY_HINT: feat_id="half_orc_t1_c1" reason="Refused to break under the captain's interrogation, three nights in the cells."]
+     [ANCESTRY_HINT: feat_id="dwarf_t3_c2" reason="Read the worked-stone scars on the bridge and named the year of the rebuild."]
+
+   BAD (these read as abstract notes; the celebration card cannot use them):
+     reason="Demonstrated resilience and physical endurance"            ← no specifics, no moment
+     reason="The player chose to push through pain on multiple occasions" ← DM-speak; abstract
+     reason="Showed strong CON-based behavior pattern"                  ← mechanic-talk
+     reason="Stayed up late, stayed quiet at dinner, helped with the harvest, ran errands without complaint" ← list, not a beat
+
+   When the SAME feat_id fires multiple times across chapters, that's expected — each fire captures a distinct beat. The handoff selects the best 2-3 (chronologically across chapters) for the celebration. Aim for ONE good reason per fire; the system will pick which ones land.
+
 15b. EMERGENCE SHAPES THE STORY — LEAN UPCOMING SCENES TOWARD EMERGING STRENGTHS.
    An EMERGENCE SO FAR block is injected right below CANON FACTS every turn. It lists accepted stats, accepted skills, leading class/theme/ancestry trajectories, and top values. This tells you what the CHARACTER IS BECOMING based on how the player has actually played.
    Your job: consult it when composing the NEXT scene and lean toward moments that reward the emerging strengths. Let the story organically curve toward who the character is becoming.

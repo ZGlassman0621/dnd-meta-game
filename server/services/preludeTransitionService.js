@@ -106,6 +106,14 @@ export async function executeTransition(characterId) {
   const canonThreads = await getActiveThreads(characterId);
   const canonFacts = await getActiveCanonFacts(characterId);
 
+  // Phase 2 follow-up — pull chapter beats for the winning ancestry feat.
+  // The chunk-5 creator's locked-feat celebration card renders these as
+  // bullets justifying why play pointed at this feat. Reasons captured
+  // verbatim from [ANCESTRY_HINT] emissions; chapter context preserved.
+  const ancestryChapterBeats = ancestryWinner
+    ? await pickAncestryChapterBeats(characterId, ancestryWinner.winner)
+    : [];
+
   // --- biography seed (only on first transition) ----------------------------
   let biographyEntries = [];
   if (isFirstTransition) {
@@ -161,7 +169,7 @@ export async function executeTransition(characterId) {
   // --- handoff payload + creation_phase flip --------------------------------
   const payload = buildHandoffPayload({
     character, setup, arcPlan, committedTheme,
-    classWinner, ancestryWinner, acceptedEmergences,
+    classWinner, ancestryWinner, ancestryChapterBeats, acceptedEmergences,
     canonNpcs, canonLocations, canonThreads, canonFacts,
     biographyEntries, mentorImprintId
   });
@@ -273,6 +281,54 @@ function buildMentorFormativeBeats(canonFacts, mentorNpc) {
 }
 
 /**
+ * Pick the top chapter beats for the winning ancestry feat. Reads
+ * [ANCESTRY_HINT] rows from prelude_emergences whose target matches
+ * the winner slug, picks up to one per chapter weighted by chapter
+ * weight (Ch1=1×, Ch2=1.5×, Ch3=2×) — preserving chronological order
+ * so the bullets tell a small arc.
+ *
+ * Returns array of `{ chapter, reason }`, max 3 entries, ordered
+ * chronologically (Ch1 → Ch2 → Ch3). Empty array if no rows match
+ * (e.g., the winning slug came from a single fire and the user is
+ * looking at Ch1 only).
+ *
+ * Selection rule (per design call from PM):
+ *   • One beat per chapter MAX (so the arc reads chronologically rather
+ *     than getting dominated by repeated Ch3 fires of the same feat).
+ *   • If a chapter has multiple fires of the winner slug, take the
+ *     LAST one (most recent fire within that chapter — usually the
+ *     most concrete beat, since earlier fires often happen as the
+ *     player is still feeling out the affinity).
+ *   • Drop any beat where reason is null/empty.
+ *   • Cap at 3 (Ch1 + Ch2 + Ch3 = 3 beats max).
+ */
+async function pickAncestryChapterBeats(characterId, winnerFeatId) {
+  if (!winnerFeatId) return [];
+  const rows = await dbAll(
+    `SELECT chapter, reason, id FROM prelude_emergences
+     WHERE character_id = ?
+       AND kind = 'ancestry'
+       AND target = ?
+       AND reason IS NOT NULL
+       AND TRIM(reason) <> ''
+     ORDER BY chapter ASC, id ASC`,
+    [characterId, winnerFeatId]
+  );
+  // Group by chapter; keep the LAST fire per chapter (rows are ordered
+  // by chapter ASC then id ASC, so the last row for a chapter is the
+  // most recent fire within that chapter).
+  const byChapter = new Map();
+  for (const row of rows) {
+    if (row.chapter == null) continue;
+    byChapter.set(row.chapter, row);
+  }
+  return [...byChapter.values()]
+    .sort((a, b) => a.chapter - b.chapter)
+    .slice(0, 3)
+    .map(r => ({ chapter: r.chapter, reason: r.reason }));
+}
+
+/**
  * Build the rich handoff payload. The existing CharacterCreationWizard
  * reads selected fields via its `preludePayload` prop (Phase 2 chunk 2
  * (iv) wiring); the new chunk-5 creator will consume more of the
@@ -281,7 +337,8 @@ function buildMentorFormativeBeats(canonFacts, mentorNpc) {
  */
 function buildHandoffPayload({
   character, setup, arcPlan, committedTheme,
-  classWinner, ancestryWinner, acceptedEmergences,
+  classWinner, ancestryWinner, ancestryChapterBeats = [],
+  acceptedEmergences,
   canonNpcs, canonLocations, canonThreads, canonFacts,
   biographyEntries, mentorImprintId
 }) {
@@ -319,6 +376,12 @@ function buildHandoffPayload({
       subrace: character.subrace,
       committed_theme: committedTheme?.theme || setup.prelude_committed_theme || null,
       ancestry_feat_id: ancestryWinner?.winner || null,
+      // Phase 2 follow-up — chapter beats for the celebration card.
+      // Top 3 reasons drawn from [ANCESTRY_HINT] emissions of the
+      // winning feat_id, ordered chronologically (Ch1 → Ch2 → Ch3) so
+      // the bullets tell a small arc. See pickAncestryChapterBeats for
+      // selection logic.
+      ancestry_chapter_beats: ancestryChapterBeats,
       home_region: setup.region || null,
       home_setting: setup.home_setting || null,
       authority_figure: setup.authority_figure || null

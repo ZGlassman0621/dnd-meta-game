@@ -827,6 +827,42 @@ console.log('\n=== v1.0.76 per-chapter engagement mode block ===\n');
   assert(p4.includes('[PRELUDE_END]'), 'Ch4 references [PRELUDE_END] marker');
 }
 
+console.log('\n=== Phase 2 follow-up — ANCESTRY_HINT reason field is load-bearing (Rule 15d-bis) ===\n');
+{
+  const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(), makeRuntime());
+  assert(p.includes('15d-bis'), 'Rule 15d-bis present');
+  assert(
+    p.includes('REASON IS LOAD-BEARING') || p.includes('reason field is NOT optional'),
+    'Rule 15d-bis frames reason as load-bearing'
+  );
+  assert(
+    p.includes('locked-feat celebration card') || p.includes('celebration card'),
+    'Rule 15d-bis names the consumer (celebration card)'
+  );
+  // Style guidance markers — past-tense, single clause, names+actions
+  assert(
+    p.includes('Past-tense'),
+    'Rule 15d-bis specifies past-tense'
+  );
+  assert(
+    p.includes('single clause') || p.includes('A single clause'),
+    'Rule 15d-bis specifies single-clause'
+  );
+  assert(
+    p.includes('Names + actions, not abstractions') || p.includes('Names + actions'),
+    'Rule 15d-bis specifies names+actions over abstractions'
+  );
+  // Worked examples — one good, one bad
+  assert(
+    p.includes('Held the line when Brella was wounded'),
+    'Rule 15d-bis includes a good worked example (past-tense, names+actions)'
+  );
+  assert(
+    p.includes('Demonstrated resilience'),
+    'Rule 15d-bis includes a bad worked example (abstract / mechanic-talk)'
+  );
+}
+
 console.log('\n=== Phase 2 — three-chapter / four-session structure references ===\n');
 {
   const p = createPreludeSystemPrompt(makeCharacter(), makeSetup(), makeArcPlan(),
