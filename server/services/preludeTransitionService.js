@@ -114,6 +114,14 @@ export async function executeTransition(characterId) {
     ? await pickAncestryChapterBeats(characterId, ancestryWinner.winner)
     : [];
 
+  // Mirror for theme — the Step 3 celebration card renders these as
+  // bullets that justify why play settled on this theme. Picked from
+  // [THEME_HINT] emissions of the committed theme; same selection rule
+  // (one beat per chapter, last fire wins, max 3, chronological).
+  const themeChapterBeats = committedTheme?.theme
+    ? await pickThemeChapterBeats(characterId, committedTheme.theme)
+    : [];
+
   // --- biography seed (only on first transition) ----------------------------
   let biographyEntries = [];
   if (isFirstTransition) {
@@ -166,12 +174,29 @@ export async function executeTransition(characterId) {
     }
   }
 
+  // --- heirloom candidates (Phase 2 chunk 5.A) ------------------------------
+  // Producer-side wiring is DEFERRED — no [OBJECT_HINT] marker, no
+  // extraction pass. The query returns [] today. Future producer work will
+  // populate prelude_canon_heirlooms with status='candidate' rows; this
+  // line will surface them automatically. Zero candidates is a legitimate
+  // empty state (per spec §8.1.2). See PHASE_2_CREATOR_SPEC.md §8.1.2 +
+  // §5.6.3 annotations for context.
+  const heirloomCandidates = await dbAll(
+    `SELECT id, name, type, specific_item_ref, description, awakening_hook,
+            acquired_at_age, acquired_at_chapter
+       FROM prelude_canon_heirlooms
+      WHERE character_id = ? AND status = 'candidate'
+      ORDER BY id`,
+    [characterId]
+  );
+
   // --- handoff payload + creation_phase flip --------------------------------
   const payload = buildHandoffPayload({
     character, setup, arcPlan, committedTheme,
-    classWinner, ancestryWinner, ancestryChapterBeats, acceptedEmergences,
+    classWinner, ancestryWinner, ancestryChapterBeats, themeChapterBeats,
+    acceptedEmergences,
     canonNpcs, canonLocations, canonThreads, canonFacts,
-    biographyEntries, mentorImprintId
+    biographyEntries, mentorImprintId, heirloomCandidates
   });
 
   await dbRun(
@@ -235,36 +260,6 @@ function parsePayload(raw) {
 }
 
 /**
- * Aggregate accepted stat emergences into a `{ str, dex, con, int, wis, cha }`
- * map of bonuses. Caps at +2 per stat (the cap is also enforced server-side
- * at recordStatHint, but we re-clamp here for safety).
- */
-function aggregateStatBonuses(acceptedEmergences) {
-  const bonuses = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
-  for (const e of acceptedEmergences) {
-    if (e.kind !== 'stat') continue;
-    const target = String(e.target || '').toLowerCase();
-    if (!(target in bonuses)) continue;
-    bonuses[target] = Math.min(2, bonuses[target] + (e.magnitude || 0));
-  }
-  return bonuses;
-}
-
-/**
- * Aggregate accepted skill emergences into an array of skill names. Caps
- * at 2 (also enforced at marker-record time).
- */
-function aggregateSkills(acceptedEmergences) {
-  const skills = [];
-  for (const e of acceptedEmergences) {
-    if (e.kind !== 'skill') continue;
-    if (skills.length >= 2) break;
-    skills.push(e.target);
-  }
-  return skills;
-}
-
-/**
  * Build the formative-beats summary string for a mentor imprint. Pulls
  * any canon facts whose subject matches the mentor's name and
  * concatenates the fact bodies. Falls back to a single-line summary if
@@ -303,20 +298,31 @@ function buildMentorFormativeBeats(canonFacts, mentorNpc) {
  *   • Cap at 3 (Ch1 + Ch2 + Ch3 = 3 beats max).
  */
 async function pickAncestryChapterBeats(characterId, winnerFeatId) {
-  if (!winnerFeatId) return [];
+  return pickChapterBeatsByKind(characterId, 'ancestry', winnerFeatId);
+}
+
+/**
+ * Mirror of pickAncestryChapterBeats for [THEME_HINT] emissions of the
+ * committed theme. Same selection rule (one beat per chapter, last fire
+ * wins, max 3, chronological). Used by the chunk-5 Step 3 celebration
+ * card.
+ */
+async function pickThemeChapterBeats(characterId, committedThemeId) {
+  return pickChapterBeatsByKind(characterId, 'theme', committedThemeId);
+}
+
+async function pickChapterBeatsByKind(characterId, kind, winnerTarget) {
+  if (!winnerTarget) return [];
   const rows = await dbAll(
     `SELECT chapter, reason, id FROM prelude_emergences
      WHERE character_id = ?
-       AND kind = 'ancestry'
+       AND kind = ?
        AND target = ?
        AND reason IS NOT NULL
        AND TRIM(reason) <> ''
      ORDER BY chapter ASC, id ASC`,
-    [characterId, winnerFeatId]
+    [characterId, kind, winnerTarget]
   );
-  // Group by chapter; keep the LAST fire per chapter (rows are ordered
-  // by chapter ASC then id ASC, so the last row for a chapter is the
-  // most recent fire within that chapter).
   const byChapter = new Map();
   for (const row of rows) {
     if (row.chapter == null) continue;
@@ -329,129 +335,192 @@ async function pickAncestryChapterBeats(characterId, winnerFeatId) {
 }
 
 /**
- * Build the rich handoff payload. The existing CharacterCreationWizard
- * reads selected fields via its `preludePayload` prop (Phase 2 chunk 2
- * (iv) wiring); the new chunk-5 creator will consume more of the
- * payload. Schema is intentionally generous — easier to ignore unused
- * fields than to extend the table later.
+ * Project accepted [STAT_HINT] emergences into the chunk-5-shaped array
+ * `[ { stat, magnitude, chapter_beat } ]` per spec §8.2.1. The Step 5
+ * bump celebration card renders one entry per accepted bump with the
+ * chapter beat as the in-fiction justification ("Across your Prelude, your
+ * STR was shaped: ...").
+ *
+ * `chapter_beat` is the `reason` field from the [STAT_HINT] emission. When
+ * a stat received multiple accepted bumps, the array contains multiple
+ * entries — preserving each fire's context rather than collapsing to a
+ * total. The +2-per-stat creator cap is the consumer's responsibility
+ * (spec §5.5.5); this projection is faithful to whatever the player
+ * accepted during play.
+ */
+function buildAcceptedStatBumps(acceptedEmergences) {
+  return acceptedEmergences
+    .filter(e => e.kind === 'stat' && e.target)
+    .map(e => ({
+      stat: String(e.target).toLowerCase(),
+      magnitude: Number(e.magnitude) || 1,
+      chapter: e.chapter ?? null,
+      chapter_beat: e.reason || null
+    }));
+}
+
+/**
+ * Project accepted [SKILL_HINT] emergences into the chunk-5-shaped array
+ * `[ { skill, chapter_beat } ]` per spec §8.2.1. The Step 5 skills picker
+ * renders these as pre-confirmed, justification-tagged picks (which the
+ * player can still re-pick the equivalent of).
+ */
+function buildAcceptedSkillBumps(acceptedEmergences) {
+  return acceptedEmergences
+    .filter(e => e.kind === 'skill' && e.target)
+    .map(e => ({
+      skill: e.target,
+      chapter: e.chapter ?? null,
+      chapter_beat: e.reason || null
+    }));
+}
+
+/**
+ * Build the rich handoff payload (schema_version=2 — Phase 2 chunk 5.B).
+ *
+ * Shape follows PHASE_2_CREATOR_SPEC.md §8.2.1 — the chunk-5 creator's
+ * contract. Top-level fields are flat per spec; a small additional set of
+ * helper fields (departure_summary, authority_label, home_region/setting,
+ * authority_figure, name_parts, mentor_imprint_id) is included as context
+ * the new creator and the gap-window transition screen need but the spec
+ * doesn't enumerate.
+ *
+ * Schema versioning: bumping from 1 → 2 marks the §8.2.1 reshape. The
+ * version field is the only safe way for downstream consumers to detect
+ * shape; consumers that read this payload should switch on it if they
+ * care.
+ *
+ * Heirloom candidates: the field is wired (`heirloom_candidates`) but the
+ * producer is deferred — see the heirloom note in §8.1.2 + §5.6.3 for
+ * what's intentionally open. Empty array is the legitimate empty state.
+ *
+ * USE_NAME marker: spec §8.2.1 references a `[USE_NAME]` marker for an
+ * effective-name override (latest USE_NAME target, or setup_name if
+ * none). The marker isn't implemented in v4 / chunk 4; until it is, the
+ * effective `name` field falls back to the character's persisted
+ * first/last name (which equals the setup name for handoff characters
+ * since the prelude doesn't currently mutate it). The fallback is
+ * spec-compliant.
  */
 function buildHandoffPayload({
   character, setup, arcPlan, committedTheme,
-  classWinner, ancestryWinner, ancestryChapterBeats = [],
+  classWinner, ancestryWinner, ancestryChapterBeats = [], themeChapterBeats = [],
   acceptedEmergences,
   canonNpcs, canonLocations, canonThreads, canonFacts,
-  biographyEntries, mentorImprintId
+  biographyEntries, mentorImprintId, heirloomCandidates = []
 }) {
   const authority = findAuthorityFigure(setup.authority_figure);
-  const statBonuses = aggregateStatBonuses(acceptedEmergences);
-  const skills = aggregateSkills(acceptedEmergences);
+  const setupName = composeName(setup.first_name, setup.last_name) || setup.name || null;
+  const characterName = composeName(character.first_name, character.last_name);
+  const effectiveName = characterName || setupName;
 
-  // Flatten biography seed entries into a single string for the existing
-  // creator's `backstory` textarea. Chunk 5's new creator reads the
-  // entries directly from `character_biography` and renders them
-  // appendable; this projection is a temporary surface for the gap
-  // window. Edits to the textarea in the existing creator do not
-  // round-trip back to `character_biography` — the table is canonical;
-  // the textarea is a one-way mirror. (See chunk 1 caveat in CHANGELOG
-  // 1.0.104 for the institutional-memory note.)
-  const flattenedBackstory = biographyEntries
-    .map(e => {
-      const tag = e.origin_age != null ? `Age ${e.origin_age}` : (e.age != null ? `Age ${e.age}` : null);
-      return tag ? `${tag} — ${e.body || e.content || ''}` : (e.body || e.content || '');
-    })
-    .filter(s => s.trim())
-    .join('\n\n');
+  // Mentor imprint eligibility — true only if the player committed to
+  // 'mentor' as authority figure AND the Prelude actually established a
+  // canonical mentor NPC (relationship='mentor'). The mentor_imprint_id
+  // below records whether seeding actually happened (it can be null if
+  // ineligible OR if eligible but the imprint row INSERT was skipped on
+  // a refresh run). The eligibility flag is independent of seeding state.
+  const mentorImprintEligible =
+    String(setup.authority_figure || '').toLowerCase() === 'mentor' &&
+    canonNpcs.some(n => String(n.relationship || '').toLowerCase() === 'mentor');
 
   return {
-    schema_version: 1,
+    schema_version: 2,
     character_id: character.id,
+    transitioned_at: new Date().toISOString(),
 
-    // Locked from setup + emergence
-    locked: {
-      first_name: character.first_name || null,
-      last_name: character.last_name || null,
-      nickname: character.nickname || null,
-      gender: character.gender,
-      race: character.race,
-      subrace: character.subrace,
-      committed_theme: committedTheme?.theme || setup.prelude_committed_theme || null,
-      ancestry_feat_id: ancestryWinner?.winner || null,
-      // Phase 2 follow-up — chapter beats for the celebration card.
-      // Top 3 reasons drawn from [ANCESTRY_HINT] emissions of the
-      // winning feat_id, ordered chronologically (Ch1 → Ch2 → Ch3) so
-      // the bullets tell a small arc. See pickAncestryChapterBeats for
-      // selection logic.
-      ancestry_chapter_beats: ancestryChapterBeats,
-      home_region: setup.region || null,
-      home_setting: setup.home_setting || null,
-      authority_figure: setup.authority_figure || null
-    },
+    // --- §8.2.1 required fields -------------------------------------------
+    setup_name: setupName,
+    name: effectiveName,
+    gender: character.gender || setup.gender || null,
+    race: character.race || setup.race || null,
+    subrace: character.subrace || setup.subrace || null,
 
-    // Suggestions — pre-filled but editable in the new creator (chunk 5).
-    // Existing creator (chunk 2 (iv) stop-gap) consumes the subset it can.
-    suggested: {
-      class: classWinner?.winner || null,
-      stat_bonuses: statBonuses,
-      skills,
-      // Class/ancestry-feat were derived from chapter-weighted tallies;
-      // surface their scores so chunk 5 can render confidence badges.
-      class_score: classWinner?.score ?? null,
-      ancestry_score: ancestryWinner?.score ?? null,
-      // alignment / lifestyle / personality / physical fields are not
-      // currently emerged from Prelude play — placeholders for chunk 5.
-      alignment: null,
-      lifestyle: null,
-      personality_traits: null,
-      ideals: null,
-      bonds: null,
-      flaws: null,
-      hair_color: null,
-      skin_color: null,
-      eye_color: null,
-      height: null,
-      weight: null
-    },
+    committed_theme: committedTheme?.theme || setup.prelude_committed_theme || null,
+    theme_chapter_beats: themeChapterBeats,
 
-    // Free choice in the creator (informational only here)
-    free_choice_fields: ['ability_scores', 'skills_remaining', 'spellcasting', 'faith', 'equipment'],
+    ancestry_feat_id: ancestryWinner?.winner || null,
+    ancestry_chapter_beats: ancestryChapterBeats,
 
-    // Pointers — the canonical rows live in the prelude_canon_* tables.
-    // chunk 5 (and downstream campaign creation) read them directly via
-    // these IDs.
-    canon: {
-      npcs: canonNpcs.map(n => ({
-        id: n.id, name: n.name, relationship: n.relationship,
-        status: n.status, age_at_prelude_end: n.age_at_prelude_end
-      })),
-      locations: canonLocations.map(l => ({
-        id: l.id, name: l.name, type: l.type, is_home: !!l.is_home
-      })),
-      threads: canonThreads.map(t => ({
-        id: t.id, kind: t.kind, weight: t.weight,
-        subject_npc_id: t.subject_npc_id, subject_location_id: t.subject_location_id,
-        subject_text: t.subject_text, condition: t.condition
-      })),
-      fact_count: canonFacts.length
-    },
+    class_suggestion: classWinner?.winner || null,
 
-    biography: {
-      entry_count: biographyEntries.length,
-      flattened_backstory: flattenedBackstory
-    },
+    accepted_stat_bumps: buildAcceptedStatBumps(acceptedEmergences),
+    accepted_skill_bumps: buildAcceptedSkillBumps(acceptedEmergences),
 
-    mentor_imprint_id: mentorImprintId,
+    heirloom_candidates: heirloomCandidates.map(h => ({
+      id: h.id,
+      name: h.name,
+      type: h.type,
+      specific_item_ref: h.specific_item_ref,
+      description: h.description,
+      awakening_hook: h.awakening_hook,
+      acquired_at_age: h.acquired_at_age,
+      acquired_at_chapter: h.acquired_at_chapter
+    })),
 
-    // Departure context — used by chunk 5's main-creator to seed the
-    // primary campaign opener ("you have traveled from..."). Read-only
-    // pointer to the arc plan's departure_seed so the campaign generator
-    // gets the same input the player saw.
+    biography_seed: biographyEntries.map(e => ({
+      age: e.origin_age ?? e.age ?? null,
+      chapter: e.origin_chapter ?? e.chapter ?? null,
+      text: e.body || e.content || ''
+    })).filter(e => e.text && e.text.trim()),
+
+    canon_npcs: canonNpcs.map(n => ({
+      id: n.id, name: n.name, relationship: n.relationship,
+      status: n.status, age_at_prelude_end: n.age_at_prelude_end,
+      description: n.description, first_appeared_age: n.first_appeared_age
+    })),
+    canon_locations: canonLocations.map(l => ({
+      id: l.id, name: l.name, type: l.type,
+      description: l.description, is_home: !!l.is_home
+    })),
+    canon_threads: canonThreads.map(t => ({
+      id: t.id, kind: t.kind, weight: t.weight,
+      subject_npc_id: t.subject_npc_id, subject_location_id: t.subject_location_id,
+      subject_text: t.subject_text, condition: t.condition
+    })),
+
+    mentor_imprint_eligible: mentorImprintEligible,
+
+    // --- additional helper fields chunk 5 + transition screen consume ----
+    // Confidence scores derived from chapter-weighted tallies — chunk 5's
+    // celebration cards use these to render "we're sure" / "soft suggestion"
+    // visual weight.
+    class_score: classWinner?.score ?? null,
+    ancestry_score: ancestryWinner?.score ?? null,
+    // Departure context — chunk 5 surfaces this in Step 8 and the
+    // primary-campaign generator reads it for the campaign opener.
     departure_summary: arcPlan?.chapter_3_arc?.departure_seed || arcPlan?.departure_seed || null,
-
-    // Authority-figure label, for surfacing in the transition screen.
+    // Authority-figure label, for surfacing in the transition screen + Step 1.
     authority_label: authority?.label || null,
-
-    transitioned_at: new Date().toISOString()
+    authority_figure: setup.authority_figure || null,
+    // Setup context — chunk 5 Step 1 / Step 7 surface these as inert
+    // background ("born in X").
+    home_region: setup.region || null,
+    home_setting: setup.home_setting || null,
+    // Mentor imprint id — null when ineligible OR when seeding was a no-op
+    // on a refresh run. Eligibility above is the boolean; this is the
+    // pointer to the row when seeded.
+    mentor_imprint_id: mentorImprintId,
+    // Canonical fact count — chunk 5 doesn't render facts directly (they
+    // flow through canon_npcs / canon_locations), but the count is useful
+    // for "X facts the world remembers" type surfacing.
+    canon_fact_count: canonFacts.length,
+    // Name parts — characters table stores first/last/nickname separately.
+    // Surfaced for the Step 1 form fields; `name` above is the effective
+    // joined string per §8.2.1.
+    name_parts: {
+      first_name: character.first_name || setup.first_name || null,
+      last_name: character.last_name || setup.last_name || null,
+      nickname: character.nickname || null
+    }
   };
+}
+
+function composeName(first, last) {
+  const a = (first || '').trim();
+  const b = (last || '').trim();
+  if (a && b) return `${a} ${b}`;
+  return a || b || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -558,3 +627,13 @@ DEPARTURE: ${arcPlan?.chapter_3_arc?.departure_seed?.primary_thread || arcPlan?.
 
 Write 4-6 entries. JSON only.`;
 }
+
+// ---------------------------------------------------------------------------
+// Test-only exports — internal helpers exposed for unit testing without
+// requiring DB + Opus round-trip. Not part of the public API.
+// ---------------------------------------------------------------------------
+
+export const __testkit__buildHandoffPayload = buildHandoffPayload;
+export const __testkit__pickChapterBeatsByKind = pickChapterBeatsByKind;
+export const __testkit__buildAcceptedStatBumps = buildAcceptedStatBumps;
+export const __testkit__buildAcceptedSkillBumps = buildAcceptedSkillBumps;

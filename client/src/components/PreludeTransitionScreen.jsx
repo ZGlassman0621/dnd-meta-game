@@ -93,11 +93,30 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
     )
   }
 
-  const locked = payload?.locked || {}
-  const suggested = payload?.suggested || {}
-  const canon = payload?.canon || { npcs: [], locations: [], threads: [], fact_count: 0 }
+  // Phase 2 chunk 5.B — payload is now §8.2.1 flat shape (schema_version=2).
+  // Local references for ergonomic destructuring; structure is otherwise flat.
+  const npcs = payload?.canon_npcs || []
+  const locations = payload?.canon_locations || []
+  const threads = payload?.canon_threads || []
+  const statBumps = payload?.accepted_stat_bumps || []
+  const skillBumps = payload?.accepted_skill_bumps || []
+  const ancestryBeats = payload?.ancestry_chapter_beats || []
+  const themeBeats = payload?.theme_chapter_beats || []
   const displayName = character.nickname || character.first_name || character.name
-  const totalStatBumps = Object.values(suggested.stat_bonuses || {}).reduce((a, b) => a + b, 0)
+  // Sum total magnitude across stat bumps (each entry is a fire, not an
+  // aggregate, so summing magnitudes yields the cumulative bonus across
+  // accepted fires — this is just for display, not the +2-per-stat clamp
+  // which lives in chunk 5's Step 5).
+  const totalStatBumps = statBumps.reduce((a, b) => a + (b.magnitude || 0), 0)
+  // Aggregate display-only stat totals { str: +2, dex: +1, ... } from the
+  // chapter-beat-shaped fires.
+  const statTotals = statBumps.reduce((acc, b) => {
+    const k = String(b.stat || '').toLowerCase()
+    if (!k) return acc
+    acc[k] = (acc[k] || 0) + (b.magnitude || 0)
+    return acc
+  }, {})
+  const skillNames = skillBumps.map(s => s.skill).filter(Boolean)
 
   return (
     <div className="container" style={{ ...shell, padding: '1rem' }}>
@@ -130,12 +149,12 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
 
       {/* Canon NPCs */}
       <div style={card}>
-        <h3 style={heading}>Canon — People ({canon.npcs.length})</h3>
-        {canon.npcs.length === 0 ? (
+        <h3 style={heading}>Canon — People ({npcs.length})</h3>
+        {npcs.length === 0 ? (
           <p style={sub}>(no canonical NPCs recorded)</p>
         ) : (
           <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
-            {canon.npcs.map(n => (
+            {npcs.map(n => (
               <li key={n.id} style={{ ...body, marginBottom: '0.25rem' }}>
                 <strong>{n.name}</strong>
                 {n.relationship ? <span style={{ color: '#a78bfa' }}> ({n.relationship})</span> : null}
@@ -148,12 +167,12 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
 
       {/* Canon locations */}
       <div style={card}>
-        <h3 style={heading}>Canon — Places ({canon.locations.length})</h3>
-        {canon.locations.length === 0 ? (
+        <h3 style={heading}>Canon — Places ({locations.length})</h3>
+        {locations.length === 0 ? (
           <p style={sub}>(no canonical places recorded)</p>
         ) : (
           <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
-            {canon.locations.map(l => (
+            {locations.map(l => (
               <li key={l.id} style={{ ...body, marginBottom: '0.25rem' }}>
                 <strong>{l.name}</strong>
                 {l.is_home ? <span style={{ color: '#a78bfa' }}> [home]</span> : null}
@@ -166,15 +185,15 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
 
       {/* Canon threads */}
       <div style={card}>
-        <h3 style={heading}>Threads the world will hold ({canon.threads.length})</h3>
+        <h3 style={heading}>Threads the world will hold ({threads.length})</h3>
         <p style={sub}>
           Unresolved obligations the AI may resurface in the main campaign — sometimes years later. The world remembers.
         </p>
-        {canon.threads.length === 0 ? (
+        {threads.length === 0 ? (
           <p style={sub}>(no long-term threads emerged from this prelude)</p>
         ) : (
           <ul style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.2rem' }}>
-            {canon.threads.map(t => (
+            {threads.map(t => (
               <li key={t.id} style={{ ...body, marginBottom: '0.35rem' }}>
                 <span style={{ color: '#c4b5fd', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', marginRight: '0.5rem' }}>{t.weight}</span>
                 <strong>{t.kind.replace(/_/g, ' ')}</strong>
@@ -194,7 +213,7 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
           {totalStatBumps === 0 ? (
             <span style={sub}>none accepted</span>
           ) : (
-            Object.entries(suggested.stat_bonuses || {})
+            Object.entries(statTotals)
               .filter(([, v]) => v > 0)
               .map(([k, v]) => `${k.toUpperCase()} +${v}`)
               .join(', ')
@@ -202,30 +221,39 @@ export default function PreludeTransitionScreen({ character, onLaunchCreator, on
         </div>
         <p style={subheading}>Skills emerged</p>
         <div style={body}>
-          {(suggested.skills || []).length === 0 ? (
-            <span style={sub}>none</span>
-          ) : (
-            (suggested.skills || []).join(', ')
-          )}
+          {skillNames.length === 0 ? <span style={sub}>none</span> : skillNames.join(', ')}
         </div>
         <p style={subheading}>Trajectory leaders</p>
         <div style={body}>
-          Theme committed: <strong>{locked.committed_theme || '(not committed)'}</strong>
+          Theme committed: <strong>{payload?.committed_theme || '(not committed)'}</strong>
           <span style={sub}> {/* preserve a leading space */}</span>
         </div>
         <div style={body}>
-          Class trajectory: <strong>{suggested.class || '(undecided)'}</strong>
-          {suggested.class_score != null ? <span style={sub}> ({suggested.class_score.toFixed(1)} pts)</span> : null}
+          Class trajectory: <strong>{payload?.class_suggestion || '(undecided)'}</strong>
+          {payload?.class_score != null ? <span style={sub}> ({payload.class_score.toFixed(1)} pts)</span> : null}
         </div>
         <div style={body}>
-          Ancestry feat trajectory: <strong>{locked.ancestry_feat_id || '(undecided)'}</strong>
-          {suggested.ancestry_score != null ? <span style={sub}> ({suggested.ancestry_score.toFixed(1)} pts)</span> : null}
+          Ancestry feat trajectory: <strong>{payload?.ancestry_feat_id || '(undecided)'}</strong>
+          {payload?.ancestry_score != null ? <span style={sub}> ({payload.ancestry_score.toFixed(1)} pts)</span> : null}
         </div>
-        {Array.isArray(locked.ancestry_chapter_beats) && locked.ancestry_chapter_beats.length > 0 && (
+        {ancestryBeats.length > 0 && (
           <div style={{ marginTop: '0.5rem' }}>
             <p style={subheading}>Across your Prelude, you showed:</p>
             <ul style={{ margin: '0.2rem 0 0 0', paddingLeft: '1.2rem' }}>
-              {locked.ancestry_chapter_beats.map((beat, i) => (
+              {ancestryBeats.map((beat, i) => (
+                <li key={i} style={{ ...body, marginBottom: '0.2rem' }}>
+                  {beat.reason}
+                  <span style={sub}> (Ch{beat.chapter})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {themeBeats.length > 0 && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <p style={subheading}>What pointed you toward this theme:</p>
+            <ul style={{ margin: '0.2rem 0 0 0', paddingLeft: '1.2rem' }}>
+              {themeBeats.map((beat, i) => (
                 <li key={i} style={{ ...body, marginBottom: '0.2rem' }}>
                   {beat.reason}
                   <span style={sub}> (Ch{beat.chapter})</span>

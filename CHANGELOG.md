@@ -2,6 +2,110 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.109] - 2026-05-02 — Phase 2 chunk 5 batch 1: Migration + payload reshape + content data files
+
+Foundation pieces for chunk 5 (rebuilt main creator). Lands the data-model deltas, the §8.2.1 payload contract, and the six PM-authored content data files. The 8-step React component tree, redesigned home page, and Screen 2 path choice are batch 2 + 3 work — gated on this batch shipping.
+
+### Migration 049 (`creator_creating_phase_and_heirlooms.js`)
+
+Two changes per spec §8.1:
+
+- **`creation_phase` enum gains `'creating'`.** Manual-mode mid-creator-flow characters write this value when Step 1 advances. Final conceptual enum: `'active' | 'creating' | 'ready_for_primary'`. The column is unconstrained `TEXT DEFAULT 'active'` — no CHECK constraint, so the enum is project convention enforced at the application layer. Migration carries no DDL for the new value, only documentation.
+- **New `prelude_canon_heirlooms` table.** Schema per spec §8.1.2 — `id, character_id (FK ON DELETE CASCADE), name, type, specific_item_ref, description, awakening_hook, acquired_at_age, acquired_at_chapter, status DEFAULT 'candidate', created_at`. Index on `(character_id, status)`.
+
+### Heirloom producer DEFERRED (PM Option A)
+
+The `[OBJECT_HINT]` marker discussed in earlier-batch design conversations was never speced into v4 and never implemented in chunks 1–4. Chunk 4's marker set is `STAT_HINT / SKILL_HINT / CLASS_HINT / THEME_HINT / ANCESTRY_HINT` (`VALUE_HINT` was dropped).
+
+Chunk 5 lands the **consumer side**:
+- Migration creates the table.
+- Step 6 handoff-mode consumer renders empty-state when no candidates exist (legitimate per spec §5.6.3 "graceful degradation").
+- Manual-mode heirloom authoring writes directly to `characters.inventory` JSON with `is_heirloom=true`/`heirloom_description`/`awakening_hook`. Unaffected by deferral.
+
+The producer-side mechanism (play-time marker / post-Prelude extraction / hybrid) is its own scoped piece of design work. Annotations added inline in `PHASE_2_CREATOR_SPEC.md` §8.1.2 + §5.6.3 and `PRELUDE_IMPLEMENTATION_PLAN.md` §5d so future readers see the gap is intentional, the consumer is ready, and the producer choice is open. Parking-lot entry queued for `CONSOLIDATED_TODO.md`.
+
+### Pre-fill payload contract reshape (schema_version 1 → 2)
+
+`preludeTransitionService.buildHandoffPayload()` rewritten to emit the §8.2.1 flat shape. Old `locked{}/suggested{}/canon{}/biography{}` wrappers dropped — those were a chunk 2 stop-gap shape, no longer worth maintaining now that the new creator is in flight. Per PM ruling: producer reshapes once; existing-creator stop-gap consumer reshaped in the same change; no backwards-compat shim warranted because chunk 5 replaces the existing creator anyway.
+
+**Required §8.2.1 fields (top-level):** `setup_name`, `name`, `gender`, `race`, `subrace`, `committed_theme`, `theme_chapter_beats`, `ancestry_feat_id`, `ancestry_chapter_beats`, `class_suggestion`, `accepted_stat_bumps`, `accepted_skill_bumps`, `heirloom_candidates`, `biography_seed`, `canon_npcs`, `canon_locations`, `canon_threads`, `mentor_imprint_eligible`.
+
+**Helper fields chunk 5 also needs (top-level, documented as such):** `class_score`, `ancestry_score`, `departure_summary`, `home_region`, `home_setting`, `authority_figure`, `authority_label`, `mentor_imprint_id`, `canon_fact_count`, `name_parts: { first_name, last_name, nickname }`.
+
+**New helpers** in `preludeTransitionService.js`:
+- `pickThemeChapterBeats()` — mirror of `pickAncestryChapterBeats` for committed-theme `[THEME_HINT]` reasons. Both delegate to a shared `pickChapterBeatsByKind()`.
+- `buildAcceptedStatBumps()` — projects `kind='stat'` emergences as per-fire `{ stat, magnitude, chapter, chapter_beat }` (no aggregation; the +2-per-stat creator clamp is consumer-side per spec §5.5.5).
+- `buildAcceptedSkillBumps()` — projects `kind='skill'` emergences as `{ skill, chapter, chapter_beat }`.
+- `composeName()` — joins setup/character first+last into a single string (used for `setup_name` and effective `name`).
+
+Old `aggregateStatBonuses()` / `aggregateSkills()` helpers removed — dead code after the reshape (they returned the old `{str, dex, ...}` map / bare-skill-name array shape that nothing reads now).
+
+**`biography_seed` is structured array.** `[ { age, chapter, text }, ... ]` mapped from `character_biography` rows (`origin_age` → `age`, `origin_chapter` → `chapter`, `body` → `text`). The flattened-string projection moves from server to client — `CharacterCreationWizard` flattens inline for its single backstory textarea; chunk 5's new creator will render entries natively.
+
+**`mentor_imprint_eligible` boolean** added: true when `setup.authority_figure='mentor'` AND a `prelude_canon_npcs` row with `relationship='mentor'` exists. Independent of `mentor_imprint_id` (which records whether seeding actually happened — null on refresh runs even when eligible).
+
+**`[USE_NAME]` fallback.** Spec §8.2.1 references a `[USE_NAME]` marker for an effective-name override; the marker isn't implemented in v4 / chunk 4. Until it is, effective `name` falls back to the character's persisted first/last name. Documented inline in `buildHandoffPayload`.
+
+**Consumers updated in the same commit:**
+- `PreludeTransitionScreen.jsx` — reads top-level `canon_npcs/canon_locations/canon_threads`, `accepted_stat_bumps/accepted_skill_bumps` (with stat-totals computed inline for display), `theme_chapter_beats` (renders alongside ancestry beats with appropriate framing).
+- `CharacterCreationWizard.jsx` (existing creator pre-fill block, ~line 224-310) — reads new shape, flattens biography_seed inline for the backstory textarea, drops the suggested-Identity-Details fields that were always null in the old shape (chunk 5's Step 7 sources those from `client/src/data/themePersonalityPrompts.js` etc., not from Prelude emergence).
+
+### Six content data files (`client/src/data/`)
+
+Verbatim transcription from spec §7. PM authored ~1100 lines of in-fiction starter content; this commit gets it into the bundle.
+
+| File | Spec § | Entries | Shape |
+|---|---|---|---|
+| `themeGoldModifiers.js` | §7.1 | 21 | `{ themeId: number }`, +0.50 to −0.50 in 0.05 steps. Plus `applyGoldModifier(baselineGp, themeId)` helper (half-up rounding per §7.1.4). |
+| `themePersonalityPrompts.js` | §7.2 | 21 × 3 = 63 | `{ themeId: [{ text, alignment }] }` |
+| `themeIdealsPrompts.js` | §7.3 | 134 (4-7/theme) | Same shape. Full 9-square coverage per Decision 5; evil-axis prompts written as character commitments held by people who think they're doing right. |
+| `themeBondsPrompts.js` | §7.4 | 126 (4-6/theme) | Same shape. Bracketed placeholders preserved verbatim ([the village that raised you], [the elder], etc.). Note: §7.4 has no CG/CE entries per Open PM call §8.6 (deferred to later content pass if playtest surfaces a need). |
+| `themeFlawsPrompts.js` | §7.5 | 106 (4-6/theme) | Same shape. Flaws written as recognizable human limitations rather than villain credentials per §7.5.2. |
+| `themeBackstoryMoments.js` | §7.6 | 21 × 8 = 168 | `{ themeId: [string] }` — bare strings, NO alignment field per Decision 4 (events ≠ commitments). Bracketed placeholders preserved. |
+
+### Files
+
+- `server/migrations/049_creator_creating_phase_and_heirlooms.js` (new)
+- `server/services/preludeTransitionService.js` (reshape — `pickThemeChapterBeats`, `buildAcceptedStatBumps/SkillBumps`, `buildHandoffPayload` v2 shape, testkit exports for unit testing)
+- `client/src/components/PreludeTransitionScreen.jsx` (consumer reshape)
+- `client/src/components/CharacterCreationWizard.jsx` (consumer reshape — pre-fill block at lines 224-310)
+- `client/src/data/themeGoldModifiers.js` (new)
+- `client/src/data/themePersonalityPrompts.js` (new)
+- `client/src/data/themeIdealsPrompts.js` (new)
+- `client/src/data/themeBondsPrompts.js` (new)
+- `client/src/data/themeFlawsPrompts.js` (new)
+- `client/src/data/themeBackstoryMoments.js` (new)
+- `tests/migration-049.test.js` (new — 19 assertions)
+- `tests/payload-contract.test.js` (new — 70 assertions)
+- `tests/theme-content-data.test.js` (new — 1284 assertions)
+- `PHASE_2_CREATOR_SPEC.md` (annotations — §8.1.2, §5.6.3 producer-deferred notes)
+- `PRELUDE_IMPLEMENTATION_PLAN.md` (annotation — §5d producer-deferred note + acknowledgment that earlier-batch OBJECT_HINT discussion was never speced)
+
+### Test sweep
+
+| Suite | Result |
+|---|---|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 180 passed |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/prelude-transition.test.js`          | ✅ 25 passed |
+| `tests/migration-049.test.js` (new)         | ✅ 19 passed |
+| `tests/payload-contract.test.js` (new)      | ✅ 70 passed |
+| `tests/theme-content-data.test.js` (new)    | ✅ 1284 passed |
+
+**Total:** 1996 assertions green (623 existing + 1373 new). Vite build clean.
+
+### Notes
+
+- The data files use direct JS object exports rather than separate JSON files because the alignment-tagged shape benefits from JS comments documenting Decision 3/4/5 in-source. Bundle size impact is small — the prompt/moment text was already going to ship somewhere.
+- Smoke test verifies counts, all 21 themes present, alignment indicators valid 9-square, bracketed placeholders preserved on spot-check entries. Word-by-word transcription is a manual read job; not automated.
+- Migration is idempotent (`CREATE IF NOT EXISTS` + `INSERT OR REPLACE` patterns elsewhere). Applies cleanly on fresh DB and on existing user data per the 19-assertion test.
+
 ## [1.0.0.108] - 2026-05-01 — Phase 2 follow-up: ANCESTRY_HINT reason as celebration beats
 
 Small post-Phase-2 patch from a design clarification surfaced during PM's per-step creator spec walkthrough. The chunk-5 creator's locked-feat celebration card needs to render past-tense narrative bullets justifying why play pointed at this ancestry feat. The infrastructure for that — `reason` field captured + persisted with chapter context — already shipped in chunk 4. This patch adds (a) explicit prompt-side style guidance for what makes a *good* reason, and (b) handoff-payload surfacing of the chapter beats so chunk 5 (and the gap-window transition screen) can render them.

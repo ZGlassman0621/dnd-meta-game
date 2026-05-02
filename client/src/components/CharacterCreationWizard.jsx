@@ -223,23 +223,35 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
   // Build initial form data - either from existing character or defaults
   const buildInitialFormData = () => {
     if (!editCharacter) {
-      // Phase 2 chunk 2 — when preludePayload is provided, pre-fill the
-      // wizard with what the existing creator can consume. Spread payload
-      // values over blank defaults; values not in the payload stay blank.
-      // Race/subrace come in as JSON keys (e.g. 'half_elf'), already in the
-      // normalized form the creator's selectors expect — preludeSetup
-      // persists them that way.
+      // Phase 2 chunk 5.B — payload contract reshape. Reads §8.2.1 flat
+      // shape (schema_version=2). Earlier shape with locked/suggested/
+      // biography nesting (schema_version=1) is no longer emitted by the
+      // producer; this consumer assumes v2 and is the stop-gap until the
+      // chunk-5 rebuilt creator replaces it. Race/subrace come in as JSON
+      // keys (e.g. 'half_elf'), already in the normalized form the
+      // creator's selectors expect — preludeSetup persists them that way.
       const p = preludePayload || {}
-      const locked = p.locked || {}
-      const suggested = p.suggested || {}
-      const biography = p.biography || {}
+      const np = p.name_parts || {}
+      // Flatten the structured biography_seed for the existing creator's
+      // single backstory textarea. Note: this is a one-way mirror — the
+      // canonical record lives in `character_biography` (migration 048).
+      // Edits to this textarea do NOT round-trip back to that table; the
+      // table is the source of truth. Chunk 5's rebuilt creator reads
+      // entries directly and renders them as appendable.
+      const flattenedBackstory = (p.biography_seed || [])
+        .map(e => {
+          const tag = e.age != null ? `Age ${e.age}` : null
+          return tag ? `${tag} — ${e.text}` : e.text
+        })
+        .filter(s => s && s.trim())
+        .join('\n\n')
       return {
-        first_name: locked.first_name || '',
-        last_name: locked.last_name || '',
-        nickname: locked.nickname || '',
-        gender: locked.gender || '',
-        race: locked.race || '',
-        subrace: locked.subrace || '',
+        first_name: np.first_name || '',
+        last_name: np.last_name || '',
+        nickname: np.nickname || '',
+        gender: p.gender || '',
+        race: p.race || '',
+        subrace: p.subrace || '',
         background: '',
         theme_id: '',
         theme_path_choice: '',
@@ -249,7 +261,7 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         // Suggested class from the Ch1-3 [CLASS_HINT] tally; the player
         // can change it freely. Out of scope for this stop-gap: the
         // locked/celebrated UI affordance for handoff fields — chunk 5.
-        class: suggested.class || '',
+        class: p.class_suggestion || '',
         subclass: '',
         level: 1,
         current_location: 'Starting Town',
@@ -262,31 +274,27 @@ function CharacterCreationWizard({ onCharacterCreated, onCancel, editCharacter =
         cha: null,
         avatar: null,
         avatarPreview: null,
-        alignment: suggested.alignment || '',
+        // Identity Details fields (alignment, lifestyle, physical, prompt-driven
+        // expansions) are NOT pre-filled in the §8.2.1 contract — chunk 5's
+        // Step 7 sources them from PM-authored prompts/moments per theme,
+        // not from Prelude emergence. Existing creator leaves them blank.
+        alignment: '',
         faith: '',
-        lifestyle: suggested.lifestyle || '',
-        hair_color: suggested.hair_color || '',
-        skin_color: suggested.skin_color || '',
-        eye_color: suggested.eye_color || '',
-        height: suggested.height || '',
-        weight: suggested.weight || '',
+        lifestyle: '',
+        hair_color: '',
+        skin_color: '',
+        eye_color: '',
+        height: '',
+        weight: '',
         age: '',
-        personality_traits: suggested.personality_traits || '',
-        ideals: suggested.ideals || '',
-        bonds: suggested.bonds || '',
-        flaws: suggested.flaws || '',
+        personality_traits: '',
+        ideals: '',
+        bonds: '',
+        flaws: '',
         organizations: '',
         allies: '',
         enemies: '',
-        // Flatten the biography seed into the existing creator's backstory
-        // textarea. Note: this is a one-way mirror — the canonical record
-        // lives in `character_biography` (migration 048). Edits to this
-        // textarea do NOT round-trip back to that table; the table is the
-        // source of truth. Chunk 5's rebuilt creator reads the entries
-        // directly. If the player edits this textarea during the gap
-        // window between chunk 2 and chunk 5, those edits stay on the
-        // `backstory` column only.
-        backstory: biography.flattened_backstory || '',
+        backstory: flattenedBackstory,
         other_notes: '',
         equipment_choice: 'equipment',
         starting_equipment: [],

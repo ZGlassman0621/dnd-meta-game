@@ -1,5 +1,40 @@
 # Test Results Log
 
+## 2026-05-02 — v1.0.109 Phase 2 chunk 5 batch 1: Migration + payload contract + content data
+
+**Change scope:** Three foundation pieces for chunk 5 (rebuilt main creator).
+1. **Migration 049** — creates `prelude_canon_heirlooms` table per spec §8.1.2; documents `'creating'` value added to the `creation_phase` enum convention (column has no CHECK constraint, so the enum is application-level).
+2. **Pre-fill payload reshape** — `preludeTransitionService.buildHandoffPayload()` rewritten to emit the §8.2.1 flat shape (schema_version=2). Old `locked{}/suggested{}/canon{}/biography{}` wrappers dropped. Added `pickThemeChapterBeats()` (mirror of ancestry helper); `buildAcceptedStatBumps` / `buildAcceptedSkillBumps` preserve per-fire chapter beats; `biography_seed` becomes structured array `[{age, chapter, text}]`; `mentor_imprint_eligible` boolean added. Existing consumers (PreludeTransitionScreen, CharacterCreationWizard pre-fill block) updated to read the new shape.
+3. **Six content data files** — verbatim transcription from spec §7. 21 + 63 + 134 + 126 + 106 + 168 = 618 entries.
+
+**Heirloom producer:** intentionally deferred per Option A. Spec §8.1.2 + §5.6.3 + v4 §5d annotated to record what shipped (table + consumer empty-state) and what's intentionally open (producer mechanism choice).
+
+**Client build:** ✅ passed (1.22s).
+
+**Regression suites:**
+
+| Suite | Result |
+|-------|--------|
+| `tests/prelude-setup.test.js`               | ✅ 59 passed |
+| `tests/prelude-arc.test.js`                 | ✅ 15 passed |
+| `tests/prelude-markers.test.js`             | ✅ 140 passed |
+| `tests/prelude-prompt.test.js`              | ✅ 180 passed |
+| `tests/prelude-violation-detection.test.js` | ✅ 91 passed |
+| `tests/prelude-canon-threads.test.js`       | ✅ 21 passed |
+| `tests/prelude-auto-model.test.js`          | ✅ 33 passed |
+| `tests/prelude-theme-commitment.test.js`    | ✅ 59 passed |
+| `tests/prelude-transition.test.js`          | ✅ 25 passed |
+| `tests/migration-049.test.js` (new)         | ✅ 19 passed |
+| `tests/payload-contract.test.js` (new)      | ✅ 70 passed |
+| `tests/theme-content-data.test.js` (new)    | ✅ 1284 passed |
+
+**Total:** 1996 assertions green (623 existing + 1373 new). No regressions.
+
+**Notes:**
+- Payload schema bumped 1 → 2; old shape no longer emitted. Consumers were updated in the same change (per PM ruling — chunk 5 replaces the old creator anyway, no backwards-compat shim warranted).
+- `[USE_NAME]` marker referenced in spec §8.2.1 but not implemented; effective `name` falls back to character first/last (which equals setup name today since the prelude doesn't mutate it). Spec-compliant fallback documented inline in `buildHandoffPayload`.
+- Six new content files in `client/src/data/` ship in the bundle; smoke test verifies counts + alignment validity + bracketed-placeholder preservation. Verbatim word-by-word transcription is a manual read job — not automated.
+
 ## 2026-05-01 — v1.0.108 Phase 2 follow-up: ANCESTRY_HINT reason as celebration beats
 
 **Change scope:** Rule 15d-bis added to preludeArcPromptBuilder (style guidance for the `reason` field on `[ANCESTRY_HINT]`). `pickAncestryChapterBeats()` helper added to preludeTransitionService — picks one beat per chapter (most recent fire), chronologically ordered, max 3. Surfaced in the handoff payload at `locked.ancestry_chapter_beats` and rendered in PreludeTransitionScreen.
