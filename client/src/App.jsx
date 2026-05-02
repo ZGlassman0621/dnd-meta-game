@@ -38,6 +38,8 @@ const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 // preview is opt-in via query param and the styles/fonts are also
 // bundled globally per CLAUDE.md scoping conventions.
 import CharacterCreatorV2 from './components/creator/CharacterCreatorV2.jsx'
+import HomeScreenV2 from './components/creator/HomeScreenV2.jsx'
+import PathChoiceScreen from './components/creator/PathChoiceScreen.jsx'
 
 // Preview-only handoff payloads — exercise the celebration card on
 // Step 2 + Step 3, the narrative-continuity card on Step 4, the bump
@@ -191,6 +193,155 @@ const PREVIEW_FIXTURES = {
   'single-bump': PREVIEW_FIXTURE_SINGLE_BUMP,
   hermit: PREVIEW_FIXTURE_HERMIT
 }
+
+// Phase 2 chunk 5 batch 3 checkpoint 3 — home page roster fixtures.
+// Exercises all three card states (active / creating / ready_for_primary)
+// for visual review of the Diablo-4 Create entry + per-state badge
+// treatment + meta line composition. Removed when 5.L.6 wires the new
+// home page to the real characters API as the live path.
+/**
+ * Phase 2 chunk 5 batch 3 checkpoint 3 sub-router for the new home →
+ * Screen 2 → creator preview flow. Lets PM walk through the full
+ * user journey at visual review.
+ *
+ * URL parameters:
+ *   ?creator=v2                       → opens directly at the creator
+ *   ?creator=v2&from=home             → opens at the new home page
+ *   ?creator=v2&from=path             → opens at Screen 2 (path choice)
+ *   ?creator=v2&handoff=1&fixture=X   → opens at the creator in handoff mode (existing)
+ *
+ * Removed in 5.L.6 cleanup when the new flow becomes the live path.
+ */
+function CreatorV2Preview({ startAt, previewPayload, onExit }) {
+  const initialRoute = startAt === 'home' ? 'home' : startAt === 'path' ? 'path' : 'wizard'
+  const [route, setRoute] = useState(initialRoute)
+  const [activePayload, setActivePayload] = useState(previewPayload)
+
+  if (route === 'home') {
+    return (
+      <div className="creator-v2">
+        <div className="appbar">
+          <div className="brand">
+            D <span className="amp">&amp;</span> D
+            <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
+          </div>
+          <div className="crumbs">The roster</div>
+          <div className="spacer" />
+          <button type="button" className="btn ghost" onClick={onExit}>Exit preview</button>
+        </div>
+        <div className="stage">
+          <HomeScreenV2
+            characters={PREVIEW_HOME_CHARACTERS}
+            onNew={() => setRoute('path')}
+            onOpenCharacter={(c) => {
+              if (c.state === 'ready_for_primary') {
+                // Resume in handoff mode — use the Verena fixture as a
+                // representative payload until 5.L.3 wires real per-character
+                // handoff payloads.
+                setActivePayload(PREVIEW_FIXTURE_VERENA)
+                setRoute('wizard')
+              } else if (c.state === 'creating') {
+                // Resume manual creator. 5.L.3 will load the character's
+                // saved creator state; preview just opens the empty creator.
+                setActivePayload(null)
+                setRoute('wizard')
+              } else {
+                window.alert(`Active character — would open the game screen for ${c.name}. (Out of scope for the v2 preview; live cutover wires this.)`)
+              }
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (route === 'path') {
+    return (
+      <div className="creator-v2">
+        <div className="appbar">
+          <div className="brand">
+            D <span className="amp">&amp;</span> D
+            <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
+          </div>
+          <div className="crumbs">A choice of beginnings</div>
+          <div className="spacer" />
+          <button type="button" className="btn ghost" onClick={onExit}>Exit preview</button>
+        </div>
+        <div className="stage center">
+          <PathChoiceScreen
+            onPrelude={() => window.alert('Prelude path → opens PreludeSetupWizard. (Out of scope for v2 preview; live cutover wires this.)')}
+            onCampaign={() => {
+              setActivePayload(null)
+              setRoute('wizard')
+            }}
+            onBack={() => setRoute('home')}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // wizard route
+  return (
+    <CharacterCreatorV2
+      preludePayload={activePayload}
+      onExit={onExit}
+    />
+  )
+}
+
+const PREVIEW_HOME_CHARACTERS = [
+  {
+    id: 'fx-1',
+    state: 'ready_for_primary',
+    name: 'Verena Ashfall',
+    glyph: 'V',
+    race_label: 'Variant Human',
+    theme_label: 'Soldier',
+    last: 'Prelude completed 2 days ago'
+  },
+  {
+    id: 'fx-2',
+    state: 'active',
+    name: 'Aelarra Stormwhisper',
+    glyph: 'A',
+    race_label: 'Wood Elf',
+    theme_label: 'Outlander',
+    class_label: 'Ranger',
+    level: 7,
+    campaign: 'The Hollow Crown',
+    last: 'Yesterday'
+  },
+  {
+    id: 'fx-3',
+    state: 'creating',
+    name: 'Brenn',
+    glyph: 'B',
+    race_label: 'Mountain Dwarf',
+    last: 'Step 2 of 8 · 4 days ago'
+  },
+  {
+    id: 'fx-4',
+    state: 'active',
+    name: 'Quill of the Late Lantern',
+    glyph: 'Q',
+    race_label: 'Tiefling',
+    theme_label: 'Charlatan',
+    class_label: 'Bard',
+    level: 4,
+    campaign: 'Salt & Cinder',
+    last: 'Last week'
+  },
+  {
+    id: 'fx-5',
+    state: 'ready_for_primary',
+    name: 'Halvor',
+    glyph: 'H',
+    race_label: 'Half-Elf',
+    theme_label: 'Investigator',
+    last: 'Prelude completed yesterday'
+  }
+]
 
 // Global fetch interceptor — adds auth token to all /api requests automatically.
 // This avoids touching every fetch call across all components.
@@ -459,14 +610,16 @@ function App() {
     const fixture = PREVIEW_FIXTURES[fixtureName] || PREVIEW_FIXTURES.verena
     const previewPayload = useHandoff ? fixture : null
     return (
-      <CharacterCreatorV2
-        preludePayload={previewPayload}
+      <CreatorV2Preview
+        startAt={queryParams.get('from') || 'wizard'}
+        previewPayload={previewPayload}
         onExit={() => {
           // Strip the query params and reload into the normal app shell.
           const url = new URL(window.location.href)
           url.searchParams.delete('creator')
           url.searchParams.delete('handoff')
           url.searchParams.delete('fixture')
+          url.searchParams.delete('from')
           window.history.replaceState({}, '', url.toString())
           window.location.reload()
         }}

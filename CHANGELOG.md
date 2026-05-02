@@ -2,6 +2,82 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.113] - 2026-05-02 — Phase 2 chunk 5 batch 3 checkpoint 3 sub-checkpoint 1: Home page + Screen 2 + bundle-load regression fix
+
+First half of checkpoint 3 — the user-facing visual surfaces that wrap the rebuilt creator. Save/resume wiring + canon transfer + cleanup land in sub-checkpoint 2.
+
+### Bundle-load regression fix (v1.0.112 fallout)
+
+Step 6's `ALL_TOOLS` const at module scope assumed `equipmentData.tools` was an array; it's actually a dict grouped as `artisansTools / gamingSets / otherTools`. Calling `.map` on a dict threw `TypeError` at module load, which cascaded:
+
+```
+Step6Equipment.jsx fails to evaluate
+  → CharacterCreatorV2.jsx fails to import it
+    → App.jsx fails to import CharacterCreatorV2
+      → entire bundle fails to load
+        → white screen on every URL
+```
+
+The build passed because esbuild only checks syntax, not runtime evaluation. Module-load errors only surface when a browser executes the code. **Lesson logged for memory**: always run the dev server briefly when shipping anything that touches new data file shapes — build-clean is necessary but not sufficient for module-scope code that consumes imported data.
+
+Fix: rewrote `ALL_TOOLS` as an IIFE that flattens across the three tool groups + handles string-or-object entries.
+
+### Home page V2 (`HomeScreenV2.jsx`)
+
+Per `PHASE_2_CREATOR_SPEC.md` §3. Single-section "Your characters" layout with:
+
+- **Heading**: *Your Characters*
+- **Subheading (italic serif lede)**: *Pick a character to get started.*
+- **Right-side help text**: *"Active characters, in-progress drafts, and Preludes ready to step forward — all here."*
+- **Diablo-4-style "Create New Character"** entry as the first card. Visually distinct (dashed border, "+" affordance, no portrait/name/level) but lives in the same 3-column grid as character cards. Per spec §3.2 + PM ruling.
+- **Three card states** (active / creating / ready_for_primary). The two in-progress states share the desaturated-portrait visual treatment per PM ruling 2026-05-02; only the badge text distinguishes them ("Draft" with outlined accent for `creating`; "Prelude · Step forward" with filled accent for `ready_for_primary`). Active characters get no badge — the absence IS the "ready to play" signal.
+- **Per-state click routing**: active → game screen (out of v2 scope); creating → resume manual creator at last step; ready_for_primary → resume in handoff mode.
+
+### Screen 2 — Path choice (`PathChoiceScreen.jsx`)
+
+Per `PHASE_2_CREATOR_SPEC.md` §4. Two co-equal cards (Prelude on the left, Campaign on the right). Body copy verbatim from spec §4.4 / §4.5. Eyebrow + lede framing line per §4.3. "← Back to roster" ghost button below the cards.
+
+Both cards use equal weight (same size, same hierarchy) per spec §4.2 — neither path is presented as "the recommended" path.
+
+### App.jsx integration (preview only)
+
+`?creator=v2` query param now opens an internal sub-router (`CreatorV2Preview`) with three routes:
+- `?creator=v2&from=home` — opens at the new home page
+- `?creator=v2&from=path` — opens at Screen 2 directly
+- `?creator=v2` (no `from`) — opens at the creator wizard (existing behavior)
+- `?creator=v2&handoff=1&fixture=verena|single-bump|hermit` (existing) — handoff mode wizard with fixture
+
+Five preview character fixtures wired so PM can review all three card states + the Diablo-4 entry: Verena (ready_for_primary), Aelarra (active), Brenn (creating), Quill (active), Halvor (ready_for_primary).
+
+### CSS — `creator-theme.css` extended
+
+Added `~240 LOC` of home + path-choice styles, all scoped under `.creator-v2`:
+- `.home-head` flex layout (heading left, help right)
+- `.charlist` 3-column grid
+- `.charcard` (active state baseline) + `.charcard.in-progress` (desaturated glyph) + `.charcard.create` (dashed-border action card) + `.charcard .badge.draft` + `.charcard .badge.prelude`
+- `.pathframe` centered + `.pathcards` 2-column grid + `.pathcard` (with hover translateY + arrow translation)
+
+### Files
+
+- `client/src/components/creator/HomeScreenV2.jsx` (new)
+- `client/src/components/creator/PathChoiceScreen.jsx` (new)
+- `client/src/components/creator/Step6Equipment.jsx` (ALL_TOOLS bug fix)
+- `client/src/App.jsx` (sub-router + 5 fixture characters)
+- `client/src/styles/creator-theme.css` (~240 LOC home + path styles)
+
+### Verification
+
+- Vite build clean (1.34s)
+- Dev server confirmed loading after fix (verified via console error trace)
+- 2008 prelude + chunk 5 assertions still green (no regressions)
+
+### Intentional deferrals (sub-checkpoint 2)
+
+- **Save/resume wiring** — Step-1-advance creates `'creating'` row; subsequent step advances PUT to update; home cards resume into the creator with full state
+- **Canon transfer service** — `transferCanonToCampaign()` server-side: copies `prelude_canon_npcs / locations / threads` into campaign-side `npcs / locations / campaign_threads`; seeds `mentor_imprints` when applicable; called from PUT `/api/character/:id` on `'ready_for_primary' → 'active'` transition
+- **Migration 050** — `physical_build` column + any other small additions
+- **Cleanup + cutover** — remove `?creator=v2` query-param wiring; new home page becomes the live path; `CharacterCreationWizard.jsx` hidden with deprecation comment per CLAUDE.md "deprecate by hiding nav, not deleting code"
+
 ## [1.0.0.112] - 2026-05-02 — Phase 2 chunk 5 batch 3 checkpoint 2: Step 7 (Identity Details) + Step 8 (Review) + Submit + persistence + PM-review polish
 
 Lands the judgment-heavy half of the rebuilt creator. Step 7 (Identity Details) introduces the prompts/moments interaction patterns (Model A click-to-fill + Model B multi-select chips) plus the always-visible alignment chips. Step 8 (Review) renders the assembled character as a read-only preview card with editable summary list + Edit-jumps + Submit branching. Server-side: POST/PUT extended to handle the new `'creating'` phase and the handoff submit's heirloom flip. Plus a substantial PM review-feedback round.

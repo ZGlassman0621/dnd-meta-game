@@ -591,3 +591,243 @@
   vertical-align: middle;
   margin: 0 8px;
 }
+
+.creator-v2 .frame.wide { max-width: var(--content-w-wide); }
+
+/* === Home page ====================================================== */
+/* Per PHASE_2_CREATOR_SPEC.md §3 — single-section "Your characters"   */
+/* grid; "Create New Character" as the first card (Diablo-4 pattern).  */
+
+.creator-v2 .home-head {
+  padding: 0 0 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+}
+
+.creator-v2 .charlist {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.creator-v2 .charcard {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  padding: 24px;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  cursor: pointer;
+  transition: all .15s ease;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+.creator-v2 .charcard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+  border-color: var(--ink-3);
+}
+
+.creator-v2 .charcard .portrait {
+  height: 130px;
+  margin: -24px -24px 18px;
+  background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-card) 100%);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.creator-v2 .charcard .portrait .glyph {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 64px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+}
+/* In-progress states share the desaturated portrait treatment per
+   PM ruling 2026-05-02 — both 'creating' and 'ready_for_primary'
+   communicate "this character isn't fully born yet"; distinguishing
+   manual-from-handoff is less important than distinguishing
+   in-progress-from-active. */
+.creator-v2 .charcard.in-progress .portrait .glyph {
+  color: var(--ink-3);
+}
+
+.creator-v2 .charcard .name {
+  font-family: var(--serif);
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.creator-v2 .charcard .meta {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+}
+
+.creator-v2 .charcard .badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--bg-card);
+}
+.creator-v2 .charcard .badge.draft {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.creator-v2 .charcard .badge.prelude {
+  background: var(--accent);
+  color: #fff;
+}
+
+.creator-v2 .charcard .footline {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule-soft);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Diablo-4 "Create New Character" entry — visually distinct (dashed
+   border, "+" affordance, no portrait/name/level) but lives in the
+   same grid as character cards so the act of creating reads as part
+   of the roster rather than a separate workflow. PM note: failure
+   mode is the user thinking they have one more character than they
+   do — the dashed-border-no-portrait treatment is the differentiator. */
+.creator-v2 .charcard.create {
+  background: transparent;
+  border: 1px dashed var(--rule);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 48px 24px;
+  min-height: 280px;
+}
+.creator-v2 .charcard.create:hover {
+  border-color: var(--accent);
+  border-style: solid;
+  background: var(--bg-card);
+}
+.creator-v2 .charcard.create .plus {
+  font-family: var(--serif);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--accent);
+}
+.creator-v2 .charcard.create .label-big {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--ink);
+}
+.creator-v2 .charcard.create .sub {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* === Path choice (Screen 2) ========================================== */
+/* Per PHASE_2_CREATOR_SPEC.md §4 — two-card layout, equal weight,    */
+/* Prelude on the left + Campaign on the right. Framing line above.   */
+
+.creator-v2 .pathframe {
+  text-align: center;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.creator-v2 .pathframe .lede {
+  max-width: 720px;
+  margin: 28px auto 56px;
+  font-size: 24px;
+}
+.creator-v2 .pathcards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  text-align: left;
+}
+.creator-v2 .pathcard {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  padding: 48px 44px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  cursor: pointer;
+  transition: all .2s ease;
+  position: relative;
+  min-height: 460px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+.creator-v2 .pathcard * { text-align: left; }
+.creator-v2 .pathcard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card);
+  border-color: var(--ink-3);
+}
+.creator-v2 .pathcard h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 36px;
+  line-height: 1.1;
+  margin: 0;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.creator-v2 .pathcard p {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+  text-wrap: pretty;
+}
+.creator-v2 .pathcard .cta {
+  margin-top: auto;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule-soft);
+}
+.creator-v2 .pathcard .cta .arrow { transition: transform .2s; }
+.creator-v2 .pathcard:hover .cta .arrow { transform: translateX(4px); }

@@ -7,10 +7,24 @@ import equipmentData from '../../data/equipment.json'
 
 // Curated tool list from equipment.json + musical instruments. Both
 // fall under "Tool" in the heirloom type taxonomy per spec §5.6.5.
-const ALL_TOOLS = [
-  ...((equipmentData.tools || []).map(t => ({ name: typeof t === 'string' ? t : t.name }))),
-  ...((equipmentData.musicalInstruments || []).map(i => ({ name: typeof i === 'string' ? i : i.name })))
-]
+// `equipment.json.tools` is grouped (artisansTools / gamingSets /
+// otherTools) — flatten across groups; entries can be strings or
+// objects with a `name` field.
+const ALL_TOOLS = (() => {
+  const out = []
+  const toolsGroups = equipmentData.tools || {}
+  for (const groupKey of Object.keys(toolsGroups)) {
+    const group = toolsGroups[groupKey]
+    if (!Array.isArray(group)) continue
+    for (const t of group) {
+      out.push({ name: typeof t === 'string' ? t : (t?.name || String(t)) })
+    }
+  }
+  for (const i of (equipmentData.musicalInstruments || [])) {
+    out.push({ name: typeof i === 'string' ? i : (i?.name || String(i)) })
+  }
+  return out
+})()
 
 /**
  * Step 6 — Equipment. Per PHASE_2_CREATOR_SPEC.md §5.6.
