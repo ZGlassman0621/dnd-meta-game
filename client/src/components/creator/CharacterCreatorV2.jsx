@@ -4,6 +4,8 @@ import Step1Identity from './Step1Identity.jsx'
 import Step2Ancestry from './Step2Ancestry.jsx'
 import Step3Theme from './Step3Theme.jsx'
 import Step4ClassCalling from './Step4ClassCalling.jsx'
+import Step5AbilityScores from './Step5AbilityScores.jsx'
+import Step6Equipment from './Step6Equipment.jsx'
 
 /**
  * Character Creator V2 — chunk 5 rebuilt main creator.
@@ -74,10 +76,12 @@ export default function CharacterCreatorV2({ preludePayload = null, onExit }) {
           {step === 1 && <Step2Ancestry {...stepProps} />}
           {step === 2 && <Step3Theme {...stepProps} />}
           {step === 3 && <Step4ClassCalling {...stepProps} />}
-          {step >= 4 && (
-            // Steps 5–8 land in batch 3. Until then this is a placeholder
-            // so the stepper navigation doesn't crash if the user clicks
-            // ahead.
+          {step === 4 && <Step5AbilityScores {...stepProps} />}
+          {step === 5 && <Step6Equipment {...stepProps} />}
+          {step >= 6 && (
+            // Steps 7–8 land in checkpoint 2 (Step 7 + Step 8 + Submit
+            // + persistence). Until then this is a placeholder so the
+            // stepper navigation doesn't crash if the user clicks ahead.
             <PlaceholderStep stepNum={step + 1} />
           )}
 
@@ -106,8 +110,7 @@ function PlaceholderStep({ stepNum }) {
           <div className="eyebrow">Step {String(stepNum).padStart(2, '0')} of 08</div>
           <h1 className="h-step">{labels[stepNum] || `Step ${stepNum}`}</h1>
           <p className="lede" style={{ marginTop: 12 }}>
-            This step lands in batch 3 of chunk 5. Step 4 is the last
-            step shipped in batch 2; use Back to return.
+            This step lands in checkpoint 2 of batch 3. Use Back to return.
           </p>
         </div>
       </div>
@@ -116,6 +119,7 @@ function PlaceholderStep({ stepNum }) {
 }
 
 function buildInitialState(payload) {
+  const blankBaseScores = { str: null, dex: null, con: null, int: null, wis: null, cha: null }
   if (!payload) {
     return {
       // Step 1
@@ -126,12 +130,22 @@ function buildInitialState(payload) {
       theme_id: '',
       // Step 4
       class_id: '', subclass_id: '', fighting_style: '',
-      // (Steps 5–8 fields land in batch 3)
+      // Step 5
+      generation_method: 'standard_array',
+      base_scores: blankBaseScores,
+      racial_choice_picks: [],
+      bump_assignments: [],
+      selected_skills: [],
+      // Step 6
+      equipment_picks: {},
+      heirloom: null,
+      heirloom_candidate_id: null
+      // (Steps 7–8 fields land in checkpoint 2)
     }
   }
   // Handoff seed from §8.2.1 payload shape (schema_version=2). Only
-  // the fields the existing batch-2 steps consume are mirrored;
-  // additional fields land as their owning steps ship.
+  // the fields the batch-2/3 steps consume are mirrored; additional
+  // fields land as their owning steps ship.
   const np = payload.name_parts || {}
   return {
     first_name: np.first_name || '',
@@ -145,6 +159,14 @@ function buildInitialState(payload) {
     theme_id: payload.committed_theme || '',
     class_id: payload.class_suggestion || '',
     subclass_id: '',
-    fighting_style: ''
+    fighting_style: '',
+    generation_method: 'standard_array',
+    base_scores: blankBaseScores,
+    racial_choice_picks: [],
+    bump_assignments: [],
+    selected_skills: [],
+    equipment_picks: {},
+    heirloom: null,
+    heirloom_candidate_id: null
   }
 }

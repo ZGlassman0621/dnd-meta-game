@@ -2,6 +2,83 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.111] - 2026-05-02 — Phase 2 chunk 5 batch 3 checkpoint 1: Step 5 (Ability Scores) + Step 6 (Equipment) + bump celebration card
+
+First of three checkpoints inside batch 3. Lands the two cleanest standalone steps — bump celebration card (third instance of the celebration primitive), gold modifier display (three variants), and heirloom flow shape. Step 7 + Step 8 + Submit + persistence land in checkpoint 2; home page + Screen 2 + cleanup land in checkpoint 3.
+
+### Step 5 — Ability Scores (`Step5AbilityScores.jsx`)
+
+Per spec §5.5. Manual mode subsections in order: generation method picker (Standard Array / Manual) → ability score assignment (six rows) → racial choice picker when applicable → skills picker → Variant Human bonus general feat (when human + Variant subrace).
+
+**Standard Array UX**: click-to-claim pattern (Pattern B from spec §5.5.6). Click "Claim" on an ability row → click a value in the pool. Click an assigned value to release it back. Used values gray out in the pool. Chose this over drag-and-drop for accessibility + mobile fit; drag-and-drop on web is fiddly and the spec leaves the mechanism open ("what's locked is the goal — visible at a glance, assignment is bound, not error-prone").
+
+**Manual mode**: numeric inputs with **3–20 base range** per spec §5.5.7 (intentionally wide — supports roleplay-driven custom builds like frail scholars or savants).
+
+**Racial bonus handling** (`races.json`): supports both static (`{wis: 1}`) and choice (`{choice: 2}`) shapes. Half-Elf's mixed shape (`{cha: 2, choice: 2}`) decomposes correctly — fixed +2 CHA pre-applied, 2 player choices via chip picker.
+
+**L1 cap 18 clamp** per Decision E. When raw `base + racial + bumps > 18`, the total renders in accent color with a "(capped from N)" annotation below. Visible, not silent (per §5.5.7 explicit requirement).
+
+**Skills picker**: chip-style multi-select within `class.skillChoices` allotment, scoped to `class.skillOptions`. Emergence skills from `accepted_skill_bumps` pre-check + are read-only + count toward the allotment (caps at 2 per v4 §5e). Allotment math currently subtracts emergence count; doesn't yet subtract class/theme/ancestry-granted skills (spec §5.7 ack: "engineering: confirm against current `class_skills` data shapes" — left for batch 3 follow-up since the data shape needs confirming first).
+
+**Variant Human bonus general feat picker**: placeholder. Real prereq-filtered feat picker is a follow-up — flagged inline with help text rather than faking a control.
+
+### Step 5 — BumpCelebrationCard (`BumpCelebrationCard.jsx`)
+
+Third instance of the celebration primitive (after Step 2 + Step 3). Two shape differences from the standard CelebrationCard:
+
+1. **Count-aware heading** per spec §5.5.5: 1 → "One moment shaped you:" / 2 → "Two moments shaped you:" / N → "[N] moments shaped you:". Verb stays "shaped" per the §5.5.5 verb-choice note (intentionally neutral about *how* the moments did their work — the chapter-beat text carries the texture).
+2. **Per-bump assignment dropdown** paired with each beat. Default to alphabetical first-fit per §5.5.7 (cha → con → dex → int → str → wis); player override is one click. Live-updates the bumps column on the ability table below.
+
+The `defaultBumpAssignments(bumps)` helper is a named export so checkpoint 2's payload-shape tests can lock the alphabetical-first-fit behavior.
+
+### Step 6 — Equipment (`Step6Equipment.jsx`)
+
+Per spec §5.6. Three subsections in order: class equipment package picker → starting gold display (read-only, calculated) → heirloom flow.
+
+**Class equipment package picker**: reads `class.startingEquipment.choices` from classes.json. Each choice is "choose 1 of N options" — renders as its own picker row. Fighter has 4 choices (armor, primary weapon, secondary weapon, pack); other classes vary.
+
+**Starting gold display** — three display variants per spec §7.1.4:
+- Zero modifier: `Starting gold: 125 gp (Fighter baseline)`
+- Positive modifier (e.g., Investigator +10%): `Starting gold: 220 gp (Rogue baseline 200 gp + Investigator theme adjustment +10%)`
+- Negative modifier (e.g., Hermit −35%): `Starting gold: 130 gp (Druid baseline 200 gp + Hermit theme adjustment −35%)` — using **U+2212** minus glyph (NOT a hyphen) per spec §7.1.4 explicit requirement
+- Read-only (no interaction). Calculation via `applyGoldModifier()` from `themeGoldModifiers.js` (half-up rounding per §7.1.4)
+
+**Heirloom flow** — two paths via `useOptInPath` branch:
+- **Handoff with candidates**: candidate picker with name + type + description + awakening hook per candidate. Player picks one or "Carry none". NOT REACHED today since producer is deferred per Option A — kept wired so it lights up automatically when producer-side work lands.
+- **Opt-in path** (manual mode + handoff with zero candidates — the only path handoff players see today): opt-in prompt → if accepted, manual authoring form (name, type [7-option select], specific item [free text — see note], description, awakening hook). Cancel-heirloom button releases cleanly back to opt-in state.
+
+The handoff-with-zero-candidates path uses softened lead-in copy: *"Your Prelude didn't surface a particular object as a marked keepsake — but if there's something you carry forward in spirit, you can author it here."*
+
+**Heirloom specific-item field is free text for all types** (including Weapon / Armor / Tool which spec §5.6.5 wants as `equipment.json` selects with mechanical baseline derivation). Free-text fallback is honest about the gap; type-aware help text tells the player the underlying type sets baseline stats. Real `equipment.json` filtering is a separate batch-3 follow-up — significant pass involving deciding which entries to surface, picker shape, and mechanical-baseline application logic.
+
+### App.jsx fixture variants
+
+Three preview fixtures wired so the singular/plural/N bump phrasings AND all three gold variants get visual review:
+
+- `?creator=v2&handoff=1&fixture=verena` (default) — Variant Human + Soldier theme + Fighter class. Plural bump phrasing (2 bumps). Zero gold modifier.
+- `?creator=v2&handoff=1&fixture=single-bump` — Half-Elf + Investigator + Rogue. **Singular** bump phrasing (1 bump). Positive gold modifier (+10%).
+- `?creator=v2&handoff=1&fixture=hermit` — Wood Elf + Hermit + Druid. Plural bump phrasing (2 bumps both targeting WIS — exercises L1 cap clamp visualization). **Negative** gold modifier (−35% with U+2212).
+
+### Files
+
+- `client/src/components/creator/Step5AbilityScores.jsx` (new)
+- `client/src/components/creator/BumpCelebrationCard.jsx` (new — exports `defaultBumpAssignments`, `ABILITY_KEYS`, `ABILITY_LABELS` for downstream tests)
+- `client/src/components/creator/Step6Equipment.jsx` (new — `HeirloomFlow`, `HeirloomAuthoringForm`, `HandoffCandidatePicker` co-located)
+- `client/src/components/creator/CharacterCreatorV2.jsx` (Steps 5+6 wired into router; initial state extended)
+- `client/src/App.jsx` (3-fixture wiring for preview review)
+
+### Verification
+
+- Vite build clean (1.26s, +~14KB)
+- 1996 prelude + chunk 5 assertions still green
+- Visual review by PM at checkpoint 1 ✅
+
+### Intentional follow-ups (logged for batch 3 checkpoint 3 cleanup)
+
+1. Skills allotment math should subtract class/theme/ancestry-granted skills, not just emergence skills (spec §5.5.7).
+2. Variant Human bonus general feat picker — real prereq-filtered selector (currently placeholder).
+3. Heirloom specific-item picker for Weapon / Armor / Tool — `equipment.json` filtered selects with mechanical baseline application (currently free text).
+
 ## [1.0.0.110] - 2026-05-02 — Phase 2 chunk 5 batch 2: Creator shell + Steps 1–4 + celebration card + narrative-continuity card
 
 Visual + interaction layer for the rebuilt creator. Steps 5–8, save/resume persistence, the home page redesign, and Screen 2 land in batch 3. The new creator is reachable behind a query-param preview affordance (`?creator=v2`) so the rest of the app stays untouched until 5.K wires it as the only path.

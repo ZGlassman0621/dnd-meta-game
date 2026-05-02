@@ -39,12 +39,19 @@ const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 // bundled globally per CLAUDE.md scoping conventions.
 import CharacterCreatorV2 from './components/creator/CharacterCreatorV2.jsx'
 
-// Preview-only handoff payload — exercises the celebration card on
-// Step 2 + Step 3 and the narrative-continuity card on Step 4. Uses
-// the §8.2.1 schema_version=2 shape. Removed when 5.K wires the new
-// creator into the home page (real payloads come from
-// /api/prelude/:id/handoff-payload at that point).
-const PREVIEW_HANDOFF_PAYLOAD = {
+// Preview-only handoff payloads — exercise the celebration card on
+// Step 2 + Step 3, the narrative-continuity card on Step 4, the bump
+// celebration card on Step 5 (singular AND plural phrasings), and all
+// three gold modifier display variants on Step 6 (positive / zero /
+// negative with U+2212 minus). Uses the §8.2.1 schema_version=2 shape.
+// Selected via `?creator=v2&handoff=1&fixture=<name>` — defaults to
+// 'verena' if no fixture name given. Removed when 5.K wires the new
+// creator into the home page (real payloads then come from
+// /api/prelude/:id/handoff-payload).
+
+// Default — multi-bump (plural "Two moments shaped you"), Soldier theme
+// (zero gold modifier — "Fighter baseline" with no theme adjustment).
+const PREVIEW_FIXTURE_VERENA = {
   schema_version: 2,
   character_id: 0,
   setup_name: 'Vera',
@@ -65,8 +72,14 @@ const PREVIEW_HANDOFF_PAYLOAD = {
     { chapter: 3, reason: 'The hunter\'s snare gave way the moment your weight came onto it.' }
   ],
   class_suggestion: 'fighter',
-  accepted_stat_bumps: [],
-  accepted_skill_bumps: [],
+  accepted_stat_bumps: [
+    { stat: 'str', magnitude: 1, chapter: 1, chapter_beat: 'The months at the smithy after the muster broadened your shoulders.' },
+    { stat: 'con', magnitude: 1, chapter: 3, chapter_beat: 'The river-crossing winter taught your body what it could endure.' }
+  ],
+  accepted_skill_bumps: [
+    { skill: 'Athletics', chapter: 2, chapter_beat: 'The drills became second nature; your old captain stopped correcting your form.' },
+    { skill: 'Intimidation', chapter: 3, chapter_beat: 'You found a voice that made the conscripts listen.' }
+  ],
   heirloom_candidates: [],
   biography_seed: [],
   canon_npcs: [],
@@ -74,6 +87,89 @@ const PREVIEW_HANDOFF_PAYLOAD = {
   canon_threads: [],
   mentor_imprint_eligible: false,
   name_parts: { first_name: 'Verena', last_name: 'Ashfall', nickname: null }
+}
+
+// Single-bump variant — exercises the singular "One moment shaped you"
+// phrasing on Step 5's bump celebration card. Investigator theme so
+// Step 6 also exercises the POSITIVE gold variant (+10%).
+const PREVIEW_FIXTURE_SINGLE_BUMP = {
+  schema_version: 2,
+  character_id: 0,
+  setup_name: 'Halvor',
+  name: 'Halvor',
+  gender: 'Male',
+  race: 'half-elf',
+  subrace: null,
+  committed_theme: 'investigator',
+  theme_chapter_beats: [
+    { chapter: 2, reason: 'You sorted a tangle of contradictory testimony at the village dispute and named the lying witness.' },
+    { chapter: 3, reason: 'The merchant\'s missing coin was in the floorboards of his own son\'s room; only you thought to look.' }
+  ],
+  ancestry_feat_id: 'half_elf_t1_c1',
+  ancestry_chapter_beats: [
+    { chapter: 1, reason: 'You learned both your parents\' tongues before you could read either, and switched between them mid-sentence.' },
+    { chapter: 2, reason: 'You understood what the elven traders were saying before they realized you would.' }
+  ],
+  class_suggestion: 'rogue',
+  accepted_stat_bumps: [
+    { stat: 'wis', magnitude: 1, chapter: 3, chapter_beat: 'You learned to wait, to watch the room before speaking — the way your aunt taught you.' }
+  ],
+  accepted_skill_bumps: [
+    { skill: 'Insight', chapter: 3, chapter_beat: 'You read the tax collector before he\'d finished his first sentence.' }
+  ],
+  heirloom_candidates: [],
+  biography_seed: [],
+  canon_npcs: [],
+  canon_locations: [],
+  canon_threads: [],
+  mentor_imprint_eligible: false,
+  name_parts: { first_name: 'Halvor', last_name: '', nickname: null }
+}
+
+// Negative-gold variant — Hermit theme exercises the NEGATIVE gold
+// display (−35% with U+2212 minus glyph, NOT a hyphen). Wood Elf so
+// Step 5 has a static racial bonus (+1 WIS) rather than the human
+// "choice" pattern.
+const PREVIEW_FIXTURE_HERMIT = {
+  schema_version: 2,
+  character_id: 0,
+  setup_name: 'Vass',
+  name: 'Vass',
+  gender: 'Female',
+  race: 'elf',
+  subrace: 'Wood Elf',
+  committed_theme: 'hermit',
+  theme_chapter_beats: [
+    { chapter: 1, reason: 'You stayed behind when the village left for the harvest fair; the silence didn\'t bother you.' },
+    { chapter: 2, reason: 'You spent a winter in the high cabin reading what the previous keeper had left, and you stopped going down for supplies.' },
+    { chapter: 3, reason: 'A traveler found you in the second spring; they spoke to you for three days and you remembered how to answer.' }
+  ],
+  ancestry_feat_id: 'elf_t1_c1',
+  ancestry_chapter_beats: [
+    { chapter: 2, reason: 'You moved through the deep wood without leaving a track even your kin could read.' },
+    { chapter: 3, reason: 'The wolves stopped marking your scent as a threat; the forest settled around you.' }
+  ],
+  class_suggestion: 'druid',
+  accepted_stat_bumps: [
+    { stat: 'wis', magnitude: 1, chapter: 2, chapter_beat: 'The long quiet taught you to hear what wasn\'t there.' },
+    { stat: 'wis', magnitude: 1, chapter: 3, chapter_beat: 'The traveler\'s questions taught you to hear what was.' }
+  ],
+  accepted_skill_bumps: [
+    { skill: 'Survival', chapter: 1, chapter_beat: 'You learned to feed yourself in the woods before you needed to.' }
+  ],
+  heirloom_candidates: [],
+  biography_seed: [],
+  canon_npcs: [],
+  canon_locations: [],
+  canon_threads: [],
+  mentor_imprint_eligible: false,
+  name_parts: { first_name: 'Vass', last_name: '', nickname: null }
+}
+
+const PREVIEW_FIXTURES = {
+  verena: PREVIEW_FIXTURE_VERENA,
+  'single-bump': PREVIEW_FIXTURE_SINGLE_BUMP,
+  hermit: PREVIEW_FIXTURE_HERMIT
 }
 
 // Global fetch interceptor — adds auth token to all /api requests automatically.
@@ -339,7 +435,9 @@ function App() {
     : new URLSearchParams()
   if (queryParams.get('creator') === 'v2') {
     const useHandoff = queryParams.get('handoff') === '1'
-    const previewPayload = useHandoff ? PREVIEW_HANDOFF_PAYLOAD : null
+    const fixtureName = queryParams.get('fixture') || 'verena'
+    const fixture = PREVIEW_FIXTURES[fixtureName] || PREVIEW_FIXTURES.verena
+    const previewPayload = useHandoff ? fixture : null
     return (
       <CharacterCreatorV2
         preludePayload={previewPayload}
@@ -348,6 +446,7 @@ function App() {
           const url = new URL(window.location.href)
           url.searchParams.delete('creator')
           url.searchParams.delete('handoff')
+          url.searchParams.delete('fixture')
           window.history.replaceState({}, '', url.toString())
           window.location.reload()
         }}
