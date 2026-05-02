@@ -2,6 +2,77 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.110] - 2026-05-02 — Phase 2 chunk 5 batch 2: Creator shell + Steps 1–4 + celebration card + narrative-continuity card
+
+Visual + interaction layer for the rebuilt creator. Steps 5–8, save/resume persistence, the home page redesign, and Screen 2 land in batch 3. The new creator is reachable behind a query-param preview affordance (`?creator=v2`) so the rest of the app stays untouched until 5.K wires it as the only path.
+
+### Editorial aesthetic locked
+
+Per Decision 6 (DECISION_LOG 2026-05-02): editorial & literary is the project's default visual register going forward. Parchment + dark variants from the design mockup are NOT carried — single-aesthetic only per PM ruling. Tweaks panel + manuscript celebration variant skipped for the same reason.
+
+- **`client/src/styles/creator-theme.css`** (new, ~580 LOC) — design tokens + structural classes, all scoped under `.creator-v2`. Wrapper-class scoping means the editorial palette never bleeds into the existing app's dark slate gradient. Promote to `client/src/styles/design-tokens.css` when a second surface (Origin & Identity, Progression) starts referencing the same tokens; don't pre-promote.
+- **`client/index.html`** — Google Fonts `<link>` for EB Garamond + Inter + JetBrains Mono with `preconnect` hints. Self-hosting deferred until the project formalizes its asset pipeline.
+- **`client/src/main.jsx`** — imports `creator-theme.css` globally. Zero side effect on existing app since all rules are scoped under `.creator-v2`.
+
+### New components in `client/src/components/creator/`
+
+- **`creatorPrimitives.jsx`** — `Eyebrow`, `Field`, `Stepper` (8-segment rail), `WizardHead`, `WizardFoot`. Step rail clicks jump to step (powers Step 8's Edit affordance later).
+- **`CelebrationCard.jsx`** — single primitive used by Step 2 + Step 3 (and Step 5 in batch 3). Card UI variant only; manuscript variant skipped per PM ruling. Reads `{ chapter, reason }` beats from the §8.2.1 payload. Opening line is opt-in per caller.
+- **`Step1Identity.jsx`** — three name fields + gender chips. Use-name affordance fires when `payload.name !== payload.setup_name` (resolves to Keep / Revert / Write something new). Pronoun for the affordance copy uses `state.gender`; defaults to "they" defensively.
+- **`Step2Ancestry.jsx`** — race + subrace + ancestry feat. Manual mode fetches feats from `/api/progression/ancestry-feats/:race?tier=1`. Handoff mode locks all three with celebration card above. Locked-feat render is graceful when API hasn't loaded or feat ID isn't in the list (renders feat name as text rather than a broken dropdown).
+- **`Step3Theme.jsx`** — manual-mode dropdown of all 21 themes (Knight + Haunted One INCLUDED — they're only excluded from Prelude emergence per Decision D, not from manual-mode selection). Selected theme detail card with identity + description + signature skills + gold modifier. Knight of the Order callout paragraph (§5.3.5 verbatim) renders only on manual mode for Knight.
+- **`Step4ClassCalling.jsx`** — class picker + class detail card. Narrative-continuity card (handoff only) renders above when `themeId in THEME_NARRATIVE_CONTINUITY`. Dismissable via "✕" — local-session-scoped, resets on theme change. Subclass + L1 mechanical picks render placeholders (real per-class wiring lands in batch 3).
+- **`CharacterCreatorV2.jsx`** — shell. Mode determined by `preludePayload` presence. Initial state seeded from §8.2.1 payload fields. Steps 5–8 render `<PlaceholderStep>` until batch 3.
+
+### Content data file (new)
+
+- **`client/src/data/themeNarrativeContinuity.js`** — 19 entries verbatim from spec §5.4.5. Knight + Haunted One absent per Decision D (cannot arrive via handoff).
+
+### Step 2 celebration card — structural reorder (spec deviation, annotated)
+
+Spec §5.2.5's prose template orders **opening → beats → race → feat**. Implementation reorders to **opening → beats → feat (the outcome the beats causally justify) → race line as a quieter italic confirmation below**. Reasoning: `[ANCESTRY_HINT]` markers explain why this *feat* emerged; race was committed at setup-wizard time and didn't move during the Prelude. Visually parenting the beats under the feat is more honest about marker semantics. Spec §5.2.5 annotated inline acknowledging the reorder.
+
+### Wording cleanup from review pass
+
+Three near-identical "years that shaped you" phrases were stacked within visual range on Steps 2 + 3. Collapsed to:
+- Eyebrow marker: "From your Prelude" (was "From the years that shaped you")
+- Per-step opening: opt-in, focused. Step 2: "These moments named your heritage gift:". Step 3: "These moments brought you to your theme:". The redundant "In the years that shaped you, you:" lead-in is gone.
+- Step 3 lockTag: "Locked from the Prelude" (matches Step 2). Was "Committed during the years that shaped you".
+
+Step 1 subtitle changed from the design mockup's "Two anchors — a name and a presence" (a poetic stand-in for gender that read as ambiguous) to spec-faithful "A name and a gender — the two anchors the rest of the creator references when it speaks about you."
+
+### Preview affordance in App.jsx
+
+`?creator=v2` opens the new creator in manual mode for visual review. `?creator=v2&handoff=1` simulates handoff using a built-in `PREVIEW_HANDOFF_PAYLOAD` (Verena Ashfall — Variant Human Soldier, Fighter class suggestion, full chapter beats). "Exit preview" strips the params and reloads. Removed when 5.K wires the new creator into the home page as the only path.
+
+### Intentional deferrals (batch 3)
+
+- **`'creating'` phase persistence.** Spec §6.2 wants manual-mode to write a `creation_phase='creating'` row on Step 1 advance. Migration shipped in 5.A; the persistence wiring is contracted with Step 8 submit + the home page resume flow, both batch 3.
+- **Step 4 subclass + L1 mechanical picks.** Render placeholder. Real wiring needs per-class subclass-pick level + fighting style options + cantrip allotments — batch 3 alongside Step 5.
+- **Save / resume routing, validation aggregation, mode coherence** (spec §6.1, §6.3, §6.4) — batch 3.
+
+### Files
+
+- `client/src/styles/creator-theme.css` (new, ~580 LOC editorial design tokens)
+- `client/index.html` (Google Fonts links)
+- `client/src/main.jsx` (imports creator-theme.css)
+- `client/src/App.jsx` (preview affordance + fixture payload)
+- `client/src/components/creator/CharacterCreatorV2.jsx` (new)
+- `client/src/components/creator/creatorPrimitives.jsx` (new)
+- `client/src/components/creator/CelebrationCard.jsx` (new)
+- `client/src/components/creator/Step1Identity.jsx` (new)
+- `client/src/components/creator/Step2Ancestry.jsx` (new)
+- `client/src/components/creator/Step3Theme.jsx` (new)
+- `client/src/components/creator/Step4ClassCalling.jsx` (new)
+- `client/src/data/themeNarrativeContinuity.js` (new — 19 verbatim entries)
+- `PHASE_2_CREATOR_SPEC.md` (annotation in §5.2.5)
+
+### Verification
+
+- Vite build clean (1.24s, +22KB bundle from new components + content)
+- 1996 prelude + chunk 5 assertions still green (no regressions)
+- Visual review by PM at Step 4 completion ✅
+
 ## [1.0.0.109] - 2026-05-02 — Phase 2 chunk 5 batch 1: Migration + payload reshape + content data files
 
 Foundation pieces for chunk 5 (rebuilt main creator). Lands the data-model deltas, the §8.2.1 payload contract, and the six PM-authored content data files. The 8-step React component tree, redesigned home page, and Screen 2 path choice are batch 2 + 3 work — gated on this batch shipping.

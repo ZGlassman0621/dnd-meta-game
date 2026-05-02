@@ -1,0 +1,593 @@
+/* ============================================================
+ * Character Creator V2 — editorial aesthetic, scoped under
+ * `.creator-v2` so the rest of the app (dark slate gradient
+ * shell) stays untouched.
+ *
+ * Per Decision 6 (DECISION_LOG 2026-05-02): editorial & literary
+ * is the locked aesthetic. Parchment + dark variants from the
+ * design mockup are NOT carried over — single-aesthetic only per
+ * PM ruling.
+ *
+ * Per CLAUDE.md "no CSS framework": this file is plain CSS for
+ * design tokens + the small set of structural classes the new
+ * creator components reference (`.creator-frame`, `.celebration`,
+ * `.narrative-card`, etc.). Component layout / one-off styling
+ * stays inline-style throughout, referencing var(--ink-1) etc.
+ *
+ * Promote to client/src/styles/design-tokens.css when a second
+ * surface (Origin & Identity tab, Progression tab) starts
+ * referencing the same tokens. Don't pre-promote.
+ * ============================================================ */
+
+.creator-v2 {
+  /* Editorial palette (locked) */
+  --bg: #fcfcfa;
+  --bg-2: #f3f3ee;
+  --bg-card: #ffffff;
+  --ink: #18181a;
+  --ink-2: #4a4a4f;
+  --ink-3: #86868b;
+  --rule: #e3e3df;
+  --rule-soft: #ededea;
+  --accent: #2f3a52;     /* muted ink-blue */
+  --accent-2: #6b6f78;
+  --selection: #d8e0ee;
+  --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 30px rgba(0,0,0,.04);
+  --shadow-card: 0 1px 0 rgba(0,0,0,.02), 0 12px 40px rgba(0,0,0,.06);
+
+  /* Typography */
+  --serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Layout */
+  --content-w: 880px;
+  --content-w-wide: 1120px;
+
+  /* Apply the editorial palette to the creator surface itself */
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+.creator-v2 ::selection { background: var(--selection); color: var(--ink); }
+.creator-v2 button { font: inherit; color: inherit; cursor: pointer; }
+.creator-v2 input,
+.creator-v2 textarea,
+.creator-v2 select { font: inherit; color: inherit; }
+.creator-v2 input:focus,
+.creator-v2 textarea:focus,
+.creator-v2 select:focus,
+.creator-v2 button:focus { outline: none; }
+.creator-v2 a { color: var(--accent); text-decoration: none; }
+
+/* === Layout =========================================================== */
+
+.creator-v2 .appbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 40px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.creator-v2 .appbar .brand {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.creator-v2 .appbar .brand .amp { color: var(--accent); }
+.creator-v2 .appbar .crumbs {
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.creator-v2 .appbar .spacer { flex: 1; }
+
+.creator-v2 .stage { padding: 56px 40px 120px; }
+.creator-v2 .frame { width: 100%; max-width: var(--content-w); margin: 0 auto; }
+.creator-v2 .frame.wide { max-width: var(--content-w-wide); }
+
+/* === Type =========================================================== */
+
+.creator-v2 .eyebrow {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.creator-v2 .h-display {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 56px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--ink);
+}
+.creator-v2 .h-step {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 44px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--ink);
+}
+.creator-v2 .h-section {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--ink);
+}
+.creator-v2 .lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.creator-v2 .help {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+.creator-v2 .label {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.creator-v2 .mono { font-family: var(--mono); }
+
+/* === Wizard chrome =================================================== */
+
+.creator-v2 .wizard-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 40px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--rule);
+}
+.creator-v2 .wizard-head .step-label { color: var(--ink-3); }
+.creator-v2 .wizard-head .step-title h1 { margin-top: 8px; }
+
+/* Step rail */
+.creator-v2 .steprail {
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+  background: var(--bg-card);
+}
+.creator-v2 .steprail .seg {
+  flex: 1;
+  padding: 10px 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-right: 1px solid var(--rule-soft);
+  background: transparent;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: color .12s;
+}
+.creator-v2 .steprail .seg:last-child { border-right: 0; }
+.creator-v2 .steprail .seg .num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.creator-v2 .steprail .seg.done { color: var(--ink-2); }
+.creator-v2 .steprail .seg.done .num { color: var(--accent); }
+.creator-v2 .steprail .seg.current {
+  color: var(--ink);
+  background: var(--bg);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.creator-v2 .steprail .seg.current .num { color: var(--accent); }
+.creator-v2 .steprail .seg:hover { color: var(--ink); }
+.creator-v2 .steprail .seg.disabled { opacity: 0.3; pointer-events: none; }
+
+/* Footer nav */
+.creator-v2 .wizard-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 28px 0 0;
+  margin-top: 56px;
+  border-top: 1px solid var(--rule);
+}
+.creator-v2 .wizard-foot .spacer { flex: 1; }
+
+/* === Buttons ========================================================= */
+
+.creator-v2 .btn {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 12px 22px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink-2);
+  border-radius: 2px;
+  transition: all .12s;
+}
+.creator-v2 .btn:hover { color: var(--ink); border-color: var(--ink-3); }
+.creator-v2 .btn.primary {
+  background: var(--ink);
+  color: var(--bg-card);
+  border-color: var(--ink);
+}
+.creator-v2 .btn.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.creator-v2 .btn.ghost { border-color: transparent; }
+.creator-v2 .btn.ghost:hover { border-color: var(--rule); }
+.creator-v2 .btn.danger:hover { color: var(--accent); border-color: var(--accent); }
+.creator-v2 .btn:disabled { opacity: .35; cursor: not-allowed; }
+.creator-v2 .btn.lg { padding: 16px 28px; font-size: 13px; letter-spacing: 0.16em; }
+
+/* === Cards ========================================================= */
+
+.creator-v2 .card {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  border-radius: 2px;
+}
+.creator-v2 .card.bare { box-shadow: none; }
+.creator-v2 .card.flat { background: var(--bg); }
+
+/* === Form fields ===================================================== */
+
+.creator-v2 .field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+.creator-v2 .field-row { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; }
+.creator-v2 .field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+.creator-v2 .field-row.four { grid-template-columns: repeat(4, 1fr); }
+
+.creator-v2 .input,
+.creator-v2 .select,
+.creator-v2 .textarea {
+  font-family: var(--serif);
+  font-size: 19px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 10px 2px;
+  color: var(--ink);
+  width: 100%;
+  transition: border-color .12s;
+}
+.creator-v2 .input:focus,
+.creator-v2 .select:focus,
+.creator-v2 .textarea:focus { border-bottom-color: var(--accent); }
+.creator-v2 .textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+.creator-v2 .select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 8px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+.creator-v2 .input::placeholder,
+.creator-v2 .textarea::placeholder { color: var(--ink-3); font-style: italic; }
+
+.creator-v2 .field.locked .input,
+.creator-v2 .field.locked .select {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--accent-2);
+  color: var(--ink-2);
+  font-style: italic;
+}
+.creator-v2 .locked-tag {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.creator-v2 .locked-tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Chips */
+.creator-v2 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.creator-v2 .chip {
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 8px 14px;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--ink-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .12s;
+}
+.creator-v2 .chip:hover { border-color: var(--ink-3); color: var(--ink); }
+.creator-v2 .chip.on {
+  background: var(--ink);
+  color: var(--bg-card);
+  border-color: var(--ink);
+}
+.creator-v2 .chip:disabled { cursor: not-allowed; opacity: 0.6; }
+.creator-v2 .chip:disabled:hover { border-color: var(--rule); color: var(--ink-2); }
+
+/* === Hairline divider =============================================== */
+.creator-v2 .hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
+.creator-v2 .hr.soft { border-color: var(--rule-soft); margin: 20px 0; }
+
+/* === Celebration cards (Step 2, 3, 5) =============================== */
+/* Card-UI variant only — manuscript variant skipped per PM ruling      */
+
+.creator-v2 .celebration {
+  margin: 0 0 28px;
+  padding: 28px 32px;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  position: relative;
+}
+.creator-v2 .celebration .marker {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.creator-v2 .celebration .opening {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin: 0 0 14px;
+}
+.creator-v2 .celebration ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.creator-v2 .celebration ul li {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  padding-left: 22px;
+  position: relative;
+}
+.creator-v2 .celebration ul li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 12px;
+  height: 1px;
+  background: var(--accent-2);
+}
+.creator-v2 .celebration ul li .ch {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-right: 8px;
+  text-transform: uppercase;
+}
+.creator-v2 .celebration .outcome {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--rule);
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.creator-v2 .celebration .outcome strong { font-weight: 600; color: var(--accent); }
+.creator-v2 .celebration .feat-desc {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--ink-3);
+  margin-top: 6px;
+}
+
+/* === Narrative-continuity card (Step 4) ============================== */
+
+.creator-v2 .narrative-card {
+  margin-bottom: 32px;
+  padding: 32px 36px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--accent);
+  position: relative;
+}
+.creator-v2 .narrative-card .marker {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+.creator-v2 .narrative-card .body {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 21px;
+  line-height: 1.55;
+  color: var(--ink);
+  margin: 0;
+  text-wrap: pretty;
+}
+.creator-v2 .narrative-card .dismiss {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: all .12s;
+}
+.creator-v2 .narrative-card .dismiss:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* === Pickers (theme, class, race) =================================== */
+
+.creator-v2 .picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.creator-v2 .picker.two { grid-template-columns: 1fr 1fr; }
+.creator-v2 .pick {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: all .12s;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.creator-v2 .pick:hover { border-color: var(--ink-3); }
+.creator-v2 .pick.on { border-color: var(--ink); background: var(--bg-2); }
+.creator-v2 .pick.locked {
+  border-color: var(--accent);
+  background: var(--bg-2);
+  cursor: default;
+}
+.creator-v2 .pick .name {
+  font-family: var(--serif);
+  font-size: 19px;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.creator-v2 .pick .sub {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Detail card under selection */
+.creator-v2 .detail-card {
+  margin-top: 20px;
+  padding: 28px 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+}
+.creator-v2 .detail-card .name {
+  font-family: var(--serif);
+  font-size: 28px;
+  letter-spacing: -0.005em;
+  margin: 0 0 8px;
+}
+.creator-v2 .detail-card .body {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 0;
+}
+.creator-v2 .detail-card .stat-line {
+  display: flex;
+  gap: 24px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule-soft);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.creator-v2 .detail-card .stat-line span strong { color: var(--ink); font-weight: 600; }
+
+/* === Use-name affordance (Step 1, handoff) ========================== */
+.creator-v2 .usename {
+  margin-bottom: 36px;
+  padding: 28px 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+}
+.creator-v2 .usename p {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 0 0 18px;
+}
+.creator-v2 .usename strong { color: var(--ink); font-weight: 600; font-style: normal; }
+.creator-v2 .usename .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* === Misc ============================================================ */
+.creator-v2 .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 8px;
+}

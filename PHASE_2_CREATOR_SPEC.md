@@ -395,6 +395,8 @@ If the chosen ancestry feat has internal sub-choices (some feats let the player 
 
 Chapter beats from `[ANCESTRY_HINT].reason` markers — top 2-3 by chapter weight (Ch1×1, Ch2×1.5, Ch3×2 per v4 plan §5e), ordered chronologically (Ch1 → Ch2 → Ch3).
 
+> **Structural reorder shipped in Chunk 5 batch 2 (2026-05-02).** The template above is content-prose, not a wireframe — race-then-feat ordering was prose convenience, not a deliberate spatial commitment. Design's mockup and the shipped implementation reorder to **opening line → beats → feat (the outcome the beats causally justify) → race line as a quieter confirmation below**. Reasoning: `[ANCESTRY_HINT]` markers explain why this *feat* emerged; race was committed at setup-wizard time and didn't move during the Prelude. Visually parenting the beats under the feat is more honest about what the marker semantics actually justify; the spec's prose ordering would have implied the beats explained both. Player-first principle (Brief #1): the player who reads carefully should find the experience honest. Future content edits to this section should respect the implementation order.
+
 #### 5.2.6 Edge cases & engineering notes
 
 - **Race / subrace handoff with no ancestry hint history.** If a Prelude character somehow has zero accepted `[ANCESTRY_HINT]` markers (edge case — the Prelude is supposed to surface ancestry hints), the celebration card displays the locked race / subrace but falls back to "Your heritage gift: choose one below" with the picker active. This is a defensive path; the expected case is at least one accepted hint.

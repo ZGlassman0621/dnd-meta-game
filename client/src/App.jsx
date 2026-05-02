@@ -33,6 +33,49 @@ const DMMode = lazy(() => import('./components/DMMode'))
 const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
 const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 
+// Phase 2 chunk 5 batch 2 — preview affordance for the rebuilt creator
+// (`?creator=v2` in the URL). Direct import (not lazy) because the
+// preview is opt-in via query param and the styles/fonts are also
+// bundled globally per CLAUDE.md scoping conventions.
+import CharacterCreatorV2 from './components/creator/CharacterCreatorV2.jsx'
+
+// Preview-only handoff payload — exercises the celebration card on
+// Step 2 + Step 3 and the narrative-continuity card on Step 4. Uses
+// the §8.2.1 schema_version=2 shape. Removed when 5.K wires the new
+// creator into the home page (real payloads come from
+// /api/prelude/:id/handoff-payload at that point).
+const PREVIEW_HANDOFF_PAYLOAD = {
+  schema_version: 2,
+  character_id: 0,
+  setup_name: 'Vera',
+  name: 'Verena Ashfall',
+  gender: 'Female',
+  race: 'human',
+  subrace: 'Variant Human',
+  committed_theme: 'soldier',
+  theme_chapter_beats: [
+    { chapter: 1, reason: 'You marched with the muster when the levies came through, and stayed when others ran.' },
+    { chapter: 2, reason: 'You held the river crossing for an hour against odds the captain still talks about.' },
+    { chapter: 3, reason: 'You carried the standard out of a field that had become a graveyard.' }
+  ],
+  ancestry_feat_id: 'human_t1_c1',
+  ancestry_chapter_beats: [
+    { chapter: 1, reason: 'You survived a fall from the bell-tower scaffold that should have killed a child.' },
+    { chapter: 2, reason: 'You drew the long straw in a coin-toss the village elders rigged against you.' },
+    { chapter: 3, reason: 'The hunter\'s snare gave way the moment your weight came onto it.' }
+  ],
+  class_suggestion: 'fighter',
+  accepted_stat_bumps: [],
+  accepted_skill_bumps: [],
+  heirloom_candidates: [],
+  biography_seed: [],
+  canon_npcs: [],
+  canon_locations: [],
+  canon_threads: [],
+  mentor_imprint_eligible: false,
+  name_parts: { first_name: 'Verena', last_name: 'Ashfall', nickname: null }
+}
+
 // Global fetch interceptor — adds auth token to all /api requests automatically.
 // This avoids touching every fetch call across all components.
 const _originalFetch = window.fetch;
@@ -283,6 +326,33 @@ function App() {
 
   if (!user) {
     return <LoginPage onLogin={setUser} />
+  }
+
+  // Phase 2 chunk 5 batch 2 — preview affordance for the rebuilt creator.
+  // `?creator=v2` opens the new creator in manual mode for visual review.
+  // `?creator=v2&handoff=1` simulates handoff mode using a built-in fixture
+  // so the celebration card + narrative-continuity card can be inspected
+  // without a live Prelude. Removed when 5.K wires the new creator into
+  // the home page as the only path.
+  const queryParams = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams()
+  if (queryParams.get('creator') === 'v2') {
+    const useHandoff = queryParams.get('handoff') === '1'
+    const previewPayload = useHandoff ? PREVIEW_HANDOFF_PAYLOAD : null
+    return (
+      <CharacterCreatorV2
+        preludePayload={previewPayload}
+        onExit={() => {
+          // Strip the query params and reload into the normal app shell.
+          const url = new URL(window.location.href)
+          url.searchParams.delete('creator')
+          url.searchParams.delete('handoff')
+          window.history.replaceState({}, '', url.toString())
+          window.location.reload()
+        }}
+      />
+    )
   }
 
   if (loading) {
