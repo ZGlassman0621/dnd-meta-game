@@ -43,15 +43,23 @@ export default function BumpCelebrationCard({ bumps, assignments, onAssignmentCh
           <li key={i}>
             <span className="ch">Ch{b.chapter ?? '—'}</span>
             {b.chapter_beat || b.reason || '(no chapter beat recorded)'}
-            <span style={{ color: 'var(--accent)', fontFamily: 'var(--mono)', fontSize: 12, marginLeft: 8 }}>
-              — +{b.magnitude || 1} to assign
+            <span style={{
+              color: 'var(--accent)',
+              fontFamily: 'var(--mono)',
+              fontSize: 11,
+              marginLeft: 10,
+              padding: '1px 6px',
+              border: '1px solid var(--accent-2)',
+              borderRadius: 2
+            }}>
+              +{b.magnitude || 1}
             </span>
           </li>
         ))}
       </ul>
       <div className="outcome" style={{ paddingTop: 18 }}>
         <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 17, color: 'var(--ink-2)', marginBottom: 14 }}>
-          Choose where each shows.
+          Though your past shaped you, you may shape your future. Where would you like each to land?
         </div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
           {bumps.map((b, i) => (

@@ -2,6 +2,15 @@ import { useMemo } from 'react'
 import { Field, WizardHead } from './creatorPrimitives.jsx'
 import classesData from '../../data/classes.json'
 import { THEME_GOLD_MODIFIERS, applyGoldModifier } from '../../data/themeGoldModifiers.js'
+import { resolveOptionLabel, isProficiencyGated, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
+import equipmentData from '../../data/equipment.json'
+
+// Curated tool list from equipment.json + musical instruments. Both
+// fall under "Tool" in the heirloom type taxonomy per spec §5.6.5.
+const ALL_TOOLS = [
+  ...((equipmentData.tools || []).map(t => ({ name: typeof t === 'string' ? t : t.name }))),
+  ...((equipmentData.musicalInstruments || []).map(i => ({ name: typeof i === 'string' ? i : i.name })))
+]
 
 /**
  * Step 6 — Equipment. Per PHASE_2_CREATOR_SPEC.md §5.6.
@@ -83,32 +92,37 @@ export default function Step6Equipment({ state, set, mode, payload }) {
             help="Choose your starting equipment. Most callings offer two equipment packages — pick the one that fits how you'll engage the world."
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {equipmentChoices.map((choice, idx) => (
-                <div key={idx}>
-                  <div style={{
-                    fontFamily: 'var(--sans)',
-                    fontSize: 11,
-                    letterSpacing: '0.14em',
-                    textTransform: 'uppercase',
-                    color: 'var(--ink-3)',
-                    marginBottom: 8
-                  }}>
-                    Pick one
+              {equipmentChoices.map((choice, idx) => {
+                // Filter "(if proficient)" gates per PM ruling. Once
+                // subclass-aware proficiency tracking lands, this filter
+                // can flip to include-when-proficient. Hide for now to
+                // avoid surfacing a confusing tag.
+                const visibleOptions = (choice.from || []).filter(opt => !isProficiencyGated(opt))
+                return (
+                  <div key={idx}>
+                    <div style={{
+                      fontFamily: 'var(--sans)',
+                      fontSize: 11,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      color: 'var(--ink-3)',
+                      marginBottom: 8
+                    }}>
+                      Pick one
+                    </div>
+                    <div className="picker two">
+                      {visibleOptions.map((opt, i) => (
+                        <EquipmentOptionCard
+                          key={i}
+                          label={opt}
+                          picked={equipmentPicks[idx] === opt}
+                          onPick={() => setPick(idx, opt)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="picker two">
-                    {(choice.from || []).map((opt, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        className={`pick ${equipmentPicks[idx] === opt ? 'on' : ''}`}
-                        onClick={() => setPick(idx, opt)}
-                      >
-                        <div className="name" style={{ fontSize: 17 }}>{opt}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </Field>
         )}
@@ -308,12 +322,10 @@ function HeirloomAuthoringForm({ heirloom, onChange, onCancel }) {
 
       {heirloom.type && (
         <Field label="Specific item" help={specificItemHelp[heirloom.type]}>
-          <input
-            type="text"
-            className="input"
+          <SpecificItemPicker
+            type={heirloom.type}
             value={heirloom.specific_item || ''}
-            onChange={e => onChange({ specific_item: e.target.value })}
-            placeholder="—"
+            onChange={v => onChange({ specific_item: v })}
           />
         </Field>
       )}
@@ -441,4 +453,208 @@ function HandoffCandidatePicker({ state, set, candidates }) {
 
 function prettifyId(id) {
   return String(id || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+/**
+ * Specific-item picker for the heirloom authoring form. Spec §5.6.5:
+ *   Weapon → select from equipment.json weapons
+ *   Armor → select from equipment.json armor
+ *   Tool → select from equipment.json tools (artisan + instruments)
+ *   Book or Tome / Jewelry / Trinket / Other → free text
+ *
+ * For weapons/armor: shows the underlying combat stats inline below
+ * the select once an item is picked, so the player sees what mechanical
+ * baseline they're committing to.
+ */
+function SpecificItemPicker({ type, value, onChange }) {
+  if (type === 'Weapon') {
+    return (
+      <>
+        <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+          <option value="">Choose a weapon…</option>
+          <optgroup label="Simple — melee">
+            {(equipmentData.simpleWeapons?.melee || []).map(w => (
+              <option key={w.name} value={w.name}>{w.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Simple — ranged">
+            {(equipmentData.simpleWeapons?.ranged || []).map(w => (
+              <option key={w.name} value={w.name}>{w.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Martial — melee">
+            {(equipmentData.martialWeapons?.melee || []).map(w => (
+              <option key={w.name} value={w.name}>{w.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Martial — ranged">
+            {(equipmentData.martialWeapons?.ranged || []).map(w => (
+              <option key={w.name} value={w.name}>{w.name}</option>
+            ))}
+          </optgroup>
+        </select>
+        {value && (() => {
+          const w = ALL_WEAPONS.find(it => it.name === value)
+          if (!w) return null
+          return (
+            <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+              {w.damage} {w.damageType}
+              {w.properties?.length > 0 && ` · ${w.properties.join(', ')}`}
+              {w.weaponType && ` · ${w.weaponType}`}
+              {w.range && ` · range ${w.range}`}
+            </div>
+          )
+        })()}
+      </>
+    )
+  }
+  if (type === 'Armor') {
+    return (
+      <>
+        <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+          <option value="">Choose armor…</option>
+          {['light', 'medium', 'heavy', 'shields'].map(group => (
+            <optgroup key={group} label={group.charAt(0).toUpperCase() + group.slice(1)}>
+              {(equipmentData.armor?.[group] || []).map(a => (
+                <option key={a.name} value={a.name}>{a.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {value && (() => {
+          const a = ALL_ARMOR.find(it => it.name === value)
+          if (!a) return null
+          return (
+            <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+              AC {a.baseAC}
+              {a.maxDexBonus > 0 && ` + DEX (max ${a.maxDexBonus})`}
+              {a.armorType && ` · ${a.armorType}`}
+              {a.strReq && ` · STR ${a.strReq} required`}
+              {a.stealthDisadvantage && ' · stealth disadvantage'}
+            </div>
+          )
+        })()}
+      </>
+    )
+  }
+  if (type === 'Tool') {
+    return (
+      <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">Choose a tool…</option>
+        {ALL_TOOLS.map(t => (
+          <option key={t.name} value={t.name}>{t.name}</option>
+        ))}
+      </select>
+    )
+  }
+  // Book or Tome / Jewelry / Trinket / Other → free text per spec §5.6.5
+  return (
+    <input
+      type="text"
+      className="input"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder="—"
+    />
+  )
+}
+
+/**
+ * Equipment option card with inline weapon/armor stats + pack contents.
+ * Resolves the option label against equipment.json so the player sees
+ * what they're picking — damage/properties for weapons, AC/strength
+ * requirement for armor, contents list for packs.
+ */
+function EquipmentOptionCard({ label, picked, onPick }) {
+  const resolved = useMemo(() => resolveOptionLabel(label), [label])
+  return (
+    <button
+      type="button"
+      className={`pick ${picked ? 'on' : ''}`}
+      onClick={onPick}
+      style={{ alignItems: 'flex-start' }}
+    >
+      <div className="name" style={{ fontSize: 17 }}>{label}</div>
+      {/* Item-level details (weapons + armor stats) */}
+      {resolved.items.map((item, i) => (
+        <div
+          key={i}
+          style={{
+            marginTop: i === 0 ? 8 : 4,
+            fontFamily: 'var(--serif)',
+            fontStyle: 'italic',
+            fontSize: 13,
+            color: 'var(--ink-3)',
+            lineHeight: 1.4
+          }}
+        >
+          {item.kind === 'weapon' && (
+            <span>
+              {item.qty > 1 ? `${item.qty}× ` : ''}<strong style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>{item.name}</strong>
+              {' — '}{item.stats.damage} {item.stats.damageType}
+              {item.stats.properties?.length > 0 && (
+                <span style={{ color: 'var(--ink-3)' }}>
+                  {' · '}{item.stats.properties.join(', ')}
+                </span>
+              )}
+            </span>
+          )}
+          {item.kind === 'armor' && (
+            <span>
+              <strong style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>{item.name}</strong>
+              {' — AC '}{item.stats.baseAC}
+              {item.stats.maxDexBonus > 0 && ` + DEX (max ${item.stats.maxDexBonus})`}
+              {item.stats.maxDexBonus === 0 && item.stats.armorType === 'heavy' && ' (no DEX)'}
+              {item.stats.strReq && ` · STR ${item.stats.strReq} required`}
+              {item.stats.stealthDisadvantage && ' · stealth disadvantage'}
+            </span>
+          )}
+          {item.kind === 'pack' && (
+            <span>
+              {item.cost && <span style={{ color: 'var(--ink-3)' }}>{item.cost} value</span>}
+            </span>
+          )}
+          {item.kind === 'other' && item.qty > 1 && (
+            <span>
+              {item.qty}× <strong style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>{item.name}</strong>
+            </span>
+          )}
+        </div>
+      ))}
+      {/* Pack contents — bulleted list inside the card */}
+      {resolved.packContents && resolved.packContents.length > 0 && (
+        <div
+          style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: '1px dashed var(--rule-soft)',
+            width: '100%'
+          }}
+        >
+          <div style={{
+            fontFamily: 'var(--sans)',
+            fontSize: 10,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: 'var(--ink-3)',
+            marginBottom: 6
+          }}>
+            Contains
+          </div>
+          <ul style={{
+            margin: 0,
+            paddingLeft: 16,
+            fontFamily: 'var(--serif)',
+            fontSize: 13,
+            color: 'var(--ink-2)',
+            lineHeight: 1.45,
+            columns: resolved.packContents.length > 6 ? 2 : 1,
+            columnGap: 18
+          }}>
+            {resolved.packContents.map((c, i) => <li key={i}>{c}</li>)}
+          </ul>
+        </div>
+      )}
+    </button>
+  )
 }

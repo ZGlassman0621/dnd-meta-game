@@ -4,6 +4,18 @@ import CelebrationCard from './CelebrationCard.jsx'
 import racesData from '../../data/races.json'
 
 /**
+ * Render a feat-id slug as a humanized fallback when the API lookup
+ * fails (e.g., production [ANCESTRY_HINT] slug `human_t1_c1` doesn't
+ * resolve against DB autoincrement IDs returned by the feats API).
+ * Real handoff payloads should include `ancestry_feat_name` from the
+ * transition service; this is the last-line fallback for raw IDs.
+ */
+function prettifyFeatId(id) {
+  if (!id) return ''
+  return String(id).split(/[_-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+/**
  * Step 2 — Ancestry. Per PHASE_2_CREATOR_SPEC.md §5.2.
  *
  * Manual mode: race + subrace + ancestry feat selectors. All three
@@ -98,10 +110,12 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
           opening="These moments named your heritage gift:"
           beats={ancestryBeats}
           outcomePrefix="Your heritage gift:"
-          outcomeBold={selectedFeat?.name || featId}
-          outcomeSuffix={selectedFeat?.description || selectedFeat?.desc
-            ? ` — ${selectedFeat.description || selectedFeat.desc}`
-            : '.'}
+          outcomeBold={selectedFeat?.feat_name || payload?.ancestry_feat_name || prettifyFeatId(featId)}
+          outcomeSuffix={
+            (selectedFeat?.description || payload?.ancestry_feat_description)
+              ? ` — ${selectedFeat?.description || payload?.ancestry_feat_description}`
+              : '.'
+          }
         >
           {/* Race line lives BELOW the beats as a quiet confirmation,
               since race was committed at setup-wizard time and the
@@ -177,9 +191,11 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
             // hasn't loaded or doesn't contain the locked id.
             <div className="pick locked" style={{ display: 'block', marginTop: 4 }}>
               <div className="name">
-                {selectedFeat?.name || (featsLoading ? 'Loading…' : (featId || '—'))}
+                {selectedFeat?.feat_name
+                  || payload?.ancestry_feat_name
+                  || (featsLoading ? 'Loading…' : prettifyFeatId(featId) || '—')}
               </div>
-              {selectedFeat?.description && (
+              {(selectedFeat?.description || payload?.ancestry_feat_description) && (
                 <div className="sub" style={{
                   marginTop: 6,
                   textTransform: 'none',
@@ -189,7 +205,7 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
                   fontSize: 16,
                   color: 'var(--ink-2)'
                 }}>
-                  {selectedFeat.description}
+                  {selectedFeat?.description || payload?.ancestry_feat_description}
                 </div>
               )}
             </div>
@@ -202,7 +218,7 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
               >
                 <option value="">{featsLoading ? 'Loading…' : 'Choose a heritage gift…'}</option>
                 {feats.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                  <option key={f.id} value={f.id}>{f.feat_name}</option>
                 ))}
               </select>
               {selectedFeat && (

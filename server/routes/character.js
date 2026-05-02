@@ -135,7 +135,13 @@ router.post('/', async (req, res) => {
       theme_path_choice = null,
       ancestry_feat_id = null,
       ancestry_list_id = null,
-      ancestry_feat_choices = null // object of player-resolved sub-choices, e.g. { skill: 'perception', language: 'dwarvish' }
+      ancestry_feat_choices = null, // object of player-resolved sub-choices, e.g. { skill: 'perception', language: 'dwarvish' }
+      // Phase 2 chunk 5 batch 3 checkpoint 2 — manual-mode creator.
+      // 'creating' is set at Step 1 advance for partial-creation rows
+      // that the player can resume later; 'active' is set at Step 8
+      // submit. Defaults to 'active' for backwards compatibility with
+      // existing callers (server seed scripts, tests, internal imports).
+      creation_phase = 'active'
     } = req.body;
 
     const sql = `
@@ -152,8 +158,9 @@ router.post('/', async (req, res) => {
         personality_traits, ideals, bonds, flaws,
         organizations, allies, enemies, backstory, other_notes,
         known_cantrips, known_spells, feats, languages, tool_proficiencies,
-        keeper_texts, keeper_recitations, keeper_genre_domain
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        keeper_texts, keeper_recitations, keeper_genre_domain,
+        creation_phase
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await dbRun(sql, [
@@ -169,7 +176,8 @@ router.post('/', async (req, res) => {
       personality_traits, ideals, bonds, flaws,
       organizations, allies, enemies, backstory, other_notes,
       known_cantrips, known_spells, feats, languages, tool_proficiencies,
-      keeper_texts, keeper_recitations, keeper_genre_domain
+      keeper_texts, keeper_recitations, keeper_genre_domain,
+      creation_phase
     ]);
 
     const characterId = result.lastInsertRowid;
@@ -250,6 +258,19 @@ async function persistAncestryFeatSelection(characterId, featId, tier, selectedA
 // Update character
 router.put('/:id', async (req, res) => {
   try {
+    // --- Phase 2 chunk 5 batch 3 checkpoint 2 — phase-transition side
+    // effects (heirloom flip on handoff submit). Detected before the
+    // generic UPDATE so we can read the prior phase to gate the work.
+    let priorPhase = null
+    if (
+      req.body.creation_phase === 'active' &&
+      (req.body.chosen_heirloom_candidate_id !== undefined ||
+       /* defensive: any field-update to 'active' on a handoff row */ true)
+    ) {
+      const row = await dbGet('SELECT creation_phase FROM characters WHERE id = ?', [req.params.id])
+      priorPhase = row?.creation_phase || null
+    }
+
     const updates = [];
     const values = [];
 
@@ -257,7 +278,8 @@ router.put('/:id', async (req, res) => {
       'name', 'first_name', 'last_name', 'nickname', 'gender',
       'class', 'subclass', 'race', 'subrace', 'background',
       'level', 'current_hp', 'max_hp', 'current_location', 'current_quest',
-      'gold_cp', 'gold_sp', 'gold_gp', 'experience', 'experience_to_next_level',
+      'gold_cp', 'gold_sp', 'gold_gp', 'starting_gold_gp',
+      'experience', 'experience_to_next_level',
       'armor_class', 'speed', 'ability_scores', 'skills', 'advantages',
       'inventory', 'faction_standings', 'injuries', 'debuffs', 'equipment',
       'avatar', 'alignment', 'faith', 'lifestyle',
@@ -271,8 +293,17 @@ router.put('/:id', async (req, res) => {
       'keeper_genre_domain_2', 'keeper_genre_mastery', 'keeper_specialization',
       // Phase 2 chunk 2 — handoff transition. The (iv) preludePayload flow
       // in CharacterCreationWizard sends `creation_phase = 'active'` on
-      // submit when finishing a 'ready_for_primary' character.
+      // submit when finishing a 'ready_for_primary' character. Phase 2
+      // chunk 5 batch 3 also uses this for the rebuilt creator's
+      // 'creating' → 'active' (manual) and 'ready_for_primary' → 'active'
+      // (handoff) submit transitions.
       'creation_phase'
+      // Note: Phase 2 chunk 5 batch 3 Step 7 introduces a `physical_build`
+      // field (the character's body type — slim, heavy, wiry, etc., per
+      // spec §5.7.4). No server column for it today. Captured client-side
+      // and surfaced in the preview; persistence pending a follow-up
+      // migration. Field intentionally NOT in this allowlist — adding it
+      // without a column would crash the UPDATE.
     ];
 
     for (const [key, value] of Object.entries(req.body)) {
@@ -291,12 +322,68 @@ router.put('/:id', async (req, res) => {
 
     await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, values);
 
+    // --- Phase 2 chunk 5 batch 3 checkpoint 2 — handoff submit hooks ---
+    // When the PUT flips creation_phase to 'active' and the prior phase
+    // was 'ready_for_primary', this is the handoff submit. Run side
+    // effects: flip heirloom candidate statuses + (TODO) canon transfer.
+    if (priorPhase === 'ready_for_primary' && req.body.creation_phase === 'active') {
+      const chosenId = req.body.chosen_heirloom_candidate_id ?? null
+      await applyHeirloomChoiceOnSubmit(req.params.id, chosenId)
+      // TODO (checkpoint 3 follow-up): canon transfer service —
+      // copy prelude_canon_npcs / prelude_canon_locations /
+      // prelude_canon_threads into the campaign-side npcs / locations /
+      // campaign_threads tables, and apply mentor_imprints when seeded.
+      // Currently NO-OP: the prelude_canon_* rows persist on the
+      // character record, and downstream campaign generation can read
+      // them directly via the existing FK chain. Surfaced for tracking
+      // rather than blocking the submit.
+      console.log(`[handoff submit] character ${req.params.id} flipped to active. Canon transfer wiring pending checkpoint 3.`)
+    }
+
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(character);
   } catch (error) {
     handleServerError(res, error, 'update character');
   }
 });
+
+/**
+ * Phase 2 chunk 5 batch 3 checkpoint 2 — apply the player's heirloom
+ * candidate choice at handoff submit. The chosen candidate flips to
+ * 'carried_forward'; all other candidates for this character flip to
+ * 'left_behind'. The chosen candidate's content is also reflected on
+ * the character's inventory blob (already shaped client-side at
+ * submit time per creatorPersistence.js).
+ *
+ * Per spec §8.1.2 status semantics: unpicked candidates are kept in the
+ * table for narrative reference; the AI may surface "remember the
+ * [object] you didn't take" in late-campaign play. No MVP mechanism
+ * wires this surfacing today.
+ *
+ * Currently a no-op for every existing handoff character because the
+ * heirloom producer is deferred per Option A — `prelude_canon_heirlooms`
+ * has no rows. The function exists wired so it lights up automatically
+ * when producer-side work lands.
+ */
+async function applyHeirloomChoiceOnSubmit(characterId, chosenCandidateId) {
+  // Get all candidates for this character
+  const candidates = await dbAll(
+    `SELECT id FROM prelude_canon_heirlooms
+     WHERE character_id = ? AND status = 'candidate'`,
+    [characterId]
+  )
+  if (candidates.length === 0) return // No-op, no candidates to apply
+
+  for (const c of candidates) {
+    const newStatus = (chosenCandidateId != null && Number(c.id) === Number(chosenCandidateId))
+      ? 'carried_forward'
+      : 'left_behind'
+    await dbRun(
+      `UPDATE prelude_canon_heirlooms SET status = ? WHERE id = ?`,
+      [newStatus, c.id]
+    )
+  }
+}
 
 // Delete character and all related data.
 //

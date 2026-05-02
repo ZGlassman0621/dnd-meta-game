@@ -6,6 +6,9 @@ import Step3Theme from './Step3Theme.jsx'
 import Step4ClassCalling from './Step4ClassCalling.jsx'
 import Step5AbilityScores from './Step5AbilityScores.jsx'
 import Step6Equipment from './Step6Equipment.jsx'
+import Step7IdentityDetails from './Step7IdentityDetails.jsx'
+import Step8Review from './Step8Review.jsx'
+import { submitCreator } from './creatorPersistence.js'
 
 /**
  * Character Creator V2 — chunk 5 rebuilt main creator.
@@ -29,7 +32,7 @@ import Step6Equipment from './Step6Equipment.jsx'
  * affordance for visual/UX review before the rebuilt creator replaces
  * the existing one.
  */
-export default function CharacterCreatorV2({ preludePayload = null, onExit }) {
+export default function CharacterCreatorV2({ preludePayload = null, onExit, onSubmitSuccess = null }) {
   const mode = preludePayload ? 'handoff' : 'manual'
 
   // The wizard's own step + state. State shape mirrors what the old
@@ -44,6 +47,16 @@ export default function CharacterCreatorV2({ preludePayload = null, onExit }) {
     setState(buildInitialState(preludePayload))
     setStep(0)
   }, [preludePayload?.character_id])
+
+  // Scroll to the top of the page on every step change. Without this,
+  // clicking Continue at the bottom of a long step lands the player
+  // somewhere mid-page on the next step. `instant` not 'smooth' — the
+  // smooth option lags noticeably for tall pages.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    }
+  }, [step])
 
   const totalSteps = 8
   const back = () => setStep(s => Math.max(0, s - 1))
@@ -78,23 +91,44 @@ export default function CharacterCreatorV2({ preludePayload = null, onExit }) {
           {step === 3 && <Step4ClassCalling {...stepProps} />}
           {step === 4 && <Step5AbilityScores {...stepProps} />}
           {step === 5 && <Step6Equipment {...stepProps} />}
-          {step >= 6 && (
-            // Steps 7–8 land in checkpoint 2 (Step 7 + Step 8 + Submit
-            // + persistence). Until then this is a placeholder so the
-            // stepper navigation doesn't crash if the user clicks ahead.
-            <PlaceholderStep stepNum={step + 1} />
+          {step === 6 && <Step7IdentityDetails {...stepProps} />}
+          {step === 7 && (
+            <Step8Review
+              state={state}
+              mode={mode}
+              payload={preludePayload}
+              onJump={(targetStep) => setStep(targetStep)}
+              onSubmit={async () => {
+                const result = await submitCreator({ state, mode, preludePayload })
+                if (onSubmitSuccess) onSubmitSuccess(result)
+                else alert(`Character ${result.character_id || ''} ${mode === 'handoff' ? 'stepped into the world' : 'created'}.`)
+              }}
+            />
           )}
 
-          <WizardFoot
-            onBack={back}
-            onNext={step === totalSteps - 1 ? () => alert('Submit handled by Step 8 (batch 3).') : next}
-            canBack={step > 0}
-            onSave={onExit}
-            nextLabel={step === totalSteps - 1
-              ? (mode === 'handoff' ? 'Step into the world' : 'Create character')
-              : 'Continue'}
-            isLast={step === totalSteps - 1}
-          />
+          {step < 7 && (
+            <WizardFoot
+              onBack={back}
+              onNext={next}
+              canBack={step > 0}
+              onSave={onExit}
+              nextLabel={'Continue'}
+              isLast={false}
+            />
+          )}
+          {step === 7 && (
+            // Step 8 has its own primary Submit button at the bottom of
+            // the page; the footer here only needs Back + Save-and-exit.
+            <WizardFoot
+              onBack={back}
+              onNext={() => {}}
+              canBack
+              canNext={false}
+              onSave={onExit}
+              nextLabel=""
+              isLast
+            />
+          )}
         </div>
       </div>
     </div>
@@ -120,6 +154,20 @@ function PlaceholderStep({ stepNum }) {
 
 function buildInitialState(payload) {
   const blankBaseScores = { str: null, dex: null, con: null, int: null, wis: null, cha: null }
+  const blankIdentity = {
+    alignment: '', faith: '', lifestyle: '',
+    age: '', height: '', weight: '',
+    eye_color: '', hair_color: '', skin_color: '', build: '',
+    distinguishing_features: ''
+  }
+  const blankExpansions = {
+    personality: { value: '' },
+    ideals: { value: '' },
+    bonds: { value: '' },
+    flaws: { value: '' },
+    backstory: { picked_keys: [], custom_moments: [] }
+  }
+
   if (!payload) {
     return {
       // Step 1
@@ -139,13 +187,13 @@ function buildInitialState(payload) {
       // Step 6
       equipment_picks: {},
       heirloom: null,
-      heirloom_candidate_id: null
-      // (Steps 7–8 fields land in checkpoint 2)
+      heirloom_candidate_id: null,
+      // Step 7
+      identity: blankIdentity,
+      expansions: blankExpansions
     }
   }
-  // Handoff seed from §8.2.1 payload shape (schema_version=2). Only
-  // the fields the batch-2/3 steps consume are mirrored; additional
-  // fields land as their owning steps ship.
+  // Handoff seed from §8.2.1 payload shape (schema_version=2).
   const np = payload.name_parts || {}
   return {
     first_name: np.first_name || '',
@@ -167,6 +215,14 @@ function buildInitialState(payload) {
     selected_skills: [],
     equipment_picks: {},
     heirloom: null,
-    heirloom_candidate_id: null
+    heirloom_candidate_id: null,
+    // Step 7 — alignment / faith / lifestyle / physical NEVER pre-fill
+    // from Prelude per spec §5.7.3. Player picks fresh in handoff too.
+    identity: blankIdentity,
+    // Backstory expansion in handoff mode displays the biography_seed
+    // read-only at the top (consumed inside the component); other
+    // expansions remain blank (biography-seed pre-fill into specific
+    // expansions is a future authoring problem per spec §5.7.7).
+    expansions: blankExpansions
   }
 }

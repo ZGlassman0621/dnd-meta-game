@@ -2,6 +2,143 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.112] - 2026-05-02 — Phase 2 chunk 5 batch 3 checkpoint 2: Step 7 (Identity Details) + Step 8 (Review) + Submit + persistence + PM-review polish
+
+Lands the judgment-heavy half of the rebuilt creator. Step 7 (Identity Details) introduces the prompts/moments interaction patterns (Model A click-to-fill + Model B multi-select chips) plus the always-visible alignment chips. Step 8 (Review) renders the assembled character as a read-only preview card with editable summary list + Edit-jumps + Submit branching. Server-side: POST/PUT extended to handle the new `'creating'` phase and the handoff submit's heirloom flip. Plus a substantial PM review-feedback round.
+
+### Step 7 — Identity Details (`Step7IdentityDetails.jsx`)
+
+Per spec §5.7. Two stacked sections:
+
+**Required core (always visible):**
+- **Alignment** — 3×3 grid picker (LG/NG/CG · LN/N/CN · LE/NE/CE). Picking a cell surfaces a 1-sentence summary + 2 illustrative behavior examples below (distilled from canonical 5e PHB definitions, not freshly authored). All 9 cells covered in `AlignmentChip.jsx`'s `ALIGNMENT_DESCRIPTIONS` export.
+- **Faith** — select listing all 53 deities from `deities.json` + "None / Unaligned" anchor. Selected faith surfaces description + alignment chip below.
+- **Lifestyle** — 7 chip options (Wretched → Aristocratic) per spec §5.7.7. Each chip shows daily cost inline ("Modest 1 gp/day"). Picked tier surfaces description below: cost + meaning per PHB Chapter 5 ("a respectable apartment or comfortable lodging…").
+- **Physical description** — 3-column compact grid for Age / Height / Weight / Eyes / Hair / Skin / Build (per §5.7.7 design call to avoid 11 stacked rows). Distinguishing features as a wider textarea below.
+- **Race-aware Age / Height / Weight pickers** (PM ruling 2026-05-02) — `RaceAwareDimensionPicker.jsx` renders dropdowns from `client/src/data/raceDemographics.js` (PHB-derived ranges per race, distilled from PHB Ch.2 / Volo's Guide / ERftLW). Dual-unit display in labels: `5'10" (178 cm)` / `165 lb (75 kg)`. "Custom…" affordance opens a text input for unusual characters (200-year-old polymorphed dragon halflings, etc.) — honors player authoring agency per CLAUDE.md "Player first." Falls back to plain text input when race not yet picked (manual-mode pre-Step-2).
+
+**Five collapsible expansions** (`ExpansionSection.jsx`):
+- **Closed by default in BOTH modes** with chevron (▸) marker that rotates 90° when open. PM review feedback 2026-05-02: original spec §5.7.3 called for handoff-default-open, but in-context review chose closed-with-marker — open-by-default visually crowded the required-fields section and the chevron preserves discoverability without imposing the expansion's content on every player. Spec §5.7.3 annotated.
+- "✓ filled" tag appears in the collapsed header when the expansion has content, so the player can see at a glance what's authored.
+
+**Model A click-to-fill** for Personality / Ideals / Bonds / Flaws (`PromptList.jsx`):
+- Theme-flavored prompts render as clickable rows with **always-visible alignment chips** inline (Decision 3 — never hover-gated).
+- Click → text drops into the textarea as starter; player edits freely.
+- Confirm dialog if the player has typed beyond the previous starter ("You've edited this. Replace with the new prompt?").
+- Picked-state highlight tracks exact-match (clears when player edits).
+
+**Model B multi-select** for Backstory (`MomentList.jsx`):
+- Curated moments (8 per theme) render as checkbox rows; click to pick.
+- Picked moments become **chips** with up/down reorder (↑↓) + remove (✕).
+- "Write your own" affordance — text input + Add button → custom moments slot in alongside curated picks.
+- **Handoff mode**: read-only biography seed renders at the top of the Backstory expansion with timestamps + "What you see here is canonical to your campaign…" affordance per §5.7.5. The §7 prompts/moments remain accessible below per spec.
+- Per Decision 4: Backstory moments have NO alignment chip (events ≠ commitments) — visibly distinct from PromptList's shape.
+
+### Step 8 — Review (`Step8Review.jsx`)
+
+Per spec §5.8. Two stacked components:
+
+**Preview card** — character-sheet-shaped read-only summary:
+- Name + nickname inline, with race / subrace / gender / theme / class / level subline (PM review feedback 2026-05-02: order is `Race · Subrace · Gender · Theme · Class · Level 1`).
+- 6-column ability score grid with mod string below each (`+2`, `+0`, `−1` etc.).
+- Section grid for Alignment & faith / Appearance / Inner life (only when filled).
+
+**Editable summary list** — 7 sections (Steps 1-7), each with an **Edit →** affordance that calls `onJump(step - 1)`. State preserved across all other steps; player advances forward through subsequent steps to return to Submit (per spec §5.8.6 Q2 = (a) locked decision).
+
+**Validation**: every required field across Steps 1-7 checked before Submit. Errors render with **per-step jump links** so the player can fix in place. Submit disabled until valid; surfaces submit errors inline.
+
+**Handoff callout** above the preview card per §5.8.5: *"The years that shaped you are behind you now. Step forward."* Single-line, modest visual weight.
+
+**Submit button**: primary CTA — *"Step into the world"* (handoff) or *"Create character"* (manual).
+
+### Submit branching (`creatorPersistence.js`)
+
+`buildSubmitBody()` composes the request body with: final ability scores (base + racial + bumps clamped at 18), inventory (equipment picks + authored heirloom with `is_heirloom=true`), composed backstory (biography seed + picked moments + custom moments in pick order, blank-line-separated), Identity Details fields (alignment / faith / lifestyle / physical / expansions).
+
+```
+mode === 'handoff':
+  → PUT /api/character/{preludePayload.character_id}
+  → server detects 'ready_for_primary' → 'active' transition
+  → applyHeirloomChoiceOnSubmit() flips chosen → 'carried_forward', others → 'left_behind'
+  → TODO (checkpoint 3): canon transfer to campaign tables
+
+mode === 'manual':
+  → POST /api/character (or PUT if a 'creating' row was created at Step 1 advance)
+```
+
+### Server-side (`server/routes/character.js`)
+
+- **POST /api/character**: now accepts `creation_phase` (defaults to `'active'` for backwards compat with existing callers — server seed scripts, tests, internal imports).
+- **PUT /api/character/:id**: detects `ready_for_primary → active` transition, runs `applyHeirloomChoiceOnSubmit()` to flip candidate statuses (chosen → `'carried_forward'`, others → `'left_behind'`); no-op when no candidates exist (the only case today since OBJECT_HINT producer is deferred per Option A).
+
+### PM-review polish round (in-checkpoint feedback fixes)
+
+Substantial fixes from visual review at checkpoint 2:
+
+- **Feat name lookup fixed.** Step 2 was reading `f.name` but the API returns `feat_name`. Added `ancestry_feat_name` + `ancestry_feat_description` override fields to fixtures (production payloads will get these from the transition service); added `prettifyFeatId` last-line fallback for raw slugs.
+- **Class primary ability rendering.** `class.primaryAbility` is an array (`['str', 'dex']`); added `formatAbilityList` helper that joins to `"STR or DEX"`. Same fix applies to saving throws.
+- **Subclass dropdown is pick-level-aware.** `detectSubclassPickLevel()` inspects class subclass data: if any subclass has L1 features (Cleric/Sorcerer/Warlock/etc.) → renders the subclass picker; otherwise renders *"[Class] chooses a specialization at level N. You'll pick when you reach that level in play."* For Fighter that reads "level 3."
+- **Bump celebration card phrasing.** Reformatted "+1 to assign" as a small badge after the chapter beat (no more confusing em-dash). Replaced "Choose where each shows" with PM's suggested wording: *"Though your past shaped you, you may shape your future. Where would you like each to land?"* Fixed the broken Verena fixture sentence about the river-crossing winter.
+- **Equipment picker improvements.** New `equipmentResolver.js` filters `(if proficient)` options entirely (until subclass-aware proficiency tracking lands — PM ruling: better to hide than surface a confusing tag). Each equipment option resolves through the resolver and shows damage/properties for weapons (e.g., *"Longsword — 1d8 slashing · versatile"*), AC + STR requirement + stealth disadvantage for armor (e.g., *"Chain Mail — AC 16 (no DEX) · STR 13 required · stealth disadvantage"*). Pack picks render their full contents inline as a 2-column bulleted list.
+- **Heirloom specific-item dropdowns.** Wired real selects from `equipment.json`: Weapon → grouped by simple/martial × melee/ranged with damage stats below; Armor → grouped by light/medium/heavy/shields with AC stats below; Tool → all artisan tools + musical instruments. Book/Tome/Jewelry/Trinket/Other stay as free text per spec §5.6.5.
+- **Scroll-to-top on step change.** `useEffect` in `CharacterCreatorV2` shell calls `window.scrollTo(0, 0)` instantly on every step change.
+- **Step 7 expansions closed-by-default.** All 5 expansions now closed by default in both modes, with chevron (▸) marker for expandability. Spec §5.7.3 annotated with the deviation reasoning.
+- **Step 8 char-name subline format.** `Race · Subrace · Gender · Theme · Class · Level 1` per PM spec.
+- **"heirloom:" capitalization** fixed to "Heirloom:" in Step 8 summary.
+
+### Coverage matrix side-output
+
+- `tests/coverage-matrix.js` (new) — Node script that reads `themeIdealsPrompts.js` / `themeBondsPrompts.js` / `themeFlawsPrompts.js` and tabulates which 9-square alignment slots are filled per theme × field. Skips Personality (intentionally skewed per spec).
+- `triage/alignment-coverage-matrix.md` (new) — generated report. Initial coverage: **241 / 567 cells (43%)** filled. Used by PM as visibility input for the targeted gap-fill content authoring pass (parking-lot entry added to `CONSOLIDATED_TODO.md`).
+
+### Parking-lot entries (CONSOLIDATED_TODO.md)
+
+Three new entries logged for post-chunk-5 work:
+- **Heirloom handoff producer** (already had table + consumer; producer-mechanism choice deferred).
+- **Deity worship-contract content authoring** — 53 deities × ~150-250 words each. Not creator-blocking.
+- **Soldier (and others) alignment-coverage gap-fills** — PM authoring pass; coverage matrix produced as side-output.
+
+### Spec annotations
+
+- `PHASE_2_CREATOR_SPEC.md` §5.7.3 — annotated with the closed-by-default deviation note, including PM's reasoning (visual crowding + chevron-as-discoverability).
+
+### Files
+
+- `client/src/components/creator/Step7IdentityDetails.jsx` (new)
+- `client/src/components/creator/Step8Review.jsx` (new)
+- `client/src/components/creator/AlignmentChip.jsx` (new — exports ALIGNMENT_NAMES + ALIGNMENT_DESCRIPTIONS)
+- `client/src/components/creator/ExpansionSection.jsx` (new — chevron marker)
+- `client/src/components/creator/PromptList.jsx` (new — Model A)
+- `client/src/components/creator/MomentList.jsx` (new — Model B with chips)
+- `client/src/components/creator/RaceAwareDimensionPicker.jsx` (new — PM-review feedback)
+- `client/src/components/creator/equipmentResolver.js` (new — equipment.json lookup)
+- `client/src/components/creator/creatorPersistence.js` (new — Submit handler)
+- `client/src/components/creator/CharacterCreatorV2.jsx` (Steps 7+8 wired; scroll-to-top; state schema extended)
+- `client/src/components/creator/Step2Ancestry.jsx` (feat_name fix; locked-feat fallback)
+- `client/src/components/creator/Step4ClassCalling.jsx` (formatAbilityList; subclass pick-level logic)
+- `client/src/components/creator/Step6Equipment.jsx` (equipmentResolver wiring; specific-item dropdowns)
+- `client/src/components/creator/BumpCelebrationCard.jsx` (phrasing fix)
+- `client/src/data/raceDemographics.js` (new — PHB-derived ranges)
+- `client/src/App.jsx` (fixture overrides for ancestry_feat_name + biography seed; canon NPCs/locations)
+- `server/routes/character.js` (POST creation_phase; PUT phase-flip + applyHeirloomChoiceOnSubmit)
+- `tests/creator-server-persistence.test.js` (new — 12 assertions)
+- `tests/coverage-matrix.js` (new — side-output script)
+- `triage/alignment-coverage-matrix.md` (new — generated report)
+- `PHASE_2_CREATOR_SPEC.md` (§5.7.3 annotation)
+- `CONSOLIDATED_TODO.md` (3 new parking-lot entries)
+
+### Verification
+
+- Vite build clean (1.29s)
+- 2008 prelude + chunk 5 assertions green (1996 prior + 12 new from creator-server-persistence)
+- Three preview fixtures exercise singular/plural bump phrasing + all three gold variants + biography seed: `?creator=v2&handoff=1&fixture=verena|single-bump|hermit`
+
+### Intentional deferrals (checkpoint 3)
+
+- Canon transfer to campaign tables (TODO comment + console.log at handoff submit). Spec §8.2.2 step 5: copy `prelude_canon_npcs / locations / threads` into the campaign-side tables; seed `mentor_imprints` when applicable. Needs integration with primary-campaign generation logic.
+- Manual-mode Step-1-advance row creation (the persistence wiring for `'creating'` phase to enable mid-creator save/resume).
+- `physical_build` server column (Step 7 new "build" field). Captured client-side and surfaced in Step 8 preview; server PUT allowlist intentionally omits it. Migration in checkpoint 3.
+
 ## [1.0.0.111] - 2026-05-02 — Phase 2 chunk 5 batch 3 checkpoint 1: Step 5 (Ability Scores) + Step 6 (Equipment) + bump celebration card
 
 First of three checkpoints inside batch 3. Lands the two cleanest standalone steps — bump celebration card (third instance of the celebration primitive), gold modifier display (three variants), and heirloom flow shape. Step 7 + Step 8 + Submit + persistence land in checkpoint 2; home page + Screen 2 + cleanup land in checkpoint 3.

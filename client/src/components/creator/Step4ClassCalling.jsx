@@ -4,6 +4,51 @@ import classesData from '../../data/classes.json'
 import { THEME_NARRATIVE_CONTINUITY } from '../../data/themeNarrativeContinuity.js'
 
 /**
+ * Render a class's primaryAbility / savingThrows field as a readable
+ * string. classes.json stores these as arrays (e.g., ['str', 'dex'])
+ * which need joining + uppercasing for display.
+ */
+function formatAbilityList(value) {
+  if (!value) return null
+  if (Array.isArray(value)) {
+    const upper = value.map(s => String(s).toUpperCase())
+    if (upper.length === 1) return upper[0]
+    if (upper.length === 2) return `${upper[0]} or ${upper[1]}`
+    return upper.join(', ')
+  }
+  return String(value)
+}
+
+/**
+ * Inspect a class's subclasses to detect when subclasses pick. Returns
+ * the level at which the first subclass becomes available, or null if
+ * subclasses aren't gated by level (rare). Subclasses with featuresByLevel
+ * starting at level 1 mean the class picks subclass at L1 (Cleric domain,
+ * Sorcerer origin, Warlock patron); others (Fighter, Rogue, Wizard, etc.)
+ * pick later (L3 typically).
+ */
+function detectSubclassPickLevel(subclasses) {
+  if (!Array.isArray(subclasses) || subclasses.length === 0) return null
+  // Check if any subclass has L1 features. If so, subclass is picked at L1.
+  const hasL1Features = subclasses.some(s => {
+    const fbl = s?.featuresByLevel || {}
+    return fbl['1'] || fbl[1]
+  })
+  if (hasL1Features) return 1
+  // Otherwise, find the lowest level any subclass has features at.
+  const levels = []
+  for (const s of subclasses) {
+    const fbl = s?.featuresByLevel || {}
+    for (const k of Object.keys(fbl)) {
+      const lvl = parseInt(k, 10)
+      if (Number.isFinite(lvl)) levels.push(lvl)
+    }
+  }
+  if (levels.length === 0) return 3  // PHB default
+  return Math.min(...levels)
+}
+
+/**
  * Step 4 — Class & Calling. Per PHASE_2_CREATOR_SPEC.md §5.4.
  *
  * Manual mode: class picker (all 17 classes) + class detail card +
@@ -48,9 +93,11 @@ export default function Step4ClassCalling({ state, set, mode, payload }) {
       id,
       name: c.name || id,
       hitDie: c.hitDie || c.hit_die || c.hd,
-      primaryAbility: c.primaryAbility || c.primary_ability || c.primary,
-      savingThrows: c.savingThrows || c.saving_throws || c.saves,
-      description: c.description || c.flavor || ''
+      primaryAbility: formatAbilityList(c.primaryAbility || c.primary_ability || c.primary),
+      savingThrows: formatAbilityList(c.savingThrows || c.saving_throws || c.saves),
+      description: c.description || c.flavor || '',
+      subclasses: Array.isArray(c.subclasses) ? c.subclasses : [],
+      subclassPickLevel: detectSubclassPickLevel(c.subclasses)
     }))
   }, [])
   const cls = classId ? classList.find(c => c.id === classId) : null
@@ -144,18 +191,41 @@ export default function Step4ClassCalling({ state, set, mode, payload }) {
         {cls && (
           <>
             <div className="hr soft" />
-            <Field
-              label="Subclass"
-              help="A specialization within your calling. Some classes pick at level 1; others pick later."
-            >
-              <select
-                className="select"
-                value={state.subclass_id || ''}
-                onChange={e => set({ ...state, subclass_id: e.target.value })}
+            {cls.subclassPickLevel === 1 ? (
+              <Field
+                label="Subclass"
+                help={`A specialization within ${cls.name} — picks at level 1.`}
               >
-                <option value="">— picks at later level —</option>
-              </select>
-            </Field>
+                <div className="picker two">
+                  {cls.subclasses.map(s => (
+                    <button
+                      key={s.name}
+                      type="button"
+                      className={`pick ${state.subclass_id === s.name ? 'on' : ''}`}
+                      onClick={() => set({ ...state, subclass_id: s.name })}
+                    >
+                      <div className="name" style={{ fontSize: 17 }}>{s.name}</div>
+                      {s.description && (
+                        <div className="sub" style={{
+                          marginTop: 4, fontFamily: 'var(--serif)', fontStyle: 'italic',
+                          fontSize: 14, color: 'var(--ink-2)',
+                          textTransform: 'none', letterSpacing: 0
+                        }}>
+                          {s.description}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            ) : (
+              <Field label="Subclass">
+                <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
+                  {cls.name} chooses a specialization at level {cls.subclassPickLevel}. You'll
+                  pick when you reach that level in play.
+                </div>
+              </Field>
+            )}
 
             <Field
               label="Other L1 picks"

@@ -65,7 +65,12 @@ const PREVIEW_FIXTURE_VERENA = {
     { chapter: 2, reason: 'You held the river crossing for an hour against odds the captain still talks about.' },
     { chapter: 3, reason: 'You carried the standard out of a field that had become a graveyard.' }
   ],
-  ancestry_feat_id: 'human_t1_c1',
+  ancestry_feat_id: 'lucky',
+  // Display overrides — production payload would have the API-resolved
+  // name + description; for fixtures we hardcode them so the celebration
+  // card renders cleanly without relying on a slug→DB-id lookup.
+  ancestry_feat_name: 'Lucky',
+  ancestry_feat_description: 'Spend luck points to reroll attacks, checks, or saves.',
   ancestry_chapter_beats: [
     { chapter: 1, reason: 'You survived a fall from the bell-tower scaffold that should have killed a child.' },
     { chapter: 2, reason: 'You drew the long straw in a coin-toss the village elders rigged against you.' },
@@ -74,16 +79,27 @@ const PREVIEW_FIXTURE_VERENA = {
   class_suggestion: 'fighter',
   accepted_stat_bumps: [
     { stat: 'str', magnitude: 1, chapter: 1, chapter_beat: 'The months at the smithy after the muster broadened your shoulders.' },
-    { stat: 'con', magnitude: 1, chapter: 3, chapter_beat: 'The river-crossing winter taught your body what it could endure.' }
+    { stat: 'con', magnitude: 1, chapter: 3, chapter_beat: 'You marched through the river-crossing winter for three days in soaked boots, and your body learned what it could endure.' }
   ],
   accepted_skill_bumps: [
     { skill: 'Athletics', chapter: 2, chapter_beat: 'The drills became second nature; your old captain stopped correcting your form.' },
     { skill: 'Intimidation', chapter: 3, chapter_beat: 'You found a voice that made the conscripts listen.' }
   ],
   heirloom_candidates: [],
-  biography_seed: [],
-  canon_npcs: [],
-  canon_locations: [],
+  biography_seed: [
+    { age: 12, chapter: 1, text: "Your mother's funeral. The priest let you carry the censer, and the weight of it was the first weight that ever felt real." },
+    { age: 16, chapter: 2, text: "You took the king's coin at the spring muster. Your sister did not speak to you for a year, and then she did, and the year was not the part that mattered." },
+    { age: 19, chapter: 3, text: "The river crossing. Captain Reyne fell. You did not. The standard was in your hand without your remembering picking it up." },
+    { age: 21, chapter: 3, text: "You carried the standard back to the garrison through three days of rain. The captain who took it from your hand never used your name again." }
+  ],
+  canon_npcs: [
+    { id: 1, name: 'Captain Reyne', relationship: 'commander', status: 'deceased' },
+    { id: 2, name: 'Vesna', relationship: 'sister', status: 'alive' }
+  ],
+  canon_locations: [
+    { id: 1, name: 'Holdfast River Crossing', type: 'battlefield', is_home: false },
+    { id: 2, name: 'Three Mills', type: 'village', is_home: true }
+  ],
   canon_threads: [],
   mentor_imprint_eligible: false,
   name_parts: { first_name: 'Verena', last_name: 'Ashfall', nickname: null }
@@ -105,7 +121,9 @@ const PREVIEW_FIXTURE_SINGLE_BUMP = {
     { chapter: 2, reason: 'You sorted a tangle of contradictory testimony at the village dispute and named the lying witness.' },
     { chapter: 3, reason: 'The merchant\'s missing coin was in the floorboards of his own son\'s room; only you thought to look.' }
   ],
-  ancestry_feat_id: 'half_elf_t1_c1',
+  ancestry_feat_id: 'fey_touched',
+  ancestry_feat_name: 'Fey-Touched',
+  ancestry_feat_description: 'Learn misty step and one 1st-level divination or enchantment spell.',
   ancestry_chapter_beats: [
     { chapter: 1, reason: 'You learned both your parents\' tongues before you could read either, and switched between them mid-sentence.' },
     { chapter: 2, reason: 'You understood what the elven traders were saying before they realized you would.' }
@@ -144,7 +162,9 @@ const PREVIEW_FIXTURE_HERMIT = {
     { chapter: 2, reason: 'You spent a winter in the high cabin reading what the previous keeper had left, and you stopped going down for supplies.' },
     { chapter: 3, reason: 'A traveler found you in the second spring; they spoke to you for three days and you remembered how to answer.' }
   ],
-  ancestry_feat_id: 'elf_t1_c1',
+  ancestry_feat_id: 'elven_accuracy',
+  ancestry_feat_name: 'Elven Accuracy',
+  ancestry_feat_description: 'When you have advantage on an attack roll using DEX, INT, WIS, or CHA, reroll one of the dice.',
   ancestry_chapter_beats: [
     { chapter: 2, reason: 'You moved through the deep wood without leaving a track even your kin could read.' },
     { chapter: 3, reason: 'The wolves stopped marking your scent as a threat; the forest settled around you.' }

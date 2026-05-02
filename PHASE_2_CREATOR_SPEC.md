@@ -823,6 +823,8 @@ Section 2 (optional expansions) has two deltas in handoff mode:
 
 The §7 prompts and moments remain accessible in handoff mode below the pre-filled value, so the player can browse alternatives or compose extra material alongside the seed.
 
+> **PM review feedback (2026-05-02):** expansions default closed in BOTH modes with a chevron marker. Original spec called for handoff-default-open with biography pre-fill exposed; in-context review chose closed-with-marker because the open-by-default state visually crowded Step 7's required-fields-section, made the page longer than needed at the moment of review, and the chevron marker preserves discoverability without imposing the expansion's content on every player. Biography seed still renders read-only at the top of the Backstory expansion when that expansion is opened (handoff mode); it just no longer auto-opens. Future content edits to this section should respect the closed-default behavior.
+
 #### 5.7.4 Fields
 
 | Field | Type | Required | Default | Validation |
