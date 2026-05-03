@@ -98,10 +98,16 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
 
   // --- Final score with L1 cap clamp at 18 ---------------------------------
   const computeFinal = (k) => {
-    const base = baseScores[k] || 0
+    // Preserve null vs 0 distinction — null means "not yet assigned"
+    // (Claim button renders), 0 means the player explicitly entered 0
+    // (value button renders). Earlier `baseScores[k] || 0` collapsed
+    // both into 0, which made the Claim path unreachable: every cell
+    // looked assigned, so clicking always called releaseSlot, which
+    // set null, which the || coerced back to 0 — invisible no-op loop.
+    const base = baseScores[k]
     const racialTotal = (racialStatic[k] || 0) + (racialChoiceBonuses[k] || 0)
     const bumpTotal = bumpBonuses[k] || 0
-    const raw = base + racialTotal + bumpTotal
+    const raw = (base ?? 0) + racialTotal + bumpTotal
     const clamped = Math.min(18, raw)
     return { base, racialTotal, bumpTotal, raw, clamped, wouldOverflow: raw > 18 }
   }

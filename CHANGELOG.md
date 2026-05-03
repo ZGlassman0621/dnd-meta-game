@@ -2,6 +2,16 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.121] - 2026-05-03 — Smoke-run fix: Step 5 Claim button never rendered (real root cause)
+
+v1.0.119 thought it had fixed Step 5's Claim flow by reordering the value pool below the rows. The reorder was correct but the underlying bug was something else entirely: `computeFinal()` did `const base = baseScores[k] || 0` — collapsing both `null` (not yet assigned) and `0` (deliberately zero) into `0`. Since `base` was always a number, the downstream `base != null` check was always true → the value-already-assigned button always rendered → the Claim button never rendered. Worse: clicking the displayed "0" called `releaseSlot` which set the value to `null`, but the next render's `|| 0` coerced it back to `0` — a silent invisible loop.
+
+Fix: preserve the null-vs-0 distinction. `const base = baseScores[k]` (no coercion); math operations downstream use `(base ?? 0)` so the totals still compute. Render branches that already had `base == null` checks (the value cell falsy display, the manual-mode input fallback) now actually trigger.
+
+User report: "no claim button for the stat rolls. It looks like you can click on the 0 stat, but nothing happens when you do."
+
+---
+
 ## [1.0.0.120] - 2026-05-03 — Smoke-run fixes: Race-derived eye/hair/skin/build pickers + "Any Simple Weapon" sub-picker + spellcasting focus tooltips
 
 **Race-derived eye/hair/skin/build pickers (Step 7).** New `client/src/data/raceColorTraits.js` mirrors `raceDemographics.js` but for color/shape traits — eye colors, hair colors, skin tones, body builds — with race-appropriate defaults distilled from PHB Chapter 2 + Volo's (aasimar) + Eberron (warforged) + Mordenkainen's (dragonborn ancestry). New `RaceAwareColorPicker.jsx` parallels `RaceAwareDimensionPicker.jsx`: dropdown with PHB defaults + "Custom…" affordance for player-authoring agency + plain-text fallback when no race is picked. Step 7's physical-description grid now uses race-aware pickers for all four color/build fields (previously plain text inputs).
