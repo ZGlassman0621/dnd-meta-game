@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Field, WizardHead } from './creatorPrimitives.jsx'
 import classesData from '../../data/classes.json'
 import { THEME_GOLD_MODIFIERS, applyGoldModifier } from '../../data/themeGoldModifiers.js'
-import { resolveOptionLabel, isProficiencyGated, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
+import { resolveOptionLabel, isProficiencyGated, getFocusDescription, getWeaponChoiceList, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
 import equipmentData from '../../data/equipment.json'
 
 // Curated tool list from equipment.json + musical instruments. Both
@@ -51,9 +51,16 @@ export default function Step6Equipment({ state, set, mode, payload }) {
   // We render one row per choice; player picks one of the N options.
   const equipmentChoices = cls?.startingEquipment?.choices || []
   const equipmentPicks = state.equipment_picks || {}
+  const equipmentSubpicks = state.equipment_subpicks || {}
 
   const setPick = (idx, value) => {
-    set({ ...state, equipment_picks: { ...equipmentPicks, [idx]: value } })
+    // Switching to a different option clears the subpick from the previous one.
+    const nextSubpicks = { ...equipmentSubpicks }
+    if (equipmentPicks[idx] !== value) delete nextSubpicks[idx]
+    set({ ...state, equipment_picks: { ...equipmentPicks, [idx]: value }, equipment_subpicks: nextSubpicks })
+  }
+  const setSubpick = (idx, weaponName) => {
+    set({ ...state, equipment_subpicks: { ...equipmentSubpicks, [idx]: weaponName } })
   }
 
   // --- Gold calculation + 3-variant display ------------------------------
@@ -130,7 +137,9 @@ export default function Step6Equipment({ state, set, mode, payload }) {
                           key={i}
                           label={opt}
                           picked={equipmentPicks[idx] === opt}
+                          subpick={equipmentSubpicks[idx]}
                           onPick={() => setPick(idx, opt)}
+                          onSubpick={(weaponName) => setSubpick(idx, weaponName)}
                         />
                       ))}
                     </div>
@@ -605,14 +614,22 @@ function SpecificItemPicker({ type, value, onChange }) {
  * what they're picking — damage/properties for weapons, AC/strength
  * requirement for armor, contents list for packs.
  */
-function EquipmentOptionCard({ label, picked, onPick }) {
+function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
   const resolved = useMemo(() => resolveOptionLabel(label), [label])
+  const focusDescription = useMemo(() => getFocusDescription(label), [label])
+  const weaponChoiceList = useMemo(() => getWeaponChoiceList(label), [label])
+  const subPickedWeapon = useMemo(
+    () => (weaponChoiceList && subpick) ? weaponChoiceList.find(w => w.name === subpick) : null,
+    [weaponChoiceList, subpick]
+  )
   return (
-    <button
-      type="button"
+    <div
       className={`pick ${picked ? 'on' : ''}`}
       onClick={onPick}
-      style={{ alignItems: 'flex-start' }}
+      style={{ alignItems: 'flex-start', cursor: 'pointer' }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }}
     >
       <div className="name" style={{ fontSize: 17 }}>{label}</div>
       {/* Item-level details (weapons + armor stats) */}
@@ -695,6 +712,60 @@ function EquipmentOptionCard({ label, picked, onPick }) {
           </ul>
         </div>
       )}
-    </button>
+      {/* Spellcasting / class focus tooltip — Component Pouch, Arcane
+          Focus, Holy Symbol, Druidic Focus all surface a short
+          description so the player knows what they're choosing. */}
+      {focusDescription && (
+        <div style={{
+          marginTop: 10,
+          paddingTop: 10,
+          borderTop: '1px dashed var(--rule-soft)',
+          fontFamily: 'var(--serif)',
+          fontStyle: 'italic',
+          fontSize: 13,
+          color: 'var(--ink-3)',
+          lineHeight: 1.45
+        }}>
+          {focusDescription}
+        </div>
+      )}
+      {/* "Any Simple/Martial Weapon" — only render the dropdown after
+          the player has picked this option, otherwise it just clutters
+          the unselected card. Click on the dropdown is stopped from
+          propagating so it doesn't re-toggle the parent pick. */}
+      {weaponChoiceList && picked && (
+        <div
+          style={{ marginTop: 12, width: '100%' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <select
+            className="select"
+            value={subpick || ''}
+            onChange={e => onSubpick && onSubpick(e.target.value)}
+          >
+            <option value="">Pick a specific weapon…</option>
+            {weaponChoiceList.map(w => (
+              <option key={w.name} value={w.name}>
+                {w.name} — {w.damage} {w.damageType}
+              </option>
+            ))}
+          </select>
+          {subPickedWeapon && (
+            <div style={{
+              marginTop: 8,
+              fontFamily: 'var(--serif)',
+              fontStyle: 'italic',
+              fontSize: 13,
+              color: 'var(--ink-3)',
+              lineHeight: 1.4
+            }}>
+              <strong style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>{subPickedWeapon.name}</strong>
+              {' — '}{subPickedWeapon.damage} {subPickedWeapon.damageType}
+              {subPickedWeapon.properties?.length > 0 && ` · ${subPickedWeapon.properties.join(', ')}`}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

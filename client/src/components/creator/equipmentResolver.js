@@ -26,12 +26,44 @@
 
 import equipmentData from '../../data/equipment.json'
 
-const ALL_WEAPONS = [
+const SIMPLE_WEAPONS = [
   ...((equipmentData.simpleWeapons?.melee) || []),
-  ...((equipmentData.simpleWeapons?.ranged) || []),
+  ...((equipmentData.simpleWeapons?.ranged) || [])
+]
+const MARTIAL_WEAPONS = [
   ...((equipmentData.martialWeapons?.melee) || []),
   ...((equipmentData.martialWeapons?.ranged) || [])
 ]
+const ALL_WEAPONS = [...SIMPLE_WEAPONS, ...MARTIAL_WEAPONS]
+
+/**
+ * Spellcasting / class foci — short descriptions surfaced in Step 6
+ * so the player knows what each focus actually IS without having to
+ * consult the PHB. Keys match the option labels exactly.
+ */
+const FOCUS_DESCRIPTIONS = {
+  'Component Pouch': 'A small belt pouch holding the material components for spells (powders, herbs, tiny vials). Required by spells that list material components — replaces having to track each ingredient individually.',
+  'Arcane Focus': 'A crystal, orb, rod, staff, or wand that channels arcane spellcasting. Substitutes for material components without a listed gp cost. Wizards, sorcerers, and warlocks use this in place of (or alongside) a Component Pouch.',
+  'Holy Symbol': 'A symbol of your deity worn or held — amulet, emblem on a shield, or reliquary. Required for clerics and paladins to channel divine spellcasting and Channel Divinity.',
+  'Druidic Focus': "A sprig of mistletoe, totem, yew wand, or carved staff inscribed with druidic markings. Channels druidic spellcasting in place of material components."
+}
+
+export function getFocusDescription(label) {
+  return FOCUS_DESCRIPTIONS[String(label || '').trim()] || null
+}
+
+/**
+ * "Any X Weapon" predicate — class equipment options often offer
+ * "Any Simple Weapon" or "Any Martial Weapon" as a generic choice
+ * that the player resolves to a specific weapon. Returns the matching
+ * weapon list when applicable, or null.
+ */
+export function getWeaponChoiceList(label) {
+  const s = String(label || '').trim().toLowerCase()
+  if (s === 'any simple weapon' || s === 'a simple weapon') return SIMPLE_WEAPONS
+  if (s === 'any martial weapon' || s === 'a martial weapon') return MARTIAL_WEAPONS
+  return null
+}
 
 const ALL_ARMOR = [
   ...((equipmentData.armor?.light) || []),

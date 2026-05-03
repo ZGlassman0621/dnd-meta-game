@@ -130,10 +130,19 @@ export function buildSubmitBody(state, mode, preludePayload) {
   // and the legacy character-sheet logic resolves them at render.
   const inventory = []
   const equipmentPicks = state.equipment_picks || {}
-  Object.values(equipmentPicks).forEach((label, i) => {
+  const equipmentSubpicks = state.equipment_subpicks || {}
+  Object.entries(equipmentPicks).forEach(([idxKey, label]) => {
     if (!label) return
+    const i = Number(idxKey)
+    // "Any Simple Weapon" / "Any Martial Weapon" picks resolve through
+    // the per-row subpick. Fall back to the generic label if no subpick
+    // — Step 6's UI already nudges the player to choose, so this is only
+    // a defensive default.
+    const subpick = equipmentSubpicks[idxKey]
+    const finalLabel = subpick || label
     inventory.push({
-      label,
+      label: finalLabel,
+      original_pick: label,
       source: 'class_package',
       pick_index: i
     })

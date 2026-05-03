@@ -2,6 +2,20 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.120] - 2026-05-03 — Smoke-run fixes: Race-derived eye/hair/skin/build pickers + "Any Simple Weapon" sub-picker + spellcasting focus tooltips
+
+**Race-derived eye/hair/skin/build pickers (Step 7).** New `client/src/data/raceColorTraits.js` mirrors `raceDemographics.js` but for color/shape traits — eye colors, hair colors, skin tones, body builds — with race-appropriate defaults distilled from PHB Chapter 2 + Volo's (aasimar) + Eberron (warforged) + Mordenkainen's (dragonborn ancestry). New `RaceAwareColorPicker.jsx` parallels `RaceAwareDimensionPicker.jsx`: dropdown with PHB defaults + "Custom…" affordance for player-authoring agency + plain-text fallback when no race is picked. Step 7's physical-description grid now uses race-aware pickers for all four color/build fields (previously plain text inputs).
+
+Race coverage: human, dwarf, elf, half-elf, half-orc, halfling, tiefling, aasimar, dragonborn (scaled — "hair" → "None — scaled"; "skin" → scale colors per draconic ancestry), warforged ("hair" → constructed/filaments/none; "skin" → plating materials; "eyes" → glowing/crystalline).
+
+**"Any Simple Weapon" / "Any Martial Weapon" sub-picker (Step 6).** Class equipment options like Cleric's "Any Simple Weapon" rendered as a clickable card with no way to actually choose which simple weapon. Now: when the player selects an "Any X Weapon" option, a sub-dropdown appears inside the card listing the matching weapons with their damage + properties. The picked weapon's name flows through to the inventory at submit time (replaces the generic label). Subpick state lives in `state.equipment_subpicks` (new field, parallel shape to `equipment_picks`).
+
+**Spellcasting focus tooltips (Step 6).** "Component Pouch", "Arcane Focus", "Holy Symbol", and "Druidic Focus" options now render an inline italic description below the option name explaining what the focus actually IS — so the player isn't choosing blind. Descriptions distilled from PHB Chapter 5 (Equipment) and Chapter 10 (Spellcasting). New helper `getFocusDescription(label)` in `equipmentResolver.js` keyed off the option label.
+
+**Card structure adjustment.** `EquipmentOptionCard` switched from `<button>` to `<div role="button">` so it can host a `<select>` child without nesting interactive elements (HTML spec). Click semantics preserved via `onClick` + Enter/Space keyboard handler. Subpick dropdown clicks `stopPropagation` so the player doesn't accidentally re-toggle the parent pick when picking a weapon.
+
+---
+
 ## [1.0.0.119] - 2026-05-03 — Smoke-run fixes: Heirloom Skip is now visible + Step 5 value pool moved below the rows
 
 **Heirloom Skip (Step 6).** The Skip button set `state.heirloom = null` — but heirloom was already null in that state, so the click was a silent no-op. Now Skip flips a new `state.heirloom_skipped` flag, and the prompt collapses to a small dismissed-state row ("No heirloom — you set out unburdened. [Change my mind]"). The "Change my mind" affordance reopens the prompt with the same buttons. Authoring an heirloom (or starting authoring) clears the skipped flag automatically.

@@ -6,6 +6,7 @@ import PromptList from './PromptList.jsx'
 import MomentList from './MomentList.jsx'
 import deitiesData from '../../data/deities.json'
 import RaceAwareDimensionPicker from './RaceAwareDimensionPicker.jsx'
+import RaceAwareColorPicker from './RaceAwareColorPicker.jsx'
 import { THEME_PERSONALITY_PROMPTS } from '../../data/themePersonalityPrompts.js'
 import { THEME_IDEALS_PROMPTS } from '../../data/themeIdealsPrompts.js'
 import { THEME_BONDS_PROMPTS } from '../../data/themeBondsPrompts.js'
@@ -362,10 +363,10 @@ function RequiredCoreSection({ identity, setIdentity, faithOptions, raceId }) {
           value={identity.weight}
           onChange={v => setIdentity({ weight: v })}
         />
-        <PhysicalField label="Eyes" value={identity.eye_color} onChange={v => setIdentity({ eye_color: v })} max={64} />
-        <PhysicalField label="Hair" value={identity.hair_color} onChange={v => setIdentity({ hair_color: v })} max={64} />
-        <PhysicalField label="Skin" value={identity.skin_color} onChange={v => setIdentity({ skin_color: v })} max={64} />
-        <PhysicalField label="Build" value={identity.build} onChange={v => setIdentity({ build: v })} max={64} />
+        <RaceAwareColorField label="Eyes" field="eyes" raceId={raceId} value={identity.eye_color} onChange={v => setIdentity({ eye_color: v })} />
+        <RaceAwareColorField label="Hair" field="hair" raceId={raceId} value={identity.hair_color} onChange={v => setIdentity({ hair_color: v })} />
+        <RaceAwareColorField label="Skin" field="skin" raceId={raceId} value={identity.skin_color} onChange={v => setIdentity({ skin_color: v })} />
+        <RaceAwareColorField label="Build" field="build" raceId={raceId} value={identity.build} onChange={v => setIdentity({ build: v })} />
       </div>
 
       <div style={{ marginTop: 18 }}>
@@ -408,6 +409,24 @@ function RaceAwarePhysicalField({ label, field, raceId, value, onChange }) {
     <div className="field" style={{ marginBottom: 0 }}>
       <div className="label">{label}</div>
       <RaceAwareDimensionPicker
+        field={field}
+        raceId={raceId}
+        value={value || ''}
+        onChange={onChange}
+      />
+    </div>
+  )
+}
+
+/**
+ * Race-aware color/build field — wraps RaceAwareColorPicker in the
+ * label-and-spacing shape the rest of the physical-fields grid uses.
+ */
+function RaceAwareColorField({ label, field, raceId, value, onChange }) {
+  return (
+    <div className="field" style={{ marginBottom: 0 }}>
+      <div className="label">{label}</div>
+      <RaceAwareColorPicker
         field={field}
         raceId={raceId}
         value={value || ''}
