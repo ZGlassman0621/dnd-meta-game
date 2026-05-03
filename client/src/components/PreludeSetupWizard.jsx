@@ -9,11 +9,19 @@ import {
   SIBLING_OPTIONS,
   AUTHORITY_FIGURES
 } from '../data/preludeSetup'
+import { Field, Eyebrow } from './creator/creatorPrimitives.jsx'
 
 const ORIGIN_FREEFORM_MAX = 2000
 
 /**
  * 10-question prelude setup wizard.
+ *
+ * Phase 2 close-out (2026-05-03): editorial reskin per PM ruling. Token
+ * swap only — form fields, logic, copy, structure all preserved. Now
+ * scoped under `.creator-v2` so the parchment palette + EB Garamond +
+ * Inter typography match HomeScreenV2 / PathChoiceScreen / CharacterCreatorV2.
+ * Closes the visible seam between the editorial home and the prelude
+ * intake.
  *
  * Phase 2 rewrite of the v1.0.73 wizard. Q9 (talents), Q10 (cares), and
  * Q11 (tone preset) cut; Q9 (authority figure) and Q10 (anything else?)
@@ -159,368 +167,477 @@ export default function PreludeSetupWizard({ onPreludeCreated, onCancel }) {
     }
   }
 
-  // ---- Styling helpers ----------------------------------------------------
-  const cardStyle = {
-    padding: '1rem',
-    background: 'rgba(139,92,246,0.08)',
-    border: '1px solid rgba(139,92,246,0.3)',
-    borderRadius: '8px',
-    marginBottom: '1rem'
-  }
-  const labelStyle = { display: 'block', marginBottom: '0.35rem', color: '#c4b5fd', fontWeight: 600 }
-  const descStyle = { fontSize: '0.75rem', color: '#9fa3a8', fontStyle: 'italic', marginTop: '0.2rem', lineHeight: 1.4 }
-  const helpStyle = { fontSize: '0.78rem', color: '#bbb', margin: '0.4rem 0 0 0', lineHeight: 1.45 }
-
   const contradiction = siblingAuthorityContradiction()
   const originLength = form.origin_freeform.length
 
   return (
-    <div className="container" style={{ maxWidth: '820px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h2 style={{ margin: 0, color: '#a78bfa' }}>Start with a Prelude</h2>
-        <p style={{ color: '#bbb', fontSize: '0.9rem', marginTop: '0.25rem', marginBottom: 0 }}>
-          Your character begins as a child. You'll play through four focused sessions of their formative years —
-          childhood, adolescence, and the threshold of adulthood. Class, theme, ancestry feat, and ability bumps
-          emerge from what you actually do. These ten questions set the stage; everything else gets discovered in play.
-        </p>
-      </div>
-
-      {/* Q1: Name */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>1. Name</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-          <input type="text" value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="First name" />
-          <input type="text" value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="Last name" />
-          <input type="text" value={form.nickname} onChange={e => set('nickname', e.target.value)} placeholder="Nickname (optional)" />
+    <div className="creator-v2">
+      <div className="appbar">
+        <div className="brand">
+          D <span className="amp">&amp;</span> D
+          <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
         </div>
-        <p style={helpStyle}>
-          Some cultures don't use family surnames the way others do — leave Last name blank if that fits your character.
-          The DM will use just your first name (or invent a use-name with you in early scenes if it matters).
-        </p>
-      </div>
-
-      {/* Q2: Gender */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>2. Gender</label>
-        <select value={form.gender} onChange={e => set('gender', e.target.value)} style={{ width: '100%' }}>
-          <option value="">Select gender</option>
-          <option value="female">Female</option>
-          <option value="male">Male</option>
-          <option value="non-binary">Non-binary</option>
-          <option value="other">Other (write your own)</option>
-        </select>
-        {form.gender === 'other' && (
-          <input
-            type="text"
-            value={form.gender_other}
-            onChange={e => set('gender_other', e.target.value)}
-            placeholder="Your gender"
-            style={{ width: '100%', marginTop: '0.35rem' }}
-          />
+        <div className="crumbs">Prelude · setup</div>
+        <div className="spacer" />
+        {onCancel && (
+          <button type="button" className="btn ghost" onClick={onCancel}>← Back to roster</button>
         )}
       </div>
 
-      {/* Q3: Race + subrace */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>3. Race</label>
-        <select value={form.race} onChange={e => { set('race', e.target.value); set('subrace', '') }} style={{ width: '100%' }}>
-          <option value="">Select race</option>
-          {raceKeys.map(k => (
-            <option key={k} value={k}>{racesData[k].name}</option>
-          ))}
-        </select>
-        {raceData?.description && (
-          <p style={descStyle}>{raceData.description}</p>
-        )}
-        {subraces.length > 0 && (
-          <div style={{ marginTop: '0.5rem' }}>
-            <label style={labelStyle}>Sub-race</label>
-            <select value={form.subrace} onChange={e => set('subrace', e.target.value)} style={{ width: '100%' }}>
-              <option value="">Select sub-race</option>
-              {subraces.map(s => (
-                <option key={s.name} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-            {form.subrace && subraces.find(s => s.name === form.subrace)?.description && (
-              <p style={descStyle}>{subraces.find(s => s.name === form.subrace).description}</p>
+      <div className="stage">
+        <div className="frame">
+          {/* Header — eyebrow + display title + lede, mirroring WizardHead's
+              structure but tuned for an out-of-step setup screen rather
+              than one of the eight numbered steps. */}
+          <div className="wizard-head">
+            <div className="step-title">
+              <Eyebrow>Prelude character · setup</Eyebrow>
+              <h1 className="h-step" style={{ marginTop: 8 }}>Start with a Prelude</h1>
+              <p className="lede" style={{ marginTop: 12, maxWidth: 720 }}>
+                Your character begins as a child. You'll play through four focused sessions of their formative years —
+                childhood, adolescence, and the threshold of adulthood. Class, theme, ancestry feat, and ability bumps
+                emerge from what you actually do. These ten questions set the stage; everything else gets discovered in play.
+              </p>
+            </div>
+          </div>
+
+          {/* Q1: Name */}
+          <div className="card">
+            <Field label="1. Name" help="Some cultures don't use family surnames the way others do — leave Last name blank if that fits your character. The DM will use just your first name (or invent a use-name with you in early scenes if it matters).">
+              <div className="field-row three">
+                <input
+                  type="text"
+                  className="input"
+                  value={form.first_name}
+                  onChange={e => set('first_name', e.target.value)}
+                  placeholder="First name"
+                />
+                <input
+                  type="text"
+                  className="input"
+                  value={form.last_name}
+                  onChange={e => set('last_name', e.target.value)}
+                  placeholder="Last name"
+                />
+                <input
+                  type="text"
+                  className="input"
+                  value={form.nickname}
+                  onChange={e => set('nickname', e.target.value)}
+                  placeholder="Nickname (optional)"
+                />
+              </div>
+            </Field>
+          </div>
+
+          {/* Q2: Gender */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field label="2. Gender">
+              <select
+                className="select"
+                value={form.gender}
+                onChange={e => set('gender', e.target.value)}
+              >
+                <option value="">Select gender…</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="non-binary">Non-binary</option>
+                <option value="other">Other (write your own)</option>
+              </select>
+              {form.gender === 'other' && (
+                <input
+                  type="text"
+                  className="input"
+                  value={form.gender_other}
+                  onChange={e => set('gender_other', e.target.value)}
+                  placeholder="Your gender"
+                  style={{ marginTop: 12 }}
+                />
+              )}
+            </Field>
+          </div>
+
+          {/* Q3: Race + subrace */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field
+              label="3. Race"
+              help="Some races have their own naming conventions. If you leave Last name blank, the DM may introduce you through play with a use-name (e.g. 'Aelar of the Silver Glade') shaped by your race and where you grew up."
+            >
+              <select
+                className="select"
+                value={form.race}
+                onChange={e => { set('race', e.target.value); set('subrace', '') }}
+              >
+                <option value="">Select race…</option>
+                {raceKeys.map(k => (
+                  <option key={k} value={k}>{racesData[k].name}</option>
+                ))}
+              </select>
+              {raceData?.description && (
+                <p className="help" style={{ marginTop: 10 }}>{raceData.description}</p>
+              )}
+            </Field>
+            {subraces.length > 0 && (
+              <Field label="Sub-race" className="" >
+                <select
+                  className="select"
+                  value={form.subrace}
+                  onChange={e => set('subrace', e.target.value)}
+                >
+                  <option value="">Select sub-race…</option>
+                  {subraces.map(s => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+                {form.subrace && subraces.find(s => s.name === form.subrace)?.description && (
+                  <p className="help" style={{ marginTop: 10 }}>
+                    {subraces.find(s => s.name === form.subrace).description}
+                  </p>
+                )}
+              </Field>
             )}
           </div>
-        )}
-        <p style={helpStyle}>
-          Some races have their own naming conventions. If you leave Last name blank, the DM may introduce you
-          through play with a use-name (e.g. "Aelar of the Silver Glade") shaped by your race and where you grew up.
-        </p>
-      </div>
 
-      {/* Q4: Birth circumstance (starting age removed in v1.0.43 —
-          derived from race server-side). */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>4. Birth circumstance</label>
-        <select value={form.birth_circumstance} onChange={e => set('birth_circumstance', e.target.value)} style={{ width: '100%' }}>
-          <option value="">Select circumstance</option>
-          {BIRTH_CIRCUMSTANCES.map(c => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-        {form.birth_circumstance && (
-          <p style={descStyle}>
-            {BIRTH_CIRCUMSTANCES.find(c => c.value === form.birth_circumstance)?.description}
-          </p>
-        )}
-        <input
-          type="text"
-          value={form.birth_circumstance_other}
-          onChange={e => set('birth_circumstance_other', e.target.value)}
-          placeholder="Or write your own (overrides dropdown)"
-          style={{ width: '100%', marginTop: '0.5rem' }}
-        />
-      </div>
-
-      {/* Q5: Home setting */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>5. Home setting</label>
-        <select value={form.home_setting} onChange={e => set('home_setting', e.target.value)} style={{ width: '100%' }}>
-          <option value="">Select home</option>
-          {HOME_SETTINGS.map(c => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-        {form.home_setting && (
-          <p style={descStyle}>
-            {HOME_SETTINGS.find(c => c.value === form.home_setting)?.description}
-          </p>
-        )}
-        <input
-          type="text"
-          value={form.home_setting_other}
-          onChange={e => set('home_setting_other', e.target.value)}
-          placeholder="Or write your own (overrides dropdown)"
-          style={{ width: '100%', marginTop: '0.5rem' }}
-        />
-      </div>
-
-      {/* Q6: Region */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>6. Region</label>
-        <select value={form.region} onChange={e => set('region', e.target.value)} style={{ width: '100%' }}>
-          <option value="">Select region</option>
-          {REGIONS.map(c => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-        {form.region && (
-          <p style={descStyle}>
-            {REGIONS.find(c => c.value === form.region)?.description}
-          </p>
-        )}
-        <input
-          type="text"
-          value={form.region_other}
-          onChange={e => set('region_other', e.target.value)}
-          placeholder="Or write your own (overrides dropdown)"
-          style={{ width: '100%', marginTop: '0.5rem' }}
-        />
-      </div>
-
-      {/* Q7: Parents */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>7. Parents / guardians</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
-          Up to two parents or guardians. Pick who each one is to you (mother, father, grandparent who raised you, etc.), their race, their name, and whether they're present / distant / gone. Race defaults to yours; change it for mixed-race or foundling families.
-        </p>
-        {form.parents.map((p, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 1fr', gap: '0.4rem', marginBottom: '0.5rem' }}>
-            <select
-              value={p.role}
-              onChange={e => {
-                const next = [...form.parents]
-                next[i] = { ...next[i], role: e.target.value }
-                set('parents', next)
-              }}
-            >
-              {PARENT_ROLES.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-            <select
-              value={p.race || ''}
-              onChange={e => {
-                const next = [...form.parents]
-                next[i] = { ...next[i], race: e.target.value }
-                set('parents', next)
-              }}
-              title="Defaults to player's race if left blank"
-            >
-              <option value="">(same as you)</option>
-              {raceKeys.map(k => (
-                <option key={k} value={k}>{racesData[k].name}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={p.name}
-              onChange={e => {
-                const next = [...form.parents]
-                next[i] = { ...next[i], name: e.target.value }
-                set('parents', next)
-              }}
-              placeholder="Name (blank = unknown)"
-            />
-            <select
-              value={p.status}
-              onChange={e => {
-                const next = [...form.parents]
-                next[i] = { ...next[i], status: e.target.value }
-                set('parents', next)
-              }}
-            >
-              {PARENT_STATUS.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+          {/* Q4: Birth circumstance (starting age removed in v1.0.43 —
+              derived from race server-side). */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field label="4. Birth circumstance">
+              <select
+                className="select"
+                value={form.birth_circumstance}
+                onChange={e => set('birth_circumstance', e.target.value)}
+              >
+                <option value="">Select circumstance…</option>
+                {BIRTH_CIRCUMSTANCES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              {form.birth_circumstance && (
+                <p className="help" style={{ marginTop: 10 }}>
+                  {BIRTH_CIRCUMSTANCES.find(c => c.value === form.birth_circumstance)?.description}
+                </p>
+              )}
+              <input
+                type="text"
+                className="input"
+                value={form.birth_circumstance_other}
+                onChange={e => set('birth_circumstance_other', e.target.value)}
+                placeholder="Or write your own (overrides dropdown)"
+                style={{ marginTop: 12 }}
+              />
+            </Field>
           </div>
-        ))}
-        <p style={descStyle}>
-          {PARENT_STATUS.find(s => s.value === form.parents[0]?.status)?.description}
-        </p>
-      </div>
 
-      {/* Q8: Siblings (single dropdown — Phase 2) */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>8. Siblings</label>
-        <select value={form.siblings} onChange={e => set('siblings', e.target.value)} style={{ width: '100%' }}>
-          <option value="">Select sibling configuration</option>
-          {SIBLING_OPTIONS.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-        <p style={helpStyle}>
-          If your character had something more specific — adopted siblings, half-siblings from a different family,
-          etc. — you can describe it in question 10.
-        </p>
-      </div>
+          {/* Q5: Home setting */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field label="5. Home setting">
+              <select
+                className="select"
+                value={form.home_setting}
+                onChange={e => set('home_setting', e.target.value)}
+              >
+                <option value="">Select home…</option>
+                {HOME_SETTINGS.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              {form.home_setting && (
+                <p className="help" style={{ marginTop: 10 }}>
+                  {HOME_SETTINGS.find(c => c.value === form.home_setting)?.description}
+                </p>
+              )}
+              <input
+                type="text"
+                className="input"
+                value={form.home_setting_other}
+                onChange={e => set('home_setting_other', e.target.value)}
+                placeholder="Or write your own (overrides dropdown)"
+                style={{ marginTop: 12 }}
+              />
+            </Field>
+          </div>
 
-      {/* Q9: Authority figure (NEW — Phase 2) */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>9. Who looms largest in your early life?</label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.7rem 0' }}>
-          The dominant adult presence — not necessarily the one who loved you most, but the one whose attention
-          shaped you most. The arc will give this person real weight in the story.
-        </p>
-        <div style={{ display: 'grid', gap: '0.4rem' }}>
-          {AUTHORITY_FIGURES.map(opt => {
-            const picked = form.authority_figure === opt.value
-            return (
+          {/* Q6: Region */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field label="6. Region">
+              <select
+                className="select"
+                value={form.region}
+                onChange={e => set('region', e.target.value)}
+              >
+                <option value="">Select region…</option>
+                {REGIONS.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              {form.region && (
+                <p className="help" style={{ marginTop: 10 }}>
+                  {REGIONS.find(c => c.value === form.region)?.description}
+                </p>
+              )}
+              <input
+                type="text"
+                className="input"
+                value={form.region_other}
+                onChange={e => set('region_other', e.target.value)}
+                placeholder="Or write your own (overrides dropdown)"
+                style={{ marginTop: 12 }}
+              />
+            </Field>
+          </div>
+
+          {/* Q7: Parents */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field
+              label="7. Parents / guardians"
+              help="Up to two parents or guardians. Pick who each one is to you (mother, father, grandparent who raised you, etc.), their race, their name, and whether they're present / distant / gone. Race defaults to yours; change it for mixed-race or foundling families."
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {form.parents.map((p, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 1.4fr 1fr',
+                      gap: 12
+                    }}
+                  >
+                    <select
+                      className="select"
+                      value={p.role}
+                      onChange={e => {
+                        const next = [...form.parents]
+                        next[i] = { ...next[i], role: e.target.value }
+                        set('parents', next)
+                      }}
+                    >
+                      {PARENT_ROLES.map(r => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="select"
+                      value={p.race || ''}
+                      onChange={e => {
+                        const next = [...form.parents]
+                        next[i] = { ...next[i], race: e.target.value }
+                        set('parents', next)
+                      }}
+                      title="Defaults to player's race if left blank"
+                    >
+                      <option value="">(same as you)</option>
+                      {raceKeys.map(k => (
+                        <option key={k} value={k}>{racesData[k].name}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      className="input"
+                      value={p.name}
+                      onChange={e => {
+                        const next = [...form.parents]
+                        next[i] = { ...next[i], name: e.target.value }
+                        set('parents', next)
+                      }}
+                      placeholder="Name (blank = unknown)"
+                    />
+                    <select
+                      className="select"
+                      value={p.status}
+                      onChange={e => {
+                        const next = [...form.parents]
+                        next[i] = { ...next[i], status: e.target.value }
+                        set('parents', next)
+                      }}
+                    >
+                      {PARENT_STATUS.map(s => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              {PARENT_STATUS.find(s => s.value === form.parents[0]?.status)?.description && (
+                <p className="help" style={{ marginTop: 10 }}>
+                  {PARENT_STATUS.find(s => s.value === form.parents[0]?.status)?.description}
+                </p>
+              )}
+            </Field>
+          </div>
+
+          {/* Q8: Siblings (single dropdown — Phase 2) */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field
+              label="8. Siblings"
+              help="If your character had something more specific — adopted siblings, half-siblings from a different family, etc. — you can describe it in question 10."
+            >
+              <select
+                className="select"
+                value={form.siblings}
+                onChange={e => set('siblings', e.target.value)}
+              >
+                <option value="">Select sibling configuration…</option>
+                {SIBLING_OPTIONS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          {/* Q9: Authority figure (NEW — Phase 2). Card-list of options
+              with editorial accent on the picked entry. Preserves the
+              "label + description" structure of the original radios. */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field
+              label="9. Who looms largest in your early life?"
+              help="The dominant adult presence — not necessarily the one who loved you most, but the one whose attention shaped you most. The arc will give this person real weight in the story."
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {AUTHORITY_FIGURES.map(opt => {
+                  const picked = form.authority_figure === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => set('authority_figure', opt.value)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '14px 18px',
+                        background: picked ? 'var(--bg-2)' : 'var(--bg-card)',
+                        border: `1px solid ${picked ? 'var(--accent)' : 'var(--rule)'}`,
+                        borderLeft: `3px solid ${picked ? 'var(--accent)' : 'var(--rule)'}`,
+                        borderRadius: 0,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--serif)',
+                        transition: 'border-color .12s, background .12s'
+                      }}
+                    >
+                      <div style={{
+                        fontFamily: 'var(--sans)',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: '0.04em',
+                        color: picked ? 'var(--ink)' : 'var(--ink-2)',
+                        marginBottom: 4
+                      }}>
+                        {opt.label}
+                      </div>
+                      <div style={{
+                        fontFamily: 'var(--serif)',
+                        fontStyle: 'italic',
+                        fontSize: 15,
+                        lineHeight: 1.45,
+                        color: 'var(--ink-3)'
+                      }}>
+                        {opt.description}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              {contradiction && (
+                <p className="help" style={{ marginTop: 12, color: 'var(--accent)' }}>
+                  You picked "Only child" in Q8 — pick a different authority figure here, or change Q8.
+                </p>
+              )}
+            </Field>
+          </div>
+
+          {/* Q10: Anything else? (NEW — Phase 2; optional free text) */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <Field
+              label="10. Anything else? (optional)"
+              help="If you have a specific origin in mind, write it here. The DM will honor it. Leave blank if you don't — your character will emerge through play."
+            >
+              <textarea
+                className="textarea"
+                value={form.origin_freeform}
+                onChange={e => set('origin_freeform', e.target.value)}
+                placeholder="Optional. Any specifics about your character's origin the curated answers couldn't capture."
+                style={{ minHeight: 120 }}
+              />
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                marginTop: 6,
+                fontFamily: 'var(--mono)',
+                fontSize: 11,
+                color: originLength > ORIGIN_FREEFORM_MAX ? 'var(--accent)' : 'var(--ink-3)'
+              }}>
+                {originLength} / {ORIGIN_FREEFORM_MAX}
+              </div>
+            </Field>
+          </div>
+
+          {/* Dev/testing toggle — show the arc preview screen between setup and
+              first session, or dive straight into gameplay. Default ON while
+              play-testing the arc output; flip OFF for production-feeling flow. */}
+          <div
+            className="card"
+            style={{
+              marginTop: 18,
+              background: 'var(--bg-2)',
+              borderStyle: 'dashed'
+            }}
+          >
+            <Field
+              label="Show the arc preview (testing)"
+              help="When checked: after submitting, you'll see the Opus-generated arc plan before gameplay starts. Useful for testing that the arc respects your setup. Uncheck to dive straight into the first scene — that's how a regular play session works."
+            >
               <label
-                key={opt.value}
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.6rem',
-                  padding: '0.6rem 0.8rem',
-                  borderRadius: '8px',
-                  border: picked ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.15)',
-                  background: picked ? 'rgba(139,92,246,0.18)' : 'rgba(255,255,255,0.04)',
+                  alignItems: 'center',
+                  gap: 12,
                   cursor: 'pointer',
-                  transition: 'border-color 120ms, background 120ms'
+                  fontFamily: 'var(--serif)',
+                  fontSize: 17,
+                  color: 'var(--ink-2)'
                 }}
               >
                 <input
-                  type="radio"
-                  name="authority_figure"
-                  value={opt.value}
-                  checked={picked}
-                  onChange={() => set('authority_figure', opt.value)}
-                  style={{ marginTop: '0.2rem', accentColor: '#8b5cf6', cursor: 'pointer' }}
+                  type="checkbox"
+                  checked={form.show_arc_preview}
+                  onChange={e => set('show_arc_preview', e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }}
                 />
-                <span>
-                  <span style={{ fontWeight: 700, color: picked ? '#e9d5ff' : '#e4e4e4' }}>{opt.label}</span>
-                  <span style={{ color: picked ? '#d4d4d8' : '#aaa' }}> — {opt.description}</span>
-                </span>
+                <span>{form.show_arc_preview ? 'Arc preview will show before gameplay' : 'Skip preview — go straight into the first scene'}</span>
               </label>
-            )
-          })}
+            </Field>
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              style={{
+                marginTop: 18,
+                padding: '14px 18px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--accent)',
+                borderLeft: '3px solid var(--accent)',
+                fontFamily: 'var(--serif)',
+                fontStyle: 'italic',
+                fontSize: 16,
+                color: 'var(--ink-2)'
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="wizard-foot">
+            <button type="button" className="btn ghost" onClick={onCancel}>← Cancel</button>
+            <div className="spacer" />
+            <button
+              type="button"
+              className="btn primary lg"
+              onClick={handleSubmit}
+              disabled={submitting || contradiction}
+            >
+              {submitting ? 'Creating…' : 'Begin the Prelude →'}
+            </button>
+          </div>
         </div>
-        {contradiction && (
-          <p style={{ ...helpStyle, color: '#fca5a5', marginTop: '0.6rem' }}>
-            You picked "Only child" in Q8 — pick a different authority figure here, or change Q8.
-          </p>
-        )}
-      </div>
-
-      {/* Q10: Anything else? (NEW — Phase 2; optional free text) */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>10. Anything else? <span style={{ fontWeight: 400, color: '#9fa3a8' }}>(optional)</span></label>
-        <p style={{ fontSize: '0.82rem', color: '#bbb', margin: '0 0 0.5rem 0' }}>
-          If you have a specific origin in mind, write it here. The DM will honor it. Leave blank if you don't —
-          your character will emerge through play.
-        </p>
-        <textarea
-          value={form.origin_freeform}
-          onChange={e => set('origin_freeform', e.target.value)}
-          placeholder="Optional. Any specifics about your character's origin the curated answers couldn't capture."
-          style={{
-            width: '100%',
-            minHeight: '5rem',
-            padding: '0.5rem',
-            fontFamily: 'inherit',
-            fontSize: '0.9rem',
-            background: 'rgba(0,0,0,0.2)',
-            color: '#e4e4e4',
-            border: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: '6px',
-            resize: 'vertical'
-          }}
-        />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
-          <span style={{
-            fontSize: '0.72rem',
-            color: originLength > ORIGIN_FREEFORM_MAX ? '#fca5a5' : '#888'
-          }}>
-            {originLength} / {ORIGIN_FREEFORM_MAX}
-          </span>
-        </div>
-      </div>
-
-      {/* Dev/testing toggle — show the arc preview screen between setup and
-          first session, or dive straight into gameplay. Default ON while
-          play-testing the arc output; flip OFF for production-feeling flow. */}
-      <div style={{
-        ...cardStyle,
-        background: 'rgba(139,92,246,0.04)',
-        border: '1px dashed rgba(139,92,246,0.3)'
-      }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0 }}>
-          <input
-            type="checkbox"
-            checked={form.show_arc_preview}
-            onChange={e => set('show_arc_preview', e.target.checked)}
-            style={{ width: '1.1rem', height: '1.1rem', accentColor: '#8b5cf6', cursor: 'pointer' }}
-          />
-          <span style={{ ...labelStyle, margin: 0 }}>Show the arc preview (testing)</span>
-        </label>
-        <p style={{ ...descStyle, marginTop: '0.35rem' }}>
-          When checked: after submitting, you'll see the Opus-generated arc plan before gameplay starts. Useful for testing that the arc respects your setup. Uncheck to dive straight into the first scene — that's how a regular play session works.
-        </p>
-      </div>
-
-      {error && (
-        <p style={{ color: '#fca5a5', marginBottom: '0.75rem', fontSize: '0.9rem' }}>{error}</p>
-      )}
-
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button type="button" onClick={onCancel} className="button" style={{ flex: 1, background: '#95a5a6' }}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className="button"
-          disabled={submitting || contradiction}
-          style={{ flex: 2, background: (submitting || contradiction) ? '#6b7280' : '#8b5cf6', color: '#fff' }}
-        >
-          {submitting ? 'Creating…' : 'Begin the Prelude'}
-        </button>
       </div>
     </div>
   )

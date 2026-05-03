@@ -2,6 +2,29 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.124] - 2026-05-03 — Phase 2 close-out: Prelude setup wizard editorial reskin (sub-checkpoint 1 of 2)
+
+PM ruling 2026-05-03 (Medium tier reskin): close the visible seam between editorial home and the prelude entry path. v1.0.115 wired `PreludeSetupWizard` into the new HomeFlow but kept its slate aesthetic — player walking from HomeScreenV2 → PathChoiceScreen → PreludeSetupWizard registered a hard visual transition.
+
+**Token swap, not redesign.** `client/src/components/PreludeSetupWizard.jsx` reskinned to match the `.creator-v2` editorial system used by the rebuilt main creator + home page + Screen 2:
+
+- Wrapped in `<div className="creator-v2">` with the same appbar pattern (brand + crumbs + back-to-roster button) used by HomeFlow / CharacterCreatorV2
+- Replaced inline-styled `cardStyle` (purple slate) blocks with the editorial `.card` primitive
+- Each question now uses the shared `<Field label help>` primitive from `creatorPrimitives.jsx` — same label/help/control composition as Steps 1-7 of the main creator
+- Form controls swapped to `.input` / `.select` / `.textarea` (EB Garamond + Inter + accent underline)
+- Q9 authority figure: card-list of options with editorial accent (left-border highlight on picked entry) replaces the purple radio cards. Preserves the label + description structure
+- Q10 character counter: monospace ink-3, switches to accent on overflow
+- Footer: `.btn ghost` cancel + `.btn primary lg` submit
+- Error message: editorial-tone block (bg-2 + accent left-border) replaces `#fca5a5` red text
+
+**Logic, copy, validation, payload shape, all preserved verbatim.** Form fields are the same 10 questions, validate() is unchanged, buildPayload() is unchanged, server contract unchanged. Pure visual reskin.
+
+PreludeArcPreview reskin lands as v1.0.125 after sub-checkpoint review of this surface against the existing editorial pages.
+
+PreludeSession (the play-loop UI) stays slate per PM scope ruling. Parking-lot entry pending: "if slate play loop feels jarring against editorial bookends after this reskin lands, reactivate."
+
+---
+
 ## [1.0.0.123] - 2026-05-03 — Phase 2 close-out: Theme personality prompts — full alignment coverage (PM authored)
 
 PM-authored content drop closing the personality alignment gap surfaced in v1.0.122's coverage scan. Replaces `client/src/data/themePersonalityPrompts.js` from 63 prompts (3 per theme, heavy alignment skew, every theme missing at least one alignment) to 189 prompts (9 per theme, every alignment present exactly once). 21 prompts carried forward from the existing file unchanged; 168 are new.
