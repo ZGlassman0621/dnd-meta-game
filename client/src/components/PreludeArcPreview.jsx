@@ -22,6 +22,16 @@ import { useEffect, useState } from 'react'
  *      POST /api/prelude/:id/arc-plan?regenerate=1.
  *   4. "Begin the prelude" hands off to the session loop.
  */
+/**
+ * Render a class/theme id (lowercase, underscore-separated) as a
+ * display label. "city_watch" → "City Watch", "ranger" → "Ranger".
+ * Returns null for nullish input so the caller's `|| '—'` fallback fires.
+ */
+function prettifyId(id) {
+  if (!id) return null
+  return String(id).split(/[_-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
 export default function PreludeArcPreview({ character, onReturn, onBegin }) {
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -504,9 +514,9 @@ export default function PreludeArcPreview({ character, onReturn, onBegin }) {
                 These are suggestions. Actual class, theme, and ancestry feat will emerge from what you play.
               </p>
               <p style={{ ...beatItemStyle, marginTop: 14 }}>
-                Class nudge: <span style={beatTitleStyle}>{plan.character_trajectory.suggested_class || '—'}</span>
+                Class nudge: <span style={beatTitleStyle}>{prettifyId(plan.character_trajectory.suggested_class) || '—'}</span>
                 {' · '}
-                Theme nudge: <span style={beatTitleStyle}>{plan.character_trajectory.suggested_theme || '—'}</span>
+                Theme nudge: <span style={beatTitleStyle}>{prettifyId(plan.character_trajectory.suggested_theme) || '—'}</span>
               </p>
               {plan.character_trajectory.why_class && (
                 <p style={{ ...subStyle, marginTop: 8 }}>

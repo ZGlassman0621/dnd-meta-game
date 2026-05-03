@@ -2,6 +2,12 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.126] - 2026-05-03 — Polish: capitalize Class nudge / Theme nudge values in arc preview
+
+Sub-checkpoint review surfaced one polish item: the "Where the arc might lead" section's `Class nudge` and `Theme nudge` values rendered raw (`ranger`, `outlander`, `city_watch`) instead of display-formatted (`Ranger`, `Outlander`, `City Watch`). Added a small `prettifyId(id)` helper local to `PreludeArcPreview.jsx` matching the same pattern used elsewhere (HomeFlow, Step2Ancestry). User flagged that players will rarely see this section but consistency matters.
+
+---
+
 ## [1.0.0.125] - 2026-05-03 — Phase 2 close-out: Prelude arc-preview editorial reskin (sub-checkpoint 2 of 2)
 
 Second of two surfaces in the Prelude entry path. v1.0.124 reskinned the setup wizard; this lands the arc preview. Player walking from HomeScreenV2 → PathChoiceScreen → PreludeSetupWizard → PreludeArcPreview now reads as one continuous editorial experience. PreludeSession (the play loop) stays slate per scope ruling; parked.
