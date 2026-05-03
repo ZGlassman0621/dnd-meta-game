@@ -2,6 +2,14 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.119] - 2026-05-03 — Smoke-run fixes: Heirloom Skip is now visible + Step 5 value pool moved below the rows
+
+**Heirloom Skip (Step 6).** The Skip button set `state.heirloom = null` — but heirloom was already null in that state, so the click was a silent no-op. Now Skip flips a new `state.heirloom_skipped` flag, and the prompt collapses to a small dismissed-state row ("No heirloom — you set out unburdened. [Change my mind]"). The "Change my mind" affordance reopens the prompt with the same buttons. Authoring an heirloom (or starting authoring) clears the skipped flag automatically.
+
+**Stats page (Step 5).** The instruction read "click 'Claim' on an ability row, then click a value below" — but the Standard Array value pool rendered ABOVE the ability rows. Click flow was right; the spatial mismatch was wrong. Reordered so the value pool renders AFTER the ability rows. Now the instruction text matches what the player sees, and the pool stays visible after they click Claim (no need to scroll back up). Updated the instruction copy slightly to match the new layout: "Click 'Claim' on an ability row above, then pick a value here."
+
+---
+
 ## [1.0.0.118] - 2026-05-02 — Smoke-run fixes: Field layout (HEADING > SUBHEADING > CHOICE) + Starting Gold copy
 
 User flagged twice: Step 7 sections (Alignment, Faith, Lifestyle) were rendering as HEADING > CHOICE > SUBHEADING. The expected reading order is HEADING > SUBHEADING > CHOICE so the player understands what they're choosing before they choose it.

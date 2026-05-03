@@ -185,54 +185,6 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
           </div>
         </Field>
 
-        {/* --- Standard Array pool ----------------------------------- */}
-        {generationMethod === 'standard_array' && (
-          <Field
-            label="Available values"
-            help={
-              claimingFor
-                ? `Click a value to assign it to ${ABILITY_LABELS[claimingFor]}.`
-                : 'Click "Claim" on an ability row, then click a value below.'
-            }
-          >
-            <div style={{
-              display: 'flex',
-              gap: 10,
-              flexWrap: 'wrap',
-              padding: 16,
-              background: 'var(--bg-2)',
-              border: '1px dashed var(--rule)'
-            }}>
-              {STANDARD_ARRAY.map(v => {
-                const used = usedArrayValues.has(v)
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => !used && claimValue(v)}
-                    disabled={used || claimingFor == null}
-                    style={{
-                      width: 56,
-                      height: 56,
-                      border: '1px solid var(--ink)',
-                      background: used ? 'var(--bg-2)' : 'var(--bg-card)',
-                      fontFamily: 'var(--mono)',
-                      fontSize: 22,
-                      fontWeight: 500,
-                      color: used ? 'var(--ink-3)' : 'var(--ink)',
-                      cursor: used || claimingFor == null ? 'not-allowed' : 'pointer',
-                      opacity: used ? 0.3 : 1,
-                      transition: 'all .12s'
-                    }}
-                  >
-                    {v}
-                  </button>
-                )
-              })}
-            </div>
-          </Field>
-        )}
-
         {/* --- Six ability score rows ------------------------------- */}
         <div style={{ marginTop: 18 }}>
           <div className="label" style={{ marginBottom: 12 }}>Ability scores</div>
@@ -357,6 +309,58 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
             })}
           </div>
         </div>
+
+        {/* --- Standard Array pool (rendered AFTER the rows so the
+             "click a value below" instruction matches what the player
+             sees, and the pool stays visible after they click Claim). */}
+        {generationMethod === 'standard_array' && (
+          <div style={{ marginTop: 18 }}>
+            <Field
+              label="Available values"
+              help={
+                claimingFor
+                  ? `Click a value to assign it to ${ABILITY_LABELS[claimingFor]}.`
+                  : 'Click "Claim" on an ability row above, then pick a value here.'
+              }
+            >
+              <div style={{
+                display: 'flex',
+                gap: 10,
+                flexWrap: 'wrap',
+                padding: 16,
+                background: 'var(--bg-2)',
+                border: '1px dashed var(--rule)'
+              }}>
+                {STANDARD_ARRAY.map(v => {
+                  const used = usedArrayValues.has(v)
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => !used && claimValue(v)}
+                      disabled={used || claimingFor == null}
+                      style={{
+                        width: 56,
+                        height: 56,
+                        border: '1px solid var(--ink)',
+                        background: used ? 'var(--bg-2)' : 'var(--bg-card)',
+                        fontFamily: 'var(--mono)',
+                        fontSize: 22,
+                        fontWeight: 500,
+                        color: used ? 'var(--ink-3)' : 'var(--ink)',
+                        cursor: used || claimingFor == null ? 'not-allowed' : 'pointer',
+                        opacity: used ? 0.3 : 1,
+                        transition: 'all .12s'
+                      }}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+          </div>
+        )}
 
         {/* --- Racial choice picker (Variant Human, Half-Elf, etc.) -- */}
         {racialChoiceCount > 0 && (

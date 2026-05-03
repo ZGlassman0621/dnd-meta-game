@@ -192,15 +192,23 @@ export default function Step6Equipment({ state, set, mode, payload }) {
 function HeirloomFlow({ state, set, isHandoff, candidates, useOptInPath }) {
   const heirloom = state.heirloom || null
   const optedIn = !!heirloom
+  const skipped = !!state.heirloom_skipped
 
   const startAuthoring = () => {
     set({
       ...state,
+      heirloom_skipped: false,
       heirloom: { name: '', type: '', specific_item: '', description: '', awakening_hook: '' }
     })
   }
   const cancelAuthoring = () => {
     set({ ...state, heirloom: null })
+  }
+  const skipHeirloom = () => {
+    set({ ...state, heirloom: null, heirloom_skipped: true })
+  }
+  const reopenPrompt = () => {
+    set({ ...state, heirloom_skipped: false })
   }
   const updateHeirloom = (patch) => {
     set({ ...state, heirloom: { ...heirloom, ...patch } })
@@ -214,7 +222,25 @@ function HeirloomFlow({ state, set, isHandoff, candidates, useOptInPath }) {
   // --- Opt-in path -------------------------------------------------------
   return (
     <Field label="Heirloom (optional)">
-      {!optedIn && (
+      {skipped && (
+        <div style={{
+          padding: '14px 18px',
+          background: 'var(--bg-2)',
+          border: '1px dashed var(--rule)',
+          fontFamily: 'var(--serif)',
+          fontStyle: 'italic',
+          color: 'var(--ink-3)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <span>No heirloom — you set out unburdened.</span>
+          <button type="button" className="btn ghost" onClick={reopenPrompt}>Change my mind</button>
+        </div>
+      )}
+
+      {!optedIn && !skipped && (
         <div style={{
           padding: 32,
           background: 'var(--bg-2)',
@@ -252,7 +278,7 @@ function HeirloomFlow({ state, set, isHandoff, candidates, useOptInPath }) {
           )}
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center' }}>
             <button type="button" className="btn primary" onClick={startAuthoring}>Add an heirloom</button>
-            <button type="button" className="btn ghost" onClick={() => set({ ...state, heirloom: null })}>Skip</button>
+            <button type="button" className="btn ghost" onClick={skipHeirloom}>Skip</button>
           </div>
         </div>
       )}
