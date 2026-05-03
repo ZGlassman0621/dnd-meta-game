@@ -47,7 +47,7 @@ export function Field({ label, help, children, className = '', locked = false, l
         <div className="label">{label}</div>
         {locked && <div className="locked-tag">{lockTag}</div>}
       </div>
-      {help && <div className="help" style={{ marginTop: 4, marginBottom: 10 }}>{help}</div>}
+      {help && <div className="help">{help}</div>}
       {children}
     </div>
   )

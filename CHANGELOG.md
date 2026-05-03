@@ -2,6 +2,18 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.128] - 2026-05-03 — Sub-checkpoint #1 fix: horizontally-grouped Field rows align input baselines
+
+User-reported issue from v1.0.127 Step 1 review: the three-column name row (First Name / Last Name / Nickname) showed inputs at staggered heights because each column's help text was a different number of lines. Help-above-input meant longer help pushed inputs down; the row read as broken even though each cell was technically correct.
+
+**Fix:** when a `.field` is a direct child of `.field-row`, render help BELOW the input via flex `order` so inputs share a baseline. v1.0.118's global HEADING > SUBHEADING > CHOICE order still applies for single-column / vertically-stacked fields. Context-specific exception scoped to `.field-row` layouts.
+
+Removed inline `marginTop:4 / marginBottom:10` from the Field primitive's help div; moved margins into CSS so the `.field-row` override actually wins.
+
+**Side benefit:** the primary creator's Step 1 has the same three-column name row with the same misalignment latent since v1.0.118. This same fix improves both surfaces.
+
+---
+
 ## [1.0.0.127] - 2026-05-03 — Phase 2 close-out: Prelude wizard structural redesign — Step 1 (sub-checkpoint #1)
 
 PM-approved structural redesign per spec rev 2 (memory: `project_prelude_setup_structural_redesign.md`). Restructures `PreludeSetupWizard` from one-page-11-questions into a 6-step wizard mirroring the primary creator. Sub-checkpoint cadence: ship Step 1 first; user reviews against primary creator's Step 1; then proceed.

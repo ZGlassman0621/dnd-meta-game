@@ -276,6 +276,21 @@
 /* === Form fields ===================================================== */
 
 .creator-v2 .field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+.creator-v2 .field > .help { margin-top: 4px; margin-bottom: 6px; }
+
+/* Horizontally grouped fields (.field-row): help renders BELOW the input so
+ * the input underlines share a baseline across all columns. Without this
+ * exception, columns with longer help text push their inputs down and the
+ * row reads as broken (inputs at staggered heights). v1.0.118's global
+ * HEADING > SUBHEADING > CHOICE order still applies for single-column /
+ * vertically-stacked fields where misalignment doesn't apply.
+ */
+.creator-v2 .field-row > .field > .help {
+  order: 1;
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
 .creator-v2 .field-row { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; }
 .creator-v2 .field-row.three { grid-template-columns: 1fr 1fr 1fr; }
 .creator-v2 .field-row.four { grid-template-columns: repeat(4, 1fr); }
