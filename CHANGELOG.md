@@ -2,6 +2,16 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.118] - 2026-05-02 — Smoke-run fixes: Field layout (HEADING > SUBHEADING > CHOICE) + Starting Gold copy
+
+User flagged twice: Step 7 sections (Alignment, Faith, Lifestyle) were rendering as HEADING > CHOICE > SUBHEADING. The expected reading order is HEADING > SUBHEADING > CHOICE so the player understands what they're choosing before they choose it.
+
+**Field primitive (`creatorPrimitives.jsx`):** moved the `help` block above `children`. This is a one-line swap that affects every step using `<Field label="..." help="...">` — Step 2 (Race / Subrace / Ancestry feat), Step 4 (Class / Subclass), Step 6 (Equipment / Gold / Heirloom), Step 7 (Alignment / Faith / Lifestyle / physical fields), and a few others. Inline `className="help"` divs that render *after* a selection (post-pick context, like the deity description after picking faith) are unaffected — those are not section subheadings.
+
+**Step 3 gold display copy:** changed "Starting gold +5% gold" → "Starting Gold: +5%". Two pieces: the label "Starting gold" → "Starting Gold:", and `formatModifier` no longer appends the redundant " gold" suffix.
+
+---
+
 ## [1.0.0.117] - 2026-05-02 — Smoke-run fix: Aasimar (and Drow) ancestry-feat lookup
 
 Smoke-run blocker. Step 2 in the rebuilt creator was fetching `/api/progression/ancestry-feats/aasimar` for an Aasimar character — but that list_id doesn't exist in `ancestry_feats`. Aasimar's feats are split across three subrace-specific lists (`aasimar_protector` / `aasimar_scourge` / `aasimar_fallen`), and Drow lives at the top level (`drow`) rather than nested under `elf`. The legacy `CharacterCreationWizard` already had a `computeAncestryListId(race, subrace)` helper handling both cases; it was lost during the chunk 5 rewrite of Step 2.

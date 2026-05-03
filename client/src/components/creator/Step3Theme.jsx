@@ -46,7 +46,7 @@ export default function Step3Theme({ state, set, mode, payload }) {
   const formatModifier = (m) => {
     if (!m || m === 0) return 'Class baseline'
     const pct = Math.round(Math.abs(m) * 100)
-    return m > 0 ? `+${pct}% gold` : `−${pct}% gold`  // U+2212 minus per spec §7.1.4
+    return m > 0 ? `+${pct}%` : `−${pct}%`  // U+2212 minus per spec §7.1.4
   }
 
   return (
@@ -119,7 +119,7 @@ export default function Step3Theme({ state, set, mode, payload }) {
                 </span>
               )}
               <span>
-                Starting gold <strong>{formatModifier(THEME_GOLD_MODIFIERS[theme.id])}</strong>
+                Starting Gold: <strong>{formatModifier(THEME_GOLD_MODIFIERS[theme.id])}</strong>
               </span>
               {theme.id === 'knight_of_the_order' && (
                 <span style={{ fontStyle: 'italic', color: 'var(--accent)' }}>
