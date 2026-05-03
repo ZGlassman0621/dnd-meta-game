@@ -2,6 +2,24 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.116] - 2026-05-02 — Smoke-run fix: NOT NULL placeholders for 'creating'-phase partial saves
+
+Smoke-run uncovered that v1.0.115's POST defaults still failed at the schema layer. Defaults were `null`, but five columns are NOT NULL with no schema-level default: `class`, `current_hp`, `max_hp`, `current_location`, `experience_to_next_level`. The wizard's Step 1 → Continue path (POST `/api/character` with `creation_phase='creating'` and only first/last/nickname/gender) tripped the constraint with `LibsqlError: NOT NULL constraint failed: characters.class`.
+
+**Fix:** Refined the v1.0.115 defaults to placeholder values that satisfy the constraints, mirroring the existing prelude pattern (`preludeService.js` writes `class='prelude'`, `level=0`, computed HP, computed location for in-flight prelude characters):
+
+- `class` defaults to `'creating'` (string placeholder, distinguishable in queries)
+- `current_hp` / `max_hp` default to `0`
+- `current_location` defaults to `''` (empty string)
+- `experience_to_next_level` defaults to `0`
+- `name` defaults to `'(unnamed)'` for the edge case where neither first nor last name is set
+
+These placeholders never reach gameplay code — the wizard PUTs real values as the player completes each step, and consumer-side guards already exist for in-progress phases (level-up checker skips `creation_phase === 'prelude'` and now should treat `'creating'` the same way; the new HomeFlow doesn't call level-up on in-progress rows so this is defense-in-depth).
+
+No schema migration required. Schema NOT NULL constraints are the existing shape; all the fix does is provide non-null defaults at the route layer for the case where the client legitimately can't yet provide a value.
+
+---
+
 ## [1.0.0.115] - 2026-05-02 — Phase 2 chunk 5 follow-ups: Prelude path wired into HomeFlow + server POST defaults
 
 Two fixes surfaced after the v1.0.114 cutover made the new home page the live path.

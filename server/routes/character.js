@@ -74,31 +74,36 @@ router.get('/:id/progression', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      name = null,
+      name = '(unnamed)',
       first_name = null,
       last_name = null,
       nickname = null,
       gender = null,
-      class: charClass = null,
+      class: charClass = 'creating',
       subclass = null,
       race = '',
       subrace = null,
       background = null,
-      // Phase 2 chunk 5 batch 3 sub-checkpoint 2 fix — every field needs
-      // an explicit default. Without defaults, partial-save POSTs (e.g.,
-      // Step 1 advance with only name + gender + creation_phase='creating')
-      // pass undefined to libsql, which throws "Unsupported type of value"
-      // since undefined isn't a valid SQL value.
+      // Phase 2 chunk 5 batch 3 sub-checkpoint 2 fix (refined v1.0.116) —
+      // partial-save POSTs need defaults that satisfy schema NOT NULL
+      // constraints, not just non-undefined values. The five fields below
+      // (class, current_hp, max_hp, current_location, experience_to_next_level)
+      // are NOT NULL with no schema-level default; legacy creation always
+      // populated them but Step-1 partial saves don't have them yet.
+      // Placeholder values mirror the existing prelude pattern (preludeService
+      // uses `class='prelude'`, `level=0`, computed HP, computed location).
+      // Consumers that key off creation_phase (e.g., level-up checker) skip
+      // these in-progress rows, so the placeholders never reach gameplay code.
       level = 1,
-      current_hp = null,
-      max_hp = null,
-      current_location = null,
+      current_hp = 0,
+      max_hp = 0,
+      current_location = '',
       current_quest = null,
       gold_cp = 0,
       gold_sp = 0,
       gold_gp = 0,
       experience = 0,
-      experience_to_next_level = null,
+      experience_to_next_level = 0,
       armor_class = 10,
       speed = 30,
       ability_scores = '{"str":10,"dex":10,"con":10,"int":10,"wis":10,"cha":10}',
