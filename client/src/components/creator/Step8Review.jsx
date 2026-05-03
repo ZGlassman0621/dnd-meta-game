@@ -568,10 +568,12 @@ function validateForSubmit(state, isHandoff, payload) {
   if (!i.alignment) errors.push({ step: 7, message: 'Alignment is required.' })
   if (!i.faith) errors.push({ step: 7, message: 'Faith is required (pick "None / Unaligned" if no faith).' })
   if (!i.lifestyle) errors.push({ step: 7, message: 'Lifestyle is required.' })
+  // distinguishing_features is intentionally optional — not every character
+  // has scars or visible markings, and forcing the field invites filler.
   for (const [field, label] of [
     ['age', 'Age'], ['height', 'Height'], ['weight', 'Weight'],
     ['eye_color', 'Eyes'], ['hair_color', 'Hair'], ['skin_color', 'Skin'],
-    ['build', 'Build'], ['distinguishing_features', 'Distinguishing features']
+    ['build', 'Build']
   ]) {
     if (!(i[field] || '').toString().trim()) {
       errors.push({ step: 7, message: `Physical description: ${label} is required.` })

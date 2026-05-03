@@ -44,7 +44,7 @@ export default function Step3Theme({ state, set, mode, payload }) {
   const themeBeats = payload?.theme_chapter_beats || []
 
   const formatModifier = (m) => {
-    if (!m || m === 0) return 'Class baseline'
+    if (!m || m === 0) return '+0%'
     const pct = Math.round(Math.abs(m) * 100)
     return m > 0 ? `+${pct}%` : `−${pct}%`  // U+2212 minus per spec §7.1.4
   }

@@ -31,6 +31,14 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
   const generationMethod = state.generation_method || 'standard_array'
   const baseScores = state.base_scores || { str: null, dex: null, con: null, int: null, wis: null, cha: null }
 
+  // --- Class importance hints (primary / dump) ---------------------------
+  // Surfaces ★ next to abilities that matter most for the chosen class
+  // and ✗ next to its dump stat. Same shape the legacy wizard used,
+  // sourced from classes.json `primaryAbility[]` + `dumpStat`.
+  const classData = state.class_id ? classesData[state.class_id] : null
+  const primaryAbilities = classData?.primaryAbility || []
+  const dumpStat = classData?.dumpStat || null
+
   // --- Racial bonus computation -------------------------------------------
   const raceData = racesData[state.race]
   const subraceData = useMemo(() => {
@@ -193,7 +201,34 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
 
         {/* --- Six ability score rows ------------------------------- */}
         <div style={{ marginTop: 18 }}>
-          <div className="label" style={{ marginBottom: 12 }}>Ability scores</div>
+          <div className="label" style={{ marginBottom: 4 }}>Ability scores</div>
+          {classData && (primaryAbilities.length > 0 || dumpStat) && (
+            <div style={{
+              fontFamily: 'var(--serif)',
+              fontStyle: 'italic',
+              fontSize: 13,
+              color: 'var(--ink-3)',
+              marginBottom: 12,
+              lineHeight: 1.45
+            }}>
+              For {classData.name}
+              {primaryAbilities.length > 0 && (
+                <>
+                  , <strong style={{ fontStyle: 'normal', color: 'var(--accent)' }}>★</strong>
+                  {' marks the '}{primaryAbilities.length === 1 ? 'primary ability' : 'primary abilities'}
+                  {' ('}{primaryAbilities.map(a => ABILITY_LABELS[a]).join(' / ')}{')'}
+                </>
+              )}
+              {dumpStat && (
+                <>
+                  {primaryAbilities.length > 0 ? '; ' : ', '}
+                  <strong style={{ fontStyle: 'normal', color: 'var(--ink-3)' }}>✗</strong>
+                  {' marks the dump stat ('}{ABILITY_LABELS[dumpStat]}{')'}
+                </>
+              )}
+              .
+            </div>
+          )}
           <div style={{ display: 'grid', gap: 0 }}>
             {/* Header row */}
             <div style={{
@@ -232,7 +267,15 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
                     borderBottom: '1px solid var(--rule-soft)'
                   }}
                 >
-                  <span className="label" style={{ fontSize: 12 }}>{ABILITY_LABELS[k]}</span>
+                  <span className="label" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {ABILITY_LABELS[k]}
+                    {primaryAbilities.includes(k) && (
+                      <span style={{ color: 'var(--accent)', fontSize: 14 }} title={`Primary ability for ${classData?.name}`}>★</span>
+                    )}
+                    {dumpStat === k && (
+                      <span style={{ color: 'var(--ink-3)', fontSize: 14 }} title={`Dump stat for ${classData?.name}`}>✗</span>
+                    )}
+                  </span>
 
                   {/* Base value cell — varies by generation method */}
                   {generationMethod === 'standard_array' ? (
@@ -270,7 +313,7 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
                           cursor: 'pointer'
                         }}
                       >
-                        {claimingFor === k ? 'Pick a value above' : 'Claim'}
+                        {claimingFor === k ? 'Pick a value below' : 'Claim'}
                       </button>
                     )
                   ) : (

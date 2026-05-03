@@ -2,6 +2,33 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.122] - 2026-05-03 — Smoke-run fixes: Gold copy, claim direction, age ranges, primary/dump stat markers, optional Distinguishing Features
+
+**Step 3 — gold "+0%" instead of "Class baseline".** "Class baseline" was too oblique. Zero-modifier case now renders "+0%" so every theme's gold display reads with the same shape (+5% / +0% / −10%).
+
+**Step 5 — Claim direction copy.** v1.0.119 moved the value pool below the rows; v1.0.121 fixed the actual Claim button rendering. The "Pick a value above" button text on a claiming row was still pointing the wrong direction. Now reads "Pick a value below".
+
+**Step 5 — primary/dump ability markers (legacy parity).** Surfaces ★ next to abilities listed in the chosen class's `primaryAbility[]` and ✗ next to the class's `dumpStat`. Matches the legacy CharacterCreationWizard's signal that helps players see at a glance which scores their class needs vs. doesn't. A small italic legend above the rows names which abilities are which (e.g., "For Cleric, ★ marks the primary ability (Wisdom); ✗ marks the dump stat (Intelligence).").
+
+**Step 7 — Distinguishing Features now optional.** Previously blocked submit if blank; now optional. Field label updated to "(optional)" so players know they can skip without filler. Not every character has visible scars or markings.
+
+**raceDemographics.js — age ranges audited per race lifespan.** Previous ranges had uneven jumps and short ceilings; revised so every race's adventuring window is dense (every year), then thins to 5y/10y/25y steps appropriate to the race's natural lifespan:
+
+- Human: 16–65 every year, then 5y to 85
+- Dwarf: 50–200 every 5y, 25y to 350
+- Elf: 100–300 every 10y, 25y to 500, 50y to 750
+- Halfling: 20–60 every year, 5y to 100, 10y to 150
+- Tiefling: 16–50 every year, 5y to 100
+- Dragonborn: 15–50 every year, 5y to 80 (matures ~15, lifespan ~80 per PHB)
+- Half-Elf: 20–60 every year, 5y to 120, 20y to 180
+- Half-Orc: 14–50 every year, 5y to 75
+- Aasimar: 16–60 every year, 5y to 100, 20y to 160
+- Warforged: 1–30 every year, 5y to 100 (years since creation)
+
+User report: Dragonborn dropdown felt off — "average adventuring age 15-20" wasn't well-represented in the previous gappy range. Now every year through the prime adventuring window for every race.
+
+---
+
 ## [1.0.0.121] - 2026-05-03 — Smoke-run fix: Step 5 Claim button never rendered (real root cause)
 
 v1.0.119 thought it had fixed Step 5's Claim flow by reordering the value pool below the rows. The reorder was correct but the underlying bug was something else entirely: `computeFinal()` did `const base = baseScores[k] || 0` — collapsing both `null` (not yet assigned) and `0` (deliberately zero) into `0`. Since `base` was always a number, the downstream `base != null` check was always true → the value-already-assigned button always rendered → the Claim button never rendered. Worse: clicking the displayed "0" called `releaseSlot` which set the value to `null`, but the next render's `|| 0` coerced it back to `0` — a silent invisible loop.

@@ -71,36 +71,33 @@ function weightRange(minLbs, maxLbs, step) {
 }
 
 export const RACE_DEMOGRAPHICS = {
-  // Adulthood ~18, "middle age" ~50, lifespan ~85. Adventuring window
-  // typically 16-65; older players welcome via Custom.
+  // Adulthood ~18, lifespan ~85. Every year through a long adventuring
+  // window, then 5-year steps to natural lifespan.
   human: {
     age: [
-      ...ageRange(16, 30, 1),
-      ...ageRange(35, 65, 5),
-      { value: '70', label: '70' },
-      { value: '80', label: '80' }
+      ...ageRange(16, 65, 1),
+      ...ageRange(70, 85, 5)
     ],
     height: heightRange(53, 79),       // 4'5" – 6'7"
     weight: weightRange(90, 300, 5)
   },
 
-  // Adulthood ~50, lifespan ~350. Adventuring 50-200 typical.
+  // Adulthood ~50, lifespan ~350. Lifespan too long for per-year — 5y
+  // through prime, 25y for elder.
   dwarf: {
     age: [
-      ...ageRange(50, 100, 5),
-      ...ageRange(120, 250, 10),
-      { value: '300', label: '300' },
-      { value: '350', label: '350' }
+      ...ageRange(50, 200, 5),
+      ...ageRange(225, 350, 25)
     ],
     height: heightRange(48, 60),       // 4'0" – 5'0"
     weight: weightRange(130, 220, 5)
   },
 
-  // Adulthood ~100, lifespan ~750. Adventuring 100-500 typical.
+  // Adulthood ~100, lifespan ~750. 10y through prime, 25y/50y elder.
   elf: {
     age: [
-      ...ageRange(100, 200, 10),
-      ...ageRange(225, 500, 25),
+      ...ageRange(100, 300, 10),
+      ...ageRange(325, 500, 25),
       ...ageRange(550, 750, 50)
     ],
     height: heightRange(56, 79),       // 4'8" – 6'7"
@@ -110,32 +107,29 @@ export const RACE_DEMOGRAPHICS = {
   // Adulthood ~20, lifespan ~150.
   halfling: {
     age: [
-      ...ageRange(20, 50, 2),
-      ...ageRange(55, 100, 5),
-      { value: '120', label: '120' },
-      { value: '150', label: '150' }
+      ...ageRange(20, 60, 1),
+      ...ageRange(65, 100, 5),
+      ...ageRange(110, 150, 10)
     ],
     height: heightRange(31, 43),       // 2'7" – 3'7"
     weight: weightRange(35, 55, 1)
   },
 
-  // Adulthood ~16-18, lifespan ~100. Per PHB.
+  // Adulthood ~16, lifespan ~100. Per PHB.
   tiefling: {
     age: [
-      ...ageRange(16, 30, 1),
-      ...ageRange(35, 90, 5),
-      { value: '100', label: '100' }
+      ...ageRange(16, 50, 1),
+      ...ageRange(55, 100, 5)
     ],
     height: heightRange(55, 79),       // 4'7" – 6'7"
     weight: weightRange(90, 300, 5)
   },
 
-  // Adulthood ~15, lifespan ~80.
+  // Adulthood ~15, lifespan ~80. Per PHB Chapter 2.
   dragonborn: {
     age: [
-      ...ageRange(15, 30, 1),
-      ...ageRange(35, 70, 5),
-      { value: '80', label: '80' }
+      ...ageRange(15, 50, 1),
+      ...ageRange(55, 80, 5)
     ],
     height: heightRange(68, 88),       // 5'8" – 7'4"
     weight: weightRange(175, 360, 10)
@@ -144,8 +138,8 @@ export const RACE_DEMOGRAPHICS = {
   // Adulthood ~20, lifespan ~180. Bridge of human/elf parents.
   'half-elf': {
     age: [
-      ...ageRange(20, 50, 2),
-      ...ageRange(55, 120, 5),
+      ...ageRange(20, 60, 1),
+      ...ageRange(65, 120, 5),
       ...ageRange(140, 180, 20)
     ],
     height: heightRange(55, 79),       // 4'7" – 6'7"
@@ -155,32 +149,29 @@ export const RACE_DEMOGRAPHICS = {
   // Adulthood ~14, lifespan ~75.
   'half-orc': {
     age: [
-      ...ageRange(14, 30, 1),
-      ...ageRange(35, 70, 5),
-      { value: '75', label: '75' }
+      ...ageRange(14, 50, 1),
+      ...ageRange(55, 75, 5)
     ],
     height: heightRange(60, 84),       // 5'0" – 7'0"
     weight: weightRange(140, 380, 10)
   },
 
-  // Adulthood ~16, lifespan ~150-200. Per Volo's Guide to Monsters.
+  // Adulthood ~16, lifespan ~160. Per Volo's Guide to Monsters.
   aasimar: {
     age: [
-      ...ageRange(16, 30, 1),
-      ...ageRange(35, 90, 5),
-      { value: '120', label: '120' },
-      { value: '150', label: '150' },
-      { value: '180', label: '180' }
+      ...ageRange(16, 60, 1),
+      ...ageRange(65, 100, 5),
+      ...ageRange(120, 160, 20)
     ],
     height: heightRange(55, 79),       // 4'7" – 6'7"
     weight: weightRange(90, 300, 5)
   },
 
-  // Created adult, age = years since creation. Don't age conventionally.
-  // Per Eberron: Rising from the Last War.
+  // Created within the last few decades; age = years since creation.
+  // Don't age conventionally. Per Eberron: Rising from the Last War.
   warforged: {
     age: [
-      ...ageRange(2, 30, 1),
+      ...ageRange(1, 30, 1),
       ...ageRange(35, 100, 5)
     ],
     height: heightRange(70, 84),       // 5'10" – 7'0"

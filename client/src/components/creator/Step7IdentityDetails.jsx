@@ -370,7 +370,7 @@ function RequiredCoreSection({ identity, setIdentity, faithOptions, raceId }) {
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <Field label="Distinguishing features" help="Scars, markings, the way you carry yourself — anything that makes you visibly you.">
+        <Field label="Distinguishing features (optional)" help="Scars, markings, the way you carry yourself — anything that makes you visibly you.">
           <textarea
             className="textarea"
             value={identity.distinguishing_features || ''}
