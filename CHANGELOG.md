@@ -2,6 +2,28 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.125] - 2026-05-03 — Phase 2 close-out: Prelude arc-preview editorial reskin (sub-checkpoint 2 of 2)
+
+Second of two surfaces in the Prelude entry path. v1.0.124 reskinned the setup wizard; this lands the arc preview. Player walking from HomeScreenV2 → PathChoiceScreen → PreludeSetupWizard → PreludeArcPreview now reads as one continuous editorial experience. PreludeSession (the play loop) stays slate per scope ruling; parked.
+
+**Token swap, not redesign.** `client/src/components/PreludeArcPreview.jsx` reskinned to match the `.creator-v2` editorial system:
+
+- Wrapped in `<div className="creator-v2">` with the same appbar pattern (brand + "Prelude · arc preview" crumbs)
+- Header uses the `wizard-head` + `eyebrow` + `h-step` + `lede` shape from the rest of the editorial flow
+- Each section (Home / Chapters / Recurring threads / Where the arc might lead) renders as `.card`
+- Per-chapter inner card uses `bg-2` + `rule-soft` border with a top label-row hairline divider
+- Mentor possibility: dashed-border + accent left-border block (matches the celebration-card pattern at smaller scale)
+- Departure seed (Ch4): accent left-border + structured "What most likely pulls them out" + "Plausible shapes" sub-blocks; back-compat with legacy `reason`/`non_tragic_alternatives` fields preserved
+- Loading state: centered `h-step` + `lede` + monospace elapsed-seconds counter (replaces the slate spinner-text pattern)
+- Error states: editorial-tone error block with accent left-border (matches v1.0.124's pattern)
+- Footer: `.btn ghost` (Back) + `.btn` (Re-roll, when available) + `.btn primary lg` (Begin the Prelude →)
+
+**Logic preserved verbatim.** Network calls, regenerate semantics, schema-version compatibility (v1.0.81 `primary_thread`/`plausible_shapes` vs legacy `reason`/`non_tragic_alternatives`), elapsed-seconds counter — all unchanged. Pure visual reskin.
+
+**Closes the visible-seam item from the Phase 2 ship note.** Both surfaces (setup wizard + arc preview) now match the editorial system. Per the structural-redesign spec captured to memory, the next piece of close-out work is the 6-step structural redesign of PreludeSetupWizard — sequencing-wise that lands after this; the visual foundation is now in place under it.
+
+---
+
 ## [1.0.0.124] - 2026-05-03 — Phase 2 close-out: Prelude setup wizard editorial reskin (sub-checkpoint 1 of 2)
 
 PM ruling 2026-05-03 (Medium tier reskin): close the visible seam between editorial home and the prelude entry path. v1.0.115 wired `PreludeSetupWizard` into the new HomeFlow but kept its slate aesthetic — player walking from HomeScreenV2 → PathChoiceScreen → PreludeSetupWizard registered a hard visual transition.
