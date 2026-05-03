@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import HomeScreenV2 from './HomeScreenV2.jsx'
 import PathChoiceScreen from './PathChoiceScreen.jsx'
 import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
+import PreludeSetupWizard from '../PreludeSetupWizard.jsx'
+import PreludeArcPreview from '../PreludeArcPreview.jsx'
+import PreludeSession from '../PreludeSession.jsx'
 import {
   rehydrateManualCreatorState,
   rehydrateHandoffCreatorState
@@ -25,11 +28,15 @@ import {
  *   route='wizard.manual'         — CharacterCreatorV2 in manual mode (new)
  *   route='wizard.resume.manual'  — CharacterCreatorV2 with rehydrated 'creating' state
  *   route='wizard.resume.handoff' — CharacterCreatorV2 with rehydrated 'ready_for_primary' state
+ *   route='prelude.setup'         — PreludeSetupWizard (11-question intake)
+ *   route='prelude.arc'           — PreludeArcPreview (Opus arc plan)
+ *   route='prelude.session'       — PreludeSession (Sonnet play loop)
  *
  * Card click routing per spec §3.5:
  *   - Active card → calls onSelectActive (App.jsx renders dashboard)
  *   - 'creating' card → load character row, rehydrate manual state, open wizard
  *   - 'ready_for_primary' card → load character + handoff payload, rehydrate, open wizard
+ *   - 'prelude' card → resume PreludeSession on the existing character
  */
 export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   const [route, setRoute] = useState('home')
@@ -38,6 +45,7 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   const [resumePayload, setResumePayload] = useState(null)
   const [resumeState, setResumeState] = useState(null)
   const [resumeCharacterId, setResumeCharacterId] = useState(null)
+  const [preludeCharacter, setPreludeCharacter] = useState(null)
   const [error, setError] = useState(null)
 
   const loadCharacters = useCallback(async () => {
@@ -79,7 +87,11 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       if (!charRes.ok) throw new Error(`Could not load character #${uiCharacter.id}`)
       const character = await charRes.json()
 
-      if (uiCharacter.state === 'ready_for_primary') {
+      if (uiCharacter.state === 'prelude') {
+        // Resume the in-flight Prelude session on this character.
+        setPreludeCharacter(character)
+        setRoute('prelude.session')
+      } else if (uiCharacter.state === 'ready_for_primary') {
         const payloadRes = await fetch(`/api/prelude/${uiCharacter.id}/handoff-payload`)
         const payload = payloadRes.ok ? await payloadRes.json() : null
         setResumePayload(payload)
@@ -108,12 +120,35 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   }, [])
 
   const handlePickPrelude = useCallback(() => {
-    // Prelude path is owned by the existing PreludeSetupWizard. The full
-    // wiring (launching the setup wizard from here) is its own integration
-    // surface — the existing app already has it under a different path.
-    // For now, surface a minimal handoff so the player can see what to do.
-    window.alert('The Prelude path uses the existing Prelude Setup Wizard. (Live wiring of "from new home → setup wizard" is a small follow-up that doesn\'t affect Phase 2 ship.)')
+    setPreludeCharacter(null)
+    setRoute('prelude.setup')
   }, [])
+
+  const handlePreludeCreated = useCallback((char, opts = {}) => {
+    // Setup wizard finished: it created a character row in 'prelude'
+    // phase. Route into arc preview by default; into the session loop
+    // when the testing checkbox bypasses the preview.
+    if (opts.showArcPreview === false) {
+      setPreludeCharacter(char)
+      setRoute('prelude.session')
+    } else {
+      setPreludeCharacter(char)
+      setRoute('prelude.arc')
+    }
+  }, [])
+
+  const handlePreludeArcBegin = useCallback(() => {
+    setRoute('prelude.session')
+  }, [])
+
+  const handlePreludeReturn = useCallback(async () => {
+    // Player exited from setup / arc preview / session. Refresh the
+    // roster so the new card (or the now-'ready_for_primary' card if
+    // [PRELUDE_END] fired) shows up, then return home.
+    setPreludeCharacter(null)
+    await loadCharacters()
+    setRoute('home')
+  }, [loadCharacters])
 
   const handleSubmitSuccess = useCallback(async (result) => {
     // Refresh the character list and route back to home; if the
@@ -172,6 +207,32 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
         persistProgress={true}
         onExit={handleExitWizard}
         onSubmitSuccess={handleSubmitSuccess}
+      />
+    )
+  }
+
+  if (route === 'prelude.setup') {
+    return (
+      <PreludeSetupWizard
+        onPreludeCreated={handlePreludeCreated}
+        onCancel={handlePreludeReturn}
+      />
+    )
+  }
+  if (route === 'prelude.arc' && preludeCharacter) {
+    return (
+      <PreludeArcPreview
+        character={preludeCharacter}
+        onBegin={handlePreludeArcBegin}
+        onReturn={handlePreludeReturn}
+      />
+    )
+  }
+  if (route === 'prelude.session' && preludeCharacter) {
+    return (
+      <PreludeSession
+        character={preludeCharacter}
+        onBack={handlePreludeReturn}
       />
     )
   }
@@ -260,6 +321,8 @@ function mapCharacterForHome(c) {
     class_label: prettify(c.class),
     level: c.level || null,
     campaign: c.campaign_name || null,
+    prelude_chapter: c.prelude_chapter || null,
+    prelude_age: c.prelude_age || null,
     last: c.updated_at ? formatLastTouched(c.updated_at) : null
   }
 }

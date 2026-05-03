@@ -2,6 +2,34 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.115] - 2026-05-02 — Phase 2 chunk 5 follow-ups: Prelude path wired into HomeFlow + server POST defaults
+
+Two fixes surfaced after the v1.0.114 cutover made the new home page the live path.
+
+### Server: explicit defaults for every POST `/api/character` field
+
+`server/routes/character.js` POST destructure now defaults every field to `null` (or a sensible scalar like `1` for `level`, `0` for currencies, `'[]'` for JSON arrays). Without defaults, partial-save bodies from the new `creating`-phase save flow (Step 1 advance with just `first_name + gender + creation_phase='creating'`) left fields like `level`, `current_hp`, `current_location`, etc. as `undefined`. libsql throws `TypeError: Unsupported type of value` when any bind parameter is `undefined`. Defaults route every untouched field through as `null`/scalar, which libsql accepts. Active-character POSTs still pass full bodies and get the same defaults — backwards-compatible.
+
+### HomeFlow: Prelude path now opens the real wizard
+
+`handlePickPrelude` in `client/src/components/creator/HomeFlow.jsx` previously showed a `window.alert` stub. Live wiring per the existing `CharacterManager` pattern:
+
+- New routes in HomeFlow's state machine: `'prelude.setup'`, `'prelude.arc'`, `'prelude.session'`
+- Click "Prelude" on Screen 2 → `PreludeSetupWizard` (existing 11-question intake)
+- Wizard's `onPreludeCreated(char, opts)` → `PreludeArcPreview` (or straight into the session if the testing checkbox bypasses preview)
+- Arc preview's `onBegin` → `PreludeSession` (existing Sonnet play loop)
+- Any of the three's exit/back → refresh roster + return home (so a now-`'ready_for_primary'` card shows up in place)
+
+Resume path: clicking a `'prelude'` card from the home roster routes directly into `PreludeSession` for that character — `handleOpenCharacter` now branches on `state === 'prelude'` to load the row and resume the session.
+
+### HomeScreenV2: 'prelude' card state added
+
+Cards now render three in-progress states: `creating` ("Draft"), `prelude` ("Prelude · Continue", with `Ch N · age X` footer), `ready_for_primary` ("Prelude · Step forward"). All three share the desaturated portrait treatment.
+
+`mapCharacterForHome` in HomeFlow now passes `prelude_chapter` and `prelude_age` through to the card.
+
+---
+
 ## [1.0.0.114] - 2026-05-02 — Phase 2 chunk 5 batch 3 sub-checkpoint 2: Save/resume + canon transfer + migration 050 + cutover (Phase 2 closes)
 
 Final piece of Phase 2 chunk 5. Lands save/resume wiring, campaign canon transfer, the `physical_build` column migration, and the cutover that makes the new home page + creator the live path. **Phase 2 ships with this commit.**

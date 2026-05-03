@@ -74,26 +74,31 @@ router.get('/:id/progression', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      name,
+      name = null,
       first_name = null,
       last_name = null,
       nickname = null,
       gender = null,
-      class: charClass,
+      class: charClass = null,
       subclass = null,
       race = '',
       subrace = null,
       background = null,
-      level,
-      current_hp,
-      max_hp,
-      current_location,
-      current_quest,
+      // Phase 2 chunk 5 batch 3 sub-checkpoint 2 fix — every field needs
+      // an explicit default. Without defaults, partial-save POSTs (e.g.,
+      // Step 1 advance with only name + gender + creation_phase='creating')
+      // pass undefined to libsql, which throws "Unsupported type of value"
+      // since undefined isn't a valid SQL value.
+      level = 1,
+      current_hp = null,
+      max_hp = null,
+      current_location = null,
+      current_quest = null,
       gold_cp = 0,
       gold_sp = 0,
       gold_gp = 0,
       experience = 0,
-      experience_to_next_level,
+      experience_to_next_level = null,
       armor_class = 10,
       speed = 30,
       ability_scores = '{"str":10,"dex":10,"con":10,"int":10,"wis":10,"cha":10}',
