@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Stepper, WizardFoot, WizardHead, PRELUDE_STEPS } from './creatorPrimitives.jsx'
+import racesData from '../../data/races.json'
 import PreludeStep1Identity from './PreludeStep1Identity.jsx'
+import PreludeStep2Ancestry from './PreludeStep2Ancestry.jsx'
 
 /**
  * Prelude Creator V2 — structural redesign per PM spec rev 2 (2026-05-03).
@@ -33,6 +35,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
   const totalSteps = PRELUDE_STEPS.length
   const back = () => setStep(s => Math.max(0, s - 1))
   const next = () => setStep(s => Math.min(totalSteps - 1, s + 1))
+  const canAdvance = canAdvanceFromStep(step, state)
 
   // Scroll to the top of the page on every step change. Same UX as
   // CharacterCreatorV2 — without it, clicking Continue at the bottom
@@ -65,7 +68,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
           <div style={{ height: 36 }} />
 
           {step === 0 && <PreludeStep1Identity {...stepProps} />}
-          {step === 1 && <PlaceholderStep stepNum={2} title="Race / Subrace" />}
+          {step === 1 && <PreludeStep2Ancestry {...stepProps} />}
           {step === 2 && <PlaceholderStep stepNum={3} title="Origin" />}
           {step === 3 && <PlaceholderStep stepNum={4} title="Family & Influence" />}
           {step === 4 && <PlaceholderStep stepNum={5} title="Appearance" />}
@@ -75,7 +78,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
             onBack={back}
             onNext={next}
             canBack={step > 0}
-            canNext={step < totalSteps - 1}
+            canNext={canAdvance && step < totalSteps - 1}
             onSave={onCancel}
             nextLabel="Continue"
             isLast={step === totalSteps - 1}
@@ -101,6 +104,37 @@ function PlaceholderStep({ stepNum, title }) {
       eyebrowLabel="Prelude Setup"
     />
   )
+}
+
+/**
+ * Per-step validation gate. Continue button is disabled when the
+ * current step's required fields aren't filled. Required-vs-optional
+ * distribution mirrors the legacy 11-question wizard's validate()
+ * function (per spec — no functional change to strictness, just
+ * relocated to per-step gates).
+ *
+ * Steps 3–5 return true while the step is a placeholder so the player
+ * can still walk forward and back during sub-checkpoint review. Each
+ * step's gate fills in when the step component lands.
+ */
+function canAdvanceFromStep(step, state) {
+  if (step === 0) {
+    // Step 1: needs (first OR last) name + gender
+    const hasName = Boolean((state.first_name || '').trim() || (state.last_name || '').trim())
+    const hasGender = Boolean(state.gender)
+    return hasName && hasGender
+  }
+  if (step === 1) {
+    // Step 2: needs race; needs subrace if race has subraces
+    if (!state.race) return false
+    const raceData = racesData[state.race]
+    const subraces = raceData?.subraces || []
+    if (subraces.length > 0 && !state.subrace) return false
+    return true
+  }
+  // Steps 3–5: placeholders. Allow advance until each step's real
+  // validation lands with the step component.
+  return true
 }
 
 /**

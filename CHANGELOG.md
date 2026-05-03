@@ -2,6 +2,32 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.129] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 2 (Ancestry) + per-step validation gates (sub-checkpoint #2)
+
+Step 1 signed off. Per the cadence agreed with PM: ship Step 2 alone (not batched with Step 3) so the new race-description visual treatment is reviewed before the same pattern propagates to Step 3.
+
+**New component: `client/src/components/creator/PreludeStep2Ancestry.jsx`** — race + subrace selectors with descriptive copy pulled inline from `client/src/data/races.json` (`races.<id>.description` and `races.<id>.subraces[].description`). One of three intentional content changes from the legacy 11-question wizard. Description renders as italic `.help` text below each dropdown after a value is selected. Subrace field appears only when the chosen race has subraces.
+
+This is a prelude-specific surfacing — the primary creator's `Step2Ancestry.jsx` does NOT show race descriptions inline (race is just a dropdown name there). PM spec called this out as intentional.
+
+**Per-step validation gates wired** (Step 1 + Step 2):
+
+- Step 1 → Step 2: requires (`first_name` OR `last_name`) AND `gender`
+- Step 2 → Step 3: requires `race`; requires `subrace` when the chosen race has subraces
+
+Implemented as a `canAdvanceFromStep(step, state)` helper in `PreludeCreatorV2.jsx`. Continue button disables when the gate isn't met. Steps 3–5 currently return `true` while they're placeholders so the player can still walk forward and back during sub-checkpoint review; each gate lands when its step component lands.
+
+Note: this gating is a small divergence from `CharacterCreatorV2`'s pattern — the primary creator doesn't gate per-step (only Submit on Step 8 validates). PM spec for the prelude wizard explicitly called for per-step gates ("Required fields per step gate advance"); going with the spec rather than primary parity. Reversible if PM wants primary parity later.
+
+**Out of scope for this sub-checkpoint** (still pending later steps):
+- Steps 3–6 (origin / family / appearance / review)
+- Save/resume server-side persistence (new `creation_phase = 'prelude_setup'` enum value, partial-save endpoints)
+- HomeScreenV2 fourth in-progress card state
+- Arc-prompt updates (APPEARANCE section + line-141 system-prompt rule refinement)
+- Cutover from legacy `PreludeSetupWizard` to `PreludeCreatorV2`
+
+---
+
 ## [1.0.0.128] - 2026-05-03 — Sub-checkpoint #1 fix: horizontally-grouped Field rows align input baselines
 
 User-reported issue from v1.0.127 Step 1 review: the three-column name row (First Name / Last Name / Nickname) showed inputs at staggered heights because each column's help text was a different number of lines. Help-above-input meant longer help pushed inputs down; the row read as broken even though each cell was technically correct.
