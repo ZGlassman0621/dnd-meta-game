@@ -2,6 +2,20 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.123] - 2026-05-03 — Phase 2 close-out: Theme personality prompts — full alignment coverage (PM authored)
+
+PM-authored content drop closing the personality alignment gap surfaced in v1.0.122's coverage scan. Replaces `client/src/data/themePersonalityPrompts.js` from 63 prompts (3 per theme, heavy alignment skew, every theme missing at least one alignment) to 189 prompts (9 per theme, every alignment present exactly once). 21 prompts carried forward from the existing file unchanged; 168 are new.
+
+**Rule applied:** every theme requires at least one personality prompt for each of the 9 alignments (LG/NG/CG/LN/N/CN/LE/NE/CE) so players are never funneled into an alignment they didn't intend. PM-authored prompts honor the institution-shifts-with-alignment refinement (Phase 2 Decision 5 + 2026-05-03) — a Charlatan can be Lawful-Good but it still feels like a charlatan, not a paladin.
+
+**Test update (`tests/theme-content-data.test.js`):** §7.2 block now asserts 9 prompts per theme = 189 total + every alignment present exactly once per theme. 1557 assertions pass.
+
+**Export naming:** kept `THEME_PERSONALITY_PROMPTS` (UPPER_SNAKE) as the primary binding for existing consumers (Step7IdentityDetails, theme-content-data.test). Added `themePersonalityPrompts` (camelCase) + default export per PM's transcription convention so future code can use either.
+
+User report that surfaced this: "I chose City Watch and I see all Personality traits are Lawful-coded. Make another note — this isn't what I want from this system!" Resolved system-wide.
+
+---
+
 ## [1.0.0.122] - 2026-05-03 — Smoke-run fixes: Gold copy, claim direction, age ranges, primary/dump stat markers, optional Distinguishing Features
 
 **Step 3 — gold "+0%" instead of "Class baseline".** "Class baseline" was too oblique. Zero-modifier case now renders "+0%" so every theme's gold display reads with the same shape (+5% / +0% / −10%).

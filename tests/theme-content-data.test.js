@@ -58,22 +58,28 @@ console.log('\n=== §7.1 themeGoldModifiers ===\n');
   assert(applyGoldModifier(15, 'sage') === 17, 'sage +10% on 15gp = 17 (16.5 rounds half-up to 17)');
 }
 
-console.log('\n=== §7.2 themePersonalityPrompts (3 per theme = 63 total) ===\n');
+console.log('\n=== §7.2 themePersonalityPrompts (9 per theme = 189 total, every alignment present) ===\n');
 {
+  // Phase 2 close-out 2026-05-03: PM-authored full alignment coverage.
+  // Every theme must have exactly one prompt for each of the 9 alignments
+  // so players are never funneled into an alignment they didn't intend.
   const ids = Object.keys(THEME_PERSONALITY_PROMPTS);
   assert(ids.length === 21, `21 theme entries (got ${ids.length})`);
   let total = 0;
   for (const id of ALL_21_THEMES) {
     assert(id in THEME_PERSONALITY_PROMPTS, `entry: ${id}`);
     const arr = THEME_PERSONALITY_PROMPTS[id];
-    assert(Array.isArray(arr) && arr.length === 3, `${id}: 3 prompts (got ${arr?.length})`);
+    assert(Array.isArray(arr) && arr.length === 9, `${id}: 9 prompts (got ${arr?.length})`);
+    const seen = new Set();
     for (const p of arr) {
       assert(typeof p.text === 'string' && p.text.length > 0, `${id}: prompt text non-empty`);
       assert(VALID_ALIGNMENTS.has(p.alignment), `${id}: alignment "${p.alignment}" valid 9-square`);
+      seen.add(p.alignment);
       total++;
     }
+    assert(seen.size === 9, `${id}: every alignment present exactly once (got ${seen.size}/9)`);
   }
-  assert(total === 63, `total prompts = 63 (got ${total})`);
+  assert(total === 189, `total prompts = 189 (got ${total})`);
 }
 
 console.log('\n=== §7.3 themeIdealsPrompts (4-7 per theme) ===\n');
