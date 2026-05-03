@@ -19,6 +19,18 @@ const STEPS = [
   'Review'
 ]
 
+// Prelude setup — 6 steps per the structural-redesign spec (PM 2026-05-03).
+// Exported so PreludeCreatorV2 can pass it to <Stepper> while keeping the
+// 8-step primary default in place for CharacterCreatorV2.
+export const PRELUDE_STEPS = [
+  'Identity',
+  'Ancestry',
+  'Origin',
+  'Family',
+  'Appearance',
+  'Review'
+]
+
 export function Eyebrow({ children }) {
   return <div className="eyebrow">{children}</div>
 }
@@ -42,14 +54,18 @@ export function Field({ label, help, children, className = '', locked = false, l
 }
 
 /**
- * 8-segment step rail. Each segment is clickable (jump-to-step) once the
- * caller decides clicks are allowed. The Step 8 "Edit" affordance reuses
- * this pattern by calling setStep(targetIndex).
+ * Step rail. Each segment is clickable (jump-to-step) once the caller
+ * decides clicks are allowed. The Step 8 "Edit" affordance reuses this
+ * pattern by calling setStep(targetIndex).
+ *
+ * `steps` defaults to the 8-step primary-creator labels (back-compat for
+ * CharacterCreatorV2). PreludeCreatorV2 passes `PRELUDE_STEPS` for the
+ * 6-step prelude wizard.
  */
-export function Stepper({ step, setStep, mode }) {
+export function Stepper({ step, setStep, mode, steps = STEPS }) {
   return (
     <div className="steprail" role="navigation" aria-label="Creator step navigation">
-      {STEPS.map((label, i) => (
+      {steps.map((label, i) => (
         <button
           key={i}
           type="button"
@@ -65,18 +81,22 @@ export function Stepper({ step, setStep, mode }) {
 }
 
 /**
- * Step header — eyebrow ("Prelude Character | Step 02 of 08") + the
- * step's display title + an optional subtitle. Subtitle uses italic
- * serif lede style.
+ * Step header — eyebrow + display title + optional subtitle. Subtitle
+ * uses italic serif lede style.
+ *
+ * `totalSteps` defaults to 8 (primary creator). `eyebrowLabel` overrides
+ * the default mode-derived label so the prelude wizard can render
+ * "Prelude Setup" in place of "Campaign Character".
  */
-export function WizardHead({ stepNum, title, subtitle, mode }) {
+export function WizardHead({ stepNum, title, subtitle, mode, totalSteps = 8, eyebrowLabel }) {
+  const label = eyebrowLabel || (mode === 'handoff' ? 'Prelude Character' : 'Campaign Character')
   return (
     <div className="wizard-head">
       <div className="step-title">
         <div className="eyebrow step-label">
-          {mode === 'handoff' ? 'Prelude Character' : 'Campaign Character'}
+          {label}
           <span className="dot" />
-          Step {String(stepNum).padStart(2, '0')} of 08
+          Step {String(stepNum).padStart(2, '0')} of {String(totalSteps).padStart(2, '0')}
         </div>
         <h1 className="h-step">{title}</h1>
         {subtitle && <p className="lede" style={{ marginTop: 12, maxWidth: 640 }}>{subtitle}</p>}

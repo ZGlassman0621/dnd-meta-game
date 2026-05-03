@@ -2,6 +2,33 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.127] - 2026-05-03 — Phase 2 close-out: Prelude wizard structural redesign — Step 1 (sub-checkpoint #1)
+
+PM-approved structural redesign per spec rev 2 (memory: `project_prelude_setup_structural_redesign.md`). Restructures `PreludeSetupWizard` from one-page-11-questions into a 6-step wizard mirroring the primary creator. Sub-checkpoint cadence: ship Step 1 first; user reviews against primary creator's Step 1; then proceed.
+
+**This release lands Step 1 (Identity) + the 6-step shell + placeholders for Steps 2–6.** The legacy `PreludeSetupWizard.jsx` stays the live path; `PreludeCreatorV2` is reachable via `?prelude_v2=1` query param for review without disturbing the live flow. Cutover lands once all 6 steps + save/resume + HomeScreenV2 fourth-card-state + arc-prompt updates are signed off.
+
+**New components:**
+- `client/src/components/creator/PreludeCreatorV2.jsx` — wizard shell (parallels `CharacterCreatorV2`). 6-step state machine, Stepper rail, scroll-to-top on step change, WizardFoot Back/Continue. Save/resume scaffolding deferred to a later sub-checkpoint per PM cadence.
+- `client/src/components/creator/PreludeStep1Identity.jsx` — Step 1. First/last/nickname inputs in a 3-column field row + Female/Male gender chips. Single-mode (no handoff fork — prelude is the entry path INTO a character, not a resume from one). Mirrors primary `Step1Identity.jsx` primitive choices verbatim.
+
+**Primitive extensions** (backward-compat for `CharacterCreatorV2`):
+- `Stepper`: new `steps` prop (defaults to the 8-step primary array). Prelude passes the new exported `PRELUDE_STEPS` constant (`Identity / Ancestry / Origin / Family / Appearance / Review`).
+- `WizardHead`: new `totalSteps` prop (defaults to 8) + `eyebrowLabel` override. Prelude renders "Prelude Setup · Step 01 of 06"; primary unchanged.
+
+**Gender content change** (per spec — one of three intentional content changes): collapses from female / male / non-binary / other(write your own) to binary Female / Male. Server-side `preludeService.js::validate` accepts any non-empty string, so the tightening is purely client-side. Existing characters with non-binary/other gender values are not a concern (clean slate confirmed in Phase 3 entry).
+
+**Routing:** `HomeFlow.jsx` reads `?prelude_v2=1` from the URL when entering the `prelude.setup` route. Present → renders `PreludeCreatorV2`. Absent → renders the legacy `PreludeSetupWizard` as before. No effect on any other path.
+
+**Out of scope for this sub-checkpoint** (lands as later steps complete):
+- Steps 2–6 (race / origin / family / appearance / review) — placeholders only
+- Save/resume server-side persistence (new `creation_phase = 'prelude_setup'` enum value, partial-save endpoints)
+- HomeScreenV2 fourth in-progress card state
+- Arc-prompt updates (APPEARANCE section + line-141 system-prompt rule refinement)
+- Cutover from legacy `PreludeSetupWizard` to `PreludeCreatorV2` as the live path
+
+---
+
 ## [1.0.0.126] - 2026-05-03 — Polish: capitalize Class nudge / Theme nudge values in arc preview
 
 Sub-checkpoint review surfaced one polish item: the "Where the arc might lead" section's `Class nudge` and `Theme nudge` values rendered raw (`ranger`, `outlander`, `city_watch`) instead of display-formatted (`Ranger`, `Outlander`, `City Watch`). Added a small `prettifyId(id)` helper local to `PreludeArcPreview.jsx` matching the same pattern used elsewhere (HomeFlow, Step2Ancestry). User flagged that players will rarely see this section but consistency matters.

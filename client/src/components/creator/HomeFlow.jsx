@@ -3,6 +3,7 @@ import HomeScreenV2 from './HomeScreenV2.jsx'
 import PathChoiceScreen from './PathChoiceScreen.jsx'
 import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
 import PreludeSetupWizard from '../PreludeSetupWizard.jsx'
+import PreludeCreatorV2 from './PreludeCreatorV2.jsx'
 import PreludeArcPreview from '../PreludeArcPreview.jsx'
 import PreludeSession from '../PreludeSession.jsx'
 import {
@@ -212,7 +213,18 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   }
 
   if (route === 'prelude.setup') {
-    return (
+    // ?prelude_v2=1 routes to the in-progress structural redesign per
+    // PM cadence (sub-checkpoint #1 — Step 1 visual + interaction
+    // review). Default route stays on the live one-page wizard until
+    // all 6 steps land + are signed off; cutover lands then.
+    const useV2 = typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('prelude_v2') === '1'
+    return useV2 ? (
+      <PreludeCreatorV2
+        onCancel={handlePreludeReturn}
+        onPreludeCreated={handlePreludeCreated}
+      />
+    ) : (
       <PreludeSetupWizard
         onPreludeCreated={handlePreludeCreated}
         onCancel={handlePreludeReturn}
