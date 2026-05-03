@@ -2,6 +2,20 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.117] - 2026-05-02 — Smoke-run fix: Aasimar (and Drow) ancestry-feat lookup
+
+Smoke-run blocker. Step 2 in the rebuilt creator was fetching `/api/progression/ancestry-feats/aasimar` for an Aasimar character — but that list_id doesn't exist in `ancestry_feats`. Aasimar's feats are split across three subrace-specific lists (`aasimar_protector` / `aasimar_scourge` / `aasimar_fallen`), and Drow lives at the top level (`drow`) rather than nested under `elf`. The legacy `CharacterCreationWizard` already had a `computeAncestryListId(race, subrace)` helper handling both cases; it was lost during the chunk 5 rewrite of Step 2.
+
+**Fix in `Step2Ancestry.jsx`:**
+- Ported `computeAncestryListId(race, subrace)` to derive the correct list_id from race + subrace
+- Fetch dependency now includes `subrace` so the list refetches when a Protector/Scourge/Fallen pick changes
+- Aasimar with no subrace: skip the fetch entirely; dropdown disables and shows "Pick a subrace first…" instead of an empty options list
+- Generic placeholders: "Pick a race first…" when nothing's chosen yet
+
+User reported as: "Selecting a heritage gift either doesn't work/isn't hooked up… or just doesn't work for Aasimar" + "I can't complete creating a character until we figure out Ancestry Feats in the character creator." Both resolved by the same fix.
+
+---
+
 ## [1.0.0.116] - 2026-05-02 — Smoke-run fix: NOT NULL placeholders for 'creating'-phase partial saves
 
 Smoke-run uncovered that v1.0.115's POST defaults still failed at the schema layer. Defaults were `null`, but five columns are NOT NULL with no schema-level default: `class`, `current_hp`, `max_hp`, `current_location`, `experience_to_next_level`. The wizard's Step 1 → Continue path (POST `/api/character` with `creation_phase='creating'` and only first/last/nickname/gender) tripped the constraint with `LibsqlError: NOT NULL constraint failed: characters.class`.

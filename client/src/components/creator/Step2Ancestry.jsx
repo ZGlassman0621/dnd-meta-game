@@ -16,6 +16,29 @@ function prettifyFeatId(id) {
 }
 
 /**
+ * Map (race, subrace) → ancestry-feat list_id used by /api/progression/ancestry-feats.
+ * Most races map directly (with hyphens → underscores), but two cases are
+ * special: Aasimar splits into protector/scourge/fallen by subrace, and
+ * Drow lives at the top level (not nested under elf). Mirrors the helper
+ * that already shipped in the legacy CharacterCreationWizard.
+ *
+ * Returns '' when the player hasn't picked enough to disambiguate yet
+ * (e.g., race='aasimar' with no subrace) — caller should skip the fetch.
+ */
+function computeAncestryListId(race, subrace) {
+  if (!race) return ''
+  const lowerSub = (subrace || '').toLowerCase()
+  if (race === 'elf' && (lowerSub.includes('drow') || lowerSub.includes('dark elf'))) return 'drow'
+  if (race === 'aasimar') {
+    if (lowerSub.includes('protector')) return 'aasimar_protector'
+    if (lowerSub.includes('scourge')) return 'aasimar_scourge'
+    if (lowerSub.includes('fallen')) return 'aasimar_fallen'
+    return '' // Aasimar requires a subrace to know which list to fetch
+  }
+  return race.replace(/-/g, '_')
+}
+
+/**
  * Step 2 — Ancestry. Per PHASE_2_CREATOR_SPEC.md §5.2.
  *
  * Manual mode: race + subrace + ancestry feat selectors. All three
@@ -64,12 +87,15 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
 
   useEffect(() => {
     if (!raceId) { setFeats([]); return }
+    // Aasimar requires a subrace to know which path-specific list to fetch
+    // (aasimar_protector / _scourge / _fallen). Skip the fetch until the
+    // player picks one — otherwise we'd hit /aasimar (no rows) and the
+    // dropdown would render empty with no signal to the player.
+    const listId = computeAncestryListId(raceId, subrace)
+    if (!listId) { setFeats([]); return }
     let cancelled = false
     setFeatsLoading(true)
-    // Race ids in races.json use hyphens (half-elf); the ancestry-feats
-    // endpoint accepts either form per the seed data.
-    const apiRace = raceId.replace(/-/g, '_')
-    fetch(`/api/progression/ancestry-feats/${apiRace}?tier=1`)
+    fetch(`/api/progression/ancestry-feats/${listId}?tier=1`)
       .then(r => r.ok ? r.json() : [])
       .then(data => {
         if (cancelled) return
@@ -82,7 +108,7 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
         setFeatsLoading(false)
       })
     return () => { cancelled = true }
-  }, [raceId])
+  }, [raceId, subrace])
 
   const featById = useMemo(() => Object.fromEntries(feats.map(f => [f.id, f])), [feats])
   const selectedFeat = featId ? featById[featId] : null
@@ -214,9 +240,16 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
               <select
                 className="select"
                 value={featId}
+                disabled={!computeAncestryListId(raceId, subrace)}
                 onChange={e => set({ ...state, ancestry_feat_id: e.target.value })}
               >
-                <option value="">{featsLoading ? 'Loading…' : 'Choose a heritage gift…'}</option>
+                <option value="">
+                  {!raceId
+                    ? 'Pick a race first…'
+                    : (raceId === 'aasimar' && !subrace)
+                      ? 'Pick a subrace first…'
+                      : (featsLoading ? 'Loading…' : 'Choose a heritage gift…')}
+                </option>
                 {feats.map(f => (
                   <option key={f.id} value={f.id}>{f.feat_name}</option>
                 ))}
