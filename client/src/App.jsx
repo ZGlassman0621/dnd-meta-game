@@ -33,315 +33,12 @@ const DMMode = lazy(() => import('./components/DMMode'))
 const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
 const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 
-// Phase 2 chunk 5 batch 2 — preview affordance for the rebuilt creator
-// (`?creator=v2` in the URL). Direct import (not lazy) because the
-// preview is opt-in via query param and the styles/fonts are also
-// bundled globally per CLAUDE.md scoping conventions.
-import CharacterCreatorV2 from './components/creator/CharacterCreatorV2.jsx'
-import HomeScreenV2 from './components/creator/HomeScreenV2.jsx'
-import PathChoiceScreen from './components/creator/PathChoiceScreen.jsx'
+// Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) — the rebuilt
+// creator + new home flow becomes the live path. Direct import (not
+// lazy) — the editorial styles/fonts are bundled globally and the
+// home flow is the user's first surface after login.
+import HomeFlow from './components/creator/HomeFlow.jsx'
 
-// Preview-only handoff payloads — exercise the celebration card on
-// Step 2 + Step 3, the narrative-continuity card on Step 4, the bump
-// celebration card on Step 5 (singular AND plural phrasings), and all
-// three gold modifier display variants on Step 6 (positive / zero /
-// negative with U+2212 minus). Uses the §8.2.1 schema_version=2 shape.
-// Selected via `?creator=v2&handoff=1&fixture=<name>` — defaults to
-// 'verena' if no fixture name given. Removed when 5.K wires the new
-// creator into the home page (real payloads then come from
-// /api/prelude/:id/handoff-payload).
-
-// Default — multi-bump (plural "Two moments shaped you"), Soldier theme
-// (zero gold modifier — "Fighter baseline" with no theme adjustment).
-const PREVIEW_FIXTURE_VERENA = {
-  schema_version: 2,
-  character_id: 0,
-  setup_name: 'Vera',
-  name: 'Verena Ashfall',
-  gender: 'Female',
-  race: 'human',
-  subrace: 'Variant Human',
-  committed_theme: 'soldier',
-  theme_chapter_beats: [
-    { chapter: 1, reason: 'You marched with the muster when the levies came through, and stayed when others ran.' },
-    { chapter: 2, reason: 'You held the river crossing for an hour against odds the captain still talks about.' },
-    { chapter: 3, reason: 'You carried the standard out of a field that had become a graveyard.' }
-  ],
-  ancestry_feat_id: 'lucky',
-  // Display overrides — production payload would have the API-resolved
-  // name + description; for fixtures we hardcode them so the celebration
-  // card renders cleanly without relying on a slug→DB-id lookup.
-  ancestry_feat_name: 'Lucky',
-  ancestry_feat_description: 'Spend luck points to reroll attacks, checks, or saves.',
-  ancestry_chapter_beats: [
-    { chapter: 1, reason: 'You survived a fall from the bell-tower scaffold that should have killed a child.' },
-    { chapter: 2, reason: 'You drew the long straw in a coin-toss the village elders rigged against you.' },
-    { chapter: 3, reason: 'The hunter\'s snare gave way the moment your weight came onto it.' }
-  ],
-  class_suggestion: 'fighter',
-  accepted_stat_bumps: [
-    { stat: 'str', magnitude: 1, chapter: 1, chapter_beat: 'The months at the smithy after the muster broadened your shoulders.' },
-    { stat: 'con', magnitude: 1, chapter: 3, chapter_beat: 'You marched through the river-crossing winter for three days in soaked boots, and your body learned what it could endure.' }
-  ],
-  accepted_skill_bumps: [
-    { skill: 'Athletics', chapter: 2, chapter_beat: 'The drills became second nature; your old captain stopped correcting your form.' },
-    { skill: 'Intimidation', chapter: 3, chapter_beat: 'You found a voice that made the conscripts listen.' }
-  ],
-  heirloom_candidates: [],
-  biography_seed: [
-    { age: 12, chapter: 1, text: "Your mother's funeral. The priest let you carry the censer, and the weight of it was the first weight that ever felt real." },
-    { age: 16, chapter: 2, text: "You took the king's coin at the spring muster. Your sister did not speak to you for a year, and then she did, and the year was not the part that mattered." },
-    { age: 19, chapter: 3, text: "The river crossing. Captain Reyne fell. You did not. The standard was in your hand without your remembering picking it up." },
-    { age: 21, chapter: 3, text: "You carried the standard back to the garrison through three days of rain. The captain who took it from your hand never used your name again." }
-  ],
-  canon_npcs: [
-    { id: 1, name: 'Captain Reyne', relationship: 'commander', status: 'deceased' },
-    { id: 2, name: 'Vesna', relationship: 'sister', status: 'alive' }
-  ],
-  canon_locations: [
-    { id: 1, name: 'Holdfast River Crossing', type: 'battlefield', is_home: false },
-    { id: 2, name: 'Three Mills', type: 'village', is_home: true }
-  ],
-  canon_threads: [],
-  mentor_imprint_eligible: false,
-  name_parts: { first_name: 'Verena', last_name: 'Ashfall', nickname: null }
-}
-
-// Single-bump variant — exercises the singular "One moment shaped you"
-// phrasing on Step 5's bump celebration card. Investigator theme so
-// Step 6 also exercises the POSITIVE gold variant (+10%).
-const PREVIEW_FIXTURE_SINGLE_BUMP = {
-  schema_version: 2,
-  character_id: 0,
-  setup_name: 'Halvor',
-  name: 'Halvor',
-  gender: 'Male',
-  race: 'half-elf',
-  subrace: null,
-  committed_theme: 'investigator',
-  theme_chapter_beats: [
-    { chapter: 2, reason: 'You sorted a tangle of contradictory testimony at the village dispute and named the lying witness.' },
-    { chapter: 3, reason: 'The merchant\'s missing coin was in the floorboards of his own son\'s room; only you thought to look.' }
-  ],
-  ancestry_feat_id: 'fey_touched',
-  ancestry_feat_name: 'Fey-Touched',
-  ancestry_feat_description: 'Learn misty step and one 1st-level divination or enchantment spell.',
-  ancestry_chapter_beats: [
-    { chapter: 1, reason: 'You learned both your parents\' tongues before you could read either, and switched between them mid-sentence.' },
-    { chapter: 2, reason: 'You understood what the elven traders were saying before they realized you would.' }
-  ],
-  class_suggestion: 'rogue',
-  accepted_stat_bumps: [
-    { stat: 'wis', magnitude: 1, chapter: 3, chapter_beat: 'You learned to wait, to watch the room before speaking — the way your aunt taught you.' }
-  ],
-  accepted_skill_bumps: [
-    { skill: 'Insight', chapter: 3, chapter_beat: 'You read the tax collector before he\'d finished his first sentence.' }
-  ],
-  heirloom_candidates: [],
-  biography_seed: [],
-  canon_npcs: [],
-  canon_locations: [],
-  canon_threads: [],
-  mentor_imprint_eligible: false,
-  name_parts: { first_name: 'Halvor', last_name: '', nickname: null }
-}
-
-// Negative-gold variant — Hermit theme exercises the NEGATIVE gold
-// display (−35% with U+2212 minus glyph, NOT a hyphen). Wood Elf so
-// Step 5 has a static racial bonus (+1 WIS) rather than the human
-// "choice" pattern.
-const PREVIEW_FIXTURE_HERMIT = {
-  schema_version: 2,
-  character_id: 0,
-  setup_name: 'Vass',
-  name: 'Vass',
-  gender: 'Female',
-  race: 'elf',
-  subrace: 'Wood Elf',
-  committed_theme: 'hermit',
-  theme_chapter_beats: [
-    { chapter: 1, reason: 'You stayed behind when the village left for the harvest fair; the silence didn\'t bother you.' },
-    { chapter: 2, reason: 'You spent a winter in the high cabin reading what the previous keeper had left, and you stopped going down for supplies.' },
-    { chapter: 3, reason: 'A traveler found you in the second spring; they spoke to you for three days and you remembered how to answer.' }
-  ],
-  ancestry_feat_id: 'elven_accuracy',
-  ancestry_feat_name: 'Elven Accuracy',
-  ancestry_feat_description: 'When you have advantage on an attack roll using DEX, INT, WIS, or CHA, reroll one of the dice.',
-  ancestry_chapter_beats: [
-    { chapter: 2, reason: 'You moved through the deep wood without leaving a track even your kin could read.' },
-    { chapter: 3, reason: 'The wolves stopped marking your scent as a threat; the forest settled around you.' }
-  ],
-  class_suggestion: 'druid',
-  accepted_stat_bumps: [
-    { stat: 'wis', magnitude: 1, chapter: 2, chapter_beat: 'The long quiet taught you to hear what wasn\'t there.' },
-    { stat: 'wis', magnitude: 1, chapter: 3, chapter_beat: 'The traveler\'s questions taught you to hear what was.' }
-  ],
-  accepted_skill_bumps: [
-    { skill: 'Survival', chapter: 1, chapter_beat: 'You learned to feed yourself in the woods before you needed to.' }
-  ],
-  heirloom_candidates: [],
-  biography_seed: [],
-  canon_npcs: [],
-  canon_locations: [],
-  canon_threads: [],
-  mentor_imprint_eligible: false,
-  name_parts: { first_name: 'Vass', last_name: '', nickname: null }
-}
-
-const PREVIEW_FIXTURES = {
-  verena: PREVIEW_FIXTURE_VERENA,
-  'single-bump': PREVIEW_FIXTURE_SINGLE_BUMP,
-  hermit: PREVIEW_FIXTURE_HERMIT
-}
-
-// Phase 2 chunk 5 batch 3 checkpoint 3 — home page roster fixtures.
-// Exercises all three card states (active / creating / ready_for_primary)
-// for visual review of the Diablo-4 Create entry + per-state badge
-// treatment + meta line composition. Removed when 5.L.6 wires the new
-// home page to the real characters API as the live path.
-/**
- * Phase 2 chunk 5 batch 3 checkpoint 3 sub-router for the new home →
- * Screen 2 → creator preview flow. Lets PM walk through the full
- * user journey at visual review.
- *
- * URL parameters:
- *   ?creator=v2                       → opens directly at the creator
- *   ?creator=v2&from=home             → opens at the new home page
- *   ?creator=v2&from=path             → opens at Screen 2 (path choice)
- *   ?creator=v2&handoff=1&fixture=X   → opens at the creator in handoff mode (existing)
- *
- * Removed in 5.L.6 cleanup when the new flow becomes the live path.
- */
-function CreatorV2Preview({ startAt, previewPayload, onExit }) {
-  const initialRoute = startAt === 'home' ? 'home' : startAt === 'path' ? 'path' : 'wizard'
-  const [route, setRoute] = useState(initialRoute)
-  const [activePayload, setActivePayload] = useState(previewPayload)
-
-  if (route === 'home') {
-    return (
-      <div className="creator-v2">
-        <div className="appbar">
-          <div className="brand">
-            D <span className="amp">&amp;</span> D
-            <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-          </div>
-          <div className="crumbs">The roster</div>
-          <div className="spacer" />
-          <button type="button" className="btn ghost" onClick={onExit}>Exit preview</button>
-        </div>
-        <div className="stage">
-          <HomeScreenV2
-            characters={PREVIEW_HOME_CHARACTERS}
-            onNew={() => setRoute('path')}
-            onOpenCharacter={(c) => {
-              if (c.state === 'ready_for_primary') {
-                // Resume in handoff mode — use the Verena fixture as a
-                // representative payload until 5.L.3 wires real per-character
-                // handoff payloads.
-                setActivePayload(PREVIEW_FIXTURE_VERENA)
-                setRoute('wizard')
-              } else if (c.state === 'creating') {
-                // Resume manual creator. 5.L.3 will load the character's
-                // saved creator state; preview just opens the empty creator.
-                setActivePayload(null)
-                setRoute('wizard')
-              } else {
-                window.alert(`Active character — would open the game screen for ${c.name}. (Out of scope for the v2 preview; live cutover wires this.)`)
-              }
-            }}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (route === 'path') {
-    return (
-      <div className="creator-v2">
-        <div className="appbar">
-          <div className="brand">
-            D <span className="amp">&amp;</span> D
-            <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-          </div>
-          <div className="crumbs">A choice of beginnings</div>
-          <div className="spacer" />
-          <button type="button" className="btn ghost" onClick={onExit}>Exit preview</button>
-        </div>
-        <div className="stage center">
-          <PathChoiceScreen
-            onPrelude={() => window.alert('Prelude path → opens PreludeSetupWizard. (Out of scope for v2 preview; live cutover wires this.)')}
-            onCampaign={() => {
-              setActivePayload(null)
-              setRoute('wizard')
-            }}
-            onBack={() => setRoute('home')}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  // wizard route
-  return (
-    <CharacterCreatorV2
-      preludePayload={activePayload}
-      onExit={onExit}
-    />
-  )
-}
-
-const PREVIEW_HOME_CHARACTERS = [
-  {
-    id: 'fx-1',
-    state: 'ready_for_primary',
-    name: 'Verena Ashfall',
-    glyph: 'V',
-    race_label: 'Variant Human',
-    theme_label: 'Soldier',
-    last: 'Prelude completed 2 days ago'
-  },
-  {
-    id: 'fx-2',
-    state: 'active',
-    name: 'Aelarra Stormwhisper',
-    glyph: 'A',
-    race_label: 'Wood Elf',
-    theme_label: 'Outlander',
-    class_label: 'Ranger',
-    level: 7,
-    campaign: 'The Hollow Crown',
-    last: 'Yesterday'
-  },
-  {
-    id: 'fx-3',
-    state: 'creating',
-    name: 'Brenn',
-    glyph: 'B',
-    race_label: 'Mountain Dwarf',
-    last: 'Step 2 of 8 · 4 days ago'
-  },
-  {
-    id: 'fx-4',
-    state: 'active',
-    name: 'Quill of the Late Lantern',
-    glyph: 'Q',
-    race_label: 'Tiefling',
-    theme_label: 'Charlatan',
-    class_label: 'Bard',
-    level: 4,
-    campaign: 'Salt & Cinder',
-    last: 'Last week'
-  },
-  {
-    id: 'fx-5',
-    state: 'ready_for_primary',
-    name: 'Halvor',
-    glyph: 'H',
-    race_label: 'Half-Elf',
-    theme_label: 'Investigator',
-    last: 'Prelude completed yesterday'
-  }
-]
 
 // Global fetch interceptor — adds auth token to all /api requests automatically.
 // This avoids touching every fetch call across all components.
@@ -504,10 +201,12 @@ function App() {
       const response = await fetch('/api/character')
       const data = await response.json()
       setCharacters(data)
-      if (data.length > 0 && !selectedCharacter) {
-        setSelectedCharacter(data[0])
-      } else if (selectedCharacter) {
-        // Refresh selectedCharacter with latest data (e.g. after campaign assignment)
+      // Phase 2 chunk 5 batch 3 sub-checkpoint 2 — do NOT auto-select
+      // the first character. The new HomeFlow ("Your Characters") is
+      // the landing surface; the player picks from the roster
+      // deliberately. Only refresh in-place if a character is already
+      // selected (e.g., after campaign assignment).
+      if (selectedCharacter) {
         const updated = data.find(c => c.id === selectedCharacter.id)
         if (updated) setSelectedCharacter(updated)
       }
@@ -595,38 +294,6 @@ function App() {
     return <LoginPage onLogin={setUser} />
   }
 
-  // Phase 2 chunk 5 batch 2 — preview affordance for the rebuilt creator.
-  // `?creator=v2` opens the new creator in manual mode for visual review.
-  // `?creator=v2&handoff=1` simulates handoff mode using a built-in fixture
-  // so the celebration card + narrative-continuity card can be inspected
-  // without a live Prelude. Removed when 5.K wires the new creator into
-  // the home page as the only path.
-  const queryParams = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search)
-    : new URLSearchParams()
-  if (queryParams.get('creator') === 'v2') {
-    const useHandoff = queryParams.get('handoff') === '1'
-    const fixtureName = queryParams.get('fixture') || 'verena'
-    const fixture = PREVIEW_FIXTURES[fixtureName] || PREVIEW_FIXTURES.verena
-    const previewPayload = useHandoff ? fixture : null
-    return (
-      <CreatorV2Preview
-        startAt={queryParams.get('from') || 'wizard'}
-        previewPayload={previewPayload}
-        onExit={() => {
-          // Strip the query params and reload into the normal app shell.
-          const url = new URL(window.location.href)
-          url.searchParams.delete('creator')
-          url.searchParams.delete('handoff')
-          url.searchParams.delete('fixture')
-          url.searchParams.delete('from')
-          window.history.replaceState({}, '', url.toString())
-          window.location.reload()
-        }}
-      />
-    )
-  }
-
   if (loading) {
     return (
       <div className="app">
@@ -635,9 +302,54 @@ function App() {
     )
   }
 
+  // Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) — when no
+  // character is selected, render the new HomeFlow (editorial "Your
+  // Characters" roster) as the live entry point. Replaces the old
+  // CharacterManager landing. When the player picks a character,
+  // selectedCharacter is set and the existing dashboard chrome takes
+  // over below. The "← Your characters" button in the dashboard
+  // header navigates back to HomeFlow by clearing selectedCharacter.
+  if (!selectedCharacter && !showCreationForm) {
+    return (
+      <HomeFlow
+        onSelectActive={(char) => setSelectedCharacter(char)}
+        onCharacterCreated={(char) => {
+          // Refresh the characters list and select the new character so
+          // App's existing dashboard takes over. handleCharacterCreated
+          // does both.
+          handleCharacterCreated(char)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="app">
       <header style={{ paddingTop: '3rem' }}>
+        {/* Back-to-roster affordance per Phase 2 chunk 5 batch 3
+           sub-checkpoint 2 — clears selectedCharacter so HomeFlow
+           takes over again. Always available when a character is
+           selected (which is always true in this branch since the
+           !selectedCharacter case is handled by the early return). */}
+        {selectedCharacter && (
+          <div style={{ marginBottom: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => setSelectedCharacter(null)}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#ccc',
+                padding: '0.4rem 0.85rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              ← Your characters
+            </button>
+          </div>
+        )}
         <h1>D&D Meta Game</h1>
         <p className="subtitle">Adventure awaits while you're away</p>
         {llmStatus && (() => {
@@ -900,17 +612,31 @@ function App() {
             </div>
           )}
 
-          <CharacterManager
-            characters={characters}
-            selectedCharacter={selectedCharacter}
-            onSelectCharacter={setSelectedCharacter}
-            onCharacterCreated={handleCharacterCreated}
-            onCharacterUpdated={handleCharacterUpdated}
-            onCreationFormChange={setShowCreationForm}
-            editCharacterInWizard={editCharacterInWizard}
-            onClearEditCharacter={() => setEditCharacterInWizard(null)}
-            onShowLevelUp={handleShowLevelUp}
-          />
+          {/*
+            Phase 2 chunk 5 batch 3 sub-checkpoint 2 — CharacterManager
+            is now hidden by default (HomeFlow handles the roster + new
+            character creation). Kept here only for the edit-existing-
+            character path: CharacterSheet's "Edit in Wizard" button
+            sets showCreationForm=true + editCharacterInWizard, which
+            triggers CharacterManager to render the legacy
+            CharacterCreationWizard in edit mode. The new
+            CharacterCreatorV2 doesn't yet support an
+            "edit existing" surface; that's a follow-up. Until then the
+            old wizard remains accessible for editing only.
+          */}
+          {showCreationForm && (
+            <CharacterManager
+              characters={characters}
+              selectedCharacter={selectedCharacter}
+              onSelectCharacter={setSelectedCharacter}
+              onCharacterCreated={handleCharacterCreated}
+              onCharacterUpdated={handleCharacterUpdated}
+              onCreationFormChange={setShowCreationForm}
+              editCharacterInWizard={editCharacterInWizard}
+              onClearEditCharacter={() => setEditCharacterInWizard(null)}
+              onShowLevelUp={handleShowLevelUp}
+            />
+          )}
 
           {selectedCharacter && !showCreationForm && (
             <div style={{

@@ -8,6 +8,7 @@ import { getCampaignLocations } from '../services/locationService.js';
 import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { resetMythicPower } from '../services/mythicService.js';
+import { transferCanonToCampaign } from '../services/campaignCanonTransferService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import { safeParse } from '../utils/safeParse.js';
 import {
@@ -297,13 +298,11 @@ router.put('/:id', async (req, res) => {
       // chunk 5 batch 3 also uses this for the rebuilt creator's
       // 'creating' → 'active' (manual) and 'ready_for_primary' → 'active'
       // (handoff) submit transitions.
-      'creation_phase'
-      // Note: Phase 2 chunk 5 batch 3 Step 7 introduces a `physical_build`
-      // field (the character's body type — slim, heavy, wiry, etc., per
-      // spec §5.7.4). No server column for it today. Captured client-side
-      // and surfaced in the preview; persistence pending a follow-up
-      // migration. Field intentionally NOT in this allowlist — adding it
-      // without a column would crash the UPDATE.
+      'creation_phase',
+      // Phase 2 chunk 5 batch 3 sub-checkpoint 2 — Step 7's "build" field
+      // (slim / heavy / wiry / etc., per spec §5.7.4). Column added by
+      // migration 050.
+      'physical_build'
     ];
 
     for (const [key, value] of Object.entries(req.body)) {
@@ -322,22 +321,24 @@ router.put('/:id', async (req, res) => {
 
     await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    // --- Phase 2 chunk 5 batch 3 checkpoint 2 — handoff submit hooks ---
+    // --- Phase 2 chunk 5 batch 3 sub-checkpoint 2 — handoff submit ---
     // When the PUT flips creation_phase to 'active' and the prior phase
     // was 'ready_for_primary', this is the handoff submit. Run side
-    // effects: flip heirloom candidate statuses + (TODO) canon transfer.
+    // effects: heirloom candidate flip + canon transfer to campaign tables.
     if (priorPhase === 'ready_for_primary' && req.body.creation_phase === 'active') {
       const chosenId = req.body.chosen_heirloom_candidate_id ?? null
       await applyHeirloomChoiceOnSubmit(req.params.id, chosenId)
-      // TODO (checkpoint 3 follow-up): canon transfer service —
-      // copy prelude_canon_npcs / prelude_canon_locations /
-      // prelude_canon_threads into the campaign-side npcs / locations /
-      // campaign_threads tables, and apply mentor_imprints when seeded.
-      // Currently NO-OP: the prelude_canon_* rows persist on the
-      // character record, and downstream campaign generation can read
-      // them directly via the existing FK chain. Surfaced for tracking
-      // rather than blocking the submit.
-      console.log(`[handoff submit] character ${req.params.id} flipped to active. Canon transfer wiring pending checkpoint 3.`)
+      try {
+        const transferResult = await transferCanonToCampaign(req.params.id)
+        console.log(`[handoff submit] character ${req.params.id} canon transfer:`, transferResult)
+      } catch (transferErr) {
+        // Canon transfer failure is non-blocking — character still
+        // flips to 'active' and player can play; the prelude_canon_*
+        // data persists and a follow-up retry can re-run the transfer
+        // (it's idempotent). Surface the error in logs but don't fail
+        // the submit (the character is in a valid state either way).
+        console.error(`[handoff submit] canon transfer failed for character ${req.params.id}:`, transferErr)
+      }
     }
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);

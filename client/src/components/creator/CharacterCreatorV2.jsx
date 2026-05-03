@@ -8,7 +8,7 @@ import Step5AbilityScores from './Step5AbilityScores.jsx'
 import Step6Equipment from './Step6Equipment.jsx'
 import Step7IdentityDetails from './Step7IdentityDetails.jsx'
 import Step8Review from './Step8Review.jsx'
-import { submitCreator } from './creatorPersistence.js'
+import { submitCreator, saveProgress } from './creatorPersistence.js'
 
 /**
  * Character Creator V2 — chunk 5 rebuilt main creator.
@@ -32,14 +32,33 @@ import { submitCreator } from './creatorPersistence.js'
  * affordance for visual/UX review before the rebuilt creator replaces
  * the existing one.
  */
-export default function CharacterCreatorV2({ preludePayload = null, onExit, onSubmitSuccess = null }) {
+export default function CharacterCreatorV2({
+  preludePayload = null,
+  initialState = null,
+  initialCharacterId = null,
+  initialStep = 0,
+  persistProgress = true,
+  onExit,
+  onSubmitSuccess = null
+}) {
   const mode = preludePayload ? 'handoff' : 'manual'
 
   // The wizard's own step + state. State shape mirrors what the old
   // CharacterCreationWizard's buildInitialFormData produces, with new
   // fields (theme_id, ancestry_feat_id) named per spec.
-  const [step, setStep] = useState(0)
-  const [state, setState] = useState(() => buildInitialState(preludePayload))
+  const [step, setStep] = useState(initialStep)
+  const [state, setState] = useState(() => initialState || buildInitialState(preludePayload))
+
+  // Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.3) — partial-save
+  // state. characterId is null in manual mode until Step 1 advance
+  // creates the row; pre-set in handoff mode (from preludePayload).
+  // Initial characterId can also be provided by the caller for resume
+  // flows (home page click on an in-progress card).
+  const [characterId, setCharacterId] = useState(
+    initialCharacterId ?? preludePayload?.character_id ?? null
+  )
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   // When entering with a different payload (e.g. switching characters
   // in handoff), re-seed the form. Cheap; only fires on payload swap.
@@ -60,7 +79,32 @@ export default function CharacterCreatorV2({ preludePayload = null, onExit, onSu
 
   const totalSteps = 8
   const back = () => setStep(s => Math.max(0, s - 1))
-  const next = () => setStep(s => Math.min(totalSteps - 1, s + 1))
+
+  // Save-before-advance per spec §6.2 + PM ruling 2026-05-02 (Option 1:
+  // single source of truth — character row). Manual mode: Step 1
+  // advance creates a 'creating' row; subsequent advances PUT to update.
+  // Handoff mode: every advance PUTs the existing 'ready_for_primary'
+  // row. The preview path (`?creator=v2`) passes `persistProgress=false`
+  // so visual review doesn't create real characters.
+  const next = async () => {
+    if (saving) return
+    if (persistProgress) {
+      setSaving(true)
+      setSaveError(null)
+      try {
+        const result = await saveProgress({ state, mode, preludePayload, characterId })
+        if (result.character_id && result.character_id !== characterId) {
+          setCharacterId(result.character_id)
+        }
+      } catch (err) {
+        setSaveError(err.message || 'Could not save progress.')
+        setSaving(false)
+        return  // Block advance on save failure
+      }
+      setSaving(false)
+    }
+    setStep(s => Math.min(totalSteps - 1, s + 1))
+  }
 
   const stepProps = { state, set: setState, mode, payload: preludePayload }
 
@@ -107,14 +151,30 @@ export default function CharacterCreatorV2({ preludePayload = null, onExit, onSu
           )}
 
           {step < 7 && (
-            <WizardFoot
-              onBack={back}
-              onNext={next}
-              canBack={step > 0}
-              onSave={onExit}
-              nextLabel={'Continue'}
-              isLast={false}
-            />
+            <>
+              {saveError && (
+                <div style={{
+                  marginTop: 16,
+                  padding: '12px 16px',
+                  background: 'rgba(231, 76, 60, 0.08)',
+                  border: '1px solid #e74c3c',
+                  color: '#c0392b',
+                  fontFamily: 'var(--serif)',
+                  fontSize: 15
+                }}>
+                  Couldn't save: {saveError} (Your input is preserved — try Continue again, or Save and exit.)
+                </div>
+              )}
+              <WizardFoot
+                onBack={back}
+                onNext={next}
+                canBack={step > 0 && !saving}
+                canNext={!saving}
+                onSave={onExit}
+                nextLabel={saving ? 'Saving…' : 'Continue'}
+                isLast={false}
+              />
+            </>
           )}
           {step === 7 && (
             // Step 8 has its own primary Submit button at the bottom of

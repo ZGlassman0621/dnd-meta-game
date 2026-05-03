@@ -1,3 +1,24 @@
+// DEPRECATED 2026-05-02 — replaced by client/src/components/creator/CharacterCreatorV2.jsx
+//
+// Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) cutover: the new
+// 8-step CharacterCreatorV2 + HomeFlow + PathChoiceScreen now own
+// character creation end-to-end. This file is no longer reachable from
+// the home page or the live "Create New Character" flow.
+//
+// It remains in the repo (NOT deleted) for two reasons per CLAUDE.md
+// "deprecate by hiding nav, not deleting code":
+//   1. The CharacterSheet "Edit in Wizard" affordance still routes here
+//      via App.jsx's editCharacterInWizard flow. Once
+//      CharacterCreatorV2 grows an "edit existing character" surface,
+//      that wiring moves over and this file can be deleted.
+//   2. Research aid during initial post-cutover playtest. If a
+//      regression surfaces in CharacterCreatorV2, this file shows how
+//      the same case was handled in the old creator.
+//
+// Safe to delete after ~2-3 playtest cycles confirm no regressions in
+// the new creator AND CharacterSheet's Edit-in-Wizard affordance has
+// been migrated to the new creator. See CONSOLIDATED_TODO parking lot.
+
 import { useState, useEffect } from 'react'
 import racesData from '../data/races.json'
 import backgroundsData from '../data/backgrounds.json'

@@ -1,3 +1,16 @@
+// DEPRECATED 2026-05-02 — replaced by client/src/components/creator/HomeFlow.jsx
+//
+// Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) cutover: the new
+// HomeFlow (HomeScreenV2 + PathChoiceScreen + CharacterCreatorV2) now
+// owns the character roster + creation entry. App.jsx renders HomeFlow
+// when no character is selected; this CharacterManager only renders
+// when `showCreationForm` is set (the CharacterSheet "Edit in Wizard"
+// path).
+//
+// Retained per CLAUDE.md "deprecate by hiding nav, not deleting code"
+// — same reasoning as CharacterCreationWizard.jsx. Safe to delete once
+// the edit-existing-character flow migrates to CharacterCreatorV2.
+
 import { useState, useEffect } from 'react'
 import CharacterCreationWizard from './CharacterCreationWizard'
 import PreludeSetupWizard from './PreludeSetupWizard'

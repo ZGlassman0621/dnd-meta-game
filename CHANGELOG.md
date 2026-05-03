@@ -2,6 +2,101 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.114] - 2026-05-02 — Phase 2 chunk 5 batch 3 sub-checkpoint 2: Save/resume + canon transfer + migration 050 + cutover (Phase 2 closes)
+
+Final piece of Phase 2 chunk 5. Lands save/resume wiring, campaign canon transfer, the `physical_build` column migration, and the cutover that makes the new home page + creator the live path. **Phase 2 ships with this commit.**
+
+### 5.L.3 — Save/resume wiring per spec §6.2 + PM Option 1 (single source of truth)
+
+Per PM ruling 2026-05-02: save creator progress to the character row directly. No parallel JSON blob. Submit becomes a clean state transition (flip `creation_phase` + run post-creation services), not a data move from one shape to another.
+
+**`creatorPersistence.js` extended:**
+- `saveProgress({ state, mode, preludePayload, characterId })` — POST creates a `'creating'` row on Step 1 advance (manual mode); PUT updates on every subsequent step. Handoff mode PUTs from the start (character_id arrives via `preludePayload.character_id`). Returns `{ character_id }`.
+- `buildProgressBody(state)` — partial body that only includes fields the player has touched. Skips null values so PUT doesn't NULL out columns the player hasn't reached. Distinct from `buildSubmitBody` which composes everything for the final commit.
+- `rehydrateManualCreatorState(character)` — manual-mode resume: reads the partial-save fields directly off the character row; never touches `prelude_handoff_payload` (which doesn't exist for manual characters).
+- `rehydrateHandoffCreatorState(character, payload)` — handoff-mode resume: reads the character row + prelude_handoff_payload, with character-row values taking precedence where they exist.
+
+Per PM note: kept the two rehydration paths separate rather than unifying around a synthetic empty payload. Two clean paths beat one path that branches internally.
+
+**`CharacterCreatorV2.jsx` extended:**
+- `characterId` state + `saving` / `saveError` state
+- `next()` is now async — calls `saveProgress` before `setStep(s+1)`. On save failure: surfaces error inline, doesn't advance, preserves typed input.
+- WizardFoot Continue button shows "Saving…" + disables during save
+- New props: `initialState`, `initialCharacterId`, `initialStep`, `persistProgress` (defaults true; HomeFlow passes true; preview-only paths can pass false)
+
+### 5.L.4 — Campaign canon transfer service (`campaignCanonTransferService.js`)
+
+Per spec §8.2.2 step 5: on handoff submit, copies `prelude_canon_npcs / locations / threads` into the campaign-side `npcs / locations / campaign_threads` tables.
+
+**`transferCanonToCampaign(characterId)`:**
+- NPCs: insert into `npcs` with `race='Unknown'` (column is NOT NULL; canonical race tracking is a future enrichment), `relationship_to_party` from prelude relationship, `background_notes` prefixed with `[prelude_canon_npc#NN]` marker for idempotency
+- Locations: insert into `locations` with `description` prefixed with `[prelude_canon_location#NN]` marker; `location_type` mapped from prelude type via `mapLocationType()` (village/hamlet/town → 'settlement'; forest/mountain → 'wilderness'; etc.)
+- Threads: insert into `campaign_threads` with `source='prelude'` + `source_thread_id` linking back to the prelude_canon_threads.id (clean idempotency without a marker hack)
+
+**Idempotency**: each insertion checks for existing rows tagged with the prelude-source marker before inserting. Submit can be retried safely; second runs no-op. 23 assertions in `tests/canon-transfer.test.js` lock down the behavior (chosen→carried_forward / others→left_behind, idempotent re-run, no-op when no canon data exists).
+
+**Hooked into PUT `/api/character/:id`** at the existing `'ready_for_primary' → 'active'` transition detection (alongside `applyHeirloomChoiceOnSubmit`). Failure is non-blocking — character still flips to `'active'`; transfer error logged + retryable later via the idempotent re-run.
+
+**Campaign-id linkage deferred**: transferred rows have `campaign_id = NULL` (no campaign exists at character submit time per the existing app flow). Linkage happens when the player later creates/assigns a campaign — parking-lot entry added.
+
+### 5.L.5 — Migration 050: `physical_build` column
+
+Adds the `physical_build` column to `characters` for Step 7's "build" field (slim/heavy/wiry/etc., per spec §5.7.4). Column was captured client-side since v1.0.112 but server PUT allowlist intentionally omitted it (would have crashed UPDATE). Migration 050 adds the column; same commit adds `physical_build` to the PUT allowlist; `creatorPersistence.buildProgressBody` + `buildSubmitBody` both now send the value. 5 assertions in `tests/migration-050.test.js`.
+
+### 5.L.6 — Cleanup + cutover
+
+The new home + creator becomes the live path.
+
+**`HomeFlow.jsx` (new)** — wraps `HomeScreenV2 + PathChoiceScreen + CharacterCreatorV2` with real `/api/character` data + a small state machine (home / path / wizard.manual / wizard.resume.manual / wizard.resume.handoff). Card click routing per spec §3.5: active → handoff to App.jsx via `onSelectActive` callback (existing dashboard takes over); creating → load character + rehydrate manual state; ready_for_primary → load character + handoff_payload + rehydrate. `mapCharacterForHome()` adapts API row shape to HomeScreenV2 prop shape (state derives from creation_phase; pretty-fies theme/class ids; formats `updated_at` as relative time).
+
+**`App.jsx` cutover:**
+- `?creator=v2` preview routing removed — `CreatorV2Preview` function, `PREVIEW_FIXTURE_*` consts, `PREVIEW_HOME_CHARACTERS` all deleted (~300 LOC)
+- New early-return: `if (!selectedCharacter && !showCreationForm) return <HomeFlow ... />` — HomeFlow is the landing surface for any logged-in user without a character selected
+- Auto-select-first-character logic disabled — players land on HomeFlow deliberately, not skipped past it
+- `<CharacterManager>` render gated on `showCreationForm` — only renders when CharacterSheet's "Edit in Wizard" path fires; never on the regular dashboard view
+- New "← Your characters" ghost button at the top of the dashboard chrome — clears `selectedCharacter` so HomeFlow takes over again
+
+**Deprecation** (per CLAUDE.md "deprecate by hiding nav, not deleting code"):
+- `CharacterCreationWizard.jsx` — top-of-file comment marks it deprecated 2026-05-02. Reachable only via CharacterSheet's Edit-in-Wizard path until the new creator grows an edit-existing surface.
+- `CharacterManager.jsx` — same. Reachable only when `showCreationForm` is true (the edit path).
+- Both files retained in the repo. Safe to delete after 2-3 playtest cycles + the edit-existing migration lands. Parking-lot entry added.
+
+### Files
+
+- `client/src/components/creator/HomeFlow.jsx` (new)
+- `client/src/components/creator/CharacterCreatorV2.jsx` (initialState/initialCharacterId/persistProgress props; save-before-advance)
+- `client/src/components/creator/creatorPersistence.js` (saveProgress / buildProgressBody / rehydrate helpers)
+- `client/src/components/CharacterCreationWizard.jsx` (deprecation header)
+- `client/src/components/CharacterManager.jsx` (deprecation header)
+- `client/src/App.jsx` (HomeFlow integration; preview wiring removed; auto-select disabled; back-to-roster button; CharacterManager conditional)
+- `server/services/campaignCanonTransferService.js` (new)
+- `server/routes/character.js` (transferCanonToCampaign hooked into PUT submit; physical_build added to PUT allowlist)
+- `server/migrations/050_physical_build_column.js` (new)
+- `tests/canon-transfer.test.js` (new — 23 assertions)
+- `tests/migration-050.test.js` (new — 5 assertions)
+- `CONSOLIDATED_TODO.md` (4 new parking-lot entries)
+
+### Verification
+
+- Vite build clean (1.35s)
+- Dev server starts cleanly (per the lesson learned in v1.0.113 — module-load is verified, not just build)
+- 2036 prelude + chunk 5 assertions green across 15 suites (1996 prior + 12 + 23 + 5 = 2036)
+
+### Phase 2 closes
+
+This commit closes Phase 2 of the consolidated project plan. The full chunk 5 surface is shipped:
+
+- 8-step rebuilt creator (Steps 1-8 + Submit + validation) — manual + handoff modes
+- Editorial aesthetic (EB Garamond + Inter + JetBrains Mono, parchment palette) — the project's default visual register going forward per Decision 6
+- Six PM-authored content data files (~620 entries — gold modifiers / personality / ideals / bonds / flaws / backstory moments + 19 narrative-continuity lines + 21 race demographic ranges)
+- Save/resume — partial creator state persists to the character row; mid-creation can resume from the home page
+- Canon transfer — Prelude-derived NPCs/locations/threads carry into the campaign tables on handoff submit
+- New home page (Diablo-4 Create + 3 card states) + Screen 2 path choice
+- Spec annotations preserve every deviation reasoning (§5.2.5 celebration card reorder, §5.7.3 expansions closed-by-default)
+- Coverage matrix tooling for content-authoring follow-ups
+
+Next: Phase 3 (AI Narrative Persistence foundation refactors per `CONSOLIDATED_TODO.md`).
+
 ## [1.0.0.113] - 2026-05-02 — Phase 2 chunk 5 batch 3 checkpoint 3 sub-checkpoint 1: Home page + Screen 2 + bundle-load regression fix
 
 First half of checkpoint 3 — the user-facing visual surfaces that wrap the rebuilt creator. Save/resume wiring + canon transfer + cleanup land in sub-checkpoint 2.

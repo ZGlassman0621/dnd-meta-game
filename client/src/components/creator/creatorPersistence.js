@@ -195,10 +195,8 @@ export function buildSubmitBody(state, mode, preludePayload) {
     eye_color: id.eye_color || null,
     hair_color: id.hair_color || null,
     skin_color: id.skin_color || null,
-    // `build` is a new field per spec §5.7.4 — server may not have a
-    // dedicated column today; surfaced as physical_build on the body so
-    // the server can decide where to store it (column or JSON blob in
-    // distinguishing_features). Backwards-safe: server can ignore.
+    // physical_build (Step 7's "build" field per spec §5.7.4) — column
+    // added by migration 050; PUT allowlist accepts it (sub-checkpoint 2).
     physical_build: id.build || null,
 
     // Optional expansions (textareas + structured backstory)
@@ -250,4 +248,261 @@ function composeBackstory(state, preludePayload) {
   }
 
   return lines.filter(Boolean).join('\n\n') || null
+}
+
+/**
+ * Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.3) — partial save on
+ * step advance. Per spec §6.2 + PM ruling 2026-05-02 (Option 1: single
+ * source of truth — character row).
+ *
+ * Manual mode:
+ *   - On Step 1 advance, no `characterId` yet → POST creates a
+ *     character at `creation_phase='creating'` with whatever fields are
+ *     filled. Returns the new character_id.
+ *   - On every subsequent step advance, PUT updates the existing row
+ *     with the fields that have been touched since the last save.
+ *
+ * Handoff mode:
+ *   - The character already exists at `creation_phase='ready_for_primary'`
+ *     (created by the Prelude transition service). character_id arrives
+ *     via `preludePayload.character_id`. Every step advance PUTs.
+ *
+ * Returns: { character_id } — the canonical id after the save.
+ */
+export async function saveProgress({ state, mode, preludePayload, characterId }) {
+  const body = buildProgressBody(state)
+
+  let url, method
+  if (mode === 'handoff') {
+    const id = characterId || preludePayload?.character_id
+    if (!id) throw new Error('Handoff save requires character_id from preludePayload')
+    url = `/api/character/${id}`
+    method = 'PUT'
+  } else if (characterId) {
+    url = `/api/character/${characterId}`
+    method = 'PUT'
+  } else {
+    // Manual mode, first save (Step 1 → Step 2). Create the row at
+    // creation_phase='creating' and return the new id.
+    url = '/api/character'
+    method = 'POST'
+    body.creation_phase = 'creating'
+  }
+
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+  if (!res.ok) {
+    let detail = ''
+    try { detail = (await res.json()).error || '' } catch {}
+    throw new Error(detail || `Save failed (HTTP ${res.status})`)
+  }
+
+  const character = await res.json()
+  return { character_id: character.id }
+}
+
+/**
+ * Compose the progress payload — partial body that updates only the
+ * fields the player has touched. Distinguished from `buildSubmitBody`:
+ *
+ *   - No `creation_phase` field (caller adds it for POST-create only;
+ *     PUT calls leave the existing phase alone)
+ *   - No final-clamp ability scores (player may still be assigning)
+ *   - Skips fields that aren't set yet (won't NULL out columns the
+ *     player hasn't reached)
+ *   - Inventory and starting gold are NOT computed yet (those finalize
+ *     at submit; partial saves don't touch them so the player can
+ *     change theme/class without re-deriving gold)
+ *
+ * The shape mirrors `buildSubmitBody` for the fields it does send so
+ * the server can reuse the same allowlist.
+ */
+export function buildProgressBody(state) {
+  const body = {}
+
+  // --- Step 1 fields (only include when set) ---
+  if (state.first_name) body.first_name = state.first_name
+  if (state.last_name) body.last_name = state.last_name
+  if (state.nickname) body.nickname = state.nickname
+  if (state.gender) body.gender = state.gender
+  // Compose `name` from first+last for legacy character-sheet read paths
+  const composed = [state.first_name, state.last_name].filter(Boolean).join(' ').trim()
+  if (composed) body.name = composed
+
+  // --- Step 2 ---
+  if (state.race) body.race = state.race
+  if (state.subrace) body.subrace = state.subrace
+  if (state.ancestry_feat_id) body.ancestry_feat_id = state.ancestry_feat_id
+  if (state.ancestry_feat_choices && Object.keys(state.ancestry_feat_choices).length > 0) {
+    body.ancestry_feat_choices = state.ancestry_feat_choices
+  }
+
+  // --- Step 3 ---
+  if (state.theme_id) body.theme_id = state.theme_id
+
+  // --- Step 4 ---
+  if (state.class_id) body.class = state.class_id
+  if (state.subclass_id) body.subclass = state.subclass_id
+
+  // --- Step 5 (only the values player has explicitly set; ability
+  //     score clamping happens at submit) ---
+  const baseScores = state.base_scores || {}
+  const anyAbilityAssigned = ABILITY_KEYS.some(k => baseScores[k] != null)
+  if (anyAbilityAssigned) {
+    body.ability_scores = JSON.stringify(baseScores)
+  }
+  if (Array.isArray(state.selected_skills) && state.selected_skills.length > 0) {
+    body.skills = JSON.stringify(state.selected_skills)
+  }
+
+  // --- Step 7 (Identity Details) ---
+  const id = state.identity || {}
+  if (id.alignment) body.alignment = id.alignment
+  if (id.faith) body.faith = id.faith
+  if (id.lifestyle) body.lifestyle = id.lifestyle
+  if (id.age) body.age = id.age
+  if (id.height) body.height = id.height
+  if (id.weight) body.weight = id.weight
+  if (id.eye_color) body.eye_color = id.eye_color
+  if (id.hair_color) body.hair_color = id.hair_color
+  if (id.skin_color) body.skin_color = id.skin_color
+  if (id.build) body.physical_build = id.build
+
+  const ex = state.expansions || {}
+  if (ex.personality?.value) body.personality_traits = ex.personality.value
+  if (ex.ideals?.value) body.ideals = ex.ideals.value
+  if (ex.bonds?.value) body.bonds = ex.bonds.value
+  if (ex.flaws?.value) body.flaws = ex.flaws.value
+
+  return body
+}
+
+/**
+ * Rehydrate creator state from a `'creating'` character row (manual mode
+ * resume from the home page). Reads only the partial-save fields; never
+ * touches the prelude_handoff_payload (which doesn't exist for manual
+ * characters).
+ *
+ * Per PM note 2026-05-02: keep this path separate from the handoff
+ * rehydration. Two clean paths beat one path that branches internally
+ * around a synthetic empty payload.
+ */
+export function rehydrateManualCreatorState(character) {
+  const baseScores = parseAbilityScores(character.ability_scores)
+  const skills = parseSkills(character.skills)
+  return {
+    first_name: character.first_name || '',
+    last_name: character.last_name || '',
+    nickname: character.nickname || '',
+    gender: character.gender || '',
+    race: character.race || '',
+    subrace: character.subrace || '',
+    ancestry_feat_id: character.ancestry_feat_id || null,
+    ancestry_feat_choices: character.ancestry_feat_choices || {},
+    theme_id: character.theme_id || '',
+    class_id: character.class || '',
+    subclass_id: character.subclass || '',
+    fighting_style: '',
+    generation_method: 'standard_array',
+    base_scores: baseScores,
+    racial_choice_picks: [],
+    bump_assignments: [],
+    selected_skills: skills,
+    equipment_picks: {},
+    heirloom: null,
+    heirloom_candidate_id: null,
+    identity: {
+      alignment: character.alignment || '',
+      faith: character.faith || '',
+      lifestyle: character.lifestyle || '',
+      age: character.age || '',
+      height: character.height || '',
+      weight: character.weight || '',
+      eye_color: character.eye_color || '',
+      hair_color: character.hair_color || '',
+      skin_color: character.skin_color || '',
+      build: '',
+      distinguishing_features: ''
+    },
+    expansions: {
+      personality: { value: character.personality_traits || '' },
+      ideals: { value: character.ideals || '' },
+      bonds: { value: character.bonds || '' },
+      flaws: { value: character.flaws || '' },
+      backstory: { picked_keys: [], custom_moments: [] }
+    }
+  }
+}
+
+/**
+ * Rehydrate creator state from a `'ready_for_primary'` character row +
+ * its prelude_handoff_payload (handoff mode resume from the home page).
+ * Payload provides locked Prelude-derived fields; character row provides
+ * any fields the player has updated since opening the creator
+ * mid-session and saving progress. Character-row values take precedence
+ * where they exist.
+ */
+export function rehydrateHandoffCreatorState(character, payload) {
+  const np = payload?.name_parts || {}
+  const baseScores = parseAbilityScores(character.ability_scores)
+  const skills = parseSkills(character.skills)
+  return {
+    first_name: character.first_name || np.first_name || '',
+    last_name: character.last_name || np.last_name || '',
+    nickname: character.nickname || np.nickname || '',
+    gender: character.gender || payload?.gender || '',
+    race: character.race || payload?.race || '',
+    subrace: character.subrace || payload?.subrace || '',
+    ancestry_feat_id: character.ancestry_feat_id || payload?.ancestry_feat_id || null,
+    ancestry_feat_choices: character.ancestry_feat_choices || {},
+    theme_id: character.theme_id || payload?.committed_theme || '',
+    class_id: character.class || payload?.class_suggestion || '',
+    subclass_id: character.subclass || '',
+    fighting_style: '',
+    generation_method: 'standard_array',
+    base_scores: baseScores,
+    racial_choice_picks: [],
+    bump_assignments: [],
+    selected_skills: skills,
+    equipment_picks: {},
+    heirloom: null,
+    heirloom_candidate_id: null,
+    identity: {
+      alignment: character.alignment || '',
+      faith: character.faith || '',
+      lifestyle: character.lifestyle || '',
+      age: character.age || '',
+      height: character.height || '',
+      weight: character.weight || '',
+      eye_color: character.eye_color || '',
+      hair_color: character.hair_color || '',
+      skin_color: character.skin_color || '',
+      build: '',
+      distinguishing_features: ''
+    },
+    expansions: {
+      personality: { value: character.personality_traits || '' },
+      ideals: { value: character.ideals || '' },
+      bonds: { value: character.bonds || '' },
+      flaws: { value: character.flaws || '' },
+      backstory: { picked_keys: [], custom_moments: [] }
+    }
+  }
+}
+
+function parseAbilityScores(raw) {
+  const blank = { str: null, dex: null, con: null, int: null, wis: null, cha: null }
+  if (!raw) return blank
+  if (typeof raw === 'object') return raw
+  try { return JSON.parse(raw) } catch { return blank }
+}
+
+function parseSkills(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : [] } catch { return [] }
 }
