@@ -52,19 +52,25 @@ export const RACE_COLOR_TRAITS = {
   },
 
   // Deep tan / lighter brown skin per PHB; dark eyes; long braided hair common.
+  // Build skews stocky/broad (built for mountains and forges) but individual
+  // variation exists — a lean dwarven scout or a wiry climber is uncommon
+  // but legitimate. No "Tall" — dwarves are a short race per PHB.
   dwarf: {
     eyes: ['Brown', 'Hazel', 'Dark Brown', 'Gray', 'Amber', 'Green'].map(v => ({ value: v, label: v })),
     hair: ['Black', 'Brown', 'Auburn', 'Red', 'Gray', 'White'].map(v => ({ value: v, label: v })),
     skin: ['Ruddy Tan', 'Tan', 'Brown', 'Dark Brown', 'Pale', 'Coppery'].map(v => ({ value: v, label: v })),
-    build: ['Stocky', 'Broad-shouldered', 'Heavy', 'Compact', 'Stout', 'Muscular'].map(v => ({ value: v, label: v }))
+    build: ['Lean', 'Wiry', 'Compact', 'Stocky', 'Stout', 'Athletic', 'Broad-shouldered', 'Muscular', 'Heavy'].map(v => ({ value: v, label: v }))
   },
 
   // Elven palette skews pale-to-copper skin, dark/silver hair, vivid eyes.
+  // Build skews slender/graceful but covers individual variation —
+  // wiry Wood Elves, athletic outdoorspeople, shorter compact elves all
+  // valid. No "Stocky" or "Heavy" — those read off-archetype for elves.
   elf: {
     eyes: ['Green', 'Hazel', 'Blue', 'Gray', 'Amber', 'Violet', 'Gold'].map(v => ({ value: v, label: v })),
     hair: ['Black', 'Silver-White', 'Brown', 'Copper-Red', 'Blonde', 'Auburn', 'Pale Gold'].map(v => ({ value: v, label: v })),
     skin: ['Pale', 'Fair', 'Coppery', 'Olive', 'Dark Brown', 'Ebony'].map(v => ({ value: v, label: v })),
-    build: ['Slender', 'Lithe', 'Lean', 'Tall', 'Graceful'].map(v => ({ value: v, label: v }))
+    build: ['Slight', 'Slender', 'Lithe', 'Wiry', 'Lean', 'Athletic', 'Average', 'Compact', 'Tall', 'Graceful'].map(v => ({ value: v, label: v }))
   },
 
   // Blend of human and elven traits.
@@ -76,11 +82,14 @@ export const RACE_COLOR_TRAITS = {
   },
 
   // Orcish ancestry — gray-green or ashen skin, coarse dark hair.
+  // Build skews large/strong (orcish heritage) but mixed-heritage Half-Orcs
+  // can also be lean / wiry / athletic. Variety honors that the human half
+  // of the parentage is just as load-bearing as the orcish.
   'half-orc': {
     eyes: ['Brown', 'Dark Brown', 'Hazel', 'Amber', 'Yellow', 'Red'].map(v => ({ value: v, label: v })),
     hair: ['Black', 'Dark Brown', 'Iron Gray', 'Coal Black'].map(v => ({ value: v, label: v })),
     skin: ['Gray-Green', 'Ash Gray', 'Olive-Green', 'Tan', 'Slate', 'Pale Green'].map(v => ({ value: v, label: v })),
-    build: ['Muscular', 'Broad-shouldered', 'Heavy', 'Tall', 'Towering', 'Powerfully built'].map(v => ({ value: v, label: v }))
+    build: ['Lean', 'Wiry', 'Athletic', 'Stocky', 'Muscular', 'Broad-shouldered', 'Heavy', 'Tall', 'Towering', 'Powerfully built'].map(v => ({ value: v, label: v }))
   },
 
   // Halfling: small frames, ruddy or brown skin, hazel/brown eyes.

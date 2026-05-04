@@ -2,6 +2,20 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.135] - 2026-05-03 — Sub-checkpoint #5 follow-up: variety pass for Half-Orc / Elf / Dwarf build pools
+
+After v1.0.134 fixed Dragonborn, surfaced the same flat-pool problem in three other races. PM call: apply the same variety pass.
+
+**Half-Orc** — `['Muscular', 'Broad-shouldered', 'Heavy', 'Tall', 'Towering', 'Powerfully built']` → `['Lean', 'Wiry', 'Athletic', 'Stocky', 'Muscular', 'Broad-shouldered', 'Heavy', 'Tall', 'Towering', 'Powerfully built']`. Skews large (orcish heritage) but lean/athletic Half-Orcs are now legitimate — the human half of parentage carries weight too.
+
+**Elf** — `['Slender', 'Lithe', 'Lean', 'Tall', 'Graceful']` → `['Slight', 'Slender', 'Lithe', 'Wiry', 'Lean', 'Athletic', 'Average', 'Compact', 'Tall', 'Graceful']`. Skews slender/graceful but covers wirier Wood Elves, athletic outdoorspeople, shorter compact elves. No "Stocky" or "Heavy" — those read off-archetype.
+
+**Dwarf** — `['Stocky', 'Broad-shouldered', 'Heavy', 'Compact', 'Stout', 'Muscular']` → `['Lean', 'Wiry', 'Compact', 'Stocky', 'Stout', 'Athletic', 'Broad-shouldered', 'Muscular', 'Heavy']`. Skews stocky/sturdy (mountain & forge build) but a lean dwarven scout or wiry climber is uncommon-not-impossible. No "Tall" — dwarves are a short race per PHB.
+
+Inline comments added to each race entry capturing the design intent (skew preserved, individual variation added) so future content edits respect the rationale.
+
+---
+
 ## [1.0.0.134] - 2026-05-03 — Sub-checkpoint #5 fix: Dragonborn build pool — actual variety
 
 User-reported issue from v1.0.133 review: Dragonborn's build options in Step 5 were `['Tall', 'Powerfully built', 'Muscular', 'Broad-shouldered', 'Towering', 'Heavy']` — six different ways of saying "big and strong." A content-authoring miss in the v1.0.120 raceColorTraits.js.
