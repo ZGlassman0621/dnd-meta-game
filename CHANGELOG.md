@@ -2,6 +2,26 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.142] - 2026-05-04 — Project-discipline catchup: tests for prelude draft endpoints
+
+CLAUDE.md mandates "tests before push for any non-trivial change (new endpoints, schema changes)." v1.0.138 added three new endpoints (`POST/PUT/GET /api/prelude/setup/draft`) plus modified `createPreludeCharacter` to accept a `draft_character_id` for row recycling. v1.0.139 was a hotfix for a BigInt serialization bug that proper tests would have caught at write time. Catching up the discipline gap.
+
+**New file: `tests/prelude-draft.test.js`** — 43 assertions, all passing. In-memory libsql; service SQL replicated inline (canon-transfer.test.js pattern). Coverage spans:
+- BigInt regression — draft create returns Number id, not BigInt (the literal v1.0.139 bug, locked in)
+- Draft create / update / read shape (phase enforcement, name composition, state JSON round-trip)
+- Finalize WITH `draft_character_id` (row recycling, phase flip prelude_setup → prelude, refuse non-draft rows)
+- Finalize WITHOUT `draft_character_id` (legacy back-compat)
+- Appearance persistence — `payload.appearance.{eye/hair/skin/build}` lands on `eye_color/hair_color/skin_color/physical_build` columns
+- End-to-end save → resume → submit cycle preserves character id
+
+**Run command:** `node tests/prelude-draft.test.js`. Pass/fail in stdout. TEST_RESULTS.md updated with the run record.
+
+**Side ship**: memory entry added — `project_opus_default_for_gameplay.md` — captures the v1.0.141 PM ruling (Opus default for live gameplay) so future model-selection calls in unrelated conversations have the rule on hand. Doesn't affect any code path; durable project context.
+
+Cutover work (originally v1.0.142) shifts to v1.0.143; smoke gate carries forward.
+
+---
+
 ## [1.0.0.141] - 2026-05-03 — Prelude gameplay flips to Opus default
 
 PM ruling 2026-05-03: prelude gameplay generalizes the v1.0.99 main DM session decision (Opus default for live gameplay). User has Claude Max so cost is bounded; prose quality and narrative continuity outweigh latency for interactive turns. Auto-picker logic retained as soft-deprecated dead code per "deprecate by hiding, not deleting."

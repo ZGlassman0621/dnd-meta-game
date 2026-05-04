@@ -1,5 +1,26 @@
 # Test Results Log
 
+## 2026-05-04 — Project-discipline catchup: tests for prelude draft endpoints
+
+**Change scope:** Project-discipline gap from v1.0.138/v1.0.139. CLAUDE.md mandates "tests before push for any non-trivial change (new endpoints, schema changes)." v1.0.138 added three new endpoints (`POST/PUT/GET /api/prelude/setup/draft`) plus modified `createPreludeCharacter` to accept a `draft_character_id` for row recycling. v1.0.139 was a hotfix for a BigInt bug that proper tests would have caught. Adding coverage now.
+
+**New file:** `tests/prelude-draft.test.js` — 43 assertions, all passing. In-memory libsql; service SQL replicated inline (canon-transfer.test.js pattern). Coverage:
+
+- **BigInt regression (v1.0.139)** — draft create returns Number id, not BigInt. The literal bug v1.0.139 fixed; locked in.
+- **Draft create** — persists at `creation_phase='prelude_setup'`, composes name from first+last with `(unnamed)` fallback, race + state JSON round-trip via `prelude_setup_data`.
+- **Draft update** — preserves id, refreshes displayable fields (name/race) AND state JSON, refuses non-prelude_setup rows (active characters, etc.).
+- **getDraftState** — returns null for non-existent ids and wrong-phase rows; returns parsed state for prelude_setup rows including nested appearance object.
+- **Finalize WITH `draft_character_id`** — RECYCLES the draft row (same id, no orphan), flips phase `prelude_setup → prelude`, refreshes name; refuses non-draft rows.
+- **Finalize WITHOUT `draft_character_id`** — creates fresh row at `creation_phase='prelude'` (back-compat with legacy one-page wizard's submit path).
+- **Appearance persistence** — `payload.appearance.{eye_color,hair_color,skin_color,build}` lands on character row's `eye_color/hair_color/skin_color/physical_build` columns. The `build → physical_build` mapping (migration 050 column name) verified explicitly. Nulls when not provided.
+- **End-to-end save→resume→submit cycle** — creates draft, updates twice, resumes, finalizes via recycle. Asserts only one row exists at the end and its id matches the original draft id.
+
+**Run command:** `node tests/prelude-draft.test.js` from repo root.
+
+**Result:** 43 passed, 0 failed.
+
+---
+
 ## 2026-05-02 — v1.0.109 Phase 2 chunk 5 batch 1: Migration + payload contract + content data
 
 **Change scope:** Three foundation pieces for chunk 5 (rebuilt main creator).
