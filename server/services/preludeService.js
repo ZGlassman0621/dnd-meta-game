@@ -363,7 +363,9 @@ export async function createDraftPreludeCharacter(state) {
   const result = await dbRun(sql, args);
   const id = result.lastID || result.lastInsertRowid;
   if (!id) throw new Error('Draft prelude character insert returned no id');
-  return { id };
+  // libsql returns lastInsertRowid as BigInt; coerce to Number so the
+  // route's res.json() can serialize. Safe — SQLite rowids are <2^53.
+  return { id: Number(id) };
 }
 
 /**
@@ -399,7 +401,7 @@ export async function updateDraftPreludeCharacter(characterId, state) {
       characterId
     ]
   );
-  return { id: characterId };
+  return { id: Number(characterId) };
 }
 
 /**

@@ -2,6 +2,18 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.139] - 2026-05-03 — v1.0.138 hotfix: BigInt serialization in draft endpoint responses
+
+Smoke caught: `POST /api/prelude/setup/draft` returned 500 — `TypeError: Do not know how to serialize a BigInt`. The `result.lastInsertRowid` from libsql is a BigInt, and `res.json({ id: bigint })` can't serialize it. Same pattern affected `updateDraftPreludeCharacter` (its `characterId` came from `req.params` as a string, but the response object built it back without coercing).
+
+**Fix:** `Number(id)` coercion before returning from `createDraftPreludeCharacter` and `updateDraftPreludeCharacter`. Safe — SQLite rowids are < 2^53.
+
+Cutover work originally slated for v1.0.139 shifts to v1.0.140; smoke gate carries forward unchanged.
+
+Also of note (cleanup, not a fix): an orphan node process from yesterday's debugging was holding port 3000, so the user's `npm run dev` wasn't binding and they were hitting yesterday's server (no draft endpoints). Killed the orphan + restarted dev cleanly. The 404s the user saw were from the stale server, not from a real routing issue. The 500 was real and is what this hotfix addresses.
+
+---
+
 ## [1.0.0.138] - 2026-05-03 — Phase 2 close-out: Prelude wizard plumbing — save/resume, appearance persistence, 4th card state, arc-prompt APPEARANCE
 
 The cutover slice's plumbing layer. All four pieces ship together since they're interdependent. Still gated behind `?prelude_v2=1`; cutover flip lands as v1.0.139 after end-to-end smoke validation.
