@@ -2,6 +2,18 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.130] - 2026-05-03 — Sub-checkpoint #2 fix: use-name guidance moves to Step 1 where the Last Name decision is made
+
+User-reported issue from v1.0.129 review: the use-name guidance ("if you left Last name blank, the Prelude DM may introduce you with a use-name like 'Aelar of the Silver Glade'…") was on Step 2's Race field. By the time the player reaches Step 2, the Last Name decision is already made — the guidance arrives too late to inform it.
+
+**Fix:** moved the use-name explanation to Step 1's Last Name help text, where the player is making the decision. Step 2's Race field help dropped (the WizardHead subtitle + the description-below-dropdown together cover the race choice; the field doesn't need its own redundant help).
+
+Combined Step 1 Last Name help now reads: "Some peoples don't use family surnames — leave blank if that fits. If you do, the Prelude DM may introduce you with a use-name (e.g. 'Aelar of the Silver Glade') shaped by your race and where you grew up."
+
+The legacy 11-question wizard had the same awkwardness (use-name copy lived on the race section but described the name section). This fix corrects an issue inherited from the legacy wizard, surfaced by the structural redesign putting the same content on a separate step.
+
+---
+
 ## [1.0.0.129] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 2 (Ancestry) + per-step validation gates (sub-checkpoint #2)
 
 Step 1 signed off. Per the cadence agreed with PM: ship Step 2 alone (not batched with Step 3) so the new race-description visual treatment is reviewed before the same pattern propagates to Step 3.

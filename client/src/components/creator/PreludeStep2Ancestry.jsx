@@ -47,10 +47,7 @@ export default function PreludeStep2Ancestry({ state, set }) {
       />
 
       <div className="card">
-        <Field
-          label="Race"
-          help="Some peoples have their own naming conventions; if you left Last name blank in Step 1, the Prelude DM may introduce you with a use-name (e.g. 'Aelar of the Silver Glade') shaped by your race and where you grew up."
-        >
+        <Field label="Race">
           <select
             className="select"
             value={state.race || ''}

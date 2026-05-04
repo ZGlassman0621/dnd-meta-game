@@ -42,7 +42,7 @@ export default function PreludeStep1Identity({ state, set }) {
           </Field>
           <Field
             label="Last name"
-            help="Some peoples don't use family surnames. Leave blank if that fits."
+            help="Some peoples don't use family surnames — leave blank if that fits. If you do, the Prelude DM may introduce you with a use-name (e.g. 'Aelar of the Silver Glade') shaped by your race and where you grew up."
           >
             <input
               type="text"
