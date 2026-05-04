@@ -2,6 +2,42 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.145] - 2026-05-04 — Phase 3 SC-2: companion loyalty migration (first abstraction port + prompt-injection gap fix)
+
+First real exercise of the standingScalar abstraction against an existing system. Per spec §2.4 — companion loyalty migrates with no behavior change to existing loyalty math, plus the prompt-injection gap that Code's Tranche 1 survey flagged (orientation note #2): companion loyalty is now visible to the AI in DM session prompts for the first time.
+
+**`server/services/companionBackstoryService.js`:**
+- New export `COMPANION_LOYALTY_CONFIG` — per-consumer-static configuration. Range 0–100, default 50, the existing 6 label bands (devoted/loyal/trusted/uncertain/distrustful/hostile), `inline_json` audit storage on `loyalty_events`. Repository callbacks own the SQL — `readScore / writeScore / readAuditTrail / appendAuditEntry` map between the abstraction's standard entry shape (strategy/change/newScore/reason/sessionId/gameDay/date) and the legacy `loyalty_events` shape (event/change/new_total/date) so anything reading the column directly stays back-compat.
+- `adjustLoyalty(companionId, change, reason)` rewritten to delegate the math + clamp + audit to `adjustStanding(COMPANION_LOYALTY_CONFIG, ...)`. The pre-create-row pattern (`getOrCreateBackstory`) and the post-call cascade (`checkSecretReveals`) stay consumer-side per Invariant B — secret thresholds are per-secret (each carries its own `loyalty_threshold`), which doesn't fit the abstraction's per-config-static threshold list.
+- New export `formatLoyaltyForPrompt(loyaltyScore, loyaltyEventsJson)` — sync helper for prompt builders that already have loyalty data loaded (the formatCompanions case). Renders the spec §2.4 fragment shape: `"Loyalty: TRUSTED (62/100). Recent: defended in tavern brawl (+5)"`. Returns empty string when score is null so callers can string-concatenate safely.
+- Legacy `getLoyaltyLabel` kept as no-op redundant export per "deprecate by hiding, not deleting." Now redundant with `mapToLabel(loyalty, COMPANION_LOYALTY_CONFIG.labelBands)`.
+
+**`server/routes/dmSession.js`:** the companion-load SELECT (line 475) extended to include `cb.loyalty as companion_loyalty, cb.loyalty_events as companion_loyalty_events` — these are what `formatLoyaltyForPrompt` reads.
+
+**`server/services/dmPromptBuilder.js::formatCompanions`:** new line in each companion's parts array — `formatLoyaltyForPrompt(companion.companion_loyalty, companion.companion_loyalty_events)` rendered alongside mood / progression / spell-slots / conditions / death-saves. The `.filter(Boolean)` already in place handles the empty-string return for companions without backstory rows.
+
+**Tests** — `tests/companion-loyalty-prompt.test.js`, 33 assertions all passing:
+- 18 assertions verifying the 6 label bands match legacy `getLoyaltyLabel` exactly at every boundary (no behavior drift)
+- Empty-fragment cases (null score, null/empty audit JSON)
+- Single-event format (positive change shows `+`, negative shows `-` once not `--`)
+- Most-recent-event-wins (newest event surfaces, older events suppressed)
+- Malformed JSON graceful fallback
+- Edge case: event missing `event` field falls back to label-only
+- Standalone `COMPANION_LOYALTY_CONFIG.formatForPrompt()` callable matches spec §2.4 example output
+
+All prior test suites still green: standing-scalar (71), marker-pipeline (44), prelude-draft (43).
+
+**No marker handler registered.** Per the SC-2 spec note: companion loyalty has no dedicated marker (state-change paths flow through consequenceService / promise / deed-recording paths, not a `[LOYALTY_CHANGE]` marker). Confirmed during the spec read; PM acknowledged. Handler registration begins at SC-4 (`[PIETY_CHANGE]`) and SC-5 (`[BOND_SHIFT]`).
+
+**SC-2 acceptance criteria met (per spec §2.4):**
+- All existing companion-loyalty-touching tests pass (no companion-loyalty-specific tests existed pre-SC-2; new tests added in this ship)
+- New tests confirm prompt injection works for companion loyalty
+- Companion mood decay (separate code path, not standing-scalar) unchanged
+- Secret-reveal cascade (`checkSecretReveals`) still fires correctly (preserved as the post-`adjustStanding` consumer-side cascade)
+- Companion-level UI surfaces unchanged (no UI touched)
+
+---
+
 ## [1.0.0.144] - 2026-05-04 — Phase 3 SC-1 + SC-6.1: foundation modules (standingScalar + markerPipeline)
 
 First Phase 3 ship. Two API-foundation modules batched per PM cadence call (both reviewed at the same gate; SC-2 exercises both APIs anyway). Sub-checkpoint review before SC-2 begins.

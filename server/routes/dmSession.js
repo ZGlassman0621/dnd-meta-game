@@ -482,7 +482,9 @@ router.post('/start', async (req, res) => {
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice, n.mannerism,
              n.motivation, n.background_notes, n.relationship_to_party,
              cb.mood as companion_mood, cb.mood_cause as companion_mood_cause,
-             cb.mood_intensity as companion_mood_intensity
+             cb.mood_intensity as companion_mood_intensity,
+             cb.loyalty as companion_loyalty,
+             cb.loyalty_events as companion_loyalty_events
       FROM companions c
       JOIN npcs n ON c.npc_id = n.id
       LEFT JOIN companion_backstories cb ON cb.companion_id = c.id

@@ -6,6 +6,8 @@
  * Extracted from ollama.js for maintainability.
  */
 
+import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
+
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
   poor: { weapon: -1, armor: -1 },
@@ -834,6 +836,17 @@ function formatCompanions(companions, awayCompanions = []) {
       companion.background_notes ? `  Backstory: ${companion.background_notes}` : null,
       companion.notes ? `  Player Notes: ${companion.notes}` : null,
       formatCompanionMood(companion),
+      // Phase 3 SC-2 — companion loyalty injection (the spec §2.4 gap fix).
+      // Sourced from cb.loyalty + cb.loyalty_events on the SELECT join in
+      // routes/dmSession.js. Returns empty string when no backstory row
+      // exists, which the .filter(Boolean) below drops cleanly.
+      (() => {
+        const fragment = formatLoyaltyForPrompt(
+          companion.companion_loyalty,
+          companion.companion_loyalty_events
+        );
+        return fragment ? `  ${fragment}` : null;
+      })(),
       formatCompanionProgressionLines(companion.progression),
       formatCompanionSpellSlotsLine(companion.spell_slots_max, companion.spell_slots_used),
       formatCompanionActiveConditionsLine(companion.active_conditions),

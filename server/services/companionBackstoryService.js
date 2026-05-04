@@ -1,7 +1,20 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { adjustStanding, AUDIT_STRATEGIES, mapToLabel } from './standingScalar.js';
 
 /**
  * Companion Backstory Service - CRUD operations for companion backstories
+ *
+ * Phase 3 SC-2 (v1.0.145): companion loyalty migrated to the
+ * standingScalar abstraction. `adjustLoyalty` now delegates the math /
+ * range clamping / audit recording to `adjustStanding`. Per spec
+ * Invariant B, the secret-reveal cascade (`checkSecretReveals`) stays
+ * consumer-side because secret thresholds are per-secret, not per-band
+ * (don't fit the abstraction's threshold-detection model).
+ *
+ * `COMPANION_LOYALTY_CONFIG` (exported below) is the per-consumer-static
+ * configuration the abstraction reads. `formatLoyaltyForPrompt` is the
+ * sync helper for prompt builders that already have loyalty data loaded
+ * (avoids an extra repository round-trip).
  */
 
 /**
@@ -109,35 +122,134 @@ export async function updateBackstoryByCompanionId(companionId, data) {
 }
 
 // ============================================================
-// LOYALTY SYSTEM
+// LOYALTY SYSTEM (Phase 3 SC-2 — migrated to standingScalar)
 // ============================================================
 
 /**
- * Adjust companion loyalty
+ * Companion loyalty configuration for the standingScalar abstraction.
+ * Range / labels / audit-storage match the legacy adjustLoyalty behavior
+ * exactly — this is a behavioral migration, not a content change.
+ *
+ * Repository callbacks own the SQL (the abstraction never builds queries
+ * itself per the SC-1 design). The audit-entry append maps from the
+ * abstraction's standard entry shape (strategy/change/newScore/reason/
+ * sessionId/gameDay/date) to the legacy `loyalty_events` shape
+ * (event/change/new_total/date) so any UI or debugging code that reads
+ * loyalty_events directly stays compatible.
+ *
+ * Thresholds intentionally empty — secret reveals fire at PER-SECRET
+ * thresholds (each secret carries its own loyalty_threshold), which
+ * doesn't fit the abstraction's per-config-static threshold list.
+ * Cascade stays consumer-side via `checkSecretReveals` per spec Invariant B.
+ */
+export const COMPANION_LOYALTY_CONFIG = {
+  name: 'companion_loyalty',
+  range: { min: 0, max: 100 },
+  defaultValue: 50,
+  labelBands: [
+    { atOrAbove: 90, label: 'devoted' },
+    { atOrAbove: 75, label: 'loyal' },
+    { atOrAbove: 50, label: 'trusted' },
+    { atOrAbove: 25, label: 'uncertain' },
+    { atOrAbove: 10, label: 'distrustful' },
+    { atOrAbove: 0,  label: 'hostile' }
+  ],
+  thresholds: [],  // see header comment — per-secret, not per-band
+  auditTrail: { storage: AUDIT_STRATEGIES.INLINE_JSON },
+  formatForPrompt: (current) => {
+    const parts = [`Loyalty: ${current.label.toUpperCase()} (${current.score}/100)`];
+    const recent = current.recentAuditEntries[0];
+    if (recent && recent.reason) {
+      const sign = recent.change > 0 ? '+' : '';
+      parts.push(`Recent: ${recent.reason} (${sign}${recent.change})`);
+    }
+    return parts.join('. ');
+  },
+  repository: {
+    async readScore(contextKey) {
+      const row = await dbGet(
+        `SELECT loyalty FROM companion_backstories WHERE companion_id = ?`,
+        [contextKey.companionId]
+      );
+      return row ? row.loyalty : null;
+    },
+    async writeScore(contextKey, newScore) {
+      await dbRun(
+        `UPDATE companion_backstories
+         SET loyalty = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE companion_id = ?`,
+        [newScore, contextKey.companionId]
+      );
+    },
+    async readAuditTrail(contextKey, limit) {
+      const row = await dbGet(
+        `SELECT loyalty_events FROM companion_backstories WHERE companion_id = ?`,
+        [contextKey.companionId]
+      );
+      if (!row) return [];
+      let events;
+      try { events = JSON.parse(row.loyalty_events || '[]'); }
+      catch { events = []; }
+      // Map back to abstraction shape so getStanding's caller sees the
+      // standard entry fields (reason, newScore, change, date).
+      return events.slice(-limit).reverse().map(e => ({
+        reason: e.event,
+        change: e.change,
+        newScore: e.new_total,
+        date: e.date
+      }));
+    },
+    async appendAuditEntry(contextKey, entry) {
+      // Map abstraction shape → legacy loyalty_events shape so consumers
+      // reading the column directly (UI, debug tools) stay compatible.
+      const row = await dbGet(
+        `SELECT loyalty_events FROM companion_backstories WHERE companion_id = ?`,
+        [contextKey.companionId]
+      );
+      let events;
+      try { events = row ? JSON.parse(row.loyalty_events || '[]') : []; }
+      catch { events = []; }
+      events.push({
+        event: entry.reason,
+        change: entry.change,
+        new_total: entry.newScore,
+        date: entry.date
+      });
+      await dbRun(
+        `UPDATE companion_backstories
+         SET loyalty_events = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE companion_id = ?`,
+        [JSON.stringify(events), contextKey.companionId]
+      );
+    }
+  }
+};
+
+/**
+ * Adjust companion loyalty. Migrated to standingScalar in Phase 3 SC-2.
+ *
+ * The function's own behavior is unchanged from the legacy version:
+ * (1) ensure backstory row exists, (2) clamp + record + apply, (3) cascade
+ * secret reveals, (4) return updated backstory. The math + audit + clamp
+ * step now goes through `adjustStanding` instead of inline code.
+ *
+ * Return shape preserved for back-compat (callers like
+ * companionActivityService.js expect the full backstory row).
  */
 export async function adjustLoyalty(companionId, change, reason = null) {
+  // Pre-create the row if needed — consumer manages row lifecycle per
+  // standingScalar's contract (the abstraction operates on existing rows).
   const backstory = await getOrCreateBackstory(companionId);
 
-  const newLoyalty = Math.max(0, Math.min(100, backstory.loyalty + change));
-  const loyaltyEvents = backstory.loyalty_events || [];
+  const result = await adjustStanding(
+    COMPANION_LOYALTY_CONFIG,
+    { companionId },
+    change,
+    { reason }
+  );
 
-  if (reason) {
-    loyaltyEvents.push({
-      event: reason,
-      change,
-      new_total: newLoyalty,
-      date: new Date().toISOString()
-    });
-  }
-
-  await dbRun(`
-    UPDATE companion_backstories SET
-      loyalty = ?, loyalty_events = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `, [newLoyalty, JSON.stringify(loyaltyEvents), backstory.id]);
-
-  // Check for secret reveals
-  await checkSecretReveals(backstory.id, newLoyalty);
+  // Cascade — per Invariant B, secret reveals stay consumer-side.
+  await checkSecretReveals(backstory.id, result.newScore);
 
   return getBackstoryById(backstory.id);
 }
@@ -151,7 +263,11 @@ export async function getLoyalty(companionId) {
 }
 
 /**
- * Get loyalty label
+ * Get loyalty label. Kept for back-compat (no consumers found in current
+ * codebase but exported, so external code or future consumers may use it).
+ * Now redundant with `mapToLabel(loyalty, COMPANION_LOYALTY_CONFIG.labelBands)`
+ * — the values match exactly. Safe to remove if a future cleanup confirms
+ * no remaining external consumers.
  */
 export function getLoyaltyLabel(loyalty) {
   if (loyalty >= 90) return 'devoted';
@@ -160,6 +276,46 @@ export function getLoyaltyLabel(loyalty) {
   if (loyalty >= 25) return 'uncertain';
   if (loyalty >= 10) return 'distrustful';
   return 'hostile';
+}
+
+/**
+ * Sync helper for prompt builders. Takes already-loaded loyalty + audit
+ * data (from a SELECT that joined companion_backstories) and returns the
+ * formatForPrompt fragment WITHOUT making an extra repository round-trip.
+ *
+ * This is the path used by `dmPromptBuilder.js::formatCompanions` (sync
+ * function called inside a template literal). The ad-hoc async path
+ * goes through `formatStandingForPrompt(COMPANION_LOYALTY_CONFIG, ...)`
+ * for callers that don't already have the data loaded.
+ *
+ * Returns empty string when loyalty is null (no backstory row exists)
+ * so callers can string-concatenate safely.
+ *
+ * @param {number|null} loyaltyScore       — value of `loyalty` column
+ * @param {string|null} loyaltyEventsJson  — value of `loyalty_events` column
+ */
+export function formatLoyaltyForPrompt(loyaltyScore, loyaltyEventsJson) {
+  if (loyaltyScore == null) return '';
+  let recentAuditEntries = [];
+  try {
+    const events = JSON.parse(loyaltyEventsJson || '[]');
+    recentAuditEntries = events
+      .slice(-2)
+      .reverse()  // newest first
+      .map(e => ({
+        reason: e.event,
+        change: e.change,
+        newScore: e.new_total,
+        date: e.date
+      }));
+  } catch { /* malformed JSON → empty audit list */ }
+
+  const label = mapToLabel(loyaltyScore, COMPANION_LOYALTY_CONFIG.labelBands);
+  return COMPANION_LOYALTY_CONFIG.formatForPrompt({
+    score: loyaltyScore,
+    label,
+    recentAuditEntries
+  });
 }
 
 // ============================================================
