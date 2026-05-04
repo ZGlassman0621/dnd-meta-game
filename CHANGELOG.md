@@ -2,6 +2,37 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.144] - 2026-05-04 — Phase 3 SC-1 + SC-6.1: foundation modules (standingScalar + markerPipeline)
+
+First Phase 3 ship. Two API-foundation modules batched per PM cadence call (both reviewed at the same gate; SC-2 exercises both APIs anyway). Sub-checkpoint review before SC-2 begins.
+
+**SC-1 — `server/services/standingScalar.js`** (per spec §2.3):
+- Public API: `adjustStanding`, `getStanding`, `formatStandingForPrompt`, `registerThresholdHandler`, `clampToRange`, `mapToLabel`, `detectThresholdCrossings`, `AUDIT_STRATEGIES` enum
+- Configuration shape per spec §2.2 — `range / defaultValue / labelBands / thresholds / auditTrail / formatForPrompt / repository`
+- **`repository` callbacks own storage** — abstraction never builds SQL. Consumer supplies `readScore / writeScore / readAuditTrail / appendAuditEntry`. Lets DM Mode bond-shifts (JSON-blob storage) use the same API as faction standing (SQL row).
+- Audit-trail strategies: `'inline_json'`, `'separate_table'`, `'split_by_sign'` (per spec Q1, faction standing's case), `'none'`
+- Threshold dispatch: handlers registered at module-load (per spec Q3); fires on cross-up / cross-down / both. Errors contained (logged, don't block adjust).
+- 71 unit-test assertions in `tests/standing-scalar.test.js` covering range clamping, label mapping (boundaries + below-floor), threshold detection (all directions + multi-cross), audit recording (all strategies), error containment, validation.
+
+**SC-6.1 — `server/services/markerPipeline.js`** (per spec §3.7):
+- Public API: `registerHandler`, `processResponseMarkers`, `buildPendingCorrectionsNote`
+- Composes existing `markerSchemas.js::validateDmMarkers` + `ruleVerifiers.js::buildRuleCorrectionMessage` — no reimplementation
+- Handler errors contained (logged, recorded as `{ ok: false, error }` in `handlerResults`, don't block other markers)
+- Wired into `routes/dmSession.js` as a parallel call alongside existing detect-functions (lines 1330ish, after the existing validation block). With no handlers registered yet at this ship, behavior is unchanged.
+- 44 unit-test assertions in `tests/marker-pipeline.test.js` covering registration validation, dispatch (single/multi instance/multi schema), error containment, validation-failure separation (malformed markers go in `failures`, not `handlerResults`), correction-note composition (marker-only / rule-only / combined / empty).
+
+**Wiring change in `routes/dmSession.js`:** new `processResponseMarkers(narrative, { characterId, sessionId })` call after the existing validation block. Try/catch wrapped — any pipeline bug is logged but doesn't block existing flow. `validateDmMarkers` runs twice per turn at this point (once via the existing block, once inside `processResponseMarkers`); SC-6.4 will collapse this.
+
+**No behavior change for end users.** Both modules are foundations; migrations begin in SC-2.
+
+**DECISION_LOG entry** documents the design tradeoffs: storage-via-repository (vs. declarative SQL), threshold-dispatch as future-facing API, parallel-not-replacement pipeline strategy, handler error containment.
+
+**Open from spec §6:**
+- Q1 (faction standing `'split_by_sign'`) — pre-answered in `AUDIT_STRATEGIES`; PM call procedural before SC-3
+- Q6 (detect-function deferral criteria) — PM authors survey doc before SC-6.4 implementation
+
+---
+
 ## [1.0.0.143] - 2026-05-04 — Phase 2 close-out: Prelude wizard cutover (PreludeCreatorV2 is the live path; legacy retired-but-hidden)
 
 End-to-end smoke confirmed by user 2026-05-04 — full create → exit-mid-wizard → resume-from-card → submit cycle works clean; appearance fields reach Opus during gameplay and the opening narration honors them faithfully. Cutover unblocked.

@@ -23,18 +23,6 @@ Format per entry is light by design:
 
 These are the calls waiting on user input or external evidence. Listed newest-first.
 
-### 🟡 Lean Prompt toggle: keep as diagnostic or retire entirely
-**Context:** Lean prompt (strips MECHANICAL MARKERS + softens Cardinal Rule 2) didn't move the needle in user playtest. Automated A/B showed it helps edge cases (atmospheric scene-opens, cinematic build) but not the average turn.
-**Decision needed:** Retire as a production direction, OR keep the toggle as a debugging tool, OR fold the relaxed Cardinal Rule 2 into production permanently.
-
-### 🟡 H7 — `PLAYER OBSERVATION = ALWAYS A CHECK` production fix
-**Context:** Surfaced during prose-quality A/B. The rule kills atmospheric scene-opens (e.g., the AI demands "Make a Perception check" after the player just opened a tavern door).
-**Decision needed:** Move OUT of always-on prompt; only inject when the player commits to a perception/investigation/stealth verb. Or some other shape.
-
-### 🟡 H8 — Cardinal Rule 2 (HARD STOPS) production softening
-**Context:** Surfaced during prose-quality A/B. The strict rule forces the AI to end its response immediately after any roll request, compressing cinematic build-ups.
-**Decision needed:** Soften to lean-mode variant in production ("ROLL REQUESTS — DON'T SPOIL OUTCOMES"), or keep strict.
-
 ### 🟡 Project rename
 **Status:** User flagged the working title "D&D Meta Game" needs replacing. No replacement chosen yet.
 **Implications:** Affects package.json, UI brand text, README, and this brief. Defer until a name is picked.
@@ -45,6 +33,609 @@ These are the calls waiting on user input or external evidence. Listed newest-fi
 ---
 
 ## Decisions log (newest first)
+
+### 2026-05-04 — Phase 3 SC-1 + SC-6.1: foundation modules ship together (Architecture)
+
+**Context:** Phase 3 spec (`PHASE_3_REFACTOR_SPEC.md`) authored 2026-05-03 calls for two refactors across nine sub-checkpoints. SC-1 builds the standing-scalar abstraction (`services/standingScalar.js`); SC-6.1 builds the marker pipeline (`services/markerPipeline.js`). Both are API-foundation work — neither does any migration. Spec's §1.5 sequencing put SC-6.1 between SC-1 and SC-2 because handler-registration must exist when systems with markers begin migrating in SC-4 ([PIETY_CHANGE]) and SC-5 ([BOND_SHIFT]).
+
+PM and Code agreed to batch SC-1 + SC-6.1 into a single ship rather than two — both surfaces are reviewed together at the same gate, and SC-2 (the first migration) exercises both APIs anyway. Reviewing the foundations together is honest about the integration. SC-2 onward proceed one ship at a time.
+
+**Decision:** Ship SC-1 + SC-6.1 as a single batch. New modules under `server/services/`:
+
+- **`standingScalar.js`**: per-consumer-static configuration object holds `range / defaultValue / labelBands / thresholds / auditTrail / formatForPrompt / repository`. The `repository` callbacks (`readScore / writeScore / readAuditTrail / appendAuditEntry`) are how the abstraction interacts with storage — the abstraction itself never builds SQL. Public API: `adjustStanding / getStanding / formatStandingForPrompt / registerThresholdHandler`.
+- **`markerPipeline.js`**: thin dispatch layer composing existing `markerSchemas.js::validateDmMarkers` + `ruleVerifiers.js::buildRuleCorrectionMessage`. Public API: `registerHandler / processResponseMarkers / buildPendingCorrectionsNote`. Handler errors are CONTAINED — they go in `handlerResults` with `ok: false` but don't throw.
+
+Wired into `routes/dmSession.js` as a parallel call alongside the existing detect-functions. With no handlers registered at SC-1+SC-6.1 ship, the pipeline is a behavioral no-op.
+
+**Why:**
+- **Storage staying consumer-side via repository callbacks** (the SC-1 design point worth flagging): the alternative was making the abstraction declarative ("here's a table name and column names; you build the SQL"). Rejected because (a) DM Mode bond-shifts store inside a JSON blob in `dm_mode_parties.party_data` — no clean SQL the abstraction could generate; (b) per Call 1 from 2026-05-03, parameterizing rather than converging means each consumer should own its storage idiosyncrasies. Repository callbacks let the consumer keep its existing repository pattern; the abstraction provides the algorithm.
+- **Threshold dispatch existing as future-facing API**: per spec Invariant B, existing per-system cascades (`checkSecretReveals`, etc.) stay consumer-side. The `registerThresholdHandler` API exists in SC-1 but is only actively exercised by piety in SC-4. Building it now (rather than deferring) is cheap and prevents an awkward "add API in SC-4" follow-up that would break the SC-1 review's API freeze.
+- **Pipeline runs in parallel with detect-functions, not as a replacement**: every existing detect-function in `dmSessionService.js` continues to fire alongside `processResponseMarkers`. SC-2 through SC-5 will register handlers for the standing-scalar markers; SC-6.4 will sweep remaining detect-functions. The cutover is gradual; no big-bang flip.
+- **Handler errors contained, never thrown to the route**: spec Q5 recommended logged-only on the rationale that surfacing engineering bugs to the AI leaks detail into the fiction. Both modules implement this consistently — adjustStanding's threshold handler errors and processResponseMarkers' marker handler errors both log + continue, never block the parent operation.
+
+**Implications:**
+- SC-2 through SC-5 will exercise the standing-scalar API against real consumers. If the API needs adjustment (e.g., the `repository` callback shape misses a use case), DECISION_LOG entries during those sub-checkpoints will document the change.
+- The `validateDmMarkers` call now happens twice per turn (once via existing `routes/dmSession.js` block, once via `processResponseMarkers`). Wasteful but not incorrect; SC-6.4's route-handler rewrite will collapse this.
+- Q1 (faction standing dual-array audit) is still pending PM call before SC-3. Spec §2.2 already names `'split_by_sign'` as the strategy; the abstraction's `auditTrail.storage` recognizes it and passes through to the consumer's repository to enact.
+- Q6 (detect-function deferral criteria) still pending PM call before SC-6.4.
+
+**Related:** `PHASE_3_REFACTOR_SPEC.md` §2 (standing-scalar) and §3 (marker pipeline). Tests at `tests/standing-scalar.test.js` (71 assertions) and `tests/marker-pipeline.test.js` (44 assertions). Memory: `project_phase3_scope.md`.
+
+---
+
+### 2026-05-03 — Opus as default model for prelude gameplay sessions; Sonnet/Haiku for non-prose work (Direction)
+
+**Context:** Phase 2 close-out work surfaced a question about model selection in prelude gameplay. PM remembered the project switching to Opus as the primary gameplay model. Code's investigation found the change was real but more limited: the 2026-04-26 (v1.0.99) decision flipped *main DM session* continuations to Opus default. Prelude sessions retained the Sonnet-default auto-picker that escalates to Opus on specific triggers (chapter 4, session wrap, heavy-weight scenes, HP drops, chapter-promise turns; capped at 2 consecutive Opus turns to break feedback loops). The auto-picker logic was last touched at v1.0.66 ("Auto picker: break the Opus-feedback loop") and has shipped unchanged since. The mismatch between PM memory and codebase reality forced the question: was the asymmetry intentional, or should prelude follow main DM's lead?
+
+**Decision:** Prelude gameplay sessions move to Opus default. The auto-picker logic in `preludeSessionService.js::pickAutoModel` is retired (preserved as dead code per "deprecate by hiding, not deleting" discipline). `resolveModel`'s default flips from `'auto'` to `'opus'`. The decision generalizes the v1.0.99 framing — "Opus everywhere for gameplay" — across both prelude and main DM sessions.
+
+**Why:**
+- Prose quality. The v1.0.96 prose investigation that drove the main DM session flip established Opus as the prose-quality lever. Prelude is *more* about atmospheric prose than main DM — it's a 5-session character-building arc with heavy literary emphasis, alignment-tagged content, and emerging-character-shape tracking. The case for Opus is arguably stronger in prelude than in main DM, not weaker.
+- Consistency of reasoning. "Opus everywhere for gameplay" is simpler to hold in mind than "Opus for main, auto-picker for prelude." The asymmetry was historical (the auto-picker predated the main DM Opus flip), not intentional design.
+- User has Claude Max. The cost argument that originally motivated the auto-picker (Opus is ~10× Sonnet per turn; prelude sessions can run long) is bounded for personal-use scope on Max. The trade-off worth optimizing for is no longer cost-vs-quality but quality-vs-latency, and the user explicitly prefers quality.
+- Playtest evidence. User's own assessment after running prelude playtests: Opus is the more reliable narrative tool. The auto-picker's escalation triggers can't substitute for uniform Opus presence in moments the picker doesn't classify as "heavy."
+
+**Broader principle established by this decision: prose vs. non-prose model selection.** Opus is the default for any AI work that produces prose the player will read — gameplay sessions (prelude + main DM), session-opening narration, narrative queue beats, biography-seed generation, atmospheric scene generation, anywhere the AI's output is read as in-fiction text. Sonnet (or Haiku, where Haiku can handle the task) is fine for any work that doesn't produce prose the player reads — chronicle extraction, marker validation, schema compliance checks, JSON-shaped data extraction, structured field generation, mechanical parsing. The distinction is not "expensive task vs cheap task" but "is the output prose the player will read." Future model-selection decisions for new systems should default to this framing rather than re-litigating Opus-vs-Sonnet per-system.
+
+**What stays Sonnet under this principle:**
+- Chronicle extraction (post-session structured-data extraction from transcripts; not prose for the player)
+- Marker validation pipelines (markerSchemas.js correction-loop work, when invoked; not prose)
+- Any future structured-extraction or schema-compliance task
+
+**What's eligible for Haiku:** Tasks that are mechanical and high-volume — for example, simple field validation, schema parsing, low-stakes summarization where Sonnet would be overkill. Specific Haiku migrations are not in scope right now; the principle is captured for future use. When a new task is being scoped and the AI work is non-prose, the spec should consider Haiku as an option and only escalate to Sonnet (or Opus) if Haiku proves insufficient.
+
+**What's retired (prelude-specific):** The auto-picker (`pickAutoModel`) and its escalation triggers (chapter 4, session wrap, heavy-weight scenes, HP drops ≤ -3, chapter-promise turns, 2-consecutive-Opus cap). Preserved as dead code; can be reactivated if a future need surfaces. The "Opus-feedback loop" the picker was tuned to avoid (v1.0.66) is now an accepted property of every prelude turn rather than a problem to mitigate.
+
+**Implications:**
+- `preludeSessionService.js` resolveModel default flips to `'opus'`.
+- CLAUDE.md model-split documentation updates: prelude sessions move from Sonnet-default to Opus-default; chronicle extraction stays Sonnet (for now); the prose-vs-non-prose framing replaces the system-by-system descriptions.
+- Latency increases on prelude turns. User has accepted this consciously.
+- Per-turn cost increases on prelude. User has Claude Max; cost is bounded for personal-use scope.
+- Future model-selection decisions should default to "Opus for prose-the-player-reads, Sonnet/Haiku for everything else." If a future system spec needs to make this call, this entry is the precedent.
+- Phase 3 marker pipeline work (§3.2 of the in-progress Phase 3 spec) inherits this framing: marker validation runs on Sonnet (or Haiku where appropriate), since validation is non-prose.
+
+**What this isn't:** Not a step toward eventual custom model. User has separately flagged that long-term goal; this decision is independent. The eventual custom-model question is a much larger lift (training data, infrastructure, evaluation framework) that's not on any current roadmap. This decision is about the right model from the available Anthropic options, today.
+
+**Related:**
+- `DECISION_LOG.md` 2026-04-26 entry "Opus as production default for main DM session continuations" (v1.0.99) — the supersession this generalizes
+- `DECISION_LOG.md` 2026 (early baseline) entry "Opus for ALL generation, Sonnet for sessions only" (now further superseded for prelude specifically; the prose-vs-non-prose framing also further refines the original baseline)
+- `server/services/preludeSessionService.js::resolveModel` (the flipped default)
+- `server/services/preludeSessionService.js::pickAutoModel` (now dead code)
+- `CLAUDE.md` model-split documentation (updated as part of this ship)
+
+### 2026-05-03 — Phase 2 close-out: alignment coverage rule for theme content prompts (Direction)
+
+**Context:** Post-Phase-2 ship (v1.0.114, 2026-05-02), user picked City Watch in the rebuilt creator and saw all Lawful-coded personality options on Step 7. Coverage scan across all 21 themes confirmed the issue is universal: every theme has at least one alignment with zero personality prompts; most themes cover only 1-3 of the 9 alignment cells. The Phase 2 personality data (3 prompts × 21 themes = 63 total) shipped with a "thin pass, intentionally skewed" annotation reflecting time pressure during chunk 5 ship; the skew was a thinness compromise, not a design call. User overrode the compromise. Four calls were surfaced by Code; this entry captures all four.
+
+**Decisions:**
+
+**Decision 1 — Universal alignment coverage rule for personality prompts.** Every theme × every alignment ≥ 1 prompt is the rule. 21 themes × 9 alignments = 189 prompts minimum (was 63; ~126 net-new). Authoring is PM-authored in one pass, batched per-theme (all 9 alignments for one theme authored in one sitting for voice coherence), delivered in groups of ~7 themes with sanity-check sub-checkpoints between batches. Code transcribes each batch into `client/src/data/themePersonalityPrompts.js` as it lands.
+
+**Decision 2 — Refined character-integrity principle: alignment shifts the institution itself.** The Phase 2 Decision 5 caveat ("believable commitments held by people who think they're doing right") is preserved, but refined for the universal-coverage case: for "naturally aligned" themes, alignment shifts the *shape of the institution, role, or path itself*, not just the character's personal morality within a fixed institution. A Chaotic Evil Knight of the Order isn't a class-betrayer; the order itself is brutal-but-orderly (think Inquisition or fascist enforcement). A Lawful Good Charlatan runs a reformed grift for legitimate charity. A Chaotic Neutral City Watch protects its district through informal networks and bent rules. The institution takes on the character of the alignment, and the prompt expresses a believable commitment held by someone living that version of the theme. This makes authoring against the universal rule tractable rather than forced — voice has more to grip onto when the institution itself flexes with the alignment.
+
+**Decision 3 — Universal rule applies to personality only; ideals / bonds / flaws keep "fill genuine gaps."** Personality is the field where alignment funneling was felt (it's the first field on Step 7, most prominently labeled, and where City Watch surfaced the issue). Ideals / bonds / flaws have more textual variety per prompt; the alignment chips help players steer; the existing coverage matrix at `triage/alignment-coverage-matrix.md` (43% filled, 241/567 cells) keeps its existing principle: "fill where roleplay-believable coverage is genuinely absent." Reactivate the universal rule for those fields if a future playtest surfaces alignment funneling on them the way City Watch surfaced it on personality. The rule adjusts to evidence, not to symmetry.
+
+**Decision 4 — Decision 4 from 2026-05-02 holds: backstory moments stay alignment-agnostic.** Moments are events, not commitments. Two characters can witness the same event ("you watched your home burn") and respond in opposite alignment directions; the alignment isn't in the moment, it's in what the character did about it. Tagging moments by alignment would force a false reading. Personality / ideals / bonds / flaws are commitments where alignment lives in the value expressed; backstory moments are events where alignment lives in the response, not the event itself. The structural distinction holds. The rule does not extend.
+
+**Why these four together:**
+
+The personality coverage problem is real and felt; the universal rule is the right correction. But the symmetric extension to all fields and to moments would have over-applied the principle to surfaces where the original Phase 2 reasoning still holds — coverage matrix pragmatism for ideals/bonds/flaws, event-vs-commitment for moments. Capturing all four calls in one entry preserves the *why* of where the rule applies and where it deliberately doesn't, so future readers see the principle as coherent rather than fragmented.
+
+The refined institution-shifts-with-alignment principle is the substantive new addition. It generalizes beyond personality prompts to any future content authoring against "naturally aligned" themes — if a future surface needs to express a theme through an off-axis alignment, the lever is "what kind of [theme] does this alignment produce" rather than "imagine a [theme] who happens to be [alignment]."
+
+**Implications:**
+- Phase 2 close-out workstream gains one item: PM authors ~126 net-new personality prompts. Runs in parallel with smoke run, smoke bug fixes, spec cleanup, Prelude flow editorial reskin, and Phase 3 spec drafting. Lands before Phase 3 implementation begins.
+- Existing 63 prompts remain unless PM flags one for replacement during authoring.
+- `triage/alignment-coverage-matrix.md` continues to track ideals / bonds / flaws coverage; no extension to those fields.
+- The institution-shifts-with-alignment principle is available for future content authoring on any theme-or-class-shaped surface where alignment coverage matters.
+- The "rule adjusts to evidence" framing (Decision 3) generalizes — if symmetry is tempting but the original pragmatic compromise still holds, evidence triggers reactivation rather than principle alone.
+
+**Related:**
+- `DECISION_LOG.md` 2026-05-02 entry (Decisions 3, 4, 5 — alignment indicators, event-vs-commitment, full-spectrum coverage with character integrity)
+- `client/src/data/themePersonalityPrompts.js` (the file Code transcribes into)
+- `triage/alignment-coverage-matrix.md` (the ideals / bonds / flaws coverage tracker, kept on existing principle)
+- `PHASE_2_CREATOR_SPEC.md` §7.2 (the personality prompts spec section)
+
+**Author note:** This is a single consolidated entry covering four related calls, following the density-over-fragmentation pattern from the 2026-05-02 six-decisions entry. Each decision is summarized with standalone reasoning preserved.
+
+### 2026-05-02 — Phase 3 scope confirmation: standing-scalar + marker pipeline, Lolth deferred (Direction)
+
+**Context:** Phase 3 (AI Narrative Persistence foundation refactors) opened in a fresh PM chat after Phase 2 shipped at v1.0.114. The bootstrap framing carried two refactors from `CONSOLIDATED_TODO.md`: a unified standing-scalar abstraction and a unified marker → state pipeline. PM raised three calls before spec authoring: (1) which existing system migrates to the new abstraction first, (2) how much of the migration ships in one cycle, (3) any in-flight campaign data to preserve across the refactor.
+
+**Decision:** Phase 3 scope locked as follows:
+
+- **Standing-scalar abstraction.** Build the abstraction. Migrate existing systems in this order: companion loyalty (first, as proof-of-concept on a real system) → faction standing → Mythic piety → NPC disposition → DM Mode bond-shifts (last, JSON-blob extraction is more invasive). Aasimar Path's Choice gets built as a new instantiation on the abstraction (user plays Aasimar; this is content the user will actually exercise).
+- **Marker → state pipeline.** Build the pipeline. Port DM Mode markers first (cleanest existing implementation), then Prelude markers, then companion threads. Party Synergies markers deferred to Phase 5 per `CONSOLIDATED_TODO.md`.
+- **Shipping cadence:** Each migration ships in its own cycle with a sub-checkpoint, mirroring Phase 2's chunk-then-checkpoint discipline. Refactor work specifically benefits from "ship a small change, see what broke, ship the next."
+- **In-flight data:** None to preserve. User has no started campaign worth carrying across the refactor.
+
+**Lolth standing tracker explicitly deferred.** The bootstrap and Code's audit both listed Drow Lolth standing as a "trivially addable once the abstraction lands" example consumer. User does not play Drow; Lolth standing has no other consumers. Parked to `FUTURE_FEATURES.md` with a Phase-3-dependency note. Aasimar Path's Choice (which user does play) stays in scope. The principle that surfaced: deferred-content systems don't justify Phase 3's case on their own; the abstraction is justified by the in-use systems migrating to it. Race-or-theme-specific consumers stay or leave Phase 3 based on whether the user actually plays that race or theme.
+
+**Why:** Phase 3's case rests on five existing systems that each repeat the same shape with different schemas. Migrating those is the load-bearing work. New consumers (Lolth, Aasimar Path's Choice, Folk Hero fame, Urchin network) are interchangeable as exemplars of "the abstraction handles new locuses too" — the user's actual character preferences determine which ones merit construction now versus which can wait. Companion-loyalty-first is the right migration order for a clean-slate environment because it stress-tests the abstraction on a real system early, when finding flaws is cheapest.
+
+**Implications:**
+- Phase 3 spec is unblocked. Spec doc to follow, same shape as `PHASE_2_CREATOR_SPEC.md`.
+- Folk Hero geographic fame and Urchin street children network stay in their existing parking-lot home (Phase 5 candidates if Themes becomes the focus area). Not Phase 3 work.
+- Inter-companion `party_relationships` port from DM Mode JSON to player-mode table stays in Phase 5 candidate list (Companions wound representation focus area). Phase 3 builds the abstraction it would later use.
+- Time-bounded state primitives (Quick Study, per-arc gating, Tiefling 1-week debts) stay deferred. Separate refactor, separate phase.
+- Pattern F class features (Keeper Eidetic Memory, Sage L5 lore queries) remain Phase 7 playtest-dependent.
+- The "deferred-content systems don't justify load-bearing refactor scope" principle generalizes: future scope confirmations for cross-cutting work should distinguish in-use consumers (justify the work) from speculative consumers (interchangeable exemplars).
+
+**Related:** `CONSOLIDATED_TODO.md` Phase 3 entry; `AI_NARRATIVE_PERSISTENCE.md` (Patterns A and ambient-pattern-matching); `CODE_AUDIT_FINDINGS.md` Block 2 (Pattern A audit, Pattern matching audit, Cross-cutting refactors); `FUTURE_FEATURES.md` "Drow Lolth Standing Tracker" entry.
+
+### 2026-05-02 — Phase 2 ship: Prelude → Primary transition + main creator rebuild (Milestone)
+**Context:** Phase 2 of the consolidated project plan covered the engineering work to ship the Prelude → Primary transition (the highest-priority real bug in the codebase per Code's audit — players who completed a Prelude had no service to flip them to active) plus the rebuild of the character creator the transition feeds into. Authored over a single PM chat, implemented across 6 Code commits over the span of one day.
+
+**Decision:** Ship as v1.0.114 across staged commits (v1.0.109 → v1.0.114). Six structural decisions made during spec authoring (consolidated into a separate log entry on the same date). Three sub-checkpoints during implementation (Step 4 visual direction, home page + Screen 2 visual direction, full integration). Single consolidated entry approach for the spec-time decisions rather than six separate entries — the user's preference for fewer, denser log entries was the right call for capture density.
+
+**What shipped:**
+- 8-step rebuilt character creator (manual + handoff modes) replacing the legacy `CharacterCreationWizard.jsx`
+- Editorial & literary aesthetic as the project's hi-fi visual default
+- Six content data files with ~620 player-facing prompts and moments (gold modifiers, personality / ideals / bonds / flaws, backstory moments, narrative-continuity copy)
+- Race demographics with dual-unit display + custom override
+- Save/resume across both creator modes via expanded `creation_phase` enum
+- Server-side canon transfer service (NPCs / locations / threads / mentor imprints from Prelude → primary campaign)
+- Redesigned home page (single-grid character roster) + Screen 2 path-choice screen
+- Migrations 049 (heirloom table) + 050 (physical_build column)
+- 2036 assertions across 15 test suites, all green
+
+**Why this is a milestone, not just a ship:** Phase 2 is the largest single body of work the project has shipped to date. It locked the project's hi-fi visual direction (editorial) for all future surfaces. It established the spec-doc-as-engineering-contract pattern (`PHASE_2_CREATOR_SPEC.md` carries four implementation-deviation annotations now, preserving the *why* of each Code-side judgment call). It demonstrated the sub-checkpoint cadence works for catching visual drift before downstream work commits to it. And it fixed the highest-priority bug in the codebase — Prelude characters can now actually exit into a campaign.
+
+**Implications:**
+- Phase 3 (AI Narrative Persistence foundation refactors) is unblocked. Inputs Phase 3 inherits: canon transfer service exists; mentor imprint seeding pattern available; three-state `creation_phase` enum in place; editorial aesthetic established for any UI surfaces Phase 3 touches.
+- Six discrete follow-up items captured in `CONSOLIDATED_TODO.md` parking lot — none Phase-3-blocking, all named with their reactivation triggers.
+- Old creator (`CharacterCreationWizard.jsx` + `CharacterManager.jsx`) hidden but retained per "deprecate by hiding nav, not deleting code" discipline. Slated for deletion after 2-3 playtest cycles confirm no regressions in the new creator.
+- The PM-Code-Design cadence patterns from Phase 2 (sub-checkpoints on visual-load-bearing surfaces, spec annotations preserving deviation reasoning, parking-lot honesty over backlog guilt) generalize forward.
+
+**Related:** [`PHASE_2_CREATOR_SPEC.md`](PHASE_2_CREATOR_SPEC.md) (v1.1, with four implementation annotations dated 2026-05-02); 2026-05-02 consolidated six-decisions log entry below; [`PRELUDE_IMPLEMENTATION_PLAN.md`](PRELUDE_IMPLEMENTATION_PLAN.md) v4 (Phase 2 implements its §6, now historical reference); [`CONSOLIDATED_TODO.md`](CONSOLIDATED_TODO.md) (Phase 2 parking lot).
+
+### 2026-05-02 — Phase 2 Creator Spec authoring: six structural decisions (Direction / Architecture / UX)
+**Context:** Authoring `PHASE_2_CREATOR_SPEC.md` (the Phase 2 main creator design brief — 8-step creator + redesigned home page + Screen 2 path choice + content appendix) surfaced six decisions that shape future work beyond the spec itself. Captured here as one consolidated entry rather than six separate entries. Each is summarized with its standalone reasoning preserved.
+
+**Decision 1 — Manual-mode mid-creator save via new `creation_phase = 'creating'` state (Architecture).** First-pass spec had manual mode as single-session — start, complete all 8 steps, submit, or cancel. Handoff mode (Prelude-played characters) was already designed for mid-creator persistence at `'ready_for_primary'`. Pushback during authoring: manual mode also needs persistence, particularly after authoring effort has gone in (Step 7 expansions, heirloom authoring). Decision: manual mode persists from Step 1 advance onward via a new enum value. Final `creation_phase` enum becomes `'active' | 'creating' | 'ready_for_primary'` (Phase 0 reduced this to two values; Phase 2 adds two back). Same persistence-on-advance code path serves both modes; the home page now differentiates three card states. Cancel/discard semantics differ per mode — manual deletes the partial record; handoff preserves Prelude history but wipes creator-state-since-last-save.
+
+**Decision 2 — Narrative-continuity copy in handoff mode is dismissable, not always-on (UX).** Step 4's per-theme copy card honors what the years did to the character ("the discipline is in your bones — now choose how you'll bring it to a wider fight"). The card is theme-anchored, not class-anchored. Question: when the player overrides the suggested class to something the copy would awkwardly contradict (Soldier + Fiend Warlock), should the copy still display? Decision: dismissable, default-visible. Player is the judge of fit. Encoding every theme × class collision is rabbit-hole work; most combinations work fine with theme-anchored copy. The dismiss affordance is low-cost UX and gives the player agency without requiring the system to anticipate every combination. State semantics: local-session-scoped (single boolean on creator state), not character-persistent — dismissal is "in this pass, I don't want to see it," not "never again." Pattern is reusable for future "trust the player as the judge of fit" UX situations (AI-suggested content the player might reject, recommendations the player should be free to ignore).
+
+**Decision 3 — Alignment indicators on player-facing content prompts (UX).** §7 of the spec produces 431 prompts across personality / ideals / bonds / flaws — too many to scan without navigation aids. Format options considered: 9-square abbreviation, separate-axis indicators, descriptive labels. Decision: standard 5e 9-square abbreviations (`LG` / `NG` / `CG` / `LN` / `N` / `CN` / `LE` / `NE` / `CE`) displayed always-visible inline alongside each prompt, with Design discretion over visual weight. The 9-square already handles every alignment combination including "lawful but morally neutral" cases (`LN`); inventing partial-axis notation was overthinking. Storage shape: `{ text: string, alignment: string }` arrays keyed by theme id. Future content authoring uses this convention — alignment-tag commitment-shaped content; leave event-shaped content untagged.
+
+**Decision 4 — Backstory moments are alignment-agnostic; events ≠ commitments (Direction).** §7.6 authors 168 backstory moments — short past-tense formative-event strings. First-pass spec was going to apply alignment indicators (matching §7.2-§7.5). Pushback: moments are events, not commitments. Two characters can witness the same event ("you watched your home burn") and respond in opposite alignment directions; the alignment isn't in the moment, it's in what the character did about it. Decision: moments stay alignment-agnostic. Storage shape is `{ themeId: [string] }` — strings only, no alignment field. The principle generalizes: in any system that distinguishes "what happened" from "what the character did about it," the *what happened* layer should not pre-commit alignment. Future moment-shaped content (events in a living-world feed, generational-arc beats from lineages work, mid-campaign formative moments in the biography) inherits this discipline. Biography seed generation also inherits — entries describe events; character-shape interpretation lives elsewhere.
+
+**Decision 5 — Full-spectrum alignment coverage in player-facing content prompts (Direction).** First-pass authoring of §7.3-§7.5 biased the alignment distribution toward Good/Neutral options, treating evil-axis prompts as villain manifestos that don't belong in a starter list. Pushback: a player choosing to roleplay an evil character benefits from evil-axis suggestions too. The line between "evil prompt" and "villain manifesto" is whether the prompt reads as something a thoughtful person could believe or carry — not whether it leans toward evil alignment. Decision: author content prompts across the full 9-square. Evil-axis ideals, bonds, and flaws are written as character commitments held by people who think they're doing right, not as declarations of villainy. Final §7 distribution covers the full spectrum. Future player-facing content authoring (more themes, expanded fields, additional creator surfaces) follows the same principle: cover the full alignment spectrum where it can be done with character integrity. The principle is roleplay support, not roleplay endorsement — prompts are starters; the player edits freely from there.
+
+**Decision 6 — Editorial & literary aesthetic direction for hi-fi UX work (Direction).** Phase 2 produced the first hi-fi-mockup-ready design brief. Claude Design surfaced an aesthetic direction question with three options: atmospheric/fantasy parchment, modern dark slate+gold, editorial & literary serif. The project's voice — "the years that shaped you," the Faerûn-anchored "epic fantasy in a lived-in world" tone description from Phase 1 Decision 3 — fits one register more naturally than the others. Decision: editorial & literary as default; parchment and modern dark exposed as tweaks for comparison. Editorial register doesn't fight the prose; the other two risk either tipping into fantasy-genre cliché or fighting the literary voice with a contemporary-RPG-app feel. Subsequent hi-fi design work (Origin & Identity tab, Progression tab, Session Hi-Fi if it touches anything new) defaults to the editorial register too, creating a coherent visual language across the project's surfaces. The aesthetic direction is not yet a design system; if it lands well in mockup, it likely becomes one (typography choices, color treatment, spacing rules) over the next 1-2 design passes. Tweaks-as-comparison is a workable pattern for future Design handoffs when aesthetic direction is genuinely uncertain.
+
+**Implications across the six decisions:**
+- Phase 2 Chunk 5 migration adds two values to `creation_phase` (Decision 1) and creates the dedicated heirloom table (specified in spec §8.1.2).
+- Six new content data files in `client/src/data/` (Decisions 3, 4) — five with alignment-tagged objects, one with bare strings.
+- Three-state home page card differentiation (Decision 1) — Design has discretion over how the states are visually distinguished.
+- Editorial & literary aesthetic (Decision 6) becomes the project's default visual register for hi-fi work going forward.
+- "Trust the player as the judge of fit" pattern (Decision 2) is available for future UX situations.
+- Commitment-shaped vs. event-shaped content distinction (Decisions 3, 4) is a structural rule for any future content authoring.
+
+**Related:** [`PHASE_2_CREATOR_SPEC.md`](PHASE_2_CREATOR_SPEC.md) — the spec itself contains the implementation detail behind each decision; this entry preserves the why for future readers.
+
+**Spec-internal calls intentionally not logged here:** "shaped" vs. "hardened" verb in stat-bump celebration card (§5.5.5); manual-mode score range 3–20 (§5.5.7); specific gold modifier values per theme (§7.1). These are inside the spec doc, not architectural decisions that shape future work.
+
+### 2026-04-30 — Phase 2 Pre-Engineering Decision E: Mythic-tier stat cap raise
+
+**Context:** Step 5 (Ability Scores) of the per-step creator spec walkthrough surfaced a question about stat caps for Prelude-earned bumps. The user proposed raising the lifetime stat cap from 5e's standard 20 to 22, with the reasoning that hero-class protagonists in a multi-year campaign should mechanically reflect their exceptional status — a Fighter at the height of their power should not have the same Strength as a particularly hardy farmer. The trade-off was real: a baseline cap raise would ripple through encounter difficulty math, ancestry feat scaling, AI DM calibration, and save DC tuning, requiring substantial supporting work.
+
+**Decision:** Stat caps follow standard 5e math (lifetime cap 20, L1 cap 18 via Standard Array + racial bonuses) for L1–L20 play. The cap raises to 22 at Mythic tier onset and stays there for the duration of Mythic-tier play. The cap raise is exclusive to Mythic — Ability Score Improvements (ASIs) at L4/L8/L12/L16/L19 cap at 20.
+
+**Specifics:**
+- **Trigger:** Mythic Tier 1 onset (the moment the character's Mythic tier first activates). Cap raise applies to all six ability scores.
+- **Cap behavior:** Lifetime cap of 22 from Mythic Tier 1 onward. No further raises across Tiers 2–5 — the Tier 1 raise is the binary "no longer mortal" signal; subsequent Mythic tiers escalate via Mythic abilities, not via further cap raises.
+- **Sources of stat increases:** Pre-Mythic, ASIs and any other increases cap at 20. At Mythic onset, the 20→22 headroom opens; subsequent ASIs (or any future increase mechanism) can push toward 22. Magical enhancements, ancestry feats with above-cap effects (e.g., Half-Orc Orc Blood Awakened L18, Tiefling Heart of Hell L18), and Mythic abilities continue to interact with the now-higher cap.
+- **L1 character creation (Phase 2 scope):** Unaffected. Bumps and Variant Human bonus feats and racial bonuses still cap at 18 at L1.
+
+**Why:**
+- The narrative argument for the cap raise is strong: hero-class protagonists in a multi-year campaign deserve mechanical headroom that reflects their exceptional status. Mortal-cap-20 is too restrictive for the project's "play one character for years" framing.
+- Gating the cap raise to Mythic onset preserves the bulk of the system's existing balance assumptions. Encounter difficulty, ancestry feat scaling, AI DM calibration, and save DC math all assume cap-20 play through L20. Those assumptions remain valid for the L1–L20 stretch where they were tuned.
+- Mythic tier is already the part of the system where exceptional power escalates. The cap raise sits alongside Mythic abilities, Mythic × Theme amplifications, dissonance arcs, and Mythic capstones as a thematically appropriate Mythic feature.
+- A character reaching Mythic tier has narratively transcended baseline heroism — moving from "exceptional human" to "legend, demigod, archfey, or worse." The +2 stat headroom signals that transcendence mechanically. The cap raise is *earned* via play, not granted at character creation.
+
+**Implications:**
+- **Phase 2 (Prelude → Primary transition):** No engineering work for the cap raise. Step 5's spec uses standard 5e cap math (L1 cap 18, lifetime cap 20).
+- **Mythic tier implementation (likely Phase 5 or Phase 7):** Cap raise is one of the threshold effects at Mythic Tier 1 activation. Engineering reads "cap raises from 20 to 22 at Mythic onset, applies to all six stats" and implements as part of Mythic threshold work.
+- **Encounter difficulty for Mythic-tier play:** Will need its own calibration pass when Mythic content is fleshed out. The 22 cap means Mythic-tier characters have meaningfully higher save DCs, attack bonuses, and AC than cap-20 baseline assumes. This is on top of the encounter recalibration that Mythic tier already requires (Mythic abilities are powerful in their own right). Worth flagging that Mythic-tier encounter design is a multi-axis problem.
+- **Ancestry feat L18 capstones that already break 20 (Half-Orc Orc Blood Awakened max 22, Tiefling Heart of Hell max 22, Human Legend's Prime max 21):** These were originally designed as exceptions to the cap-20 rule. They remain exceptions to the *pre-Mythic* cap-20 rule. With Mythic raising the cap to 22, these capstones now sit at the new ceiling rather than above it. Worth re-examining whether their above-baseline framing still feels exceptional when Mythic-tier characters can reach 22 by other means; possibly an opportunity to revise these capstones as "you reach 22 without needing Mythic onset" or similar lineage-distinct framing. Logged as a follow-up item for the Mythic tier implementation pass.
+- **Future opening — Mythic tier triggers:** When Mythic tier triggers for a character, the per-stat cap raise mechanically activates. The conditions under which Mythic triggers (per existing Mythic system design) determine when the cap raise lands. Not Phase 2 work; logged here so the dependency is clear when Mythic implementation picks up.
+
+**Out of scope:**
+- Per-Mythic-path stat preferences (Demon-pathed character emphasizing STR/CON, Lich-pathed character emphasizing INT/WIS, etc.). Cap raise is universal across all six stats; per-path mechanical flavor stays in Mythic abilities themselves.
+- Gradual cap raises across Mythic tiers (Tier 1 → 21, Tier 3 → 22, etc.). Cap raise is binary at Tier 1; subsequent tiers escalate via abilities, not cap.
+- Above-22 caps for any character at any tier. 22 is the ceiling.
+
+**Related:** Phase 2 Pre-Engineering Decision A (setup wizard); Phase 2 Pre-Engineering Decision D (Knight + Haunted One excluded from Prelude); existing Mythic system design (`MYTHIC_REVIEW.md`, `MYTHIC_THEME_AMPLIFICATIONS.md`, `mythicThemeAmplifications.js`); ancestry feat L18 capstones flagged in `ANCESTRY_FEATS_REVIEW.md` Category 2.
+
+### 2026-04-30 — Phase 2 Pre-Engineering Decision D: Knight of the Order and Haunted One excluded from Prelude emergence
+
+**Context:** Phase 2 per-step creator spec walkthrough surfaced that two of the 21 themes don't fit the Prelude's emergent-from-formative-play model. The Prelude produces a character through ages 7–22 of childhood / adolescence / threshold-of-adulthood play; certain themes presuppose conditions that can't reasonably emerge through that arc.
+
+**Decision:** Knight of the Order and Haunted One are manual-mode only. Both are excluded from Prelude `[THEME_HINT]` emission rules and from chapter-weighted theme tally calculation. The Prelude's effective theme pool is 19 themes (out of 21 total).
+
+**Why:**
+- **Knight of the Order** requires pre-existing vows or commitment to an order. The path system (true / reformer / martyr / complicit / fallen / redemption) requires time-under-pressure to manifest. A character finishing the Prelude at age 22 hasn't had time to be Fallen, Reformer, Martyr, Complicit, or in Redemption — those paths describe what happens to a True Knight under sustained moral strain. The path defaults to `'true'` for any Knight character (manual mode only); path-shifts continue at runtime via existing DM judgment.
+- **Haunted One** requires a player-authored defining traumatic event. The theme's identity presupposes "encountered true horror that fundamentally changed how they perceive reality" — a starting position for play, not an emergence from play. Trauma occurring in the Prelude doesn't automatically make a character a Haunted One; the theme is specifically about being shaped *before* the player meets them.
+
+**Implications:**
+- **Chunk 3 (prompt builder):** exclude `knight_of_the_order` and `haunted_one` from `[THEME_HINT]` emission rules. The arc plan generator never pushes the player toward these themes during play.
+- **Chunk 4 (marker handling):** exclude these two themes from the chapter-weighted theme tally. If a hint somehow fires for them, ignore.
+- **Chunk 5 (creator integration):** the per-theme narrative-continuity copy lookup table for Step 4's handoff-mode framing card has 19 entries (the 19 emergence-eligible themes). Knight and Haunted One have no entry. If a player somehow arrives at Step 4 with one of these themes in handoff mode (not expected per chunks 3/4 rules), the framing card simply doesn't render.
+- **No path-locking at handoff for Knight.** The original concern about whether to lock Knight's path at handoff dissolves when Knight can't arrive via handoff. Path management remains entirely runtime.
+- **Future opening (not Phase 2 scope):** A "veteran character" creation flow could eventually let manual-mode players commit to non-default Knight paths or pre-authored Haunted-One trauma at character creation. Same general shape — players who want the deeper baggage can author it. Logged for post-MVP consideration if the need emerges.
+
+**Out of scope:** Possible future revisions to the `identity` text on Knight and Haunted One to soften the language that anticipates runtime developments (e.g., Knight's identity currently lists the six paths inline). Code flagged this in passing; not blocking.
+
+**Related:** Phase 2 Pre-Engineering Decision A (setup wizard, 19/21 themes Prelude-eligible aligns with curated theme content); Phase 1 Decision 4 (Ch3 beat sequence — irreversible act → theme commitment → departure, which the 19 emergence-eligible themes support); Phase 2 per-step creator spec Step 3 (Theme handling) and Step 4 (Class & Calling narrative-continuity framing).
+
+### 2026-04-30 — Phase 2 Pre-Engineering Decision C: `creation_phase` Intermediate State
+
+**Context:** The `characters.creation_phase` column currently has two values: `'prelude'` (Prelude in progress) and `'active'` (post-creation, normal play). Phase 1 flagged a possible third value to gate the period between `[PRELUDE_END]` firing and the player completing the main creator. The question is whether the player can break out of the creator handoff and resume later, or whether the handoff is one-shot.
+
+**Decision:** Three states. Add `'ready_for_primary'` as the intermediate value. State transitions:
+- New character: `'prelude'` (set when Prelude begins, after setup wizard completes)
+- `[PRELUDE_END]` fires: `'prelude'` → `'ready_for_primary'`
+- Main creator completed: `'ready_for_primary'` → `'active'`
+
+**Why:** the Prelude is a 4-chapter, multi-hour investment. Gating creator handoff behind "finish in one sitting or lose it" is brittle for a desktop solo game where sessions are interruptible. The intermediate state lets the player close the browser after `[PRELUDE_END]` fires and resume the main creator later without losing Prelude play.
+
+**Player-facing implications:**
+- Home page renders two sections when applicable: "Your characters" (state `'active'`) and "In progress" (state `'ready_for_primary'`). Cards in the "In progress" section show name, race, theme, and a "Finish creating" CTA — no level/HP/equipment fields yet because they haven't been chosen. Click → main creator opens at the handoff state for that character.
+- Multiplicity handled naturally: a player who has done two Preludes and abandoned both creators sees both cards in the "In progress" section.
+- Empty-state home page (no characters at all) shows neither section and surfaces the two-CTA fork (Begin Prelude / Create Character). Once a player has any character — active or in-progress — the home page shifts to section-based layout with a smaller "+ New character" affordance.
+
+**Engineering implications:**
+- Database: `creation_phase` column accepts `'prelude' | 'ready_for_primary' | 'active'`. Migration sets existing rows accordingly: any character with `[PRELUDE_END]` fired but no main-creator data → `'ready_for_primary'`; otherwise unchanged. (Edge case probably empty in current DB but the migration should be safe regardless.)
+- Transition service (Phase 2 engineering chunk 2): when `[PRELUDE_END]` fires, it now sets `creation_phase = 'ready_for_primary'` rather than triggering creator entry directly. Generates the Prelude payload at this transition and persists it on the character record (so the creator can re-read the payload when the player returns).
+- Main creator (rebuild, gated): supports two entry paths — from `[PRELUDE_END]` (initial entry, payload is fresh) and from the home page (resume entry, payload is loaded from persistence). Both paths land on the same Step 1 of the new creator. Submit at Step 8 (Review) flips state to `'active'`.
+- Home page (in scope per Decision B): renders the section structure described above. Empty-state and in-progress states are designed in the per-step spec.
+
+**Out of scope:**
+- Mid-Prelude abandonment recovery (player closes browser during Ch2, what happens). Currently the Prelude already supports resume via `creation_phase = 'prelude'`; this decision doesn't change that. Any UI improvements to mid-Prelude resume live in a separate design pass.
+- Post-creation edit-mode handling. Edit mode runs on a character with `creation_phase = 'active'`; this decision doesn't touch it.
+
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md §6 (transition flow), §10 (open questions); Phase 2 Pre-Engineering Decision A (setup wizard); Phase 2 Pre-Engineering Decision B (creator rebuild scope, manual + handoff modes).
+
+### 2026-04-30 — Phase 2 Pre-Engineering Decision B: Main Creator Rebuild Scope
+
+**Context:** Phase 1 Decision 1 Consequence 5 surfaced that the existing CharacterCreationWizard.jsx is clunky and cannot cleanly consume the richer character payload the Prelude produces at handoff. Phase 2 needed to decide whether to (A) polish-rebuild the existing 5-step creator, (B) rebuild with a new step structure supporting both manual and Prelude-handoff entry paths, or (C) rebuild as a tabbed character-sheet-shaped creator. The rebuild also has to interact with the future Themes-Replace-Backgrounds character sheet without locking us into a data model that fights it.
+
+**Decision:** Option B. Full rebuild. New step structure designed around the actual decisions a player makes, supporting two co-equal entry paths: manual creation (player builds a character from scratch, no Prelude) and Prelude-handoff (character arrives pre-filled from Prelude emergence; player confirms or edits). Both paths are first-class — every field works in both modes, with locked-but-visible treatment in handoff mode.
+
+**Starting step structure (subject to per-step spec refinement):**
+1. Identity — name (with use-name editing affordance), gender, avatar.
+2. Ancestry — race, subrace, ancestry feat (with sub-choices). Locked from setup + emergence in handoff mode.
+3. Class & Calling — class, subclass, spellcasting selections (cantrips/spells/Keeper texts/Variant Human feat). Free choice in both modes.
+4. Theme — theme, theme path choice. Locked from Ch3 commitment in handoff mode.
+5. Ability Scores — Standard Array or Manual, ability scores, skill proficiencies. Free choice in both modes; desktop layout uses horizontal real estate (scores + skills side-by-side) instead of stacking.
+6. Equipment — current Step 4 redesigned but largely intact. The one part of the existing creator that works.
+7. Identity Details — alignment, faith, lifestyle, physical appearance, personality traits/ideals/bonds/flaws. Authoring surface in manual mode; pre-filled with confirm/edit in handoff mode.
+8. Review — final summary before save.
+
+**Why Option B over A and C:**
+- Option A (polish-rebuild) leaves Step 1's decision-density problem in place and structurally cannot support the locked-from-Prelude affordances cleanly. Cheap but doesn't solve the actual problem.
+- Option C (tabbed character sheet as creator) is a hostile first impression for new players who've never made a D&D character. The empty-state entry — first thing a new player sees with no characters — needs a guided flow, not a wall of tabs.
+- Option B's "more steps but each smaller" structure correctly diagnoses that the existing creator's problem is decision-density per step, not step count.
+
+**Why two co-equal modes (Possibility 3 of three options considered):**
+Not every player wants to play 4 chapters of Prelude before getting to their character. Manual creation must remain a first-class path — the home page exposes both "Begin the Prelude" and "Create a character" as prominent equal-weight CTAs. This means every step has to author cleanly from scratch (manual mode), not just confirm pre-filled fields (handoff mode).
+
+**Empty-state home page redesign:** in scope. Cleaner empty state with the two-CTA fork (Prelude / Manual). The current home page surfacing the creator inline as the first thing a new player sees gets replaced.
+
+**Specific failures of the existing creator the rebuild must fix:**
+- Step 1 carries 10+ decisions including the heaviest one (ancestry feat with sub-choices); spread across new Steps 1, 2, 3, 4.
+- Theme/background data model is mid-migration with the seam visible in the UI; rebuild commits fully to Theme.
+- Ability-score step is a wall (toggle + 6 scores + skills + conditional Variant Human feat picker + conditional Keeper picker + conditional cantrip picker + conditional spell picker); spellcasting selections move into Step 3 (Class & Calling) where they belong.
+- Step 3 personality is nine textareas of cold-start fiction; in handoff mode pre-filled from Prelude emergence, in manual mode redesigned with smaller authoring units.
+- Conditional UI explodes inside steps with no warning; rebuild surfaces sub-decisions explicitly per step.
+- Next button silently disables on chained conditions; rebuild surfaces unmet conditions explicitly.
+- Inline `style={}` everywhere with rainbow color schemes; rebuild gets a unified visual system via Claude Design.
+- 1500-line single component fuses create-mode and edit-mode; rebuild splits cleanly.
+- No support for AI-introduced use-names (e.g. "Aelar of the Silver Glade"); Step 1 includes editable use-name affordance.
+
+**Process commitments:**
+- Per-step spec drafted in PM chat with playtester (lock step structure → walk through each step → empty-state home page → full doc).
+- Locked spec handed to Claude Design for clickable mockup. Playtester reviews mockup before any engineering wire-up.
+- Engineering Phase 2 chunks 1-4 (setup wizard, transition service, prompt builder, marker handling) can start immediately. Chunk 5 (main creator integration) gates on per-step spec being locked AND Claude Design mockup approved.
+
+**Data contract (high level — refined in per-step spec):**
+The Prelude payload at handoff includes:
+- Locked: race/subrace, theme + theme path, ancestry feat (with feat_id from `[ANCESTRY_HINT]` tally), starting class hint (if emerged), key NPCs (`[NPC_CANON]` entries from the arc).
+- Pre-filled but editable: name (including any AI-introduced use-name with revert affordance), suggested alignment, suggested lifestyle, emerged personality traits/ideals/bonds/flaws (as authored sentences, not slot picks), suggested physical appearance details if mentioned in narrative.
+- Free choice in both modes: ability scores, skills, spellcasting selections (cantrips/spells/etc.), faith, equipment.
+
+Engineering Chunk 2 (transition service) generates this payload shape; Chunk 5 (creator integration) consumes it. Specific field names and shapes locked in the per-step spec.
+
+**Out of scope (logged for follow-on phases):**
+- Post-creation character sheet rebuild (Origin & Identity hi-fi tab, Themes-Replace-Backgrounds full surface). Creator rebuild's data model has to be compatible with that future sheet but the sheet itself is a separate design pass.
+- Edit-mode rework. Existing edit-mode logic carries forward into the new creator with minimal changes; full edit-mode UX rethink waits until character sheet design lands.
+
+**Related:** `PRELUDE_IMPLEMENTATION_PLAN.md` §6 (transition flow), §10 (open questions); Phase 1 Decision 1 Consequence 5 (creator rebuild needed); Phase 2 Pre-Engineering Decision A (setup wizard content revisit); `client/src/components/CharacterCreationWizard.jsx`; `Claude UX Design/D&D Meta Game (Remix)/Themes-Replace-Backgrounds.md`.
+
+### 2026-04-30 — Phase 2 Pre-Engineering Decision A: Setup Wizard Content Revisit (Direction)
+
+**Context:** Phase 1 closed 2026-04-29 with `PRELUDE_IMPLEMENTATION_PLAN.md` §10 listing the setup-wizard content revisit as "resolved at Phase 2 start" — a pre-engineering design call that has to happen before Code runs the engineering chat. Two known changes were already committed by Phase 1 (tone-tag question cut per Decision 3; authority-figure question added per Decision 1). The full content + UX pass had been deferred. Current wizard: 11 numbered questions plus two sub-forms (parents, siblings); known to be bloated and partly orphaned (e.g. Q10 "cares" seeded the cut values tracker).
+
+**Decision:** Wizard rebuilt to 10 questions. One optional escape-valve free-text field added. Cuts and adds:
+
+**Cut:**
+- Q9 (talents) — pre-loads class/theme expectations against Phase 1's "play sets the character" principle.
+- Q10 (cares) — seeded the values tracker cut by Decision 3; orphaned.
+- Q11 (tone preset) — replaced by locked tone description per Decision 3.
+
+**Add:**
+- Q9 (authority figure) — single-select curated, 8 options. Phase 1 Decision 1 commitment.
+- Q10 (anything else?) — optional free-text, 2000 char cap. Escape valve for players with a specific origin fantasy that the curated lists don't capture.
+
+**Restructure:**
+- Q8 (siblings) — replace variable-length sub-form (per-sibling: name, nickname, race, gender, relative_age) with single dropdown of 9 options. AI generates names and dynamics during Ch1 narrative play. Free-text override removed (Q10 catches edge cases).
+
+**Carry forward unchanged:**
+- Q1 (name), Q2 (gender), Q3 (race/subrace), Q4 (birth circumstance), Q5 (home setting), Q6 (region), Q7 (parents sub-form including per-parent race override).
+
+**Help text additions:**
+- Q1: surname-blank guidance (cultures vary; AI may introduce a use-name through play).
+- Q3: race-naming-convention heads-up.
+- Q8: pointer to Q10 for unusual sibling configurations.
+
+**Wording:** intro paragraph rewritten (4 sessions, 10 questions, "ancestry feat and ability bumps" replacing "values"). Q9 and Q10 stems and option phrasings drafted. Q9 options each get a one-line clarifier rather than a single-word tag.
+
+**Validation rule added:** Q8 "only child" + Q9 "older sibling" produces a warning; one must change.
+
+**Why:** The setup wizard's job is to set the *world* the character was born into; play sets *who the character is*. Talents and cares conflicted with that principle and pre-loaded class/theme expectations the emergence system was designed to handle through play. Tone preset was already locked to the fixed tone description. Sibling sub-form was disproportionate work for a question whose dynamics the AI handles better in narrative. The escape-valve Q10 catches the "I have a specific origin in mind" case that the simplified curated lists can't, without re-bloating every per-question free-text override.
+
+**Implications:**
+- Setup data blob schema: drop `talents`, `cares`, `tone_preset`/`tone_tags`, the `_other` free-text fields for siblings; add `authority_figure` (enum), `origin_freeform` (text). Other fields unchanged.
+- Prompt builder (chunk 3 of Phase 2 engineering): add `authority_figure` and `origin_freeform` into the arc plan generation prompt. `authority_figure='mentor'` is the precondition for mentor NPC generation and `[NPC_CANON]` emission in early chapters. `origin_freeform`, when present, must be honored over conflicting curated answers — explicit instruction needed.
+- Ancestry feat gating throughout the Prelude: `[ANCESTRY_HINT]` markers carry a `feat_id`; server validates `feat_id` is in the player's race's allowed feat list. Required for the chapter-weighted ancestry tally to be coherent at handoff. Cross-cut between chunk 3 (prompt builder) and chunk 4 (marker handling).
+- Main creator at handoff (separate decision pending): name field must be editable, including reverting any use-name the AI introduced through play. Logged as a constraint on the main-creator rebuild scope decision.
+- Q4 birth circumstance list bias: leans socioeconomic; gappy on flavor/fated origins. Free-text override mitigates. Phase 7 watch-item: if Preludes feel same-y, revisit list breadth.
+- Phase 4 diagnostic gains a new test: does the AI honor `origin_freeform` when present, or generic-ify it? If the AI ignores or softens specific origins, that's a prompt-engineering bug.
+
+**Parked for future:**
+- Multi-tone selection return — v2.0.0+ (already parked per Decision 3).
+- Q4 list breadth revisit — Phase 7, conditional on playtest.
+
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md §2 (player flow), §6 (transition flow), §10 (open questions); Phase 1 Decision 1 (outputs spec; mentor as setup choice; living biography seeding); Phase 1 Decision 3 (machinery audit; tone-tag cut; values tracker cut); `client/src/components/PreludeSetupWizard.jsx`; `client/src/data/preludeSetup.js`.
+
+### 2026-04-29 — Phase 1 Decision 3 (sub-deliverable): Tone description for "epic fantasy in a lived-in world" (Prompt design)
+**Context:** Decision 3 cut the 16-tone-tag system in favor of a single fixed tone for MVP, deferring multi-tone selection to v2.0.0. The fixed tone needed an actual prompt-ready description — a one-line label ("epic fantasy in a lived-in world") doesn't tell the AI anything the words don't already imply. PM brought a first draft (gritty + lived-in), user pushed back: too dark, missing the "epic" of epic fantasy, missing the wonder and weirdness of Faerûn's depth. PM also flagged risk of AI taking concrete tone-description details as canon facts about the player's world. Three mitigation options: (a) abstract language only, (b) mark examples as examples in-prompt, (c) use Faerûn-shaped examples that already exist as types in the world. PM initially mis-rated and recommended (c) while labeling it worst; on re-rating, (c) is best — the Faerûn anchor defangs the canon-seeding risk because the example details already exist in the canonical world.
+**Decision:** Lock the three-paragraph tone description (Draft 2) into Phase 1's deliverables. Structure: a guard sentence at the top (concrete details are illustrative, not canon — specific facts come from arc plan and player setup), followed by three paragraphs — *what this tone is* (epic fantasy in the Forgotten Realms; grand and granular share the scene; wonder and mundane both real), *what this tone is not* (not generic, not high-camp, not YA-coded, not grimdark, not safe), *beats this tone reaches for* (quiet scenes earning weight, competent and tired NPCs, fast/dirty combat, magic that costs something, old places that feel old, legends that may or may not be true, knights/monsters/gods/ruins/rumors alongside fields and kitchens). The directive against shelter-behavior (protagonist's age affects what they understand, not what the world is willing to do to them) lives in the second paragraph at tone-setting altitude rather than as a separate Cardinal Rule.
+
+The locked text:
+
+> Concrete details in this description are illustrative of register and texture. They are guidance for what kinds of things belong in scenes; they are not canon facts about the player's world. Specific places, names, NPCs, and circumstances come from the arc plan and the player's setup answers, not from this tone description.
+>
+> What this tone is. This is epic fantasy in the Forgotten Realms — a world with deep history, real gods, working magic, and ancient places that remember things humans don't. The map has been walked for thousands of years. There are ruins older than nations, artifacts whose owners are long dead, mountain ranges where dragons sleep, and crossroads where small choices have echoed for generations. And this world is also lived in: bread is baked, debts are owed, taverns smell of smoke, knees ache, and most people have never seen a wizard. The grand and the granular share the same scene. A child can grow up watching their father shoe horses and also know that a knight of an ancient order rode through their village last spring. Both things are real. The wonder doesn't make the mundane less true; the mundane doesn't make the wonder less wondrous.
+>
+> What this tone is not. It is not generic fantasy where the world arranges itself around the protagonist's importance. It is not high-camp parody, video-game-pastiche, or YA-coded fantasy that sands down moral edges to make them easier. It is also not grimdark — this world has light, beauty, decency, and people who help each other for no reason. It is not safe, either. Children in this world get hurt. Parents disappoint. Mentors die. Choices have lasting cost. The protagonist's age affects what they understand and how they feel, not what the world is willing to do to them. Do not soften consequences because the protagonist is young; a coming-of-age story in this world can include real loss, real fear, and real moral weight, and the best ones do.
+>
+> Beats this tone reaches for. Quiet scenes that earn their weight before the loud ones land. NPCs who are competent at their actual jobs, suspicious of strangers, occasionally generous, often tired — and a few who have seen things they don't talk about. Combat that is fast, dirty, and frightening at any age. Magic that costs something, that feels strange, that doesn't always behave. Old places that feel old. Legends that may or may not be true but are part of the cultural air. Moments of unexpected tenderness in hard places. Choices that cost something whichever way the player goes. Knights, monsters, gods, ruins, and rumors — alongside fields, kitchens, market days, and the work of being alive. The world is real; it does not negotiate. It is also full of wonder; honor that too.
+
+**Why:** Three paragraphs is the minimum length to give the AI usable signal about register and texture; a one-line label is inert. Naming Forgotten Realms explicitly draws on the AI's existing canonical knowledge rather than asking the prompt to bootstrap a world. Folding the shelter-behavior corrective into the tone description (rather than as a separate Cardinal Rule) puts it at tone-setting altitude — the original Cardinal Rule 2 was being misread as "kid-friendly content" rather than "age-appropriate inner voice within an adult-stakes story," and elevating the corrective changes its visibility in the prompt structure. The "not grimdark" line responds to the user's pushback that Draft 1 was too dark and missed the "epic" of epic fantasy. The "wonder doesn't make the mundane less true; the mundane doesn't make the wonder less wondrous" framing makes both registers load-bearing rather than treating one as the dominant note. Faerûn-shaped examples (knights, dragons, ruins, taverns) defang the canon-seeding risk because they are already canonical to the world; category-texture details (bread, knees, smoke) paint register without committing specific facts; the guard sentence catches residual risk.
+**Implications:**
+- The locked text becomes the tone block in `preludePromptBuilder.js` (Phase 2 engineering work). Wired into the always-on prompt at the position currently occupied by tone-tag injection.
+- Cardinal Rule 2 ("age-appropriate everything") in the existing prompt is superseded by the directive within paragraph two of the tone description. Cardinal Rules are reduced by one. Phase 2 prompt builder updates accordingly.
+- Phase 4's AI shelter-behavior diagnostic now has a specific artifact to test against. The diagnostic tests whether elevating the corrective to tone-setting altitude (rather than burying it in Cardinal Rules) is sufficient to override the shelter-default. If not, further prompt-engineering work is needed — likely in the form of more explicit framing, repeated reinforcement at scene-open, or per-chapter tone instruction (Ch1 carries the highest shelter risk per Decision 5).
+- The tone description is treated as living text, not frozen. Playtesting may surface places where the AI mis-reads, over-leans on Faerûn-typical types, or underdelivers on a specific register. Revisions follow the same loop as the prose-quality H7/H8 work: identify the failure, adjust the text, re-validate. The text should not be treated as untouchable.
+- Multi-tone selection remains parked for v2.0.0. When that work resumes, the Faerûn-anchored "epic fantasy in a lived-in world" tone becomes one of several available presets rather than the only available one.
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); Decision 3 (machinery audit, parent decision); AI_NARRATIVE_PERSISTENCE.md (Phase 4 shelter-behavior diagnostic); the H7/H8 prose-quality work (precedent for the diagnostic loop).
+
+### 2026-04-29 — Phase 1 Decision 6: Long-term thread seeding from Prelude (Direction)
+**Context:** During Decision 5 (pacing), user surfaced a real concern that the current Prelude design under-serves long-term consequence — Prelude beats persist as static canon (NPCs, locations) but don't seed *unresolved threads* that can resurface years into the main campaign. User cited examples: missing parents resurfacing, killed NPCs' children pursuing revenge 30 years later, the law catching up after years of near misses. User also surfaced a related insight that NPC memory could be asymmetric — the world remembers, but individual NPCs forget — which lets us bound the engineering problem rather than seeding every NPC's memory permanently.
+**Decision:** Two parts.
+
+**Part 1 — `[CANON_THREAD]` marker (Phase 1 commitment).** New marker fired by the AI during Prelude play when a beat creates an unresolved narrative obligation the world will hold. Separate from `[NPC_CANON]` and `[LOCATION_CANON]` — those persist entities; `[CANON_THREAD]` persists obligations. Four fields per thread:
+- `kind` — thread type. Categories: `unresolved_loss`, `blood_debt`, `unfulfilled_oath`, `unpaid_crime`, `unfinished_relationship`, `held_object`, `held_secret`.
+- `subject` — references an existing `[NPC_CANON]` / `[LOCATION_CANON]` entity or an abstract noun.
+- `condition` — what triggers the thread to ripen ("PC returns to home region after 5+ years," "PC encounters anyone bearing the family name," etc.).
+- `weight` — `minor` / `notable` / `major`. Major threads should resurface; minor may.
+
+New table `prelude_canon_threads` (Phase 2 schema work) mirroring the shape of `prelude_canon_npcs` — character_id FK, kind, subject reference, condition, weight, status (active / ripened / resolved / decayed). At handoff, threads transfer to a `campaign_threads` table for main campaign consultation. Prompt builder (Phase 2) needs explicit calibration examples — the AI fires `[CANON_THREAD]` only when a genuinely unresolved obligation is created, not on every beat.
+
+**Part 2 — Asymmetric NPC memory model (parked for Phase 3).** Canon NPCs persist as entities; their *memory of the PC* has a decay model. Strong memories (raised the PC, witnessed killing the PC, married the PC) decay slowly or not at all. Weak memories (sold bread once at age 9, exchanged five words at a market) decay within a few years of in-fiction time. When the PC returns and an NPC's memory has decayed, the NPC behaves like a stranger; the *world* may still hold the thread (the cobbler doesn't remember the PC, but a child the PC saved twelve years ago is now the town guard). This is logged as a design principle here. Engineering shape — likely the "scalar + label + audit trail" abstraction that's already Refactor 3.1 in CONSOLIDATED_TODO.md — is Phase 3 work.
+
+**Why:** The brief's first definition of "done" — *"a single character playable for literal years without the AI losing context"* — explicitly flags long-term entity and thread persistence as load-bearing. Without thread infrastructure, Prelude beats become a microcosm: vivid in the moment, inert afterward. Threads are how the Prelude earns its place as the foundation of a years-long character. Distinguishing **NPC memory** (decays) from **world threads** (don't decay until resolved) bounds the engineering problem — we don't have to seed every Prelude NPC's memory permanently into the AI's context budget. The asymmetric memory model also matches how memory actually works (most strangers don't remember you), which makes the world feel real rather than artificially small.
+
+**Implications:**
+- Phase 1 commits `[CANON_THREAD]` as a marker concept with four fields. Schema and prompt-builder work happen in Phase 2 alongside other transition engineering.
+- Phase 3 (AI Narrative Persistence foundation refactors) absorbs the asymmetric NPC memory model as a use case for Refactor 3.1 (scalar + label + audit trail). NPC-memory-strength becomes one of the things the unified abstraction handles, alongside companion loyalty, faction standing, Mythic piety, etc.
+- Phase 4 (AI behavior diagnostic) inherits the question of whether the AI fires `[CANON_THREAD]` reliably and whether the main campaign AI consults transferred threads correctly. Both are AI-behavior-pattern-matching concerns of the same shape Phase 4 is designed to investigate.
+- The thread mechanism strengthens the Prelude's value proposition against "pick a background and start at age 20" (Decision 1, Criterion 4): the Prelude doesn't just give the character a past — it gives the *world* unfinished business with that character. That's a meaningful difference no background mechanic delivers.
+- Calibration risk: the AI may over-fire `[CANON_THREAD]` (every beat becomes a thread) or under-fire (genuinely unresolved obligations don't get tagged). This is a prompt-engineering concern for Phase 2; mitigated by explicit examples in the prompt builder of what does and doesn't warrant a thread.
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); AI_NARRATIVE_PERSISTENCE.md (asymmetric NPC memory becomes a Phase 3 use case for Pattern A); CONSOLIDATED_TODO.md Refactor 3.1; Decision 5 (where the concern surfaced).
+
+### 2026-04-29 — Phase 1 Decision 5: Pacing across three chapters (Direction)
+**Context:** With three-chapter structure (Decision 2) and Ch3 beat sequence (Decision 4) committed, pacing was the remaining structural call. Three sub-questions: (1) sessions per chapter, (2) time-compression techniques per chapter, (3) rhythm guidance per chapter. Initial PM proposal was Ch1=1 / Ch2=1 / Ch3=2 (4 sessions, ~4-7 hours). User pushed back arguing Ch2=2 was needed for short-term consequence breathing room within the chapter. PM brought a compromise — Option C — using intra-Ch2 AGE_ADVANCE to deliver two distinct emotional registers (e.g., ages 11-13 then 13-15) within one session, preserving Decision 2's length discipline.
+**Decision:** Option C. **Sessions:** Ch1=1, Ch2=1, Ch3=2 (4 sessions total, ~4-7 hours). **Ch2 internal structure:** explicit intra-session AGE_ADVANCE that splits Ch2 into two halves with different ages and emotional registers, allowing consequences from the first half to land in the second within one session. **Time-compression by chapter:** Ch1 = high (rhythm-compression + multiple AGE_ADVANCE fires carrying ages 6-10); Ch2 = medium (selective-detail + 1-2 AGE_ADVANCE fires, including the deliberate intra-session split); Ch3 = minimal (real-time scene weight; AGE_ADVANCE rare, mostly between Ch3a and Ch3b). **Rhythm by chapter:** Ch1 establishing (short atmospheric scenes, no combat, observational), Ch2 widening (lengthening scenes, rising stakes, combat introduces, theme/class hints accumulate, chapter-promise beat at opening), Ch3 real (full-weight scenes, real stakes, chapter-promise beat at opening, irreversible act builds across Ch3a, theme commitment + departure resolve in Ch3b).
+**Why:** Option C honors the user's correct instinct that Ch2 consequences need breathing room without expanding session count to the original 5-session shape. The intra-session AGE_ADVANCE technique already exists and is meant for exactly this — making explicit use of it inside Ch2 is a refinement of existing design, not new machinery. Total length stays at 4 sessions / 4-7 hours, preserving Decision 2's discipline. Splitting Ch2 across two sessions (the rejected Option A) would have walked back from Decision 2, recreated the original "too long" problem, and added session-overhead time without proportional content gain. Splitting Ch2 across one session with internal time-jump is more elegant — it matches what Ch2 *is* (the widening years where the same character is a different person at 11 vs 14).
+**Implications:**
+- Ch2's prompt builder needs explicit examples of AGE_ADVANCE rendered as compressed prose ("the autumn after that, you turned twelve…") rather than announced as a cut. Prompt-engineering risk: a mid-session time jump that lands wrong is jarring. Playtesting will validate; fallback is splitting Ch2 into two sessions if the prompt-side fix doesn't suffice.
+- Cliffhanger marker (`[SESSION_END_CLIFFHANGER]`) fires at end of Sessions 1, 2, and 3. Session 4 ends on `[DEPARTURE]` + `[PRELUDE_END]`, no cliffhanger.
+- Chapter promises fire at Ch2 opening and Ch3 opening (per Decision 3). Ch1 opens organically.
+- Shelter-behavior risk concentrates in Ch1 (young child, observational, household scenes). Phase 4's diagnostic and prompt-engineering work should focus most energy on Ch1's tone-fidelity instructions. Decision 5's pacing shape is structurally helpful for Phase 4 — it isolates the failure mode.
+- Player journey end-to-end: setup wizard → arc plan → arc preview → Session 1 (Ch1, ~1-1.5 hrs, ages 6-10) → Session 2 (Ch2, ~1-1.5 hrs, ages 11-15 split into two halves) → Session 3 (Ch3a, ~1-1.5 hrs, irreversible act builds and lands) → Session 4 (Ch3b, ~1-2 hrs, aftermath, theme commitment, departure, `[PRELUDE_END]`) → transition screen → main creator handoff.
+- Each Ch3 session needs explicit pacing guidance: Ch3a builds toward the irreversible act with real-stakes scenes that earn the act when it lands; Ch3b plays the aftermath at full scene weight, gives the theme commitment its quiet moment, and lets the departure breathe rather than rushing it.
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); Decision 2 (three-chapter structure); Decision 4 (Ch3 beat sequence).
+
+### 2026-04-29 — Phase 1 Decision 4: Ch3 beat sequence (Direction)
+**Context:** Decision 2 collapsed Ch4 into Ch3, which now absorbs three weight-bearing beats: theme commitment, irreversible act, and departure. Decision 3 simplified the theme commitment to a lightweight in-line card (leading theme + 3 alternatives + choose-your-own). The remaining open question was the order in which the three beats land within Ch3. PM brought three orderings: A (act → commitment → departure), B (commitment → act → departure), C (act → departure → commitment).
+**Decision:** Option A. Irreversible act fires first; theme commitment surfaces in the aftermath; departure follows from the committed identity.
+**Why:** The irreversible act is the felt evidence that earns the commitment — the player ratifies who their character is *because* of what they just did, not as an abstract pick from a list. The departure then takes its tone and shape from the committed theme, preserving the existing `THEME_DEPARTURE_MAP` logic (soldier → enlistment, acolyte → pilgrimage, etc.). The sequence also gives Ch3 narrative rhythm: high-intensity act → quiet reflective commitment → high-stakes departure. Option B would have the AI writing the irreversible act through a pre-chosen theme lens, pre-loading the answer. Option C handles only involuntary departure types (exile, flight) cleanly and breaks for chosen departures.
+**Implications:**
+- Ch3 prompt builder needs explicit pacing guidance: irreversible act, theme commitment, and departure are three distinct beats, each given its own scene weight. The AI must not compress them into one paragraph or one scene.
+- The arc plan generator's Ch3 section should describe the *shape* of the irreversible act (what the act might look like given the player's accumulated character) without naming the theme — the act has to land before the lens is chosen.
+- The `[THEME_COMMITMENT_OFFERED]` marker fires *after* the irreversible act resolves, not before.
+- The `[DEPARTURE]` marker fires *after* the commitment is made (or, if the player defers commitment, after the AI commits to the trajectory winner per existing fallback logic). Departure tone and reason are shaped by the committed (or trajectory-winning) theme.
+- Pacing of Ch3 (one session vs. two) deferred to Decision 5. The three-beat density may warrant Ch3 being two sessions if a single session can't carry act + commitment + departure with appropriate weight.
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); Decision 2 (three-chapter structure); Decision 3 (theme commitment ceremony simplification).
+
+### 2026-04-29 — Phase 1 Decision 3: Machinery audit (Direction)
+**Context:** With three-chapter structure committed (Decision 2), each piece of existing Prelude machinery needed to be evaluated against the locked outputs and new shape: keep, modify, or cut. Current design has eight load-bearing systems plus several smaller markers and infrastructure pieces.
+**Decision:** Eight machinery items resolved as follows.
+
+**Keep as-is:**
+- Five emergence markers: `[STAT_HINT]`, `[SKILL_HINT]`, `[CLASS_HINT]`, `[THEME_HINT]`, `[ANCESTRY_HINT]`. Class and ancestry tallies feed handoff suggestions only (not commitment); theme tally drives Ch3 commitment.
+- Irreversible act recognition beat at Ch3.
+- Arc plan (Opus-generated structured JSON at setup completion) — load-bearing for tone, NPC seeding, recurring threads, departure shape. Regenerated for three chapters.
+- Age-scaled provisional stats (HP/AC/weapon damage by age bracket).
+- `[SESSION_END_CLIFFHANGER]`, `[NPC_CANON]`, `[LOCATION_CANON]`, `[DEPARTURE]`, `[PRELUDE_END]` markers.
+
+**Keep + simplify:**
+- Theme commitment ceremony at Ch3. UI lightens to a single in-line card: leading theme + 3 alternatives + "choose your own." No wildcard, no defer, no full-screen takeover. Integrates into the Ch3 climax cluster (theme commitment + irreversible act + departure) without breaking flow.
+
+**Keep + repurpose:**
+- Remembered-voice backstory generation. No longer a one-shot 3-5 paragraph dump at Prelude end. Becomes the *seed entries* for the living biography (per Decision 1's Consequence 3). Output format is appendable — entries timestamped by in-fiction age + chapter, not one continuous prose blob. Voice (remembered, with allowed gentle distortion) preserved as a felt-output mechanism in its own right. Living-biography schema and UI are Phase 2 work.
+
+**Keep + shift:**
+- Chapter promises. Now fire at Ch2 + Ch3 openings (was Ch3 + Ch4). Ch1 (ages 6-10) remains too young for self-reflection beats; opens organically. Server-side `[CHAPTER_PROMISE]` validator updates: accepts at Ch2/Ch3, rejects at Ch1 with `[SYSTEM]` injection feedback to AI.
+
+**Modify:**
+- Chapter-weighted tally. Three-chapter weights: Ch1 = 1×, Ch2 = 1.5×, Ch3 = 2×. Class and ancestry tallies feed handoff suggestions (not commitment); theme tally drives Ch3 commitment ceremony. Math infrastructure unchanged; targets clarified.
+
+**Cut:**
+- `[VALUE_HINT]` marker (values tracker cut in Decision 1).
+- Values paragraph generation (no input data anymore).
+- Transient-canon flag for Ch4 NPCs (Ch4 is gone; no road-life NPCs to flag). If shipped, leave column unused; otherwise don't add it.
+- **Tone tags as a system.** All 16 tone tags cut for MVP. Single fixed tone: "epic fantasy in a lived-in world." Tone description to be drafted as a Phase 1 sub-deliverable before close. Multi-tone selection deferred to v2.0.0 implementation.
+
+**Why:** Cuts (values tracker, tone tags, Ch4 transient flag) align machinery with the locked outputs. Theme commitment ceremony simplification responds to Ch3's three-beat density (commitment + irreversible act + departure) — a full UI takeover would feel stagey when stacked. Repurposing the remembered-voice backstory honors Decision 1's living-biography concept without losing the voice that makes it work. Chapter promise shifting reflects the three-chapter ages: self-reflection beats land naturally at age 11+ (Ch2 opening) and age 16+ (Ch3 opening), not earlier.
+
+**Implications:**
+- Setup wizard revisit (mentor question addition, tone-tag removal, possible bloat trimming) parks for Phase 2 start. Phase 2 begins with a content + UX pass on the wizard before engineering work proceeds. Phase 1 records known changes; full content pass deferred. The wizard rebuild interlocks with the broader character creator rebuild flagged in Decision 1's Consequence 5; both designed together at Phase 2 start.
+- Tone description for "epic fantasy in a lived-in world" becomes a Phase 1 deliverable, drafted between PM and user before Phase 1 closes. The paragraph describes what the tone *is*, what it *is not*, and what beats it leans toward. Wired into prompt builder during Phase 2 engineering.
+- Phase 4 (AI shelter-behavior diagnostic) still required. Eliminating per-player tone choice removes one variable but does not address the AI's default-to-shelter behavior with child protagonists. The fixed tone gives the AI one signal to honor; whether that signal is load-bearing enough to override the shelter-default is what Phase 4 must test.
+- Schema impact minimal: `prelude_arc_plans.chapter_4_arc` JSON column stops being populated for new preludes (additive-only schema; harmless). `prelude_values` table can be dropped or left unused. Tone-related columns/JSON stop being read.
+- The `[CHAPTER_PROMISE]` server validator and the chapter-weighted tally math both need code updates in Phase 2 engineering. Documented as Phase 2 inputs.
+- Ch3 absorbs three weight-bearing beats (theme commitment, irreversible act, departure) plus the simplified theme card. Decision 5 (pacing) must address whether these compress into one session or warrant Ch3 being two sessions, and how the AI sequences them.
+- Decision 4 (theme commitment placement) is now a smaller question — the *shape* of the commitment is locked (in-line card, 3 alternatives, choose-your-own); only the *exact* placement within Ch3 remains open.
+
+**Parked for Phase 2 start:**
+- Setup wizard content + UX revisit. Includes: drop tone-tag question, add mentor/guardian question (per Decision 1), bloat trimming, possible question consolidation, integration with broader character creator rebuild.
+
+**Parked for v2.0.0:**
+- Multi-tone selection (16 tone tags or successor). Re-introduce when MVP is shipping clean; until then, single fixed tone serves.
+
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); Decision 1 (outputs spec); Decision 2 (three-chapter structure).
+
+### 2026-04-29 — Phase 1 Decision 2: Three-chapter structure (Direction)
+**Context:** With outputs locked (Decision 1), the question was how many distinct life-stage moments are required to deliver them. Current design is four chapters (Ch1 OBSERVE / Ch2 LEARN / Ch3 DECIDE / Ch4 BECOME-BRIDGE) at 5 sessions, 7-10 hours total — too long for available play sessions. PM brought three options: A (2 chapters, 3-5 hrs), B (3 chapters, 4-7 hrs), C (4 chapters tightened, 5-8 hrs).
+**Decision:** Option B — three chapters. **Ch1 Childhood (ages ~6-10):** home, family, place; witnessing more than acting; skill-check tutorial begins; light to no combat. **Ch2 Adolescence (ages ~11-15):** world widens; real choices with smaller stakes; combat introduced (training, schoolyard, first defensive moments); theme affinity accumulates. **Ch3 Threshold (ages ~16-19):** real stakes, real combat, theme commits, irreversible act, departure. Ch4 collapsed entirely. Estimated 4-7 hours across 3-4 sessions.
+**Why:** Option B is the only structure where felt output #2 ("NPCs feel real") clears the bar — two chapters compresses NPC scene-time, four is over-scoped now that class commits at handoff. Three chapters honor the original Prelude review diagnosis (design is sound, AI behavior is the problem) — calibration, not teardown. Each NPC gets multiple scenes across multiple life-stages so the player sees them change as the PC grows; that's where "feels real" lives. Theme has sufficient affinity-accumulation runway across Ch1-2 before Ch3 commits. Tutorial paces naturally — skill checks early, combat introduced gradually, real combat in Ch3.
+**Implications:**
+- The Round 3 reframe (Ch4 as BECOME / bridge to adventuring) is superseded. With class moved to handoff (Decision 1), Ch4's load-bearing reason for existing — "be on the road, realize you've changed, commit-via-action" — no longer applies. Class committing at handoff means the player walks into the main creator already feeling like they've left.
+- The "you've been on the road for a while" beat moves to main campaign opener responsibility. Phase 2 (engineering) will need to design the campaign-opener-from-prelude shape: the first session of the primary campaign opens with the character having traveled, not with the moment-of-departure. That's a campaign-design concern, not a Prelude-design concern.
+- Ch3 absorbs three weight-bearing beats: theme commitment, irreversible act, departure. This is the packed chapter. Decision 5 (pacing) will need to address whether these compress into one session or warrant Ch3 being two sessions.
+- The arc plan generator (`preludeArcService.js`) needs to regenerate against three chapters instead of four. The `chapter_4_arc` JSON column becomes unused; new preludes don't populate it. Schema can stay as-is (additive only after migration 011); existing logic just reads three chapter_arc fields instead of four.
+- Chapter promises (currently fire at Ch3 + Ch4 openings) now fire at Ch2 + Ch3 openings. The "what is this chapter about" beat lands when the PC is old enough to self-reflect (~age 11+).
+- `[CHAPTER_PROMISE]` server validator updates: rejects firing at Ch1 (too young to self-reflect), accepts at Ch2 and Ch3.
+- `THEME_DEPARTURE_MAP` continues to drive the departure type at Ch3's tail, with tone preset modulating feel. No change to the mapping itself.
+- The departure beat in Ch3 must give *each* of {theme commitment, irreversible act, departure} its own scene weight — explicit pacing guidance in the AI prompt to prevent compression into one paragraph.
+- Length lands at 4-7 hours / 3-4 sessions, closer to actual play-session reality. Still not "play in one sitting" short. If reality forces shorter, Option A (two chapters, 3-5 hrs) is the fallback — re-evaluate at Phase 7 if Option B's length still doesn't fit.
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); Round 3 reframe entry within that document (now superseded by this decision); Decision 1 (outputs spec).
+
+### 2026-04-29 — Phase 1 Decision 1: Prelude outputs spec locked (Direction)
+**Context:** Phase 1 (Prelude reframe game design) opened. Original Phase 1 question list led with "how many life-stage moments are load-bearing." PM pushed back: that question presupposes a defined output set, which the project did not have. Spec was implicit — abstract success criteria ("allows growth," "feels like an origin story") without a concrete checklist. Decision 1 written to make the spec explicit before structural work begins.
+**Decision:** Lock the Prelude outputs as 7 tangible outputs (theme committed, living biography seeded, canon NPCs persisted with status, canon locations persisted, L1 ancestry feat chosen, up-to-+2 in up-to-2 stats, up-to-2 skill profs), 4 felt outputs (formative memories + a few non-formative just-good-or-bad memories, NPCs that feel real, world-shaping lessons that affect how the PC sees other characters and factions, encapsulated origin with who/why/where), and tutorial coverage (basic combat, roleplay, skill checks). Class and L1 choices commit at handoff, not during Prelude. Cut: values tracker as a system, mentor as a required output. Mentor moves to setup wizard choice. Party-combat tutorial dropped.
+**Why:** Concrete outputs let structural proposals be evaluated against a checklist instead of an abstract gut check. The original 5-session 4-chapter 7-10 hour Prelude grew that big partly because abstract criteria don't push back when scope expands. A concrete output spec disciplines the design downstream.
+**Implications:**
+- Mentor becomes a setup-wizard question ("Who looms largest in your early life?" — parent / sibling / mentor / guardian / captor / employer / rival / no one), not an emergent figure. Arc plan generates against that answer. Removes the "no mentor emerged" failure case and honors the street-urchin-with-no-mentor case as a legitimate setup choice.
+- Values tracker cut: alignment becomes a manual pick at handoff (standard 5e). The "what does this character believe" weight that the values paragraph used to carry is absorbed by the backstory generation, which becomes correspondingly more important.
+- Living biography is a new feature. Phase 1 scope is "generate the first chapters during the Prelude — capture memories during play, not just summarize at the end." Phase 2 builds the schema, service, and UI for the living document (tentatively `character_biography` table + entries + UI surface on Origin & Identity tab).
+- Non-formative memorable scenes stay on the felt-output list but get no dedicated structural machinery in Phase 1. Decision 2's structure builds in deliberate breathing room (fewer mandatory beats per session than the current design) to host them. Re-evaluate at Phase 7 based on whether felt-output #1 lands; if not, distinguish AI-side gap (Phase 4 underdelivered) from structure-side gap (explicit affordance needed).
+- Class commits at handoff; theme commits during Prelude. The Ch3 irreversible-act beat is now only about theme commitment, simplifying its design. `[CLASS_HINT]` markers stay but no longer determine a winner — they pre-select the suggestion in the handoff creator.
+- Handoff wizard rebuild is on the table. Phase 1 doesn't design it. Phase 2 either expands to include it or the rebuild carves off into its own phase. Resolved at Phase 1's end.
+- All Decision 2-5 proposals graded against an 8-point checklist: produces all 7 tangible outputs; supports all 4 felt outputs; delivers tutorial coverage; makes room for non-formative scenes; works with mentor as setup choice; works without values tracker; supports living-biography seeding; works with theme-commits-in-Prelude / class-commits-at-handoff.
+
+**Parked for future:**
+- Emergent alignment from Prelude play behavior (Opus generates from session transcripts post-Prelude). Phase 7-or-later, gated on having real play data.
+- Explicit structural affordance for non-formative memory beats ("the time we got caught in the rain at market"). Re-evaluate at Phase 7.
+
+**Related:** PRELUDE_IMPLEMENTATION_PLAN.md (will be updated at end of Phase 1); PRELUDE_REVIEW.md.
+
+### 2026-04-29 — Keeper is a third caster, not a full caster (Architecture)
+**Context:** Phase 0 surfaced a `CASTER_TYPE: 'none'` bug at server/config/levelProgression.js:605. The bug was real — Keeper levels were being treated as non-caster in multiclass spell-slot calculations. The PM handoff assumed the fix was `'full'` based on a doc-vs-code drift framing. Code went to verify against the design and surfaced that the design actually says Keeper is a third caster, not a full caster.
+**Decision:** Set Keeper's `CASTER_TYPE` to `'third'`. Register the five Keeper subclasses (Lorewarden, Mythslinger, Rhetorician, Versebinder, Polymath) in `SPELLCASTING_SUBCLASSES`.
+**Why:** Third-caster matches the design intent and avoids over-powering Keeper relative to other classes. Multiclass math now works as intended: W1/K19 yields 7 caster-equivalent levels (previously bypassed entirely); W5/K1 yields 5 (a 1-level Keeper dip earns the toolkit but no spell-slot bonus, which is the correct behavior); W5/K6 yields 7. Subclass registration was missing alongside the base-class bug; both shipped together.
+**Implications:** Any prior thinking that assumed Keeper was a full caster (including the original PM handoff) should be re-read with this correction. Class-balance evaluation in Phase 7 (playing mode) will be the real test of whether third-caster is the right scale; if Keeper feels underpowered or overpowered in long-running play, this is the lever to revisit. The sibling pattern — base class config and subclass registration drifting together — is worth keeping in mind for any future caster-type changes.
+**Related:** Phase 0 handoff (this session); KEEPER_REVIEW.md; server/config/levelProgression.js:605; SPELLCASTING_SUBCLASSES registry.
+
+### 2026-04-29 — `[PARTY_ARGUMENT]` marker: keep, build in Phase 6 (Direction)
+**Context:** DM Mode reserves a `[PARTY_ARGUMENT]` marker in code but has no detector and no handler — only a strip regex at dmModeService.js:145. The Code audit confirmed it's reserved-but-unprocessed. Phase 0 required a keep-or-cut design call before Code touches it.
+**Decision:** Keep the reservation. Build the detector + handler properly in Phase 6 (DM Mode dedicated pass).
+**Why:** Overseeing arguments between the AI party is part of what makes DM Mode the practice ground it's meant to be. A good DM mediates internal party conflict; cutting the feature would shrink what DM Mode teaches and what it can deliver as an experience. The work fits naturally in Phase 6 where DM Mode gets a focused pass.
+**Implications:** Phase 0 leaves the reservation intact (no removal). Phase 6 owns the build: detector logic for when an argument should fire, handler service for playing one out, and any needed prompt-side framing for the AI party. Until Phase 6 ships, the marker continues to do nothing in production — same state as today.
+**Related:** CONSOLIDATED_TODO.md Phase 0 and Phase 6; CODE_AUDIT_FINDINGS.md (DM Mode section); DM_MODE_REVIEW.md.
+
+### 2026-04-29 — Ancestry feat count: 195 canonical, "Path Less Walked" parks (Direction)
+**Context:** Doc drift across the project — CLAUDE.md says 195 ancestry feats, ANCESTRY_FEATS.md says 208. The 13-feat gap is the "Path Less Walked" cross-pick mechanism (a character picking an ancestry feat from outside their own ancestry). Designed but never built. Code matches CLAUDE.md (195).
+**Decision:** 195 is canonical. ANCESTRY_FEATS.md gets reconciled to 195 to match code and CLAUDE.md. The "Path Less Walked" cross-pick mechanism parks for Phase 7 — revive or formally retire based on playing-mode evidence.
+**Why:** The ancestry feats system is already robust at 195. Phase 0 is for stop-the-bleeding alignment, not for committing to 13 new feats of design + implementation work. Park the cross-pick question until there's lived evidence (a long-running character, real cross-cultural narrative beats) that would tell us whether the mechanism would actually pay off. No prejudice in either direction — easy to revive, easy to retire.
+**Implications:** Phase 0 doc cleanup includes the ANCESTRY_FEATS.md reconciliation. Phase 7 picks up "Path Less Walked" as a design question. No code changes required by this decision.
+**Related:** CONSOLIDATED_TODO.md Phase 0 and parking lot; CODE_AUDIT_FINDINGS.md (ancestry section); ANCESTRY_FEATS_REVIEW.md.
+
+## 2026-04-29 — Foundation-first sequencing for post-review-phase work (Process)
+
+**Decision:** Adopt foundation-first sequencing (seven phases plus parking lot, strictly sequenced) for the work surfaced by the nine-system review phase and the subsequent Code audit. Captured in `CONSOLIDATED_TODO.md`.
+
+**Phases:**
+1. Phase 0 — Stop-the-bleeding fixes (Keeper CASTER_TYPE bug, [PARTY_ARGUMENT] decision, doc drift)
+2. Phase 1 — Prelude reframe (game design, PM + user)
+3. Phase 2 — Prelude → Primary transition (engineering, conditional on Phase 1 spec)
+4. Phase 3 — AI Narrative Persistence foundation refactors (unified standing-scalar abstraction; unified marker → state pipeline)
+5. Phase 4 — AI behavior diagnostic (shelter-and-shape concern across Prelude, Companions, Themes; DM Mode as reference)
+6. Phase 5 — Focus-area execution (selection and ordering deferred to end-of-Phase-4)
+7. Phase 6 — DM Mode dedicated pass
+8. Phase 7 — Playing mode (long-running character; several deferred systems become evaluable)
+
+**Sequencing is strict.** Each phase ships in full before the next begins. Earlier draft considered parallelism (Phase 0 / Phase 1, Phase 2 / Phase 3, Phase 3 / Phase 4); user chose strict sequencing for clarity and to avoid context-switching costs.
+
+**Trade made explicit:** AI behavior diagnostic runs *before* commitment to a focus area, inverting the bootstrap prompt's instinct that Prelude / Companions / Themes-AI were leading focus candidates. Reasoning: all three candidates share the diagnostic. One investigation feeds three execution paths. Selection of which candidate becomes Phase 5 headline focus is deferred to end-of-Phase-4 — no leaning committed in advance.
+
+**Why foundation-first over focus-area-first:**
+- The two priority refactors (standing-scalar abstraction, marker pipeline) unblock multiple deferred items each. Without them, every deferred item is a new bespoke schema or implementation.
+- Code audit identified the Prelude → Primary transition as a routing-level real bug. Fixing it before any new Prelude work prevents shipping a beautifully fixed Prelude that the player can't escape.
+- Project owner's stated bias: longer build time is acceptable; "playing mode" eventually replaces "building mode," but not yet.
+
+**Why Prelude reframe enters as Phase 1:**
+Project owner confirmed the current 5-session, 4-chapter Prelude is too long for the play sessions actually available, and that the reframe must preserve four success criteria (growth, story beats, origin-story feel, real character-building beyond background-pick). Length is an output of the reframe, not an input. Reframe is structural design work and squarely PM + user territory per project process.
+
+**Why DM Mode gets a dedicated phase:**
+Bootstrap prompt flagged DM Mode as possibly underweighted. Earlier draft argued the reweighting resolves implicitly (DM Mode shapes Phase 4, which shapes Phase 5). User pushed back — DM Mode warrants its own phase to make sure deferred work in it is done right rather than handled in passing. Phase 6 sits after the foundation refactors and focus area so DM Mode lands on a codebase where its own patterns have been generalized (e.g., cross-party memory question becomes easier to answer once standing-scalar abstraction exists). Phase 6 covers `[PARTY_ARGUMENT]` implementation, post-session relationship summary view, bond-shift evolution review, cross-party NPC memory, Opus toggle decision, DM Mode product positioning, and confirmation that DM Mode patterns remain consistent with whatever the Phase 3 abstractions ended up being.
+
+**Notable findings from Code audit that shaped the sequence:**
+- Mythic is more built than the review framed it (framework + content + markers + prompt injection all wired). Strategic question shifts from "build" to "fill gaps and playtest." Deferred to parking lot / Phase 7.
+- Themes content is full content (84 abilities), not shells. Single load-bearing risk is missing AI-trigger specs per ability — focused, scopable. One of three Phase 5 candidates.
+- Party Synergies is more broken than reviewed: `partySynergy.js` imported nowhere, system invisible to AI today. Sequenced in parking lot, contingent on marker pipeline (Phase 3).
+- Phase 5 of the original Prelude (transition to primary) is the single highest-priority real bug in the codebase. Player who finishes Prelude today has no service to exit. Becomes Phase 2 of the consolidated to-do.
+
+**Re-evaluation point:** End of Phase 4 diagnostic. Findings determine Phase 5 commitment and may reshape parking-lot priorities.
+
+**Supersedes:** PM_TODO's queue (PM_TODO described itself as ephemeral end-of-review state).
+
+**Complements:** PROJECT_TODO (per-session active/blocked/parked map, unchanged role).
+
+### 2026-04-26 — Prose-quality triage closes; thread complete (Process)
+**Context**: The prose-quality investigation has been the central engineering thread since v1.0.95. Started with 6 hypotheses; expanded to 8. Closure required four criteria: (1) path decisions made, (2) H7 + H8 production fixes shipped, (3) cost validated in real-session metrics, (4) findings folded into design docs.
+**Decision**: Close the prose-quality triage. All four criteria met as of this version.
+**Why**: The thread accomplished what it set out to do. Opus is the production default at validated ~$1.30–$2.00/hour; both cache tiers run on 1-hour TTL; Lean Prompt is retired as a production direction; H7 and H8 production fixes shipped and verified by re-running the A/B harness. The investigation produced three pieces of durable institutional knowledge: the three-tier cache architecture is sound and byte-stable (proven in tests/cache-creation-investigation.js), Opus is the prose-quality lever for this project, and the post-process-on-a-copy pattern (applyLeanTransforms()) is preserved as a reusable diagnostic harness for future prompt experiments.
+**Implications**: Code's attention is now free for the next thread. Session Hi-Fi implementation moves out of "blocked on prose-quality" status. Remaining items related to this thread (cache_creation cost optimization, Levers 2 and 3) stay parked in PM_TODO as known side-quests if cost ever becomes a forcing function. The triage doc itself can be archived or marked closed.
+**Related**: triage/prose-quality-triage.md; v1.0.95 through current changelog entries.
+
+### 2026-04-26 — H8 production fix: soften Cardinal Rule 2 (Prompt design)
+**Context**: Cardinal Rule 2 (HARD STOPS) forced the AI DM to end its response immediately after any roll request, compressing cinematic build-ups by cutting off mid-scene to demand the roll. The original prose-quality A/B testing flagged this as a real prose-compression issue, and session 147 caught it firing twice in production play (zero in session 148 — real but not constant).
+**Decision**: Replace the strict "HARD STOPS" variant in the always-on prompt with "ROLL REQUESTS — DON'T SPOIL OUTCOMES." This was previously only available via applyLeanTransforms(); it's now production.
+**Why**: The actual goal of Cardinal Rule 2 is preventing the AI from narrating outcomes before the roll resolves. The strict version achieved that but at the cost of compressing legitimate cinematic build-ups. The soft variant preserves the goal (don't spoil outcomes) without the compression. A/B harness re-run after shipping confirmed no H8 flags on the relevant scenario.
+**Implications**: applyLeanTransforms()'s second transform (strict→soft swap) silently no-ops in production now, since the strict heading no longer appears in the canonical prompt. Wiring is preserved for two reasons: it would still apply if a future revival of the strict rule lands, and the first transform (stripping MECHANICAL MARKERS) remains a real diagnostic lever.
+**Related**: triage/prose-quality-triage.md; H7 fix (same release).
+
+### 2026-04-26 — H7 production fix: gate the OBSERVATION-as-check rule (Prompt design)
+**Context**: The PLAYER OBSERVATION = ALWAYS A CHECK rule, lived in the always-on formatMechanicalMarkers() block, caused the AI DM to demand a perception/investigation/stealth check on every player observation — including atmospheric scene-opens like "I push open the tavern door" where no check was warranted. Original A/B testing surfaced this; production sessions 147 and 148 didn't catch it firing visibly, but the diagnostic evidence was clear.
+**Decision**: Move the rule out of the always-on prompt. Verb-gate it via detectObservationVerbs(action) exported from dmPromptBuilder.js — a narrow word-stem regex against commitment verbs (search, examine, investigate, study, sneak, listen, identify, track, persuade, intimidate, deceive, pick, disarm, climb, etc.). Inject the rule at /message time only when the verb fires; restore the un-injected systemPrompt before persisting so the block doesn't accumulate across turns.
+**Why**: The rule was solving a real problem (AI sometimes skips a check the player committed to) but applying it universally compressed atmospheric prose. Gating it on actual verb commitment preserves the rule's value where it matters and removes the compression where it doesn't. A/B harness re-run after shipping confirmed no H7 flags on atmospheric scene-opens.
+**Implications**: Pattern of "verb-gated rule injection" is now established and reusable. The injection-then-restore approach (don't accumulate the block in messages[0]) is the same shape as marker-correction injection — consistent with existing patterns. Future prompt rules that should fire situationally rather than always can follow the same structure.
+**Related**: triage/prose-quality-triage.md; H8 fix (same release).
 
 ### 2026-04-26 — Retire Lean Prompt toggle as production direction (Prompt design)
 **Context**: The Lean Prompt toggle was introduced as a diagnostic-only experiment (see earlier 2026-04-26 entry) to A/B-test whether stripping the MECHANICAL MARKERS section and softening Cardinal Rule 2 would improve prose quality. Automated A/B showed it helped edge cases (atmospheric scene-opens, cinematic build) but didn't move the needle in real user playtest at production cadence.

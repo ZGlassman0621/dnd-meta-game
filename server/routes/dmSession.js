@@ -37,6 +37,7 @@ import { detectConditionChanges, formatConditionsForAI } from '../data/condition
 import { safeParse } from '../utils/safeParse.js';
 import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
 import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVerifiers.js';
+import { processResponseMarkers } from '../services/markerPipeline.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
 import { initTranscript, appendToTranscript, getTurnCount, getTranscript } from '../utils/sessionTranscript.js';
 import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
@@ -1325,6 +1326,29 @@ router.post('/:sessionId/message', async (req, res) => {
       };
     } catch (err) {
       console.error('[marker-schema] validation pass failed (non-fatal):', err.message);
+    }
+
+    // Phase 3 SC-6.1 — marker pipeline (parallel with detect-functions).
+    // Dispatches to handlers registered against marker schemas. SC-6.1
+    // ships with NO handlers registered, so this is a no-op at the
+    // behavioral level — it just re-runs validation (already happened
+    // above) and finds nothing to dispatch. SC-2 through SC-5 register
+    // their per-system handlers; SC-6.4 sweeps remaining detect-functions
+    // through this pipeline. At end of Phase 3 the existing detect-function
+    // calls below are either replaced (canonical pipeline) or kept with
+    // explicit deferral rationale. Wrapped in try/catch so a pipeline
+    // bug never blocks the existing flow.
+    try {
+      // gameDay isn't always loaded in this scope — handlers that need it
+      // can read it themselves via the characterId. SC-1+SC-6.1 ship has
+      // no handlers registered, so the context object's exact contents
+      // are forward-compat for SC-2 onward.
+      await processResponseMarkers(result.narrative || '', {
+        characterId: session.character_id,
+        sessionId: parseInt(sessionId)
+      });
+    } catch (err) {
+      console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
     }
 
     // Per-turn playtest log line — surfaces context-drift signals live in the terminal.
