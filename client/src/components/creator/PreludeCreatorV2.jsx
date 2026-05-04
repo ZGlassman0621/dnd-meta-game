@@ -275,15 +275,15 @@ function buildInitialState() {
     ],
     siblings: '',
     authority_figure: '',
-    // Step 5 — appearance fields ported from primary creator's Step 7,
-    // plus the Anything-else? free-text from the legacy wizard
+    // Step 5 — appearance fields. Limited to eyes / hair / skin / build
+    // per the v1.0.137 review call (the prelude character is a child;
+    // adult-range height/weight would confuse the narrator). Plus the
+    // Anything-else? free-text carried from the legacy wizard.
     appearance: {
       eye_color: '',
       hair_color: '',
       skin_color: '',
-      build: '',
-      height: '',
-      weight: ''
+      build: ''
     },
     origin_freeform: '',
     // Testing flag — preserved from the legacy wizard for parity. Defaults

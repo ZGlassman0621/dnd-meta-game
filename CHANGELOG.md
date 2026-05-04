@@ -2,6 +2,21 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.137] - 2026-05-03 — Sub-checkpoint #6 fix: drop height + weight from Step 5 (Prelude character is a child)
+
+User-reported issue from v1.0.136 review: the prelude character is a CHILD across most of the arc (race-derived starting age: humans 6, elves 30, dwarves 18, etc.), so adult-range height/weight values would confuse the Sonnet narrator — picture "the small child carefully tries to lift the practice sword" running alongside a character sheet that says 6'0" / 225lb.
+
+**Fix:** Step 5's Appearance section drops Height + Weight cells. Keeps Eyes / Hair / Skin / Build — those four read truthfully at any age. Grid restructures from 3-col×2-row (6 cells) to 2-col×2-row (4 cells). The original spec rev 2 said "wholesale port from primary creator's Step 7" but that was a foreseeable design tension; review surfaced the consequence and we corrected.
+
+**Changes:**
+- `PreludeStep5Appearance.jsx`: removed Height + Weight `RaceAwareDimensionPicker` cells; removed the now-unused `RaceAwareDimensionPicker` import; updated grid to `1fr 1fr`; tightened the help-text wording (no longer mentions adult-range caveat); doc-comment header rewrites the rationale.
+- `PreludeCreatorV2.jsx::buildInitialState`: dropped `height: ''` and `weight: ''` from `appearance` object. State shape is now four fields, not six.
+- `PreludeStep6Review.jsx`: dropped Height + Weight conditional renders from the Appearance preview section; `hasAnyAppearance()` helper now only checks the four kept fields.
+
+The arc-prompt APPEARANCE section work that lands at cutover should also reference only the four fields. Memory entry's "TWO server-side changes" item still applies — but the field list narrows.
+
+---
+
 ## [1.0.0.136] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 6 (Review) — feature-complete (sub-checkpoint #6)
 
 Sub-checkpoint #5 signed off (v1.0.133-135). Step 6 — the final step — ships next, completing the 6-step structural redesign.

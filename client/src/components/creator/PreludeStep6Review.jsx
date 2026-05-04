@@ -198,8 +198,6 @@ export default function PreludeStep6Review({ state, set, onJump, onSubmit }) {
             {state.appearance?.hair_color && <PreviewLine keyLabel="Hair" value={state.appearance.hair_color} />}
             {state.appearance?.skin_color && <PreviewLine keyLabel="Skin" value={state.appearance.skin_color} />}
             {state.appearance?.build && <PreviewLine keyLabel="Build" value={state.appearance.build} />}
-            {state.appearance?.height && <PreviewLine keyLabel="Height" value={state.appearance.height} />}
-            {state.appearance?.weight && <PreviewLine keyLabel="Weight" value={state.appearance.weight} />}
           </PreviewSection>
         )}
 
@@ -493,8 +491,6 @@ function hasAnyAppearance(appearance) {
     appearance.eye_color ||
     appearance.hair_color ||
     appearance.skin_color ||
-    appearance.build ||
-    appearance.height ||
-    appearance.weight
+    appearance.build
   )
 }

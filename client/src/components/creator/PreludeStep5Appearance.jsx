@@ -1,48 +1,38 @@
 import { Field, WizardHead } from './creatorPrimitives.jsx'
-import RaceAwareDimensionPicker from './RaceAwareDimensionPicker.jsx'
 import RaceAwareColorPicker from './RaceAwareColorPicker.jsx'
 
 const ORIGIN_FREEFORM_MAX = 2000
 
 /**
- * Prelude Wizard Step 5 — Appearance + "Anything else?". Per the
- * structural-redesign spec rev 2 (PM 2026-05-03):
+ * Prelude Wizard Step 5 — Appearance + "Anything else?".
  *
- *   - Port the appearance fields from the primary creator's Step 7
- *     wholesale (eyes / hair / skin / build / height / weight). Same
- *     primitives, same race-derived dropdowns, same Custom… affordance.
- *   - Append the "Anything else?" free-text question from the legacy
- *     11-question wizard (Q10) as the second half of the step. 2000-char
- *     cap; optional.
+ * Per the structural-redesign spec rev 2 (PM 2026-05-03), Step 5 was
+ * specified as a wholesale port of the primary creator's Step 7
+ * appearance fields (eyes / hair / skin / build / height / weight).
+ * Sub-checkpoint #6 review (2026-05-03) caught the real-world issue:
+ * the Prelude character is a CHILD across most of the arc, and adult-
+ * range height/weight values would confuse the Sonnet narrator
+ * ("a small child carefully tries to lift the practice sword" while
+ * the character sheet says 6'0" 225lb). Spec amended: drop height +
+ * weight; keep eyes / hair / skin / build only — those four are
+ * stable across childhood and adulthood and the AI can narrate them
+ * truthfully at any age.
  *
- * One of three intentional content changes from the legacy 11-question
- * wizard. The legacy wizard had no appearance section at all; this is
- * net-new content for the prelude entry path. PM accepted that the
- * appearance choices feed the arc generator's new APPEARANCE prompt
- * section (see preludeArcService.js — to be wired alongside the
- * structural redesign cutover, per memory entry).
- *
- * Age intentionally NOT included — starting age is race-derived
+ * Age intentionally NOT included either — starting age is race-derived
  * server-side per `preludeService.js::computeStartingAge` (humans 6,
  * elves 30, dwarves 18, warforged 1, etc.). The legacy wizard removed
- * its age field in v1.0.43 for the same reason; the prelude character
- * begins as a child whose age is set by their race, not picked.
+ * its age field in v1.0.43 for the same reason.
  *
- * All appearance fields are OPTIONAL — the prelude character is a
- * child whose appearance changes across the arc. Players who care can
- * fill it; players who don't get a clean fallback (the picker's "no
- * race" branch shows a text input). Origin free-text also optional
- * (matches the legacy wizard's Q10 behavior).
+ * All four appearance fields are OPTIONAL. Players who care can fill
+ * them; players who don't get a clean fallback (the picker's "no race"
+ * branch shows a text input). Origin free-text also optional (matches
+ * the legacy wizard's Q10 behavior).
  *
  * Single-mode component (no handoff fork).
  *
- * Visual layout: 3-column grid with the six fields in two rows of three,
- * mirroring the primary creator's Step 7 physical-description grid. The
- * race-derived ranges in `raceDemographics.js` / `raceColorTraits.js`
- * are calibrated for ADULT characters; the player can always use Custom…
- * for child-appropriate values when the prelude calls for it. Future
- * design iteration could split into "as a child" vs "as an adult" pickers
- * — parking-lot consideration, not in scope here.
+ * Visual layout: 2-column grid with the four fields in two rows of two.
+ * Each cell uses RaceAwareColorPicker which offers race-appropriate
+ * defaults + a Custom… affordance per `raceColorTraits.js`.
  */
 export default function PreludeStep5Appearance({ state, set }) {
   const appearance = state.appearance || {}
@@ -63,15 +53,19 @@ export default function PreludeStep5Appearance({ state, set }) {
         eyebrowLabel="Prelude Setup"
       />
 
-      {/* Appearance grid */}
+      {/* Appearance grid — eyes / hair / skin / build. Height + weight
+          intentionally excluded (the prelude character is a child across
+          most of the arc; adult-range dimensions would confuse the
+          narrator at age 5–8). The four kept here read truthfully at
+          any age. */}
       <div className="card">
         <Field
           label="Physical description"
-          help="All optional. Race-derived ranges default to adult values; use Custom… for child-appropriate values where it matters."
+          help="All optional. The Prelude DM will weave whatever you set here into how others first see you — at any age you're played at."
         >
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
+            gridTemplateColumns: '1fr 1fr',
             gap: 18
           }}>
             <PhysicalCell label="Eyes">
@@ -104,22 +98,6 @@ export default function PreludeStep5Appearance({ state, set }) {
                 raceId={raceId}
                 value={appearance.build || ''}
                 onChange={v => updateAppearance({ build: v })}
-              />
-            </PhysicalCell>
-            <PhysicalCell label="Height">
-              <RaceAwareDimensionPicker
-                field="height"
-                raceId={raceId}
-                value={appearance.height || ''}
-                onChange={v => updateAppearance({ height: v })}
-              />
-            </PhysicalCell>
-            <PhysicalCell label="Weight">
-              <RaceAwareDimensionPicker
-                field="weight"
-                raceId={raceId}
-                value={appearance.weight || ''}
-                onChange={v => updateAppearance({ weight: v })}
               />
             </PhysicalCell>
           </div>
