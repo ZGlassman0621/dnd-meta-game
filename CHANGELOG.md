@@ -2,6 +2,37 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.136] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 6 (Review) — feature-complete (sub-checkpoint #6)
+
+Sub-checkpoint #5 signed off (v1.0.133-135). Step 6 — the final step — ships next, completing the 6-step structural redesign.
+
+**New component: `client/src/components/creator/PreludeStep6Review.jsx`** — three-part review screen:
+
+1. **Character preview card** — large serif name + nickname header; gender · race · subrace eyebrow; sectioned by Origin / Family & Influence / Appearance / Anything else. Sections that have no filled content are omitted (Appearance + free-text are optional).
+2. **Edit any step** section list — five rows (one per Step 1–5), each with step number + label + brief detail + an "Edit →" affordance that jumps directly to that step via the Stepper.
+3. **Testing toggle + Submit** — the legacy wizard's `show_arc_preview` checkbox preserved (controls whether arc preview shows or the player dives straight into first scene). Submit button is the primary CTA, lives inside Step 6 (mirrors primary creator's Step 8 pattern).
+
+**Defensive end-to-end validation** in `validateForSubmit(state)`. Per-step gates already catch most issues, but Step 6 surfaces stragglers (player jumped backward via Stepper, cleared a required field, jumped forward to Step 6). Errors render at the top of the page with inline "Edit Step N →" links — same accent left-border treatment used elsewhere.
+
+**Submit handler** — `submitPrelude(state)` builds the same payload shape the legacy `PreludeSetupWizard::buildPayload` produces (so `/api/prelude/setup`'s contract is unchanged). Adds appearance fields for forward-compat; server silently drops them until persistence work lands at cutover. On success, calls `onPreludeCreated(character, { showArcPreview })` — HomeFlow routes the player to either PreludeArcPreview (testing) or PreludeSession (skip).
+
+**Shell extensions in `PreludeCreatorV2.jsx`**:
+- Step 6 receives `state`, `set`, `onJump(targetStep)`, `onSubmit()`
+- WizardFoot for Step 6 only carries Back + Save-and-exit (`canNext: false`, `nextLabel: ''`, `isLast: true`) — Submit lives inside the step
+- Removed now-unused `PlaceholderStep` helper + `WizardHead` import
+- New top-level `submitPrelude(state)` helper with the payload-build + POST logic
+
+**Structural redesign is now feature-complete on the client side.** All 6 steps live; full submit path works. The preview build (`?prelude_v2=1`) walks Home → Path → Prelude → 6-step wizard → submit → arc preview / session. Try it end-to-end.
+
+**Out of scope for this sub-checkpoint** (still pending; lands at cutover):
+- Save/resume server-side persistence (new `creation_phase = 'prelude_setup'` enum value, partial-save endpoints)
+- HomeScreenV2 fourth in-progress card state
+- Server-side appearance field persistence (currently silent-drops on insert)
+- Arc-prompt updates (APPEARANCE section + line-141 system-prompt rule refinement)
+- Cutover from legacy `PreludeSetupWizard` to `PreludeCreatorV2` as the live path
+
+---
+
 ## [1.0.0.135] - 2026-05-03 — Sub-checkpoint #5 follow-up: variety pass for Half-Orc / Elf / Dwarf build pools
 
 After v1.0.134 fixed Dragonborn, surfaced the same flat-pool problem in three other races. PM call: apply the same variety pass.

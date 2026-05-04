@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Stepper, WizardFoot, WizardHead, PRELUDE_STEPS } from './creatorPrimitives.jsx'
+import { Stepper, WizardFoot, PRELUDE_STEPS } from './creatorPrimitives.jsx'
 import racesData from '../../data/races.json'
 import PreludeStep1Identity from './PreludeStep1Identity.jsx'
 import PreludeStep2Ancestry from './PreludeStep2Ancestry.jsx'
 import PreludeStep3Origin from './PreludeStep3Origin.jsx'
 import PreludeStep4Family from './PreludeStep4Family.jsx'
 import PreludeStep5Appearance, { ORIGIN_FREEFORM_MAX } from './PreludeStep5Appearance.jsx'
+import PreludeStep6Review from './PreludeStep6Review.jsx'
 
 /**
  * Prelude Creator V2 — structural redesign per PM spec rev 2 (2026-05-03).
@@ -75,17 +76,45 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
           {step === 2 && <PreludeStep3Origin {...stepProps} />}
           {step === 3 && <PreludeStep4Family {...stepProps} />}
           {step === 4 && <PreludeStep5Appearance {...stepProps} />}
-          {step === 5 && <PlaceholderStep stepNum={6} title="Review" />}
+          {step === 5 && (
+            <PreludeStep6Review
+              state={state}
+              set={setState}
+              onJump={(targetStep) => setStep(targetStep)}
+              onSubmit={async () => {
+                const character = await submitPrelude(state)
+                if (onPreludeCreated) {
+                  onPreludeCreated(character, { showArcPreview: state.show_arc_preview ?? true })
+                }
+              }}
+            />
+          )}
 
-          <WizardFoot
-            onBack={back}
-            onNext={next}
-            canBack={step > 0}
-            canNext={canAdvance && step < totalSteps - 1}
-            onSave={onCancel}
-            nextLabel="Continue"
-            isLast={step === totalSteps - 1}
-          />
+          {step < totalSteps - 1 && (
+            <WizardFoot
+              onBack={back}
+              onNext={next}
+              canBack={step > 0}
+              canNext={canAdvance}
+              onSave={onCancel}
+              nextLabel="Continue"
+              isLast={false}
+            />
+          )}
+          {step === totalSteps - 1 && (
+            // Step 6 (Review) owns its own primary Submit button. Footer
+            // here only carries Back + Save-and-exit. Mirrors primary
+            // creator's Step 8 pattern.
+            <WizardFoot
+              onBack={back}
+              onNext={() => {}}
+              canBack
+              canNext={false}
+              onSave={onCancel}
+              nextLabel=""
+              isLast
+            />
+          )}
         </div>
       </div>
     </div>
@@ -93,20 +122,70 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
 }
 
 /**
- * Placeholder step component — mirrors CharacterCreatorV2's
- * PlaceholderStep pattern. Used while later steps are being built so the
- * stepper rail is functional during sub-checkpoint review.
+ * Submit the wizard payload to the server. Mirrors the legacy
+ * `PreludeSetupWizard::buildPayload` shape exactly so the existing
+ * `/api/prelude/setup` endpoint accepts it without contract changes.
+ *
+ * Adds appearance fields to the payload (eye_color / hair_color /
+ * skin_color / build / height / weight). The server's preludeService.js
+ * doesn't yet persist these to the character row — they're silently
+ * dropped on insert. Persistence + the arc-prompt APPEARANCE section
+ * land alongside cutover, per the structural-redesign memory entry.
+ *
+ * Returns the created character on success; throws with a human-readable
+ * error message on failure.
  */
-function PlaceholderStep({ stepNum, title }) {
-  return (
-    <WizardHead
-      stepNum={stepNum}
-      title={title}
-      subtitle="This step lands in a later sub-checkpoint. Use Back to return to Step 1."
-      totalSteps={6}
-      eyebrowLabel="Prelude Setup"
-    />
-  )
+async function submitPrelude(state) {
+  const resolved = (curated, overrideValue) => {
+    const trimmed = (overrideValue || '').trim()
+    if (trimmed) return trimmed
+    return curated
+  }
+
+  // Filter parents per the legacy wizard's logic: keep slots with status
+  // set AND (name filled OR status not 'present'). Empty all-default →
+  // server fills a default unknown guardian.
+  const parents = (state.parents || [])
+    .filter(p => p?.status && ((p.name || '').trim() || p.status !== 'present'))
+    .map(p => ({
+      role: p.role || 'guardian',
+      name: (p.name || '').trim() || null,
+      race: p.race || state.race,
+      status: p.status
+    }))
+  const parentsFinal = parents.length > 0
+    ? parents
+    : [{ role: 'guardian', name: null, race: state.race, status: 'unknown' }]
+
+  const payload = {
+    first_name: (state.first_name || '').trim(),
+    last_name: (state.last_name || '').trim(),
+    nickname: (state.nickname || '').trim() || null,
+    gender: state.gender,
+    race: state.race,
+    subrace: state.subrace || null,
+    birth_circumstance: resolved(state.birth_circumstance, state.birth_circumstance_other),
+    home_setting: resolved(state.home_setting, state.home_setting_other),
+    region: resolved(state.region, state.region_other),
+    parents: parentsFinal,
+    siblings: state.siblings,
+    authority_figure: state.authority_figure,
+    origin_freeform: (state.origin_freeform || '').trim() || null,
+    // Appearance fields — included for forward-compat. Server silently
+    // drops these until the persistence work lands at cutover.
+    appearance: state.appearance || null
+  }
+
+  const resp = await fetch('/api/prelude/setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}))
+    throw new Error(body.error || `Server error (${resp.status})`)
+  }
+  return resp.json()
 }
 
 /**
@@ -115,10 +194,6 @@ function PlaceholderStep({ stepNum, title }) {
  * distribution mirrors the legacy 11-question wizard's validate()
  * function (per spec — no functional change to strictness, just
  * relocated to per-step gates).
- *
- * Steps 3–5 return true while the step is a placeholder so the player
- * can still walk forward and back during sub-checkpoint review. Each
- * step's gate fills in when the step component lands.
  */
 function canAdvanceFromStep(step, state) {
   if (step === 0) {
