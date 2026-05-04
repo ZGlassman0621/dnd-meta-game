@@ -2,6 +2,14 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.134] - 2026-05-03 — Sub-checkpoint #5 fix: Dragonborn build pool — actual variety
+
+User-reported issue from v1.0.133 review: Dragonborn's build options in Step 5 were `['Tall', 'Powerfully built', 'Muscular', 'Broad-shouldered', 'Towering', 'Heavy']` — six different ways of saying "big and strong." A content-authoring miss in the v1.0.120 raceColorTraits.js.
+
+**Fix:** revised Dragonborn build pool to cover the full range of individual variation: `['Lean', 'Wiry', 'Athletic', 'Compact', 'Stocky', 'Broad-shouldered', 'Muscular', 'Heavy', 'Tall', 'Towering']`. The race still skews large (no "Slight" — Dragonborn aren't tiny), but a lean / wiry / compact Dragonborn is now a legitimate option, not just six flavors of intimidating.
+
+---
+
 ## [1.0.0.133] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 5 (Appearance + free-text) (sub-checkpoint #5)
 
 Sub-checkpoint #4 signed off (v1.0.132). Step 5 next.

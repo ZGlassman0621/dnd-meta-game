@@ -111,6 +111,9 @@ export const RACE_COLOR_TRAITS = {
 
   // Dragonborn — scaled, no hair traditionally; scale color reflects
   // draconic ancestry (metallic + chromatic). Eyes draconic.
+  // Build covers the full range of individual variation — Dragonborn
+  // skew large but a lean / wiry / compact Dragonborn is just as
+  // legitimate as a towering one.
   dragonborn: {
     eyes: ['Red', 'Gold', 'Silver', 'Bronze', 'Copper', 'Green', 'Blue', 'Black', 'White'].map(v => ({ value: v, label: v })),
     hair: ['None — scaled'].map(v => ({ value: v, label: v })),
@@ -118,7 +121,7 @@ export const RACE_COLOR_TRAITS = {
       'Brass scales', 'Bronze scales', 'Copper scales', 'Gold scales', 'Silver scales',
       'Black scales', 'Blue scales', 'Green scales', 'Red scales', 'White scales'
     ].map(v => ({ value: v, label: v })),
-    build: ['Tall', 'Powerfully built', 'Muscular', 'Broad-shouldered', 'Towering', 'Heavy'].map(v => ({ value: v, label: v }))
+    build: ['Lean', 'Wiry', 'Athletic', 'Compact', 'Stocky', 'Broad-shouldered', 'Muscular', 'Heavy', 'Tall', 'Towering'].map(v => ({ value: v, label: v }))
   },
 
   // Warforged — constructed body. "Hair" is filaments or none; "skin" is
