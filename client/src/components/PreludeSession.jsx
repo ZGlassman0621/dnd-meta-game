@@ -58,13 +58,15 @@ export default function PreludeSession({ character, onBack }) {
   const [values, setValues] = useState([])
   // Canon facts moved to PreludeLorePanel (v1.0.75 → fully migrated). The
   // panel fetches its own data via /canon-facts when it opens.
-  // v1.0.75 — simplified to a two-state toggle: 'auto' (default — Sonnet,
-  // escalating to Opus on heavy beats) or 'sonnet' (always Sonnet).
-  // The server still accepts 'opus' for legacy session state, but the UI
-  // no longer surfaces it. resolvedModel/resolveReason still carry the
-  // server's last-turn decision so the UI can show why Auto escalated.
-  const [model, setModel] = useState('auto')
-  const [resolvedModel, setResolvedModel] = useState('sonnet')
+  // v1.0.141 — Opus is the prelude gameplay default per PM ruling
+  // 2026-05-03 (generalizes the v1.0.99 main DM session decision).
+  // The Auto / Sonnet toggle that lived in this header is hidden in
+  // v1.0.141 (state preserved for backward-compat with sessions whose
+  // model_preference was stored as 'auto' or 'sonnet' before the flip).
+  // Initial useState default flipped from 'auto' → 'opus' so the local
+  // value matches the server before the first roundtrip completes.
+  const [model, setModel] = useState('opus')
+  const [resolvedModel, setResolvedModel] = useState('opus')
   const [resolveReason, setResolveReason] = useState(null)
   const scrollerRef = useRef(null)
 
@@ -462,44 +464,14 @@ export default function PreludeSession({ character, onBack }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {/* v1.0.83 — Auto toggle flattened: the column-wrapper and
-              resolve-reason indicator were making the button taller than
-              its siblings (misaligned row). If the player wants to see
-              last-turn resolution, server logs carry it. The Auto label
-              itself shows a tiny arrow-marker when last turn was Opus. */}
-          <label
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.35rem 0.7rem',
-              border: '1px solid rgba(139,92,246,0.4)',
-              borderRadius: '14px',
-              background: model === 'auto' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.04)',
-              cursor: sending ? 'not-allowed' : 'pointer',
-              fontSize: '0.78rem',
-              fontFamily: 'monospace',
-              color: model === 'auto' ? '#e9d5ff' : '#9ca3af',
-              userSelect: 'none'
-            }}
-            title={
-              model === 'auto' && resolvedModel === 'opus' && resolveReason
-                ? `Auto mode on — last turn escalated to Opus (${resolveReason}). Toggle off for Sonnet-always.`
-                : 'Auto mode: Sonnet for texture, Opus for heavy beats. Toggle off to always use Sonnet.'
-            }
-          >
-            <input
-              type="checkbox"
-              checked={model === 'auto'}
-              disabled={sending}
-              onChange={e => setModel(e.target.checked ? 'auto' : 'sonnet')}
-              style={{ cursor: sending ? 'not-allowed' : 'pointer' }}
-            />
-            Auto
-            {model === 'auto' && resolvedModel === 'opus' && (
-              <span style={{ marginLeft: '0.15rem', color: '#c4b5fd', fontSize: '0.72rem' }}>→opus</span>
-            )}
-          </label>
+          {/* v1.0.141: Auto toggle hidden — Opus is the gameplay default
+              per PM ruling. Old auto/sonnet toggle would misrepresent
+              state now (checkbox-off used to mean "Sonnet always" but
+              the server-side default is no longer auto, so an unchecked
+              box would suggest Sonnet while the user is actually in Opus).
+              State preserved for back-compat with stored sessions; UI
+              affordance retired. Players who want Sonnet can opt down
+              via session config (no UI surface as of this version). */}
           {(() => {
             // v1.0.82 — compact uniform button styling
             const btn = (bg, border, color, extra = {}) => ({

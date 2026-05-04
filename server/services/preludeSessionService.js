@@ -90,6 +90,15 @@ const AUTO_SOFT_OPUS_MAX = 2;  // cap of consecutive soft-triggered Opus turns
 // "heavy-weight", etc.) so the UI can show "Auto → Opus (chapter-4)".
 // `hard` indicates whether the trigger bypasses the consecutive-Opus cap.
 // Exported for unit tests.
+//
+// SOFT-DEPRECATED v1.0.141 — PM ruling 2026-05-03 generalized the
+// v1.0.99 main DM decision: Opus default for ALL gameplay, including
+// prelude. resolveModel() no longer falls through to this picker by
+// default; new sessions go straight to Opus. The picker is still
+// reachable via legacy session state with model_preference='auto'
+// or an explicit override. Retained as dead code per "deprecate by
+// hiding, not deleting" — drop this function + the 'auto' branch in
+// resolveModel together when the auto pattern is confirmed retired.
 export function pickAutoModel(sessionCfg, runtime, playSessionLength) {
   // HARD triggers — bypass the consecutive-Opus cap
   if (runtime?.chapter >= 4) return { model: 'opus', reason: 'chapter-4', hard: true };
@@ -124,17 +133,27 @@ export function pickAutoModel(sessionCfg, runtime, playSessionLength) {
   return { model: 'sonnet', reason: null, hard: false };
 }
 
-// v1.0.75 — Default mode for new sessions is now 'auto' (previously 'sonnet').
-// The client UI has been simplified to a two-state toggle: Auto (on) or
-// Sonnet-always (off). Manual 'opus' is still accepted here for legacy
-// session state, but the UI no longer emits it.
+// v1.0.141 — Default mode for new sessions is now 'opus' (previously 'auto').
+// PM call 2026-05-03: prelude gameplay generalizes the v1.0.99 main DM
+// session decision (Opus everywhere for live gameplay). Auto-picker logic
+// (pickAutoModel) is RETAINED as soft-deprecated dead code per
+// "deprecate by hiding, not deleting" — the resolver no longer falls
+// through to it for new sessions, but explicit 'auto' opt-ins (legacy
+// session state with model_preference='auto', or a body override) still
+// work. If the auto pattern is genuinely retired in a future cleanup,
+// drop pickAutoModel + the 'auto' branch here together.
+//
+// History: v1.0.66 added the auto picker; v1.0.75 made auto the default;
+// v1.0.141 demotes auto in favor of opus.
 function resolveModel(override, sessionCfg, runtime, playSessionLength) {
   const stored = sessionCfg?.model_preference;
   const mode = (override && VALID_MODES.has(override))
     ? override
-    : (stored && VALID_MODES.has(stored)) ? stored : 'auto';
+    : (stored && VALID_MODES.has(stored)) ? stored : 'opus';
   if (mode === 'sonnet') return { mode, model: 'sonnet', reason: null };
   if (mode === 'opus') return { mode, model: 'opus', reason: null };
+  // 'auto' branch — retained for legacy session state but no longer
+  // the default. See pickAutoModel comment for retirement path.
   const { model, reason } = pickAutoModel(sessionCfg, runtime, playSessionLength);
   return { mode, model, reason };
 }

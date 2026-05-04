@@ -2,6 +2,30 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.141] - 2026-05-03 — Prelude gameplay flips to Opus default
+
+PM ruling 2026-05-03: prelude gameplay generalizes the v1.0.99 main DM session decision (Opus default for live gameplay). User has Claude Max so cost is bounded; prose quality and narrative continuity outweigh latency for interactive turns. Auto-picker logic retained as soft-deprecated dead code per "deprecate by hiding, not deleting."
+
+**Server (`server/services/preludeSessionService.js`):**
+- `resolveModel`: default mode flipped from `'auto'` → `'opus'`. The `'auto'` branch still works when stored session state has `model_preference='auto'` (legacy sessions) or when an explicit override comes in via the request body. New sessions go straight to Opus.
+- `pickAutoModel`: marked SOFT-DEPRECATED with header comment. No callers from the new default path; retained for legacy session compatibility. Drop together with the `'auto'` branch when the auto pattern is confirmed retired.
+
+**Client (`client/src/components/PreludeSession.jsx`):**
+- Auto / Sonnet toggle in the session header HIDDEN. The toggle's "off" state used to mean "Sonnet always" but with Opus as the new default, an unchecked box would visually suggest Sonnet while the user is actually in Opus — confusing. State preserved (`model`, `resolvedModel`, `resolveReason`) for back-compat with stored sessions; UI affordance gone.
+- `useState('auto')` → `useState('opus')` so the local default matches the server before the first session-load roundtrip completes. Same for `resolvedModel`.
+
+**Chronicle extraction stays on Sonnet** (Code's read; PM deferred). Both `storyChronicleService.js::extractChronicle` and `dmModeChronicleService.js::extractChronicle / extractRelationshipEvolution` continue to call Sonnet. Reasoning: chronicle extraction is structured-output work (read transcript → emit JSON), not prose narration. The prose-quality argument that justified the live-gameplay flip doesn't directly apply. Latency at session-end is user-facing — Opus would add 15–30s the player feels. If playtests show extraction missing nuance, it's a one-line per-call-site flip later. Conservative read: only flip what we have evidence to flip.
+
+**CLAUDE.md updated:** "AI model discipline" section reflects the new split. Sonnet's role narrowed; the prelude auto-picker called out as soft-deprecated.
+
+**v1.0.140 (Sonnet session prompt appearance fix) stands unchanged.** The `formatAppearanceBlock` runs against `createPreludeSystemPrompt` which feeds whichever model the resolver chose — now Opus by default — so the appearance block reaches Opus instead of Sonnet, but the wiring is the same.
+
+DM Mode (user-as-DM) sessions are intentionally NOT included in this flip — DM Mode's pacing and economics differ from prelude/main-DM, and there's been no quality complaint there. Surface separately if PM wants to generalize further.
+
+Cutover work (originally slated for v1.0.140 → shifted to v1.0.141 last turn → now shifts to v1.0.142). Smoke gate carries forward; with Opus on prelude gameplay, the smoke now also confirms Sonnet/Opus prompt-builder reads appearance correctly through the new resolver path.
+
+---
+
 ## [1.0.0.140] - 2026-05-03 — Sonnet session prompt now reads player-set appearance fields
 
 User caught it during smoke: the v1.0.138 arc-prompt update wired appearance into Opus's arc-plan generator, but `preludeArcPromptBuilder.js` (the Sonnet system prompt for live prelude gameplay sessions) was unchanged. Sonnet was narrating the character with no knowledge of the four appearance fields the player set — it would invent eye/hair/skin/build every time the PC was described, and the player's Step 5 picks would silently never matter in actual gameplay.

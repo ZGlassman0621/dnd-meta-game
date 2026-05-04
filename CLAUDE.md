@@ -26,8 +26,9 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 
 ### AI model discipline
 - Model aliases (no date suffix): `claude-opus-4-7`, `claude-sonnet-4-6` — major.minor is pinned; bump manually when a new Claude version ships.
-- **Opus handles ALL generation** — campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world, prelude arc plans.
-- **Sonnet handles ONLY interactive DM sessions** (including prelude sessions), plus chronicle extraction. Exception: the first session opening uses Opus for narrative richness.
+- **Opus is the default for all live gameplay** — Player Mode DM sessions (since v1.0.99), Prelude sessions (since v1.0.141), plus all generation work (campaign plans, backstory, NPCs, quests, locations, companions, adventures, living world, prelude arc plans). PM ruling 2026-05-03: prose quality + narrative continuity outweigh latency for interactive turns.
+- **Sonnet's role narrowed** — chronicle extraction (player-mode and DM-mode session recaps) and DM Mode interactive sessions still use Sonnet. Sonnet stays as an explicit opt-down for prelude/DM sessions via stored `model_preference='sonnet'` (no UI surface as of v1.0.141; legacy session state honors it).
+- The prelude auto-picker (`preludeSessionService.js::pickAutoModel`) is soft-deprecated as of v1.0.141 — retained as dead code per "deprecate by hiding, not deleting." Reachable only via legacy `model_preference='auto'` session state.
 - Structured JSON from LLMs goes through `server/utils/llmJson.js` — `extractLLMJson()` / `tryExtractLLMJson()`. Don't write new ad-hoc parsers; Opus occasionally emits multi-block responses that naive extractors splice into invalid JSON.
 
 ### Prompt structure
