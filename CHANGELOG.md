@@ -2,6 +2,18 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.140] - 2026-05-03 — Sonnet session prompt now reads player-set appearance fields
+
+User caught it during smoke: the v1.0.138 arc-prompt update wired appearance into Opus's arc-plan generator, but `preludeArcPromptBuilder.js` (the Sonnet system prompt for live prelude gameplay sessions) was unchanged. Sonnet was narrating the character with no knowledge of the four appearance fields the player set — it would invent eye/hair/skin/build every time the PC was described, and the player's Step 5 picks would silently never matter in actual gameplay.
+
+**Fix:** appended an `Appearance` block to the CHARACTER context in `createPreludeSystemPrompt` (line 1064). New helper `formatAppearanceBlock(character)` reads `eye_color / hair_color / skin_color / physical_build` off the character row and emits the same "honor when describing the character, do NOT invent additional physical markers" framing the arc-prompt update used. Returns empty string when the player skipped Step 5 (no fields set), so the prompt stays clean for those characters.
+
+The opening prompt at line 1187 already instructs Sonnet to "describe your own body — size, hair, skin, eyes, canonical race features, don't invent markers" — that instruction now has the actual values to use, sourced from the system prompt's CHARACTER block.
+
+Cutover work originally slated for v1.0.140 shifts to v1.0.141; smoke gate carries forward.
+
+---
+
 ## [1.0.0.139] - 2026-05-03 — v1.0.138 hotfix: BigInt serialization in draft endpoint responses
 
 Smoke caught: `POST /api/prelude/setup/draft` returned 500 — `TypeError: Do not know how to serialize a BigInt`. The `result.lastInsertRowid` from libsql is a BigInt, and `res.json({ id: bigint })` can't serialize it. Same pattern affected `updateDraftPreludeCharacter` (its `characterId` came from `req.params` as a string, but the response object built it back without coercing).

@@ -44,6 +44,32 @@ function getChapterAges(race) {
 }
 
 /**
+ * Append an APPEARANCE block to the CHARACTER context when the player
+ * set any of the four kept appearance fields (eye/hair/skin/build) in
+ * Step 5 of the rebuilt PreludeCreatorV2. Stored on the character row
+ * (eye_color / hair_color / skin_color / physical_build).
+ *
+ * v1.0.140: Sonnet needs to know these so it can describe the character
+ * truthfully without inventing markers. Without this block, the narrator
+ * has to make up eye/hair/skin every time the PC is described, which
+ * means the player's Step 5 picks would silently never matter in
+ * gameplay (only the testing-only arc preview surfaced them via Opus's
+ * input prompt).
+ *
+ * Returns '' when no appearance fields are set so the prompt stays clean
+ * for players who skipped Step 5.
+ */
+function formatAppearanceBlock(character) {
+  const lines = [];
+  if (character.eye_color) lines.push(`    Eyes: ${character.eye_color}`);
+  if (character.hair_color) lines.push(`    Hair: ${character.hair_color}`);
+  if (character.skin_color) lines.push(`    Skin: ${character.skin_color}`);
+  if (character.physical_build) lines.push(`    Build: ${character.physical_build}`);
+  if (lines.length === 0) return '';
+  return `\n  Appearance (player-set — canonical; honor when describing the character, do NOT invent additional physical markers):\n${lines.join('\n')}`;
+}
+
+/**
  * Resolve the player character's name + pronouns for prose injection.
  */
 function resolveCharacterVoice(character, setup) {
@@ -1035,7 +1061,7 @@ CHARACTER (player-owned, canonical):
   Gender: ${setup.gender} — pronouns ${v.pronouns}
   Current age: ${runtime.age} (Chapter ${runtime.chapter} of 3 — play-session ${runtime.sessionNumber || 1} of 4 in a prelude)
   Session position: exchange ${runtime.exchangeCount || 0} of ~${runtime.sessionBudget || 50} target budget (${Math.round((runtime.progressFraction || 0) * 100)}% — wrap ~${runtime.wrapAt || 65}, force-close ~${runtime.forceAt || 80}). Begin foreshadowing a cliffhanger moment around exchange ${Math.round((runtime.sessionBudget || 50) * 0.8)}; fire [SESSION_END_CLIFFHANGER] at the strongest natural beat after that.
-  Life stages by chapter for this race: Ch1 ${ages.ch1} / Ch2 ${ages.ch2} / Ch3 ${ages.ch3}
+  Life stages by chapter for this race: Ch1 ${ages.ch1} / Ch2 ${ages.ch2} / Ch3 ${ages.ch3}${formatAppearanceBlock(character)}
   Birth circumstance: ${birth ? birth.label : setup.birth_circumstance}
     ${birth ? birth.description : '(free text)'}
   Home: ${home ? home.label : setup.home_setting}${region ? ` in ${region.label}` : ''}
