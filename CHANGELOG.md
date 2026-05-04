@@ -2,6 +2,25 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.131] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 3 (Origin) (sub-checkpoint #3)
+
+Sub-checkpoint #2 signed off (v1.0.130). Step 3 ships next.
+
+**New component: `client/src/components/creator/PreludeStep3Origin.jsx`** — birth circumstance / home setting / region. All three preserved verbatim from the legacy 11-question wizard. Each field reuses the visual pattern Step 2 established (signed off v1.0.130): curated dropdown → italic `.help` description below the dropdown after a value is picked → free-text override input ("Or write your own…") below the description.
+
+Internal `CuratedFieldWithOverride` helper component reduces the three near-identical Field blocks to one shape parameterized by label / options / state slot. Server's `preludeService.js::buildPayload` resolves each field via `resolved(curated, otherKey)` — override wins when populated; otherwise dropdown value.
+
+**Step 3 → Step 4 validation gate** added to `canAdvanceFromStep`: each origin field counts as filled when EITHER the dropdown value OR the override has content. Mirrors the legacy wizard's `validate()` after the resolver runs.
+
+**Out of scope for this sub-checkpoint** (still pending later steps):
+- Steps 4–6 (family / appearance / review)
+- Save/resume server-side persistence
+- HomeScreenV2 fourth in-progress card state
+- Arc-prompt updates
+- Cutover from legacy `PreludeSetupWizard`
+
+---
+
 ## [1.0.0.130] - 2026-05-03 — Sub-checkpoint #2 fix: use-name guidance moves to Step 1 where the Last Name decision is made
 
 User-reported issue from v1.0.129 review: the use-name guidance ("if you left Last name blank, the Prelude DM may introduce you with a use-name like 'Aelar of the Silver Glade'…") was on Step 2's Race field. By the time the player reaches Step 2, the Last Name decision is already made — the guidance arrives too late to inform it.

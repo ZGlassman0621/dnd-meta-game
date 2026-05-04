@@ -3,6 +3,7 @@ import { Stepper, WizardFoot, WizardHead, PRELUDE_STEPS } from './creatorPrimiti
 import racesData from '../../data/races.json'
 import PreludeStep1Identity from './PreludeStep1Identity.jsx'
 import PreludeStep2Ancestry from './PreludeStep2Ancestry.jsx'
+import PreludeStep3Origin from './PreludeStep3Origin.jsx'
 
 /**
  * Prelude Creator V2 — structural redesign per PM spec rev 2 (2026-05-03).
@@ -69,7 +70,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
 
           {step === 0 && <PreludeStep1Identity {...stepProps} />}
           {step === 1 && <PreludeStep2Ancestry {...stepProps} />}
-          {step === 2 && <PlaceholderStep stepNum={3} title="Origin" />}
+          {step === 2 && <PreludeStep3Origin {...stepProps} />}
           {step === 3 && <PlaceholderStep stepNum={4} title="Family & Influence" />}
           {step === 4 && <PlaceholderStep stepNum={5} title="Appearance" />}
           {step === 5 && <PlaceholderStep stepNum={6} title="Review" />}
@@ -132,7 +133,16 @@ function canAdvanceFromStep(step, state) {
     if (subraces.length > 0 && !state.subrace) return false
     return true
   }
-  // Steps 3–5: placeholders. Allow advance until each step's real
+  if (step === 2) {
+    // Step 3: each origin field needs EITHER curated dropdown OR free-text
+    // override. Mirrors the legacy wizard's resolved() helper — server
+    // accepts the override when populated, otherwise the dropdown value.
+    const filled = (curated, other) => Boolean(curated || (other || '').trim())
+    return filled(state.birth_circumstance, state.birth_circumstance_other)
+      && filled(state.home_setting, state.home_setting_other)
+      && filled(state.region, state.region_other)
+  }
+  // Steps 4–5: placeholders. Allow advance until each step's real
   // validation lands with the step component.
   return true
 }
