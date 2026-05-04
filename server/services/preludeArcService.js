@@ -138,7 +138,7 @@ ${(setup.origin_freeform || '').trim() ? `   ⚠ Q10 ORIGIN FREE-TEXT — HONOR 
    - RIGHT: "Cornered by toughs in an alley, close enough to smell the indigo on their hands. The way you get out of this — fists, lies, running, surrender, something else — will mark how Rook sees you for years."
    Describe the pressure. Leave the answer.
 
-9. **DON'T INVENT CHARACTER TRAITS NOT IN THE SETUP.** The player's race, gender, parents, siblings, home, region, birth circumstance, authority figure, and Q10 free-text are canon. Canonical 5e race features (darkvision, breath weapons, etc.) are fair game. But do NOT invent specific physical markers (veins, birthmarks, glowing eyes, fevers, scars) or family secrets (hidden bloodlines, prophecies, royal parentage) that the player didn't establish. Stay inside the lines they drew.
+9. **DON'T INVENT CHARACTER TRAITS NOT IN THE SETUP.** The player's race, gender, parents, siblings, home, region, birth circumstance, authority figure, free-text origin, AND any APPEARANCE fields they set (eye color, hair, skin, build) are canon. Canonical 5e race features (darkvision, breath weapons, etc.) are fair game. Honor the appearance fields the player set — those are inputs you can describe and reference; they're not absences to work around. But do NOT invent ADDITIONAL physical markers beyond what was set (veins, birthmarks, glowing eyes the player didn't ask for, fevers, scars). Same rule for family: no hidden bloodlines, prophecies, or royal parentage the player didn't establish. Stay inside the lines they drew.
 
 10. **TRAJECTORY NUDGES MUST CITE PLAYER SETUP EXPLICITLY.** Do not suggest "paladin because the character is a scourge aasimar." Suggest "paladin because the home is a frontier outpost with a faltering chapel and your authority figure is a guardian who used to wear armor." Cite home / region / parents / siblings / authority / origin-freeform / birth-circumstance by name where applicable.
 
@@ -291,6 +291,20 @@ function buildArcUserPrompt(character, setup) {
   const ages = getChapterAges(character.race);
   const originFreeform = (setup.origin_freeform || '').trim();
 
+  // v1.0.138: surface appearance fields when the player set them in
+  // Step 5 of the rebuilt PreludeCreatorV2. Stored on the character row
+  // (eye_color / hair_color / skin_color / physical_build); height and
+  // weight intentionally omitted per v1.0.137 (the prelude character is
+  // a child and adult-range dimensions would mislead the narrator).
+  const appearanceLines = []
+  if (character.eye_color) appearanceLines.push(`  Eyes: ${character.eye_color}`);
+  if (character.hair_color) appearanceLines.push(`  Hair: ${character.hair_color}`);
+  if (character.skin_color) appearanceLines.push(`  Skin: ${character.skin_color}`);
+  if (character.physical_build) appearanceLines.push(`  Build: ${character.physical_build}`);
+  const appearanceBlock = appearanceLines.length > 0
+    ? `\nAPPEARANCE (player-set — canonical; honor when describing the character, do NOT invent additional physical markers):\n${appearanceLines.join('\n')}\n`
+    : '';
+
   return `Generate the arc plan for this character. Respect every field as canonical.
 
 NAME: ${character.name}${character.nickname ? ` ("${character.nickname}")` : ''}
@@ -318,7 +332,7 @@ AUTHORITY FIGURE (Q9 — looms largest in early life): ${authorityDesc}
 ${originFreeform ? `
 ANYTHING ELSE (Q10 — player free-text origin): "${originFreeform}"
   ⚠ Honor this over conflicting curated answers when applicable.` : ''}
-
+${appearanceBlock}
 Output the JSON arc plan now. No preamble, no epilogue — just the JSON object.`;
 }
 

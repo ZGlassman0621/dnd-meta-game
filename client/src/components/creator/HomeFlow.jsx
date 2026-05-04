@@ -47,6 +47,11 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   const [resumeState, setResumeState] = useState(null)
   const [resumeCharacterId, setResumeCharacterId] = useState(null)
   const [preludeCharacter, setPreludeCharacter] = useState(null)
+  // v1.0.138 — resume state for the 6-step PreludeCreatorV2. Set when a
+  // 'prelude_setup' home card is clicked; cleared when the player starts
+  // a fresh Prelude or finishes the wizard.
+  const [preludeDraftState, setPreludeDraftState] = useState(null)
+  const [preludeDraftCharacterId, setPreludeDraftCharacterId] = useState(null)
   const [error, setError] = useState(null)
 
   const loadCharacters = useCallback(async () => {
@@ -88,7 +93,17 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       if (!charRes.ok) throw new Error(`Could not load character #${uiCharacter.id}`)
       const character = await charRes.json()
 
-      if (uiCharacter.state === 'prelude') {
+      if (uiCharacter.state === 'prelude_setup') {
+        // Resume the new 6-step prelude wizard mid-flight (v1.0.138+).
+        // Fetch the stored wizard state from prelude_setup_data and hand
+        // it to PreludeCreatorV2 via initialState / initialCharacterId.
+        const draftRes = await fetch(`/api/prelude/setup/draft/${uiCharacter.id}`)
+        if (!draftRes.ok) throw new Error(`Could not load prelude draft #${uiCharacter.id}`)
+        const draft = await draftRes.json()
+        setPreludeDraftState(draft.state || null)
+        setPreludeDraftCharacterId(draft.id)
+        setRoute('prelude.setup')
+      } else if (uiCharacter.state === 'prelude') {
         // Resume the in-flight Prelude session on this character.
         setPreludeCharacter(character)
         setRoute('prelude.session')
@@ -121,7 +136,10 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   }, [])
 
   const handlePickPrelude = useCallback(() => {
+    // Fresh start — clear any draft-resume state from a prior card click
     setPreludeCharacter(null)
+    setPreludeDraftState(null)
+    setPreludeDraftCharacterId(null)
     setRoute('prelude.setup')
   }, [])
 
@@ -147,6 +165,8 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
     // roster so the new card (or the now-'ready_for_primary' card if
     // [PRELUDE_END] fired) shows up, then return home.
     setPreludeCharacter(null)
+    setPreludeDraftState(null)
+    setPreludeDraftCharacterId(null)
     await loadCharacters()
     setRoute('home')
   }, [loadCharacters])
@@ -219,6 +239,18 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
     // all 6 steps land + are signed off; cutover lands then.
     const useV2 = typeof window !== 'undefined' &&
       new URLSearchParams(window.location.search).get('prelude_v2') === '1'
+    // Resume always uses V2 (the legacy one-page wizard has no
+    // save/resume — if there's a draft to resume, it was created by V2).
+    if (preludeDraftCharacterId) {
+      return (
+        <PreludeCreatorV2
+          onCancel={handlePreludeReturn}
+          onPreludeCreated={handlePreludeCreated}
+          initialState={preludeDraftState}
+          initialCharacterId={preludeDraftCharacterId}
+        />
+      )
+    }
     return useV2 ? (
       <PreludeCreatorV2
         onCancel={handlePreludeReturn}

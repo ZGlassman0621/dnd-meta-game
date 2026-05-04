@@ -174,6 +174,16 @@ function buildCurrentLocation(payload) {
  * The character is intentionally minimal — no class, no theme, no stats
  * beyond all-10s. The fully-specified character emerges at the end of the
  * prelude through the main creator wizard.
+ *
+ * v1.0.138: appearance fields (eye_color, hair_color, skin_color,
+ * physical_build) persist when the wizard payload includes them under
+ * `appearance`. Stable child→adult traits per the v1.0.137 cut (no
+ * height/weight). When `payload.draft_character_id` is set, the existing
+ * 'prelude_setup' row gets RECYCLED — flipped to 'prelude' phase + all
+ * fields re-written — instead of creating a new row. This keeps the same
+ * character id across the save/resume → submit transition so anything
+ * pointing at it (UI bookmarks, future narrative_queue entries) stays
+ * valid.
  */
 export async function createPreludeCharacter(payload) {
   const v = validateSetupPayload(payload);
@@ -196,6 +206,59 @@ export async function createPreludeCharacter(payload) {
   // `prelude_emergences` table until then.
   const abilityScores = JSON.stringify({ str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
 
+  // Pull appearance fields off the payload. Stored separately on the
+  // character row (eye_color / hair_color / skin_color / physical_build);
+  // not part of the JSON blob since they're indexable on the row itself.
+  const appearance = payload.appearance || {};
+  const eyeColor = (appearance.eye_color || '').trim() || null;
+  const hairColor = (appearance.hair_color || '').trim() || null;
+  const skinColor = (appearance.skin_color || '').trim() || null;
+  const physicalBuild = (appearance.build || '').trim() || null;
+
+  const draftId = payload.draft_character_id ? Number(payload.draft_character_id) : null;
+  if (draftId) {
+    // RECYCLE the existing 'prelude_setup' row. Flip phase + overwrite
+    // every field. Preserves the row id so HomeScreenV2 bookmarks /
+    // future narrative-queue entries pointing at the draft id still
+    // resolve to the now-finalized character.
+    const draftRow = await dbGet('SELECT id, creation_phase FROM characters WHERE id = ?', [draftId]);
+    if (!draftRow) throw new Error(`Draft character ${draftId} not found`);
+    if (draftRow.creation_phase !== 'prelude_setup') {
+      throw new Error(`Draft character ${draftId} is not in prelude_setup phase (got ${draftRow.creation_phase})`);
+    }
+
+    await dbRun(
+      `UPDATE characters SET
+         name = ?, first_name = ?, last_name = ?, nickname = ?, gender = ?,
+         class = ?, race = ?, subrace = ?,
+         level = ?, current_hp = ?, max_hp = ?, current_location = ?, current_quest = ?,
+         experience_to_next_level = ?,
+         armor_class = ?, speed = ?, ability_scores = ?,
+         age = ?,
+         eye_color = ?, hair_color = ?, skin_color = ?, physical_build = ?,
+         creation_phase = ?, prelude_age = ?, prelude_chapter = ?, prelude_setup_data = ?,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        fullName,
+        (payload.first_name || '').trim() || null,
+        (payload.last_name || '').trim() || null,
+        (payload.nickname || '').trim() || null,
+        payload.gender,
+        'prelude',
+        payload.race,
+        (payload.subrace || '').trim() || null,
+        0, startingHP, startingHP, location, null,
+        0, 10, 30, abilityScores,
+        String(age),
+        eyeColor, hairColor, skinColor, physicalBuild,
+        'prelude', age, 1, JSON.stringify(payload),
+        draftId
+      ]
+    );
+    return getPreludeCharacter(draftId);
+  }
+
   const sql = `
     INSERT INTO characters (
       name, first_name, last_name, nickname, gender,
@@ -204,8 +267,9 @@ export async function createPreludeCharacter(payload) {
       experience_to_next_level,
       armor_class, speed, ability_scores,
       age,
+      eye_color, hair_color, skin_color, physical_build,
       creation_phase, prelude_age, prelude_chapter, prelude_setup_data
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   const args = [
     fullName,
@@ -226,6 +290,7 @@ export async function createPreludeCharacter(payload) {
     30,                  // speed — racial/age tweaks can come later
     abilityScores,
     String(age),         // `age` column is TEXT in the existing schema
+    eyeColor, hairColor, skinColor, physicalBuild,
     'prelude',
     age,
     1,                   // chapter 1
@@ -237,6 +302,124 @@ export async function createPreludeCharacter(payload) {
   if (!id) throw new Error('Prelude character insert returned no id');
 
   return getPreludeCharacter(id);
+}
+
+// ============================================================
+// DRAFT (in-progress wizard) persistence — v1.0.138
+// ============================================================
+//
+// The 6-step prelude wizard saves on every step advance. The first save
+// (Step 1 → Step 2) creates a 'prelude_setup' row with placeholder
+// required-NOT-NULL fields and whatever wizard state is filled. Subsequent
+// saves PUT the partial wizard state into prelude_setup_data. At final
+// submit, createPreludeCharacter recycles the row by flipping phase to
+// 'prelude' (see draft_character_id branch above).
+//
+// Required-NOT-NULL columns we satisfy with placeholders during draft:
+//   name = composed first+last or '(unnamed)'
+//   class = 'prelude_setup'  (consumers that key off creation_phase
+//                              already skip these rows; same pattern as
+//                              the 'creating' phase placeholders from
+//                              v1.0.116)
+//   level = 0
+//   current_hp / max_hp = 0
+//   current_location = '(setting up)'
+//   experience_to_next_level = 0
+
+/**
+ * Create a draft prelude-setup character. Returns the row's id.
+ * Called by the wizard on Step 1 advance.
+ */
+export async function createDraftPreludeCharacter(state) {
+  const composedName = [(state.first_name || '').trim(), (state.last_name || '').trim()]
+    .filter(Boolean).join(' ') || '(unnamed)';
+  const sql = `
+    INSERT INTO characters (
+      name, first_name, last_name, nickname, gender,
+      class, race, subrace,
+      level, current_hp, max_hp, current_location, current_quest,
+      experience_to_next_level,
+      armor_class, speed, ability_scores,
+      creation_phase, prelude_setup_data
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const args = [
+    composedName,
+    (state.first_name || '').trim() || null,
+    (state.last_name || '').trim() || null,
+    (state.nickname || '').trim() || null,
+    state.gender || null,
+    'prelude_setup',
+    state.race || '',
+    (state.subrace || '').trim() || null,
+    0, 0, 0,
+    '(setting up)',
+    null,
+    0, 10, 30,
+    JSON.stringify({ str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }),
+    'prelude_setup',
+    JSON.stringify(state)
+  ];
+  const result = await dbRun(sql, args);
+  const id = result.lastID || result.lastInsertRowid;
+  if (!id) throw new Error('Draft prelude character insert returned no id');
+  return { id };
+}
+
+/**
+ * Update an existing draft. Called on every step advance after the first.
+ * Refreshes the displayable fields (name / race / etc.) so HomeScreenV2's
+ * "Continue setup" card shows the current state, plus rewrites the full
+ * wizard state into prelude_setup_data.
+ */
+export async function updateDraftPreludeCharacter(characterId, state) {
+  const row = await dbGet('SELECT id, creation_phase FROM characters WHERE id = ?', [characterId]);
+  if (!row) throw new Error(`Draft character ${characterId} not found`);
+  if (row.creation_phase !== 'prelude_setup') {
+    throw new Error(`Character ${characterId} is not a prelude_setup draft (got ${row.creation_phase})`);
+  }
+  const composedName = [(state.first_name || '').trim(), (state.last_name || '').trim()]
+    .filter(Boolean).join(' ') || '(unnamed)';
+  await dbRun(
+    `UPDATE characters SET
+       name = ?, first_name = ?, last_name = ?, nickname = ?, gender = ?,
+       race = ?, subrace = ?,
+       prelude_setup_data = ?,
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [
+      composedName,
+      (state.first_name || '').trim() || null,
+      (state.last_name || '').trim() || null,
+      (state.nickname || '').trim() || null,
+      state.gender || null,
+      state.race || '',
+      (state.subrace || '').trim() || null,
+      JSON.stringify(state),
+      characterId
+    ]
+  );
+  return { id: characterId };
+}
+
+/**
+ * Read a draft prelude-setup character's wizard state for resume.
+ * Returns { id, state } or null if not found / not a draft.
+ */
+export async function getDraftPreludeState(characterId) {
+  const row = await dbGet(
+    'SELECT id, creation_phase, prelude_setup_data FROM characters WHERE id = ?',
+    [characterId]
+  );
+  if (!row) return null;
+  if (row.creation_phase !== 'prelude_setup') return null;
+  let state = null;
+  try {
+    state = row.prelude_setup_data ? JSON.parse(row.prelude_setup_data) : null;
+  } catch {
+    state = null;
+  }
+  return { id: row.id, state };
 }
 
 /**

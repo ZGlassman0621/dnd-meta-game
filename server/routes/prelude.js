@@ -17,7 +17,10 @@ import express from 'express';
 import {
   createPreludeCharacter,
   getPreludeCharacter,
-  listPreludeCharacters
+  listPreludeCharacters,
+  createDraftPreludeCharacter,
+  updateDraftPreludeCharacter,
+  getDraftPreludeState
 } from '../services/preludeService.js';
 import {
   generateArcPlan,
@@ -56,6 +59,57 @@ router.post('/setup', async (req, res) => {
       return validationError(res, err.message);
     }
     handleServerError(res, err, 'create prelude character');
+  }
+});
+
+/**
+ * POST /api/prelude/setup/draft
+ * Body: partial wizard state from PreludeCreatorV2 (any fields filled so far).
+ * Creates a 'prelude_setup' phase character row with placeholder required
+ * fields + the wizard state stored on prelude_setup_data. Returns { id }.
+ *
+ * Called by the wizard on Step 1 advance. Subsequent advances use PUT.
+ */
+router.post('/setup/draft', async (req, res) => {
+  try {
+    const result = await createDraftPreludeCharacter(req.body || {});
+    res.status(201).json(result);
+  } catch (err) {
+    handleServerError(res, err, 'create prelude draft');
+  }
+});
+
+/**
+ * PUT /api/prelude/setup/draft/:id
+ * Body: full updated wizard state.
+ * Refreshes the row's displayable fields (name / race / etc.) so the
+ * home page card surfaces current state, plus rewrites prelude_setup_data.
+ */
+router.put('/setup/draft/:id', async (req, res) => {
+  try {
+    const result = await updateDraftPreludeCharacter(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    if (err && err.message && (err.message.includes('not found') || err.message.includes('not a prelude_setup'))) {
+      return notFound(res, 'Prelude draft');
+    }
+    handleServerError(res, err, 'update prelude draft');
+  }
+});
+
+/**
+ * GET /api/prelude/setup/draft/:id
+ * Returns { id, state } for a draft prelude-setup character. Used when
+ * the player clicks the "Continue setup" home card and the wizard needs
+ * to rehydrate.
+ */
+router.get('/setup/draft/:id', async (req, res) => {
+  try {
+    const result = await getDraftPreludeState(req.params.id);
+    if (!result) return notFound(res, 'Prelude draft');
+    res.json(result);
+  } catch (err) {
+    handleServerError(res, err, 'read prelude draft');
   }
 });
 

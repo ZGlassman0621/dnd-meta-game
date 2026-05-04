@@ -63,7 +63,7 @@ export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter }
 
 function CharacterCard({ character, onClick }) {
   const { state } = character
-  const inProgress = state === 'creating' || state === 'ready_for_primary' || state === 'prelude'
+  const inProgress = state === 'creating' || state === 'ready_for_primary' || state === 'prelude' || state === 'prelude_setup'
   const glyph = (character.glyph || character.first_name || character.name || '?').charAt(0).toUpperCase()
 
   return (
@@ -73,12 +73,15 @@ function CharacterCard({ character, onClick }) {
       onClick={onClick}
     >
       {/* Per-state badge (top-right corner). 'creating' = "Draft" with
-         outlined accent; 'prelude' = "Prelude · Continue" while still
-         playing; 'ready_for_primary' = "Prelude · Step forward" once the
-         arc has finished. Active characters get no badge — the absence
-         of one IS the "ready to play" signal. */}
+         outlined accent; 'prelude_setup' = "Prelude · Continue setup"
+         (the new 6-step wizard mid-flight, v1.0.138); 'prelude' =
+         "Prelude · Continue" while still playing the arc;
+         'ready_for_primary' = "Prelude · Step forward" once the arc has
+         finished. Active characters get no badge — the absence of one IS
+         the "ready to play" signal. */}
       {state === 'ready_for_primary' && <div className="badge prelude">Prelude · Step forward</div>}
       {state === 'prelude' && <div className="badge prelude">Prelude · Continue</div>}
+      {state === 'prelude_setup' && <div className="badge prelude">Prelude · Continue setup</div>}
       {state === 'creating' && <div className="badge draft">Draft</div>}
 
       <div className="portrait">
@@ -116,6 +119,7 @@ function composeMeta(c) {
 function composeFooter(c) {
   if (c.state === 'active') return c.campaign || 'Active'
   if (c.state === 'creating') return 'Manual draft'
+  if (c.state === 'prelude_setup') return 'Prelude setup in progress'
   if (c.state === 'prelude') {
     const bits = []
     if (c.prelude_chapter) bits.push(`Ch ${c.prelude_chapter}`)

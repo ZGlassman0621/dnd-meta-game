@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Stepper, WizardFoot, PRELUDE_STEPS } from './creatorPrimitives.jsx'
 import racesData from '../../data/races.json'
+import { savePreludeProgress, submitPrelude as submitPreludeApi } from './preludePersistence.js'
 import PreludeStep1Identity from './PreludeStep1Identity.jsx'
 import PreludeStep2Ancestry from './PreludeStep2Ancestry.jsx'
 import PreludeStep3Origin from './PreludeStep3Origin.jsx'
@@ -32,14 +33,49 @@ import PreludeStep6Review from './PreludeStep6Review.jsx'
  * value, partial-save endpoints, HomeScreenV2 fourth-state card) lands
  * once the visual + interaction pattern is signed off.
  */
-export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
+export default function PreludeCreatorV2({
+  onCancel,
+  onPreludeCreated,
+  initialState = null,
+  initialCharacterId = null,
+  persistProgress = true
+}) {
   const [step, setStep] = useState(0)
-  const [state, setState] = useState(buildInitialState)
+  const [state, setState] = useState(() => initialState || buildInitialState())
+  // v1.0.138: characterId tracks the draft row created on Step 1 advance.
+  // Pre-populated when resuming from a "Continue setup" home card click.
+  const [characterId, setCharacterId] = useState(initialCharacterId)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   const totalSteps = PRELUDE_STEPS.length
   const back = () => setStep(s => Math.max(0, s - 1))
-  const next = () => setStep(s => Math.min(totalSteps - 1, s + 1))
   const canAdvance = canAdvanceFromStep(step, state)
+
+  // Save-before-advance per v1.0.138 plumbing. Step 1 advance creates a
+  // 'prelude_setup' draft row; subsequent advances PUT updates. Same
+  // shape as CharacterCreatorV2's primary-creator save-on-advance pattern.
+  // The `?prelude_v2=1` preview path passes persistProgress through (true
+  // by default); set to false for visual review without DB writes.
+  const next = async () => {
+    if (saving) return
+    if (persistProgress) {
+      setSaving(true)
+      setSaveError(null)
+      try {
+        const result = await savePreludeProgress({ state, characterId })
+        if (result.character_id && result.character_id !== characterId) {
+          setCharacterId(result.character_id)
+        }
+      } catch (err) {
+        setSaveError(err.message || 'Could not save progress.')
+        setSaving(false)
+        return  // Block advance on save failure
+      }
+      setSaving(false)
+    }
+    setStep(s => Math.min(totalSteps - 1, s + 1))
+  }
 
   // Scroll to the top of the page on every step change. Same UX as
   // CharacterCreatorV2 — without it, clicking Continue at the bottom
@@ -59,7 +95,9 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
           D <span className="amp">&amp;</span> D
           <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
         </div>
-        <div className="crumbs">Prelude · setup (v2 preview)</div>
+        <div className="crumbs">
+          {initialCharacterId ? 'Prelude · resuming setup' : 'Prelude · setup (v2 preview)'}
+        </div>
         <div className="spacer" />
         {onCancel && (
           <button type="button" className="btn ghost" onClick={onCancel}>← Back to roster</button>
@@ -82,7 +120,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
               set={setState}
               onJump={(targetStep) => setStep(targetStep)}
               onSubmit={async () => {
-                const character = await submitPrelude(state)
+                const character = await submitPreludeApi({ state, characterId })
                 if (onPreludeCreated) {
                   onPreludeCreated(character, { showArcPreview: state.show_arc_preview ?? true })
                 }
@@ -91,15 +129,32 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
           )}
 
           {step < totalSteps - 1 && (
-            <WizardFoot
-              onBack={back}
-              onNext={next}
-              canBack={step > 0}
-              canNext={canAdvance}
-              onSave={onCancel}
-              nextLabel="Continue"
-              isLast={false}
-            />
+            <>
+              {saveError && (
+                <div style={{
+                  marginTop: 16,
+                  padding: '12px 16px',
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--accent)',
+                  borderLeft: '3px solid var(--accent)',
+                  fontFamily: 'var(--serif)',
+                  fontStyle: 'italic',
+                  fontSize: 15,
+                  color: 'var(--ink-2)'
+                }}>
+                  Couldn't save: {saveError} (Your input is preserved — try Continue again, or Back to roster.)
+                </div>
+              )}
+              <WizardFoot
+                onBack={back}
+                onNext={next}
+                canBack={step > 0 && !saving}
+                canNext={canAdvance && !saving}
+                onSave={onCancel}
+                nextLabel={saving ? 'Saving…' : 'Continue'}
+                isLast={false}
+              />
+            </>
           )}
           {step === totalSteps - 1 && (
             // Step 6 (Review) owns its own primary Submit button. Footer
@@ -119,73 +174,6 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
       </div>
     </div>
   )
-}
-
-/**
- * Submit the wizard payload to the server. Mirrors the legacy
- * `PreludeSetupWizard::buildPayload` shape exactly so the existing
- * `/api/prelude/setup` endpoint accepts it without contract changes.
- *
- * Adds appearance fields to the payload (eye_color / hair_color /
- * skin_color / build / height / weight). The server's preludeService.js
- * doesn't yet persist these to the character row — they're silently
- * dropped on insert. Persistence + the arc-prompt APPEARANCE section
- * land alongside cutover, per the structural-redesign memory entry.
- *
- * Returns the created character on success; throws with a human-readable
- * error message on failure.
- */
-async function submitPrelude(state) {
-  const resolved = (curated, overrideValue) => {
-    const trimmed = (overrideValue || '').trim()
-    if (trimmed) return trimmed
-    return curated
-  }
-
-  // Filter parents per the legacy wizard's logic: keep slots with status
-  // set AND (name filled OR status not 'present'). Empty all-default →
-  // server fills a default unknown guardian.
-  const parents = (state.parents || [])
-    .filter(p => p?.status && ((p.name || '').trim() || p.status !== 'present'))
-    .map(p => ({
-      role: p.role || 'guardian',
-      name: (p.name || '').trim() || null,
-      race: p.race || state.race,
-      status: p.status
-    }))
-  const parentsFinal = parents.length > 0
-    ? parents
-    : [{ role: 'guardian', name: null, race: state.race, status: 'unknown' }]
-
-  const payload = {
-    first_name: (state.first_name || '').trim(),
-    last_name: (state.last_name || '').trim(),
-    nickname: (state.nickname || '').trim() || null,
-    gender: state.gender,
-    race: state.race,
-    subrace: state.subrace || null,
-    birth_circumstance: resolved(state.birth_circumstance, state.birth_circumstance_other),
-    home_setting: resolved(state.home_setting, state.home_setting_other),
-    region: resolved(state.region, state.region_other),
-    parents: parentsFinal,
-    siblings: state.siblings,
-    authority_figure: state.authority_figure,
-    origin_freeform: (state.origin_freeform || '').trim() || null,
-    // Appearance fields — included for forward-compat. Server silently
-    // drops these until the persistence work lands at cutover.
-    appearance: state.appearance || null
-  }
-
-  const resp = await fetch('/api/prelude/setup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}))
-    throw new Error(body.error || `Server error (${resp.status})`)
-  }
-  return resp.json()
 }
 
 /**

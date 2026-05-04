@@ -2,6 +2,45 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.138] - 2026-05-03 — Phase 2 close-out: Prelude wizard plumbing — save/resume, appearance persistence, 4th card state, arc-prompt APPEARANCE
+
+The cutover slice's plumbing layer. All four pieces ship together since they're interdependent. Still gated behind `?prelude_v2=1`; cutover flip lands as v1.0.139 after end-to-end smoke validation.
+
+**1. Server-side `prelude_setup` recognition + draft endpoints** (`server/services/preludeService.js`, `server/routes/prelude.js`):
+- New `creation_phase` value `'prelude_setup'` for in-flight wizard rows. Final enum: `'active' | 'creating' | 'ready_for_primary' | 'prelude' | 'prelude_setup'`.
+- New service helpers: `createDraftPreludeCharacter(state)`, `updateDraftPreludeCharacter(id, state)`, `getDraftPreludeState(id)`.
+- New endpoints: `POST /api/prelude/setup/draft` (Step 1 advance creates a draft row), `PUT /api/prelude/setup/draft/:id` (subsequent advances update), `GET /api/prelude/setup/draft/:id` (resume reads stored state).
+- Draft rows use placeholder values for required NOT-NULL columns (`class='prelude_setup'`, `level=0`, `current_hp=0`, `current_location='(setting up)'` etc.) — same pattern as the v1.0.116 `'creating'` phase placeholders.
+- `createPreludeCharacter` modified: when payload includes `draft_character_id`, RECYCLES that row (UPDATE, flips phase `prelude_setup → prelude`) instead of creating a new one. Keeps the same character id through the save→submit transition so anything bookmarking the draft id stays valid.
+
+**2. Server-side appearance field persistence** (same files):
+- At finalize, `eye_color` / `hair_color` / `skin_color` / `physical_build` from `payload.appearance` get written to the character row's columns directly (existing schema columns; `physical_build` added in migration 050).
+- Stable child→adult traits per the v1.0.137 cut (no height/weight).
+
+**3. Save/resume client wiring** (`client/src/components/creator/preludePersistence.js` — new file, `PreludeCreatorV2.jsx`):
+- `savePreludeProgress({ state, characterId })` — POST/PUT helper mirroring `creatorPersistence.js`'s shape for the primary creator.
+- `submitPrelude({ state, characterId })` — final submit, includes `draft_character_id` so the server recycles the row.
+- `loadPreludeDraft(characterId)` — resume helper; reads stored state from the draft row.
+- `PreludeCreatorV2` now accepts `initialState` and `initialCharacterId` props for resume; `next()` is async and calls `savePreludeProgress` before advancing; "Saving…" button state during in-flight saves; `saveError` surfaces inline if save fails (player's input preserved, can retry).
+
+**4. HomeScreenV2 fourth in-progress card state** (`HomeScreenV2.jsx`):
+- New badge: `Prelude · Continue setup` for `prelude_setup` rows.
+- Footer: `Prelude setup in progress`.
+- Shares the desaturated in-progress treatment with the existing three states.
+
+**HomeFlow `prelude_setup` card click routing** (`HomeFlow.jsx`):
+- `handleOpenCharacter` branches on `state === 'prelude_setup'`, fetches the draft state via `/api/prelude/setup/draft/:id`, populates `preludeDraftState` + `preludeDraftCharacterId`, routes to the `prelude.setup` route.
+- The render branch uses these to construct `<PreludeCreatorV2 initialState initialCharacterId>` instead of a fresh wizard.
+- `handlePickPrelude` (fresh start) clears the draft state so a new wizard isn't accidentally seeded with a prior resume.
+
+**5. Arc-prompt updates** (`server/services/preludeArcService.js`):
+- `buildArcUserPrompt` appends an `APPEARANCE` block listing only the four kept fields (Eyes / Hair / Skin / Build) when set on the character row. Block reads: *"player-set — canonical; honor when describing the character, do NOT invent additional physical markers"*.
+- `buildArcSystemPrompt` line 141 (CARDINAL RULE 9) refined per PM rev 2 framing: appearance fields are now part of the "canon" list; rule still bans inventing ADDITIONAL physical markers beyond what was set.
+
+**End-to-end smoke gate before cutover (v1.0.139):** create prelude character via `?prelude_v2=1` → exit mid-wizard → verify "Continue setup" card surfaces on home → click resume → complete remaining steps → submit → confirm arc generation includes the APPEARANCE block. Cutover flip + legacy `PreludeSetupWizard.jsx` retirement queue once smoke passes.
+
+---
+
 ## [1.0.0.137] - 2026-05-03 — Sub-checkpoint #6 fix: drop height + weight from Step 5 (Prelude character is a child)
 
 User-reported issue from v1.0.136 review: the prelude character is a CHILD across most of the arc (race-derived starting age: humans 6, elves 30, dwarves 18, etc.), so adult-range height/weight values would confuse the Sonnet narrator — picture "the small child carefully tries to lift the practice sword" running alongside a character sheet that says 6'0" / 225lb.
