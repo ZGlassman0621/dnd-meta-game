@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import HomeScreenV2 from './HomeScreenV2.jsx'
 import PathChoiceScreen from './PathChoiceScreen.jsx'
 import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
-import PreludeSetupWizard from '../PreludeSetupWizard.jsx'
 import PreludeCreatorV2 from './PreludeCreatorV2.jsx'
 import PreludeArcPreview from '../PreludeArcPreview.jsx'
 import PreludeSession from '../PreludeSession.jsx'
@@ -29,7 +28,7 @@ import {
  *   route='wizard.manual'         — CharacterCreatorV2 in manual mode (new)
  *   route='wizard.resume.manual'  — CharacterCreatorV2 with rehydrated 'creating' state
  *   route='wizard.resume.handoff' — CharacterCreatorV2 with rehydrated 'ready_for_primary' state
- *   route='prelude.setup'         — PreludeSetupWizard (11-question intake)
+ *   route='prelude.setup'         — PreludeCreatorV2 (6-step structural wizard)
  *   route='prelude.arc'           — PreludeArcPreview (Opus arc plan)
  *   route='prelude.session'       — PreludeSession (Sonnet play loop)
  *
@@ -233,33 +232,17 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   }
 
   if (route === 'prelude.setup') {
-    // ?prelude_v2=1 routes to the in-progress structural redesign per
-    // PM cadence (sub-checkpoint #1 — Step 1 visual + interaction
-    // review). Default route stays on the live one-page wizard until
-    // all 6 steps land + are signed off; cutover lands then.
-    const useV2 = typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('prelude_v2') === '1'
-    // Resume always uses V2 (the legacy one-page wizard has no
-    // save/resume — if there's a draft to resume, it was created by V2).
-    if (preludeDraftCharacterId) {
-      return (
-        <PreludeCreatorV2
-          onCancel={handlePreludeReturn}
-          onPreludeCreated={handlePreludeCreated}
-          initialState={preludeDraftState}
-          initialCharacterId={preludeDraftCharacterId}
-        />
-      )
-    }
-    return useV2 ? (
+    // v1.0.143 cutover: PreludeCreatorV2 (6-step structural redesign)
+    // is now the live path for the prelude entry. Resume from a draft
+    // card uses the same component with initialState + initialCharacterId.
+    // Legacy PreludeSetupWizard is retained but unwired per
+    // "deprecate by hiding nav, not deleting code."
+    return (
       <PreludeCreatorV2
         onCancel={handlePreludeReturn}
         onPreludeCreated={handlePreludeCreated}
-      />
-    ) : (
-      <PreludeSetupWizard
-        onPreludeCreated={handlePreludeCreated}
-        onCancel={handlePreludeReturn}
+        initialState={preludeDraftState}
+        initialCharacterId={preludeDraftCharacterId}
       />
     )
   }

@@ -140,7 +140,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 
 **Structure**: 5 play sessions — Chapter 1 (OBSERVE): 1 session, Chapter 2 (LEARN): 1 session, Chapter 3 (DECIDE): 2 sessions, Chapter 4 (COMMIT): 1 session.
 
-**Setup**: `POST /api/prelude/setup` creates a prelude-phase character from an 11-question wizard (`PreludeSetupWizard.jsx`). Starting age is race-derived server-side (humans 6, elves 30, dwarves 18, warforged 1, etc.).
+**Setup**: 6-step wizard `PreludeCreatorV2.jsx` (live as of v1.0.143) — Identity / Ancestry / Origin / Family / Appearance / Review. Save-on-step-advance via the new `'prelude_setup'` `creation_phase` value (draft endpoints `POST/PUT/GET /api/prelude/setup/draft`). Final submit POSTs to `/api/prelude/setup` with `draft_character_id`, which RECYCLES the draft row (UPDATE in place, flips phase `prelude_setup → prelude`). Starting age is race-derived server-side (humans 6, elves 30, dwarves 18, warforged 1, etc.). Appearance fields collected: eye / hair / skin / build (height + weight intentionally cut — prelude character is a child across most of the arc; adult-range dimensions would mislead the narrator). Legacy one-page wizard (`PreludeSetupWizard.jsx`) retained but unwired per "deprecate by hiding nav, not deleting code"; safe to delete after 2-3 playtest cycles.
 
 **Arc plan**: Opus generates a structured arc via `preludeArcService.js` — home world (4–6 locals, 2 tensions, 1–2 threats, mentor), 4 chapter arcs (2 beats each, seeded emergences), recurring threads, character trajectory. One re-roll allowed. Departure in Ch4 is a SEED of 3–4 plausible shapes; the actual departure type is driven by the player's committed theme at Ch3 wrap-up.
 
@@ -248,7 +248,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `client/src/components/DMMode.jsx` — DM Mode UI
 - `client/src/components/CharacterCreationWizard.jsx` — 4-step wizard (~4300 lines)
 - `client/src/components/CharacterSheet.jsx` — Character view/edit (~3600 lines)
-- `client/src/components/PreludeSetupWizard.jsx`, `PreludeArcPreview.jsx`, `PreludeSession.jsx`
+- `client/src/components/creator/PreludeCreatorV2.jsx` (+ `PreludeStep1Identity` through `PreludeStep6Review`, `preludePersistence.js`), `client/src/components/PreludeArcPreview.jsx`, `PreludeSession.jsx`. Legacy `PreludeSetupWizard.jsx` retained-but-unwired.
 - `client/src/components/MythicProgressionPage.jsx` — 7-tab mythic UI
 - `client/src/components/PartyBasePage.jsx` — 6-tab base management
 - Reference panels: `EquipmentReferencePanel`, `SpellReferencePanel`, `RulesReferencePanel`, `PrepReferencePanel`

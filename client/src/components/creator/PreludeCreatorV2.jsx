@@ -96,7 +96,7 @@ export default function PreludeCreatorV2({
           <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
         </div>
         <div className="crumbs">
-          {initialCharacterId ? 'Prelude · resuming setup' : 'Prelude · setup (v2 preview)'}
+          {initialCharacterId ? 'Prelude · resuming setup' : 'Prelude · setup'}
         </div>
         <div className="spacer" />
         {onCancel && (

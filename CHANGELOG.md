@@ -2,6 +2,25 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.143] - 2026-05-04 — Phase 2 close-out: Prelude wizard cutover (PreludeCreatorV2 is the live path; legacy retired-but-hidden)
+
+End-to-end smoke confirmed by user 2026-05-04 — full create → exit-mid-wizard → resume-from-card → submit cycle works clean; appearance fields reach Opus during gameplay and the opening narration honors them faithfully. Cutover unblocked.
+
+**Changes:**
+
+- **`HomeFlow.jsx`** — `?prelude_v2=1` URL gate removed. Prelude entry route now renders `PreludeCreatorV2` unconditionally (resume + fresh paths converge). `PreludeSetupWizard` import dropped. Vite tree-shakes the legacy file out of the bundle.
+- **`PreludeCreatorV2.jsx`** — appbar crumbs simplified from `Prelude · setup (v2 preview)` to `Prelude · setup`. Resume crumbs unchanged (`Prelude · resuming setup`).
+- **`PreludeSetupWizard.jsx`** — file retained per CLAUDE.md "deprecate by hiding nav, not deleting code." Header comment marks it DEPRECATED with a note that the only remaining importer is the deprecated `CharacterManager.jsx` (itself unwired except for the legacy "Edit in Wizard" affordance from CharacterSheet). Safe to delete once 2-3 playtest cycles confirm no need to revert.
+- **`CLAUDE.md`** — Prelude system snapshot updated: 6-step wizard is the live path; describes the new `'prelude_setup'` save/resume model + the four appearance fields. Frontend file-list updated.
+
+**The Prelude flow as of v1.0.143** (player-facing):
+
+Home → Path Choice → Prelude → Step 1 (Identity) → Step 2 (Ancestry) → Step 3 (Origin) → Step 4 (Family) → Step 5 (Appearance + free-text) → Step 6 (Review) → Submit → Arc Preview (testing toggle on) or first session (off). Save-on-step-advance throughout; exit mid-wizard surfaces a "Prelude · Continue setup" card on the home page; click resumes with all fields preserved.
+
+**Phase 2 close-out is now complete.** Remaining parking-lot items (heirloom handoff producer, deity worship-contract content, CharacterCreatorV2 edit-existing surface, deletion of deprecated legacy files) all flagged as deferred per `CONSOLIDATED_TODO.md` — not blocking Phase 3.
+
+---
+
 ## [1.0.0.142] - 2026-05-04 — Project-discipline catchup: tests for prelude draft endpoints
 
 CLAUDE.md mandates "tests before push for any non-trivial change (new endpoints, schema changes)." v1.0.138 added three new endpoints (`POST/PUT/GET /api/prelude/setup/draft`) plus modified `createPreludeCharacter` to accept a `draft_character_id` for row recycling. v1.0.139 was a hotfix for a BigInt serialization bug that proper tests would have caught at write time. Catching up the discipline gap.

@@ -13,8 +13,20 @@ import { Field, Eyebrow } from './creator/creatorPrimitives.jsx'
 
 const ORIGIN_FREEFORM_MAX = 2000
 
+// DEPRECATED 2026-05-04 — replaced by client/src/components/creator/PreludeCreatorV2.jsx
+//
+// v1.0.143 cutover: HomeFlow now renders the 6-step PreludeCreatorV2
+// structural redesign as the live prelude-entry path (with save/resume,
+// the new appearance step, and per-step validation gates). This legacy
+// one-page wizard is retained but unwired per CLAUDE.md "deprecate by
+// hiding nav, not deleting code." Same reasoning as the post-chunk-5
+// retention of CharacterCreationWizard.jsx + CharacterManager.jsx.
+//
+// Safe to delete once 2-3 playtest cycles confirm no need to revert.
+// Anything still importing from this file is a regression.
+
 /**
- * 10-question prelude setup wizard.
+ * 10-question prelude setup wizard. (DEPRECATED — see header.)
  *
  * Phase 2 close-out (2026-05-03): editorial reskin per PM ruling. Token
  * swap only — form fields, logic, copy, structure all preserved. Now
