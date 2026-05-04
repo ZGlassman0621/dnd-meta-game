@@ -2,6 +2,30 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.133] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 5 (Appearance + free-text) (sub-checkpoint #5)
+
+Sub-checkpoint #4 signed off (v1.0.132). Step 5 next.
+
+**New component: `client/src/components/creator/PreludeStep5Appearance.jsx`** — two halves in one step per spec:
+
+1. **Appearance grid** — six fields in a 3-column × 2-row grid: Eyes / Hair / Skin / Build / Height / Weight. Wholesale port of the primary creator's Step 7 race-aware pickers (`RaceAwareColorPicker`, `RaceAwareDimensionPicker`). Same primitives, same data shape, same race-derived dropdown options + "Custom…" override per the v1.0.120 work that built those.
+2. **Anything else?** — free-text textarea, 2000-char cap with monospace counter (turns accent at overflow). Carried over from the legacy 11-question wizard's Q10.
+
+**Age intentionally NOT included** — starting age is race-derived server-side per `preludeService.js::computeStartingAge` (humans 6, elves 30, dwarves 18, warforged 1, etc.). Legacy wizard removed its age field in v1.0.43 for the same reason.
+
+**All appearance fields are optional**, matching the legacy wizard's Q10 leniency. Race-derived ranges in `raceDemographics.js` / `raceColorTraits.js` are calibrated for adult characters; the prelude character is a child whose appearance changes across the arc, so the player can fill what matters and use Custom… for child-appropriate values where it counts. Future iteration could split into "as a child" vs "as an adult" pickers — parking-lot consideration, not in scope here. Documented inline in the component.
+
+**Step 5 → Step 6 validation gate** added: only blocks advance when `origin_freeform` exceeds the 2000-char cap (player sees + addresses before reaching review). All other fields lenient.
+
+**Out of scope for this sub-checkpoint**:
+- Step 6 (review)
+- Save/resume server-side persistence
+- HomeScreenV2 fourth in-progress card state
+- Arc-prompt updates (APPEARANCE section in `preludeArcService.js` + line-141 system-prompt rule refinement) — these wire alongside cutover, per memory entry
+- Cutover from legacy `PreludeSetupWizard`
+
+---
+
 ## [1.0.0.132] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 4 (Family & Influence) (sub-checkpoint #4)
 
 Sub-checkpoint #3 signed off (v1.0.131, no notes). Step 4 ships next — the largest step structurally, hence shipped alone before the smaller Steps 5+6.

@@ -5,6 +5,7 @@ import PreludeStep1Identity from './PreludeStep1Identity.jsx'
 import PreludeStep2Ancestry from './PreludeStep2Ancestry.jsx'
 import PreludeStep3Origin from './PreludeStep3Origin.jsx'
 import PreludeStep4Family from './PreludeStep4Family.jsx'
+import PreludeStep5Appearance, { ORIGIN_FREEFORM_MAX } from './PreludeStep5Appearance.jsx'
 
 /**
  * Prelude Creator V2 — structural redesign per PM spec rev 2 (2026-05-03).
@@ -73,7 +74,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
           {step === 1 && <PreludeStep2Ancestry {...stepProps} />}
           {step === 2 && <PreludeStep3Origin {...stepProps} />}
           {step === 3 && <PreludeStep4Family {...stepProps} />}
-          {step === 4 && <PlaceholderStep stepNum={5} title="Appearance" />}
+          {step === 4 && <PreludeStep5Appearance {...stepProps} />}
           {step === 5 && <PlaceholderStep stepNum={6} title="Review" />}
 
           <WizardFoot
@@ -153,7 +154,14 @@ function canAdvanceFromStep(step, state) {
     if (state.siblings === 'only_child' && state.authority_figure === 'sibling') return false
     return true
   }
-  // Step 5: placeholder. Allow advance until the real validation lands.
+  if (step === 4) {
+    // Step 5: appearance fields all optional; origin_freeform optional.
+    // Only gate is the 2000-char cap — block advance if over the limit
+    // so the player sees + addresses it before reaching review.
+    const len = (state.origin_freeform || '').length
+    if (len > ORIGIN_FREEFORM_MAX) return false
+    return true
+  }
   return true
 }
 
