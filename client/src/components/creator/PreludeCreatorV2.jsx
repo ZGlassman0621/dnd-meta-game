@@ -4,6 +4,7 @@ import racesData from '../../data/races.json'
 import PreludeStep1Identity from './PreludeStep1Identity.jsx'
 import PreludeStep2Ancestry from './PreludeStep2Ancestry.jsx'
 import PreludeStep3Origin from './PreludeStep3Origin.jsx'
+import PreludeStep4Family from './PreludeStep4Family.jsx'
 
 /**
  * Prelude Creator V2 — structural redesign per PM spec rev 2 (2026-05-03).
@@ -71,7 +72,7 @@ export default function PreludeCreatorV2({ onCancel, onPreludeCreated }) {
           {step === 0 && <PreludeStep1Identity {...stepProps} />}
           {step === 1 && <PreludeStep2Ancestry {...stepProps} />}
           {step === 2 && <PreludeStep3Origin {...stepProps} />}
-          {step === 3 && <PlaceholderStep stepNum={4} title="Family & Influence" />}
+          {step === 3 && <PreludeStep4Family {...stepProps} />}
           {step === 4 && <PlaceholderStep stepNum={5} title="Appearance" />}
           {step === 5 && <PlaceholderStep stepNum={6} title="Review" />}
 
@@ -142,8 +143,17 @@ function canAdvanceFromStep(step, state) {
       && filled(state.home_setting, state.home_setting_other)
       && filled(state.region, state.region_other)
   }
-  // Steps 4–5: placeholders. Allow advance until each step's real
-  // validation lands with the step component.
+  if (step === 3) {
+    // Step 4: siblings + authority figure required (parents lenient —
+    // legacy validate() doesn't check parents; server fills a default
+    // 'unknown guardian' if all slots are empty). Sibling/authority
+    // contradiction (only_child + sibling-as-authority) blocks advance.
+    if (!state.siblings) return false
+    if (!state.authority_figure) return false
+    if (state.siblings === 'only_child' && state.authority_figure === 'sibling') return false
+    return true
+  }
+  // Step 5: placeholder. Allow advance until the real validation lands.
   return true
 }
 

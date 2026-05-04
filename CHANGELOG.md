@@ -2,6 +2,29 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.132] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 4 (Family & Influence) (sub-checkpoint #4)
+
+Sub-checkpoint #3 signed off (v1.0.131, no notes). Step 4 ships next — the largest step structurally, hence shipped alone before the smaller Steps 5+6.
+
+**New component: `client/src/components/creator/PreludeStep4Family.jsx`** — three sections in a single step:
+
+- **Parents / guardians** — two slots, each row is a 4-column grid (role / race / name / status). Race defaults to player's race when blank. Status description renders as `.help` text below the rows when the first parent's status changes.
+- **Siblings** — single dropdown from `SIBLING_OPTIONS`. No free-text override (the legacy wizard's Q10 catches edge cases; here, Step 5's "Anything else?" carries that load).
+- **Authority figure** — card-list of 8 options (parent / sibling / mentor / guardian / captor / employer / rival / none). Reuses the v1.0.124-signed-off pattern: editorial cards with accent left-border on the picked entry, label + italic description per option.
+
+**Sibling/authority contradiction guard.** Selecting "Only child" + "An older sibling" as the dominant adult presence is incoherent — the legacy wizard's `validate()` blocked it; this version surfaces an inline `.help` warning ("You said 'Only child' above — pick a different authority here, or change your sibling answer.") AND disables Continue until resolved.
+
+**Step 4 → Step 5 validation gate** added: requires `siblings` + `authority_figure`; blocks the only-child contradiction. Parents lenient — server fills a default unknown guardian if all slots are empty (matches legacy behavior).
+
+**Out of scope for this sub-checkpoint**:
+- Steps 5–6 (appearance + free-text / review)
+- Save/resume server-side persistence
+- HomeScreenV2 fourth in-progress card state
+- Arc-prompt updates
+- Cutover from legacy `PreludeSetupWizard`
+
+---
+
 ## [1.0.0.131] - 2026-05-03 — Phase 2 close-out: Prelude wizard Step 3 (Origin) (sub-checkpoint #3)
 
 Sub-checkpoint #2 signed off (v1.0.130). Step 3 ships next.
