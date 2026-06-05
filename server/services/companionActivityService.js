@@ -13,6 +13,7 @@ import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { adjustLoyalty, setMood } from './companionBackstoryService.js';
 import { emit } from './eventEmitter.js';
 import { GAME_EVENTS } from '../config/eventTypes.js';
+import { loggedChat } from './aiCallLogger.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 const VALID_ACTIVITY_TYPES = [
@@ -365,7 +366,8 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await claudeChat(
+    const response = await loggedChat(
+      { call_purpose: 'companion_activity_gen', prompt_builder: 'companionActivityService' },
       'You are a D&D narrative outcome generator. Return ONLY valid JSON, no markdown or explanation.',
       [{ role: 'user', content: prompt }],
       2, 'opus'

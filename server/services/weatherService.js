@@ -8,6 +8,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import {
   WEATHER_TYPES,
   SEASON_WEATHER_TABLES,
@@ -635,3 +636,28 @@ export async function setWeather(campaignId, weatherType, durationHours, gameDay
 
   return getWeather(campaignId);
 }
+
+// ============================================================
+// SC-6.4 — WEATHER_CHANGE marker handler
+// ============================================================
+
+// Replaces the inline detect-call dispatch in routes/dmSession.js (was
+// at lines 1868-1873). Reads the character's campaign_id + game_day to
+// drive setWeather. Returns the weatherChangeResult shape the route used
+// to push into `data.weatherChange` for the client (consumed by
+// DMSession.jsx:869 as a refresh trigger).
+//
+// Duration_Hours defaults to 24 when omitted (matches the legacy detect
+// fallback `parseInt(data.duration_hours) || 24`).
+registerMarkerHandler('WEATHER_CHANGE', async (parsed, context) => {
+  if (!context?.characterId) {
+    console.warn('[weatherService] WEATHER_CHANGE handler invoked without characterId');
+    return null;
+  }
+  const row = await dbGet('SELECT campaign_id, game_day FROM characters WHERE id = ?', [context.characterId]);
+  if (!row?.campaign_id) return null;
+  const durationHours = parsed.Duration_Hours || 24;
+  await setWeather(row.campaign_id, parsed.Type, durationHours, row.game_day || 1);
+  console.log(`🌦️ WEATHER_CHANGE: ${parsed.Type} for ${durationHours}h`);
+  return { type: parsed.Type, duration_hours: durationHours };
+});

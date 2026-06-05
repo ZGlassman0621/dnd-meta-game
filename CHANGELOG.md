@@ -2,6 +2,975 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.167] - 2026-05-06 — Phase 4a review fix part 2: home-route appbar missed the AI Behavior link
+
+PM 2026-05-06 review caught that v1.0.166's "fix" only landed on one of HomeFlow's two appbars. The path-route appbar (`route === 'path'`, the choice-of-beginnings screen) got the AI Behavior link; the home-route appbar (`route === 'home'`, the default — the user's primary surface) did not.
+
+**Root cause.** The two appbars in `HomeFlow.jsx` use different indentation levels — the path-route block sits inside a `creator-v2` wrapper at 12-space indent; the home-route block sits at 10-space indent. The earlier `replace_all` edit's pattern matched the 12-space version only, silently leaving the home-route appbar untouched. `grep "setAiBehaviorOpen(true)"` showed 1 occurrence at v1.0.166 instead of the expected 2.
+
+**Fix.** Added the AI Behavior button to the home-route appbar with matching indentation. Verified with `grep -c "setAiBehaviorOpen(true)"` → 2 occurrences. Rebuilt bundle now includes 7 "AI Behavior" string occurrences (was 5 at v1.0.166), confirming all three appbar surfaces (HomeFlow home + HomeFlow path + App.jsx dashboard header) ship the button.
+
+**No other changes.** Same code path, same component, same `aiBehaviorOpen` state machine. Pure indentation-pattern miss caught by PM review.
+
+---
+
+## [1.0.0.166] - 2026-05-06 — Phase 4a review fix: AI Behavior debug page entry point in appbar
+
+PM 2026-05-06 review surfaced that v1.0.165's only entry point to the AI Behavior debug page was a card in the dashboard nav grid — invisible from the home screen and inconsistent with the Settings access pattern. PM lean: appbar text link, right side, near the Settings link, visible on home + mid-session same as Settings.
+
+**`client/src/components/creator/HomeFlow.jsx`:**
+- Lazy-loaded `AIBehaviorDebugPage` import. Full-screen takeover (same pattern as the wizard / prelude routes) when `aiBehaviorOpen` is true; `onBack` returns to the prior route.
+- "AI Behavior" link added to BOTH appbars (home route + path-choice route) beside the existing "Settings" link. Same `.nav-settings` editorial-aesthetic class; uses a `◇` glyph to distinguish from Settings's `✦`. Visible regardless of whether a character exists (the page has its own filter dropdowns and works against an empty log).
+
+**`client/src/App.jsx`:**
+- "AI Behavior" button added to the dashboard header beside the Settings button. Same dark-aesthetic inline-style treatment; sets `activeView='showAIBehavior'`.
+- Shared `appbarLinkStyle` + `appbarLinkGlyph` constants extracted (DRY across the two header buttons).
+- Removed the dashboard nav grid card for "AI Behavior (debug)" — the appbar link is now the single canonical entry point per PM lean. Comment block left in the grid card array referencing this DECISION_LOG ruling so a future reader doesn't re-add it.
+
+**Mid-session access:** DMSession runs inside the dashboard branch with `activeView === 'showDMSession'`; the dashboard header (with the new AI Behavior button) renders above it. Same access pattern as Settings — appbar link visible mid-session, click opens the debug page in a separate view, returning via `onBack` resumes the same DM turn.
+
+Smoke: client build clean (1716 kB index.js, +1KB from glyph + branch logic). No server change. Tests unchanged (the navigation fix is purely UI plumbing).
+
+---
+
+## [1.0.0.165] - 2026-05-06 — Phase 4a: AI behavior diagnostic infrastructure (read-only on production prompts)
+
+PM-authored mini-phase between Phase 3.7 close (v1.0.164) and Phase 4b. Implements [`PHASE_4A_SPEC.md`](PHASE_4A_SPEC.md) end-to-end. Ships the instrumentation that lets the project see what the AI is actually doing — captured prompts, captured responses, derived signals, prompt-shape accounting, debug page + CLI. **No production prompt changes** — Phase 4a is read-only on the AI's actual behavior; tuning is Phase 4b.
+
+**SC-4a.1 — Prompt-response capture.**
+
+- Migration 053 creates `ai_call_log` table with 28 columns covering identity (character_id / campaign_id / session_id / turn_number / prompt_builder / call_purpose), timing (request_started_at / response_received_at / latency_ms), model + token counts (model_id / input_tokens / output_tokens / cache_read_input_tokens / cache_creation_input_tokens), prompt + response content (system_prompt / user_message / conversation_history / response_text / response_status / response_error), prompt-shape (prompt_sections JSON), marker-pipeline annotations (markers_detected / marker_failures / triggered_correction_loop / rule_violations), free-form metadata, and a future `archived_at` hook for eventual pruning. Indexed on (character_id, started_at), (session_id, started_at), (started_at), (call_purpose, started_at).
+- New module [`server/services/aiCallLogger.js`](server/services/aiCallLogger.js) exports `logAiCall`, `logAiCallWithId`, `annotateAiCallLog`, `wrapClaudeCall`, `wrapClaudeCallWithId`, and a thin drop-in `loggedChat(callContext, ...chatArgs)` for generator-style sites. Logging is best-effort — DB persistence failures never propagate to the caller; gameplay continues if the log table is unreachable.
+- Token-count capture via `options.onApiMeta` callback added to [`server/services/claude.js`](server/services/claude.js) `chat()`. The logger wires this callback automatically; existing call sites are unaffected.
+- **All 37 production Claude call sites migrated** to delegate through the logger:
+  - **Gameplay-critical paths (with `logAiCallWithId` + post-marker annotation):** dmSession main turn, dmSession start, prelude turn (with rule-2 retry separately tracked), prelude session start, DM Mode session start / turn / roll-reaction.
+  - **Chronicle + memory paths:** storyChronicleService chronicle extraction, dmModeChronicleService chronicle + relationship-evolution, npcVoiceService voice extraction, dmModeNpcService NPC voice extraction, rollingSummaryService rolling-summary update.
+  - **Generator paths:** preludeArcService Opus arc-plan, preludeSessionService chapter recap, preludeTransitionService biography seed, backstoryParserService, partyGeneratorService, npcMailService, questGenerator, livingWorldGenerator, campaignPlanService, dmCoachingService, adventureGenerator, companionBackstoryGenerator, companionActivityService, locationGenerator, contextManager compression, character-route notes generation, dmMode session summary, dmSession internal sub-prompts (rest check, analysis, notes extract, NPC extract, memory extract, recap, NPC codex extract ×2).
+- DM session main turn additionally annotates the row post-fact with `markers_detected`, `marker_failures`, `triggered_correction_loop`, and `turn_number` once the marker pipeline + transcript writer run.
+
+**SC-4a.2 — Quality signal aggregation.**
+
+[`server/services/aiBehaviorSignals.js`](server/services/aiBehaviorSignals.js) — eight signals plus orchestration:
+
+1. `markerCorrectionLoopHits` — count of turns triggering correction prompt next-turn; per-call rate; recent examples
+2. `ruleViolationRates` — per-call flagging counts; by-kind buckets
+3. `repetitionLedgerTriggers` — repetition-ledger flag counts (sourced from metadata for now; promoted to a dedicated column if Phase 4b investigations need it)
+4. `responseLengthDistribution` — token-count distribution per call_purpose (count / min / max / mean / median / p90)
+5. `markerEmissionRates` — per-marker-type emission count totals
+6. `nameReuseSignal` — heuristic proper-noun extraction; flags names appearing across ≥ 2 character_ids (looks for the OoDL "dozens of distinct named NPCs" pattern; flags divergence)
+7. `timeDriftSignal` — best-effort heuristic regex on time-bounded statements ("X arrives in N days" / "ward holds for N hours"); flags subject-keyed value drift within a session
+8. `scopeOfInstructionApplication` — **the most important signal per [`PHASE_4_OVERVIEW.md`](PHASE_4_OVERVIEW.md) §6**. Detects autonomy-violation patterns (player_dialogue_attribution / player_thought_attribution / player_emotion_attribution / player_physical_action_directive) regardless of whether the narrow example case is present. Per spec §3.5 v1 is best-effort with explicit caveats; refinement is Phase 4b investigation #1.
+
+`computeAllSignals(filter)` composes all eight in parallel for the debug page + CLI.
+
+**SC-4a.3 — Prompt-shape accounting.**
+
+[`server/services/promptShapeAccounting.js`](server/services/promptShapeAccounting.js):
+
+- `computePromptSections(prompt, builder)` — heuristic section-boundary inference per Q5 ruling. Recognizes `=== SECTION ===`, `ALL CAPS HEADERS:`, `**Bold**`, `# Markdown` patterns. Returns `[{ name, chars, tokens, line_start, line_end }]`. Token estimate is `chars/4` (Claude tokenizer empirical average for mixed prose+structured content).
+- Persisted alongside every captured prompt in `ai_call_log.prompt_sections` JSON column.
+- Aggregation queries: `lengthDistributionForBuilder`, `sectionContributionForBuilder` (avg tokens + share % per section across calls), `cumulativeContextForSession` (input+output token trajectory), `promptGrowthForSession` (system-prompt growth slope across turns).
+
+**SC-4a.4 — Diagnostic query surface.**
+
+- [`server/routes/aiBehavior.js`](server/routes/aiBehavior.js) — REST API mounted at `/api/ai-behavior`. Endpoints: `GET /calls` (filtered list), `GET /calls/:id` (full detail with parsed JSON columns), `GET /dimensions` (filter dropdowns), `GET /signals/:name` for each of the eight signals + `signals/all`, `GET /prompt-shape/length-distribution`, `GET /prompt-shape/section-contribution`, `GET /prompt-shape/cumulative-context/:sessionId`, `GET /prompt-shape/growth/:sessionId`.
+- [`client/src/components/AIBehaviorDebugPage.jsx`](client/src/components/AIBehaviorDebugPage.jsx) — React debug page accessible via dashboard nav card "AI Behavior (debug)". Filter controls (character / session / call_purpose) → signal summary panel + paginated call list + per-call detail pane (full prompt, response, conversation history, marker results, prompt sections breakdown). Editorial register relaxed per spec §5.3 — plain monospace typography, dense two-column layout, no decorative ornaments.
+- [`server/scripts/ai-behavior.js`](server/scripts/ai-behavior.js) — CLI tool with subcommands `sessions / signal / calls / export / shape / cumulative`. Pipeable to grep/jq for ad-hoc analysis. Supports `--session-id=last` magic value for "the most-recent session." Same signal functions backing both the page and the CLI.
+
+**Tests** — [`tests/ai-behavior-instrumentation.test.js`](tests/ai-behavior-instrumentation.test.js), 78 assertions all passing:
+
+- **SC-4a.3 section inference (10 assertions):** `=== SECTION ===` markers, ALL-CAPS headers, **Bold** headers, # Markdown headers all recognized; estimateTokens edge cases (empty / null / chars/4); unstructured prompt yields one section.
+- **SC-4a.1 logger basics (16 assertions):** `logAiCall` returns callFn result transparently, captures all metadata fields (character_id / system_prompt / user_message / response_text / latency_ms / response_status); failed callFn rethrows + logs as `response_status='error'`; missing `call_purpose` throws (defensive); section inference happens automatically and persists as JSON.
+- **SC-4a.1 logAiCallWithId + annotation (5 assertions):** returns numeric logId; `annotateAiCallLog` updates `markers_detected`, `triggered_correction_loop`, `rule_violations` on the existing row.
+- **SC-4a.1 onApiMeta hook (4 assertions):** `wrapClaudeCall` wires the callback so the token counts (model_id / input_tokens / output_tokens / cache_read_input_tokens) all land on the row when the synthesized claudeFn invokes onApiMeta.
+- **SC-4a.2 signals (33 assertions across 6 signals):** scopeOfInstructionApplication shape + autonomy-violation detection (seeded "you decide" / "you feel" → flagged); responseLengthDistribution by_purpose buckets; markerEmissionRates picks up annotated markers; nameReuseSignal detects shared proper noun across two character_ids ("Korren"); timeDriftSignal detects subject-keyed value drift ("Lyra 7 days → 4 days"); computeAllSignals composes the eight under documented keys.
+- **SC-4a.3 aggregation queries (8 assertions):** sectionContributionForBuilder + lengthDistributionForBuilder return documented shapes; section names from seeded data surface in breakdown.
+
+Regression suites green: marker-pipeline (44), fortress-threat-marker (61), survival-intensity (59), time-bounded-state (69). Server boot smoke clean (migration 053 applies; routes mount; CLI tool runs end-to-end against the seeded test data). Client build clean — 1715 kB index.js (no significant size delta), 82.85 kB CSS bundle.
+
+**Phase 4a acceptance criteria met (per spec §2.6 + §3.6 + §4.6 + §5.6):**
+- ✅ `ai_call_log` table created via migration 053 with all spec §2.2 fields
+- ✅ `services/aiCallLogger.js` exports the logging helper (and convenience wrappers)
+- ✅ All 37 existing AI call sites migrated to delegate through the helper
+- ✅ Captured fields per §2.2; storage shape per §2.4 (append-only with archival hook)
+- ✅ Tests cover helper wraps correctly, failed API calls log, existing call-site behavior is byte-identical
+- ✅ Eight signal functions exported with documented shapes
+- ✅ Tests cover each signal: known-input → known-output verification
+- ✅ Prompt builders' section breakdowns inferred + persisted in `ai_call_log`
+- ✅ Aggregation functions handle the standard queries (length distribution / section contribution / cumulative context / growth)
+- ✅ Debug page exists at stable activeView `'showAIBehavior'`, accessible from app
+- ✅ Filter controls work; signal computations display; call list paginates; per-call detail view shows captured prompt + response + metadata
+- ✅ CLI tool exposes the same signal functions with command-line invocation
+- ✅ Schema for `ai_call_log` is documented in migration header + this CHANGELOG entry
+- ✅ DECISION_LOG entry covering each sub-checkpoint's design decisions
+- ✅ No prompt-content or response-content changes (read-only on production)
+
+**Phase 4a is closed.** Phase 4b (investigation practice) is unblocked. PM ships Phase 4b's investigation framework + first three investigation specs next.
+
+---
+
+## [1.0.0.164] - 2026-05-06 — Phase 3.7: fortress groundwork (marker-driven threats + mechanical-damage symmetry + KNOWN_BUGS triage)
+
+PM-authored mini-phase between Phase 3.5 close (v1.0.163) and Phase 4 entry. Three sub-checkpoints, all backend + documentation work, no Design dependency. Implements [`PHASE_3_7_SPEC.md`](PHASE_3_7_SPEC.md). Lays foundation for the eventual fortress system design phase (Phase 5 candidate) by absorbing two findings from [`triage/kingdom-management-survey.md`](triage/kingdom-management-survey.md) and triaging the rest into `KNOWN_BUGS.md`.
+
+**SC-3.7.1 — Marker-driven fortress threats.** Reframes threat origination from world-event-tick to AI DM marker emission.
+
+- New `FORTRESS_THREAT` schema in [server/services/markerSchemas.js](server/services/markerSchemas.js): required `BaseId`, `EventType` (one of five `RAID_CAPABLE_EVENTS` keys), `Force` (1-30), `WarningDays` (1-30); optional `Source`, `Category`, `Reason`. Multi-instance per Q1 (pipeline default loop handles).
+- New handler in [server/services/baseThreatService.js](server/services/baseThreatService.js) registered via `registerMarkerHandler('FORTRESS_THREAT', ...)`. Validates: base exists + belongs to character's campaign; base status='active'; no existing approaching/defending/resolving threat (single-active-threat invariant). Source/Category fallbacks land **handler-side** per Q3 (schema validates structure; handler reads `RAID_CAPABLE_EVENTS[EventType].sourceLabel` / `.category` for absent optional fields). Computes `threat_type` from `Force` + `SIEGE_FORCE_THRESHOLD`; inserts row + writes narrative_queue entry. Returns structured result with `threatId`/`threatType`/`baseName`/`source`/`deadlineGameDay` plus a systemNote for the route to assemble.
+- `generateThreatsForCampaign` deprecated per Q2 — comment block references spec §1.2 ("removing it would touch the living-world tick architecture — out of scope") and notes that marker-driven origination is canonical post-Phase-3.7. Function stays in place; same row shape if any future ship re-activates the world-event path.
+- Resolves the producer-gap finding from [`triage/kingdom-management-survey.md`](triage/kingdom-management-survey.md) §0 + §3.1. Fix-along-the-way #6 in Phase 3 + 3.7 (joins notoriety silent-drop, NPC absence ×2, dehydration weather modulation, world event clock standardization). KNOWN_BUGS Resolved-archive entry.
+
+**SC-3.7.2 — Mechanical-damage asymmetry fix.** Closes the perverse incentive surfaced in survey §1.6.
+
+- `recordPlayerDefenseOutcome` ([server/services/baseThreatService.js](server/services/baseThreatService.js)) now runs `computeDamageFromOutcome` for `damaged` and `captured` outcomes — the same helper auto-resolve uses. Mechanical mutation (buildings flipped to `damaged`, treasury debited, garrison reduced) lands regardless of resolution path.
+- New `synthesizeOutcomeCalcFromMarker(outcome)` helper translates the marker's `Outcome` enum value into the `outcomeCalc` shape `computeDamageFromOutcome` expects (auto-resolve produces this via dice rolls; player-led path doesn't roll). Synthetic rolls flagged `synthetic: true` in the resulting damage_report so analytics can distinguish marker-driven outcomes from auto-resolve.
+- Player-led `damaged` defaults to **mild sub-tier** (margin treated as 0) per spec §3.4: 25% treasury / 20% garrison / 1-2 buildings damaged. Rationale: player engaged with the defense; even a "damaged" outcome reflects active resistance. Penalize engaged players less harshly than unengaged. Future severity field on `[BASE_DEFENSE_RESULT]` (Q4) can override; out of Phase 3.7 scope.
+- Caller-supplied `damageReport` blobs merge WITH mechanical mutation — caller fields preserved on the JSON blob; mechanical mutation runs underneath either way.
+- `repelled` outcome continues to apply zero damage (no behavior change).
+- KNOWN_BUGS Resolved-archive entry. Per DECISION_LOG: this fix is NOT fix-along-the-way (it was an explicit acceptance criterion of the sub-checkpoint).
+
+**SC-3.7.3 — Documentation + KNOWN_BUGS triage.**
+
+- [KNOWN_BUGS.md](KNOWN_BUGS.md) cleaned up: duplicate `## Active known bugs` and `## Resolved known bugs (archive)` headers removed (PM-authored entries had concatenation duplicates); `v1.0.16x` placeholders updated to `v1.0.164` on the two SC-3.7.x resolution stamps.
+- Two new active entries (Recapture window without recapture mechanism; Holdings purpose data is stub) — both formally deferred to the future fortress system design phase per spec §1.2.
+- Two new resolved-archive entries (Producer gap; Mechanical-damage asymmetry).
+- [CLAUDE.md](CLAUDE.md) updated per spec §4.3: `[FORTRESS_THREAT]` added to the canonical marker list; `baseThreatService` handler registry entry now reads `FORTRESS_THREAT/BASE_DEFENSE_RESULT`; new paragraph documents marker-driven threat origination as canonical; Party bases / fortresses section updated to reflect mechanical-damage symmetry + the recapture-window known limitation.
+- [triage/kingdom-management-survey.md](triage/kingdom-management-survey.md) updated with a post-Phase-3.7 status block at the top — names which findings were absorbed (producer gap, mechanical-damage asymmetry) versus which remain open as KNOWN_BUGS (recapture, holdings purpose) versus what stayed parked (the fortress intensity dial itself, naming nudge carried forward).
+
+**Tests** — `tests/fortress-threat-marker.test.js` (new, 61 assertions all passing):
+- **Schema validation (15 assertions)** — canonical FORTRESS_THREAT parses; required fields enforced (BaseId / EventType / Force / WarningDays); enum validation (EventType, Category); Force min/max + WarningDays max; minimal canonical with all optionals omitted parses (fallbacks land handler-side); multi-instance extraction (two markers in one narrative).
+- **Handler dispatch (20 assertions)** — valid marker → 1 new `base_threats` row with handler-side Source/Category fallbacks from `RAID_CAPABLE_EVENTS`; raid-vs-siege determination at the SIEGE_FORCE_THRESHOLD boundary; deadline = game_day + WarningDays; status starts approaching; narrative_queue entry created; error paths covered (unknown BaseId → `base_not_found`; base in another campaign → `base_not_owned`; abandoned base → `base_not_active`; existing threat → `threat_already_active` with `existingThreatId`); explicit Source/Category in marker used verbatim (no fallback).
+- **SC-3.7.2 damage symmetry (24 assertions)** — `repelled`: treasury/garrison untouched, no buildings damaged; `damaged` (mild sub-tier default): 25% treasury / 20% garrison / 1-2 buildings; `captured`: 90% treasury / 0 garrison / all buildings + party_bases.status flips to `damaged` + recapture_deadline_game_day = gameDay + 14; damage_report JSON populates with mechanical detail (`treasury_lost_gp`, `garrison_lost`, `buildings_damaged`, `player_defended: true`, `rolls.synthetic: true`); caller-supplied damageReport blobs merge WITH mechanical mutation (caller fields preserved; mechanical mutation runs underneath).
+
+Regression suites all green: marker-pipeline (44), sc6-4d-combat-mythic-schemas (48), threshold-crossed-cluster (33), survival-intensity (59), time-bounded-state (69). Server boot smoke clean — handler registration loads on import as expected.
+
+**Phase 3.7 acceptance criteria met (per spec §2.7 + §3.5 + §4.4):**
+- ✅ FORTRESS_THREAT schema added to markerSchemas.js
+- ✅ Handler registered in baseThreatService.js via registerMarkerHandler
+- ✅ Handler validates base ownership + active status
+- ✅ Handler enforces single-active-threat-per-base invariant
+- ✅ Handler creates base_threats row + narrative_queue entry on success
+- ✅ Handler returns structured result for route to pass through
+- ✅ Tests cover valid marker / invalid BaseId / existing threat / raid vs siege
+- ✅ Existing world-event-driven `generateThreatsForCampaign` still works (no regression)
+- ✅ `recordPlayerDefenseOutcome` runs `computeDamageFromOutcome` for damaged + captured
+- ✅ `repelled` continues to apply zero damage
+- ✅ Mild sub-tier used as default for player-led damaged
+- ✅ damage_report JSON blob continues to populate
+- ✅ Three KNOWN_BUGS entries (PM-authored content; Code landed) — actually four, two active + two resolved-archive
+- ✅ CLAUDE.md updated per §4.3
+- ✅ DECISION_LOG entries (one closing entry consolidating the three SC-3.7.x ships)
+
+**Phase 3.7 is closed.** Phase 4 (AI behavior diagnostic + combat difficulty mechanism activation) is unblocked.
+
+---
+
+## [1.0.0.163] - 2026-05-05 — Phase 3.5 first ship: Settings overlay UI (survival intensity wired end-to-end + combat difficulty placeholder)
+
+User-facing surface for the SC-7.6.5 mechanism. Implements [`settings/SETTINGS_DESIGN_BRIEF.md`](settings/SETTINGS_DESIGN_BRIEF.md) verbatim — centered editorial overlay sheet on a tinted scrim, reachable from a `Settings` link in the appbar on home and mid-session alike. Two controls today (Gameplay section): survival intensity (active, writes via existing PUT `/api/character/:id` boundary added in SC-7.6.5) and combat difficulty (placeholder dial; mechanism activation is Phase 4 territory per CONSOLIDATED_TODO).
+
+**`client/src/components/settings/SettingsOverlay.jsx` (new):**
+- `SettingsOverlay` — fixed-position overlay (`role="dialog"`, `aria-modal`, Esc-to-close, scrim-click dismiss). Per-character scope via `character` prop; dial click fires PUT immediately and updates the right-margin meta to `Saved · just now` (decays via 15s polling tick to `a moment ago`, `5m ago`, `1h ago`, `earlier today`).
+- `FourPosDial` — labeled register dial primitive (per design §5). Four columns (`I/II/III/IV`), active position promoted in editorial-accent color, active explanation paragraph below in faded-gold left-rule block. Disabled variant identical structurally (per design §6 — "real future feature, not broken stub"); the disabled dial still ships as a real DOM control (`aria-disabled`) pointing at `standard`.
+- Optimistic local state + rollback on PUT failure. Apply-on-click contract per design §4 — no save button, no discard prompt.
+- `context` prop drives exit-button label: `'Back to game'` from session, `'Done'` from home.
+
+**`client/src/styles/creator-theme.css`:**
+- Appended Settings overlay styles scoped under `.settings-overlay-root`. Editorial palette duplicated (small token block) so the overlay reads correctly when summoned from either the editorial-aesthetic HomeFlow appbar or the legacy dark-aesthetic dashboard chrome — the scrim provides visual separation either way. Promotion to `design-tokens.css` deferred per the existing comment at the top of the file (waiting for a third surface).
+- Added `.creator-v2 .appbar .nav-settings` for the editorial Settings link in HomeFlow's appbar.
+
+**`client/src/components/creator/HomeFlow.jsx`:**
+- Settings link added to BOTH appbars (home route + path-choice route). Picks the most-recently-updated active character (or in-progress draft as fallback) for per-character scope. Hidden when zero characters exist.
+- `handleSettingsSaved` patches the locally-tracked character list so subsequent home renders reflect the new `survival_intensity` without a refetch round-trip.
+
+**`client/src/App.jsx`:**
+- Settings link added to the dashboard header (sits above DMSession + character sheet + all dashboard views). Scopes to `selectedCharacter`; `context` is `'session'` when `activeView === 'showDMSession'`, else `'home'`. Mid-session safety contract (per design): overlay is fixed-position above the session view; the underlying DOM is not unmounted; closing returns the player to the same DM turn they paused on.
+- `onSaved` callback patches both `selectedCharacter` and the local `characters` array so the UI stays in sync without a refetch.
+
+**Server:** No backend changes. The `survival_intensity` PUT allowlist + enum guard shipped at SC-7.6.5 / v1.0.162 ([server/routes/character.js](server/routes/character.js)) is the contract this UI consumes. Migration 052's `'standard'` default means existing characters render the dial pointing at Standard out of the box.
+
+**Smoke:**
+- Client build (`cd client && npx vite build`) clean — 1715 kB index.js, 82.85 kB CSS bundle. No warnings beyond the existing chunk-size advisory.
+- Server boot smoke clean — no migrations to apply (052 already shipped at v1.0.162).
+- No new tests this ship — UI surface; no test framework for React components per CLAUDE.md. The mechanism it consumes is covered by [tests/survival-intensity.test.js](tests/survival-intensity.test.js) (59 assertions) shipped at v1.0.162.
+
+**Design brief acceptance criteria** (per `settings/SETTINGS_DESIGN_BRIEF.md` "Functional contract for Code"):
+- ✅ `Settings` link in the appbar, right side; visible on home and session screens both
+- ✅ Click opens overlay over the current screen; no route change
+- ✅ Overlay is a layer above the session view; session DOM is not unmounted
+- ✅ Exit affordance reads `Back to game` in-session, `Done` from home; available in both `×` and foot-row positions
+- ✅ Settings persist on the character record (not the account); header reads "Settings for *[active character name]*"
+- ✅ Apply-on-click: each dial click writes immediately + updates the `Saved · just now` stamp; decays to relative time on subsequent renders (no debouncing)
+- ✅ Survival intensity values: `off / lenient / standard / strict`; default `standard`
+- ✅ Combat placeholder rendered as real DOM control (`role="radiogroup"`, `aria-disabled="true"`); pointing at `standard` so the value is meaningful when the feature lands; right-margin meta reads `Coming soon`
+- ✅ Future sections — each is a `.settings-section` with `.sec-head` (eyebrow + rule + count); adding a new section is one block
+
+**Phase 3.5 status:** Settings page UI shipped. Combat difficulty mechanism activation deferred to Phase 4 per CONSOLIDATED_TODO. Phase 3.5 scope (confirmed 2026-05-05) is **two controls only**: survival intensity (active) + combat difficulty (placeholder). No fortress/kingdom dial in Phase 3.5. The producer-gap and recapture-mechanism gaps surfaced in [`triage/kingdom-management-survey.md`](triage/kingdom-management-survey.md) belong to Phase 3.7 (Fortress groundwork) at earliest, with the full fortress system as a Phase 5 candidate; three KNOWN_BUGS entries (producer gap, mechanical-damage asymmetry, recapture-window-without-recapture-mechanism) get filed during Phase 3.7. Phase 3.5 closes once PM ships the close-out DECISION_LOG entry — no further Code work in this phase.
+
+---
+
+## [1.0.0.162] - 2026-05-05 — Phase 3.3 SC-7.6.5: player-tunable survival intensity (`off / lenient / standard / strict`)
+
+PM-drafted addendum to Phase 3.3. Adds a four-position character-level survival intensity setting that consumers read at decay/threshold evaluation time, so players can dial survival mechanics between gritty (Strict) and tonal-only (Off) without rebuilding consumer registrations or restarting the campaign. Default `'standard'` for all rows — byte-identical behavior to SC-7.6 for any character who hasn't explicitly chosen otherwise. **UI deferred** (no slider component this ship); column + server logic land first so the contract is settled before paint.
+
+**`server/migrations/052_survival_intensity.js` (new):**
+- Adds `survival_intensity TEXT NOT NULL DEFAULT 'standard'` to `characters`. Idempotent — `PRAGMA table_info` check before ALTER. SQLite ALTER doesn't support inline CHECK constraints; the migration header documents the intended `CHECK (survival_intensity IN ('off','lenient','standard','strict'))` shape for a future schema-rebuild ship. Application-layer enum validation enforced at PUT boundary.
+- All existing rows pick up `'standard'` automatically — no backfill code needed beyond the column default.
+
+**`server/services/survivalService.js`:**
+- New SC-7.6.5 infrastructure block (`VALID_INTENSITIES`, `INTENSITY_THRESHOLDS`, `INTENSITY_HOT_MULTIPLIERS`, `INTENSITY_COLD_MULTIPLIERS`, `INTENSITY_DEHYDRATION_MAGNITUDE` maps + `getSurvivalIntensity` + `isColdWeather` helpers). Per-position numbers picked to bracket the design space (~2× spread Lenient ↔ Strict so the slider has visible effect at every position):
+  - **Starvation thresholds** (added to CON mod, min 1): Lenient 6 / **Standard 3** / Strict 2.
+  - **Dehydration kick-in days**: Lenient 3 / **Standard 1** / Strict 1.
+  - **Hot multipliers**: Lenient 1.5× / **Standard 2.0×** / Strict 3.0×.
+  - **Cold multipliers** (Strict-only addition): Lenient 1.0× / **Standard 1.0×** / Strict 1.5×.
+  - **Dehydration tier magnitudes** ({tier1, tier2}): Lenient {1, 1} (capped, no escalation) / **Standard {1, 2}** / Strict {2, 2} (severe immediately).
+- `STARVATION_THRESHOLD_CONSUMER.repository.readAnchor` now reads intensity at evaluation time. Off short-circuits via `null` anchor (no fire). Otherwise threshold = `INTENSITY_THRESHOLDS.starvation[intensity] + CON_mod` (min 1).
+- `DEHYDRATION_THRESHOLD_CONSUMER.repository.readAnchor` reads intensity, short-circuits on Off, shifts the anchor by `kick_in_days - 1` so threshold=1 fires at `lastDrink + kick_in_days`. (Lenient anchor = `lastDrink + 2`; Standard/Strict anchor = `lastDrink`.)
+- `DEHYDRATION_THRESHOLD_CONSUMER.handler` reads intensity, applies `INTENSITY_HOT_MULTIPLIERS[intensity]` for hot weather, `INTENSITY_COLD_MULTIPLIERS[intensity]` for cold (mutually exclusive — hot = `heat_wave`/>85F, cold = `blizzard`/`snow`/<32F), pulls tier magnitudes from `INTENSITY_DEHYDRATION_MAGNITUDE[intensity]`. Standard preserves SC-7.6's `'DOUBLE water needs — effective rate is 2x'` message string verbatim (byte-identity); Lenient/Strict use generic `'multiply water needs (Nx)'` wording.
+- `checkStarvation` / `checkDehydration` wrappers detect Off and short-circuit before invoking the consumer (defense-in-depth — null-anchor path also covers direct `checkAndFire` calls). Wrapper returns include `intensity` field.
+- `getSurvivalStatus` returns `survival_intensity`; threshold display reflects the intensity-adjusted value. `formatSurvivalForPrompt` adds a one-line intensity hint to the DM prompt for non-Standard intensities (Standard remains silent — preserves SC-7.6 prompt byte-identity).
+
+**`server/routes/character.js`:**
+- `survival_intensity` added to PUT allowlist with `VALID_SURVIVAL_INTENSITIES` enum guard. Invalid values silently skip the update (cannot corrupt the column from a malformed client).
+
+**Tests** — `tests/survival-intensity.test.js`, 59 assertions all passing:
+- **Test 1: Off short-circuit** — STARVATION + DEHYDRATION consumers do not fire even at 100 days; wrapper functions report non-effect; `intensity: 'off'` propagated.
+- **Test 2: Lenient extended thresholds** — starvation threshold 8 (6 + CON 2), dehydration kick-in at 3 days, magnitude capped at 1 level (no tier2 escalation).
+- **Test 3: Standard byte-identity** — threshold 5, day-6 fires starving, hot 2× tier transition, **cold not modulated** (`cold` flag stays false), `'DOUBLE'` message string preserved.
+- **Test 4: Strict tightening** — threshold 4, tier1 magnitude = 2 levels (severe immediately), 3.0× hot multiplier produces 3 effective days, **cold modulated 1.5×** (Strict-only feature).
+- **Test 5: Default fallback** — missing `survival_intensity` field → 'standard'; invalid value (e.g., `'extreme'`) → 'standard'.
+- **Test 6: getSurvivalStatus surfaces intensity** — returns `survival_intensity`; `starvation_threshold` reflects intensity-adjusted value.
+- **Test 7: Runtime read mid-stream** — same character row, intensity flipped Standard→Lenient between calls; consumer picks up the new threshold without restart.
+- **Test 8: PUT enum guard** — accepts the four valid values; rejects `'STANDARD'` (case-sensitive), `''`, `null`, `'normal'`, `'hardcore'`, etc.
+
+All prior Pattern D + Phase 3 suites green: time-bounded-state (69), companion-mood-decay (45), npc-absence-cluster (50), notoriety-decay (43), threshold-crossed-cluster (33), world-event-clock-fix (14), survival-timer-cleanup (50), survival (66), standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73). Server boot smoke clean — migration 052 applied + intensity wiring loads without error. (Skipping client build — no client/ changes.)
+
+**SC-7.6.5 acceptance criteria met (per spec §3.3.10):**
+- STARVATION_THRESHOLD_CONSUMER and DEHYDRATION_THRESHOLD_CONSUMER read intensity at evaluation time
+- Off short-circuits both threshold consumers via null anchor
+- Lenient / Standard / Strict produce different effective threshold values per the spec table
+- Weather modulation respects intensity per `INTENSITY_HOT_MULTIPLIERS` (and the Strict-only `INTENSITY_COLD_MULTIPLIERS` extension)
+- Behavior parity vs. SC-7.6: any existing character with `survival_intensity = 'standard'` (the default) sees byte-identical behavior to SC-7.6's shipped state — explicitly validated in Test 3
+- DECISION_LOG entry covering the four-position design + runtime-read pattern + deferred UI surfacing
+
+**Phase 3.3 status:** 7 sub-checkpoints complete (SC-7.1 abstraction + SC-7.2–SC-7.7 per-system ports + this player-tunable extension). Phase 3.3 functionally closed; remaining work is the §3.3 close-out DECISION_LOG entry (synthesizes the arc + consolidates cumulative findings — same shape as SC-6.4 close-out). After that close-out, Phase 3 closes.
+
+---
+
+## [1.0.0.161] - 2026-05-05 — BUG FIX: world events on real-time clock instead of game-day clock (resolved as part of Phase 3.3 SC-7.7 migration)
+
+**Headline.** `worldEventService.processEventTick` was the only consumer in the codebase NOT running on the `currentGameDay` clock. Pre-SC-7.7 it used `new Date()` and ISO timestamp arithmetic for both deadline checks (`new Date(event.deadline) < new Date()`) and stage-advance calculations (`(new Date() - new Date(event.started_at)) / (1000 * 60 * 60 * 24)`). A campaign played briefly over a real-time week could see events firing as if many game-days had passed. Pattern D survey §1.12 (2026-05-04) flagged this as the cross-cutting "two clocks, same name" finding. PM Q10 ruling: fix in Phase 3.3 scope.
+
+**Severity.** Functional / Game-state-consistency. World events drive narrative pacing; firing on the wrong clock disconnects story progression from in-game time. Severity scales with how variable the game-day-per-real-day ratio is in actual play.
+
+**Fix shape.** Migration 051 adds `started_game_day` and `deadline_game_day` integer columns to `world_events`; backfills `started_game_day = MAX(game_day)` per campaign for active events (best-effort — past stage advances stay baked into `current_stage`; future advances measure from the fresh anchor). New `WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER` (Pattern D abstraction; threshold=0; SELECT-pre-filter idempotency). Stage-advance uses `daysSince(started_game_day, currentGameDay)` inline. `processEventTick` signature: `(campaignId, gameDaysPassed)` → `(campaignId, currentGameDay)`. Caller in `livingWorldService` updated.
+
+**Fix-along-the-way #5** in Phase 3 (joins notoriety silent-drop SC-6.4c, NPC absence ×2 SC-7.3, dehydration weather modulation SC-7.6). KNOWN_BUGS.md archive entry resolved at v1.0.161.
+
+---
+
+## [1.0.0.161] - 2026-05-05 — Phase 3.3 SC-7.7: world event clock standardization (final §3.3 ship; per-system migrations complete)
+
+Final ship in Phase 3.3's per-system migration sequence (SC-7.2 → SC-7.7). Standardizes the last consumer that wasn't on the `currentGameDay` clock. All 11 Pattern D survey surfaces are now migrated.
+
+**`server/migrations/051_world_event_game_day_columns.js` (new):**
+- Adds `started_game_day` + `deadline_game_day` INTEGER columns to `world_events` (idempotent — checks `PRAGMA table_info` before ALTER).
+- Backfills `started_game_day = MAX(game_day) per campaign` for active events. Treats existing events as "started today" in game-time terms; past stage advances are baked into `current_stage` so future advances measure from the fresh anchor. Acceptable trade-off for a forward-looking clock-standardization fix.
+- `deadline_game_day` stays NULL for legacy events (threshold consumer's null-anchor short-circuit gracefully ungates them).
+
+**`server/services/worldEventService.js`:**
+- New module-level export `WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER` — Pattern D threshold consumer, `threshold: 0`, anchor = `event.deadline_game_day`. Handler calls `resolveEvent(event.id, 'deadline_passed', ...)`. SELECT-pre-filter idempotency (orchestrator's `status='active'` filter drops fired events from subsequent ticks).
+- `createWorldEvent` accepts `started_game_day` + `deadline_game_day` parameters and writes them to the new columns. Legacy `deadline` (ISO string) and `started_at` (DATETIME) columns continue to be written for back-compat.
+- `processEventTick` signature changed: `(campaignId, gameDaysPassed = 1)` → `(campaignId, currentGameDay = 0)`. The real-time delta wasn't useful for game-day-clock work. Default `0` for the parameter means uncalled callers no-op safely.
+- Deadline check delegates to `WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER`. Stage-advance computes from `daysSince(started_game_day, currentGameDay)` inline (no consumer wrapper — stage advance is a current-vs-expected comparison, not a fire-once-when-crossing mechanic; the abstraction wouldn't have added value).
+
+**`server/services/livingWorldService.js`:**
+- Caller of `processEventTick` updated to pass `MAX(game_day)` per campaign instead of `gameDaysPassed`. Same shape as the other consumers in the tick.
+
+**Tests** — `tests/world-event-clock-fix.test.js`, 14 assertions all passing:
+- `WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER` shape sanity (name, threshold=0, checkAndFire)
+- **HEADLINE: clock standardization** — `currentGameDay=11 vs deadline=10 → 1 day elapsed` (would fire); `currentGameDay=10 vs deadline=50 → 0 elapsed` (orchestrator SELECT pre-filter handles future-deadline exclusion in production)
+- Anchor null (legacy events without backfilled `deadline_game_day`) → `no_anchor` reason → no fire
+- Stage-advance: `daysSince` computes 5 game days elapsed; `expectedStage = floor(5 / daysPerStage)`; clamps to last stage even on huge elapsed values
+- Same-day creation: 0 elapsed → no premature stage advance
+- **Three semantics still distinct post-SC-7.7** — synthetic test repeats the SC-7.4 enum-fully-exercised check as defense against accidental regression in the abstraction layer
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), time-bounded-state (69), companion-mood-decay (45), npc-absence-cluster (50), notoriety-decay (43), threshold-crossed-cluster (33), survival-timer-cleanup (50), survival (66), faction-quests (112). Server boot smoke clean — migration 051 applied + handler registered. (Skipping client build — no client/ changes.)
+
+**SC-7.7 acceptance criteria met (per spec §3.3.7):**
+- `worldEventService.js` deadline + stage-advance use `currentGameDay` instead of `new Date()`
+- Deadline check implemented via `registerThresholdConsumer`
+- All world-event consumers run on the same game-day clock as the rest of the codebase
+- DECISION_LOG entry covering the bug fix and clock-standardization rationale
+
+**Phase 3.3 per-system migration progress: 6 of 6 complete.** Six consumer ports across SC-7.2 → SC-7.7 covering all 11 Pattern D survey surfaces. Three decay semantics validated against real consumers (CONSUMED / HIGH_WATER_MARK / WRITTEN_BACK). Eight threshold consumers built via the abstraction (5 in SC-7.5 + 2 in SC-7.6 + 1 in SC-7.7).
+
+**Phase 3.3 remaining:**
+- **SC-7.6.5** — Player-tunable survival intensity (Off / Lenient / Standard / Strict). PM in flight on the spec section; lands as a separate sub-checkpoint after spec arrives. Shape: settings storage on character row + UI toggle + default-value migration + runtime multiplier read in survival decay/threshold functions.
+- **SC-7 close-out DECISION_LOG entry** — synthesizes the §3.3 arc (SC-7.1 → SC-7.7) and consolidates findings. Same shape as SC-6.4 close-out. Lands after SC-7.6.5 ships.
+
+**For close-out DECISION_LOG entry** (cumulative findings now):
+1. Three-semantics enum fully exercised in production
+2. SELECT-pre-filter as a fifth idempotency strategy (used by 6 of 8 threshold consumers in Phase 3.3)
+3. Per-instance threshold derivation via `repository.readAnchor` (variable thresholds absorbed into anchor derivation — used by promise auto-break SC-7.5 + starvation SC-7.6)
+4. **Fix-along-the-way pattern is now load-bearing methodology** — 5 instances across Phase 3.2 + Phase 3.3 (notoriety silent-drop / NPC absence ×2 / dehydration weather modulation / world event clock divergence). Each surfaced during prep work and resolved through the migration mechanism.
+5. **Vestigial-column cleanup pattern** — column-as-source-of-truth → anchor-as-source-of-truth without schema migration. Used in SC-7.6.
+6. **Schema migration as last resort** — only Phase 3.3 ship that needed one (SC-7.7) was the world event clock fix, where the legacy table had no game-day columns to compute against. All other migrations were behavioral (config + handler swaps).
+
+---
+
+## [1.0.0.160] - 2026-05-05 — BUG FIX: dehydration hot-weather acceleration (resolved as part of Phase 3.3 SC-7.6 migration)
+
+**Headline.** `survivalService.checkDehydration` documented behavior — "Hot weather doubles water needs — 0.5 days without water counts as a full day" — was not actually implemented. The legacy code only added a cosmetic string to the message; exhaustion levels did NOT accelerate. PM ruling 2026-05-05: implement the doubling. Resolved via SC-7.6's `DEHYDRATION_THRESHOLD_CONSUMER` reading `hint.weather` and computing `effective_days = raw_days × (hot ? 2 : 1)`.
+
+**Severity.** Functional / Game-balance. D&D 5e exhaustion is a real lever; missing doubling under-penalized players in heat-wave/desert scenarios.
+
+**Fix shape.** Migration handler computes effective elapsed via the contextHints plumbing; exhaustion levels = `effective_days >= 2 ? 2 : 1`. So 1 raw day in hot weather = 2 effective days = severe-tier (2 levels) immediately. Boundary: `temperature_f === 85` is NOT hot (strict `>` check matches legacy detection).
+
+**Fix-along-the-way #4** (named pattern from SC-6.4 close-out). KNOWN_BUGS.md archive entry resolved at v1.0.160.
+
+**Test snapshot.** `tests/survival-timer-cleanup.test.js` HEADLINE section asserts: heat_wave weather → 1 raw day → 2 effective → 2 exhaustion (BUG FIX); high-temp (92F) triggers same; boundary (85F) does NOT trigger (matches legacy `> 85`); 2 raw days in hot = 4 effective (capped at severe-tier 2 levels).
+
+---
+
+## [1.0.0.160] - 2026-05-05 — Phase 3.3 SC-7.6: survival timer cleanup (anchor-as-source-of-truth + weather-modulated dehydration consumer)
+
+Survival timers migrate to Pattern D threshold consumers. Counter columns (`days_without_food`, `days_without_water`) become **vestigial cache** — anchor columns (`last_meal_game_day`, `last_drink_game_day`) are the source of truth post-migration. Helpers compute elapsed time from anchor with column-fallback for legacy data. Weather-modulated dehydration consumer fixes the long-standing docs/code divergence (see headline above).
+
+**`server/services/survivalService.js`:**
+- New helpers: `daysSinceLastMeal(character, currentGameDay)` + `daysSinceLastDrink(character, currentGameDay)`. Use `daysSince` from timeBoundedState when anchor is set; fall back to legacy column when anchor null. `isHotWeather(weather)` extracted from inline heat-detection logic. `effectiveLastMealAnchor(character)` + `effectiveLastDrinkAnchor(character)` synthesize an anchor for the threshold-consumer's `readAnchor` callback (column-fallback computes `game_day - column_value` when anchor null).
+- New module-level export `STARVATION_THRESHOLD_CONSUMER` — `threshold: 1` (one day past effective starvation day), variable per-character threshold absorbed into `repository.readAnchor` derivation: `anchor = last_meal + max(3 + conMod, 1)`. Same per-instance-threshold-via-anchor-derivation pattern as SC-7.5's promise auto-break. Per-day re-emission (idempotency no-op — handler emits status report, doesn't mutate state).
+- New module-level export `DEHYDRATION_THRESHOLD_CONSUMER` — `threshold: 1` (1 raw day without water). Handler reads `hint.weather` and computes effective elapsed: `effective = raw * (hot ? 2 : 1)`. Exhaustion levels: `effective < 2` → 1 level, `effective >= 2` → 2 levels (severe tier). 1 raw day in hot weather → 2 effective → 2 exhaustion immediately.
+- `checkStarvation(character, currentGameDay?)` and `checkDehydration(character, weather, currentGameDay?)` now async; delegate to their respective threshold consumers. Hungry-but-not-starving status returned synchronously (without invoking the consumer's fire path) when below threshold. `currentGameDay` parameter optional, defaults to `character.game_day`.
+- `processDayChange` rewritten: stops writing the counter columns; uses `daysSinceLastMeal/Drink` helpers; awaits the now-async `checkStarvation/checkDehydration`. The `effectsApplied` array still surfaces "Starvation: +1 exhaustion" / "Dehydration: +N exhaustion" status reports (now with optional ", hot" suffix on dehydration when weather-accelerated).
+- `getSurvivalStatus` now computes `days_without_food` / `days_without_water` from anchor (with column fallback). Client response shape preserved exactly — clients that read these fields from `survivalState` continue to work.
+
+**Counter columns are now vestigial.** Eat/drink continues to write `0` (a denormalized cache that's still used by the column-fallback path in `daysSinceLastMeal/Drink`); `processDayChange` no longer increments them daily. Schema columns stay (no migration); future cleanup ship can drop them. Documented in DECISION_LOG.
+
+**Tests** — `tests/survival-timer-cleanup.test.js`, 50 assertions all passing:
+- Both threshold consumers built + exposed
+- **Anchor-as-source-of-truth** validated: helpers compute from anchor when set; fall back to vestigial column when anchor null
+- Starvation: per-character threshold via CON modifier (CON 14 → 5, CON 8 → 2, CON 1 → floor 1)
+- Dehydration: 1 raw day normal → 1 exhaustion; 2 raw days normal → 2 exhaustion (severe tier)
+- **HEADLINE: Weather modulation fix-along-the-way #4** — heat_wave + 1 raw day → 2 effective → 2 exhaustion (BUG FIX); temperature_f > 85 triggers same; 85F boundary is NOT hot; 2 raw days in hot = 4 effective (capped at severe-tier 2 levels)
+- 0 raw days → not dehydrated regardless of weather (kick-in still requires elapsed time)
+- `getSurvivalStatus` field shape preserved (client-facing payload unchanged)
+- **Behavior parity**: 5 representative scenarios match inline-replicated legacy logic for `starving / hungry` flags
+
+Existing `tests/survival.test.js` updated (66 assertions still passing): `makeMockCharacter` now auto-syncs anchor when overriding the column (post-anchor-source-of-truth requires self-consistent mocks); `checkStarvation` / `checkDehydration` calls await-ed (they're now async).
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), time-bounded-state (69), companion-mood-decay (45), npc-absence-cluster (50), notoriety-decay (43), threshold-crossed-cluster (33), faction-quests (112). Server boot smoke clean.
+
+**Production wire-up**: existing `processDayChange` callsites (per-day-advance paths) continue to work unchanged. The function is still async (was already), and now its inner `checkStarvation/Dehydration` calls are too — handled transparently via the existing await chain.
+
+**Player-tunable survival intensity** (Off / Lenient / Standard / Strict) is intentionally OUT of SC-7.6 per PM direction. Lands as a separate sub-checkpoint (SC-7.6.5 or Phase 3.3 follow-up). PM drafts the spec section during SC-7.7 implementation. Code's discretion to fold in if it turns out smaller than estimated; surfaces back to PM if going that direction.
+
+**SC-7.6 acceptance criteria met (per spec §3.3.7):**
+- `survivalService.checkStarvation` and `checkDehydration` delegate to `registerThresholdConsumer`
+- Counter columns become computed-from-anchor (with column fallback for legacy data); schema unchanged, columns vestigial
+- Survival prompt-builder paths (`getSurvivalStatus`) read from anchor; client payload shape preserved
+- PM call resolved on weather-modulation wrinkle: implemented per ruling 2026-05-05
+- DECISION_LOG entry on counter-column cleanup decision (vestigial-column approach + fix-along-the-way #4 framing)
+
+**Pattern D migration progress**: 5 of 6 ports complete. Remaining: SC-7.7 (world event clock fix — real-time → game-day standardization, the only consumer not yet on `currentGameDay`).
+
+**For Phase 3.3 close-out DECISION_LOG entry** (cumulative findings now):
+1. Three-semantics enum fully exercised — CONSUMED / HIGH_WATER_MARK / WRITTEN_BACK
+2. SELECT-pre-filter as a fifth idempotency strategy
+3. Per-instance threshold derivation via repository.readAnchor (variable thresholds absorbed into anchor derivation)
+4. **Fix-along-the-way pattern is now load-bearing methodology** — four instances (notoriety silent-drop, NPC absence ×2, dehydration weather modulation). Each surfaced during prep work, resolved through the migration mechanism, documented durably in KNOWN_BUGS archive.
+5. **Vestigial-column cleanup pattern** — when migrating from column-as-source-of-truth to anchor-as-source-of-truth, columns can stay as a fallback cache rather than requiring schema migration. Bridges legacy data without a drop-column ship.
+
+---
+
+## [1.0.0.159] - 2026-05-05 — Phase 3.3 SC-7.5: threshold-crossed cluster migration (5 consumers batched; SELECT-pre-filter idempotency; two-stage merchant order pipeline)
+
+Largest cluster ship in Phase 3.3 — five `registerThresholdConsumer` registrations across three service files in one batch per spec §3.3.5 + the user's batching principle. All five share the same idempotency strategy: **SELECT-pre-filter via status column**. Orchestrator's WHERE clause filters to pre-fire status only; handler flips status; subsequent ticks don't see the row. Abstraction's idempotency callbacks are no-ops because the orchestrator owns the strategy.
+
+**Five threshold consumers placed in their consumer services:**
+- `PROMISE_AUTO_BREAK_THRESHOLD_CONSUMER` ([consequenceService.js](server/services/consequenceService.js)) — threshold = 1, anchor = effective deadline (`deadline_game_day` if explicit, else `game_day_made + 45`). Per-promise effective deadline derived in repository.readAnchor.
+- `QUEST_AUTO_FAIL_THRESHOLD_CONSUMER` ([consequenceService.js](server/services/consequenceService.js)) — threshold = 1, anchor = `quests.deadline_game_day`. Cleanest of the five (single column anchor).
+- `MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER` ([merchantOrderService.js](server/services/merchantOrderService.js)) — threshold = 0, anchor = `deadline_game_day`. Stage 1 of the two-stage merchant pipeline (pending → ready).
+- `MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER` ([merchantOrderService.js](server/services/merchantOrderService.js)) — threshold = 31, anchor = `ready_game_day`. Stage 2 (ready → expired). Threshold 31 matches legacy strict-greater check `(currentGameDay - ready_game_day) > 30`.
+- `BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER` ([baseThreatService.js](server/services/baseThreatService.js)) — threshold = 0, anchor = `recapture_deadline_game_day`. Side effect: flip both `party_bases.status` and `base_threats.outcome` to 'abandoned' + best-effort narrative queue entry.
+
+**Per-promise effective-deadline derivation** — `repository.readAnchor` returns `promise.deadline_game_day || (promise.game_day_made + PROMISE_BREAK_DAYS)`. Single threshold (1) suffices for both explicit-deadline and 45-day-default promises because the anchor's derivation absorbs the variability. Promises lacking `game_day_made` (legacy data without tracking) return null anchor → threshold consumer no-ops via `reason: 'no_anchor'`.
+
+**Promise warnings (half-deadline / 21-day) stay inline** — different shape (per-promise lookback idempotency via `consequence_log` query), not in SC-7.5 scope per spec §3.3.5. Auto-break is the only promise threshold migrated.
+
+**One small back-compat removal**: `expireStaleReadyOrders` legacy signature `(currentGameDay, holdDays = 30)` simplified to `(currentGameDay)` — the production caller (`livingWorldService:252`) never overrode `holdDays`, the threshold consumer's `threshold: 31` is config-time fixed, and a future caller needing a different hold time would register a second consumer rather than parameter-override. Verified single caller via grep before the simplification.
+
+**Tests** — `tests/threshold-crossed-cluster.test.js`, 33 assertions all passing:
+- All five consumers built + exposed (name, threshold, checkAndFire methods)
+- Promise effective-deadline derivation (explicit-deadline path AND 45-day-default path both produce correct daysElapsed)
+- Promise legacy data (no `game_day_made`) → null anchor → no-fire
+- Quest single-column anchor: `current==deadline` no-fire (0 elapsed); `current=deadline+1` fires
+- Two-stage merchant pipeline: due (threshold=0) fires at exact-anchor day; expire (threshold=31) does NOT fire at 30 elapsed (matches legacy `> 30`); fires at 31 elapsed
+- Base recapture: threshold=0 fires when current reaches deadline; future-anchored rows clamp to 0 elapsed (orchestrator's SELECT pre-filter handles the future-deadline exclusion)
+- **Cluster batch validation**: all five consumers have identical surface area (`checkAndFire / name / threshold`) — only the threshold value, anchor source, and handler side effect vary. Three distinct threshold values across the five (0, 1, 31). Validates the abstraction handled all five with one API.
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), time-bounded-state (69), companion-mood-decay (45), npc-absence-cluster (50), notoriety-decay (43), faction-quests (112). Server boot smoke clean. (Skipping client build — no client/ changes.)
+
+**Production wire-up**: existing call sites in `livingWorldService` (line 175 for promise/quest cascade; 223/252 for merchant order; baseThreat tick) continue to work unchanged. Cluster behavior identical from the player perspective.
+
+**SC-7.5 acceptance criteria met (per spec §3.3.7):**
+- Promise, quest, merchant order, base recapture all use `registerThresholdConsumer`
+- Idempotency strategies vary per consumer — documented as SELECT-pre-filter for all five (the strategy lives in the orchestrator's WHERE clause, not in the abstraction's callbacks)
+- Two-stage merchant order pipeline (pending → ready → expired) handled with two registrations per spec
+- Behavior unchanged from player perspective
+
+**For Phase 3.3 close-out DECISION_LOG entry** (cumulative findings):
+1. Three-semantics enum fully exercised against real production consumers (CONSUMED ✓, HIGH_WATER_MARK ✓, WRITTEN_BACK ✓ — completes after SC-7.4)
+2. **SELECT-pre-filter as a fifth idempotency strategy** — joins the SC-1 standing-scalar's threshold-handler-registry pattern + SC-7.3's natural-fired-once-marker pattern. Five consumers in one cluster all use the same strategy, encoded by no-op idempotency callbacks because the orchestrator's WHERE clause IS the strategy.
+3. **Per-instance threshold derivation via repository.readAnchor** — the promise auto-break consumer needs different effective deadlines per promise (explicit OR game_day_made + 45). The fixed-threshold abstraction handled this by deriving the anchor in the repository callback rather than parameterizing the threshold value. The threshold becomes a constant offset (1) from the derived anchor.
+
+**Pattern D migration progress**: 4 of 6 ports complete (mood SC-7.2, absence SC-7.3, notoriety SC-7.4, threshold cluster SC-7.5 = 9 consumer registrations across 4 ships). Remaining: SC-7.6 (survival timer cleanup — counter columns drop), SC-7.7 (world event clock fix — real-time → game-day standardization).
+
+---
+
+## [1.0.0.158] - 2026-05-05 — Phase 3.3 SC-7.4: notoriety decay migration (validates WRITTEN_BACK semantics — completes the three-semantics exercise set)
+
+Third Pattern D consumer port. Validates `DECAY_SEMANTICS.WRITTEN_BACK` — the variant where the anchor advances to currentGameDay after each tick (vs SC-7.2's CONSUMED that NULLs at floor and SC-7.3's HIGH_WATER_MARK that stays put). All three decay semantics now exercised in production: CONSUMED ✓ (companion mood), HIGH_WATER_MARK ✓ (NPC absence), WRITTEN_BACK ✓ (notoriety).
+
+**`server/services/notorietyService.js`:**
+- New module-level export `NOTORIETY_DECAY_CONSUMER` — `semantics: WRITTEN_BACK`, tiered decay rate (`> 50` score → 1/day; `≤ 50` → 2/day), `floor: 0`, `ceiling: 100` (MAX_SCORE). Repository preserves the legacy anchor fallback chain exactly: `last_decay_game_day || last_event_game_day || currentGameDayFallback`. The `advanceAnchor` callback writes `last_decay_game_day = currentGameDay` after each tick.
+- `decayScores(characterId, campaignId, currentGameDay)` rewritten as orchestrator: SELECT entries → for each: skip-and-GC if zeroed (housekeeping kept consumer-side, not pushed into abstraction), otherwise `applyDecay({entryId, currentGameDayFallback}, currentGameDay)` → aggregate `{source, category, oldScore, newScore, decayed}` results. Same orchestrator shape as SC-7.2 + SC-7.3.
+
+**Two-step write trade-off documented inline** (mirrors SC-7.2's mood reset trade-off): legacy wrote both `score` and `last_decay_game_day` in one UPDATE; the abstraction splits into writeValue (score) + advanceAnchor (last_decay_game_day). 2 statements vs 1. Acceptable cost: notoriety decay runs on the living-world tick (not session-start), entries per character are typically <10, most ticks are no-ops.
+
+**Tests** — `tests/notoriety-decay.test.js`, 43 assertions all passing:
+- `NOTORIETY_DECAY_CONSUMER` shape sanity (name, semantics=WRITTEN_BACK)
+- Tiered decay rate preserved exactly: score > 50 → 1/day (sticky), score ≤ 50 → 2/day, boundary at 50/51 verified
+- **WRITTEN_BACK anchor advancement**: tick 1 advances anchor; tick 2 measures from advanced position (5 elapsed, not 10) — distinguishes from HIGH_WATER_MARK behavior
+- Floor at 0 with anchor still advancing even at clamp
+- **Anchor fallback chain** exactly preserved: last_decay → last_event → currentGameDayFallback (third fallback yields 0 elapsed → no-op)
+- Same-day tick → 0 elapsed → no-op (no DB writes)
+- **Behavior parity vs legacy**: 5 representative scenarios run through inline-replicated legacy logic + the new abstraction side-by-side; all produce byte-identical end-state across `score` + `last_decay_game_day`
+- **Three-semantics-together validation**: HIGH_WATER_MARK / CONSUMED / WRITTEN_BACK each tested with the same 5-day-elapsed-decay-by-5 sequence, asserts each produces structurally distinct end-state matching its semantics. Marks the DECAY_SEMANTICS enum as fully exercised.
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), time-bounded-state (69), companion-mood-decay (45), npc-absence-cluster (50), faction-quests (112). Server boot smoke clean. (Skipping client build — no client/ changes.)
+
+**Production wire-up**: existing `decayScores` callsite at `livingWorldService.js:198` (per the SC-6.4 inventory) continues to work unchanged. Notoriety decay behavior is identical from the player perspective.
+
+**SC-7.4 acceptance criteria met (per spec §3.3.7):**
+- `notorietyService.decayScores` delegates to `registerDecayConsumer`
+- "Written-back anchor" semantics validated (tested distinctly from HIGH_WATER_MARK + CONSUMED)
+- Existing notoriety tests pass (no pre-existing decay-specific tests; new test suite is the first coverage)
+
+**Pattern D migration progress**: 3 of 6 consumer ports complete (mood SC-7.2, absence SC-7.3, notoriety SC-7.4). All three decay semantics validated against real production consumers. Remaining: SC-7.5 (threshold-crossed cluster — 4 consumers batched), SC-7.6 (survival timer cleanup), SC-7.7 (world event clock fix).
+
+---
+
+## [1.0.0.157] - 2026-05-05 — Phase 3.3 SC-7.3: NPC absence cluster migration (dual decay from one anchor + stochastic threshold + 2x fix-along-the-way)
+
+Second cluster Pattern D port. Stress-tests three abstraction surfaces in one ship: dual-decay-from-shared-anchor (disposition + trust both reading `last_interaction_game_day`), stochastic threshold (relocation 10% probability roll — first exercise of `registerThresholdConsumer.probability`), and the "fix-along-the-way" pattern doubled (compound-prefix relocate bug + repeat-fire forget bug both surface during prep, both resolved through the migration mechanism).
+
+**`server/services/npcAgingService.js`:**
+- New module-level exports: `DISPOSITION_DECAY_CONSUMER`, `TRUST_DECAY_CONSUMER` (both `HIGH_WATER_MARK`, both reading the shared `last_interaction_game_day` anchor against different value columns), `RELOCATION_THRESHOLD_CONSUMER` (60d threshold + `probability: 0.1`), `FORGET_THRESHOLD_CONSUMER` (120d threshold, deterministic).
+- `processAbsenceEffects` rewritten as orchestrator: SELECT alive-and-met NPCs → iterate → call each consumer's `applyDecay` / `checkAndFire` → aggregate counts. Same shape as SC-7.2's decayMoods orchestrator. Per-relationship processing does ~6-10 DB round trips vs. legacy ~2-3; acceptable for session-start (documented in DECISION_LOG).
+- Legacy `calculateDispositionDecay`, `calculateTrustDecay`, `checkAbsenceThreshold` kept exported (potential test consumers + per "deprecate by hiding"); no longer called from production processAbsenceEffects.
+
+**Stochastic threshold validates `probability` parameter** (Q8 from survey, named in SC-7.1 DECISION_LOG): relocation handler fires only when `Math.random() < probability` AND threshold + condition both hold. Failed rolls don't record idempotency — next tick can roll again. Test forces deterministic random (override `Math.random`) to verify both pass and fail paths.
+
+**Two fix-along-the-way bug fixes** ([KNOWN_BUGS.md](KNOWN_BUGS.md) Resolved archive, both resolved at v1.0.157):
+- **Compound-prefix relocate bug** (cosmetic): legacy had no relocation idempotency → consecutive 10% rolls produced `Unknown (left Unknown (left Tavern))`. Migration adds `hasFiredRecently: location.startsWith('Unknown (left ')` as the natural fired-once marker. Side-effect fix via the abstraction's idempotency slot.
+- **Repeat-fire forget bug** (perf): legacy fired forget every tick once disposition+trust hit 0 (wasted UPDATE per forgotten NPC). Migration adds `hasFiredRecently: disposition === 0 && trust_level === 0` as the natural fired-once marker.
+
+**Tests** — `tests/npc-absence-cluster.test.js`, 50 assertions all passing:
+- All four consumers built + exposed (name, semantics/threshold, applyDecay/checkAndFire methods)
+- `calculateDispositionDecay` legacy formula preserved exactly: 8 boundary + 30/31 tier transitions + 90/93 second-tier + high-trust modifier (half rate) + -20 floor cap
+- `calculateTrustDecay` legacy formula preserved: 14/15 boundary + 24/60/65/80 tier values + 0 floor + zero-trust shortcut
+- Dual-decay-from-one-anchor: parallel synthetic test runs both consumers against shared anchor, verifies both decays apply independently to different value columns, anchor stays at HIGH_WATER_MARK
+- Stochastic threshold honored: forced random pass/fail paths verify probability gate + idempotency-on-failed-roll behavior
+- **Fix-along-the-way validation**: relocate idempotency blocks compound-prefix on already-relocated NPC; forget idempotency blocks repeat-fire on already-zero NPC
+- Consumer-side condition gate (handler-level filter) returns `{fired: false, reason: 'condition_not_met'}` cleanly — abstraction doesn't need a generic condition parameter
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), time-bounded-state (69), companion-mood-decay (45), faction-quests (112). Server boot smoke clean. (Skipping client build — no client/ changes.)
+
+**Production wire-up**: existing `processAbsenceEffects` callsite at `routes/dmSession.js:773` continues to work unchanged. Per-NPC absence behavior is identical from the player perspective — except for the two latent bugs which are now fixed (cosmetic compound-prefix prevented; perf-wasted UPDATEs blocked).
+
+**SC-7.3 acceptance criteria met (per spec §3.3.7):**
+- `processAbsenceEffects` orchestrates two decay consumers + two threshold consumers (interpreted spec's literal "one threshold consumer" liberally — see DECISION_LOG)
+- Stochastic threshold (relocation 10% roll) exercises `probability` parameter
+- ABSENCE prompt annotation reads same anchor without going through decay primitive (read-only display, untouched)
+- DECISION_LOG entry on stochastic threshold support + dual fix-along-the-way
+
+**Pattern D migration progress:** 2 of 6 consumer ports complete (SC-7.2 mood + SC-7.3 absence cluster). Remaining: SC-7.4 (notoriety — WRITTEN_BACK semantics), SC-7.5 (threshold cluster: 4 consumers batched), SC-7.6 (survival timer cleanup), SC-7.7 (world event clock fix). Three decay semantics validated post-SC-7.4: CONSUMED ✓ (SC-7.2), HIGH_WATER_MARK ✓ (SC-7.3), WRITTEN_BACK (next).
+
+---
+
+## [1.0.0.156] - 2026-05-05 — Phase 3.3 SC-7.2: companion mood decay migration (first Pattern D port — validates CONSUMED semantics)
+
+First consumer port for the time-bounded state abstraction. Validates the `DECAY_SEMANTICS.CONSUMED` shape — the variant that distinguishes companion mood from the high-water-mark decays in §1.2/§1.3/§1.9 (NPC disposition, NPC trust, notoriety). When the decay value reaches floor (0), the entire mood state resets and the anchor NULLs; subsequent ticks no-op until `setMood` re-establishes a non-content mood with a fresh anchor.
+
+**`server/services/companionBackstoryService.js`:**
+- New module-level export `MOOD_DECAY_CONSUMER` — built via `registerDecayConsumer({...})` with `semantics: DECAY_SEMANTICS.CONSUMED`, `decayFunction: (daysElapsed) => Math.floor(daysElapsed / 2)` (legacy preserved exactly), `floor: 0`. Repository callbacks read/write `companion_backstories.mood_set_game_day` (anchor) and `mood_intensity` (value). The `consumeAnchor` callback does the full legacy reset (`mood='content', mood_cause=NULL, mood_intensity=1, mood_set_game_day=NULL`) — overwrites the abstraction's writeValue(0) call that just landed.
+- `decayMoods(characterId, currentGameDay)` rewritten as a thin orchestrator: SELECT all eligible companions (filter preserved: active companions of this character with non-content mood + non-null anchor) → iterate → `MOOD_DECAY_CONSUMER.applyDecay({backstoryId}, currentGameDay)` for each. The per-companion decay logic moves into the abstraction; the consumer scope decision (which companions to consider) stays in the orchestrator.
+- New import: `registerDecayConsumer, DECAY_SEMANTICS` from `./timeBoundedState.js`.
+
+**Two-step reset trade-off documented inline.** When the abstraction's writeValue(0) lands and consumeAnchor follows with the full reset, there are 2 UPDATE statements vs. legacy's 1 UPDATE. Acceptable cost: mood decay runs at session-start only, companions per character are typically <10, resets are rare. Documented at the consumer registration so future review doesn't get confused by the redundant intensity write.
+
+**Tests** — `tests/companion-mood-decay.test.js`, 45 assertions all passing:
+- `MOOD_DECAY_CONSUMER` shape sanity (name, semantics=CONSUMED, applyDecay)
+- Decay function preservation: 1 intensity per 2 game days (`floor(daysElapsed / 2)`) — legacy behavior preserved exactly
+- **CONSUMED-vs-HIGH-WATER distinction** validated explicitly with a two-tick sequence: tick 1 (intensity 3 → 1, anchor STAYS at 100), tick 2 (intensity 1 → 0 → reset, anchor NULLed)
+- Reset shape: `mood='content'`, `mood_cause=NULL`, `mood_intensity=1` (NOT 0), `mood_set_game_day=NULL` — matches legacy reset state exactly
+- Subsequent ticks after reset are no-ops (anchor=null, no decay applies)
+- Edge cases: 0 elapsed → no-op; 1 elapsed → decay 0 → no-op (legacy threshold preserved); large elapsed crosses floor in single tick
+- **Legacy-vs-new behavior comparison**: 4 scenarios run through inline-replicated legacy logic + the new abstraction side-by-side. All four scenarios produce byte-identical end-state across `mood / intensity / mood_cause / anchor`.
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), time-bounded-state (69), faction-quests (112). Server boot smoke clean. (Skipping client build — no client/ changes.)
+
+**Production wire-up**: existing `decayMoods` callsite at `routes/dmSession.js:812` continues to work unchanged. Mood decay behavior is identical from the player perspective; the change is purely structural (per-companion logic moved into the abstraction).
+
+**SC-7.2 acceptance criteria met (per spec §3.3.7):**
+- `companionBackstoryService.decayMoods` delegates to `registerDecayConsumer`
+- "Consumed" semantics validated — anchor NULLs at intensity 0 (verified in test, legacy reset shape preserved exactly)
+- Existing mood-decay tests pass (no pre-existing tests; new test suite is the first coverage)
+- New test for consumed-vs-high-water distinction lands the validation explicitly
+- Behavior unchanged from player perspective (legacy-vs-new comparison test confirms byte-identical end-state)
+
+**For Phase 3.3 close-out DECISION_LOG entry**: this ship is the first real exercise of `DECAY_SEMANTICS.CONSUMED`. The two-step reset trade-off (2 UPDATEs vs 1) and the orchestrator-stays-consumer-side pattern (SELECT scope decision NOT in abstraction) are both worth landing as part of the close-out's "what we learned migrating consumers" section.
+
+---
+
+## [1.0.0.155] - 2026-05-05 — Phase 3.3 SC-7.1: Pattern D foundation (time-bounded state primitives — no consumer migrations yet)
+
+First ship in Phase 3.3 (Pattern D / time-bounded state primitives). Per spec §3.3.7: foundation lands, API review gate before any consumer migrates in SC-7.2. Same pattern as §3.1 SC-1 + §3.2 SC-6.1 — foundation-first, validate API shape, then incremental migrations.
+
+**`server/services/timeBoundedState.js`** (new file, ~280 lines):
+- New export `daysSince(anchorGameDay, currentGameDay)` — normalized arithmetic helper. Returns null when either arg is null/undefined (explicit "no anchor set" semantics); returns `max(0, elapsed)` otherwise (game-day-rollback safety). Replaces ~20 sites of inline arithmetic identified by the Pattern D survey. Future hour-granularity work can grow a unit parameter without breaking call sites (per spec Q11).
+- New export `registerDecayConsumer(config)` — consumer factory for decay-on-read patterns. Accepts config with `decayFunction`, `floor`/`ceiling`, `repository` callbacks, and `semantics` enum. Returns object with `applyDecay(contextKey, currentGameDay, contextHints)` method.
+- New export `registerThresholdConsumer(config)` — consumer factory for threshold-crossed-with-effect patterns. Accepts config with `threshold` (in days), `handler`, `idempotency` callbacks, optional `probability` parameter for stochastic crossers (Q8 — used first by SC-7.3 NPC relocation 10% roll). Returns object with `checkAndFire(contextKey, currentGameDay, contextHints)` method.
+- New export `DECAY_SEMANTICS` enum — three frozen values: `HIGH_WATER_MARK` (anchor stays put across ticks; NPC disposition / trust shape), `CONSUMED` (anchor NULLs at floor; companion mood shape), `WRITTEN_BACK` (anchor advances to currentGameDay after each tick; notoriety shape). Each consumer specifies its semantics; abstraction dispatches to semantics-specific anchor handling post-decay.
+
+**Design decisions (full DECISION_LOG entry alongside this ship):**
+- **Parameterize, don't converge** — same call as §3.1 SC-1. Each consumer keeps its own anchor column, decay function shape, and idempotency strategy. Repository callbacks own storage; abstraction owns orchestration.
+- **Probability roll happens BEFORE handler.** Failed rolls leave idempotency unrecorded — next tick can roll again (matches legacy NPC relocation semantics).
+- **Handler errors contained, not propagated.** Logged via `console.error`; surfaced as `{fired: false, reason: 'handler_error', error}`. Idempotency NOT recorded on handler error (allows retry). Mirrors §3.1 SC-1's threshold-handler-error containment policy.
+- **Idempotency-record errors don't degrade handler success.** If `recordFired` throws after the handler ran, return is `{fired: true, handlerResult, idempotencyError}` rather than rolling back. The handler's side effect already landed; flagging the secondary failure is more useful than pretending it didn't.
+
+**Tests** — `tests/time-bounded-state.test.js`, 69 assertions all passing:
+- `daysSince` null/clamp/edge-case semantics
+- Config validation for both registration APIs (catches malformed configs early; tested via `expectThrow` helper covering 11 distinct invalid-config shapes)
+- Three decay semantics validated independently — high-water-mark anchor unchanged, consumed anchor NULLed at floor, written-back anchor advanced to currentGameDay
+- Floor + ceiling clamping with no-op-on-clamp behavior
+- Threshold + idempotency + probability roll + handler-error containment
+- Empty-state safety (no-op consumers don't crash; foundation ship has no consumer migrations yet)
+- DECAY_SEMANTICS enum exposed + frozen
+
+All prior Phase 3 suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), sc6-4d-combat-mythic-schemas (48), faction-quests (112). Server boot smoke clean. (Skipping client build — no client/ changes.)
+
+**SC-7.1 acceptance criteria met (per spec §3.3.7):**
+- `services/timeBoundedState.js` exports the three primitives
+- Tests confirm primitive API shapes and configuration validation
+- DECISION_LOG entry on parameterize-not-converge call (mirroring Pattern A's SC-1 call)
+- No consumer migrations yet; behavior unchanged everywhere
+
+**API review gate**: PM + user review the API shape before SC-7.2 (companion mood migration) starts. Same gate as §3.1 SC-1 + §3.2 SC-6.1 had.
+
+---
+
+## [1.0.0.154] - 2026-05-05 — Phase 3 SC-6.5: documentation closing (Phase 3.2 marker pipeline consolidation complete)
+
+Documentation-only ship. Closes Phase 3.2 per spec §3.9: `markerSchemas.js` header docs reflect canonical role; `CLAUDE.md` "DM session markers + marker pipeline" section landed with the four-rationale schemas-without-handlers category as **intentional design** (not reverse-engineered from per-ship entries); closing DECISION_LOG entry consolidating §3.2's whole arc across 5 sub-checkpoints.
+
+**`server/services/markerSchemas.js` header:**
+- Reframed as **canonical dispatch surface** (post-Phase-3.2). Old framing ("intermediate step toward full tool-use migration") preserved as forward-looking note; the schemas + pipeline are the production path today.
+- Architecture section spells out the 4-step model: schemas → parsing (`parseMarkerBody`) → dispatch (handlers via `markerPipeline`) → correction loop (`pendingMarkerCorrections`).
+- Schemas-without-handlers section enumerates the four legitimate rationales (ordering invariants / aggregated returns / no side-effect target / orchestrated-with-sibling-marker) with example markers per rationale.
+
+**`CLAUDE.md` "DM session markers + marker pipeline" section:**
+- Old flat marker list replaced with: marker list + canonical-pipeline description + handler placement map (13 service files, 24 handlers) + four-rationale schemas-without-handlers landed as intentional design + legacy `detectXxx()` deprecation note.
+- "Key files" section updated to add `markerSchemas.js` + `markerPipeline.js` + `combatMarkerService.js` + `lootDropService.js` (the new SC-6.4 single-purpose marker-handler modules), and to annotate `dmSessionService.js` + `preludeMarkerDetection.js` with their post-Phase-3.2 status.
+
+**`DECISION_LOG.md`:**
+- New top entry "Phase 3.2 closing: marker pipeline consolidation complete" — synthesizes the whole §3.2 arc across SC-6.1 → SC-6.5. Distinct from the SC-6.4 close-out entry below it (which covered the SC-6.4 sweep specifically). Captures three principles validated by Phase 3.2: foundation-first sub-checkpoint cadence, schemas-without-handlers as first-class end-state, schema-direction as per-marker call.
+
+**Phase 3.2 final numbers (post all 5 sub-checkpoints):**
+- 39 markers in MARKER_SCHEMAS with schema validation + correction-loop feedback active
+- 24 handlers registered across 13 service files
+- 22 detect-function call sites deleted from `routes/dmSession.js` (~580 lines), 6 from `routes/dmMode.js` (BOND_SHIFT migration), 1 from earlier (PIETY_CHANGE migration in SC-4)
+- 2 new single-purpose service files (`lootDropService.js`, `combatMarkerService.js`)
+- 5 PARK ENTIRELY rulings for non-marker functions
+- 1 production bug discovered + resolved via "fix-along-the-way" pattern
+
+**No code changes** (header docstring is the only `.js` edit; rest is `.md`). Server boot smoke clean. All 13 prior Phase 3 + faction-quests test suites still green. Skipping client build (no `client/` changes; would be a no-op).
+
+**Phase 3 status post-SC-6.5:**
+- Phase 3.1 (standing-scalar abstraction) — complete (SC-1 through SC-5)
+- Phase 3.2 (marker pipeline consolidation) — complete (SC-6.1 through SC-6.5)
+- Phase 3.3 (Pattern D / time-bounded state primitives) — spec locked at PHASE_3_REFACTOR_SPEC.md §3.3; SC-7.1 unblocked
+
+---
+
+## [1.0.0.153] - 2026-05-05 — Phase 3 SC-6.4d: combat / mythic / base-defense cluster + SC-6.4 close-out (6 markers — all 6 handlers)
+
+Fourth and final ship in the SC-6.4 four-ship sweep. Final cluster is the cleanest-shape: 6 markers, 6 handlers, zero parks. Includes the heaviest single-marker handler in SC-6.4 (COMBAT_START rolls initiative for player + companions + enemies) and the orchestrator handler with cascade (MYTHIC_TRIAL → optional advanceTier).
+
+**`server/services/markerSchemas.js`:** 3 new schemas added to MARKER_SCHEMAS:
+- MYTHIC_TRIAL: Name required, Description + Outcome enum (passed/failed/redirected) optional
+- ITEM_AWAKEN: Item required, NewState enum (awakened/exalted/mythic) + Deed optional
+- MYTHIC_SURGE: Ability required, Cost optional positive int
+
+(COMBAT_START / COMBAT_END / BASE_DEFENSE_RESULT schemas already in MARKER_SCHEMAS pre-Phase-3.)
+
+**`server/services/mythicService.js`:**
+- MYTHIC_TRIAL handler — calls `recordTrial`; if result.canAdvance, additionally calls `advanceTier`. Returns `{mythicEvents: [trial, optional tier_advance]}` for the route to unpack into mythicEvents array.
+- ITEM_AWAKEN handler — locates legendary item via `findLegendaryItemByName`; calls `advanceItemState` with new state + deed. Silent no-op if item not in inventory (legacy preserved).
+- MYTHIC_SURGE handler — calls `useMythicPower`; gated on `character.has_mythic` (legacy preserved).
+
+**`server/services/baseThreatService.js`:**
+- BASE_DEFENSE_RESULT handler — calls `recordPlayerDefenseOutcome`. Returns systemNote text the route pushes to result.messages (success or failure variant). Multi-instance support preserved.
+
+**`server/services/combatMarkerService.js` (new file):**
+- Single-purpose module owning COMBAT_START + COMBAT_END handlers. Created because no existing combat service owned AI-driven combat-state initialization.
+- COMBAT_START handler — heaviest single-marker handler in SC-6.4. Computes player initiative (ability_scores DEX mod + d20), companion initiatives (joins companions + npcs tables for active companions), enemy initiatives (`estimateEnemyDexMod` heuristic + d20). Sorts turn order by initiative/modifier with random tiebreaker. Returns `{combatStart: {turnOrder, currentTurn, round}, systemNote}`.
+- COMBAT_END handler — presence-only marker. Returns `{type: 'combat_end'}` for the route to set `combatEnd` boolean.
+
+**`server/routes/dmSession.js`:**
+- 6 inline detect-function dispatches DELETED — ~145 lines removed. Replaced by 4 small handlerResults extraction blocks routing by schemaKey into `defenseHandlerResults` / `combatStart` + `combatEnd` / `mythicEvents`.
+- Imports cleaned: 6 detect-functions + 5 service helpers (recordTrial, advanceTier, findLegendaryItemByName, advanceItemState, useMythicPower, recordPlayerDefenseOutcome) no longer imported. Bare side-effect imports for baseThreatService + combatMarkerService.
+- **Cumulative SC-6.4 thinning of `dmSession.js`: ~580 lines** of inline marker dispatch removed across the four cluster ships.
+
+**Tests** — `tests/sc6-4d-combat-mythic-schemas.test.js`, 48 assertions all passing:
+- All 6 cluster-5 schemas registered + handlers wired
+- All 7 legacy detect-functions still exported (incl. estimateEnemyDexMod utility helper)
+- Per-schema field validation including the 3 new mythic schemas
+- End-to-end realistic combat/mythic turn extracts all 6 markers cleanly
+- Cross-pipeline isolation: prior SC-4 + SC-6.4a/b markers still validate
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), sc6-4c-promise-notoriety-schemas (36), faction-quests (112). Server boot smoke clean. Client production build clean.
+
+**Composition reconfirmed in SC-6.4d prep**: detectMythicTrial does NOT touch piety. The Q6 survey's hypothesized trial→piety cascade was a misread; recordTrial only inserts mythic_trials + bumps trials_completed. canAdvance triggers advanceTier (also no piety). Migration is structurally clean.
+
+**SC-6.4 sweep complete (cumulative across 4 ships):**
+- 22 detect-functions migrated to handlers (10 + 5 + 4 + 6 cluster splits, with PIETY_CHANGE pre-migrated in SC-4 = 23 actual; actual handler count post-Phase-3 in MARKER_SCHEMAS: 24 incl. BOND_SHIFT from SC-5)
+- 2 added as schema-without-handler (SWIM, ADD_ITEM) — extending SC-6.3's prelude-marker precedent in two new categorical directions (no-side-effect-target, orchestrated-with-sibling)
+- 4 confirmed PARK ENTIRELY (detectDowntime per PM ruling, detectRecruitment, estimateEnemyDexMod utility, parseMarkerKeyValue + parseMarkerPairs utilities)
+- ~580 lines deleted from `routes/dmSession.js`
+- 193 new schema/handler/snapshot test assertions
+- 1 production bug discovered + fixed via the migration mechanism (notoriety silent-drop, headlined in v1.0.152)
+
+**Consolidated SC-6.4 close-out DECISION_LOG entry** lands with this ship — covers all four cluster ships + the four structural decisions (schemas-without-handlers four rationales / schema-relaxation pattern / context.narrative API extension / "fix-along-the-way" named pattern). See [DECISION_LOG.md](DECISION_LOG.md) entry "Phase 3 SC-6.4 close-out" 2026-05-05.
+
+**Phase 3.2 (marker pipeline consolidation) complete.** SC-6.5 (documentation closing — markerSchemas.js header docs + CLAUDE.md model split + closing DECISION_LOG entry per spec §3.9) is the remaining Phase 3.2 sub-checkpoint. Phase 3.3 (Pattern D / time-bounded state primitives) is the next major Phase 3 surface, gated on PM drafting §3.3 of PHASE_3_REFACTOR_SPEC.md.
+
+---
+
+## [1.0.0.152] - 2026-05-05 — BUG FIX: notoriety silent-drop on canonical-format markers (resolved as part of Phase 3 SC-6.4c migration)
+
+**Headline.** `[NOTORIETY_GAIN]` and `[NOTORIETY_LOSS]` markers emitted by the DM AI in the canonical prompt-instructed format (quoted, space-separated: `[NOTORIETY_GAIN: source="City Watch" amount=15 category="criminal"]`) were silently dropped pre-v1.0.152. The detect-functions used `parseMarkerKeyValue` which expects comma-separated, possibly-unquoted values. When the AI emitted canonical, the parser's `str.split(',')` returned one entry containing the whole quoted string; key-extraction on that single entry produced garbage and the truthy-check `if (data.source && data.amount)` rejected it. Result: the notoriety side effect never fired. No error logged, no correction-loop feedback, no client visibility.
+
+**Severity.** Functional / Data-integrity. The notoriety system is a real game mechanic (entanglement risk, faction reactions). Players accumulated less heat than the AI intended; the AI's narrative-side notoriety acknowledgments wouldn't match the DB state. Likely most or all production NOTORIETY emissions silently dropped, given the prompt instructs the canonical quoted format explicitly.
+
+**Discovery.** SC-6.4 implementation prep, 2026-05-05. Surfaced while spot-checking the survey's "alternative parser" PM call against the actual code path — the divergence between the prompt-instructed format and the detect-function's parser was visible in source.
+
+**Fix shape.** The SC-6.4c migration replaces both `detectNotorietyGain` and `detectNotorietyLoss` call sites in `routes/dmSession.js` with handlers backed by `markerSchemas.js` parsing. The schema's `extractField` regex's third alternation (`([^\\s,\\]]+)`) handles bareword/comma-sep formats while the first two alternations handle quoted forms — natively accepts BOTH formats without consumer-side accommodation. `parseMarkerKeyValue` becomes dead code (the helper is referenced in the Q6 survey as PARK ENTIRELY); legacy `detectNotoriety*` exports stay per "deprecate by hiding" but no longer invoked from production.
+
+**KNOWN_BUGS archive.** Entry resolved at v1.0.152. See [KNOWN_BUGS.md](KNOWN_BUGS.md) "Notoriety silent-drop on canonical-format markers."
+
+**Test snapshot.** `tests/sc6-4c-promise-notoriety-schemas.test.js` "HEADLINE" section asserts the canonical quoted format parses cleanly post-fix:
+- `source="City Watch"` extracts as `'City Watch'` (embedded space preserved)
+- `amount=15` extracts as int 15
+- `category="criminal"` extracts as enum 'criminal'
+- Plus schema validation surfaces field-targeted correction-loop feedback for malformed amount/category violations
+
+---
+
+## [1.0.0.152] - 2026-05-05 — Phase 3 SC-6.4c: promise + notoriety cluster migration (4 markers — all 4 handlers, no parks)
+
+Third of four ships in the SC-6.4 sweep. **The notoriety silent-drop bug fix above ships with this cluster** (separate CHANGELOG entry per PM direction so the bug fix lands as the headline, not buried as a migration footnote).
+
+**Cluster shape: 4 markers, 4 handlers, zero parks.** Cleanest-shape cluster in SC-6.4 — every marker has a single clean side-effect target. PROMISE_MADE/FULFILLED touch npcRelationshipService + canon_facts + consequenceService cascades; NOTORIETY_GAIN/LOSS touch notorietyService.
+
+**`server/services/notorietyService.js`:**
+- NOTORIETY_GAIN handler — multi-instance dispatch. Reads character's campaign_id + game_day, calls `addNotoriety` with parsed source/amount/category. Returns event object for response payload. Resolves the silent-drop bug headlined above by routing through the schema parser.
+- NOTORIETY_LOSS handler — same shape, inverts amount sign. Hardcodes `category: 'criminal'` (legacy behavior; NOTORIETY_LOSS schema doesn't carry category).
+
+**`server/services/consequenceService.js`:**
+- PROMISE_MADE handler — NPC name lookup (case-insensitive), `npcRelationshipService.addPromise`, INSERT into canon_facts. NPC-not-found is silent no-op (legacy preserved).
+- PROMISE_FULFILLED handler — heaviest in this cluster. NPC lookup → `getPendingPromises` → fuzzy match by promise text prefix → `fulfillPromise` (returns weight) → weight-derived `adjustDisposition` + `adjustTrust` → `spreadReputationRipple` → `spreadFactionStanding` → INSERT into canon_facts. Returns rich event object with all the cascade effects.
+
+**`server/routes/dmSession.js`:**
+- Inline detect-function dispatches for all 4 markers DELETED — ~135 lines removed. Replaced by a 12-line `handlerResults` extraction that splits results into `promiseEvents` / `notorietyEvents` arrays by schemaKey set membership.
+- Imports cleaned: `detectPromiseMade`, `detectPromiseFulfilled`, `detectNotorietyGain`, `detectNotorietyLoss` no longer imported (legacy exports stay). Five service-function imports removed: `addPromise`, `fulfillPromise`, `getPendingPromises`, `adjustDisposition` (npc), `adjustTrust` (npc), `addNotoriety`, `FULFILL_WEIGHTS`, `spreadReputationRipple`, `spreadFactionStanding` — all now invoked inside their respective service handlers.
+- `calculatePriceModifier` import retained (used elsewhere in the route at the merchant-price-modifier path).
+
+**Tests** — `tests/sc6-4c-promise-notoriety-schemas.test.js`, 36 assertions all passing:
+- All 4 cluster-3 schemas registered + handlers wired
+- All 4 legacy detect-functions still exported (back-compat)
+- Per-schema field validation including the canonical-format bug-fix headline assertions
+- End-to-end realistic narrative extraction
+- Cross-pipeline isolation: SC-4 + SC-6.4b markers still validate
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), sc6-4b-merchant-schemas (47), faction-quests (112). Server boot smoke clean. Client production build clean.
+
+**Cumulative SC-6.4 progress:** 19 of 22 detect-functions migrated (10 in v1.0.150 + 5 in v1.0.151 + 4 in v1.0.152). Remaining: 6 in v1.0.153 (combat/mythic cluster). Cumulative thinning of `routes/dmSession.js`: ~440 lines deleted across the three cluster ships.
+
+**Per-ship review gates:** v1.0.152 ships → user smoke + PM review → v1.0.153 (combat/mythic + consolidated DECISION_LOG entry covering all four ships) starts.
+
+---
+
+## [1.0.0.151] - 2026-05-05 — Phase 3 SC-6.4b: merchant cluster migration (5 markers — 4 handlers + 1 schema-only orchestrated by sibling)
+
+Second of four ships in the SC-6.4 sweep. Merchant cluster has the heaviest response-payload coupling — MERCHANT_SHOP loads inventory, builds the AI-context message, integrates merchant relationships; MERCHANT_COMMISSION pushes success/failure system notes; LOOT_DROP consolidates per-drop results into a combined player-facing inventory message. The cluster validates the "handler returns data; route assembles response payload" pattern from cluster 1 against substantially more complex coupling.
+
+**Cluster shape: 4 handlers + 1 schema-only.** ADD_ITEM is the schema-only entry — its legacy code path was orchestrated WITH MERCHANT_SHOP (only fires when a merchant context exists), so the migration folds ADD_ITEM processing INTO the MERCHANT_SHOP handler. ADD_ITEM keeps its schema for correction-loop validation but doesn't dispatch independently. This extends the SC-6.3 schemas-without-handlers precedent: schema-only is also the right shape for markers that orchestrate together with a sibling marker (the orchestration belongs in one handler, not split across two).
+
+**`server/services/markerSchemas.js`:** MERCHANT_COMMISSION schema extended with optional `Price_SP`, `Price_CP`, `Deposit_SP`, `Deposit_CP`, `Description` fields + `Price_GP` min relaxed from 1 to 0. Preserves the legacy detect-function's tolerance for mixed-denomination prices and free-text description without forcing the AI prompt to change. Other 4 cluster schemas (MERCHANT_SHOP, ADD_ITEM, MERCHANT_REFER, LOOT_DROP) were already in MARKER_SCHEMAS pre-Phase-3.
+
+**`server/services/merchantService.js`:**
+- MERCHANT_SHOP handler — orchestrates the full shop activation: find/create merchant via `getMerchantInventory` + `createMerchantOnTheFly`; processes coupled ADD_ITEM markers from the same narrative via `extractMarkerBodies` + `parseMarkerBody`; calls `addItemToMerchant` for each; re-loads inventory; builds the inventoryContext system note with cursed-item special-case handling. Returns the merchant info + the inventoryContext string for the route to push to `result.messages`.
+- MERCHANT_REFER handler — calls `ensureItemAtMerchant`. Silent side effect; no AI-context message push.
+
+**`server/services/merchantOrderService.js`:**
+- MERCHANT_COMMISSION handler — preserves the idempotency guard (skip if active order exists for the same item at the same merchant) and the gp/sp/cp price aggregation. Returns a structured `{type, status, orderId, systemNote}` object the route handler pushes to `result.messages` based on `status` (placed | failed | skipped_duplicate).
+
+**`server/services/lootDropService.js` (new file):**
+- Single-purpose module owning the LOOT_DROP marker handler. Created because no existing service owned character-inventory mutation for AI-driven drops. Handler does per-marker: lookup against loot tables, mutate inventory, persist. Returns the structured drop result. Route consolidates handlerResults for all LOOT_DROPs into ONE combined SYSTEM note (preserves the legacy "items have been added: A, B, C" shape).
+
+**`server/routes/dmSession.js`:**
+- Pipeline context extended: now passes `narrative` so the MERCHANT_SHOP handler can self-orchestrate the coupled ADD_ITEM markers without needing a separate handler for them.
+- Inline detect-function dispatches for MERCHANT_SHOP / ADD_ITEM (combined block, ~55 lines) + MERCHANT_REFER (~10 lines) + MERCHANT_COMMISSION (~75 lines) + LOOT_DROP (~50 lines) all DELETED. Replaced by a 25-line `handlerResults` extraction that reads `MERCHANT_SHOP.inventoryContext` / `MERCHANT_COMMISSION.systemNote` / consolidated LOOT_DROP results and pushes to `result.messages`.
+- Two new bare side-effect imports: `import '../services/merchantOrderService.js'` (was `import { placeCommission }` — now loaded for module-level handler registration), `import '../services/lootDropService.js'` (new).
+- Imports cleaned: `detectMerchantShop`, `detectMerchantRefer`, `detectAddItem`, `detectLootDrop`, `detectMerchantCommission` no longer imported (legacy exports stay per "deprecate by hiding"). `placeCommission`, `addItemToMerchant`, `ensureItemAtMerchant`, `getLootTableForLevel` no longer imported (handlers in consumer services own the calls now). `lookupItemByName` still imported (used elsewhere in the file).
+- Net: ~190 lines deleted from the route handler this ship; cumulative SC-6.4 thinning ~300 lines.
+
+**Tests** — `tests/sc6-4b-merchant-schemas.test.js`, 47 assertions all passing:
+- All 5 cluster-2 schemas registered, 4 handlers registered (ADD_ITEM excluded by design — verified `!_hasHandler('ADD_ITEM')`)
+- All 5 legacy detect-functions still exported
+- Per-schema field-extraction tests covering all 5 schemas including the SC-6.4b extension fields (sp/cp denominations + Description)
+- End-to-end realistic merchant turn extracts all 5 markers cleanly with zero false failures
+- **Response-payload snapshot tests** (PM suggestion for cluster-2): 5 cases covering MERCHANT_SHOP message push, MERCHANT_COMMISSION placed/failed/skipped_duplicate variants, LOOT_DROP combined-message consolidation, MERCHANT_REFER silent (no push). Each asserts byte-identical `result.messages` content versus the legacy inline-dispatch shape.
+- Cross-pipeline isolation: SC-4 PIETY_CHANGE + SC-6.4a SHELTER_FOUND still validate alongside cluster-2 schemas.
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), sc6-4a-survival-crafting-schemas (62), faction-quests (112). Server boot smoke clean. Client production build clean.
+
+**Notable findings deferred to consolidated DECISION_LOG entry at v1.0.153 close-out:**
+- ADD_ITEM as schema-only-orchestrated-by-sibling extends the SC-6.3 schemas-without-handlers precedent in a new direction (SC-6.3 reasons were ordering invariants + aggregated returns; SC-6.4a added "no side-effect target" via SWIM; SC-6.4b adds "orchestrated-with-sibling-marker" via ADD_ITEM).
+- MERCHANT_COMMISSION schema extension preserves legacy detect-tolerance (mixed-denomination prices, free-text description) — schema-relaxation rather than tightening; an explicit choice to keep behavior-neutral on the migration ship.
+- Pipeline context now carries `narrative` for self-orchestrating handlers — small API extension, used by MERCHANT_SHOP only this ship; available for future cross-marker-coordination cases.
+
+**Per-ship review gates:** v1.0.151 ships → user smoke + PM review → v1.0.152 (promise/notoriety cluster — headlines the notoriety silent-drop bug fix in its own CHANGELOG entry) starts.
+
+**SC-6.4b acceptance criteria progress:** 15 of 22 detect-functions migrated cumulatively (10 in v1.0.150 + 5 in v1.0.151). Cluster-2 detect-function call sites removed from `routes/dmSession.js`; legacy exports retained. Existing tests stay green; new tests confirm schema validation + response-payload byte-identity. DECISION_LOG entry deferred to v1.0.153 close-out.
+
+---
+
+## [1.0.0.150] - 2026-05-05 — Phase 3 SC-6.4a: survival + crafting cluster migration (10 markers — 9 handlers + 1 schema-only)
+
+First of four ships in the SC-6.4 detect-function sweep. Per the four-ship split confirmed by PM 2026-05-05 (single SC-6.4 ship was rejected after sizing surfaced cluster-2/3/4 having substantively different review surfaces). 10 markers across the survival + crafting domain: SHELTER_FOUND first per the Phase 4 prep flag; SWIM is schema-only because the legacy `detectSwim` was exported but never invoked from any side-effect path; the other 8 are full schema+handler migrations.
+
+**`server/services/markerSchemas.js`:** 10 new schemas under a Phase 3 SC-6.4 section header — SHELTER_FOUND (Type enum required, Quality enum optional), WEATHER_CHANGE (Type required, Duration_Hours optional positive int defaulting to 24), EAT (Item required), DRINK (Item required), FORAGE (Terrain/Result/Food/Water all optional with Result enum + non-negative int constraints), SWIM (Duration optional — schema-only), CRAFT_PROGRESS (Hours required positive int), RECIPE_FOUND (Name required + Source optional), MATERIAL_FOUND (Name required + Quantity/Quality optional with Quality enum), RECIPE_GIFT (Name + Category required + 9 optional fields covering DC / Hours / Materials / etc.).
+
+**`server/services/survivalService.js`:**
+- New export `setCharacterShelter(characterId, shelterType)` — single-purpose helper called by the SHELTER_FOUND handler; also available for future non-marker shelter-set paths.
+- 4 module-load handler registrations: SHELTER_FOUND (calls `setCharacterShelter`), EAT (calls `consumeFood`), DRINK (calls `consumeWater`), FORAGE (mutates inventory + writes back). Each handler reads game_day from the characters table fresh; matches the SC-4 piety pattern.
+- Each handler returns the event object the route handler used to push into `survivalEvents` (preserves the existing client contract — `DMSession.jsx:869` uses `survivalEvents.length > 0` as a refresh trigger).
+
+**`server/services/weatherService.js`:**
+- WEATHER_CHANGE handler registers at module load. Reads character's campaign_id + game_day, calls `setWeather`, returns the weatherChangeResult shape the route used to push into `data.weatherChange`.
+
+**`server/services/craftingService.js`:**
+- 4 module-load handler registrations: RECIPE_FOUND (calls `discoverRecipe`), MATERIAL_FOUND (calls `addMaterial`), CRAFT_PROGRESS (looks up active in-progress project via `getProjectStatus`, calls `advanceProject` if found — no-op if none), RECIPE_GIFT (maps schema's PascalCase fields to recipeData lowercase shape, calls `createRadiantRecipe`).
+- Each handler returns the event object the route handler used to push into `craftingEvents`.
+
+**`server/routes/dmSession.js`:**
+- The `processResponseMarkers` call site now captures `pipelineResult` (was previously fire-and-forget). Downstream code reads `pipelineResult.handlerResults` to assemble response-payload arrays.
+- Inline detect-function dispatches for all 10 cluster-1 markers DELETED — 113 lines removed. Replaced by an 11-line `handlerResults` extraction that routes by schemaKey into the existing `survivalEvents` / `craftingEvents` / `weatherChangeResult` slots.
+- Imports cleaned: `detectWeatherChange` / `detectShelterFound` / `detectSwim` / `detectEat` / `detectDrink` / `detectForage` / `detectRecipeFound` / `detectMaterialFound` / `detectCraftProgress` / `detectRecipeGift` no longer imported (legacy exports stay per "deprecate by hiding"). `setWeather`, `consumeFood`, `consumeWater`, `discoverRecipe`, `addMaterial`, `advanceProject`, `getProjectStatus`, `createRadiantRecipe` no longer imported (handlers in the consumer services own the calls now). The bare side-effect imports of survival/weather/crafting services in dmSession.js still fire the module-load `registerMarkerHandler` calls.
+
+**Tests** — `tests/sc6-4a-survival-crafting-schemas.test.js`, 62 assertions all passing:
+- All 10 cluster-1a schemas registered in MARKER_SCHEMAS
+- 9 handlers registered (SWIM excluded by design — verified `!_hasHandler('SWIM')`)
+- All 10 legacy detect-functions still exported from dmSessionService.js (back-compat per "deprecate by hiding")
+- Per-schema field-extraction tests: canonical form parses, missing required → field-targeted error, enum violations → field-targeted error, min/max violations → field-targeted error, optional fields tolerated
+- End-to-end realistic narrative slice with 5 markers extracts to validByKey correctly with zero false failures
+- Cross-pipeline isolation: SC-4 PIETY_CHANGE + SC-5 BOND_SHIFT still validate alongside cluster-1 schemas
+
+All prior suites green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-marker-schemas (73), faction-quests (112). Server boot smoke clean. Client production build clean.
+
+**Notable findings during implementation, deferred to later ships' DECISION_LOG entries (consolidated at v1.0.153 close-out):**
+- `detectDowntime` ruled PARK ENTIRELY (not SCHEMA-WITHOUT-HANDLER as initial survey suggested) — operates on player input not AI narrative; adding `[DOWNTIME]` would be NEW marker semantics excluded by spec §3.5. Survey + KNOWN_BUGS-style triage updated.
+- `detectMythicTrial` does NOT compose with the SC-4 piety abstraction (initial survey hypothesized a trial→piety cascade — spot-check confirmed `recordTrial` doesn't touch piety). Migration in v1.0.153 (cluster 5) is structurally clean.
+- Notoriety silent-drop bug discovered (`parseMarkerKeyValue` chokes on the canonical prompt-instructed format) — pre-emptively logged in `KNOWN_BUGS.md` Resolved archive section as a fix-along-the-way for v1.0.152 (cluster 4 — promise/notoriety).
+
+**Per-ship review gates assumed:** v1.0.150 ships → user smoke + PM review → v1.0.151 (merchant cluster) starts. Same gate before v1.0.152 (promise/notoriety + notoriety bug fix headlined in its own CHANGELOG entry) and v1.0.153 (combat/mythic + consolidated DECISION_LOG entry covering all four ships).
+
+**SC-6.4a acceptance criteria progress:**
+- 10 of 22 detect-functions migrated this ship (cumulative SC-6.4 progress)
+- All cluster-1 detect-function call sites removed from `routes/dmSession.js`; legacy exports retained per "deprecate by hiding"
+- Existing tests stay green; new tests confirm schema validation; cross-pipeline isolation verified
+- DECISION_LOG entry deferred to v1.0.153 close-out per the four-ship sequencing
+
+---
+
+## [1.0.0.149] - 2026-05-04 — Phase 3 SC-6.3: Prelude marker schemas + correction-loop (parked from handler dispatch; ordering invariants force consumer-side orchestration)
+
+19 Prelude markers added to MARKER_SCHEMAS for validation + correction-loop feedback. Per the SC-6.3 parking decision (DECISION_LOG entry 2026-05-04): ZERO handlers registered. Side-effect dispatch stays in `preludeSessionService.processMarkersForSession` because of ordering invariants between markers (`AGE_ADVANCE → HP_CHANGE` for max_hp; `CANON_FACT_RETIRE → CANON_FACT` for retire-then-record; `CHAPTER_PROMISE → AGE_ADVANCE` for chapter check) plus aggregated-return shapes (`npcsCreated`, `capViolations`, `offeredEmergences` etc.) that don't fit per-handler dispatch. The pipeline's contribution is **correction-loop feedback** — a capability that didn't exist for prelude markers before SC-6.3.
+
+**`server/services/markerSchemas.js`:** 19 new schemas under a Phase 3 SC-6.3 section header:
+- 15 standard field-extracted markers: `AGE_ADVANCE` (years int min 1), `CHAPTER_END` (summary required), `SESSION_END_CLIFFHANGER` (text optional), `NPC_CANON` (name required + relationship/status optional), `LOCATION_CANON` (name required + type/is_home optional), `HP_CHANGE` (delta signed int + reason optional), `CHAPTER_PROMISE` (theme/question both optional), `STAT_HINT` (stat enum [str|dex|con|int|wis|cha] required + magnitude bounded [1, 2] + reason optional), `SKILL_HINT`, `CLASS_HINT`, `THEME_HINT`, `ANCESTRY_HINT` (all canonical-form: skill/class/theme/feat_id required + reason optional), `CANON_THREAD` (kind enum [unresolved_loss|blood_debt|...] + subject + condition required + weight enum optional), `CANON_FACT` (subject + category enum [npc|location|event|relationship|trait|item] + fact required), `CANON_FACT_RETIRE` (subject + fact_contains required), `DEPARTURE` (reason/tone optional).
+- 3 presence-only markers: `THEME_COMMITMENT_OFFERED`, `NEXT_SCENE_WEIGHT`, `PRELUDE_END` — `fields: {}`. The bareword/free-text bodies of these markers don't fit the field-extractor; the existing detect functions handle value extraction. Schema confirms presence.
+- Backward-compat aliases (`CLASS_HINT.class_id=`, `THEME_HINT.theme_id=`, `ANCESTRY_HINT.feat=`, `CANON_FACT_RETIRE.contains=`) NOT in schema but still tolerated by detect functions. Intentional asymmetry: schemas tighten the AI-facing contract via the correction-loop; detect-functions stay legacy-tolerant for old transcripts.
+
+**`server/services/preludeSessionService.js`:**
+- New import: `validateDmMarkers, buildCorrectionMessage` from `markerSchemas.js`.
+- After `processMarkersForSession`, run `validateDmMarkers(result.response)` to capture marker failures. Defensive try/catch — validation failures never block the message-flush flow.
+- Stash `buildCorrectionMessage(failures)` to `session_config.pendingMarkerCorrections` (same key the player-mode pipeline uses; sessions are scoped per `session_type` so no cross-pollution risk).
+- Consume any prior-turn `pendingMarkerCorrections` at the start of the next message-flush; inject as a `user`-role message before the AI call, mirroring the existing `pendingCapFeedback` / `pendingViolationNote` patterns.
+- Logs malformed markers via `console.warn('[prelude-marker-schema] N malformed marker(s) on session X: ...')` for playtest visibility.
+
+**`server/services/preludeMarkerDetection.js`:** untouched. All 19 detect functions stay in place (parking decision = side-effect dispatch stays consumer-side).
+
+**Tests** — `tests/prelude-marker-schemas.test.js`, 73 assertions all passing:
+- All 19 prelude schemas registered; ZERO handlers registered (parking preserved via `_hasHandler` checks)
+- Field-extraction validation for each schema: canonical form parses, missing required → field-targeted error, enum violations → field-targeted error, min/max violations → field-targeted error
+- Presence-only markers tolerate empty body + stray-content body
+- End-to-end: realistic narrative slice with 2 valid + 2 invalid markers → 2 valid extractions + 2 correction-note entries that reference the malformed fields
+- Cross-pipeline: prelude `CHAPTER_END` and DM `PIETY_CHANGE` co-validate without false failures
+
+All prior suites still green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), dm-mode-bond-shift (59), prelude-markers (140), prelude-arc (15), prelude-canon-threads (21), prelude-prompt (180), prelude-theme-commitment (59), prelude-violation-detection (91). Server boot smoke clean. Client production build clean.
+
+**SC-6.3 acceptance criteria met (per spec §3.9):**
+- All 19 Prelude markers have schemas (parked from handler dispatch with documented rationale per SC-6.3 DECISION_LOG entry)
+- `preludeMarkerDetection.js` ad-hoc functions removed for migrated markers — applies vacuously (zero markers migrated to handlers per the parking decision)
+- Existing Prelude tests pass (501 assertions across 6 prelude test suites)
+- DECISION_LOG entry documents the parking rationale (ordering invariants + aggregated returns + cross-marker shared state)
+
+**Pattern D survey delivered alongside.** [triage/pattern-d-survey.md](triage/pattern-d-survey.md) — 11 time-bounded state surfaces inventoried, four shapes identified (decay-on-read, threshold-with-effect, stage-advance-on-elapsed, round-bounded session-only), 7 open questions surfaced for PM's §3.3 drafting. Recommended scope: `daysSince` helper + `registerDecayConsumer` + `registerThresholdConsumer`. Out: combat-round client state, world-event stage-advance (uses real-time clock — flagged as separate fix), companion-activity completion. Survey is read-only; no code changes.
+
+**Marker pipeline progression:** Two markers fully owned by handlers (`[PIETY_CHANGE]` SC-4, `[BOND_SHIFT]` SC-5); 19 markers schema-validated but parked from handler dispatch (SC-6.3); ~26 detect-functions still in `dmSessionService.js` awaiting SC-6.4 survey. The SC-6.3 parking decision establishes that "schemas without handlers" is a legitimate end-state — useful precedent for SC-6.4's similarly-entangled detect-functions.
+
+---
+
+## [1.0.0.148] - 2026-05-04 — Phase 3 SC-5: DM Mode bond-shifts migration (service extraction + dual-scalar with shared audit + JSON-blob storage + marker pipeline owns [BOND_SHIFT])
+
+Fifth and last consumer port for the standingScalar abstraction. Per spec §2.7 — the most complex migration in Phase 3: dual-scalar (warmth + trust) per directional pair, JSON-blob storage inside `dm_mode_parties.party_data`, three application paths converging on a shared service, and the marker pipeline taking ownership of `[BOND_SHIFT]` dispatch (second migrated marker after `[PIETY_CHANGE]`).
+
+**`server/services/dmModeBondShiftService.js`** (new file, ~210 lines):
+- New exports `DM_MODE_BOND_WARMTH_CONFIG` and `DM_MODE_BOND_TRUST_CONFIG` — both range -5..+5, default 0, no label bands (raw signed integer in prompts), `AUDIT_STRATEGIES.NONE`. Distinct names so the abstraction's threshold registry treats them as fully independent. Repository callbacks walk into `dm_mode_parties.party_data` JSON blob: `readScore` parses → finds `characters[fromCharName].party_relationships[toCharName]` → returns warmth/trust; `writeScore` does the same walk + mutate + stringify + write back. ContextKey shape: `{partyId, fromCharName, toCharName}` (directional — A→B independent of B→A).
+- New export `mutateRelationshipScalars(rel, warmthDelta, trustDelta, reason, sessionLabel)` — the deterministic core. Clamps warmth and trust via the abstraction's exported `clampToRange(value, config.range)` (single source of truth for [-5, +5] bounds), pushes ONE shared history entry combining both deltas (FIFO max 10). Skips history push when both deltas are zero.
+- New exports `applyBondShift(partyId, fromCharName, toCharName, warmthDelta, trustDelta, reason, sessionLabel)` (single-shift) and `applyBondShifts(partyId, shifts, sessionLabel)` (batched). Both load party_data once, mutate via `mutateRelationshipScalars`, write back once. Single-shift is used by the marker handler + manual relationship route.
+- Module-load `registerMarkerHandler('BOND_SHIFT', ...)` — pipeline owns dispatch. Handler unpacks `parsed.From / To / Warmth / Trust / Reason` + `context.partyId / sessionLabel` and calls `applyBondShift`. Per-shift dispatch (N reads + N writes per turn) accepted as the right cadence — BOND_SHIFTs are rare per turn ("most messages have none").
+
+**`server/services/markerSchemas.js`:** new entry `BOND_SHIFT` — position `'last'`, fields `From` (string, required), `To` (string, required), `Warmth` (signed int, optional, bounded [-5, +5]), `Trust` (signed int, optional, bounded [-5, +5]), `Reason` (string, optional). Replaces `dmModeService.detectBondShifts`'s no-op-skip-on-zero-deltas behavior with schema validation + correction-loop feedback for malformed markers.
+
+**`server/routes/dmMode.js`:**
+- Removed `detectBondShifts` from the `dmModeService` named imports + the inline 35-line application block at lines 295-329 — pipeline now owns dispatch via `processResponseMarkers(narrative, {partyId, sessionLabel})`. Module-load handler registration fires transitively via the new `import { applyBondShift } from '../services/dmModeBondShiftService.js'`.
+- The OOC gate (skip BOND_SHIFTs for OOC turns) is preserved at the route level — `processResponseMarkers` only runs when `!isOOC`.
+- Refreshed-characters reload after dispatch to reflect handler mutations back to the client (the handler mutates `party_data` directly via the JSON-blob repository).
+- Manual relationship adjust route (`PUT /api/dm-mode/party/:partyId/relationship`) rewritten to delegate to `applyBondShift`. Per-route delta clamp to [-2, +2] preserved at the call site (manual adjustments tighter than AI markers — per-path policy, not abstraction territory).
+
+**`server/services/dmModeChronicleService.js`:** the session-end `extractRelationshipEvolution` shift loop (lines 347-380) rewritten to call `mutateRelationshipScalars(rel, warmthDelta, trustDelta, reason, sessionNumber)` for the warmth/trust+history mutations. The `attitude` / `tension` field updates and the preserve-original-shape JSON persist (lines 397-407) stay chronicle-side — they're not part of the bond-shift abstraction. Per-path delta clamp to [-2, +2] preserved (Sonnet's session-end synthesis can be chatty about deltas). Attitude-only history entry preserved as a special case (zero deltas + `new_attitude` → push `attitude→X` entry inline after `mutateRelationshipScalars`).
+
+**Tests** — 59 new assertions, all passing:
+
+- `tests/dm-mode-bond-shift.test.js` (59 assertions): both configs' shape sanity (range, defaults, NONE audit, distinct names), formatForPrompt fragment shapes (sign-aware including `+0`), `mutateRelationshipScalars` clamps at upper bound (5+3 → 5), lower bound (-3 + -5 → -5), warmth-only shifts (history entry omits trust), trust-only shifts, no-op (both deltas 0 → no history push), missing-field defaults (rel without warmth/trust treated as 0), FIFO max 10 (12 events → trims to oldest 2 dropped), directional pair semantics (A→B mutation doesn't touch B→A's separate sub-object), BOND_SHIFT marker schema field shape (From/To required, Warmth/Trust optional bounded [-5, +5]), module-load BOND_SHIFT handler registration verified.
+
+All prior suites still green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), piety-config (31), npc-disposition-trust (48), faction-quests (112). Server boot smoke clean (4-second hold). Client production build clean.
+
+**SC-5 acceptance criteria met (per spec §2.7):**
+- Service extracted (`dmModeBondShiftService.js`) — three application paths converge on `mutateRelationshipScalars` + `applyBondShift`
+- Two configs (`DM_MODE_BOND_WARMTH_CONFIG` + `DM_MODE_BOND_TRUST_CONFIG`) created with the dual-scalar shape per spec §2.7 step 2
+- Directional contextKey (`{partyId, fromCharName, toCharName}`) supported via opaque pass-through (no abstraction-level changes needed; the consumer's repository encodes the JSON-blob walk)
+- Per-turn application path migrated (route handler now uses pipeline dispatch)
+- Session-end synthesis path migrated (chronicle extractor now uses `mutateRelationshipScalars`)
+- Manual relationship route migrated (now uses `applyBondShift`)
+- Prompt injection at `dmModePromptBuilder.js:321-338` unchanged — output format preserved (warmth/trust raw integers, history entries via shared `rel.history` array). The line composer reads from `party_data` JSON which the new wrappers write identically.
+- `[BOND_SHIFT]` handler registered and verified (`_hasHandler('BOND_SHIFT')`)
+
+**Schema migration to dedicated `party_relationships` table is OUT of scope** per Phase 3 Call 3 — that's Phase 6 work. The repository callbacks here encode the JSON-blob walk; Phase 6 will swap them for SQL on a dedicated table without the abstraction or the application call sites needing to change.
+
+**Phase 3 standing-scalar migrations are now complete.** All five consumer systems (companion loyalty SC-2, faction standing SC-3, piety + NPC disposition/trust SC-4, DM Mode bond-shifts SC-5) migrated. Two markers (`[PIETY_CHANGE]`, `[BOND_SHIFT]`) fully owned by the pipeline. The detect-function survey (SC-6.4) is the natural next step — with two markers migrated through the pipeline as proof points, the survey can scope additional candidates among the remaining ~26 detect-functions.
+
+---
+
+## [1.0.0.147] - 2026-05-04 — Phase 3 SC-4: piety + NPC disposition/trust migration (dual-scalar + composite contextKey + marker pipeline owns [PIETY_CHANGE])
+
+Third and fourth consumer ports for the standingScalar abstraction in a single sub-checkpoint. Per spec §2.6 — piety adds composite contextKey (per-deity scoping) + `SEPARATE_TABLE` audit + threshold-handler dispatch + prompt-injection gap fix; NPC disposition/trust adds the dual-scalar pattern (two configs against one row). The marker pipeline (§3.2) takes ownership of `[PIETY_CHANGE]` dispatch — the first detect-function call site removed from `routes/dmSession.js` in favor of the schema-driven pipeline.
+
+**`server/services/pietyService.js`:**
+- New export `MYTHIC_PIETY_CONFIG` — composite contextKey `{characterId, deityName}`, range `{min: 0, max: Infinity}`, default 1, no label bands (piety uses thresholds), `SEPARATE_TABLE` audit pointing to `piety_history`. Repository callbacks own the SQL — `readScore` / `writeScore` use `COLLATE NOCASE` for case-insensitive deity matching; `appendAuditEntry` INSERTs into `piety_history` with the legacy column shape (`change_amount`, `new_score`, `game_day`, `session_id`); `readAuditTrail` SELECTs back and maps to the abstraction's standard entry shape.
+- `adjustPiety(characterId, deityName, amount, reason, gameDay, sessionId)` rewritten to delegate the math + clamp + audit + threshold-dispatch to `adjustStanding(MYTHIC_PIETY_CONFIG, ...)`. Pre-create-row pattern (`initializePiety`) preserved consumer-side. Return shape (`{oldScore, newScore, change, reason, thresholdCrossed, thresholdAbility}`) preserved for back-compat — `thresholdCrossed` derived from the abstraction's `thresholdsCrossed` array (highest cross-up).
+- Module-load `registerThresholdHandler(MYTHIC_PIETY_CONFIG, threshold, handler, 'up')` calls for each of `[3, 10, 25, 50]` — replaces the legacy `checkNewThreshold` cascade. Each handler runs the same `UPDATE character_piety SET highest_threshold_unlocked = ? ... AND highest_threshold_unlocked < ?` (highest-only invariant preserved). Cross-down does NOT lock; matches legacy `if (newScore > oldScore)` gate.
+- Module-load `registerMarkerHandler('PIETY_CHANGE', ...)` — pipeline now owns dispatch. Handler reads `characterId` + `sessionId` from the pipeline context; pulls `gameDay` from the characters table best-effort; calls `adjustPiety(...)`.
+- New export `formatPietyForPrompt(pietyRows)` — sync helper for prompt builders. Renders one line per deity: `- {Deity}: N piety (unlocked X, next at Y | max tier reached)`. Returns empty string for empty array so callers can string-concatenate safely.
+- `checkNewThreshold` kept as back-compat export (also functional — runs the same UPDATE). Now redundant with the abstraction's threshold dispatch.
+
+**`server/services/npcRelationshipService.js`:**
+- New exports `NPC_DISPOSITION_CONFIG` and `NPC_TRUST_CONFIG` — the dual-scalar pair targeting the same `npc_relationships` row via contextKey `{characterId, npcId}`. Disposition: range -100..+100, default 0, 7 label bands (devoted/allied/friendly/neutral/unfriendly/hostile/nemesis), `INLINE_JSON` audit on `witnessed_deeds` with mapping to/from the legacy `{deed, impact, date}` shape. Trust: range -100..+100, default 0, no label bands (trust uses raw integer in prompts via the existing `getTrustLabel` in dmPromptBuilder), `NONE` audit (legacy adjustTrust recorded no audit; preserved exactly).
+- `adjustDisposition(characterId, npcId, change, reason)` and `adjustTrust(characterId, npcId, change)` rewritten to delegate to `adjustStanding(NPC_DISPOSITION_CONFIG, ...)` and `adjustStanding(NPC_TRUST_CONFIG, ...)` respectively. Pre-create-row pattern (`getOrCreateRelationship`) preserved consumer-side.
+- `updateRelationship` now uses `mapToLabel(data.disposition, NPC_DISPOSITION_CONFIG.labelBands)` instead of the legacy `getDispositionLabel` helper.
+- `createRelationship` now uses `mapToLabel(disposition, NPC_DISPOSITION_CONFIG.labelBands)` for the initial label.
+- Legacy `getDispositionLabel` deleted (verified no external consumers via grep before deletion; same name in `server/config/eventTypes.js` is a different function — different signature).
+
+**`server/services/markerSchemas.js`:** new entry `PIETY_CHANGE` — position `'inline'`, fields `Deity` (string, required), `Amount` (signed int, required), `Reason` (string, optional). Replaces `dmSessionService.detectPietyChange`'s silent-drop behavior with schema validation + correction-loop feedback for malformed markers.
+
+**`server/routes/dmSession.js`:**
+- Removed direct `import { adjustPiety }` and the dispatch block at lines 1999-2011 — pipeline now owns dispatch via the registered handler in `pietyService.js`. The `mythicEvents` array no longer carries per-turn piety entries; verified zero client consumers via grep.
+- New `import { getAllCharacterPiety, formatPietyForPrompt } from '../services/pietyService.js'` — also fires the module-level handler registrations transitively.
+- New parallel-load slot `pietyRowsResult` via `getAllCharacterPiety(characterId)` in the parallel context assembly (alongside `mythicStatusResult`).
+- New `pietyContext` builder — wraps `formatPietyForPrompt` output with the `=== PIETY ===` section header + a one-line directive about acknowledging unlocked abilities. Empty when no piety rows exist.
+- `pietyContext` threaded into the `sessionContext` object passed to the prompt builder.
+- Removed `detectPietyChange` from the dmSessionService named imports.
+
+**`server/services/dmPromptBuilder.js`:** the mega-string interpolation now includes `${sessionContext.pietyContext ? '\n\n' + sessionContext.pietyContext : ''}` immediately after `mythicContext` — surfaces piety to the AI for the first time (per spec §2.6.3 gap fix).
+
+**Tests** — 79 new assertions across two new suites, all passing:
+
+- `tests/piety-config.test.js` (31 assertions): config shape sanity (composite contextKey, separate-table audit, 4-threshold dispatch, infinity max-range), `formatForPrompt` fragment shape (positive / negative / no-recent / missing-reason cases), `formatPietyForPrompt` per-deity scoping (single deity, multiple deities, defaults, empty array), module-load registration verified (`_getThresholdHandlerCount() >= 4` and `_hasHandler('PIETY_CHANGE')`)
+- `tests/npc-disposition-trust.test.js` (48 assertions): full integer-range parity for disposition labels (201 values, 0 mismatches against the inlined legacy `getDispositionLabel`), 15 band-edge spot checks, both configs' shape sanity, `formatForPrompt` fragments for both, dual-scalar isolation (distinct names, distinct audit strategies, NONE-strategy trust has no audit callbacks)
+
+All prior suites still green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-standing-prompt-snapshot (38), faction-quests (112). Server boot smoke clean (4-second hold). Client production build clean.
+
+**SC-4 acceptance criteria met (per spec §2.6):**
+- All piety tests pass; new test for piety prompt injection (`formatPietyForPrompt` coverage)
+- All NPC disposition tests pass; full-range disposition_label parity proves no NPC prompt-output regression (the line composer in dmPromptBuilder reads the denormalized column unchanged)
+- Threshold cascade for piety fires correctly: 4 handlers registered, exercised by the abstraction's own threshold tests in `tests/standing-scalar.test.js` (handler dispatch + handler-error containment paths)
+- Dual-scalar shape validates: two configs with distinct names, distinct audit strategies, both targeting the same row via shared contextKey
+- Per-deity scoping for piety works: `formatPietyForPrompt` renders one line per deity (verified in test)
+- `[PIETY_CHANGE]` handler registered and verified (`_hasHandler('PIETY_CHANGE')`)
+
+**Marker pipeline transition:** `[PIETY_CHANGE]` is the first marker whose detect-function call site has been removed from `routes/dmSession.js`. The legacy `detectPietyChange` export in `dmSessionService.js` stays for back-compat per the "deprecate by hiding nav, not deleting code" policy. SC-5 will follow the same pattern for `[BOND_SHIFT]`.
+
+**Lossy migration footnote:** `mythicEvents` array no longer pushes per-turn piety entries (the legacy code returned `{type: 'piety', deity, oldScore, newScore, ...}` to the client). Verified zero client consumers of `mythicEvents` via grep before the silent drop. Piety state still lives in `character_piety` / `piety_history`; UI surfaces continue to read from there.
+
+---
+
+## [1.0.0.146] - 2026-05-04 — Phase 3 SC-3: faction standing migration (split_by_sign audit + prompt byte-identity guarantee)
+
+Second consumer port for the standingScalar abstraction. Per spec §5.3 — faction standing migrates with `AUDIT_STRATEGIES.SPLIT_BY_SIGN` (PM Q1 ruling 2026-05-04), preserving the dual-array `deeds_for / deeds_against` shape and producing byte-identical DM prompt output.
+
+**`server/services/factionService.js`:**
+- New export `FACTION_STANDING_CONFIG` — per-consumer-static configuration. Range -100..+100, default 0, the existing 9 label bands (exalted/revered/honored/friendly/neutral/unfriendly/hostile/hated/enemy), `split_by_sign` audit storage routing positive `change` to `deeds_for` and negative to `deeds_against`. Repository callbacks own the SQL — `writeScore` updates BOTH `standing` AND the denormalized `standing_label` column in a single UPDATE (label computed via `mapToLabel(newScore, FACTION_STANDING_CONFIG.labelBands)`); `appendAuditEntry` enacts split_by_sign consumer-side; `readAuditTrail` merges + sorts both deed arrays into the abstraction's standard entry shape.
+- `modifyStanding(characterId, factionId, amount, deed)` rewritten to delegate the math + clamp + audit to `adjustStanding(FACTION_STANDING_CONFIG, ...)`. Pre-create-row pattern (`getOrCreateStanding`) preserved consumer-side. New private `normalizeDeedReason()` collapses the legacy polymorphic `deed` parameter (`{ description, ... }` object | bare string | null) into the abstraction's string `reason` slot — lossy migration; `deed.quest_id` and other ancillary fields are dropped (verified zero consumers via grep before deletion; columns are debug-only today).
+- New export `formatFactionStandingFragment(standingScore)` — sync helper for prompt builders that already have standing data loaded. Returns `"LABEL (+N)"` from `FACTION_STANDING_CONFIG.formatForPrompt`, or empty string when score is null. Same pattern as SC-2's `formatLoyaltyForPrompt`.
+- `updateStanding` now uses `mapToLabel(updates.standing, FACTION_STANDING_CONFIG.labelBands)` instead of the legacy `getStandingLabel` helper — single source of truth for label bands.
+- Legacy `getStandingLabel` deleted (verified no external consumers via grep before deletion).
+
+**`server/services/dmPromptBuilder.js::formatWorldStateSnapshot`:** the faction standings block now composes lines as `- ${faction_name}: ${formatFactionStandingFragment(s.standing)}${memberNote} - ${behavior}`. Output is byte-identical to the legacy hand-rolled string. `getStandingBehavior` stays in `dmPromptBuilder` (consumer-specific NPC behavior hint, not part of the abstraction's `formatForPrompt`).
+
+**Tests** — `tests/faction-standing-prompt-snapshot.test.js`, 38 assertions all passing:
+- Full integer range walk: `mapToLabel` produces identical labels to the inlined legacy `getStandingLabel` for every score in [-100, 100] (201 values, 0 mismatches)
+- 16 representative `formatFactionStandingFragment` outputs covering band edges (80→exalted, 79→revered, 0→neutral, -1→unfriendly, -60→hated, -61→enemy) plus extremes (+100, -100) and the sign-formatting edge case (0 has no sign prefix)
+- Empty-fragment cases (null/undefined score)
+- 8 full-line scenarios across band edges + member states confirm byte-identity between the legacy composer and the new composer (SC-3 acceptance criteria gate)
+- Config shape sanity (range, defaults, 9 bands, audit strategy, callable repository methods)
+
+All prior test suites still green: standing-scalar (71), marker-pipeline (44), companion-loyalty-prompt (33), faction-quests (112). Server boot smoke confirmed clean module load (no circular import — factionService imports from standingScalar; dmPromptBuilder imports from both factionService and companionBackstoryService). Client production build clean.
+
+**SC-3 acceptance criteria met (per spec §5.3):**
+- Output byte-identical: snapshot test walks all 201 integer standings + 8 full-line scenarios
+- Audit trail preserved: `deeds_for` / `deeds_against` columns still receive entries on positive / negative changes respectively
+- Range clamping unchanged: -100..+100 enforced via `range` config
+- Faction membership flag (`is_member`), rank/level fields untouched (orthogonal to standing-scalar)
+
+**No marker handler registered.** Faction standing has no dedicated marker — state changes flow through `consequenceService` (promise breaks, quest expiry) and `questService` (quest completion), never via a `[STANDING_CHANGE]` marker. Handler registration first lands at SC-4 ([PIETY_CHANGE]).
+
+---
+
 ## [1.0.0.145] - 2026-05-04 — Phase 3 SC-2: companion loyalty migration (first abstraction port + prompt-injection gap fix)
 
 First real exercise of the standingScalar abstraction against an existing system. Per spec §2.4 — companion loyalty migrates with no behavior change to existing loyalty math, plus the prompt-injection gap that Code's Tranche 1 survey flagged (orientation note #2): companion loyalty is now visible to the AI in DM session prompts for the first time.

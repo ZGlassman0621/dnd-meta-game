@@ -11,6 +11,7 @@ import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
 import { createMerchantsFromPlan } from './merchantService.js';
 import { extractLLMJson } from '../utils/llmJson.js';
+import { loggedChat } from './aiCallLogger.js';
 
 /**
  * Generate a comprehensive campaign plan using Opus
@@ -61,7 +62,9 @@ export async function generateCampaignPlan(campaignId, characterId) {
     throw new Error('Claude API is required for campaign plan generation');
   }
 
-  const response = await claudeChat(
+  const response = await loggedChat(
+    { call_purpose: 'campaign_plan_gen', prompt_builder: 'campaignPlanService',
+      character_id: characterId, campaign_id: campaignId },
     buildSystemPrompt(),
     [{ role: 'user', content: prompt }],
     3,

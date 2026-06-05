@@ -36,6 +36,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import * as claude from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 
 // Tunable constants. Chosen conservatively — err toward keeping more context
 // verbatim. Can be tightened later once we observe real session shapes.
@@ -162,7 +163,16 @@ export async function rollSummary(sessionId, session, messages) {
     const systemPrompt = 'You are a concise, factual summarizer. Output only the requested summary with no preamble or commentary.';
     const userPrompt = buildSummaryPrompt(existing, chunk, sessionType);
 
-    const updated = await claude.chat(
+    // Phase 4a SC-4a.1 — wrap with the call logger.
+    const updated = await loggedChat(
+      {
+        character_id: session?.character_id,
+        campaign_id: session?.campaign_id,
+        session_id: sessionId,
+        prompt_builder: 'rollingSummaryService',
+        call_purpose: 'rolling_summary_update',
+        metadata: { sessionType, chunkSize: chunk.length }
+      },
       systemPrompt,
       [{ role: 'user', content: userPrompt }],
       2,       // retries — summarization isn't critical, keep retry budget small

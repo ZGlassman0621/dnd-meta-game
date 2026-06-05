@@ -49,6 +49,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { getPreludeCharacter } from './preludeService.js';
 import { getArcPlan } from './preludeArcService.js';
@@ -539,7 +540,11 @@ async function generateBiographyEntries(character, setup, ctx) {
   const sysPrompt = buildBiographySystemPrompt();
   const userPrompt = buildBiographyUserPrompt(character, setup, ctx);
 
-  const raw = await chat(sysPrompt, [{ role: 'user', content: userPrompt }], 3, 'opus', 4096, true);
+  const raw = await loggedChat(
+    { call_purpose: 'prelude_handoff_biography_gen', prompt_builder: 'preludeTransitionService',
+      character_id: character?.id, campaign_id: character?.campaign_id },
+    sysPrompt, [{ role: 'user', content: userPrompt }], 3, 'opus', 4096, true
+  );
   const parsed = extractLLMJson(raw);
 
   if (!parsed || !Array.isArray(parsed.entries)) {

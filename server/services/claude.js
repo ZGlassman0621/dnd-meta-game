@@ -394,6 +394,22 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         console.log(`Claude API response - model: ${data.model}, stop_reason: ${data.stop_reason}, content_length: ${content.length}, usage: input=${data.usage?.input_tokens} output=${data.usage?.output_tokens}`);
       }
 
+      // Phase 4a SC-4a.1 hook — when the caller is wrapping this call with
+      // aiCallLogger, the logger sets an `onApiMeta` callback to receive
+      // token counts + model identity for `ai_call_log` persistence.
+      // Best-effort; never break the call if the callback throws.
+      if (typeof options?.onApiMeta === 'function') {
+        try {
+          options.onApiMeta({
+            model: data.model,
+            usage: data.usage,
+            stop_reason: data.stop_reason
+          });
+        } catch (e) {
+          console.warn('[claude.chat] onApiMeta callback error:', e?.message);
+        }
+      }
+
       // Warn if response was truncated — markers at the end may have been lost
       if (data.stop_reason === 'max_tokens') {
         console.warn(`⚠️ Claude response TRUNCATED (hit max_tokens=${maxTokens}). Output: ${data.usage?.output_tokens} tokens. System markers at end of response may be lost.`);

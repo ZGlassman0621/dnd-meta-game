@@ -6,6 +6,7 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import {
   getMythicTierInfo,
   getBaseAbilitiesForTier,
@@ -555,3 +556,109 @@ function parseItemJson(item) {
     mythic_properties: item.mythic_properties ? JSON.parse(item.mythic_properties) : null
   };
 }
+
+// ============================================================
+// SC-6.4d — Mythic cluster marker handlers
+// ============================================================
+
+/**
+ * MYTHIC_TRIAL handler. Single-instance per response. Calls recordTrial
+ * (inserts mythic_trials row + increments trials_completed); if the
+ * cumulative count crosses trials_required, additionally calls
+ * advanceTier (bumps mythic_tier).
+ *
+ * **Composition note (Q6 survey reconfirmed during SC-6.4d prep):** the
+ * trial path does NOT touch piety. recordTrial increments trials_completed
+ * only — the SC-4 piety abstraction is independent. Initial Q6 survey
+ * draft hypothesized a trial→piety cascade that doesn't exist in the
+ * code; this handler matches the actual call shape (no piety touches).
+ */
+registerMarkerHandler('MYTHIC_TRIAL', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT id, campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character) return null;
+  try {
+    const trialResult = await recordTrial(character.id, character.campaign_id, {
+      name: parsed.Name,
+      description: parsed.Description || '',
+      outcome: parsed.Outcome || 'passed',
+      gameDay: character.game_day,
+      sessionId: context.sessionId
+    });
+
+    const events = [{
+      type: 'trial',
+      name: parsed.Name,
+      description: parsed.Description || '',
+      outcome: parsed.Outcome || 'passed',
+      ...trialResult
+    }];
+
+    if (trialResult.canAdvance) {
+      try {
+        const advanceResult = await advanceTier(character.id, character.game_day);
+        events.push({
+          type: 'tier_advance',
+          newTier: advanceResult.tier,
+          tierName: advanceResult.tierName
+        });
+      } catch (advErr) {
+        console.error('[mythicService] auto tier advance failed:', advErr.message);
+      }
+    }
+
+    // Return the events array — route handler unpacks into mythicEvents.
+    return { mythicEvents: events };
+  } catch (e) {
+    console.error('[mythicService] MYTHIC_TRIAL handler failed:', e.message);
+    return null;
+  }
+});
+
+/**
+ * ITEM_AWAKEN handler. Single-instance. Locates the legendary item by
+ * name and advances its state (awakened → exalted → mythic). Silent
+ * no-op if item not found in the character's inventory (matches legacy).
+ */
+registerMarkerHandler('ITEM_AWAKEN', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character) return null;
+  try {
+    const legendaryItem = await findLegendaryItemByName(character.id, parsed.Item);
+    if (!legendaryItem) return null;
+    const newState = parsed.NewState || 'awakened';
+    await advanceItemState(legendaryItem.id, newState, parsed.Deed || '', character.game_day);
+    return { type: 'item_awaken', item: parsed.Item, newState };
+  } catch (e) {
+    console.error('[mythicService] ITEM_AWAKEN handler failed:', e.message);
+    return null;
+  }
+});
+
+/**
+ * MYTHIC_SURGE handler. Single-instance. Tracks mythic-power consumption.
+ * Only fires if character.has_mythic is set (matches legacy gate).
+ */
+registerMarkerHandler('MYTHIC_SURGE', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT id, has_mythic FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character?.has_mythic) return null;
+  try {
+    const cost = parsed.Cost || 1;
+    await useMythicPower(character.id, cost);
+    return { type: 'surge', ability: parsed.Ability, cost };
+  } catch (e) {
+    console.error('[mythicService] MYTHIC_SURGE handler failed:', e.message);
+    return null;
+  }
+});

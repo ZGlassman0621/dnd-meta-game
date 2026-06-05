@@ -36,11 +36,27 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - DM Mode prompt uses a 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER).
 - Prompt caching via `claude.js` has three tiers (cache-break markers embedded in the prompt string): universal-static, per-character static, dynamic. Only blocks ≥1024 tokens are cached.
 
-### DM session markers
-Markers the DM AI emits during Player Mode sessions, each detected and processed server-side:
-`[COMBAT_START]` `[COMBAT_END]` `[LOOT_DROP]` `[MERCHANT_SHOP]` `[MERCHANT_REFER]` `[ADD_ITEM]` `[MERCHANT_COMMISSION]` `[BASE_DEFENSE_RESULT]` `[WEATHER_CHANGE]` `[SHELTER_FOUND]` `[SWIM]` `[EAT]` `[DRINK]` `[FORAGE]` `[RECIPE_FOUND]` `[MATERIAL_FOUND]` `[CRAFT_PROGRESS]` `[RECIPE_GIFT]` `[MYTHIC_TRIAL]` `[PIETY_CHANGE]` `[ITEM_AWAKEN]` `[MYTHIC_SURGE]` `[PROMISE_MADE]` `[PROMISE_FULFILLED]` `[NOTORIETY_GAIN]` `[NOTORIETY_LOSS]` `[CONDITION_ADD]` `[CONDITION_REMOVE]`.
+### DM session markers + marker pipeline
+Markers the DM AI emits during Player Mode sessions:
+`[COMBAT_START]` `[COMBAT_END]` `[LOOT_DROP]` `[MERCHANT_SHOP]` `[MERCHANT_REFER]` `[ADD_ITEM]` `[MERCHANT_COMMISSION]` `[FORTRESS_THREAT]` `[BASE_DEFENSE_RESULT]` `[WEATHER_CHANGE]` `[SHELTER_FOUND]` `[SWIM]` `[EAT]` `[DRINK]` `[FORAGE]` `[RECIPE_FOUND]` `[MATERIAL_FOUND]` `[CRAFT_PROGRESS]` `[RECIPE_GIFT]` `[MYTHIC_TRIAL]` `[PIETY_CHANGE]` `[ITEM_AWAKEN]` `[MYTHIC_SURGE]` `[PROMISE_MADE]` `[PROMISE_FULFILLED]` `[NOTORIETY_GAIN]` `[NOTORIETY_LOSS]` `[CONDITION_ADD]` `[CONDITION_REMOVE]` `[BOND_SHIFT]` (DM Mode) `[NPC_WANTS_TO_JOIN]`.
 
-Prelude sessions have their own marker set (see prelude section below).
+Prelude sessions have their own marker set (19 markers — see prelude section below).
+
+**Marker pipeline (canonical path post-Phase-3.2):** `markerSchemas.js` (schema definitions) + `markerPipeline.js` (dispatch) own marker validation + side-effect dispatch. Every marker in `MARKER_SCHEMAS` flows through `validateDmMarkers` (schema validation + correction-loop feedback) and `processResponseMarkers` (handler dispatch to consumer services). Schemas double as future tool-use definitions — no rewrite needed when that migration lands.
+
+Handlers register via `registerHandler(schemaKey, fn)` at module-load time, co-located with the consumer service that owns the side effect: `pietyService` (PIETY_CHANGE), `dmModeBondShiftService` (BOND_SHIFT), `survivalService` (SHELTER_FOUND/EAT/DRINK/FORAGE), `weatherService` (WEATHER_CHANGE), `craftingService` (CRAFT_PROGRESS/RECIPE_FOUND/MATERIAL_FOUND/RECIPE_GIFT), `merchantService` (MERCHANT_SHOP/MERCHANT_REFER), `merchantOrderService` (MERCHANT_COMMISSION), `lootDropService` (LOOT_DROP), `consequenceService` (PROMISE_MADE/PROMISE_FULFILLED), `notorietyService` (NOTORIETY_GAIN/NOTORIETY_LOSS), `mythicService` (MYTHIC_TRIAL/ITEM_AWAKEN/MYTHIC_SURGE), `baseThreatService` (FORTRESS_THREAT/BASE_DEFENSE_RESULT), `combatMarkerService` (COMBAT_START/COMBAT_END). When a handler doesn't naturally co-locate with an existing service, the precedent is a single-purpose marker-handler module (`lootDropService.js`, `combatMarkerService.js`).
+
+**Fortress threat origination is marker-driven** (Phase 3.7 SC-3.7.1): the AI DM emits `[FORTRESS_THREAT]` when narrative context warrants a threat against a player-owned base; the handler in `baseThreatService.js` validates ownership/active-status, enforces the single-active-threat-per-base invariant, and creates the `base_threats` row. Source/Category fields fall back handler-side to `RAID_CAPABLE_EVENTS[EventType]` lookups when omitted on the marker. The legacy world-event-tick path (`generateThreatsForCampaign` reading raid-capable `event_type` rows from `world_events`) is **deprecated** and unused in production — kept in place per Phase 3.7 §1.2 (removing it would touch the living-world tick architecture).
+
+**Schemas-without-handlers** is a first-class end-state — schema validation provides correction-loop feedback even without handler dispatch. Four legitimate rationales (DECISION_LOG 2026-05-05 SC-6.4 close-out, intentional design):
+1. **Ordering invariants** — sibling markers require a strict run order the pipeline can't guarantee (19 prelude markers — `AGE_ADVANCE → HP_CHANGE`, `CANON_FACT_RETIRE → CANON_FACT`)
+2. **Aggregated returns** — route handler combines per-marker results into one structured response payload (also the prelude markers)
+3. **No side-effect target** — marker has no consumer service to wire (`SWIM`)
+4. **Orchestrated-with-sibling-marker** — coupled markers fold into one handler internally rather than dispatching independently (`ADD_ITEM` consumed by MERCHANT_SHOP handler via `context.narrative` extension)
+
+The legacy `detectXxx()` functions in `dmSessionService.js` remain exported per "deprecate by hiding nav" but are no longer invoked from the production route. `processResponseMarkers` is the canonical dispatch path. `dmSessionService.js`'s remaining live exports are utility helpers (`parseMarkerPairs`, `parseMarkerKeyValue`, `estimateEnemyDexMod`) and the still-active `detectDowntime` (player-input classifier, not a marker detector — PARK ENTIRELY per Q6 survey + PM ruling 2026-05-05) + `detectRecruitment` (free-text fallback for unstructured AI prose).
+
+Malformed marker emissions get correction-loop feedback via `session_config.pendingMarkerCorrections` (player-mode) or the same key on prelude sessions — invisible `[SYSTEM]` note injected on next turn telling the AI which fields failed validation.
 
 ### Memory systems
 Three layers of persistent world memory flow into the DM prompt:
@@ -108,7 +124,9 @@ Context-window budgeting is adaptive: 40% of remaining context, no hard cap, sli
 - Bases have `category` (civilian/martial/arcane/sanctified) and `subtype` (13 options: watchtower/outpost/keep/fortress/castle/tavern/hall/manor/wizard_tower/academy/chapel/temple/sanctuary). `is_primary` flag + `building_slots` derived from subtype.
 - **Buildings** inside a base via `BUILDING_TYPES` config (20 buildings with slots/cost/hours/perks). Construction status `planned → in_progress → completed`; perks merge into `base.active_perks`; demolish reverses.
 - **Garrison + defense**: `defense_rating` = subtype bonus + building perks + officer contributions. `base_officers` table assigns companions to roles.
-- **Base threats** (raids/sieges): `base_threats` table, status state machine (approaching → defending/resolving → resolved), outcome enum (repelled/damaged/captured/abandoned). Raid-capable world events spawn threats during the living-world tick; auto-resolve or player-led defense via `[BASE_DEFENSE_RESULT]` marker. 14-day recapture window for captured bases.
+- **Base threats** (raids/sieges): `base_threats` table, status state machine (approaching → defending/resolving → resolved), outcome enum (repelled/damaged/captured/abandoned). Threat origination is **marker-driven** post-Phase-3.7 — AI DM emits `[FORTRESS_THREAT]`, `baseThreatService` handler creates the row (deprecated world-event path retained but unused; see marker-pipeline section above). Auto-resolve or player-led defense via `[BASE_DEFENSE_RESULT]` marker.
+- **Damage application is mechanical regardless of resolution path** (Phase 3.7 SC-3.7.2): both auto-resolve (`autoResolveThreat`) and player-led defense (`recordPlayerDefenseOutcome`) mutate buildings/treasury/garrison columns per `computeDamageFromOutcome`. Player-led `damaged` defaults to **mild sub-tier** (margin treated as 0); a future severity field on `[BASE_DEFENSE_RESULT]` may override.
+- **Recapture window exists but no recapture path** — 14-day window opens on capture (`RECAPTURE_WINDOW_DAYS`, `BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER`), but no player-side codepath uses it; window expires → permanently abandoned. Tracked in [`KNOWN_BUGS.md`](KNOWN_BUGS.md); the recapture quest framework belongs to the future fortress system design phase (Phase 5 candidate).
 - **Renown, levels, treasury, staff, income/upkeep** all processed in the living-world tick.
 
 ### Notoriety / heat
@@ -195,12 +213,16 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/services/dmPromptBuilder.js` — Player Mode DM system prompt
 - `server/services/dmModePromptBuilder.js` — DM Mode system prompt
 - `server/services/preludeArcPromptBuilder.js` — Prelude session prompt
-- `server/services/dmSessionService.js` — Session logic, marker detection
+- `server/services/dmSessionService.js` — Session logic + legacy detect-functions (no longer invoked from production route per Phase 3.2 SC-6.4 close-out; kept exported for back-compat)
+- `server/services/markerSchemas.js` — Marker schema definitions + validation (canonical dispatch surface, post Phase 3.2)
+- `server/services/markerPipeline.js` — `processResponseMarkers` dispatch + `registerHandler` API
+- `server/services/combatMarkerService.js` — COMBAT_START + COMBAT_END handlers (initiative orchestration)
+- `server/services/lootDropService.js` — LOOT_DROP handler (character-inventory mutation for AI-driven drops)
 - `server/routes/dmSession.js` — DM session routes (main API surface)
 - `server/routes/dmMode.js` — DM Mode routes
 - `server/routes/prelude.js` — Prelude routes
 - `server/services/preludeSessionService.js` — Prelude session lifecycle
-- `server/services/preludeMarkerDetection.js` — Prelude-specific marker parsing
+- `server/services/preludeMarkerDetection.js` — Prelude-specific marker parsing (consumer-side dispatch per SC-6.3 schemas-without-handlers parking — see DECISION_LOG)
 - `server/services/preludeArcService.js` — Opus arc-plan generation
 - `server/services/preludeCanonService.js` — Canon-facts ledger
 - `server/services/preludeEmergenceService.js` — Stat/skill/theme hints with caps

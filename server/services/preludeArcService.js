@@ -42,6 +42,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { getPreludeCharacter } from './preludeService.js';
 import {
@@ -439,7 +440,10 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
   let lastRaw = '';
   let lastErr;
   for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
-    const raw = await chat(systemPrompt, messages, 3, 'opus', 8192, true);
+    const raw = await loggedChat(
+      { call_purpose: 'prelude_arc_plan_gen', prompt_builder: 'preludeArcService', metadata: { attempt } },
+      systemPrompt, messages, 3, 'opus', 8192, true
+    );
     lastRaw = raw;
     try {
       parsed = extractLLMJson(raw);

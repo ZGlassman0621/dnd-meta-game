@@ -25,6 +25,7 @@
 
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { chat, startSession as claudeStartSession, continueSession as claudeContinueSession } from './claude.js';
+import { wrapClaudeCallWithId, logAiCall, annotateAiCallLog } from './aiCallLogger.js';
 import { getPreludeCharacter } from './preludeService.js';
 import { getArcPlan, generateArcPlan } from './preludeArcService.js';
 import {
@@ -33,6 +34,7 @@ import {
   createPreludeResumePrompt
 } from './preludeArcPromptBuilder.js';
 import { detectPreludeMarkers } from './preludeMarkerDetection.js';
+import { validateDmMarkers, buildCorrectionMessage } from './markerSchemas.js';
 import * as rollingSummary from './rollingSummaryService.js';
 import * as emergenceService from './preludeEmergenceService.js';
 import * as canonService from './preludeCanonService.js';
@@ -288,7 +290,21 @@ export async function startSession(characterId) {
   const openingPrompt = createPreludeOpeningPrompt(character, setup, arcPlan, runtime);
 
   // Opus for the opening — like the main DM's first session.
-  const result = await claudeStartSession(systemPrompt, openingPrompt, 'opus');
+  // Phase 4a SC-4a.1 — wrap with the call logger.
+  const wrappedStart = await wrapClaudeCallWithId(
+    {
+      character_id: character?.id,
+      campaign_id: character?.campaign_id,
+      turn_number: 0,
+      prompt_builder: 'preludeArcPromptBuilder',
+      call_purpose: 'prelude_session_start',
+      system_prompt: systemPrompt,
+      user_message: openingPrompt,
+      metadata: { initialChapter: runtime.chapter, initialAge: runtime.age }
+    },
+    (chatOptions) => claudeStartSession(systemPrompt, openingPrompt, 'opus', chatOptions)
+  );
+  const result = wrappedStart.result;
 
   // Persist the session row. We store messages as JSON like the main DM.
   const title = `Prelude — ${character.nickname || character.first_name || character.name}`;
@@ -493,6 +509,13 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   // and self-corrects. Consumed here, cleared after.
   const pendingViolationNote = sessionCfg.pendingViolationNote;
 
+  // SC-6.3 — pending marker-schema correction from the previous turn.
+  // When the AI emits a malformed prelude marker (missing required field,
+  // invalid enum, out-of-range int), buildCorrectionMessage stashes a
+  // [SYSTEM] note on session_config.pendingMarkerCorrections. Consume +
+  // inject as a user message so the AI sees the correction and re-emits.
+  const pendingMarkerCorrections = sessionCfg.pendingMarkerCorrections;
+
   // Play-session pacing — inject a [SYSTEM NOTE] when we're past the
   // healthy length. Thresholds match SESSION_*_EXCHANGES (50/65/80)
   // in buildRuntime. (playSessionLength computed above near runtime.)
@@ -535,6 +558,9 @@ If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker
   if (pendingViolationNote) {
     injectedMessages.push({ role: 'user', content: pendingViolationNote });
   }
+  if (pendingMarkerCorrections) {
+    injectedMessages.push({ role: 'user', content: pendingMarkerCorrections });
+  }
   if (canonNudge) {
     injectedMessages.push({ role: 'user', content: canonNudge });
   }
@@ -559,13 +585,30 @@ If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker
   const resolved = resolveModel(modelOverride, sessionCfg, runtime, playSessionLength);
   const modelChoice = resolved.model;
 
-  let result = await claudeContinueSession(
-    systemPrompt,
-    augmentedMessages,
-    action,
-    modelChoice,
-    { sessionId }
+  // Phase 4a SC-4a.1 — wrap with the call logger. Prelude turns capture
+  // the same fields as gameplay_turn but with prelude-specific tags.
+  // Turn number derives from message count (rough; refine in Phase 4b).
+  const __preludeTurnNumber = Math.ceil(augmentedMessages.length / 2);
+  const __preludeWrapped = await wrapClaudeCallWithId(
+    {
+      character_id: character?.id,
+      campaign_id: character?.campaign_id,
+      session_id: sessionId,
+      turn_number: __preludeTurnNumber,
+      prompt_builder: 'preludeArcPromptBuilder',
+      call_purpose: 'prelude_turn',
+      system_prompt: systemPrompt,
+      user_message: action,
+      conversation_history: augmentedMessages.filter(m => m.role !== 'system'),
+      metadata: { model_choice: modelChoice, chapter: runtime?.chapter, age: runtime?.age }
+    },
+    (chatOptions) => claudeContinueSession(
+      systemPrompt, augmentedMessages, action, modelChoice,
+      { ...chatOptions, sessionId }
+    )
   );
+  let result = __preludeWrapped.result;
+  const __preludeLogId = __preludeWrapped.logId;
 
   // v1.0.87 — Prevent Rule 2 violations from reaching the player. Detect
   // immediately; if violated, re-call the AI with a correction note and
@@ -602,13 +645,27 @@ INSTEAD, describe:
 - End on engagement (per Rule 6): a question, a roll prompt, or something happening TO/AROUND the PC
 
 Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowledgment — just the clean response the player should see.`;
-    const retry = await claudeContinueSession(
-      systemPrompt,
-      augmentedMessages,
-      correctionAction,
-      modelChoice,
-      { sessionId }
+    // Phase 4a SC-4a.1 — log the retry separately with a distinct
+    // call_purpose so signals can count rule-2 retries cleanly.
+    const __retryWrapped = await wrapClaudeCallWithId(
+      {
+        character_id: character?.id,
+        campaign_id: character?.campaign_id,
+        session_id: sessionId,
+        turn_number: __preludeTurnNumber,
+        prompt_builder: 'preludeArcPromptBuilder',
+        call_purpose: 'prelude_turn_retry_rule2',
+        system_prompt: systemPrompt,
+        user_message: correctionAction,
+        conversation_history: augmentedMessages.filter(m => m.role !== 'system'),
+        metadata: { violating_matches: violation.matches.slice(0, 3) }
+      },
+      (chatOptions) => claudeContinueSession(
+        systemPrompt, augmentedMessages, correctionAction, modelChoice,
+        { ...chatOptions, sessionId }
+      )
     );
+    const retry = __retryWrapped.result;
     const retryViolation = detectPlayerDialogueViolation(retry.response);
     if (!retryViolation.violated) {
       // Retry cleaned the violation. Use the rewrite as-if-original and
@@ -694,10 +751,38 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
     };
   }
 
+  // Phase 3 SC-6.3 — schema-level validation of every prelude marker the AI
+  // emitted. Failures (missing required fields, invalid enums, out-of-range
+  // numbers) get stashed on session_config.pendingMarkerCorrections so the
+  // NEXT turn's prompt can ask the AI to re-emit. Side-effect dispatch stays
+  // in processMarkersForSession (above); this is correction-loop feedback
+  // ONLY. See DECISION_LOG 2026-05-04 (SC-6.3) for the parking rationale.
+  let preludeMarkerFailures = [];
+  try {
+    const validateResult = validateDmMarkers(result.response || '');
+    preludeMarkerFailures = validateResult.failures || [];
+    if (preludeMarkerFailures.length > 0) {
+      console.warn(
+        `[prelude-marker-schema] ${preludeMarkerFailures.length} malformed marker(s) on session ${sessionId}:`,
+        preludeMarkerFailures.map(f => `${f.schemaKey}(${f.errors.map(e => e.field).join(',')})`).join(', ')
+      );
+    }
+  } catch (err) {
+    console.error('[prelude-marker-schema] validation failed (non-fatal):', err.message);
+  }
+
   // If the cap-violation feedback we just injected was consumed, clear it.
   // If new violations happened this turn, queue them for next turn.
   const nextCfg = safeJsonParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
   if (pendingCapFeedback) delete nextCfg.pendingCapFeedback;
+  // SC-6.3 — consume any prior marker-correction note (the AI either acted
+  // on it via the previous turn or didn't; stale corrections shouldn't
+  // accrete). Then queue this turn's failures for next turn.
+  delete nextCfg.pendingMarkerCorrections;
+  if (preludeMarkerFailures.length > 0) {
+    const correctionMsg = buildCorrectionMessage(preludeMarkerFailures);
+    if (correctionMsg) nextCfg.pendingMarkerCorrections = correctionMsg;
+  }
 
   // v1.0.70 — advance the canon-nudge cursor whenever a nudge fired this
   // turn, so the next nudge is 5 exchanges out from this point.
@@ -1343,7 +1428,10 @@ ${transcript}${emergenceBlock}
 
 Output ONLY the recap prose. No preamble, no signoff.`;
 
-  const raw = await chat(systemPrompt, [{ role: 'user', content: userPrompt }], 3, 'sonnet', 800, true);
+  const raw = await loggedChat(
+    { call_purpose: 'prelude_chapter_recap', prompt_builder: 'preludeSessionService' },
+    systemPrompt, [{ role: 'user', content: userPrompt }], 3, 'sonnet', 800, true
+  );
   return String(raw || '').trim();
 }
 

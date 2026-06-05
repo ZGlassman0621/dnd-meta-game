@@ -6,6 +6,7 @@
  */
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { dbGet, dbRun } from '../database.js';
 import { randomUUID } from 'crypto';
@@ -312,7 +313,8 @@ async function generateWithAI(prompt) {
   // Try Claude first
   if (isClaudeAvailable()) {
     try {
-      const response = await claudeChat(
+      const response = await loggedChat(
+        { call_purpose: 'backstory_parse', prompt_builder: 'backstoryParserService' },
         'You are a D&D backstory analyst. Return ONLY valid JSON, no explanation or markdown code fences.',
         [{ role: 'user', content: prompt }],
         3, 'opus'

@@ -32,12 +32,21 @@ const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
 const DMMode = lazy(() => import('./components/DMMode'))
 const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
 const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
+// Phase 4a SC-4a.4 — diagnostic surface for AI behavior. Lazy-loaded;
+// only opens when user navigates to it via the dashboard.
+const AIBehaviorDebugPage = lazy(() => import('./components/AIBehaviorDebugPage'))
 
 // Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) — the rebuilt
 // creator + new home flow becomes the live path. Direct import (not
 // lazy) — the editorial styles/fonts are bundled globally and the
 // home flow is the user's first surface after login.
 import HomeFlow from './components/creator/HomeFlow.jsx'
+
+// Phase 3.5 — Settings overlay (per `settings/SETTINGS_DESIGN_BRIEF.md`).
+// Direct import; the overlay is small, mounted-on-demand, and reachable
+// from both the editorial home appbar (HomeFlow) and the dashboard
+// header below.
+import SettingsOverlay from './components/settings/SettingsOverlay.jsx'
 
 
 // Global fetch interceptor — adds auth token to all /api requests automatically.
@@ -88,6 +97,36 @@ function App() {
   const [activeAdventure, setActiveAdventure] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState(null) // Single state for current view
+  // Phase 3.5 — Settings overlay open state (dashboard branch). HomeFlow
+  // owns its own copy. The overlay always scopes to `selectedCharacter`
+  // here since the dashboard branch is only reached when one is selected.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // Phase 4a SC-4a.4 — shared style for the appbar text-link buttons
+  // (Settings, AI Behavior). Mirrors HomeFlow's `.nav-settings` class
+  // semantically; the dashboard chrome uses dark-aesthetic inline styles.
+  const appbarLinkStyle = {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.15)',
+    color: '#ccc',
+    padding: '0.4rem 0.85rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+    letterSpacing: '0.18em',
+    textTransform: 'uppercase',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px'
+  }
+  const appbarLinkGlyph = {
+    fontFamily: "'EB Garamond', Georgia, serif",
+    fontStyle: 'italic',
+    fontSize: '15px',
+    letterSpacing: 0,
+    color: '#d4a86a'
+  }
   const [showCreationForm, setShowCreationForm] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
@@ -332,7 +371,7 @@ function App() {
            selected (which is always true in this branch since the
            !selectedCharacter case is handled by the early return). */}
         {selectedCharacter && (
-          <div style={{ marginBottom: '1rem' }}>
+          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <button
               type="button"
               onClick={() => setSelectedCharacter(null)}
@@ -347,6 +386,32 @@ function App() {
               }}
             >
               ← Your characters
+            </button>
+            {/* Phase 3.5 — Settings access in the dashboard appbar. Mirrors
+               the HomeFlow appbar's editorial-aesthetic Settings link
+               using the dark dashboard's button register.
+               Phase 4a SC-4a.4 — AI Behavior link added beside it; same
+               appbar treatment, different surface. */}
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={() => setActiveView('showAIBehavior')}
+              aria-label="AI Behavior debug"
+              title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
+              style={appbarLinkStyle}
+            >
+              <span style={{ ...appbarLinkGlyph, color: '#7aafff' }}>◇</span>
+              AI Behavior
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              title="Settings"
+              style={appbarLinkStyle}
+            >
+              <span style={appbarLinkGlyph}>✦</span>
+              Settings
             </button>
           </div>
         )}
@@ -445,6 +510,11 @@ function App() {
           allCharacters={characters}
           onBack={goHome}
           onCharacterUpdated={handleCharacterUpdated}
+        />
+      ) : activeView === 'showAIBehavior' ? (
+        <AIBehaviorDebugPage
+          onBack={goHome}
+          defaultCharacterId={selectedCharacter?.id || null}
         />
       ) : activeView === 'showDowntime' && selectedCharacter ? (
         <div>
@@ -658,6 +728,11 @@ function App() {
                 { key: 'showMythicProgression', label: 'Mythic Progression', desc: 'Mythic tiers, paths, piety, epic boons, and legendary items', color: '#ff6b35' },
                 { key: 'showPartyBase', label: 'Stronghold', desc: 'Manage your base, upgrades, staff, projects, and notoriety', color: '#b45309' },
                 { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
+                // Phase 4a SC-4a.4 — AI Behavior debug page is reached via
+                // the appbar link (right side, beside Settings). Removed
+                // from the dashboard nav grid per PM 2026-05-06 review:
+                // "appbar near Settings, distinct from but parallel to
+                // Settings access pattern" — single canonical entry point.
               ].map(card => (
                 <div
                   key={card.key}
@@ -698,6 +773,26 @@ function App() {
       )}
       </Suspense>
       </ErrorBoundary>
+      {/* Phase 3.5 — Settings overlay sits above the dashboard chrome. The
+         underlying view (DMSession, character sheet, etc.) is not unmounted
+         while open — closing returns the player to the same DM turn they
+         paused on per the design brief's mid-session safety contract. */}
+      {settingsOpen && selectedCharacter && (
+        <SettingsOverlay
+          character={selectedCharacter}
+          context={activeView === 'showDMSession' ? 'session' : 'home'}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(updated) => {
+            // Patch the locally-tracked character so subsequent reads
+            // (status displays, future per-character settings) reflect
+            // the saved value without a refetch round-trip.
+            if (updated?.id) {
+              setSelectedCharacter(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev)
+              setCharacters(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

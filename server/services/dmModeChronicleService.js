@@ -10,7 +10,9 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
+import { mutateRelationshipScalars } from './dmModeBondShiftService.js';
 
 const CHRONICLE_PROMPT = `You are analyzing a completed D&D session transcript. The USER was the Dungeon Master and the AI played 4 player characters. In the transcript, "DM" lines are the human Dungeon Master's narration and world description. "PARTY" lines are the AI characters' dialogue and actions.
 
@@ -115,7 +117,14 @@ export async function generateDMModeChronicle(sessionId, partyId) {
   const sessionNumber = (sessionCount?.count || 0) + 1;
 
   try {
-    const response = await chat(
+    // Phase 4a SC-4a.1 — wrap with the call logger.
+    const response = await loggedChat(
+      {
+        session_id: sessionId,
+        prompt_builder: 'dmModeChronicleService',
+        call_purpose: 'dm_mode_chronicle_extraction',
+        metadata: { partyId, sessionNumber }
+      },
       CHRONICLE_PROMPT,
       [{ role: 'user', content: input }],
       2,
@@ -321,7 +330,14 @@ export async function extractRelationshipEvolution(sessionId, partyId) {
     .replace('{TENSION_STATE}', JSON.stringify(tensions, null, 2));
 
   try {
-    const response = await chat(
+    // Phase 4a SC-4a.1 — wrap with the call logger.
+    const response = await loggedChat(
+      {
+        session_id: sessionId,
+        prompt_builder: 'dmModeChronicleService',
+        call_purpose: 'dm_mode_relationship_evolution',
+        metadata: { partyId }
+      },
       prompt,
       [{ role: 'user', content: input }],
       2,
@@ -344,7 +360,16 @@ export async function extractRelationshipEvolution(sessionId, partyId) {
     );
     const sessionNumber = chronicle?.session_number || '?';
 
-    // Apply relationship shifts
+    // Apply relationship shifts. Phase 3 SC-5: warmth/trust clamping +
+    // shared-history append delegate to dmModeBondShiftService's
+    // mutateRelationshipScalars (single source of truth for the [-5, +5]
+    // bounds via FACTION_STANDING_CONFIG.range, same FIFO-10 history
+    // append). Attitude/tension/attitude-only history entries stay
+    // chronicle-side — they're not part of the bond-shift abstraction.
+    //
+    // Per-path delta clamp to [-2, +2] preserved here (session-end
+    // extraction is tighter than per-turn AI markers — Sonnet can be
+    // chatty about deltas).
     let shiftCount = 0;
     for (const shift of (result.relationship_shifts || [])) {
       const fromChar = characters.find(c => c.name === shift.from);
@@ -357,21 +382,25 @@ export async function extractRelationshipEvolution(sessionId, partyId) {
 
       if (warmthDelta === 0 && trustDelta === 0 && !shift.new_attitude && !shift.new_tension) continue;
 
-      rel.warmth = clamp((rel.warmth || 0) + warmthDelta, -5, 5);
-      rel.trust = clamp((rel.trust || 0) + trustDelta, -5, 5);
+      mutateRelationshipScalars(
+        rel,
+        warmthDelta,
+        trustDelta,
+        shift.reason || 'Relationship evolved',
+        sessionNumber
+      );
 
       if (shift.new_attitude) rel.attitude = shift.new_attitude;
       if (shift.new_tension) rel.tension = shift.new_tension;
 
-      // Append to history (FIFO, max 10)
-      if (!rel.history) rel.history = [];
-      const deltas = [];
-      if (warmthDelta) deltas.push(`warmth${warmthDelta > 0 ? '+' : ''}${warmthDelta}`);
-      if (trustDelta) deltas.push(`trust${trustDelta > 0 ? '+' : ''}${trustDelta}`);
-      if (deltas.length > 0 || shift.new_attitude) {
+      // Attitude-only history entry — surfaces "attitude→X" when neither
+      // scalar moved (mutateRelationshipScalars's history push only
+      // fires when warmth or trust changed). Preserves legacy behavior.
+      if (warmthDelta === 0 && trustDelta === 0 && shift.new_attitude) {
+        if (!rel.history) rel.history = [];
         rel.history.push({
           session: sessionNumber,
-          shift: deltas.length > 0 ? deltas.join(', ') : `attitude→${shift.new_attitude}`,
+          shift: `attitude→${shift.new_attitude}`,
           reason: shift.reason || 'Relationship evolved'
         });
         if (rel.history.length > 10) rel.history = rel.history.slice(-10);

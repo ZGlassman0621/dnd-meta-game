@@ -1,8 +1,20 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { applyReunionBoost } from './npcAgingService.js';
+import { adjustStanding, AUDIT_STRATEGIES, mapToLabel } from './standingScalar.js';
 
 /**
  * NPC Relationship Service - CRUD operations for character-NPC relationships
+ *
+ * Phase 3 SC-4 (v1.0.147): disposition AND trust migrated to the
+ * standingScalar abstraction — the dual-scalar exercise. Two configs
+ * (`NPC_DISPOSITION_CONFIG` and `NPC_TRUST_CONFIG`) operate against the
+ * same `npc_relationships` row, each managing its own column. The
+ * abstraction stays unaware of the other scalar; consumers handle row
+ * lifecycle via `getOrCreateRelationship`.
+ *
+ * Disposition uses INLINE_JSON audit on `witnessed_deeds` (mapped to/from
+ * the legacy `{deed, impact, date}` shape via repository callbacks).
+ * Trust has no persistent audit (NONE strategy) — matches legacy behavior.
  */
 
 /**
@@ -29,7 +41,7 @@ export async function createRelationship(data) {
     first_met_location_id = null
   } = data;
 
-  const dispositionLabel = getDispositionLabel(disposition);
+  const dispositionLabel = mapToLabel(disposition, NPC_DISPOSITION_CONFIG.labelBands);
 
   const result = await dbRun(`
     INSERT INTO npc_relationships (
@@ -126,9 +138,11 @@ export async function updateRelationship(id, data) {
 
   const updates = { ...rel, ...data };
 
-  // Recalculate disposition label if disposition changed
+  // Recalculate disposition label if disposition changed.
+  // Phase 3 SC-4: routed through the standingScalar config — single
+  // source of truth for label bands.
   if (data.disposition !== undefined) {
-    updates.disposition_label = getDispositionLabel(data.disposition);
+    updates.disposition_label = mapToLabel(data.disposition, NPC_DISPOSITION_CONFIG.labelBands);
   }
 
   await dbRun(`
@@ -156,46 +170,170 @@ export async function updateRelationship(id, data) {
   return getRelationshipById(id);
 }
 
+// ============================================================
+// STANDING-SCALAR CONFIGS (Phase 3 SC-4 — dual-scalar)
+// ============================================================
+
 /**
- * Adjust disposition (add/subtract from current value)
+ * NPC disposition configuration. Range -100..+100, default 0, 7 label
+ * bands matching the legacy getDispositionLabel exactly. Audit storage
+ * is INLINE_JSON on `witnessed_deeds` with consumer-side mapping between
+ * the abstraction's standard entry shape and the legacy `{deed, impact,
+ * date}` shape (preserves UI/debug consumers reading the column directly).
+ *
+ * No threshold handlers today — disposition has no system-wide unlock
+ * cascade (unlike piety). Reserved for future SC-7+ work.
+ */
+export const NPC_DISPOSITION_CONFIG = {
+  name: 'npc_disposition',
+  range: { min: -100, max: 100 },
+  defaultValue: 0,
+  labelBands: [
+    { atOrAbove: 75, label: 'devoted' },
+    { atOrAbove: 50, label: 'allied' },
+    { atOrAbove: 25, label: 'friendly' },
+    { atOrAbove: -24, label: 'neutral' },
+    { atOrAbove: -49, label: 'unfriendly' },
+    { atOrAbove: -74, label: 'hostile' },
+    { atOrAbove: -100, label: 'nemesis' }
+  ],
+  thresholds: [],
+  auditTrail: { storage: AUDIT_STRATEGIES.INLINE_JSON },
+  formatForPrompt: (current) => {
+    const sign = current.score > 0 ? '+' : '';
+    return `${current.label.toUpperCase()} (${sign}${current.score})`;
+  },
+  repository: {
+    async readScore(contextKey) {
+      const row = await dbGet(
+        'SELECT disposition FROM npc_relationships WHERE character_id = ? AND npc_id = ?',
+        [contextKey.characterId, contextKey.npcId]
+      );
+      return row ? row.disposition : null;
+    },
+    async writeScore(contextKey, newScore) {
+      const label = mapToLabel(newScore, NPC_DISPOSITION_CONFIG.labelBands);
+      await dbRun(
+        `UPDATE npc_relationships SET
+           disposition = ?, disposition_label = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE character_id = ? AND npc_id = ?`,
+        [newScore, label, contextKey.characterId, contextKey.npcId]
+      );
+    },
+    async readAuditTrail(contextKey, limit) {
+      const row = await dbGet(
+        'SELECT witnessed_deeds FROM npc_relationships WHERE character_id = ? AND npc_id = ?',
+        [contextKey.characterId, contextKey.npcId]
+      );
+      if (!row) return [];
+      let deeds;
+      try { deeds = JSON.parse(row.witnessed_deeds || '[]'); }
+      catch { deeds = []; }
+      return deeds.slice(-limit).reverse().map(d => ({
+        reason: d.deed,
+        change: d.impact,
+        date: d.date
+      }));
+    },
+    async appendAuditEntry(contextKey, entry) {
+      // Map abstraction shape → legacy `witnessed_deeds` shape so any UI
+      // or debug code reading the column directly stays compatible.
+      const row = await dbGet(
+        'SELECT witnessed_deeds FROM npc_relationships WHERE character_id = ? AND npc_id = ?',
+        [contextKey.characterId, contextKey.npcId]
+      );
+      let deeds;
+      try { deeds = row ? JSON.parse(row.witnessed_deeds || '[]') : []; }
+      catch { deeds = []; }
+      deeds.push({
+        deed: entry.reason,
+        impact: entry.change,
+        date: entry.date
+      });
+      await dbRun(
+        `UPDATE npc_relationships SET
+           witnessed_deeds = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE character_id = ? AND npc_id = ?`,
+        [JSON.stringify(deeds), contextKey.characterId, contextKey.npcId]
+      );
+    }
+  }
+};
+
+/**
+ * NPC trust configuration — the second scalar on the same row. Range
+ * -100..+100, default 0. No label bands (trust renders as raw integer
+ * via getTrustLabel in dmPromptBuilder, kept consumer-side for now —
+ * the label cuts are display-tier-only and don't drive game state).
+ *
+ * Audit strategy is NONE — trust has no equivalent of `witnessed_deeds`,
+ * matching the legacy adjustTrust behavior (no audit recorded). If SC-5
+ * or later wants a trust audit, add an INLINE_JSON column.
+ */
+export const NPC_TRUST_CONFIG = {
+  name: 'npc_trust',
+  range: { min: -100, max: 100 },
+  defaultValue: 0,
+  labelBands: [],
+  thresholds: [],
+  auditTrail: { storage: AUDIT_STRATEGIES.NONE },
+  formatForPrompt: (current) => `Trust ${current.score}`,
+  repository: {
+    async readScore(contextKey) {
+      const row = await dbGet(
+        'SELECT trust_level FROM npc_relationships WHERE character_id = ? AND npc_id = ?',
+        [contextKey.characterId, contextKey.npcId]
+      );
+      return row ? row.trust_level : null;
+    },
+    async writeScore(contextKey, newScore) {
+      await dbRun(
+        `UPDATE npc_relationships SET trust_level = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE character_id = ? AND npc_id = ?`,
+        [newScore, contextKey.characterId, contextKey.npcId]
+      );
+    }
+    // No appendAuditEntry / readAuditTrail — auditTrail.storage = NONE
+    // means the abstraction skips the audit step entirely.
+  }
+};
+
+/**
+ * Adjust disposition (add/subtract from current value).
+ * Migrated to standingScalar in Phase 3 SC-4.
+ *
+ * Pre-create-row lifecycle (`getOrCreateRelationship`) preserved
+ * consumer-side. Math + clamp + audit-append now flow through
+ * `adjustStanding`. Return shape unchanged (full relationship row).
  */
 export async function adjustDisposition(characterId, npcId, change, reason = null) {
   const rel = await getOrCreateRelationship(characterId, npcId);
 
-  const newDisposition = Math.max(-100, Math.min(100, rel.disposition + change));
-  const newLabel = getDispositionLabel(newDisposition);
-
-  // Add to witnessed deeds if reason provided
-  let witnessedDeeds = rel.witnessed_deeds || [];
-  if (reason) {
-    witnessedDeeds.push({
-      deed: reason,
-      impact: change,
-      date: new Date().toISOString()
-    });
-  }
-
-  await dbRun(`
-    UPDATE npc_relationships SET
-      disposition = ?, disposition_label = ?,
-      witnessed_deeds = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `, [newDisposition, newLabel, JSON.stringify(witnessedDeeds), rel.id]);
+  await adjustStanding(
+    NPC_DISPOSITION_CONFIG,
+    { characterId, npcId },
+    change,
+    { reason }
+  );
 
   return getRelationshipById(rel.id);
 }
 
 /**
- * Adjust trust level
+ * Adjust trust level. Migrated to standingScalar in Phase 3 SC-4.
+ *
+ * Trust shares the same `npc_relationships` row as disposition but is
+ * a fully independent scalar — the dual-scalar exercise per spec §2.6.
+ * No audit recorded (auditTrail.storage = NONE). Return shape unchanged.
  */
 export async function adjustTrust(characterId, npcId, change) {
   const rel = await getOrCreateRelationship(characterId, npcId);
 
-  const newTrust = Math.max(-100, Math.min(100, rel.trust_level + change));
-
-  await dbRun(`
-    UPDATE npc_relationships SET trust_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `, [newTrust, rel.id]);
+  await adjustStanding(
+    NPC_TRUST_CONFIG,
+    { characterId, npcId },
+    change
+  );
 
   return getRelationshipById(rel.id);
 }
@@ -746,14 +884,7 @@ function parseRelationshipJson(rel) {
   };
 }
 
-function getDispositionLabel(disposition) {
-  if (disposition >= 75) return 'devoted';
-  if (disposition >= 50) return 'allied';
-  if (disposition >= 25) return 'friendly';
-  if (disposition >= -24) return 'neutral';
-  if (disposition >= -49) return 'unfriendly';
-  if (disposition >= -74) return 'hostile';
-  return 'nemesis';
-}
-
-export { getDispositionLabel };
+// Legacy `getDispositionLabel` removed in Phase 3 SC-4 — superseded by
+// `mapToLabel(disposition, NPC_DISPOSITION_CONFIG.labelBands)`. Verified
+// no external callers via grep before deletion (the same name exists in
+// server/config/eventTypes.js — different function, different signature).

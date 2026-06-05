@@ -10,6 +10,7 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
+import { loggedChat } from './aiCallLogger.js';
 
 // ============================================================
 // FACTION GOAL GENERATION
@@ -364,7 +365,8 @@ async function generateWithAI(prompt) {
   // Try Claude first
   if (isClaudeAvailable()) {
     try {
-      const response = await claudeChat(
+      const response = await loggedChat(
+        { call_purpose: 'living_world_gen', prompt_builder: 'livingWorldGenerator' },
         'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.',
         [{ role: 'user', content: prompt }],
         3, 'opus'

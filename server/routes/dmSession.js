@@ -2,6 +2,7 @@ import express from 'express';
 import db, { dbAll, dbGet, dbRun } from '../database.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
+import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat } from '../services/aiCallLogger.js';
 import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
 import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
@@ -9,20 +10,47 @@ import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSession
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
 import { getCharacterWorldView, processLivingWorldTick } from '../services/livingWorldService.js';
 import { getActiveFactions } from '../services/factionService.js';
-import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter, addPromise, fulfillPromise, getPendingPromises, adjustDisposition as adjustNpcDisposition, adjustTrust as adjustNpcTrust } from '../services/npcRelationshipService.js';
+// SC-6.4c: addPromise / fulfillPromise / getPendingPromises /
+// adjustDisposition / adjustTrust no longer imported — PROMISE_MADE +
+// PROMISE_FULFILLED handlers in consequenceService.js own those calls.
+import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from '../services/npcRelationshipService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
-import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly, addItemToMerchant, ensureItemAtMerchant } from '../services/merchantService.js';
-import { placeCommission } from '../services/merchantOrderService.js';
-import { recordPlayerDefenseOutcome } from '../services/baseThreatService.js';
+import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly } from '../services/merchantService.js';
+// SC-6.4b: merchantOrderService loaded for module-level
+// registerMarkerHandler('MERCHANT_COMMISSION', ...). Direct placeCommission
+// + addItemToMerchant + ensureItemAtMerchant imports no longer needed —
+// handlers in merchantService.js / merchantOrderService.js own the calls.
+import '../services/merchantOrderService.js';
+// SC-6.4b: lootDropService is new — registers the LOOT_DROP handler at
+// module load.
+import '../services/lootDropService.js';
+// SC-6.4d: recordPlayerDefenseOutcome no longer imported — BASE_DEFENSE_RESULT
+// handler in baseThreatService.js owns the call. Loading the module fires
+// the module-level registerMarkerHandler registration.
+import '../services/baseThreatService.js';
+// SC-6.4d: combatMarkerService is new — registers COMBAT_START + COMBAT_END
+// handlers at module load.
+import '../services/combatMarkerService.js';
 import {
-  parseNpcJoinMarker, detectDowntime, detectRecruitment, detectMerchantShop,
-  detectMerchantRefer, detectAddItem, detectLootDrop, detectMerchantCommission, detectBaseDefenseResult, detectCombatStart, detectCombatEnd, estimateEnemyDexMod,
-  detectWeatherChange, detectShelterFound, detectSwim, detectEat, detectDrink,
-  detectForage, detectRecipeFound, detectMaterialFound, detectCraftProgress, detectRecipeGift,
-  detectMythicTrial, detectPietyChange, detectItemAwaken, detectMythicSurge,
-  detectPromiseMade, detectPromiseFulfilled,
-  detectNotorietyGain, detectNotorietyLoss,
+  parseNpcJoinMarker, detectDowntime, detectRecruitment,
+  // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
+  // (detectCombatStart / CombatEnd / BaseDefenseResult / MythicTrial /
+  // ItemAwaken / MythicSurge) migrated to handlers in combatMarkerService.js,
+  // mythicService.js, baseThreatService.js. Legacy exports stay per
+  // "deprecate by hiding." estimateEnemyDexMod stays imported by
+  // combatMarkerService.js (utility helper, PARK ENTIRELY per Q6 survey).
+  // SC-6.4a (v1.0.150) — survival + crafting cluster detect-functions
+  // migrated to markerPipeline handlers (survivalService.js,
+  // weatherService.js, craftingService.js). Legacy exports stay.
+  // SC-6.4b (v1.0.151) — merchant cluster detect-functions
+  // (detectMerchantShop / MerchantRefer / AddItem / LootDrop /
+  // MerchantCommission) migrated to handlers in merchantService.js,
+  // merchantOrderService.js, lootDropService.js. Legacy exports stay.
+  // SC-6.4c (v1.0.152) — promise + notoriety cluster detect-functions
+  // (detectPromiseMade / PromiseFulfilled / NotorietyGain / NotorietyLoss)
+  // migrated to handlers in consequenceService.js + notorietyService.js.
+  // Legacy exports stay per "deprecate by hiding."
   buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -32,7 +60,8 @@ import {
   emitSessionEvents, emitSessionEndedEvent
 } from '../services/dmSessionService.js';
 import { lookupItemByName } from '../data/merchantLootTables.js';
-import { getLootTableForLevel } from '../config/rewards.js';
+// SC-6.4b: getLootTableForLevel moved into lootDropService.js with the
+// LOOT_DROP handler. No remaining usage in this file.
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
 import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
@@ -51,17 +80,34 @@ import { getAwayCompanions } from '../services/companionActivityService.js';
 import { processAbsenceEffects } from '../services/npcAgingService.js';
 import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget } from '../utils/contextManager.js';
 import { handleServerError } from '../utils/errorHandler.js';
-import { getWeather, setWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
-import { getSurvivalStatus, consumeFood, consumeWater, formatSurvivalForPrompt } from '../services/survivalService.js';
-import { formatCraftingForPrompt, discoverRecipe, addMaterial, advanceProject, getProjectStatus, createRadiantRecipe } from '../services/craftingService.js';
+import { getWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
+import { getSurvivalStatus, formatSurvivalForPrompt } from '../services/survivalService.js';
+import { formatCraftingForPrompt } from '../services/craftingService.js';
+// (Loading these services also fires their module-level
+// registerMarkerHandler() calls — survival/weather/crafting handlers
+// wire up at server boot regardless of import order.)
 import { formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK } from '../services/dmPromptBuilder.js';
-import { getMythicStatus, recordTrial, useMythicPower, advanceTier, findLegendaryItemByName, advanceItemState } from '../services/mythicService.js';
-import { adjustPiety } from '../services/pietyService.js';
-import { FULFILL_WEIGHTS, spreadReputationRipple, spreadFactionStanding, calculatePriceModifier } from '../services/consequenceService.js';
+// SC-6.4d: recordTrial / useMythicPower / advanceTier / findLegendaryItemByName /
+// advanceItemState no longer imported — MYTHIC_TRIAL / ITEM_AWAKEN / MYTHIC_SURGE
+// handlers in mythicService.js own the calls.
+import { getMythicStatus } from '../services/mythicService.js';
+import { getAllCharacterPiety, formatPietyForPrompt } from '../services/pietyService.js';
+// (Loading pietyService here also fires its module-level
+// registerMarkerHandler('PIETY_CHANGE', ...) — SC-4 wired the dispatch
+// path through the marker pipeline; the old detect-function call site
+// in this file was removed.)
+// SC-6.4c: FULFILL_WEIGHTS / spreadReputationRipple / spreadFactionStanding
+// no longer imported here — PROMISE_FULFILLED handler in consequenceService.js
+// owns those calls. calculatePriceModifier is still used for the merchant
+// price-modifier path (~line 1969) so it stays.
+import { calculatePriceModifier } from '../services/consequenceService.js';
 import { getActiveQuests as getCharacterActiveQuests } from '../services/questService.js';
 import { calculateEconomyModifiers, getItemEconomyMultiplier, recordTransaction, getBulkDiscount } from '../services/economyService.js';
 import { getBaseForPrompt } from '../services/partyBaseService.js';
-import { getNotorietyForPrompt, addNotoriety as addNotorietyScore } from '../services/notorietyService.js';
+// SC-6.4c: addNotoriety no longer imported — NOTORIETY_GAIN/LOSS handlers
+// in notorietyService.js own the calls (loading the module fires the
+// module-level registerMarkerHandler registrations).
+import { getNotorietyForPrompt } from '../services/notorietyService.js';
 import { getProjectsForPrompt } from '../services/longTermProjectService.js';
 // Old single-session "origin story" prelude builder removed in v1.0.44 —
 // replaced wholesale by the prelude-forward character creator (see
@@ -780,6 +826,7 @@ router.post('/start', async (req, res) => {
       weatherSnapshot,
       craftingContextResult,
       mythicStatusResult,
+      pietyRowsResult,
       partyBaseContextResult,
       notorietyContextResult,
       projectsContextResult,
@@ -795,6 +842,7 @@ router.post('/start', async (req, res) => {
         ? formatCraftingForPrompt(characterId).catch(e => { console.error('Error formatting crafting:', e); return ''; })
         : Promise.resolve(''),
       getMythicStatus(characterId).catch(e => { console.error('Error fetching mythic:', e); return null; }),
+      getAllCharacterPiety(characterId).catch(e => { console.error('Error fetching piety:', e); return []; }),
       getBaseForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error base:', e); return ''; }),
       getNotorietyForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error notoriety:', e); return ''; }),
       getProjectsForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error projects:', e); return ''; }),
@@ -843,6 +891,15 @@ router.post('/start', async (req, res) => {
     if (mythicStatusResult && mythicStatusResult.tier > 0) {
       mythicContext = formatMythicForPrompt(mythicStatusResult, character);
     }
+    // Piety prompt injection (Phase 3 SC-4 gap fix). Surfaces every
+    // deity the character has piety with, regardless of mythic tier —
+    // characters can earn piety pre-mythic. The formatter returns
+    // empty string for an empty array; we wrap with the section
+    // header only when there's content to inject.
+    const pietyBody = formatPietyForPrompt(pietyRowsResult);
+    const pietyContext = pietyBody
+      ? `=== PIETY ===\n${pietyBody}\n\nReference unlocked piety abilities (3/10/25/50 thresholds) when relevant. The character's deity may answer prayers or send subtle signs at higher tiers.`
+      : '';
     // ──────────── END PARALLEL CONTEXT ASSEMBLY ────────────
 
     // Build session config with campaign module or custom Forgotten Realms context
@@ -874,6 +931,7 @@ router.post('/start', async (req, res) => {
       survivalContext,
       craftingContext,
       mythicContext,
+      pietyContext,
       partyBaseContext,
       notorietyContext,
       projectsContext,
@@ -958,7 +1016,24 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
       // so toggling lean off later restores all rules.
       const apiSystemPrompt = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
 
-      const claudeResult = await claude.startSession(apiSystemPrompt, openingPrompt, modelChoice);
+      // Phase 4a SC-4a.1 — wrap with the call logger. session_id isn't
+      // known yet (the dm_sessions row gets inserted right after this
+      // call; turn_number = 0 for the opening turn).
+      const wrappedStart = await wrapClaudeCallWithId(
+        {
+          character_id: character?.id,
+          campaign_id: character?.campaign_id,
+          turn_number: 0,
+          prompt_builder: 'dmPromptBuilder',
+          call_purpose: 'session_start',
+          system_prompt: apiSystemPrompt,
+          user_message: openingPrompt,
+          metadata: { model_choice: modelChoice, lean_prompt: !!leanPrompt }
+        },
+        (chatOptions) => claude.startSession(apiSystemPrompt, openingPrompt, modelChoice, chatOptions)
+      );
+      const claudeResult = wrappedStart.result;
+      const __sessionStartLogId = wrappedStart.logId;
       // Restore the full prompt as the persisted system message regardless
       // of which variant we sent to the API this turn.
       if (claudeResult.messages?.[0]?.role === 'system') {
@@ -1234,6 +1309,10 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     let result;
+    // Phase 4a SC-4a.1 — `__aiLogId` set when this turn ran through the
+    // logged Claude path; null for Ollama or if logging persistence failed.
+    // Threaded into the marker-dispatch annotation below.
+    let __aiLogId = null;
     if (provider === 'claude') {
       // Use Claude - extract system prompt from messages
       // v1.0.99: Opus is the default for all DM session turns. Body param
@@ -1254,7 +1333,30 @@ router.post('/:sessionId/message', async (req, res) => {
       const observationVerbInjection = detectObservationVerbs(action) ? OBSERVATION_AS_CHECK_BLOCK : '';
       const apiSystemPrompt = apiSystemPromptBase + observationVerbInjection;
       const turnModel = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
-      const claudeResult = await claude.continueSession(apiSystemPrompt, messagesToSend, action, turnModel, { sessionId });
+      // Phase 4a SC-4a.1 — wrap with the call logger. wrapClaudeCallWithId
+      // returns { result: <continueSession return>, logId } so the marker
+      // dispatch pass below can amend the row with markers_detected,
+      // marker_failures, triggered_correction_loop. logId is null when
+      // logging persistence fails (best-effort; never blocks gameplay).
+      const wrapped = await wrapClaudeCallWithId(
+        {
+          character_id: session.character_id,
+          campaign_id: session.campaign_id,
+          session_id: parseInt(sessionId),
+          prompt_builder: 'dmPromptBuilder',
+          call_purpose: 'gameplay_turn',
+          system_prompt: apiSystemPrompt,
+          user_message: action,
+          conversation_history: messagesToSend.filter(m => m.role !== 'system'),
+          metadata: { model_choice: turnModel, lean_prompt: !!leanPrompt, observation_verb_injected: !!observationVerbInjection }
+        },
+        (chatOptions) => claude.continueSession(
+          apiSystemPrompt, messagesToSend, action, turnModel,
+          { ...chatOptions, sessionId }
+        )
+      );
+      const claudeResult = wrapped.result;
+      __aiLogId = wrapped.logId;  // threaded into the marker-dispatch annotation below
       if (claudeResult.messages?.[0]?.role === 'system') {
         claudeResult.messages[0] = { role: 'system', content: systemPrompt };
       }
@@ -1331,26 +1433,43 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     // Phase 3 SC-6.1 — marker pipeline (parallel with detect-functions).
-    // Dispatches to handlers registered against marker schemas. SC-6.1
-    // ships with NO handlers registered, so this is a no-op at the
-    // behavioral level — it just re-runs validation (already happened
-    // above) and finds nothing to dispatch. SC-2 through SC-5 register
-    // their per-system handlers; SC-6.4 sweeps remaining detect-functions
-    // through this pipeline. At end of Phase 3 the existing detect-function
-    // calls below are either replaced (canonical pipeline) or kept with
-    // explicit deferral rationale. Wrapped in try/catch so a pipeline
+    // Dispatches to handlers registered against marker schemas. SC-6.4
+    // captures the result so downstream code can read handlerResults to
+    // assemble response-payload arrays (survivalEvents, etc.) preserving
+    // the existing client contract. Wrapped in try/catch so a pipeline
     // bug never blocks the existing flow.
+    let pipelineResult = { handlerResults: [], failures: [] };
     try {
-      // gameDay isn't always loaded in this scope — handlers that need it
-      // can read it themselves via the characterId. SC-1+SC-6.1 ship has
-      // no handlers registered, so the context object's exact contents
-      // are forward-compat for SC-2 onward.
-      await processResponseMarkers(result.narrative || '', {
+      // gameDay isn't passed in context — handlers that need it can SELECT
+      // characters.game_day via characterId (matches the SC-4 piety pattern).
+      // SC-6.4b adds `narrative` so MERCHANT_SHOP handler can self-orchestrate
+      // the coupled ADD_ITEM markers (parked from independent dispatch).
+      pipelineResult = await processResponseMarkers(result.narrative || '', {
         characterId: session.character_id,
-        sessionId: parseInt(sessionId)
+        sessionId: parseInt(sessionId),
+        narrative: result.narrative || ''
       });
     } catch (err) {
       console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
+    }
+
+    // Phase 4a SC-4a.1 — annotate the ai_call_log row created above with
+    // marker-dispatch + correction-loop outcomes. Best-effort; row id is
+    // null when this turn ran via Ollama or logger persistence failed.
+    if (__aiLogId != null) {
+      // Group successful marker results by schemaKey for the markers_detected
+      // count map. Failures get the structured failures array verbatim.
+      const detected = {};
+      for (const r of (pipelineResult.handlerResults || [])) {
+        if (r?.schemaKey) detected[r.schemaKey] = (detected[r.schemaKey] || 0) + 1;
+      }
+      try {
+        await annotateAiCallLog(__aiLogId, {
+          markers_detected: detected,
+          marker_failures: pipelineResult.failures || [],
+          triggered_correction_loop: (pipelineResult.failures || []).length > 0
+        });
+      } catch { /* best-effort */ }
     }
 
     // Per-turn playtest log line — surfaces context-drift signals live in the terminal.
@@ -1362,6 +1481,13 @@ router.post('/:sessionId/message', async (req, res) => {
         turnNumber = await getTurnCount(parseInt(sessionId));
       } catch {
         turnNumber = Math.ceil(result.messages.length / 2);
+      }
+      // Phase 4a SC-4a.1 — backfill turn_number on the log row now that
+      // we know it. Best-effort.
+      if (__aiLogId != null) {
+        try {
+          await dbRun('UPDATE ai_call_log SET turn_number = ? WHERE id = ?', [turnNumber, __aiLogId]);
+        } catch { /* best-effort */ }
       }
       const promptChars = augmentedMessages[0]?.content?.length || 0;
       // Best-effort character-name lookup for human-readable framing.
@@ -1480,11 +1606,10 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
 
-    // Check for merchant shop in the response
-    const merchantShop = detectMerchantShop(result.narrative);
-    if (merchantShop) {
-      console.log(`🏪 MERCHANT_SHOP detected: "${merchantShop.merchantName}" (${merchantShop.merchantType}) at ${merchantShop.location}`);
-    }
+    // SC-6.4b: MERCHANT_SHOP detection + console log moved into the
+    // handler in merchantService.js (orchestrates ADD_ITEM coupling
+    // internally). Inline block deleted; the handlerResults extraction
+    // below pushes the inventoryContext to result.messages.
 
     // Strip all system markers from displayed narrative
     let cleanNarrative = result.narrative;
@@ -1516,325 +1641,88 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[PROMISE_MADE:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[PROMISE_FULFILLED:[^\]]+\]\s*/gi, '').trim();
 
-    // Handle ADD_ITEM markers — add custom items to current merchant's inventory
-    const addItems = detectAddItem(result.narrative);
-    let currentMerchantId = null;
-    if (addItems.length > 0 || merchantShop) {
-      try {
-        const character = await dbGet('SELECT campaign_id, level FROM characters WHERE id = ?', [session.character_id]);
-        if (character?.campaign_id) {
-          // Find the current merchant (from MERCHANT_SHOP marker or most recent context)
-          const merchantName = merchantShop?.merchantName;
-          if (merchantName) {
-            let dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
-            if (!dbMerchant) {
-              dbMerchant = await createMerchantOnTheFly(
-                character.campaign_id, merchantName,
-                merchantShop.merchantType, merchantShop.location, character.level || 1
-              );
-            }
-            currentMerchantId = dbMerchant.id;
-
-            // Process ADD_ITEM markers for this merchant
-            for (const item of addItems) {
-              try {
-                await addItemToMerchant(dbMerchant.id, item);
-              } catch (e) {
-                console.error('Error adding item to merchant:', e);
-              }
-            }
-
-            // Re-fetch inventory after any additions
-            if (addItems.length > 0) {
-              dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
-            }
-
-            // Inject actual inventory into conversation so AI knows what items are available
-            const itemList = dbMerchant.inventory
-              .map(i => {
-                let line = `- ${i.name} (${i.price_gp}gp${i.quantity > 1 ? `, qty: ${i.quantity}` : ''}${i.quality ? ` [${i.quality}]` : ''})`;
-                if (i.cursed && i.true_name) {
-                  line += ` [CURSED: actually ${i.true_name} — ${i.curse_description}]`;
-                }
-                return line;
-              })
-              .join('\n');
-            const hasCursedItems = dbMerchant.inventory.some(i => i.cursed);
-            const cursedInstructions = hasCursedItems
-              ? '\nCURSED ITEMS: Items marked [CURSED] APPEAR to the player as the normal item listed. Do NOT reveal the curse — describe it convincingly as the item it appears to be. The curse reveals itself only when used or identified with Identify/Detect Magic. If the player casts Identify, THEN reveal the true nature.'
-              : '';
-            const inventoryContext = `[SYSTEM: ${merchantName}'s actual inventory — ONLY reference these items when the player asks what's available:\n${itemList}\nMerchant gold: ${dbMerchant.gold_gp}gp. Do NOT invent items not on this list. The shop UI shows this inventory to the player. If an item isn't here, suggest an alternative or refer to another merchant with [MERCHANT_REFER]. You can add fitting custom items with [ADD_ITEM].${cursedInstructions}]`;
-            result.messages.push({ role: 'user', content: inventoryContext });
-            await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-          }
-        }
-      } catch (e) {
-        console.error('Error processing merchant markers:', e);
+    // SC-6.4b — merchant cluster handlers run inside the marker pipeline
+    // (merchantService.js: MERCHANT_SHOP, MERCHANT_REFER; merchantOrderService.js:
+    // MERCHANT_COMMISSION). Side effects done in handlers; AI-context
+    // message construction stays at the route call site so the
+    // result.messages reference (closed over here) gets the push, then
+    // the whole array persists once at the end of the merchant block.
+    //
+    // ADD_ITEM is parked from independent dispatch (schema-only). The
+    // MERCHANT_SHOP handler self-orchestrates ADD_ITEM markers from the
+    // same narrative because they coordinate (legacy behavior preserved).
+    let merchantMessagesAdded = false;
+    let merchantShop = null;
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (hr.schemaKey === 'MERCHANT_SHOP') {
+        result.messages.push({ role: 'user', content: hr.result.inventoryContext });
+        merchantMessagesAdded = true;
+        // Reshape handler result → client-facing payload (DMSession.jsx
+        // checks data.merchantShop?.detected to drive the shop UI).
+        merchantShop = {
+          detected: true,
+          merchantName: hr.result.merchantName,
+          merchantType: hr.result.merchantType,
+          location: hr.result.location
+        };
+      } else if (hr.schemaKey === 'MERCHANT_COMMISSION') {
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
+        merchantMessagesAdded = true;
       }
+      // MERCHANT_REFER: no AI-context message push (silent side effect).
+    }
+    if (merchantMessagesAdded) {
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
     }
 
-    // Handle MERCHANT_REFER — ensure the referenced item exists at the other merchant
-    const merchantRefer = detectMerchantRefer(result.narrative);
-    if (merchantRefer) {
-      try {
-        const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [session.character_id]);
-        if (character?.campaign_id) {
-          await ensureItemAtMerchant(character.campaign_id, merchantRefer.toMerchant, merchantRefer.item);
-        }
-      } catch (e) {
-        console.error('Error ensuring item at referred merchant:', e);
+    // SC-6.4d — BASE_DEFENSE_RESULT handler in baseThreatService.js
+    // owns the threat-status flip; route consolidates handlerResults
+    // and pushes systemNote(s) to result.messages.
+    const defenseHandlerResults = pipelineResult.handlerResults
+      .filter(hr => hr.ok && hr.schemaKey === 'BASE_DEFENSE_RESULT' && hr.result);
+    if (defenseHandlerResults.length > 0) {
+      for (const hr of defenseHandlerResults) {
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
       }
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
     }
 
-    // M2: Handle MERCHANT_COMMISSION — player commissions a custom item from
-    // the current merchant. The marker emits item + price + deposit + lead
-    // time; we create a merchant_orders row, deduct the deposit from the
-    // party purse, and surface the order back to the AI so it can narrate
-    // the hand-off ("come back in 7 days").
-    const commissions = detectMerchantCommission(result.narrative);
-    if (commissions.length > 0) {
-      try {
-        const character = await dbGet(
-          'SELECT campaign_id, game_day FROM characters WHERE id = ?',
-          [session.character_id]
-        );
-        if (character?.campaign_id) {
-          for (const c of commissions) {
-            // Find or create the merchant
-            let dbMerchant = await getMerchantInventory(character.campaign_id, c.merchant);
-            if (!dbMerchant) {
-              dbMerchant = await createMerchantOnTheFly(
-                character.campaign_id, c.merchant,
-                'general', null, 1
-              );
-            }
-
-            // Idempotency guard: if an active order with the same item name
-            // already exists at this merchant for this character, skip —
-            // the AI likely repeated the marker across retries or across
-            // two turns in the same narrative beat. Prevents double-charging
-            // the deposit.
-            const dupe = await dbGet(
-              `SELECT id FROM merchant_orders
-               WHERE merchant_id = ? AND character_id = ?
-                 AND LOWER(item_name) = LOWER(?)
-                 AND status IN ('pending','ready')
-               LIMIT 1`,
-              [dbMerchant.id, session.character_id, c.item]
-            );
-            if (dupe) {
-              result.messages.push({
-                role: 'user',
-                content: `[SYSTEM: MERCHANT_COMMISSION skipped — an order for "${c.item}" at ${c.merchant} is already in progress (order #${dupe.id}). Don't restate the commission.]`
-              });
-              await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-              continue;
-            }
-
-            const quotedCp = (c.price_gp || 0) * 100 + (c.price_sp || 0) * 10 + (c.price_cp || 0);
-            const depositCp = (c.deposit_gp || 0) * 100 + (c.deposit_sp || 0) * 10 + (c.deposit_cp || 0);
-
-            const result2 = await placeCommission({
-              merchantId: dbMerchant.id,
-              characterId: session.character_id,
-              itemName: c.item,
-              itemSpec: { quality: c.quality, description: c.description, hook: c.hook },
-              quotedPriceCp: quotedCp,
-              depositCp,
-              leadTimeDays: c.lead_time_days,
-              currentGameDay: character.game_day || 0,
-              narrativeHook: c.hook
-            });
-
-            if (!result2.ok) {
-              // Surface the reason back to the AI as a system note — it can
-              // narrate the merchant changing their mind or the player
-              // backing out ("you don't have enough coin for the deposit").
-              result.messages.push({
-                role: 'user',
-                content: `[SYSTEM: MERCHANT_COMMISSION failed — ${result2.error}. Narrate the merchant withdrawing the offer or the player lacking funds. Do NOT tell the player the order was placed.]`
-              });
-            } else {
-              result.messages.push({
-                role: 'user',
-                content: `[SYSTEM: Commission recorded. Order #${result2.order.id}: ${c.item} from ${c.merchant}, ready in ${c.lead_time_days} game days (day ${character.game_day + c.lead_time_days}). Deposit: ${Math.ceil(depositCp / 100)} gp. Balance due on pickup: ${Math.ceil((quotedCp - depositCp) / 100)} gp.]`
-              });
-            }
-            await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-          }
-        }
-      } catch (e) {
-        console.error('Error processing merchant commission:', e);
-      }
+    // SC-6.4b — LOOT_DROP handler in lootDropService.js owns the
+    // per-drop inventory mutation. Route consolidates handlerResults
+    // across all LOOT_DROP entries into ONE combined SYSTEM note (the
+    // legacy "items have been added: A, B, C" shape) and persists once.
+    const lootDropResults = pipelineResult.handlerResults
+      .filter(hr => hr.ok && hr.schemaKey === 'LOOT_DROP' && hr.result)
+      .map(hr => hr.result);
+    if (lootDropResults.length > 0) {
+      const itemNames = lootDropResults.map(d => d.item).join(', ');
+      result.messages.push({
+        role: 'user',
+        content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The following items have been added to the player's inventory: ${itemNames}. The player's character sheet now reflects these items.`
+      });
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
     }
 
-    // F3: Handle BASE_DEFENSE_RESULT markers — record the outcome of a
-    // player-led base defense so the threat flips from 'defending' to
-    // 'resolved' with the declared outcome.
-    const defenseResults = detectBaseDefenseResult(result.narrative);
-    if (defenseResults.length > 0) {
-      try {
-        const character = await dbGet('SELECT game_day FROM characters WHERE id = ?', [session.character_id]);
-        for (const d of defenseResults) {
-          try {
-            await recordPlayerDefenseOutcome(d.threatId, {
-              outcome: d.outcome,
-              narrative: d.narrative,
-              gameDay: character?.game_day || null
-            });
-            result.messages.push({
-              role: 'user',
-              content: `[SYSTEM: Base defense outcome recorded. Threat #${d.threatId} resolved as ${d.outcome}.]`
-            });
-          } catch (e) {
-            result.messages.push({
-              role: 'user',
-              content: `[SYSTEM: BASE_DEFENSE_RESULT failed — ${e.message}]`
-            });
-          }
-        }
-        await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-      } catch (e) {
-        console.error('Error processing base defense result:', e);
-      }
-    }
-
-    // Handle LOOT_DROP markers — validate items and add to character inventory
-    const lootDrops = detectLootDrop(result.narrative);
-    let lootDropResults = [];
-    if (lootDrops.length > 0) {
-      try {
-        const character = await dbGet('SELECT id, level, inventory FROM characters WHERE id = ?', [session.character_id]);
-        if (character) {
-          let inventory = safeParse(character.inventory, []);
-
-          for (const drop of lootDrops) {
-            // Try to find the item in our loot tables
-            const knownItem = lookupItemByName(drop.item);
-            const lootTable = getLootTableForLevel(character.level);
-            const isInLootTable = lootTable.includes(drop.item);
-
-            // Accept the item if it's known in our system OR in the level-appropriate loot table
-            const itemName = knownItem ? knownItem.name : drop.item;
-
-            // Add to character inventory
-            const existing = inventory.find(i => i.name.toLowerCase() === itemName.toLowerCase());
-            if (existing) {
-              existing.quantity = (existing.quantity || 1) + 1;
-            } else {
-              inventory.push({ name: itemName, quantity: 1 });
-            }
-
-            lootDropResults.push({
-              item: itemName,
-              source: drop.source,
-              known: !!knownItem || isInLootTable
-            });
-          }
-
-          // Save updated inventory
-          await dbRun('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [JSON.stringify(inventory), character.id]);
-
-          // Inject system context so AI knows the item was added
-          const itemNames = lootDropResults.map(d => d.item).join(', ');
-          result.messages.push({
-            role: 'user',
-            content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The following items have been added to the player's inventory: ${itemNames}. The player's character sheet now reflects these items.`
-          });
-          await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-        }
-      } catch (e) {
-        console.error('Error processing loot drops:', e);
-      }
-    }
-
-    // Handle COMBAT_START marker — roll initiative for all combatants
-    const combatStartData = detectCombatStart(result.narrative);
+    // SC-6.4d — COMBAT_START + COMBAT_END handlers in combatMarkerService.js
+    // own the initiative roll + system-note text. Route extracts the
+    // combatStart payload + pushes the systemNote to result.messages.
     let combatStart = null;
-    if (combatStartData.detected) {
-      try {
-        const character = await dbGet('SELECT id, name, nickname, ability_scores FROM characters WHERE id = ?', [session.character_id]);
-        const charAbilities = typeof character.ability_scores === 'string'
-          ? safeParse(character.ability_scores, {})
-          : (character.ability_scores || {});
-        const playerDexMod = Math.floor(((charAbilities.dexterity || 10) - 10) / 2);
-
-        const rollD20 = () => Math.floor(Math.random() * 20) + 1;
-        const turnOrder = [];
-
-        // Player initiative
-        const playerRoll = rollD20();
-        turnOrder.push({
-          name: character.nickname || character.name || 'Player',
-          type: 'player',
-          roll: playerRoll,
-          modifier: playerDexMod,
-          initiative: playerRoll + playerDexMod
-        });
-
-        // Companion initiatives.
-        // Schema notes: companions.name doesn't exist (name lives on npcs via
-        // npc_id); the FK column is recruited_by_character_id, and active-state
-        // is `status = 'active'` rather than a boolean is_active.
-        const activeCompanions = await dbAll(
-          `SELECT n.name AS name, c.companion_ability_scores
-           FROM companions c
-           JOIN npcs n ON c.npc_id = n.id
-           WHERE c.recruited_by_character_id = ? AND c.status = 'active'`,
-          [session.character_id]
-        );
-        for (const comp of activeCompanions) {
-          const compAbilities = typeof comp.companion_ability_scores === 'string'
-            ? safeParse(comp.companion_ability_scores, {})
-            : (comp.companion_ability_scores || {});
-          const compDexMod = Math.floor(((compAbilities.dexterity || 10) - 10) / 2);
-          const compRoll = rollD20();
-          turnOrder.push({
-            name: comp.name,
-            type: 'companion',
-            roll: compRoll,
-            modifier: compDexMod,
-            initiative: compRoll + compDexMod
-          });
-        }
-
-        // Enemy initiatives
-        for (const enemy of combatStartData.enemies) {
-          const enemyDexMod = estimateEnemyDexMod(enemy);
-          const enemyRoll = rollD20();
-          turnOrder.push({
-            name: enemy,
-            type: 'enemy',
-            roll: enemyRoll,
-            modifier: enemyDexMod,
-            initiative: enemyRoll + enemyDexMod
-          });
-        }
-
-        // Sort by initiative descending, break ties by modifier, then random
-        turnOrder.sort((a, b) => {
-          if (b.initiative !== a.initiative) return b.initiative - a.initiative;
-          if (b.modifier !== a.modifier) return b.modifier - a.modifier;
-          return Math.random() - 0.5;
-        });
-
-        combatStart = { turnOrder, currentTurn: 0, round: 1 };
-
-        // Inject initiative results into conversation so AI uses the turn order
-        const orderStr = turnOrder.map(c => `${c.name} (${c.initiative})`).join(', ');
-        result.messages.push({
-          role: 'user',
-          content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Initiative has been rolled. Turn order: ${orderStr}. Use this order for all combat turns. The first combatant to act is ${turnOrder[0].name}.`
-        });
-        await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-      } catch (e) {
-        console.error('Error rolling initiative:', e);
+    let combatEnd = false;
+    let combatSystemNoteAdded = false;
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (hr.schemaKey === 'COMBAT_START') {
+        combatStart = hr.result.combatStart;
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
+        combatSystemNoteAdded = true;
+      } else if (hr.schemaKey === 'COMBAT_END') {
+        combatEnd = true;
       }
     }
-
-    // Handle COMBAT_END marker
-    const combatEnd = detectCombatEnd(result.narrative);
+    if (combatSystemNoteAdded) {
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+    }
 
     // Detect condition changes from AI response
     const conditionChanges = detectConditionChanges(result.narrative);
@@ -1845,336 +1733,66 @@ router.post('/:sessionId/message', async (req, res) => {
     let survivalEvents = [];
     let craftingEvents = [];
 
-    try {
-      const character = await dbGet('SELECT id, campaign_id, game_day, inventory FROM characters WHERE id = ?', [session.character_id]);
-      if (character?.campaign_id) {
-        // Weather change
-        const weatherChange = detectWeatherChange(result.narrative);
-        if (weatherChange) {
-          const updated = await setWeather(character.campaign_id, weatherChange.type, weatherChange.duration_hours, character.game_day || 1);
-          weatherChangeResult = { type: weatherChange.type, duration_hours: weatherChange.duration_hours };
-          console.log(`🌦️ WEATHER_CHANGE: ${weatherChange.type} for ${weatherChange.duration_hours}h`);
-        }
-
-        // Shelter found
-        const shelter = detectShelterFound(result.narrative);
-        if (shelter) {
-          await dbRun('UPDATE characters SET shelter_type = ? WHERE id = ?', [shelter.type, character.id]);
-          survivalEvents.push({ type: 'shelter_found', shelter: shelter.type });
-        }
-
-        // Eating
-        const eatMarkers = detectEat(result.narrative);
-        for (const eat of eatMarkers) {
-          try {
-            await consumeFood(character.id, eat.item, character.game_day || 1);
-            survivalEvents.push({ type: 'ate', item: eat.item });
-          } catch (e) {
-            console.error(`Error processing EAT marker for ${eat.item}:`, e.message);
-          }
-        }
-
-        // Drinking
-        const drinkMarkers = detectDrink(result.narrative);
-        for (const drink of drinkMarkers) {
-          try {
-            await consumeWater(character.id, drink.item, character.game_day || 1);
-            survivalEvents.push({ type: 'drank', item: drink.item });
-          } catch (e) {
-            console.error(`Error processing DRINK marker for ${drink.item}:`, e.message);
-          }
-        }
-
-        // Foraging
-        const forage = detectForage(result.narrative);
-        if (forage && forage.result === 'success') {
-          if (forage.food > 0) {
-            // Add foraged food to inventory
-            const inv = safeParse(character.inventory, []);
-            const existing = inv.find(i => i.name === 'Foraged Food');
-            if (existing) existing.quantity = (existing.quantity || 1) + forage.food;
-            else inv.push({ name: 'Foraged Food', quantity: forage.food, category: 'food', nutrition_days: 1, perishable: true, spoils_in_days: 2, acquired_game_day: character.game_day || 1 });
-            await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(inv), character.id]);
-          }
-          if (forage.water > 0) {
-            const inv = safeParse(character.inventory, []);
-            const existing = inv.find(i => i.name === 'Collected Water');
-            if (existing) existing.quantity = (existing.quantity || 1) + forage.water;
-            else inv.push({ name: 'Collected Water', quantity: forage.water, category: 'water', hydration_days: 1 });
-            await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(inv), character.id]);
-          }
-          survivalEvents.push({ type: 'foraged', terrain: forage.terrain, food: forage.food, water: forage.water });
-        }
-
-        // Recipe discovery
-        const recipes = detectRecipeFound(result.narrative);
-        for (const recipe of recipes) {
-          try {
-            await discoverRecipe(character.id, recipe.name, recipe.source, character.game_day || 1);
-            craftingEvents.push({ type: 'recipe_found', name: recipe.name, source: recipe.source });
-          } catch (e) {
-            console.error(`Error processing RECIPE_FOUND for ${recipe.name}:`, e.message);
-          }
-        }
-
-        // Material discovery
-        const materials = detectMaterialFound(result.narrative);
-        for (const mat of materials) {
-          try {
-            await addMaterial(character.id, mat.name, mat.quantity, mat.quality, 'found', character.game_day || 1);
-            craftingEvents.push({ type: 'material_found', name: mat.name, quantity: mat.quantity });
-          } catch (e) {
-            console.error(`Error processing MATERIAL_FOUND for ${mat.name}:`, e.message);
-          }
-        }
-
-        // Craft progress
-        const craftProgress = detectCraftProgress(result.narrative);
-        if (craftProgress) {
-          try {
-            const projects = await getProjectStatus(character.id);
-            const activeProject = projects.find(p => p.status === 'in_progress');
-            if (activeProject) {
-              await advanceProject(activeProject.id, craftProgress.hours);
-              craftingEvents.push({ type: 'craft_progress', hours: craftProgress.hours, project_id: activeProject.id });
-            }
-          } catch (e) {
-            console.error('Error processing CRAFT_PROGRESS:', e.message);
-          }
-        }
-
-        // Radiant recipe gifts (AI-created unique recipes)
-        const recipeGifts = detectRecipeGift(result.narrative);
-        for (const gift of recipeGifts) {
-          try {
-            const created = await createRadiantRecipe(character.id, gift, character.game_day || 1);
-            craftingEvents.push({
-              type: 'recipe_gift',
-              name: gift.name,
-              category: gift.category,
-              gifted_by: gift.giftedBy,
-              recipe_id: created.recipe?.id
-            });
-          } catch (e) {
-            console.error(`Error processing RECIPE_GIFT for ${gift.name}:`, e.message);
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error processing weather/survival/crafting markers:', e);
+    // Phase 3 SC-6.4a — survival + crafting cluster handlers run inside
+    // the marker pipeline (see survivalService.js, weatherService.js,
+    // craftingService.js). Side effects are dispatched there; here we
+    // read pipelineResult.handlerResults to populate the response-payload
+    // arrays (preserves DMSession.jsx:869's refresh-trigger contract).
+    //
+    // SURVIVAL: SHELTER_FOUND, EAT, DRINK, FORAGE
+    // CRAFTING: RECIPE_FOUND, MATERIAL_FOUND, CRAFT_PROGRESS, RECIPE_GIFT
+    // WEATHER:  WEATHER_CHANGE (assigned to weatherChangeResult separately)
+    const SURVIVAL_KEYS = new Set(['SHELTER_FOUND', 'EAT', 'DRINK', 'FORAGE']);
+    const CRAFTING_KEYS = new Set(['RECIPE_FOUND', 'MATERIAL_FOUND', 'CRAFT_PROGRESS', 'RECIPE_GIFT']);
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (SURVIVAL_KEYS.has(hr.schemaKey)) survivalEvents.push(hr.result);
+      else if (CRAFTING_KEYS.has(hr.schemaKey)) craftingEvents.push(hr.result);
+      else if (hr.schemaKey === 'WEATHER_CHANGE') weatherChangeResult = hr.result;
     }
 
-    // ---- MYTHIC PROGRESSION MARKERS ----
-    let mythicEvents = [];
-    try {
-      const character = await dbGet('SELECT id, campaign_id, game_day, has_mythic FROM characters WHERE id = ?', [session.character_id]);
-
-      // Mythic trial detection
-      const mythicTrial = detectMythicTrial(result.narrative);
-      if (mythicTrial && character) {
-        try {
-          const trialResult = await recordTrial(character.id, character.campaign_id, {
-            name: mythicTrial.name,
-            description: mythicTrial.description,
-            outcome: mythicTrial.outcome,
-            gameDay: character.game_day,
-            sessionId: session.id
-          });
-          mythicEvents.push({ type: 'trial', ...mythicTrial, ...trialResult });
-
-          // Auto-advance tier if trials completed
-          if (trialResult.canAdvance) {
-            try {
-              const advanceResult = await advanceTier(character.id, character.game_day);
-              mythicEvents.push({ type: 'tier_advance', newTier: advanceResult.tier, tierName: advanceResult.tierName });
-            } catch (advErr) {
-              console.error('Error auto-advancing mythic tier:', advErr.message);
-            }
-          }
-        } catch (e) {
-          console.error('Error recording mythic trial:', e.message);
-        }
+    // SC-6.4d — Mythic cluster handlers run inside the marker pipeline
+    // (mythicService.js: TRIAL, ITEM_AWAKEN, SURGE; pietyService.js:
+    // PIETY_CHANGE since SC-4). Route assembles mythicEvents from
+    // handlerResults. MYTHIC_TRIAL handler returns a `mythicEvents`
+    // array (it can produce 1 trial event + optional 1 tier_advance
+    // event from the auto-advance cascade); other handlers return
+    // single events.
+    //
+    // **Composition reconfirmed in SC-6.4d prep**: MYTHIC_TRIAL does
+    // NOT touch piety. The Q6 survey's hypothesized trial→piety cascade
+    // was a misread; recordTrial only inserts mythic_trials + bumps
+    // trials_completed. Piety stays in its own SC-4 abstraction.
+    const mythicEvents = [];
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (hr.schemaKey === 'MYTHIC_TRIAL') {
+        // Trial handler returns {mythicEvents: [trial, optional tier_advance]}
+        if (Array.isArray(hr.result.mythicEvents)) mythicEvents.push(...hr.result.mythicEvents);
+      } else if (hr.schemaKey === 'ITEM_AWAKEN' || hr.schemaKey === 'MYTHIC_SURGE') {
+        mythicEvents.push(hr.result);
       }
-
-      // Piety changes
-      const pietyChanges = detectPietyChange(result.narrative);
-      for (const change of pietyChanges) {
-        try {
-          const pietyResult = await adjustPiety(
-            session.character_id, change.deity, change.amount,
-            change.reason, character?.game_day, session.id
-          );
-          mythicEvents.push({ type: 'piety', deity: change.deity, ...pietyResult });
-        } catch (e) {
-          console.error(`Error adjusting piety for ${change.deity}:`, e.message);
-        }
-      }
-
-      // Legendary item state changes
-      const itemAwaken = detectItemAwaken(result.narrative);
-      if (itemAwaken && character) {
-        try {
-          const legendaryItem = await findLegendaryItemByName(character.id, itemAwaken.item);
-          if (legendaryItem) {
-            const advancedItem = await advanceItemState(legendaryItem.id, itemAwaken.newState, itemAwaken.deed, character.game_day);
-            mythicEvents.push({ type: 'item_awaken', item: itemAwaken.item, newState: itemAwaken.newState });
-          }
-        } catch (e) {
-          console.error('Error advancing legendary item:', e.message);
-        }
-      }
-
-      // Mythic power usage tracking
-      const mythicSurge = detectMythicSurge(result.narrative);
-      if (mythicSurge && character?.has_mythic) {
-        try {
-          await useMythicPower(character.id, mythicSurge.cost);
-          mythicEvents.push({ type: 'surge', ability: mythicSurge.ability, cost: mythicSurge.cost });
-        } catch (e) {
-          console.error('Error tracking mythic power usage:', e.message);
-        }
-      }
-    } catch (e) {
-      console.error('Error processing mythic markers:', e);
     }
 
-    // ---- PROMISE MARKERS ----
-    let promiseEvents = [];
-    try {
-      const character = session.character_id
-        ? await dbGet('SELECT id, campaign_id, game_day FROM characters WHERE id = ?', [session.character_id])
-        : null;
-
-      // Promise made detection
-      const promisesMade = detectPromiseMade(result.narrative);
-      for (const pm of promisesMade) {
-        try {
-          // NPCs are campaign-global (no campaign_id column), so we match by
-          // name only. Rare collision risk across campaigns is acceptable for
-          // a solo game.
-          const npc = await dbGet(
-            'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
-            [pm.npc]
-          );
-          if (npc && character) {
-            const deadlineGameDay = pm.deadline > 0 ? (character.game_day || 0) + pm.deadline : null;
-            await addPromise(character.id, npc.id, pm.promise, {
-              gameDay: character.game_day || null,
-              deadlineGameDay,
-              weight: pm.weight || 'moderate'
-            });
-            promiseEvents.push({ type: 'promise_made', npc: pm.npc, promise: pm.promise, deadline: pm.deadline, weight: pm.weight });
-
-            // Also create canon fact
-            await dbRun(`
-              INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
-              VALUES (?, ?, 'promise', ?, ?, ?, 'major', 1, '["promise_made"]')
-            `, [
-              character.campaign_id, character.id,
-              npc.name,
-              `Promised ${npc.name} (${pm.weight}): "${pm.promise}"${pm.deadline > 0 ? ` (due in ${pm.deadline} days)` : ''}`,
-              character.game_day || 0
-            ]);
-          }
-        } catch (e) {
-          console.error(`Error processing PROMISE_MADE for ${pm.npc}:`, e.message);
-        }
-      }
-
-      // Promise fulfilled detection
-      const promisesFulfilled = detectPromiseFulfilled(result.narrative);
-      for (const pf of promisesFulfilled) {
-        try {
-          const npc = await dbGet(
-            'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
-            [pf.npc]
-          );
-          if (npc && character) {
-            // Find matching pending promise by text similarity
-            const pending = await getPendingPromises(character.id);
-            const match = pending.find(p =>
-              p.npc_id === npc.id &&
-              (p.promise || '').toLowerCase().includes(pf.promise.toLowerCase().substring(0, 20))
-            );
-            if (match) {
-              const { weight } = await fulfillPromise(character.id, npc.id, match.promise_index);
-
-              // Apply weight-based rewards
-              const fw = FULFILL_WEIGHTS[weight] || FULFILL_WEIGHTS.moderate;
-              await adjustNpcDisposition(character.id, npc.id, fw.directDisposition, `Fulfilled a promise (${weight})`);
-              await adjustNpcTrust(character.id, npc.id, fw.directTrust);
-
-              // Reputation ripple — nearby NPCs hear about the kept promise
-              const rippleResults = await spreadReputationRipple(character.campaign_id, character.id, npc.id, weight, false);
-              // Faction standing boost
-              const factionResults = await spreadFactionStanding(character.id, character.campaign_id, npc.id, weight, false);
-
-              promiseEvents.push({
-                type: 'promise_fulfilled', npc: pf.npc, promise: pf.promise, weight,
-                dispositionChange: fw.directDisposition, trustChange: fw.directTrust,
-                rippleCount: rippleResults.length, factionChanges: factionResults.length
-              });
-
-              // Create canon fact
-              await dbRun(`
-                INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
-                VALUES (?, ?, 'promise', ?, ?, ?, 'major', 1, '["promise_fulfilled"]')
-              `, [
-                character.campaign_id, character.id,
-                npc.name,
-                `Fulfilled ${weight} promise to ${npc.name}: "${pf.promise}"`,
-                character.game_day || 0
-              ]);
-            }
-          }
-        } catch (e) {
-          console.error(`Error processing PROMISE_FULFILLED for ${pf.npc}:`, e.message);
-        }
-      }
-    } catch (e) {
-      console.error('Error processing promise markers:', e);
-    }
-
-    // Notoriety gain/loss detection
+    // SC-6.4c — promise + notoriety cluster handlers run inside the
+    // marker pipeline (consequenceService.js: PROMISE_MADE/FULFILLED;
+    // notorietyService.js: NOTORIETY_GAIN/LOSS). Side effects done in
+    // handlers; route assembles per-marker event arrays from
+    // handlerResults to preserve any downstream consumers.
+    //
+    // **Notoriety silent-drop bug fix**: NOTORIETY_GAIN/LOSS handlers
+    // use the schema's extractField parser (handles both quoted-space-sep
+    // canonical AND comma-sep legacy formats), resolving the parser
+    // divergence that caused canonical-format markers to silently fail
+    // pre-SC-6.4c. See KNOWN_BUGS.md Resolved archive.
+    const PROMISE_KEYS = new Set(['PROMISE_MADE', 'PROMISE_FULFILLED']);
+    const NOTORIETY_KEYS = new Set(['NOTORIETY_GAIN', 'NOTORIETY_LOSS']);
+    const promiseEvents = [];
     const notorietyEvents = [];
-    try {
-      const character = session.character_id
-        ? await dbGet('SELECT id, campaign_id, game_day FROM characters WHERE id = ?', [session.character_id])
-        : null;
-
-      if (character) {
-        const notorietyGains = detectNotorietyGain(result.narrative);
-        for (const ng of notorietyGains) {
-          try {
-            await addNotorietyScore(character.id, character.campaign_id, {
-              source: ng.source,
-              amount: ng.amount,
-              category: ng.category,
-              reason: `Session event (game day ${character.game_day || 0})`
-            });
-            notorietyEvents.push({ type: 'notoriety_gain', ...ng });
-          } catch (e) {
-            console.error(`Error processing NOTORIETY_GAIN for ${ng.source}:`, e.message);
-          }
-        }
-
-        const notorietyLosses = detectNotorietyLoss(result.narrative);
-        for (const nl of notorietyLosses) {
-          try {
-            await addNotorietyScore(character.id, character.campaign_id, {
-              source: nl.source,
-              amount: -nl.amount,
-              category: 'criminal',
-              reason: `Cleared name (game day ${character.game_day || 0})`
-            });
-            notorietyEvents.push({ type: 'notoriety_loss', ...nl });
-          } catch (e) {
-            console.error(`Error processing NOTORIETY_LOSS for ${nl.source}:`, e.message);
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error processing notoriety markers:', e);
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (PROMISE_KEYS.has(hr.schemaKey)) promiseEvents.push(hr.result);
+      else if (NOTORIETY_KEYS.has(hr.schemaKey)) notorietyEvents.push(hr.result);
     }
 
     // Pillar 5: record distinctive imagery from this response so the next
@@ -2797,7 +2415,10 @@ router.post('/:sessionId/rest-narrative', async (req, res) => {
 
     if (provider === 'claude') {
       try {
-        const result = await claude.chat(restPrompt, recentMessages, 1, 'sonnet', 200);
+        const result = await loggedChat(
+          { call_purpose: 'dm_rest_check', prompt_builder: 'dmSession_route' },
+          restPrompt, recentMessages, 1, 'sonnet', 200
+        );
         narrative = result;
       } catch (err) {
         console.error('Rest narrative AI error (Claude):', err.message);
@@ -2896,7 +2517,11 @@ router.post('/:sessionId/end', async (req, res) => {
           ...messages.filter(m => m.role !== 'system'),
           { role: 'user', content: analysisPrompt }
         ];
-        analysisResponse = await claude.chat(systemPrompt, analysisMessages);
+        analysisResponse = await loggedChat(
+          { call_purpose: 'dm_session_analysis', prompt_builder: 'dmSession_route',
+            session_id: parseInt(req.params.sessionId) },
+          systemPrompt, analysisMessages
+        );
       } else {
         const analysisMessages = [
           ...messages,
@@ -2942,10 +2567,15 @@ router.post('/:sessionId/end', async (req, res) => {
         if (provider === 'claude') {
           const systemMessage = messages.find(m => m.role === 'system');
           const systemPrompt = systemMessage?.content || '';
-          notesResponse = await claude.chat(systemPrompt, [
-            ...messages.filter(m => m.role !== 'system'),
-            { role: 'user', content: extractionPrompt }
-          ]);
+          notesResponse = await loggedChat(
+            { call_purpose: 'dm_session_notes_extract', prompt_builder: 'dmSession_route',
+              session_id: parseInt(req.params.sessionId) },
+            systemPrompt,
+            [
+              ...messages.filter(m => m.role !== 'system'),
+              { role: 'user', content: extractionPrompt }
+            ]
+          );
         } else {
           notesResponse = await ollama.chat([
             ...messages,
@@ -2976,10 +2606,15 @@ router.post('/:sessionId/end', async (req, res) => {
         if (provider === 'claude') {
           const systemMessage = messages.find(m => m.role === 'system');
           const systemPrompt = systemMessage?.content || '';
-          npcResponse = await claude.chat(systemPrompt, [
-            ...messages.filter(m => m.role !== 'system'),
-            { role: 'user', content: npcExtractionPrompt }
-          ]);
+          npcResponse = await loggedChat(
+            { call_purpose: 'dm_session_npc_extract', prompt_builder: 'dmSession_route',
+              session_id: parseInt(req.params.sessionId) },
+            systemPrompt,
+            [
+              ...messages.filter(m => m.role !== 'system'),
+              { role: 'user', content: npcExtractionPrompt }
+            ]
+          );
         } else {
           npcResponse = await ollama.chat([
             ...messages,
@@ -3002,10 +2637,16 @@ router.post('/:sessionId/end', async (req, res) => {
         if (memProvider === 'claude') {
           const systemMessage = messages.find(m => m.role === 'system');
           const systemPrompt = systemMessage?.content || '';
-          memoryResponse = await claude.chat(systemPrompt, [
-            ...messages.filter(m => m.role !== 'system'),
-            { role: 'user', content: memoryPrompt }
-          ]);
+          memoryResponse = await loggedChat(
+            { call_purpose: 'dm_session_memory_extract', prompt_builder: 'dmSession_route',
+              session_id: parseInt(req.params.sessionId),
+              character_id: character?.id },
+            systemPrompt,
+            [
+              ...messages.filter(m => m.role !== 'system'),
+              { role: 'user', content: memoryPrompt }
+            ]
+          );
         } else {
           memoryResponse = await ollama.chat([
             ...messages,
@@ -3312,7 +2953,11 @@ router.post('/:sessionId/resume', async (req, res) => {
               ...messages.filter(m => m.role !== 'system'),
               { role: 'user', content: recapPrompt }
             ];
-            recap = await claude.chat(systemPrompt, recapMessages);
+            recap = await loggedChat(
+              { call_purpose: 'dm_session_recap', prompt_builder: 'dmSession_route',
+                session_id: parseInt(req.params.sessionId) },
+              systemPrompt, recapMessages
+            );
           } else {
             const recapMessages = [
               ...messages,
@@ -3592,7 +3237,11 @@ If no named NPCs appeared, respond with: NO_NPCS`;
         ...messages.filter(m => m.role !== 'system'),
         { role: 'user', content: npcExtractionPrompt }
       ];
-      npcResponse = await claude.chat(systemPrompt, npcMessages);
+      npcResponse = await loggedChat(
+        { call_purpose: 'dm_session_npc_codex_extract', prompt_builder: 'dmSession_route',
+          session_id: parseInt(req.params.sessionId) },
+        systemPrompt, npcMessages
+      );
     } else {
       const npcMessages = [
         ...messages,
@@ -3722,7 +3371,11 @@ If no named NPCs appeared, respond with: NO_NPCS`;
             ...messages.filter(m => m.role !== 'system'),
             { role: 'user', content: npcExtractionPrompt }
           ];
-          npcResponse = await claude.chat(systemPrompt, npcMessages);
+          npcResponse = await loggedChat(
+            { call_purpose: 'dm_session_npc_extract_alt', prompt_builder: 'dmSession_route',
+              session_id: parseInt(req.params.sessionId) },
+            systemPrompt, npcMessages
+          );
         } else {
           const npcMessages = [
             ...messages,

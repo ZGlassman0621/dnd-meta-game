@@ -91,7 +91,7 @@ Engineering depth lives in [`CLAUDE.md`](CLAUDE.md). Use this as the strategic m
 
 - **Player Mode DM sessions** — chat-based AI DM with ~25 game-state markers (combat, loot, merchants, conditions, promises, weather, etc.). Three-tier prompt caching. Rolling summary compaction for long sessions.
 - **DM Mode** — user-as-DM with AI playing 4 distinct characters. Separate prompt builder. Bond tracking. Coaching tips.
-- **Prelude character creator** — Phases 1-4 shipped (5 sessions, 4 chapters). Phase 5 (handoff to main campaign) is the largest pending work; see `FUTURE_FEATURES.md` and `PRELUDE_IMPLEMENTATION_PLAN.md`.
+- **Prelude character creator** — Phases 1-4 shipped (5 sessions, 4 chapters in early design; reframed in 2026-04 to 4 sessions across 3 chapters, v4 plan). Phase 5 (handoff to main campaign + character creator rebuild) shipped 2026-05-02 at v1.0.114 — see `PHASE_2_CREATOR_SPEC.md`. The 8-step rebuilt creator (manual + handoff modes) is now the live entry path; old `CharacterCreationWizard.jsx` is hidden but retained for fallback during initial playtest.
 - **Living world** — between-session tick pipeline (weather → factions → events → quests → companions → mail → consequences → survival → bases → notoriety).
 - **Companions** — full 5e progression mirror, multiclass, spell slots, conditions, mood, loyalty, off-screen activities.
 - **Merchants & economy** — persistent inventories from loot tables (not AI-generated per visit), DMG + XGtE magic items across 5 rarities, bargaining, custom commissions, price modifiers.
@@ -111,11 +111,11 @@ What's NOT yet built (the long-term ambitions):
 
 ## Strategic threads currently in flight
 
-Three threads, plus a backlog of standalone features. Detail lives in [`PROJECT_TODO.md`](PROJECT_TODO.md) and [`FUTURE_FEATURES.md`](FUTURE_FEATURES.md). High-level:
+Three threads, plus a backlog of standalone features. Detail lives in [`PROJECT_TODO.md`](PROJECT_TODO.md), [`CONSOLIDATED_TODO.md`](CONSOLIDATED_TODO.md), and [`FUTURE_FEATURES.md`](FUTURE_FEATURES.md). High-level:
 
-1. **Prose quality** — current focus. Just shipped v1.0.96 (cache architecture fix). Validating Opus as production default. Next moves: production fixes for two prompt rules that compress cinematic moments (H7, H8), then NPC voice/tone system, then expanded naming. All centered on "the AI DM writes meaningfully better prose."
-2. **Hi-fi UX** — design for an in-session three-column cockpit landed (`Claude UX Design/D&D Meta Game (Remix)/Session-Design-Bundle/`). Plus designs for character sheet tabs (Stats, Combat, Spells, Inventory, Features all done). Origin & Identity tab and Progression tab still need building. This thread is on deck.
-3. **Themes content + prelude integration** — most ambitious. Includes Themes content design (84 abilities to write), Phase 5 prelude→main campaign handoff, tone-preset integration, theme commitment in prelude Ch3. The pieces interlock; high reward but high dependency chain.
+1. **AI Narrative Persistence** — current focus (entering as of 2026-05-02). Phase 3 of the consolidated plan. Refactor work on existing systems (prompt-building, chronicle handling, NPC-conversation persistence) for better narrative continuity over long campaigns. Two load-bearing refactors: unified standing-scalar abstraction and unified marker → state pipeline. Different shape from greenfield design — reading existing code, migration coordination, backwards-compatibility for in-flight campaigns. See `AI_NARRATIVE_PERSISTENCE.md`.
+2. **Hi-fi UX (parked, on deck)** — design for an in-session three-column cockpit landed (`Claude UX Design/D&D Meta Game (Remix)/Session-Design-Bundle/`). Plus designs for character sheet tabs (Stats, Combat, Spells, Inventory, Features all done). Origin & Identity tab and Progression tab still need building. Editorial & literary aesthetic established as the project's hi-fi default in Phase 2; future hi-fi work follows that register.
+3. **Themes content** — most ambitious remaining design lift. 84 theme abilities to write across 21 themes × 4 tiers. Phase 5 of the consolidated plan (selection deferred to end-of-Phase-4 diagnostic).
 
 The PM's job includes helping pick which thread to push, when, and how far before pivoting.
 

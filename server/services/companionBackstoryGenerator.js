@@ -9,6 +9,7 @@ import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { randomUUID } from 'crypto';
 import { extractLLMJson } from '../utils/llmJson.js';
+import { loggedChat } from './aiCallLogger.js';
 
 /**
  * Generate a complete backstory for a companion
@@ -205,7 +206,8 @@ async function generateWithAI(prompt) {
   // Try Claude first
   if (isClaudeAvailable()) {
     try {
-      const response = await claudeChat(
+      const response = await loggedChat(
+        { call_purpose: 'companion_backstory_gen', prompt_builder: 'companionBackstoryGenerator' },
         'You are a D&D backstory writer. Return ONLY valid JSON, no explanation or markdown.',
         [{ role: 'user', content: prompt }],
         3, 'opus'

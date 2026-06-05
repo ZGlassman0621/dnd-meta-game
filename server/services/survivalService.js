@@ -14,6 +14,22 @@
  */
 
 import { dbGet, dbRun } from '../database.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+import { registerThresholdConsumer, daysSince } from './timeBoundedState.js';
+// safeParse is defined locally below (line ~41); no import needed.
+
+/**
+ * Phase 3 SC-6.4 — survival cluster marker handlers register at module
+ * load (this file is imported by routes/dmSession.js + routes/character.js,
+ * so handlers wire up on server boot regardless of load order).
+ *
+ * Handlers do their side effect AND return the event object the route
+ * handler used to push into `survivalEvents` — preserves the existing
+ * response shape (client uses `survivalEvents.length > 0` as a refresh
+ * trigger via DMSession.jsx:869). Route handler reads handlerResults
+ * after `processResponseMarkers` and assembles survivalEvents from the
+ * returned event objects.
+ */
 
 // ============================================================
 // HELPER FUNCTIONS
@@ -135,8 +151,214 @@ export function checkFoodSpoilage(inventory, currentGameDay, weatherType) {
 }
 
 // ============================================================
+// SURVIVAL INTENSITY (Phase 3.3 SC-7.6.5 — player-tunable difficulty)
+// ============================================================
+//
+// Per spec §3.3.10. Four-position character-level setting:
+//   'off'      — survival mechanics disabled; consumers short-circuit
+//   'lenient'  — extended thresholds, lighter weather modulation
+//   'standard' — SC-7.6 baseline (default for all existing characters)
+//   'strict'   — tighter thresholds, harsher weather modulation
+//
+// Read at decay/threshold evaluation time (not at consumer registration);
+// player can change setting mid-campaign without rebuilding consumers.
+//
+// Off short-circuits via null anchor in `repository.readAnchor` —
+// threshold consumer's null-anchor branch returns `{fired: false,
+// reason: 'no_anchor'}`. No special-casing inside handlers is needed.
+
+const VALID_INTENSITIES = Object.freeze(['off', 'lenient', 'standard', 'strict']);
+
+// Per-mechanic threshold offsets per intensity. Hunger value is added to
+// CON modifier (e.g., Standard at 3 + CON mod). Dehydration value is
+// the kick-in day count (e.g., Standard at 1 day without water).
+const INTENSITY_THRESHOLDS = Object.freeze({
+  starvation: Object.freeze({
+    off: null,
+    lenient: 6,
+    standard: 3,
+    strict: 2
+  }),
+  dehydration: Object.freeze({
+    off: null,
+    lenient: 3,
+    standard: 1,
+    strict: 1
+  })
+});
+
+// Hot-weather multiplier — applied to raw days for the dehydration
+// effective-elapsed calculation. Off is unused (consumer short-circuits).
+const INTENSITY_HOT_MULTIPLIERS = Object.freeze({
+  off: 1.0,
+  lenient: 1.5,
+  standard: 2.0,
+  strict: 3.0
+});
+
+// Cold-weather multiplier — Strict-only addition per spec §3.3.10.
+// All other intensities pass cold weather through at 1.0×.
+const INTENSITY_COLD_MULTIPLIERS = Object.freeze({
+  off: 1.0,
+  lenient: 1.0,
+  standard: 1.0,
+  strict: 1.5
+});
+
+// Per-tier exhaustion magnitude for dehydration. SC-7.6 baseline
+// (Standard) was: tier 1 = 1 level, tier 2 (effective_days >= 2) = 2
+// levels. SC-7.6.5 extends per intensity:
+//   - Lenient: tier 1 = 1, tier 2 = 1 (capped — Lenient shouldn't escalate)
+//   - Standard: tier 1 = 1, tier 2 = 2 (preserves SC-7.6 behavior exactly)
+//   - Strict: tier 1 = 2, tier 2 = 2 (immediate severe-tier on day 1)
+//
+// Strict's "kick into severe immediately" combined with its 3.0× hot
+// multiplier means a single hot day without water = 2 raw effective ×
+// 3.0 = 6 effective days = severe tier with magnitude 2. Lenient with
+// 1.5× hot means 1 raw day in hot = 1.5 effective < 2, magnitude 1.
+//
+// PM call open: spec §3.3.10 says "Strict raises rate from 1 level/day
+// to 2 levels/day past threshold." This binary-tier model interpretation
+// keeps magnitudes reasonable. If a different magnitude curve is wanted,
+// surface back to PM.
+const INTENSITY_DEHYDRATION_MAGNITUDE = Object.freeze({
+  off: Object.freeze({ tier1: 0, tier2: 0 }),  // unused; consumer short-circuits
+  lenient: Object.freeze({ tier1: 1, tier2: 1 }),
+  standard: Object.freeze({ tier1: 1, tier2: 2 }),
+  strict: Object.freeze({ tier1: 2, tier2: 2 })
+});
+
+function getSurvivalIntensity(character) {
+  const v = character?.survival_intensity || 'standard';
+  return VALID_INTENSITIES.includes(v) ? v : 'standard';
+}
+
+// ============================================================
+// PATTERN D HELPERS (Phase 3.3 SC-7.6 — anchor-based + column fallback)
+// ============================================================
+//
+// Pre-SC-7.6: `days_without_food` and `days_without_water` columns were
+// the source of truth, incremented by processDayChange daily. Anchor
+// columns (`last_meal_game_day`, `last_drink_game_day`) were set on eat
+// /drink events but not the source of truth for elapsed-time queries.
+//
+// Post-SC-7.6: anchors are the source of truth. Counter columns become
+// vestigial (still written by eat/drink as a denormalized cache; no
+// longer written by processDayChange). Helpers compute elapsed time from
+// the anchor when set, falling back to the column for legacy data.
+//
+// The fallback chain bridges existing characters with `anchor=null` and
+// `column=N` (legacy never-eaten state). Synthetic anchor =
+// `game_day - column_value` reproduces legacy elapsed-time semantics
+// without touching schema.
+
+function daysSinceLastMeal(character, currentGameDay) {
+  if (character.last_meal_game_day != null) {
+    return daysSince(character.last_meal_game_day, currentGameDay) ?? 0;
+  }
+  // Legacy fallback: anchor null, use the counter column directly.
+  return character.days_without_food || 0;
+}
+
+function daysSinceLastDrink(character, currentGameDay) {
+  if (character.last_drink_game_day != null) {
+    return daysSince(character.last_drink_game_day, currentGameDay) ?? 0;
+  }
+  return character.days_without_water || 0;
+}
+
+function isHotWeather(weather) {
+  if (!weather) return false;
+  return weather.type === 'heat_wave'
+    || weather.weather_type === 'heat_wave'
+    || (typeof weather.temperature_f === 'number' && weather.temperature_f > 85);
+}
+
+// Phase 3.3 SC-7.6.5 — cold-weather detection for Strict-only multiplier.
+// Detects via weather_type ('blizzard', 'snow') OR temperature_f < 32.
+function isColdWeather(weather) {
+  if (!weather) return false;
+  return weather.type === 'blizzard'
+    || weather.weather_type === 'blizzard'
+    || weather.type === 'snow'
+    || weather.weather_type === 'snow'
+    || (typeof weather.temperature_f === 'number' && weather.temperature_f < 32);
+}
+
+// Synthetic anchor used by readAnchor callbacks below. Returns the
+// effective last-meal/drink day for either anchored OR legacy-column
+// data. Returns null only when both are absent.
+function effectiveLastMealAnchor(character) {
+  if (character.last_meal_game_day != null) return character.last_meal_game_day;
+  const col = character.days_without_food;
+  if (col != null && col > 0 && character.game_day != null) {
+    return character.game_day - col;
+  }
+  return null;
+}
+
+function effectiveLastDrinkAnchor(character) {
+  if (character.last_drink_game_day != null) return character.last_drink_game_day;
+  const col = character.days_without_water;
+  if (col != null && col > 0 && character.game_day != null) {
+    return character.game_day - col;
+  }
+  return null;
+}
+
+// ============================================================
 // STARVATION CHECK (D&D 5e PHB p.185)
 // ============================================================
+//
+// **Phase 3.3 SC-7.6 migration**: `STARVATION_THRESHOLD_CONSUMER` below
+// owns the elapsed-vs-threshold check; `checkStarvation` becomes a thin
+// pure-function wrapper that invokes the consumer and translates its
+// status report into the legacy return shape (back-compat for
+// processDayChange + tests).
+//
+// Variable threshold (per-character: 3 + CON mod, min 1) absorbed into
+// the consumer's `repository.readAnchor` derivation: anchor =
+// last_meal_game_day + threshold_days. The consumer's `threshold: 1`
+// fires one day past the effective starvation day.
+
+const STARVATION_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'starvation',
+  threshold: 1,
+  handler: async (contextKey, daysElapsed) => {
+    return {
+      starving: true,
+      hungry: true,
+      exhaustion_level: 1,
+      overDays: daysElapsed,
+      daysWithout: contextKey.daysWithout,
+      thresholdDays: contextKey.thresholdDays,
+      message: `Going without food for ${contextKey.daysWithout} days (threshold: ${contextKey.thresholdDays}). Gaining 1 level of exhaustion. (${daysElapsed} day${daysElapsed > 1 ? 's' : ''} past limit)`
+    };
+  },
+  idempotency: {
+    // Re-emit every tick — no fired-once semantics. Each day past the
+    // threshold the DM/UI gets a fresh status report. No DB state mutated
+    // by the handler (status is reported, not persisted).
+    async hasFiredRecently() { return false; },
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      const c = contextKey.character;
+      // Phase 3.3 SC-7.6.5: intensity read at evaluation time. Off
+      // short-circuits via null anchor (per spec §3.3.10).
+      const intensity = getSurvivalIntensity(c);
+      if (intensity === 'off') return null;
+      const lastMeal = effectiveLastMealAnchor(c);
+      if (lastMeal == null) return null;
+      const conMod = getConMod(c);
+      const baseThreshold = INTENSITY_THRESHOLDS.starvation[intensity];
+      // baseThreshold is non-null for non-Off (guarded above).
+      const thresholdDays = Math.max(baseThreshold + conMod, 1);
+      return lastMeal + thresholdDays;
+    }
+  }
+});
 
 /**
  * Evaluate starvation status per D&D 5e rules.
@@ -145,80 +367,194 @@ export function checkFoodSpoilage(inventory, currentGameDay, weatherType) {
  * After that, they gain 1 level of exhaustion per additional day.
  * A normal day of eating resets the counter.
  *
+ * Phase 3.3 SC-7.6: delegates to STARVATION_THRESHOLD_CONSUMER for the
+ * elapsed-vs-threshold check. Pure async wrapper around the consumer
+ * for back-compat with existing callers (processDayChange, tests).
+ *
  * @param {object} character - Character row from DB
- * @returns {{ starving: boolean, hungry: boolean, exhaustion_level?: number, days_remaining?: number, message: string }}
+ * @param {number} [currentGameDay] - Current game day (defaults to character.game_day)
+ * @returns {{ starving: boolean, hungry: boolean, exhaustion_level?: number, days_remaining?: number, daysWithout?: number, thresholdDays?: number, message: string }}
  */
-export function checkStarvation(character) {
-  const conMod = getConMod(character);
-  const threshold = Math.max(3 + conMod, 1);
-  const daysWithout = character.days_without_food || 0;
-
-  if (daysWithout > threshold) {
-    const overDays = daysWithout - threshold;
-    return {
-      starving: true,
-      hungry: true,
-      exhaustion_level: 1,
-      message: `Going without food for ${daysWithout} days (threshold: ${threshold}). Gaining 1 level of exhaustion. (${overDays} day${overDays > 1 ? 's' : ''} past limit)`
-    };
+export async function checkStarvation(character, currentGameDay) {
+  const intensity = getSurvivalIntensity(character);
+  // Phase 3.3 SC-7.6.5: 'off' disables starvation entirely (consumer also
+  // short-circuits via null anchor; wrapper short-circuit gives the
+  // no-effect status without traversing the consumer at all).
+  if (intensity === 'off') {
+    return { starving: false, hungry: false, daysWithout: 0, thresholdDays: 0, intensity, message: '' };
   }
 
-  if (daysWithout > 0) {
-    const remaining = threshold - daysWithout;
+  const day = currentGameDay ?? character.game_day ?? 0;
+  const conMod = getConMod(character);
+  const baseThreshold = INTENSITY_THRESHOLDS.starvation[intensity];
+  const thresholdDays = Math.max(baseThreshold + conMod, 1);
+  const daysWithout = daysSinceLastMeal(character, day);
+
+  // Hungry-but-not-starving status — returned without invoking the
+  // threshold consumer because there's no fire condition yet.
+  if (daysWithout > 0 && daysWithout <= thresholdDays) {
+    const remaining = thresholdDays - daysWithout;
     return {
       starving: false,
       hungry: true,
       days_remaining: remaining,
+      daysWithout,
+      thresholdDays,
+      intensity,
       message: `Hungry for ${daysWithout} day${daysWithout > 1 ? 's' : ''}. Can endure ${remaining} more day${remaining > 1 ? 's' : ''} before exhaustion sets in.`
     };
   }
 
-  return { starving: false, hungry: false, message: '' };
+  if (daysWithout === 0) {
+    return { starving: false, hungry: false, daysWithout: 0, thresholdDays, intensity, message: '' };
+  }
+
+  // Past threshold — delegate to the threshold consumer for the fire path.
+  const result = await STARVATION_THRESHOLD_CONSUMER.checkAndFire(
+    { character, daysWithout, thresholdDays },
+    day
+  );
+  if (result.fired && result.handlerResult) {
+    return { ...result.handlerResult, intensity };
+  }
+  // Threshold consumer didn't fire (defensive — shouldn't happen given the
+  // daysWithout > thresholdDays gate above). Return safe default.
+  return { starving: false, hungry: true, daysWithout, thresholdDays, intensity, message: '' };
 }
 
 // ============================================================
 // DEHYDRATION CHECK (D&D 5e PHB p.185)
 // ============================================================
+//
+// **Phase 3.3 SC-7.6 migration + weather-modulation bug fix
+// (fix-along-the-way #4)**:
+//
+// Pre-SC-7.6, the legacy `checkDehydration` had a documented behavior
+// "Hot weather doubles water needs — 0.5 days without water counts as
+// a full day" but the actual implementation only added a string to the
+// message — exhaustion levels didn't accelerate. Discovered in Pattern D
+// survey (§1.6.1, 2026-05-04). PM ruling 2026-05-05: implement the
+// doubling.
+//
+// Post-SC-7.6: `DEHYDRATION_THRESHOLD_CONSUMER` fires from day 1 onward
+// (raw days). Handler reads `hint.weather` to compute effective elapsed:
+// `effective = raw * (hot ? 2 : 1)`. Exhaustion levels:
+//   effective < 2: 1 level
+//   effective >= 2: 2 levels (already-dehydrated tier)
+// Hot weather skips the 1-level tier on day 1 → 2 levels immediately
+// (1 raw day × 2 = 2 effective days = severe dehydration).
+//
+// This is fix-along-the-way #4 in Phase 3 (after SC-6.4 notoriety silent-
+// drop + SC-7.3 NPC absence ×2). Documented in DECISION_LOG.
+
+const DEHYDRATION_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'dehydration',
+  threshold: 1,  // 1 day past intensity-adjusted anchor → fire
+  handler: async (contextKey, daysElapsed, hints) => {
+    const intensity = getSurvivalIntensity(contextKey.character);
+    const hot = isHotWeather(hints?.weather);
+    const cold = isColdWeather(hints?.weather);
+    const hotMult = INTENSITY_HOT_MULTIPLIERS[intensity];
+    const coldMult = INTENSITY_COLD_MULTIPLIERS[intensity];
+    // Hot and cold are mutually exclusive (hot = heat_wave/>85F; cold =
+    // blizzard/snow/<32F). Apply whichever applies; default 1.0×.
+    const weatherMult = hot ? hotMult : (cold ? coldMult : 1.0);
+    const effectiveDays = daysElapsed * weatherMult;
+    const tier = effectiveDays >= 2 ? 'tier2' : 'tier1';
+    const exhaustionLevels = INTENSITY_DEHYDRATION_MAGNITUDE[intensity][tier];
+
+    const baseMsg = `No water for ${daysElapsed} day${daysElapsed > 1 ? 's' : ''}. Gaining ${exhaustionLevels} level${exhaustionLevels > 1 ? 's' : ''} of exhaustion.`;
+    let weatherMsg = '';
+    if (hot && hotMult > 1.0) {
+      // Standard preserves SC-7.6's exact phrasing (byte-identity).
+      weatherMsg = intensity === 'standard'
+        ? ' Hot conditions DOUBLE water needs — effective rate is 2x.'
+        : ` Hot conditions multiply water needs (${hotMult}x).`;
+    } else if (cold && coldMult > 1.0) {
+      weatherMsg = ` Cold conditions multiply water needs (${coldMult}x).`;
+    }
+
+    // `cold` reported only when it actually modulates (Strict-only currently)
+    // — preserves SC-7.6 response shape for Standard (cold field stays false).
+    return {
+      dehydrated: true,
+      exhaustion_levels: exhaustionLevels,
+      raw_days: daysElapsed,
+      effective_days: effectiveDays,
+      hot,
+      cold: cold && coldMult > 1.0,
+      intensity,
+      message: baseMsg + weatherMsg
+    };
+  },
+  idempotency: {
+    async hasFiredRecently() { return false; },  // re-emit every tick
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      const c = contextKey.character;
+      // Phase 3.3 SC-7.6.5: intensity read at evaluation time.
+      // Off short-circuits via null anchor.
+      const intensity = getSurvivalIntensity(c);
+      if (intensity === 'off') return null;
+      const lastDrink = effectiveLastDrinkAnchor(c);
+      if (lastDrink == null) return null;
+      // Kick-in days vary by intensity (Lenient: 3, Standard/Strict: 1).
+      // Threshold is fixed at 1; we shift the anchor so the consumer
+      // fires on day (lastDrink + kick_in_days).
+      const kickInDays = INTENSITY_THRESHOLDS.dehydration[intensity];
+      return lastDrink + (kickInDays - 1);
+    }
+  }
+});
 
 /**
  * Evaluate dehydration status per D&D 5e rules.
  *
  * Without water: 1 level of exhaustion per day.
  * If already dehydrated (days_without_water >= 2): gain 2 levels instead.
- * Hot weather (heat_wave or temp > 85) doubles water needs — 0.5 days
- * without water counts as a full day.
+ * Hot weather (heat_wave or temp > 85) doubles water needs — 1 raw day
+ * in hot conditions = 2 effective days = severe-tier exhaustion immediately.
+ *
+ * Phase 3.3 SC-7.6: delegates to DEHYDRATION_THRESHOLD_CONSUMER. Weather
+ * modulation now actually accelerates exhaustion (was just a message
+ * string pre-fix-along-the-way #4).
  *
  * @param {object} character - Character row from DB
  * @param {object} weather - Weather object with type and temperature_f
- * @returns {{ dehydrated: boolean, exhaustion_levels: number, message: string }}
+ * @param {number} [currentGameDay] - Current game day (defaults to character.game_day)
+ * @returns {{ dehydrated: boolean, exhaustion_levels: number, raw_days?: number, effective_days?: number, hot?: boolean, message: string }}
  */
-export function checkDehydration(character, weather) {
-  const daysWithout = character.days_without_water || 0;
+export async function checkDehydration(character, weather, currentGameDay) {
+  const intensity = getSurvivalIntensity(character);
+  // Phase 3.3 SC-7.6.5: 'off' disables dehydration entirely.
+  if (intensity === 'off') {
+    return { dehydrated: false, exhaustion_levels: 0, intensity, message: '' };
+  }
+
+  const day = currentGameDay ?? character.game_day ?? 0;
+  const daysWithout = daysSinceLastDrink(character, day);
 
   if (daysWithout < 1) {
-    return { dehydrated: false, exhaustion_levels: 0, message: '' };
+    return { dehydrated: false, exhaustion_levels: 0, intensity, message: '' };
   }
 
-  // Determine if hot conditions apply
-  const isHot = weather &&
-    (weather.type === 'heat_wave' || weather.weather_type === 'heat_wave' ||
-     (weather.temperature_f && weather.temperature_f > 85));
-
-  // Already dehydrated from prior days — gain 2 levels
-  const exhaustionLevels = daysWithout >= 2 ? 2 : 1;
-
-  let message = `No water for ${daysWithout} day${daysWithout > 1 ? 's' : ''}. Gaining ${exhaustionLevels} level${exhaustionLevels > 1 ? 's' : ''} of exhaustion.`;
-
-  if (isHot) {
-    message += ' Hot conditions double water needs — situation is critical.';
+  const result = await DEHYDRATION_THRESHOLD_CONSUMER.checkAndFire(
+    { character },
+    day,
+    { weather }
+  );
+  if (result.fired && result.handlerResult) {
+    return result.handlerResult;
   }
-
-  return {
-    dehydrated: true,
-    exhaustion_levels: exhaustionLevels,
-    message
-  };
+  // Below intensity-adjusted kick-in (e.g., Lenient day 1-2). Not yet
+  // dehydrated mechanically; return non-effect with intensity for callers.
+  return { dehydrated: false, exhaustion_levels: 0, intensity, message: '' };
 }
+
+// Exports for direct test access.
+export { STARVATION_THRESHOLD_CONSUMER, DEHYDRATION_THRESHOLD_CONSUMER };
 
 // ============================================================
 // CORE DAY CHANGE PROCESSOR
@@ -253,49 +589,38 @@ export async function processDayChange(characterId, currentGameDay, weather) {
   const spoilageResult = checkFoodSpoilage(inventory, currentGameDay, weatherType);
   if (spoilageResult.spoiled.length > 0) {
     warnings.push(`Food spoiled: ${spoilageResult.spoiled.join(', ')}`);
-    // Persist updated inventory with spoiled items
     await dbRun(
       'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [JSON.stringify(spoilageResult.updated_inventory), characterId]
     );
   }
 
-  // --- Hunger tracking ---
-  let daysWithoutFood = character.days_without_food || 0;
-  const lastMealDay = character.last_meal_game_day;
-  if (lastMealDay == null || lastMealDay < currentGameDay) {
-    daysWithoutFood += 1;
-  }
-
-  // --- Thirst tracking ---
-  let daysWithoutWater = character.days_without_water || 0;
-  const lastDrinkDay = character.last_drink_game_day;
-  if (lastDrinkDay == null || lastDrinkDay < currentGameDay) {
-    daysWithoutWater += 1;
-  }
-
-  // Update character with new counters for starvation/dehydration checks
-  const updatedChar = { ...character, days_without_food: daysWithoutFood, days_without_water: daysWithoutWater };
+  // Phase 3.3 SC-7.6: hunger + thirst elapsed time computed from anchor
+  // columns (last_meal_game_day, last_drink_game_day) via the
+  // daysSinceLastMeal / daysSinceLastDrink helpers. Counter columns are
+  // no longer incremented here — they remain as vestigial cache (still
+  // reset by eat/drink) for back-compat with code that hasn't migrated yet.
+  const daysWithoutFood = daysSinceLastMeal(character, currentGameDay);
+  const daysWithoutWater = daysSinceLastDrink(character, currentGameDay);
 
   // --- Starvation effects ---
-  const hungerStatus = checkStarvation(updatedChar);
+  const hungerStatus = await checkStarvation(character, currentGameDay);
   if (hungerStatus.starving) {
     effectsApplied.push(`Starvation: +1 exhaustion (day ${daysWithoutFood})`);
   } else if (hungerStatus.hungry) {
     warnings.push(hungerStatus.message);
   }
 
-  // --- Dehydration effects ---
-  const thirstStatus = checkDehydration(updatedChar, weather);
+  // --- Dehydration effects (with weather modulation per SC-7.6 fix-along-the-way #4) ---
+  const thirstStatus = await checkDehydration(character, weather, currentGameDay);
   if (thirstStatus.dehydrated) {
-    effectsApplied.push(`Dehydration: +${thirstStatus.exhaustion_levels} exhaustion (day ${daysWithoutWater})`);
+    effectsApplied.push(`Dehydration: +${thirstStatus.exhaustion_levels} exhaustion (day ${daysWithoutWater}${thirstStatus.hot ? ', hot' : ''})`);
   }
 
-  // --- Persist hunger/thirst counters ---
-  await dbRun(
-    'UPDATE characters SET days_without_food = ?, days_without_water = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [daysWithoutFood, daysWithoutWater, characterId]
-  );
+  // **No counter-column writes here** (was: UPDATE days_without_food/water).
+  // Anchor columns are the source of truth post-SC-7.6; counter columns
+  // are vestigial. processDayChange's contribution is now: spoilage,
+  // status reporting (effectsApplied), warnings.
 
   return {
     food_spoiled: spoilageResult.spoiled,
@@ -498,9 +823,18 @@ export async function consumeWater(characterId, itemName, currentGameDay) {
 export function getSurvivalStatus(character, weather) {
   const inventory = safeParse(character.inventory, []);
   const conMod = getConMod(character);
-  const threshold = Math.max(3 + conMod, 1);
-  const daysWithoutFood = character.days_without_food || 0;
-  const daysWithoutWater = character.days_without_water || 0;
+  // Phase 3.3 SC-7.6.5: status threshold reflects per-character intensity.
+  // Off → use Standard threshold for display purposes (mechanics are
+  // gated separately by checkStarvation/checkDehydration's off branch).
+  const intensity = getSurvivalIntensity(character);
+  const baseThreshold = INTENSITY_THRESHOLDS.starvation[intensity] ?? INTENSITY_THRESHOLDS.starvation.standard;
+  const threshold = Math.max(baseThreshold + conMod, 1);
+  // Phase 3.3 SC-7.6: compute from anchor (with column fallback for
+  // legacy data). Counter columns are vestigial; helper picks the right
+  // source.
+  const currentDay = character.game_day || 0;
+  const daysWithoutFood = daysSinceLastMeal(character, currentDay);
+  const daysWithoutWater = daysSinceLastDrink(character, currentDay);
   const warnings = [];
 
   // --- Hunger level ---
@@ -531,8 +865,7 @@ export function getSurvivalStatus(character, weather) {
   const foodCount = countFoodItems(inventory);
   const waterCount = countWaterItems(inventory);
 
-  // --- Perishable food warnings ---
-  const currentDay = character.game_day || 0;
+  // --- Perishable food warnings (currentDay declared above) ---
   const perishables = inventory
     .filter(i => i.perishable && isFoodItem(i) && !i.name.toLowerCase().startsWith('spoiled'))
     .map(i => {
@@ -570,6 +903,7 @@ export function getSurvivalStatus(character, weather) {
       total_days: waterCount
     },
     starvation_threshold: threshold,
+    survival_intensity: intensity,
     warnings
   };
 }
@@ -636,6 +970,17 @@ export function formatSurvivalForPrompt(character, weather, effectiveTemp) {
 
   const lines = [];
   lines.push('=== SURVIVAL STATUS ===');
+
+  // Phase 3.3 SC-7.6.5: surface non-Standard intensity to the DM so
+  // narrative weight matches mechanical effect. Standard is silent
+  // (preserves SC-7.6 prompt byte-identity).
+  if (status.survival_intensity && status.survival_intensity !== 'standard') {
+    if (status.survival_intensity === 'off') {
+      lines.push('Survival mode: OFF (no mechanical hunger/thirst effects — narrate sparingly).');
+    } else {
+      lines.push(`Survival mode: ${status.survival_intensity.toUpperCase()}`);
+    }
+  }
 
   // --- Hunger ---
   const hungerLabels = { fed: 'Well-fed', hungry: 'Hungry', starving: 'Starving', critical: 'CRITICALLY STARVING' };
@@ -718,3 +1063,100 @@ export function formatSurvivalForPrompt(character, weather, effectiveTemp) {
 
   return lines.join('\n');
 }
+
+// ============================================================
+// SC-6.4 — Shelter helper + marker handlers
+// ============================================================
+
+/**
+ * Persist the character's current shelter type. Called by the SHELTER_FOUND
+ * marker handler; also available for direct service calls if a future
+ * non-marker path needs to set shelter (e.g., manual UI toggle).
+ */
+export async function setCharacterShelter(characterId, shelterType) {
+  await dbRun(
+    'UPDATE characters SET shelter_type = ? WHERE id = ?',
+    [shelterType, characterId]
+  );
+}
+
+// SHELTER_FOUND handler. Replaces the inline detect-call dispatch at the
+// pre-SC-6.4 routes/dmSession.js:1875-1880 site. Returns the event object
+// the route used to push into survivalEvents — route handler reads
+// handlerResults to preserve the response shape.
+//
+// Per the Phase 4 prep flag in the Q6 survey: this is the first marker
+// migrated in SC-6.4 because Phase 4's AI-behavior diagnostic work will
+// instrument shelter-fixation through this exact marker, and pipeline-
+// driven dispatch makes the diagnostic hook clean.
+registerMarkerHandler('SHELTER_FOUND', async (parsed, context) => {
+  if (!context?.characterId) {
+    console.warn('[survivalService] SHELTER_FOUND handler invoked without characterId');
+    return null;
+  }
+  await setCharacterShelter(context.characterId, parsed.Type);
+  return { type: 'shelter_found', shelter: parsed.Type };
+});
+
+// EAT / DRINK handlers — multi-instance markers; pipeline dispatches the
+// handler once per emitted marker (same shape as SC-5's BOND_SHIFT). Each
+// handler reads game_day fresh because the route handler doesn't pass it
+// in context (matches the SC-4 piety pattern).
+registerMarkerHandler('EAT', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const row = await dbGet('SELECT game_day FROM characters WHERE id = ?', [context.characterId]);
+  const gameDay = row?.game_day || 1;
+  try {
+    await consumeFood(context.characterId, parsed.Item, gameDay);
+    return { type: 'ate', item: parsed.Item };
+  } catch (e) {
+    console.error(`[survivalService] EAT handler failed for ${parsed.Item}:`, e.message);
+    return null;
+  }
+});
+
+registerMarkerHandler('DRINK', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const row = await dbGet('SELECT game_day FROM characters WHERE id = ?', [context.characterId]);
+  const gameDay = row?.game_day || 1;
+  try {
+    await consumeWater(context.characterId, parsed.Item, gameDay);
+    return { type: 'drank', item: parsed.Item };
+  } catch (e) {
+    console.error(`[survivalService] DRINK handler failed for ${parsed.Item}:`, e.message);
+    return null;
+  }
+});
+
+// FORAGE handler — single-instance, may add Foraged Food and/or Collected
+// Water to inventory. Result enum guards against partial/failure forages
+// (only success forages mutate inventory). Quantity defaults to 0 if the
+// AI omits the Food/Water fields (matches the legacy detect default).
+registerMarkerHandler('FORAGE', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const result = (parsed.Result || 'success').toLowerCase();
+  if (result !== 'success') {
+    return { type: 'foraged', terrain: parsed.Terrain || 'unknown', food: 0, water: 0 };
+  }
+  const food = parsed.Food || 0;
+  const water = parsed.Water || 0;
+  if (food === 0 && water === 0) {
+    return { type: 'foraged', terrain: parsed.Terrain || 'unknown', food: 0, water: 0 };
+  }
+  const row = await dbGet('SELECT inventory, game_day FROM characters WHERE id = ?', [context.characterId]);
+  if (!row) return null;
+  const inv = safeParse(row.inventory, []);
+  const gameDay = row.game_day || 1;
+  if (food > 0) {
+    const existing = inv.find(i => i.name === 'Foraged Food');
+    if (existing) existing.quantity = (existing.quantity || 1) + food;
+    else inv.push({ name: 'Foraged Food', quantity: food, category: 'food', nutrition_days: 1, perishable: true, spoils_in_days: 2, acquired_game_day: gameDay });
+  }
+  if (water > 0) {
+    const existing = inv.find(i => i.name === 'Collected Water');
+    if (existing) existing.quantity = (existing.quantity || 1) + water;
+    else inv.push({ name: 'Collected Water', quantity: water, category: 'water', hydration_days: 1 });
+  }
+  await dbRun('UPDATE characters SET inventory = ? WHERE id = ?', [JSON.stringify(inv), context.characterId]);
+  return { type: 'foraged', terrain: parsed.Terrain || 'unknown', food, water };
+});

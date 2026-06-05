@@ -9,6 +9,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { DEFAULT_RECIPES } from '../data/craftingRecipes.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 
 // ============================================================
 // HELPERS
@@ -1009,3 +1010,94 @@ export async function formatCraftingForPrompt(characterId) {
 
   return lines.join('\n');
 }
+
+// ============================================================
+// SC-6.4 — Crafting cluster marker handlers
+// ============================================================
+
+// All four handlers register at module load. Each replaces the inline
+// detect-call dispatch that lived in routes/dmSession.js. Handlers
+// return the event object the route used to push into craftingEvents
+// — route handler reads handlerResults to preserve the response shape
+// (client uses craftingEvents to surface toasts via DMSession.jsx).
+
+registerMarkerHandler('RECIPE_FOUND', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const row = await dbGet('SELECT game_day FROM characters WHERE id = ?', [context.characterId]);
+  const gameDay = row?.game_day || 1;
+  const source = parsed.Source || 'found';
+  try {
+    await discoverRecipe(context.characterId, parsed.Name, source, gameDay);
+    return { type: 'recipe_found', name: parsed.Name, source };
+  } catch (e) {
+    console.error(`[craftingService] RECIPE_FOUND handler failed for ${parsed.Name}:`, e.message);
+    return null;
+  }
+});
+
+registerMarkerHandler('MATERIAL_FOUND', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const row = await dbGet('SELECT game_day FROM characters WHERE id = ?', [context.characterId]);
+  const gameDay = row?.game_day || 1;
+  const quantity = parsed.Quantity || 1;
+  const quality = parsed.Quality || 'standard';
+  try {
+    await addMaterial(context.characterId, parsed.Name, quantity, quality, 'found', gameDay);
+    return { type: 'material_found', name: parsed.Name, quantity };
+  } catch (e) {
+    console.error(`[craftingService] MATERIAL_FOUND handler failed for ${parsed.Name}:`, e.message);
+    return null;
+  }
+});
+
+// CRAFT_PROGRESS advances the active in-progress project (if any). The
+// legacy inline code skipped silently when no active project — preserved.
+registerMarkerHandler('CRAFT_PROGRESS', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  try {
+    const projects = await getProjectStatus(context.characterId);
+    const activeProject = projects.find(p => p.status === 'in_progress');
+    if (!activeProject) return null;
+    await advanceProject(activeProject.id, parsed.Hours);
+    return { type: 'craft_progress', hours: parsed.Hours, project_id: activeProject.id };
+  } catch (e) {
+    console.error('[craftingService] CRAFT_PROGRESS handler failed:', e.message);
+    return null;
+  }
+});
+
+// RECIPE_GIFT creates a new AI-authored recipe attributed to the gifting
+// NPC. The handler maps the schema's PascalCase fields to the recipe-data
+// shape createRadiantRecipe expects (lowercase keys), preserving the
+// legacy field-name contract.
+registerMarkerHandler('RECIPE_GIFT', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const row = await dbGet('SELECT game_day FROM characters WHERE id = ?', [context.characterId]);
+  const gameDay = row?.game_day || 1;
+  const recipeData = {
+    name: parsed.Name,
+    category: parsed.Category,
+    description: parsed.Description,
+    materials: parsed.Materials,
+    tools: parsed.Tools,
+    dc: parsed.DC,
+    hours: parsed.Hours,
+    ability: parsed.Ability,
+    outputName: parsed.OutputName,
+    outputDesc: parsed.OutputDesc,
+    giftedBy: parsed.GiftedBy
+  };
+  try {
+    const created = await createRadiantRecipe(context.characterId, recipeData, gameDay);
+    return {
+      type: 'recipe_gift',
+      name: parsed.Name,
+      category: parsed.Category,
+      gifted_by: parsed.GiftedBy,
+      recipe_id: created.recipe?.id
+    };
+  } catch (e) {
+    console.error(`[craftingService] RECIPE_GIFT handler failed for ${parsed.Name}:`, e.message);
+    return null;
+  }
+});

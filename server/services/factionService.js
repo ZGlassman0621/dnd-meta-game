@@ -1,8 +1,22 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { adjustStanding, AUDIT_STRATEGIES, mapToLabel } from './standingScalar.js';
 
 /**
  * Faction Service - CRUD operations for factions, faction goals, and faction standings
+ *
+ * Phase 3 SC-3 (v1.0.146): faction standing migrated to the standingScalar
+ * abstraction. `modifyStanding` now delegates the math / range clamping /
+ * audit recording to `adjustStanding`. The audit strategy is `split_by_sign`
+ * (per Q1 ruling 2026-05-04) — positive deeds append to `deeds_for`,
+ * negative deeds append to `deeds_against`, enacted consumer-side in the
+ * `appendAuditEntry` repository callback.
+ *
+ * `FACTION_STANDING_CONFIG` (exported below) is the per-consumer-static
+ * configuration the abstraction reads. `formatFactionStandingFragment` is
+ * the sync helper for prompt builders that already have standing data
+ * loaded (avoids an extra repository round-trip — same pattern as
+ * companion loyalty's `formatLoyaltyForPrompt`).
  */
 
 // ============================================================
@@ -360,8 +374,149 @@ export async function deleteFactionGoal(id) {
 }
 
 // ============================================================
-// FACTION STANDINGS CRUD
+// FACTION STANDINGS CRUD (Phase 3 SC-3 — migrated to standingScalar)
 // ============================================================
+
+/**
+ * Faction standing configuration for the standingScalar abstraction.
+ * Range / labels / audit-storage match the legacy modifyStanding behavior
+ * exactly — this is a behavioral migration, not a content change.
+ *
+ * Repository callbacks own the SQL (the abstraction never builds queries
+ * itself per the SC-1 design). The audit strategy is `split_by_sign`:
+ * positive `change` appends to `deeds_for`, negative to `deeds_against`.
+ * Per Q1 ruling 2026-05-04, the dual-array shape is enacted consumer-side
+ * inside `appendAuditEntry` — the abstraction passes the strategy through
+ * as metadata on the entry but doesn't dictate which column gets written.
+ *
+ * `writeScore` updates BOTH `standing` and the denormalized `standing_label`
+ * column in a single UPDATE — the label comes from `mapToLabel` against
+ * this config's bands so the denormalized cache stays consistent with the
+ * abstraction's truth.
+ *
+ * Thresholds intentionally empty — faction standing has no system-wide
+ * crossing-cascades today (membership/rank changes are explicit calls,
+ * not standing-driven). Reserved for future SC-7+ work.
+ */
+export const FACTION_STANDING_CONFIG = {
+  name: 'faction_standing',
+  range: { min: -100, max: 100 },
+  defaultValue: 0,
+  labelBands: [
+    { atOrAbove: 80, label: 'exalted' },
+    { atOrAbove: 60, label: 'revered' },
+    { atOrAbove: 40, label: 'honored' },
+    { atOrAbove: 20, label: 'friendly' },
+    { atOrAbove: 0, label: 'neutral' },
+    { atOrAbove: -20, label: 'unfriendly' },
+    { atOrAbove: -40, label: 'hostile' },
+    { atOrAbove: -60, label: 'hated' },
+    { atOrAbove: -100, label: 'enemy' }
+  ],
+  thresholds: [],
+  auditTrail: { storage: AUDIT_STRATEGIES.SPLIT_BY_SIGN },
+  formatForPrompt: (current) => {
+    const sign = current.score > 0 ? '+' : '';
+    return `${current.label.toUpperCase()} (${sign}${current.score})`;
+  },
+  repository: {
+    async readScore(contextKey) {
+      const row = await dbGet(
+        'SELECT standing FROM faction_standings WHERE character_id = ? AND faction_id = ?',
+        [contextKey.characterId, contextKey.factionId]
+      );
+      return row ? row.standing : null;
+    },
+    async writeScore(contextKey, newScore) {
+      const label = mapToLabel(newScore, FACTION_STANDING_CONFIG.labelBands);
+      await dbRun(
+        `UPDATE faction_standings
+         SET standing = ?, standing_label = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE character_id = ? AND faction_id = ?`,
+        [newScore, label, contextKey.characterId, contextKey.factionId]
+      );
+    },
+    async readAuditTrail(contextKey, limit) {
+      const row = await dbGet(
+        'SELECT deeds_for, deeds_against FROM faction_standings WHERE character_id = ? AND faction_id = ?',
+        [contextKey.characterId, contextKey.factionId]
+      );
+      if (!row) return [];
+      const deedsFor = safeParse(row.deeds_for, []);
+      const deedsAgainst = safeParse(row.deeds_against, []);
+      // Merge both arrays, sort by date (oldest first), take last `limit`,
+      // reverse to newest-first, map to abstraction shape so callers see
+      // the standard entry fields (reason, change, newScore, date).
+      const merged = [...deedsFor, ...deedsAgainst].sort(
+        (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+      );
+      return merged.slice(-limit).reverse().map(e => ({
+        reason: e.description || e.reason || null,
+        change: e.change ?? null,
+        newScore: e.newScore ?? e.new_total ?? null,
+        date: e.date
+      }));
+    },
+    async appendAuditEntry(contextKey, entry) {
+      // split_by_sign: positive change → deeds_for, negative → deeds_against.
+      // Skip when change === 0 (no deed to record either way).
+      if (entry.change === 0) return;
+      const row = await dbGet(
+        'SELECT deeds_for, deeds_against FROM faction_standings WHERE character_id = ? AND faction_id = ?',
+        [contextKey.characterId, contextKey.factionId]
+      );
+      if (!row) return;
+      const deedsFor = safeParse(row.deeds_for, []);
+      const deedsAgainst = safeParse(row.deeds_against, []);
+      // Map abstraction shape → legacy deed shape. The legacy column stored
+      // arbitrary deed objects (description text + sometimes quest_id);
+      // we preserve `description` as the canonical text field plus the
+      // standard audit fields (change/newScore/date) for replay/debug.
+      const legacyDeed = {
+        description: entry.reason,
+        change: entry.change,
+        newScore: entry.newScore,
+        date: entry.date
+      };
+      if (entry.change > 0) deedsFor.push(legacyDeed);
+      else deedsAgainst.push(legacyDeed);
+      await dbRun(
+        `UPDATE faction_standings
+         SET deeds_for = ?, deeds_against = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE character_id = ? AND faction_id = ?`,
+        [
+          JSON.stringify(deedsFor),
+          JSON.stringify(deedsAgainst),
+          contextKey.characterId,
+          contextKey.factionId
+        ]
+      );
+    }
+  }
+};
+
+/**
+ * Sync helper for prompt builders. Takes already-loaded standing data
+ * (from a SELECT that joined faction_standings + factions) and returns
+ * the formatForPrompt fragment WITHOUT making an extra repository
+ * round-trip. Returns "LABEL (+N)" — the per-row composer at the call
+ * site (dmPromptBuilder::formatWorldStateSnapshot) wraps this with
+ * faction_name + memberNote + behavior.
+ *
+ * Returns empty string when standing is null so callers can string-
+ * concatenate safely. Same pattern as `formatLoyaltyForPrompt`.
+ *
+ * @param {number|null} standingScore — value of the `standing` column
+ */
+export function formatFactionStandingFragment(standingScore) {
+  if (standingScore == null) return '';
+  const label = mapToLabel(standingScore, FACTION_STANDING_CONFIG.labelBands);
+  return FACTION_STANDING_CONFIG.formatForPrompt({
+    score: standingScore,
+    label,
+    recentAuditEntries: []
+  });
+}
 
 /**
  * Get or create faction standing for a character
@@ -422,8 +577,9 @@ export async function updateStanding(characterId, factionId, data) {
 
   const updates = { ...standing, ...data };
 
-  // Calculate standing label
-  updates.standing_label = getStandingLabel(updates.standing);
+  // Calculate standing label via the standingScalar config — single source
+  // of truth for label bands (eliminates the legacy duplicate helper).
+  updates.standing_label = mapToLabel(updates.standing, FACTION_STANDING_CONFIG.labelBands);
 
   await dbRun(`
     UPDATE faction_standings SET
@@ -445,27 +601,52 @@ export async function updateStanding(characterId, factionId, data) {
 }
 
 /**
- * Modify standing by amount
+ * Modify standing by amount. Migrated to standingScalar in Phase 3 SC-3.
+ *
+ * The function's external behavior is unchanged from the legacy version:
+ * (1) ensure standing row exists, (2) clamp + record deed + write, (3)
+ * return the updated row. The math + clamp + audit step now goes through
+ * `adjustStanding` (which calls back into this module's repository
+ * callbacks for storage).
+ *
+ * `deed` accepts the legacy shapes — `{description, ...}` object, bare
+ * string, or null. The split-by-sign routing (positive→deeds_for,
+ * negative→deeds_against) lives in the config's `appendAuditEntry`
+ * callback. Lossy migration: extra deed fields beyond `description`
+ * (e.g., `quest_id`) are not preserved — no consumers read them today,
+ * verified via grep.
+ *
+ * Return shape preserved for back-compat (the route handler and
+ * questService callers expect the full standing row).
  */
 export async function modifyStanding(characterId, factionId, amount, deed = null) {
-  const standing = await getOrCreateStanding(characterId, factionId);
+  // Pre-create the row — consumer manages row lifecycle per standingScalar's
+  // contract (the abstraction operates on existing rows only).
+  await getOrCreateStanding(characterId, factionId);
 
-  const newStanding = Math.max(-100, Math.min(100, standing.standing + amount));
+  const reason = normalizeDeedReason(deed);
 
-  // Track the deed
-  if (deed) {
-    if (amount > 0) {
-      standing.deeds_for.push({ ...deed, date: new Date().toISOString() });
-    } else {
-      standing.deeds_against.push({ ...deed, date: new Date().toISOString() });
-    }
-  }
+  await adjustStanding(
+    FACTION_STANDING_CONFIG,
+    { characterId, factionId },
+    amount,
+    { reason }
+  );
 
-  return updateStanding(characterId, factionId, {
-    standing: newStanding,
-    deeds_for: standing.deeds_for,
-    deeds_against: standing.deeds_against
-  });
+  return getOrCreateStanding(characterId, factionId);
+}
+
+/**
+ * Coerce the polymorphic `deed` parameter into a string reason. Legacy
+ * callers pass: `{description: '...'}`, `{description, quest_id}`, bare
+ * strings, or null. The abstraction's audit entry only carries a string
+ * `reason`; we keep the description text and drop ancillary keys.
+ */
+function normalizeDeedReason(deed) {
+  if (deed == null) return null;
+  if (typeof deed === 'string') return deed;
+  if (typeof deed === 'object' && deed.description) return deed.description;
+  return null;
 }
 
 /**
@@ -694,14 +875,6 @@ function parseStandingJson(standing) {
   };
 }
 
-function getStandingLabel(standing) {
-  if (standing >= 80) return 'exalted';
-  if (standing >= 60) return 'revered';
-  if (standing >= 40) return 'honored';
-  if (standing >= 20) return 'friendly';
-  if (standing >= 0) return 'neutral';
-  if (standing >= -20) return 'unfriendly';
-  if (standing >= -40) return 'hostile';
-  if (standing >= -60) return 'hated';
-  return 'enemy';
-}
+// Legacy `getStandingLabel` removed in Phase 3 SC-3 — superseded by
+// `mapToLabel(standing, FACTION_STANDING_CONFIG.labelBands)`. Verified
+// no external callers via grep before deletion.

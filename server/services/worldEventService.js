@@ -1,6 +1,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { generateNpcEffectsForEvent, resolveNpcEffectsForEvent } from './worldEventNpcService.js';
+import { registerThresholdConsumer, daysSince } from './timeBoundedState.js';
 
 /**
  * World Event Service - CRUD operations for world events and event effects
@@ -27,6 +28,13 @@ export async function createWorldEvent(data) {
     stage_descriptions = [],
     expected_duration_days = null,
     deadline = null,
+    // Phase 3.3 SC-7.7: game-day columns are the new source of truth
+    // for time-based event mechanics. Callers should pass
+    // started_game_day (typically character.game_day at create time)
+    // and deadline_game_day (started + expected duration). Legacy
+    // timestamp columns stay populated for back-compat.
+    started_game_day = null,
+    deadline_game_day = null,
     visibility = 'public',
     discovered_by_characters = [],
     triggered_by_faction_id = null,
@@ -41,15 +49,17 @@ export async function createWorldEvent(data) {
     INSERT INTO world_events (
       campaign_id, title, description, event_type, scope, affected_locations,
       affected_factions, current_stage, stages, stage_descriptions,
-      expected_duration_days, deadline, visibility, discovered_by_characters,
+      expected_duration_days, deadline, started_game_day, deadline_game_day,
+      visibility, discovered_by_characters,
       triggered_by_faction_id, triggered_by_character_id, triggered_by_event_id,
       possible_outcomes, player_intervention_options, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     campaign_id, title, description, event_type, scope,
     JSON.stringify(affected_locations), JSON.stringify(affected_factions),
     current_stage, JSON.stringify(stages), JSON.stringify(stage_descriptions),
-    expected_duration_days, deadline, visibility,
+    expected_duration_days, deadline, started_game_day, deadline_game_day,
+    visibility,
     JSON.stringify(discovered_by_characters), triggered_by_faction_id,
     triggered_by_character_id, triggered_by_event_id,
     JSON.stringify(possible_outcomes), JSON.stringify(player_intervention_options),
@@ -442,10 +452,61 @@ export async function getEventsForTick(campaignId) {
   return events.map(parseEventJson);
 }
 
+// ============================================================
+// Phase 3.3 SC-7.7 — World event deadline threshold consumer
+// ============================================================
+//
+// Replaces the legacy `new Date(event.deadline) < new Date()` check
+// with `daysSince(deadline_game_day, currentGameDay) >= 0` semantics
+// via the threshold consumer abstraction. Final §3.3 ship —
+// standardizes the last consumer that wasn't on currentGameDay.
+//
+// Anchor: `deadline_game_day`. Threshold = 0 (fire when current >=
+// deadline). SELECT-pre-filter idempotency: orchestrator only loads
+// events with status='active'; the handler calls resolveEvent which
+// flips status to 'resolved', dropping the row from subsequent ticks.
+
+const WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'world_event_deadline',
+  threshold: 0,
+  handler: async (contextKey) => {
+    const { event } = contextKey;
+    await resolveEvent(event.id, 'deadline_passed', 'Event deadline reached without intervention');
+    return { event_id: event.id, title: event.title };
+  },
+  idempotency: {
+    async hasFiredRecently() { return false; },  // SELECT pre-filters by status='active'
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      return contextKey.event?.deadline_game_day || null;
+    }
+  }
+});
+
 /**
- * Process world events tick (called periodically to advance events)
+ * Process world events tick (called periodically to advance events).
+ *
+ * Phase 3.3 SC-7.7 (v1.0.161): now takes `currentGameDay` as the
+ * primary parameter. Was `(campaignId, gameDaysPassed)` — the delta
+ * is unused going forward; livingWorldService passes currentGameDay
+ * directly. The legacy positional arg is preserved for back-compat
+ * (callers that still pass `gameDaysPassed` get a default-currentGameDay
+ * of 0, which short-circuits everything).
+ *
+ * Real-time-clock comparisons are gone:
+ *   - Deadline check: was `new Date() > new Date(event.deadline)` →
+ *     now `daysSince(event.deadline_game_day, currentGameDay) >= 0`
+ *     via WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER.
+ *   - Stage advance: was `(new Date() - new Date(event.started_at)) /
+ *     ms_per_day` → now `daysSince(event.started_game_day, currentGameDay)`.
+ *
+ * Legacy events without `started_game_day` (pre-migration data, edge
+ * cases where backfill failed) gracefully no-op via the helper's
+ * null-anchor short-circuit.
  */
-export async function processEventTick(campaignId, gameDaysPassed = 1) {
+export async function processEventTick(campaignId, currentGameDay = 0) {
   const events = await getEventsForTick(campaignId);
   const results = [];
 
@@ -456,25 +517,24 @@ export async function processEventTick(campaignId, gameDaysPassed = 1) {
   }
 
   for (const event of events) {
-    // Check if event has deadline and if it's passed
-    if (event.deadline) {
-      const deadlineDate = new Date(event.deadline);
-      if (deadlineDate < new Date()) {
-        const resolved = await resolveEvent(event.id, 'deadline_passed', 'Event deadline reached without intervention');
-        results.push({
-          type: 'event_deadline_passed',
-          event_id: event.id,
-          title: event.title
-        });
-        continue;
-      }
+    // Check if event has deadline and if it's passed (game-day clock)
+    const deadlineResult = await WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER.checkAndFire(
+      { event },
+      currentGameDay
+    );
+    if (deadlineResult.fired && deadlineResult.handlerResult) {
+      results.push({
+        type: 'event_deadline_passed',
+        event_id: deadlineResult.handlerResult.event_id,
+        title: deadlineResult.handlerResult.title
+      });
+      continue;
     }
 
-    // For multi-stage events, potentially advance stages based on duration
-    if (event.stages.length > 0 && event.expected_duration_days) {
-      const daysSinceStart = Math.floor(
-        (new Date() - new Date(event.started_at)) / (1000 * 60 * 60 * 24)
-      );
+    // For multi-stage events, potentially advance stages based on
+    // game-day duration (replaces the real-time delta calculation).
+    if (event.stages.length > 0 && event.expected_duration_days && event.started_game_day != null) {
+      const daysSinceStart = daysSince(event.started_game_day, currentGameDay) ?? 0;
       const daysPerStage = event.expected_duration_days / event.stages.length;
       const expectedStage = Math.min(
         Math.floor(daysSinceStart / daysPerStage),
@@ -536,3 +596,6 @@ function parseEffectJson(effect) {
     parameters: safeParse(effect.parameters, {})
   };
 }
+
+// Export for direct test access.
+export { WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER };

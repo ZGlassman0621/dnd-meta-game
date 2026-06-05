@@ -1,6 +1,7 @@
 import { aggregateCampaignContext, dayToHarptosDate } from './metaGame.js';
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { extractLLMJson } from '../utils/llmJson.js';
+import { loggedChat } from './aiCallLogger.js';
 
 // Ollama API endpoint (runs locally) - fallback when Claude is unavailable
 const OLLAMA_API = 'http://localhost:11434/api/generate';
@@ -15,7 +16,8 @@ async function callLLM(prompt, temperature = 0.8) {
   if (isClaudeAvailable()) {
     try {
       console.log('Using Claude for adventure generation...');
-      const response = await claudeChat(
+      const response = await loggedChat(
+        { call_purpose: 'adventure_gen', prompt_builder: 'adventureGenerator' },
         'You are a D&D adventure generator. Return ONLY valid JSON, no other text.',
         [{ role: 'user', content: prompt }],
         3, 'opus'

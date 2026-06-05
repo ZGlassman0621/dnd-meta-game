@@ -3,6 +3,8 @@ import * as npcRelationshipService from './npcRelationshipService.js';
 import * as questService from './questService.js';
 import * as narrativeQueueService from './narrativeQueueService.js';
 import { emit, GAME_EVENTS } from './eventEmitter.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+import { registerThresholdConsumer } from './timeBoundedState.js';
 
 /**
  * Consequence Service - Automated consequence processing
@@ -313,9 +315,94 @@ export async function processConsequences(campaignId, characterId, currentGameDa
 // PROMISE CHECKING
 // ============================================================
 
+// ============================================================
+// Phase 3.3 SC-7.5 — Promise auto-break + quest auto-fail threshold consumers
+// ============================================================
+//
+// Two threshold consumers in this file (plus 3 more across merchantOrderService
+// and baseThreatService for the full SC-7.5 cluster). All five share the
+// same idempotency strategy: **SELECT-pre-filter**. Each orchestrator
+// SELECTs only rows in pre-fire status (status='active'/'pending'/'ready'/
+// 'captured'); the handler flips status to fire-status; subsequent ticks
+// don't see the row. Abstraction's idempotency callbacks are no-ops
+// because the orchestrator's WHERE clause IS the strategy.
+//
+// Promise auto-break has a per-promise effective deadline: explicit
+// deadline_game_day if set, else game_day_made + PROMISE_BREAK_DAYS (45).
+// The repository.readAnchor computes the effective deadline; threshold=1
+// means "fire when current > effective_deadline" (one day past).
+
+/**
+ * Promise auto-break threshold consumer. Anchor is the EFFECTIVE deadline
+ * (deadline_game_day if explicit, else game_day_made + 45). Threshold = 1
+ * (fire when current_game_day exceeds the effective deadline).
+ *
+ * Warnings (the half-deadline / 21-day soft notification) stay inline in
+ * the orchestrator — they're a different shape (per-promise lookback
+ * idempotency via consequence_log) and the spec scopes SC-7.5 to
+ * auto-break, not warnings.
+ */
+const PROMISE_AUTO_BREAK_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'promise_auto_break',
+  threshold: 1,
+  handler: async (contextKey, daysElapsed, hints) => {
+    const { characterId, campaignId, promise } = hints;
+    const reason = promise.deadline_game_day
+      ? `Deadline passed (day ${promise.deadline_game_day})`
+      : `${promise.game_day_made + PROMISE_BREAK_DAYS - promise.game_day_made + daysElapsed} days without fulfillment`;
+    return applyPromiseBrokenConsequences(
+      characterId, campaignId, promise.npc_id, promise.promise_index, promise,
+      contextKey.currentGameDay, reason
+    );
+  },
+  idempotency: {
+    // SELECT-pre-filter: orchestrator only loads pending promises;
+    // breakPromise flips status to 'broken' so subsequent ticks don't
+    // see it. No per-row defensive idempotency needed.
+    async hasFiredRecently() { return false; },
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      // Effective deadline: explicit deadline_game_day OR game_day_made + 45.
+      const p = contextKey.promise;
+      if (!p.game_day_made) return null;  // skip legacy promises without tracking
+      return p.deadline_game_day || (p.game_day_made + PROMISE_BREAK_DAYS);
+    }
+  }
+});
+
+/**
+ * Quest auto-fail threshold consumer. Cleanest of the five — single
+ * deadline column, no derivation. Threshold = 1 (fire when current >
+ * deadline_game_day, matching legacy `deadline_game_day < currentGameDay`).
+ */
+const QUEST_AUTO_FAIL_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'quest_auto_fail',
+  threshold: 1,
+  handler: async (contextKey, daysElapsed, hints) => {
+    const { characterId, campaignId, quest } = hints;
+    return applyQuestExpiredConsequences(characterId, campaignId, quest, contextKey.currentGameDay);
+  },
+  idempotency: {
+    async hasFiredRecently() { return false; },  // SELECT pre-filters by status='active'
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      return contextKey.quest?.deadline_game_day || null;
+    }
+  }
+});
+
 /**
  * Scan all pending promises and check for overdue ones.
  * Returns { broken: [...], warnings: [...] }
+ *
+ * Phase 3.3 SC-7.5 (v1.0.159): auto-break logic delegates to
+ * PROMISE_AUTO_BREAK_THRESHOLD_CONSUMER. Warnings stay inline (different
+ * shape — per-promise lookback idempotency via consequence_log; not in
+ * SC-7.5 scope per spec §3.3.5).
  */
 async function checkOverduePromises(characterId, campaignId, currentGameDay) {
   const broken = [];
@@ -330,24 +417,19 @@ async function checkOverduePromises(characterId, campaignId, currentGameDay) {
     const daysSinceMade = currentGameDay - gameDayMade;
     const deadline = p.deadline_game_day || 0;
 
-    // Check for auto-break
-    if (deadline > 0 && currentGameDay > deadline) {
-      // Explicit deadline passed
-      const result = await applyPromiseBrokenConsequences(
-        characterId, campaignId, p.npc_id, p.promise_index, p, currentGameDay,
-        `Deadline passed (day ${deadline})`
-      );
-      if (result) broken.push(result);
-    } else if (!deadline && daysSinceMade >= PROMISE_BREAK_DAYS) {
-      // No explicit deadline, but too much time has passed
-      const result = await applyPromiseBrokenConsequences(
-        characterId, campaignId, p.npc_id, p.promise_index, p, currentGameDay,
-        `${daysSinceMade} days without fulfillment`
-      );
-      if (result) broken.push(result);
+    // Auto-break via threshold consumer
+    const brokenResult = await PROMISE_AUTO_BREAK_THRESHOLD_CONSUMER.checkAndFire(
+      { promise: p, currentGameDay },
+      currentGameDay,
+      { characterId, campaignId, promise: p }
+    );
+    if (brokenResult.fired && brokenResult.handlerResult) {
+      broken.push(brokenResult.handlerResult);
+      continue;  // don't also issue a warning for a just-broken promise
     }
-    // Check for warning (only if not already breaking)
-    else if (shouldWarn(p, daysSinceMade, deadline, currentGameDay)) {
+
+    // Warning (kept inline — different shape, not in SC-7.5 scope).
+    if (shouldWarn(p, daysSinceMade, deadline, currentGameDay)) {
       const alreadyWarned = await hasRecentWarning(characterId, p.npc_id, p.promise);
       if (!alreadyWarned) {
         const result = await queuePromiseWarning(
@@ -360,6 +442,9 @@ async function checkOverduePromises(characterId, campaignId, currentGameDay) {
 
   return { broken, warnings };
 }
+
+// Exports for direct test access.
+export { PROMISE_AUTO_BREAK_THRESHOLD_CONSUMER, QUEST_AUTO_FAIL_THRESHOLD_CONSUMER };
 
 /**
  * Determine if a promise warning should be issued.
@@ -561,11 +646,18 @@ async function queuePromiseWarning(characterId, campaignId, promise, currentGame
 
 /**
  * Check active quests for expired deadlines.
+ *
+ * Phase 3.3 SC-7.5: per-quest threshold check delegates to
+ * QUEST_AUTO_FAIL_THRESHOLD_CONSUMER. SELECT remains the same — it's
+ * still useful as a pre-filter (only loads quests with deadline; abstraction's
+ * threshold consumer would no-op others but the SELECT avoids loading them).
  */
 async function checkExpiredQuests(characterId, campaignId, currentGameDay) {
   const expiredQuests = [];
 
-  // Get time-sensitive active quests with game day deadlines
+  // Get time-sensitive active quests with game day deadlines.
+  // SELECT pre-filter is the idempotency strategy — once a quest is failed
+  // (status='failed'), it drops out of subsequent ticks.
   const quests = await dbAll(`
     SELECT * FROM quests
     WHERE character_id = ? AND status = 'active'
@@ -573,8 +665,14 @@ async function checkExpiredQuests(characterId, campaignId, currentGameDay) {
   `, [characterId, currentGameDay]);
 
   for (const quest of quests) {
-    const result = await applyQuestExpiredConsequences(characterId, campaignId, quest, currentGameDay);
-    if (result) expiredQuests.push(result);
+    const result = await QUEST_AUTO_FAIL_THRESHOLD_CONSUMER.checkAndFire(
+      { quest, currentGameDay },
+      currentGameDay,
+      { characterId, campaignId, quest }
+    );
+    if (result.fired && result.handlerResult) {
+      expiredQuests.push(result.handlerResult);
+    }
   }
 
   return expiredQuests;
@@ -807,3 +905,124 @@ export async function getApproachingDeadlineQuests(characterId, currentGameDay) 
     ORDER BY deadline_game_day ASC
   `, [characterId, currentGameDay + 7]); // Within 7 days of deadline
 }
+
+// ============================================================
+// SC-6.4c — PROMISE_MADE / PROMISE_FULFILLED marker handlers
+// ============================================================
+
+/**
+ * PROMISE_MADE handler. Multi-instance — one per emitted marker.
+ * Replaces the inline detect-call dispatch at the pre-SC-6.4c
+ * routes/dmSession.js:1809 site.
+ *
+ * Side effects: NPC name lookup (case-insensitive), addPromise via
+ * npcRelationshipService, INSERT into canon_facts. NPC-not-found is
+ * silently ignored (matches legacy behavior — no NPC means no promise
+ * to track; the marker is essentially a no-op).
+ */
+registerMarkerHandler('PROMISE_MADE', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT id, campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character) return null;
+  const npc = await dbGet(
+    'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
+    [parsed.NPC]
+  );
+  if (!npc) return null;
+
+  try {
+    const deadline = parsed.Deadline || 0;
+    const deadlineGameDay = deadline > 0 ? (character.game_day || 0) + deadline : null;
+    await npcRelationshipService.addPromise(character.id, npc.id, parsed.Promise, {
+      gameDay: character.game_day || null,
+      deadlineGameDay,
+      weight: parsed.Weight || 'moderate'
+    });
+
+    // Canon fact: legacy behavior preserved exactly.
+    await dbRun(`
+      INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
+      VALUES (?, ?, 'promise', ?, ?, ?, 'major', 1, '["promise_made"]')
+    `, [
+      character.campaign_id, character.id,
+      npc.name,
+      `Promised ${npc.name} (${parsed.Weight || 'moderate'}): "${parsed.Promise}"${deadline > 0 ? ` (due in ${deadline} days)` : ''}`,
+      character.game_day || 0
+    ]);
+
+    return {
+      type: 'promise_made',
+      npc: parsed.NPC,
+      promise: parsed.Promise,
+      deadline,
+      weight: parsed.Weight || 'moderate'
+    };
+  } catch (e) {
+    console.error(`[consequenceService] PROMISE_MADE handler failed for ${parsed.NPC}:`, e.message);
+    return null;
+  }
+});
+
+/**
+ * PROMISE_FULFILLED handler. Heaviest promise side effect: fuzzy-match
+ * pending promise → fulfillPromise → weight-derived disposition + trust
+ * adjustments → reputation ripple → faction standing → canon fact.
+ * NPC-not-found or no-matching-pending-promise: silent no-op (legacy).
+ */
+registerMarkerHandler('PROMISE_FULFILLED', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT id, campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character) return null;
+  const npc = await dbGet(
+    'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
+    [parsed.NPC]
+  );
+  if (!npc) return null;
+
+  try {
+    const pending = await npcRelationshipService.getPendingPromises(character.id);
+    const match = pending.find(p =>
+      p.npc_id === npc.id &&
+      (p.promise || '').toLowerCase().includes(parsed.Promise.toLowerCase().substring(0, 20))
+    );
+    if (!match) return null;
+
+    const { weight } = await npcRelationshipService.fulfillPromise(character.id, npc.id, match.promise_index);
+    const fw = FULFILL_WEIGHTS[weight] || FULFILL_WEIGHTS.moderate;
+    await npcRelationshipService.adjustDisposition(character.id, npc.id, fw.directDisposition, `Fulfilled a promise (${weight})`);
+    await npcRelationshipService.adjustTrust(character.id, npc.id, fw.directTrust);
+
+    const rippleResults = await spreadReputationRipple(character.campaign_id, character.id, npc.id, weight, false);
+    const factionResults = await spreadFactionStanding(character.id, character.campaign_id, npc.id, weight, false);
+
+    await dbRun(`
+      INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, game_day, importance, is_active, tags)
+      VALUES (?, ?, 'promise', ?, ?, ?, 'major', 1, '["promise_fulfilled"]')
+    `, [
+      character.campaign_id, character.id,
+      npc.name,
+      `Fulfilled ${weight} promise to ${npc.name}: "${parsed.Promise}"`,
+      character.game_day || 0
+    ]);
+
+    return {
+      type: 'promise_fulfilled',
+      npc: parsed.NPC,
+      promise: parsed.Promise,
+      weight,
+      dispositionChange: fw.directDisposition,
+      trustChange: fw.directTrust,
+      rippleCount: rippleResults.length,
+      factionChanges: factionResults.length
+    };
+  } catch (e) {
+    console.error(`[consequenceService] PROMISE_FULFILLED handler failed for ${parsed.NPC}:`, e.message);
+    return null;
+  }
+});

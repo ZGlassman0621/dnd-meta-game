@@ -34,7 +34,7 @@ function assert(condition, message) {
 // ============================================================
 
 function makeMockCharacter(overrides = {}) {
-  return {
+  const base = {
     id: 1,
     days_without_food: 0,
     days_without_water: 0,
@@ -52,6 +52,18 @@ function makeMockCharacter(overrides = {}) {
     current_location: 'forest',
     ...overrides
   };
+  // Phase 3.3 SC-7.6: anchor is source-of-truth post-migration. When a
+  // test overrides `days_without_food` (or _water) without explicitly
+  // setting the anchor, sync the anchor to match the override so the
+  // helpers' anchor-first logic produces the expected days-elapsed.
+  // Pre-SC-7.6 tests assumed the column was source-of-truth.
+  if (overrides.days_without_food != null && overrides.last_meal_game_day === undefined) {
+    base.last_meal_game_day = base.game_day - base.days_without_food;
+  }
+  if (overrides.days_without_water != null && overrides.last_drink_game_day === undefined) {
+    base.last_drink_game_day = base.game_day - base.days_without_water;
+  }
+  return base;
 }
 
 // ============================================================
@@ -99,23 +111,23 @@ console.log('\n=== Test 2: checkStarvation ===\n');
 
 // Character with no hunger
 let char = makeMockCharacter({ days_without_food: 0 });
-result = checkStarvation(char);
+result = await checkStarvation(char);
 assert(!result.starving, 'days_without_food=0 → not starving');
 assert(!result.hungry || result.hungry === false, 'days_without_food=0 → not hungry');
 
 // Character hungry but not starving (CON 14 → mod +2, threshold = 3+2=5)
 char = makeMockCharacter({ days_without_food: 3 });
-result = checkStarvation(char);
+result = await checkStarvation(char);
 assert(!result.starving, 'days_without_food=3, threshold=5 → not yet starving');
 
 // Character at threshold
 char = makeMockCharacter({ days_without_food: 5 });
-result = checkStarvation(char);
+result = await checkStarvation(char);
 assert(!result.starving, 'days_without_food=5, threshold=5 → at limit but not beyond');
 
 // Character beyond threshold → starving
 char = makeMockCharacter({ days_without_food: 6 });
-result = checkStarvation(char);
+result = await checkStarvation(char);
 assert(result.starving === true, 'days_without_food=6 > threshold=5 → starving');
 
 // Low CON character (CON 8 → mod -1, threshold = 3+(-1)=2, min 1)
@@ -123,7 +135,7 @@ char = makeMockCharacter({
   days_without_food: 3,
   ability_scores: JSON.stringify({ str: 10, dex: 10, con: 8, int: 10, wis: 10, cha: 10 })
 });
-result = checkStarvation(char);
+result = await checkStarvation(char);
 assert(result.starving === true, 'CON 8 (threshold=2): days_without_food=3 → starving');
 
 // ============================================================
@@ -133,17 +145,17 @@ console.log('\n=== Test 3: checkDehydration ===\n');
 
 // Not dehydrated
 char = makeMockCharacter({ days_without_water: 0 });
-result = checkDehydration(char, null);
+result = await checkDehydration(char, null);
 assert(!result.dehydrated, 'days_without_water=0 → not dehydrated');
 
 // Dehydrated after 1 day
 char = makeMockCharacter({ days_without_water: 1 });
-result = checkDehydration(char, null);
+result = await checkDehydration(char, null);
 assert(result.dehydrated === true, 'days_without_water=1 → dehydrated');
 
 // Severely dehydrated
 char = makeMockCharacter({ days_without_water: 3 });
-result = checkDehydration(char, null);
+result = await checkDehydration(char, null);
 assert(result.dehydrated === true, 'days_without_water=3 → dehydrated');
 
 // ============================================================

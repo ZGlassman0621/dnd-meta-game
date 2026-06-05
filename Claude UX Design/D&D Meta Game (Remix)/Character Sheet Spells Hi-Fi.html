@@ -1,0 +1,1715 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Character Sheet · Spells — Hi-Fi</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Dark modern — matches wireframe semi-dark mode */
+      --bg:        #1b1f2a;
+      --bg-2:      #242938;
+      --surface:   #2b3143;
+      --surface-2: #343b51;
+      --ink:       #e8edf7;
+      --ink-2:     #c9d1e0;
+      --ink-dim:   #8a95ad;
+      --ink-faint: #5a6378;
+
+      /* Accent set — tuned for dark background */
+      --terracotta:   #ff8a5b;
+      --terracotta-2: #ffa27a;
+      --forest:       #7dd4a2;
+      --forest-2:     #9be8bc;
+      --ink-purple:   #b19cff;
+      --ink-purple-2: #c9b8ff;
+      --faction-blue: #6ca9ff;
+      --danger:       #ff7a7a;
+
+      /* Chrome */
+      --line:       #4a5269;
+      --line-soft:  #3c4359;
+      --line-faint: #2e344a;
+
+      /* Type */
+      --display: "Fraunces", "Cormorant Garamond", Georgia, serif;
+      --body:    "Inter", system-ui, -apple-system, sans-serif;
+      --num:     "Inter", system-ui, -apple-system, sans-serif;
+      --mono:    "JetBrains Mono", ui-monospace, monospace;
+
+      /* Shadow for dark */
+      --sh-soft:  0 1px 2px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.18);
+      --sh-card:  0 1px 2px rgba(0,0,0,0.3), 0 8px 22px rgba(0,0,0,0.25);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--body);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "ss01", "ss02", "cv11";
+    }
+    body {
+      background-image:
+        radial-gradient(circle at 20% 10%, rgba(108,169,255,0.04), transparent 45%),
+        radial-gradient(circle at 80% 90%, rgba(177,156,255,0.04), transparent 45%);
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ─────────────────────────────────────── */
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line-soft);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .brand {
+      font-family: var(--display);
+      font-weight: 600;
+      font-variation-settings: "opsz" 144, "SOFT" 100;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+    }
+    .brand .amp { color: var(--terracotta); font-style: italic; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      padding: 3px 9px;
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+    }
+    .spacer { flex: 1; }
+    .topbar-link {
+      font-family: var(--body);
+      font-size: 13px;
+      color: var(--ink-dim);
+      text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .topbar-link:hover { color: var(--terracotta); }
+
+    /* ── Canvas ──────────────────────────────────────── */
+    .canvas {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 24px 24px 80px;
+    }
+
+    /* ── Hero / identity ─────────────────────────────── */
+    .hero {
+      display: grid;
+      grid-template-columns: 128px 1fr auto;
+      gap: 28px;
+      padding: 24px 28px;
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 14px;
+      box-shadow: var(--sh-card);
+      margin-bottom: 18px;
+      align-items: center;
+    }
+
+    /* Heraldic crest — class sigil */
+    .crest {
+      width: 128px; height: 128px;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.4), transparent 45%),
+        linear-gradient(135deg, #c95e2a 0%, #a64b1c 100%);
+      border-radius: 14px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.35),
+        inset 0 -2px 0 rgba(0,0,0,0.1),
+        0 2px 6px rgba(70,50,20,0.15);
+    }
+    .crest svg { width: 68%; height: 68%; }
+    .crest-badge {
+      position: absolute; bottom: -6px; right: -6px;
+      width: 30px; height: 30px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--terracotta);
+      box-shadow: var(--sh-soft);
+    }
+
+    .identity h1 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-variation-settings: "opsz" 144;
+      font-size: 44px;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin: 0 0 4px;
+      color: var(--ink);
+    }
+    .identity .subtitle {
+      font-family: var(--body);
+      font-size: 14px;
+      color: var(--ink-dim);
+      margin-bottom: 12px;
+    }
+    .identity .subtitle em {
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--ink-2);
+    }
+
+    /* Status pills */
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-2);
+      font-feature-settings: "tnum";
+    }
+    .pill .label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .pill .v { color: var(--ink); }
+    .pill.accent { border-color: var(--terracotta); color: var(--terracotta); background: color-mix(in oklab, var(--terracotta) 8%, var(--surface-2)); }
+    .pill.forest { border-color: var(--forest); color: var(--forest); background: color-mix(in oklab, var(--forest) 8%, var(--surface-2)); }
+    .pill.purple { border-color: var(--ink-purple); color: var(--ink-purple); background: color-mix(in oklab, var(--ink-purple) 8%, var(--surface-2)); }
+
+    /* HP inline */
+    .hp-pill {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 14px;
+      background: color-mix(in oklab, var(--forest) 12%, var(--surface-2));
+      border: 1px solid var(--forest);
+      border-radius: 999px;
+    }
+    .hp-pill .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--forest); }
+    .hp-pill .v { font-family: var(--num); font-size: 14px; font-weight: 600; color: var(--forest); font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+    .hp-bar { width: 70px; height: 5px; background: color-mix(in oklab, var(--forest) 20%, var(--surface)); border-radius: 999px; overflow: hidden; }
+    .hp-bar .fill { width: 81%; height: 100%; background: linear-gradient(90deg, var(--forest-2), var(--forest)); }
+
+    /* Hero action stack */
+    .hero-actions { display: flex; flex-direction: column; gap: 8px; min-width: 140px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 9px 16px;
+      font-family: var(--body);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.002em;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      background: var(--surface-2);
+      color: var(--ink-2);
+      border-color: var(--line-soft);
+    }
+    .btn:hover { border-color: var(--line); background: var(--surface); }
+    .btn.primary {
+      background: var(--terracotta);
+      color: #1b1f2a;
+      border-color: var(--terracotta);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .btn.primary:hover { background: var(--terracotta-2); }
+    .btn.ghost {
+      background: transparent;
+      border-color: var(--line-soft);
+      color: var(--ink-dim);
+    }
+    .btn.ghost:hover { color: var(--ink-2); border-color: var(--line); }
+    .btn .icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* ── Tabs ─────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--line-soft);
+      margin-bottom: 22px;
+    }
+    .tab {
+      padding: 11px 18px;
+      font-family: var(--body);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      display: inline-flex; align-items: center; gap: 8px;
+      transition: color 0.12s ease;
+    }
+    .tab:hover { color: var(--ink-2); }
+    .tab.active { color: var(--terracotta); border-bottom-color: var(--terracotta); font-weight: 600; }
+    .tab .icon { width: 14px; height: 14px; }
+    .tab .count {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 1px 6px;
+      background: var(--surface-2);
+      border-radius: 999px;
+      color: var(--ink-dim);
+    }
+
+    /* ── Section headings with ornamental dividers ────── */
+    .section-head {
+      display: flex; align-items: center; gap: 14px;
+      margin: 0 0 14px;
+    }
+    .section-head h2 {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 24;
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      color: var(--ink);
+    }
+    .section-head .sub {
+      font-family: var(--body);
+      font-size: 12px;
+      color: var(--ink-dim);
+    }
+    .fleuron {
+      flex: 1;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--line);
+    }
+    .fleuron::before, .fleuron::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line-soft);
+    }
+    .fleuron svg { flex-shrink: 0; opacity: 0.7; }
+
+    /* ── Grid ─────────────────────────────────────────── */
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr 0.9fr;
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+    .grid-secondary {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 22px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: var(--sh-soft);
+    }
+
+    /* ── Abilities grid ──────────────────────────────── */
+    .abilities {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .ability {
+      position: relative;
+      padding: 14px 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      text-align: center;
+    }
+    .ability .name {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 2px;
+    }
+    .ability .score {
+      font-family: var(--num);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-size: 30px;
+      line-height: 1;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+    }
+    .ability .mod {
+      font-family: var(--num);
+      font-weight: 600;
+      font-feature-settings: "tnum";
+      font-size: 14px;
+      color: var(--terracotta);
+      margin-top: 3px;
+    }
+    .ability.prime {
+      background: color-mix(in oklab, var(--terracotta) 10%, var(--surface-2));
+      border-color: color-mix(in oklab, var(--terracotta) 40%, var(--line));
+    }
+    .ability.prime::before {
+      content: "";
+      position: absolute; top: 6px; right: 6px;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--terracotta);
+    }
+
+    /* ── Saves list ──────────────────────────────────── */
+    .save-list { display: flex; flex-direction: column; gap: 2px; }
+    .save-row {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 10px; align-items: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .save-row.prof {
+      background: color-mix(in oklab, var(--terracotta) 6%, transparent);
+    }
+    .save-row .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: transparent; border: 1.3px solid var(--line);
+      justify-self: center;
+    }
+    .save-row.prof .dot { background: var(--terracotta); border-color: var(--terracotta); }
+    .save-row .nm { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+    .save-row.prof .nm { color: var(--terracotta); }
+    .save-row .mod {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+    }
+    .save-row.prof .mod { color: var(--terracotta); }
+
+    /* ── Senses ──────────────────────────────────────── */
+    .senses { display: flex; flex-direction: column; gap: 8px; }
+    .sense-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 0;
+    }
+    .sense-row .lbl {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .sense-row .lbl .icon { width: 14px; height: 14px; color: var(--ink-dim); }
+    .sense-row .v {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+    }
+    .senses-note {
+      font-size: 12px;
+      color: var(--ink-dim);
+      padding-top: 10px;
+      margin-top: 4px;
+      border-top: 1px solid var(--line-faint);
+      font-style: italic;
+    }
+
+    /* ── Skills ──────────────────────────────────────── */
+    .skills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px 18px;
+    }
+    .skill {
+      display: grid;
+      grid-template-columns: 14px 1fr auto auto;
+      gap: 8px; align-items: center;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .skill.prof {
+      background: color-mix(in oklab, var(--terracotta) 6%, transparent);
+    }
+    .skill.expert {
+      background: color-mix(in oklab, var(--ink-purple) 6%, transparent);
+    }
+    .skill .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: transparent; border: 1.3px solid var(--line);
+      justify-self: center;
+    }
+    .skill.prof .dot { background: var(--terracotta); border-color: var(--terracotta); }
+    .skill.expert .dot {
+      background: var(--ink-purple); border-color: var(--ink-purple);
+      box-shadow: 0 0 0 2px color-mix(in oklab, var(--ink-purple) 30%, transparent);
+    }
+    .skill .nm { color: var(--ink-2); }
+    .skill.prof .nm { color: var(--ink); font-weight: 500; }
+    .skill.expert .nm { color: var(--ink-purple); font-weight: 600; }
+    .skill .abil {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+    }
+    .skill .mod {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+      min-width: 22px; text-align: right;
+    }
+
+    /* ── Languages / Tools / Armor ───────────────────── */
+    .kv-block { margin-bottom: 14px; }
+    .kv-block:last-child { margin-bottom: 0; }
+    .kv-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 6px;
+    }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .tag .icon { width: 11px; height: 11px; color: var(--ink-dim); }
+    .prose {
+      font-family: var(--body);
+      font-size: 13px;
+      color: var(--ink-2);
+      line-height: 1.55;
+    }
+
+    /* ── Inspiration callout ─────────────────────────── */
+    .insp {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 11px;
+      background: color-mix(in oklab, var(--ink-purple) 12%, var(--surface-2));
+      border: 1px solid var(--ink-purple);
+      border-radius: 999px;
+      font-family: var(--body);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-purple);
+    }
+    .insp .icon { width: 12px; height: 12px; }
+
+    /* ── Spells tab ──────────────────────────────── */
+
+    /* Layout */
+    .spells-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    /* Pact magic slot tracker */
+    .pact-strip {
+      background:
+        radial-gradient(circle at 85% 50%, rgba(177,156,255,0.18), transparent 60%),
+        linear-gradient(135deg, color-mix(in oklab, var(--ink-purple) 14%, var(--surface)) 0%, var(--surface) 100%);
+      border: 1px solid color-mix(in oklab, var(--ink-purple) 40%, var(--line-soft));
+      border-radius: 14px;
+      padding: 18px 22px;
+      margin-bottom: 22px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 24px;
+      align-items: center;
+    }
+    .pact-head {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .pact-head .eyebrow {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-purple);
+    }
+    .pact-head h3 {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 48;
+      font-weight: 600;
+      font-size: 24px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      color: var(--ink);
+    }
+    .pact-head .meta {
+      font-size: 12px;
+      color: var(--ink-dim);
+      margin-top: 2px;
+    }
+    .pact-head .meta em {
+      font-family: var(--display);
+      font-style: italic;
+      color: var(--ink-2);
+    }
+
+    .slot-array {
+      display: flex; align-items: center; gap: 12px; justify-content: center;
+    }
+    .slot-orb {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255,255,255,0.35), transparent 40%),
+        radial-gradient(circle at 50% 50%, #c9b8ff 0%, #7a6bd9 60%, #4a3d99 100%);
+      border: 1.5px solid color-mix(in oklab, var(--ink-purple) 80%, #fff 10%);
+      box-shadow:
+        0 0 12px color-mix(in oklab, var(--ink-purple) 50%, transparent),
+        inset 0 -2px 6px rgba(0,0,0,0.3);
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 16px;
+      color: #fff;
+      font-feature-settings: "tnum";
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .slot-orb.spent {
+      background:
+        radial-gradient(circle at 50% 50%, var(--surface-2) 0%, var(--bg-2) 100%);
+      border-color: var(--line);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+      color: var(--ink-faint);
+      text-shadow: none;
+    }
+    .slot-divider {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-dim);
+      letter-spacing: 0.05em;
+    }
+    .slot-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    .pact-actions {
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 160px;
+    }
+    .pact-actions .btn { width: 100%; }
+
+    /* Spell meta strip — DC/atk/mod */
+    .cast-stats {
+      display: flex; gap: 0;
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--surface);
+      margin-bottom: 22px;
+    }
+    .cast-stat {
+      flex: 1;
+      padding: 12px 16px;
+      border-right: 1px solid var(--line-faint);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .cast-stat:last-child { border-right: 0; }
+    .cast-stat .lbl {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .cast-stat .val {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 22px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+      letter-spacing: -0.01em;
+    }
+    .cast-stat .val.accent { color: var(--ink-purple); }
+    .cast-stat .sub {
+      font-size: 11px;
+      color: var(--ink-faint);
+    }
+
+    /* Spell level sections */
+    .spell-level-head {
+      display: flex; align-items: baseline; gap: 14px;
+      margin: 22px 0 10px;
+    }
+    .spell-level-head h3 {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 36;
+      font-weight: 600;
+      font-size: 18px;
+      color: var(--ink);
+      margin: 0;
+    }
+    .spell-level-head .kind {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .spell-level-head .rule {
+      flex: 1;
+      height: 1px;
+      background: var(--line-faint);
+    }
+    .spell-level-head .at-will {
+      font-family: var(--body);
+      font-size: 11px;
+      color: var(--forest);
+      padding: 2px 8px;
+      background: color-mix(in oklab, var(--forest) 12%, transparent);
+      border: 1px solid color-mix(in oklab, var(--forest) 40%, transparent);
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .spell-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .spell-grid.cantrips {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Spell card */
+    .spell {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: start;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+    .spell:hover { border-color: var(--line); }
+    .spell.expanded {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      padding: 18px 20px;
+      background:
+        linear-gradient(180deg, color-mix(in oklab, var(--terracotta) 7%, var(--surface)) 0%, var(--surface) 100%);
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--terracotta) 12%, transparent);
+    }
+    .spell.concentrating {
+      border-color: var(--ink-purple);
+      background: color-mix(in oklab, var(--ink-purple) 6%, var(--surface));
+    }
+
+    .spell-head {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    .spell-name {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 24;
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+    }
+    .spell.concentrating .spell-name { color: var(--ink-purple); }
+
+    /* Tag row - VSM, range, action cost */
+    .spell-tags {
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .stag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 7px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      color: var(--ink-dim);
+      background: var(--surface-2);
+      border: 1px solid var(--line-faint);
+      border-radius: 5px;
+    }
+    .stag.action { color: var(--terracotta); border-color: color-mix(in oklab, var(--terracotta) 40%, var(--line-faint)); }
+    .stag.bonus { color: var(--forest); border-color: color-mix(in oklab, var(--forest) 40%, var(--line-faint)); }
+    .stag.reaction { color: var(--faction-blue); border-color: color-mix(in oklab, var(--faction-blue) 40%, var(--line-faint)); }
+    .stag.ritual { color: var(--ink-purple); border-color: color-mix(in oklab, var(--ink-purple) 40%, var(--line-faint)); }
+    .stag.conc {
+      color: var(--ink-purple);
+      background: color-mix(in oklab, var(--ink-purple) 16%, var(--surface-2));
+      border-color: var(--ink-purple);
+      font-weight: 600;
+    }
+    .stag .icon { width: 10px; height: 10px; }
+
+    .spell-meta {
+      font-size: 12px;
+      color: var(--ink-dim);
+      display: flex; flex-wrap: wrap; gap: 10px;
+    }
+    .spell-meta .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); margin-right: 4px; }
+    .spell-meta .v { color: var(--ink-2); font-feature-settings: "tnum"; }
+
+    .spell-dmg {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--terracotta);
+      font-feature-settings: "tnum";
+      white-space: nowrap;
+    }
+    .spell-dmg .type {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      display: block;
+      font-weight: 500;
+      margin-top: 1px;
+      text-align: right;
+    }
+
+    /* Expanded spell detail */
+    .spell-detail {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: start;
+      padding-top: 12px;
+      border-top: 1px solid var(--line-faint);
+    }
+    .spell-desc {
+      font-family: var(--body);
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--ink-2);
+    }
+    .spell-desc .higher {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: color-mix(in oklab, var(--ink-purple) 10%, var(--surface-2));
+      border-left: 3px solid var(--ink-purple);
+      border-radius: 0 6px 6px 0;
+      font-size: 12.5px;
+    }
+    .spell-desc .higher strong {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-purple);
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .spell-cast-panel {
+      display: flex; flex-direction: column; gap: 10px;
+      min-width: 190px;
+      padding: 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+    }
+    .spell-cast-panel .headline {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .spell-cast-panel .roll-preview {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 20px;
+      color: var(--terracotta);
+      font-feature-settings: "tnum";
+      letter-spacing: -0.01em;
+    }
+    .spell-cast-panel .roll-preview .op { color: var(--ink-faint); margin: 0 4px; font-weight: 400; }
+    .spell-cast-panel .roll-note {
+      font-size: 12px; color: var(--ink-2);
+    }
+
+    /* Upcast chooser (in expanded card for leveled spell) */
+    .upcast {
+      display: flex; gap: 6px;
+      margin-top: 4px;
+    }
+    .upcast-btn {
+      flex: 1;
+      padding: 8px 6px;
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      display: flex; flex-direction: column; gap: 2px;
+      align-items: center;
+      transition: all 0.12s ease;
+    }
+    .upcast-btn:hover { border-color: var(--line); }
+    .upcast-btn.selected {
+      background: color-mix(in oklab, var(--ink-purple) 18%, var(--surface));
+      border-color: var(--ink-purple);
+      box-shadow: 0 0 0 2px color-mix(in oklab, var(--ink-purple) 20%, transparent);
+    }
+    .upcast-btn .lvl {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 24;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .upcast-btn .dmg {
+      font-family: var(--num);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--terracotta);
+      font-feature-settings: "tnum";
+    }
+    .upcast-btn.selected .lvl { color: var(--ink-purple); }
+
+    /* Invocations sidebar */
+    .invocations {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: 18px 20px;
+      position: sticky;
+      top: 80px;
+    }
+    .invocations .section-head { margin-bottom: 10px; }
+    .invocations .sub-note {
+      font-size: 12px;
+      color: var(--ink-dim);
+      font-style: italic;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line-faint);
+    }
+    .invo-list { display: flex; flex-direction: column; gap: 12px; }
+    .invo {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line-faint);
+    }
+    .invo:last-child { border-bottom: 0; padding-bottom: 0; }
+    .invo-name {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 24;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+      margin-bottom: 2px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .invo-name .icon { width: 12px; height: 12px; color: var(--ink-purple); }
+    .invo-desc {
+      font-family: var(--body);
+      font-size: 12px;
+      color: var(--ink-2);
+      line-height: 1.5;
+    }
+    .invo-meta {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-top: 4px;
+    }
+
+    .slots-open {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      background: color-mix(in oklab, var(--ink-purple) 14%, transparent);
+      border: 1px solid var(--ink-purple);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-purple);
+      font-weight: 600;
+    }
+
+    /* Tab footnote */
+    .tab-footnote {
+      text-align: center;
+      font-family: var(--body);
+      font-size: 12px;
+      color: var(--ink-faint);
+      font-style: italic;
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line-faint);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Reusable SVG defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <!-- Lucide-style icons -->
+      <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+      <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+      <symbol id="i-backpack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8"/><path d="M8 21v1M16 21v1"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.8l-6.3 4.2L8 13.8 2 9.4h7.6z"/></symbol>
+      <symbol id="i-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 14l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/><path d="M5 15l.5 1.5L7 17l-1.5.5L5 19l-.5-1.5L3 17l1.5-.5z"/></symbol>
+      <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></symbol>
+      <symbol id="i-bed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17V7M2 11h20v6M22 11a2 2 0 0 0-2-2h-7v4"/><circle cx="6.5" cy="11.5" r="1.5"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+
+      <!-- D&D thematic glyphs -->
+      <symbol id="g-sword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
+        <path d="M13 19l6-6"/>
+        <path d="M16 16l4 4"/>
+        <path d="M19 21l2-2"/>
+      </symbol>
+      <symbol id="g-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </symbol>
+      <symbol id="g-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z"/>
+      </symbol>
+      <symbol id="g-eye-mystic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 12c3-5 6-7 10-7s7 2 10 7c-3 5-6 7-10 7s-7-2-10-7z"/>
+        <circle cx="12" cy="12" r="3.5"/>
+        <path d="M12 8v2M12 14v2M8 12h2M14 12h2"/>
+      </symbol>
+      <symbol id="g-fleuron" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3c-1 2-3 3-5 3 2 0 4 1 5 3 1-2 3-3 5-3-2 0-4-1-5-3z"/>
+        <path d="M12 15c-1 2-3 3-5 3 2 0 4 1 5 3 1-2 3-3 5-3-2 0-4-1-5-3z"/>
+        <path d="M12 9v6"/>
+      </symbol>
+
+      <!-- Class crest: Warlock — pact rod crossed over an occult star -->
+      <symbol id="crest-warlock" viewBox="0 0 100 100" fill="none" stroke="#fff8ea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <!-- Outer heraldic shield -->
+        <path d="M50 10 L85 22 L85 52 C85 72 68 86 50 92 C32 86 15 72 15 52 L15 22 Z" fill="rgba(255,248,234,0.08)" stroke-width="2.2"/>
+        <!-- Inscribed circle (pact seal) -->
+        <circle cx="50" cy="50" r="20" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.85"/>
+        <!-- Pentagram / occult star inside the seal -->
+        <path d="M50 34 L56 48 L71 48 L58.5 56.5 L63.5 70 L50 62 L36.5 70 L41.5 56.5 L29 48 L44 48 Z" fill="rgba(255,248,234,0.22)" stroke-width="1.3"/>
+        <!-- Eye in the center -->
+        <ellipse cx="50" cy="53" rx="5" ry="2.8" fill="rgba(255,248,234,0.9)" stroke="none"/>
+        <circle cx="50" cy="53" r="1.4" fill="#a64b1c" stroke="none"/>
+        <!-- Rays/pact flames above -->
+        <path d="M50 18 L50 26 M43 20 L45 27 M57 20 L55 27" stroke-width="1.3" opacity="0.75"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">D<span class="amp">&amp;</span>D Meta Game</div>
+    <span class="tag">Hi-Fi · Character Sheet · Spells</span>
+    <div class="spacer"></div>
+    <a class="topbar-link" href="DnD Meta Game Wireframes.html">
+      <svg class="icon" style="width:14px;height:14px"><use href="#i-book"/></svg>
+      back to wireframes
+    </a>
+  </header>
+
+  <main class="canvas">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="crest">
+        <svg viewBox="0 0 100 100" aria-label="Warlock crest"><use href="#crest-warlock"/></svg>
+        <div class="crest-badge">7</div>
+      </div>
+
+      <div class="identity">
+        <h1>Kaelen Voss</h1>
+        <div class="subtitle">
+          <em>Tiefling</em> · <em>Warlock</em> of the Hexblade · <em>Noble</em> background
+          &nbsp;·&nbsp; <span style="color:var(--ink-faint)">Crowned Shadow campaign</span>
+        </div>
+        <div class="pills">
+          <span class="hp-pill">
+            <span class="label">HP</span>
+            <span class="v">42 / 52</span>
+            <span class="hp-bar"><span class="fill"></span></span>
+          </span>
+          <span class="pill"><span class="label">AC</span><span class="v">15</span></span>
+          <span class="pill"><span class="label">Init</span><span class="v">+2</span></span>
+          <span class="pill"><span class="label">Spd</span><span class="v">30 ft</span></span>
+          <span class="pill accent"><span class="label">Prof</span><span class="v">+3</span></span>
+          <span class="pill"><span class="label">Hit Dice</span><span class="v">3 / 7 d8</span></span>
+          <span class="insp"><svg class="icon"><use href="#i-star"/></svg>Inspiration</span>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <button class="btn primary">
+          <svg class="icon"><use href="#i-chevrons-up"/></svg>
+          Level up
+        </button>
+        <button class="btn ghost">
+          <svg class="icon"><use href="#i-coffee"/></svg>
+          Short rest
+        </button>
+        <button class="btn ghost">
+          <svg class="icon"><use href="#i-bed"/></svg>
+          Long rest
+        </button>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <nav class="tabs" aria-label="Character sections">
+      <div class="tab"><svg class="icon"><use href="#i-brain"/></svg>Stats</div>
+      <div class="tab"><svg class="icon"><use href="#g-sword"/></svg>Combat</div>
+      <div class="tab active"><svg class="icon"><use href="#g-flame"/></svg>Spells<span class="count">12</span></div>
+      <div class="tab"><svg class="icon"><use href="#i-backpack"/></svg>Inventory<span class="count">18</span></div>
+      <div class="tab"><svg class="icon"><use href="#i-sparkles"/></svg>Features</div>
+      <div class="tab"><svg class="icon"><use href="#i-scroll"/></svg>Background</div>
+      <div class="tab"><svg class="icon"><use href="#i-chevrons-up"/></svg>Progression</div>
+      <div class="tab"><svg class="icon"><use href="#g-eye-mystic"/></svg>Mythic</div>
+    </nav>
+
+    <!-- === SPELLS TAB === -->
+
+    <!-- Pact Magic slot tracker -->
+    <section class="pact-strip">
+      <div class="pact-head">
+        <span class="eyebrow">Pact Magic</span>
+        <h3>Slots of the Hexblade</h3>
+        <div class="meta">2 slots · always cast at <em>4th level</em> · refresh on <em>short rest</em></div>
+      </div>
+
+      <div>
+        <div class="slot-array">
+          <div class="slot-orb">4</div>
+          <div class="slot-divider">+</div>
+          <div class="slot-orb spent">—</div>
+        </div>
+        <div class="slot-label">1 of 2 remaining</div>
+      </div>
+
+      <div class="pact-actions">
+        <button class="btn ghost"><svg class="icon"><use href="#i-coffee"/></svg>Take short rest</button>
+        <button class="btn ghost"><svg class="icon"><use href="#i-search"/></svg>Search spells</button>
+      </div>
+    </section>
+
+    <!-- Two-column spells layout -->
+    <div class="spells-layout">
+
+      <!-- LEFT: Spell list -->
+      <div>
+
+        <!-- Cast stats strip -->
+        <div class="cast-stats">
+          <div class="cast-stat">
+            <span class="lbl">Spell save DC</span>
+            <span class="val accent">15</span>
+            <span class="sub">8 + prof + Cha</span>
+          </div>
+          <div class="cast-stat">
+            <span class="lbl">Spell attack</span>
+            <span class="val">+7</span>
+            <span class="sub">prof + Cha</span>
+          </div>
+          <div class="cast-stat">
+            <span class="lbl">Ability</span>
+            <span class="val">Charisma</span>
+            <span class="sub">+4 modifier</span>
+          </div>
+          <div class="cast-stat">
+            <span class="lbl">Prepared</span>
+            <span class="val">9 / 9</span>
+            <span class="sub">Cha mod + lvl</span>
+          </div>
+        </div>
+
+        <!-- Cantrips -->
+        <div class="spell-level-head">
+          <h3>Cantrips</h3>
+          <span class="kind">level 0 · 4 known</span>
+          <span class="rule"></span>
+          <span class="at-will">At-will</span>
+        </div>
+
+        <div class="spell-grid cantrips">
+          <!-- EXPANDED Eldritch Blast -->
+          <article class="spell expanded" style="grid-column: 1 / -1">
+            <div class="spell-head">
+              <span class="spell-name">Eldritch Blast</span>
+              <div class="spell-tags">
+                <span class="stag action">Action</span>
+                <span class="stag">V</span>
+                <span class="stag">S</span>
+              </div>
+              <span style="flex:1"></span>
+              <span class="spell-dmg">
+                2 × 1d10+4
+                <span class="type">Force</span>
+              </span>
+            </div>
+
+            <div class="spell-meta">
+              <span><span class="k">Range</span><span class="v">120 ft</span></span>
+              <span><span class="k">Target</span><span class="v">1 creature per beam</span></span>
+              <span><span class="k">Duration</span><span class="v">Instant</span></span>
+              <span><span class="k">School</span><span class="v">Evocation</span></span>
+            </div>
+
+            <div class="spell-detail">
+              <div class="spell-desc">
+                A beam of crackling violet energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes <strong style="color:var(--ink)">1d10 force damage</strong>.
+                <div class="higher">
+                  <strong>Agonizing Blast invocation</strong>
+                  Add your Charisma modifier (<span style="color:var(--ink)">+4</span>) to each beam's damage. You cast two beams at level 5+ and may target the same creature or different creatures.
+                </div>
+              </div>
+
+              <div class="spell-cast-panel">
+                <span class="headline">Next attack roll</span>
+                <div class="roll-preview">1d20 <span class="op">+</span> 7</div>
+                <div class="roll-note">Ranged spell attack vs. AC</div>
+                <button class="btn primary"><svg class="icon"><use href="#g-flame"/></svg>Cast Eldritch Blast</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Mage Hand</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span><span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">30 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">1 min</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">Utility</div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Minor Illusion</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">S</span><span class="stag">M</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">30 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">1 min</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">Utility</div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Chill Touch</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span><span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">120 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">1 rnd</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg">
+              1d8
+              <span class="type">Necrotic</span>
+            </div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Prestidigitation</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span><span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">10 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">1 hr</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">Flavor</div>
+          </article>
+        </div>
+
+        <!-- Level 4 — Pact slots cast at this level -->
+        <div class="spell-level-head">
+          <h3>Fourth Level</h3>
+          <span class="kind">pact level · 8 known</span>
+          <span class="rule"></span>
+          <span class="slots-open">1 slot open</span>
+        </div>
+
+        <div class="spell-grid">
+
+          <!-- EXPANDED Hex (concentrating) -->
+          <article class="spell expanded concentrating" style="grid-column: 1 / -1">
+            <div class="spell-head">
+              <span class="spell-name">Hex</span>
+              <div class="spell-tags">
+                <span class="stag bonus">Bonus</span>
+                <span class="stag conc">⌁ Concentrating</span>
+                <span class="stag">V</span><span class="stag">S</span><span class="stag">M</span>
+              </div>
+              <span style="flex:1"></span>
+              <span class="spell-dmg" style="color:var(--ink-purple)">
+                +1d6 per hit
+                <span class="type" style="color:var(--ink-purple)">Necrotic</span>
+              </span>
+            </div>
+
+            <div class="spell-meta">
+              <span><span class="k">Range</span><span class="v">90 ft</span></span>
+              <span><span class="k">Target</span><span class="v">Sir Kestrel (marked)</span></span>
+              <span><span class="k">Duration</span><span class="v">concentration · <strong style="color:var(--ink-purple)">47 min remaining</strong></span></span>
+              <span><span class="k">Ability</span><span class="v">Strength (disadvantage)</span></span>
+            </div>
+
+            <div class="spell-detail">
+              <div class="spell-desc">
+                You place a curse on <strong style="color:var(--ink)">Sir Kestrel of the Scarlet Vow</strong>. Until the spell ends, you deal an extra <strong style="color:var(--ink-purple)">1d6 necrotic damage</strong> when you hit them with an attack, and they have disadvantage on <strong style="color:var(--ink)">Strength</strong> ability checks.
+                <div class="higher">
+                  <strong>Upcasting</strong>
+                  3rd-level slot holds for up to 8 hours. 5th level: 24 hours. Transfers to new target as a bonus action if the original drops to 0 HP.
+                </div>
+              </div>
+
+              <div class="spell-cast-panel">
+                <span class="headline">Upcast at</span>
+                <div class="upcast">
+                  <button class="upcast-btn"><span class="lvl">1</span><span class="dmg">1d6</span></button>
+                  <button class="upcast-btn"><span class="lvl">2</span><span class="dmg">1d6</span></button>
+                  <button class="upcast-btn"><span class="lvl">3</span><span class="dmg">1d6</span></button>
+                  <button class="upcast-btn selected"><span class="lvl">4</span><span class="dmg">1d6</span></button>
+                </div>
+                <button class="btn ghost" style="border-color:var(--ink-purple); color:var(--ink-purple)">Drop concentration</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Armor of Agathys</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span><span class="stag">S</span><span class="stag">M</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">Self</span></span>
+                <span><span class="k">Dur</span><span class="v">1 hr</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg">
+              20 temp HP
+              <span class="type">Cold</span>
+            </div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Hellish Rebuke</span>
+                <div class="spell-tags">
+                  <span class="stag reaction">Reaction</span>
+                  <span class="stag">V</span><span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">60 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">Instant</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg">
+              5d10
+              <span class="type">Fire</span>
+            </div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Darkness</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag conc">Conc.</span>
+                  <span class="stag">V</span><span class="stag">M</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">60 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">10 min</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">15-ft sphere</div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Mirror Image</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span><span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">Self</span></span>
+                <span><span class="k">Dur</span><span class="v">1 min</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">3 duplicates</div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Counterspell</span>
+                <div class="spell-tags">
+                  <span class="stag reaction">Reaction</span>
+                  <span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">60 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">Instant</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">Interrupt</div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Dimension Door</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">500 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">Instant</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg" style="color:var(--ink-dim); font-size:12px; font-family:var(--body); font-weight:500;">Teleport</div>
+          </article>
+
+          <article class="spell">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Banishment</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag conc">Conc.</span>
+                  <span class="stag">V</span><span class="stag">S</span><span class="stag">M</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">60 ft</span></span>
+                <span><span class="k">Dur</span><span class="v">1 min</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg">
+              DC 15
+              <span class="type">Cha save</span>
+            </div>
+          </article>
+        </div>
+
+        <!-- Mystic Arcanum — Warlock 7th level feature -->
+        <div class="spell-level-head">
+          <h3>Mystic Arcanum</h3>
+          <span class="kind">5th level · 1 / long rest · no slot used</span>
+          <span class="rule"></span>
+          <span class="at-will" style="color:var(--terracotta); background: color-mix(in oklab, var(--terracotta) 12%, transparent); border-color: color-mix(in oklab, var(--terracotta) 40%, transparent);">1 use left</span>
+        </div>
+
+        <div class="spell-grid">
+          <article class="spell" style="grid-column: 1 / -1; border-color: color-mix(in oklab, var(--terracotta) 40%, var(--line-soft)); background: color-mix(in oklab, var(--terracotta) 4%, var(--surface));">
+            <div>
+              <div class="spell-head">
+                <span class="spell-name">Synaptic Static</span>
+                <div class="spell-tags">
+                  <span class="stag action">Action</span>
+                  <span class="stag">V</span><span class="stag">S</span>
+                </div>
+              </div>
+              <div class="spell-meta" style="margin-top:6px">
+                <span><span class="k">Rng</span><span class="v">120 ft</span></span>
+                <span><span class="k">Area</span><span class="v">20-ft sphere</span></span>
+                <span><span class="k">Save</span><span class="v">Int DC 15 · half</span></span>
+                <span><span class="k">Debuff</span><span class="v">–1d6 to attacks &amp; checks (1 min)</span></span>
+              </div>
+            </div>
+            <div class="spell-dmg">
+              8d6
+              <span class="type">Psychic</span>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <!-- RIGHT: Invocations sidebar -->
+      <aside class="invocations">
+        <div class="section-head">
+          <h2 style="font-size:18px">Eldritch Invocations</h2>
+        </div>
+        <div class="sub-note">Always-on abilities — your pact's permanent gifts.</div>
+
+        <div class="invo-list">
+          <div class="invo">
+            <div class="invo-name">
+              <svg class="icon"><use href="#g-flame"/></svg>
+              Agonizing Blast
+            </div>
+            <div class="invo-desc">Add <strong style="color:var(--ink)">Cha (+4)</strong> to each Eldritch Blast beam's damage.</div>
+            <div class="invo-meta">Applies to EB · always on</div>
+          </div>
+
+          <div class="invo">
+            <div class="invo-name">
+              <svg class="icon"><use href="#i-eye"/></svg>
+              Devil's Sight
+            </div>
+            <div class="invo-desc">See normally in darkness — magical and nonmagical — to <strong style="color:var(--ink)">120 ft</strong>.</div>
+            <div class="invo-meta">Passive · sight</div>
+          </div>
+
+          <div class="invo">
+            <div class="invo-name">
+              <svg class="icon"><use href="#g-eye-mystic"/></svg>
+              Mask of Many Faces
+            </div>
+            <div class="invo-desc">Cast <em>Disguise Self</em> at will — no slot required.</div>
+            <div class="invo-meta">At-will · social</div>
+          </div>
+
+          <div class="invo">
+            <div class="invo-name">
+              <svg class="icon"><use href="#i-book"/></svg>
+              Book of Ancient Secrets
+            </div>
+            <div class="invo-desc">Transcribe rituals. Currently holding <strong style="color:var(--ink)">Detect Magic</strong>, <strong style="color:var(--ink)">Silent Image</strong>, <strong style="color:var(--ink)">Unseen Servant</strong>.</div>
+            <div class="invo-meta">Ritual · 3 spells</div>
+          </div>
+
+          <div class="invo">
+            <div class="invo-name">
+              <svg class="icon"><use href="#i-chevrons-up"/></svg>
+              Eldritch Smite
+            </div>
+            <div class="invo-desc">Spend a slot after a melee hit: <strong style="color:var(--ink)">+1d8 force / slot level</strong> and knock prone if Huge or smaller.</div>
+            <div class="invo-meta">1 slot · Hexblade only</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="tab-footnote">
+      Spells tab shown · Pact Magic · 2 slots at 4th level · Hex concentration active · Eldritch Blast + Hex expanded for reference
+    </div>
+  </main>
+</body>
+</html>
+<!-- LEGACY STATS BODY BELOW REMOVED -->
+<template style="display:none">
+      <!-- Abilities -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Abilities</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+          <span class="sub">point-buy · Tiefling +2 Cha</span>
+        </div>
+        <div class="abilities">
+          <div class="ability"><div class="name">Str</div><div class="score">10</div><div class="mod">+0</div></div>
+          <div class="ability"><div class="name">Dex</div><div class="score">14</div><div class="mod">+2</div></div>
+          <div class="ability"><div class="name">Con</div><div class="score">14</div><div class="mod">+2</div></div>
+          <div class="ability"><div class="name">Int</div><div class="score">11</div><div class="mod">+0</div></div>
+          <div class="ability"><div class="name">Wis</div><div class="score">12</div><div class="mod">+1</div></div>
+          <div class="ability prime"><div class="name">Cha</div><div class="score">18</div><div class="mod">+4</div></div>
+        </div>
+      </section>
+
+      <!-- Saves -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Saving throws</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+          <span class="sub">Cha · Wis</span>
+        </div>
+        <div class="save-list">
+          <div class="save-row"><span class="dot"></span><span class="nm">Strength</span><span class="mod">+0</span></div>
+          <div class="save-row"><span class="dot"></span><span class="nm">Dexterity</span><span class="mod">+2</span></div>
+          <div class="save-row"><span class="dot"></span><span class="nm">Constitution</span><span class="mod">+2</span></div>
+          <div class="save-row"><span class="dot"></span><span class="nm">Intelligence</span><span class="mod">+0</span></div>
+          <div class="save-row prof"><span class="dot"></span><span class="nm">Wisdom</span><span class="mod">+4</span></div>
+          <div class="save-row prof"><span class="dot"></span><span class="nm">Charisma</span><span class="mod">+7</span></div>
+        </div>
+      </section>
+
+      <!-- Senses -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Passive senses</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+        </div>
+        <div class="senses">
+          <div class="sense-row">
+            <span class="lbl"><svg class="icon"><use href="#i-eye"/></svg>Perception</span>
+            <span class="v">11</span>
+          </div>
+          <div class="sense-row">
+            <span class="lbl"><svg class="icon"><use href="#i-brain"/></svg>Insight</span>
+            <span class="v">11</span>
+          </div>
+          <div class="sense-row">
+            <span class="lbl"><svg class="icon"><use href="#i-search"/></svg>Investigation</span>
+            <span class="v">10</span>
+          </div>
+          <div class="senses-note">
+            Darkvision 60 ft · Devil's Sight 120 ft (pierces magical darkness)
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Secondary row -->
+    <div class="grid-secondary">
+
+      <!-- Skills -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Skills</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+          <span class="sub">
+            <span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);display:inline-block"></span>proficient</span>
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--ink-purple);display:inline-block"></span>expertise</span>
+          </span>
+        </div>
+        <div class="skills">
+          <div class="skill"><span class="dot"></span><span class="nm">Acrobatics</span><span class="abil">Dex</span><span class="mod">+2</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Animal Handling</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill prof"><span class="dot"></span><span class="nm">Arcana</span><span class="abil">Int</span><span class="mod">+3</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Athletics</span><span class="abil">Str</span><span class="mod">+0</span></div>
+          <div class="skill expert"><span class="dot"></span><span class="nm">Deception</span><span class="abil">Cha</span><span class="mod">+10</span></div>
+          <div class="skill prof"><span class="dot"></span><span class="nm">History</span><span class="abil">Int</span><span class="mod">+3</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Insight</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill prof"><span class="dot"></span><span class="nm">Intimidation</span><span class="abil">Cha</span><span class="mod">+7</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Investigation</span><span class="abil">Int</span><span class="mod">+0</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Medicine</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Nature</span><span class="abil">Int</span><span class="mod">+0</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Perception</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Performance</span><span class="abil">Cha</span><span class="mod">+4</span></div>
+          <div class="skill expert"><span class="dot"></span><span class="nm">Persuasion</span><span class="abil">Cha</span><span class="mod">+10</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Religion</span><span class="abil">Int</span><span class="mod">+0</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Sleight of Hand</span><span class="abil">Dex</span><span class="mod">+2</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Stealth</span><span class="abil">Dex</span><span class="mod">+2</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Survival</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+        </div>
+      </section>
+
+      <!-- Languages, tools, armor -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Proficiencies</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+        </div>
+
+        <div class="kv-block">
+          <div class="kv-label">Languages</div>
+          <div class="tag-row">
+            <span class="tag">Common</span>
+            <span class="tag">Infernal</span>
+            <span class="tag">Elvish</span>
+          </div>
+        </div>
+
+        <div class="kv-block">
+          <div class="kv-label">Armor &amp; weapons</div>
+          <div class="prose">Light &amp; medium armor · shields · simple &amp; martial weapons <em style="color:var(--ink-faint)">(Hexblade patron)</em></div>
+        </div>
+
+        <div class="kv-block">
+          <div class="kv-label">Tools</div>
+          <div class="tag-row">
+            <span class="tag"><svg class="icon"><use href="#i-book"/></svg>Dragonchess</span>
+            <span class="tag"><svg class="icon"><use href="#i-scroll"/></svg>Calligrapher's</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="tab-footnote">
+      Stats tab shown · switch tabs above for Combat · Spells · Inventory · Features · Background · Progression · Mythic
+    </div>
+  </main>
+</body>
+</html>

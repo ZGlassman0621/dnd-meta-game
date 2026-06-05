@@ -8,6 +8,9 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+import { getMerchantInventory, createMerchantOnTheFly } from './merchantService.js';
+import { registerThresholdConsumer } from './timeBoundedState.js';
 
 const CP_PER_GP = 100;
 const CP_PER_SP = 10;
@@ -226,11 +229,74 @@ export async function listOrdersForCharacter(characterId) {
   );
 }
 
+// ============================================================
+// Phase 3.3 SC-7.5 — Two-stage merchant-order threshold pipeline
+// ============================================================
+//
+// Two registrations per spec §3.3.5: pending → ready (stage 1, threshold=0
+// fires when deadline reached); ready → expired (stage 2, threshold=31
+// fires when 31+ days past ready_game_day, matching legacy `> 30`).
+// SELECT-pre-filter is the idempotency strategy for both — orchestrator
+// only loads orders in the pre-fire status; status flip drops them out
+// of subsequent ticks.
+
+const MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'merchant_order_due',
+  threshold: 0,
+  handler: async (contextKey) => {
+    const { order, currentGameDay } = contextKey;
+    await dbRun(
+      `UPDATE merchant_orders
+       SET status = 'ready', ready_game_day = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'pending'`,
+      [currentGameDay, order.id]
+    );
+    return { ...order, status: 'ready', ready_game_day: currentGameDay };
+  },
+  idempotency: {
+    async hasFiredRecently() { return false; },  // SELECT pre-filters by status='pending'
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      return contextKey.order?.deadline_game_day || null;
+    }
+  }
+});
+
+const MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'merchant_order_expire',
+  threshold: 31,  // legacy: `(currentGameDay - ready_game_day) > 30` → 31+ elapsed
+  handler: async (contextKey) => {
+    const { order } = contextKey;
+    await dbRun(
+      `UPDATE merchant_orders
+       SET status = 'expired', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'ready'`,
+      [order.id]
+    );
+    return { ...order, status: 'expired' };
+  },
+  idempotency: {
+    async hasFiredRecently() { return false; },  // SELECT pre-filters by status='ready'
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      return contextKey.order?.ready_game_day || null;
+    }
+  }
+});
+
 /**
  * Mark pending orders as ready when their deadline has been reached.
  * Called from the living-world tick. Returns the list of orders that
  * just flipped status so the caller can hand them to the narrative
  * queue.
+ *
+ * Phase 3.3 SC-7.5: per-order threshold check delegates to
+ * MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER. SELECT pre-filter retained as
+ * the idempotency strategy.
  */
 export async function processDueOrders(currentGameDay) {
   const due = await dbAll(
@@ -243,13 +309,11 @@ export async function processDueOrders(currentGameDay) {
 
   const becameReady = [];
   for (const order of due) {
-    await dbRun(
-      `UPDATE merchant_orders
-       SET status = 'ready', ready_game_day = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'pending'`,
-      [currentGameDay, order.id]
+    const result = await MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER.checkAndFire(
+      { order, currentGameDay },
+      currentGameDay
     );
-    becameReady.push({ ...order, status: 'ready', ready_game_day: currentGameDay });
+    if (result.fired && result.handlerResult) becameReady.push(result.handlerResult);
   }
   return becameReady;
 }
@@ -258,26 +322,120 @@ export async function processDueOrders(currentGameDay) {
  * Expire ready orders that have sat too long (30 game days post-ready).
  * Merchants don't hold stock forever. Returns expired orders for
  * narrative notification.
+ *
+ * Phase 3.3 SC-7.5: stage 2 of the two-stage threshold pipeline. Per-order
+ * check delegates to MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER (threshold=31,
+ * matching legacy's `> 30` strict-greater check).
+ *
+ * Note: legacy supported a `holdDays` parameter to override the 30-day
+ * default. The threshold consumer's threshold is config-time fixed at 31.
+ * Production callers (livingWorldService) always use the default; the
+ * parameter override is removed in this migration. If a future caller
+ * needs a different hold time, register a second consumer with that
+ * threshold.
  */
-export async function expireStaleReadyOrders(currentGameDay, holdDays = 30) {
+export async function expireStaleReadyOrders(currentGameDay) {
   const stale = await dbAll(
     `SELECT o.*, m.merchant_name
      FROM merchant_orders o
      LEFT JOIN merchant_inventories m ON o.merchant_id = m.id
      WHERE o.status = 'ready' AND o.ready_game_day IS NOT NULL
-       AND (? - o.ready_game_day) > ?`,
-    [currentGameDay, holdDays]
+       AND (? - o.ready_game_day) > 30`,
+    [currentGameDay]
   );
 
   const expired = [];
   for (const order of stale) {
-    await dbRun(
-      `UPDATE merchant_orders
-       SET status = 'expired', updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'ready'`,
-      [order.id]
+    const result = await MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER.checkAndFire(
+      { order, currentGameDay },
+      currentGameDay
     );
-    expired.push({ ...order, status: 'expired' });
+    if (result.fired && result.handlerResult) expired.push(result.handlerResult);
   }
   return expired;
 }
+
+// Exports for direct test access.
+export { MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER, MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER };
+
+// ============================================================
+// SC-6.4b — MERCHANT_COMMISSION marker handler
+// ============================================================
+
+/**
+ * MERCHANT_COMMISSION handler — replaces the inline dispatch at the
+ * pre-SC-6.4b routes/dmSession.js:1611-1686 site. Per-marker handler
+ * (multi-instance markers fire the handler once per instance via the
+ * pipeline). Returns a structured result with the success/failure
+ * payload + the system note text the route should push to
+ * result.messages.
+ *
+ * Idempotency guard preserved (skip if an active order with the same
+ * item name already exists at this merchant for this character — AI
+ * may repeat the marker across retries; prevents double-charging).
+ *
+ * Schema accepts price/deposit in mixed gp/sp/cp denominations per the
+ * SC-6.4b schema extension; legacy detect-tolerance preserved.
+ */
+registerMarkerHandler('MERCHANT_COMMISSION', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character?.campaign_id) return null;
+
+  let dbMerchant = await getMerchantInventory(character.campaign_id, parsed.Merchant);
+  if (!dbMerchant) {
+    dbMerchant = await createMerchantOnTheFly(
+      character.campaign_id, parsed.Merchant, 'general', null, 1
+    );
+  }
+
+  // Idempotency: skip if an active order already exists for this item.
+  const dupe = await dbGet(
+    `SELECT id FROM merchant_orders
+     WHERE merchant_id = ? AND character_id = ?
+       AND LOWER(item_name) = LOWER(?)
+       AND status IN ('pending','ready')
+     LIMIT 1`,
+    [dbMerchant.id, context.characterId, parsed.Item]
+  );
+  if (dupe) {
+    return {
+      type: 'merchant_commission',
+      status: 'skipped_duplicate',
+      systemNote: `[SYSTEM: MERCHANT_COMMISSION skipped — an order for "${parsed.Item}" at ${parsed.Merchant} is already in progress (order #${dupe.id}). Don't restate the commission.]`
+    };
+  }
+
+  const quotedCp = (parsed.Price_GP || 0) * 100 + (parsed.Price_SP || 0) * 10 + (parsed.Price_CP || 0);
+  const depositCp = (parsed.Deposit_GP || 0) * 100 + (parsed.Deposit_SP || 0) * 10 + (parsed.Deposit_CP || 0);
+
+  const placeResult = await placeCommission({
+    merchantId: dbMerchant.id,
+    characterId: context.characterId,
+    itemName: parsed.Item,
+    itemSpec: { quality: parsed.Quality, description: parsed.Description, hook: parsed.Hook },
+    quotedPriceCp: quotedCp,
+    depositCp,
+    leadTimeDays: parsed.Lead_Time_Days,
+    currentGameDay: character.game_day || 0,
+    narrativeHook: parsed.Hook
+  });
+
+  if (!placeResult.ok) {
+    return {
+      type: 'merchant_commission',
+      status: 'failed',
+      systemNote: `[SYSTEM: MERCHANT_COMMISSION failed — ${placeResult.error}. Narrate the merchant withdrawing the offer or the player lacking funds. Do NOT tell the player the order was placed.]`
+    };
+  }
+
+  return {
+    type: 'merchant_commission',
+    status: 'placed',
+    orderId: placeResult.order.id,
+    systemNote: `[SYSTEM: Commission recorded. Order #${placeResult.order.id}: ${parsed.Item} from ${parsed.Merchant}, ready in ${parsed.Lead_Time_Days} game days (day ${character.game_day + parsed.Lead_Time_Days}). Deposit: ${Math.ceil(depositCp / 100)} gp. Balance due on pickup: ${Math.ceil((quotedCp - depositCp) / 100)} gp.]`
+  };
+});

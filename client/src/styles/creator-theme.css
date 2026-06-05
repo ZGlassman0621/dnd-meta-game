@@ -846,3 +846,440 @@
 }
 .creator-v2 .pathcard .cta .arrow { transition: transform .2s; }
 .creator-v2 .pathcard:hover .cta .arrow { transform: translateX(4px); }
+
+/* ============================================================
+ * Phase 3.5 — Settings overlay (per `settings/SETTINGS_DESIGN_BRIEF.md`)
+ *
+ * Scoped under `.settings-overlay-root` so the overlay can be reached from
+ * the editorial-aesthetic HomeFlow AND the legacy dark-aesthetic dashboard
+ * — the scrim + sheet provide their own visual separation either way.
+ * Tokens are duplicated here (small palette, low cost) rather than
+ * promoted into design-tokens.css; the comment at the top of this file
+ * notes that a token-promotion ship can land later when a third surface
+ * starts referencing them.
+ * ============================================================ */
+
+.settings-overlay-root {
+  /* Editorial palette (mirrors `.creator-v2`) */
+  --bg: #fcfcfa;
+  --bg-2: #f3f3ee;
+  --bg-card: #ffffff;
+  --ink: #18181a;
+  --ink-2: #4a4a4f;
+  --ink-3: #86868b;
+  --rule: #e3e3df;
+  --rule-soft: #ededea;
+  --accent: #2f3a52;
+  --accent-2: #6b6f78;
+  --serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 64px 24px;
+  overflow-y: auto;
+  background: rgba(28, 24, 19, 0.42);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  font-family: var(--serif);
+  color: var(--ink);
+}
+
+.settings-overlay-root *,
+.settings-overlay-root *::before,
+.settings-overlay-root *::after { box-sizing: border-box; }
+
+.settings-overlay-root button { font: inherit; color: inherit; cursor: pointer; }
+.settings-overlay-root button:focus { outline: none; }
+
+/* Sheet ---------------------------------------------------------------- */
+
+.settings-overlay-root .settings-sheet {
+  width: 760px;
+  max-width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  box-shadow: 0 30px 80px rgba(28,24,19,0.18), 0 2px 0 rgba(28,24,19,0.04);
+  position: relative;
+}
+.settings-overlay-root .settings-sheet::before,
+.settings-overlay-root .settings-sheet::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: var(--rule-soft);
+  pointer-events: none;
+}
+.settings-overlay-root .settings-sheet::before { top: 6px; }
+.settings-overlay-root .settings-sheet::after  { bottom: 6px; }
+
+/* Sheet head ----------------------------------------------------------- */
+
+.settings-overlay-root .settings-head {
+  padding: 44px 56px 32px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: start;
+}
+.settings-overlay-root .settings-head .for-line {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 14px;
+}
+.settings-overlay-root .settings-head .for-line .name {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+  margin-left: 6px;
+}
+.settings-overlay-root .settings-head h1 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.settings-overlay-root .settings-head .lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin: 0;
+  max-width: 480px;
+}
+
+.settings-overlay-root .dismiss-x {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sans);
+  font-size: 18px;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all .12s;
+  align-self: start;
+  line-height: 1;
+}
+.settings-overlay-root .dismiss-x:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* Section -------------------------------------------------------------- */
+
+.settings-overlay-root .settings-section {
+  padding: 32px 56px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.settings-overlay-root .settings-section:last-of-type { border-bottom: 0; }
+.settings-overlay-root .settings-section .sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.settings-overlay-root .settings-section .sec-eyebrow {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+.settings-overlay-root .settings-section .sec-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+.settings-overlay-root .settings-section .sec-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+
+/* A single setting item ----------------------------------------------- */
+
+.settings-overlay-root .setting {
+  padding: 24px 0 8px;
+  position: relative;
+}
+.settings-overlay-root .setting + .setting {
+  border-top: 1px dashed var(--rule-soft);
+  margin-top: 8px;
+}
+.settings-overlay-root .setting .setting-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: baseline;
+  margin-bottom: 18px;
+}
+.settings-overlay-root .setting .setting-name {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+  margin: 0 0 4px;
+}
+.settings-overlay-root .setting .setting-blurb {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  margin: 0;
+  max-width: 440px;
+  text-wrap: pretty;
+}
+.settings-overlay-root .setting .setting-meta {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
+}
+.settings-overlay-root .setting .setting-meta .saved { color: var(--accent); }
+.settings-overlay-root .setting .setting-meta .saved::before {
+  content: "";
+  display: inline-block;
+  width: 5px; height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.settings-overlay-root .setting .coming-soon {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--accent-2);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The four-position dial ---------------------------------------------- */
+
+.settings-overlay-root .dial { position: relative; margin-top: 20px; }
+.settings-overlay-root .dial .dial-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+}
+.settings-overlay-root .dial .dial-pos {
+  background: transparent;
+  border: 0;
+  padding: 0 6px 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  position: relative;
+  text-align: left;
+  transition: color .12s;
+}
+.settings-overlay-root .dial .dial-pos .tick {
+  position: absolute;
+  left: 0;
+  top: -14px;
+  width: 1px;
+  height: 14px;
+  background: var(--rule);
+  transition: background .12s, height .12s, top .12s;
+}
+.settings-overlay-root .dial .dial-pos .dial-rom {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.1em;
+  transition: color .12s;
+}
+.settings-overlay-root .dial .dial-pos .dial-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  padding-top: 6px;
+  transition: color .12s;
+}
+.settings-overlay-root .dial .dial-pos:hover .dial-label,
+.settings-overlay-root .dial .dial-pos:hover .dial-rom { color: var(--ink-2); }
+.settings-overlay-root .dial .dial-pos:hover .tick { background: var(--ink-3); }
+
+.settings-overlay-root .dial .dial-pos.on .tick {
+  background: var(--accent);
+  height: 22px;
+  top: -22px;
+  width: 2px;
+}
+.settings-overlay-root .dial .dial-pos.on .dial-label { color: var(--accent); font-weight: 600; }
+.settings-overlay-root .dial .dial-pos.on .dial-rom   { color: var(--accent); }
+
+/* Active explanation block sits below the track */
+.settings-overlay-root .dial .dial-explain {
+  margin-top: 28px;
+  padding: 18px 22px;
+  background: var(--bg);
+  border-left: 2px solid var(--accent-2);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.settings-overlay-root .dial .dial-explain strong {
+  font-weight: 600;
+  font-style: normal;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  font-family: var(--sans);
+  font-size: 11px;
+  text-transform: uppercase;
+  margin-right: 10px;
+  vertical-align: 1px;
+}
+
+/* Disabled (placeholder) variant */
+.settings-overlay-root .dial.dial-disabled .dial-track {
+  border-top-style: dashed;
+}
+.settings-overlay-root .dial.dial-disabled .dial-pos { cursor: default; }
+.settings-overlay-root .dial.dial-disabled .dial-pos:hover .dial-label,
+.settings-overlay-root .dial.dial-disabled .dial-pos:hover .dial-rom { color: var(--ink-3); }
+.settings-overlay-root .dial.dial-disabled .dial-pos:hover .tick     { background: var(--rule); }
+.settings-overlay-root .dial.dial-disabled .dial-pos .tick           { background: var(--rule); }
+.settings-overlay-root .dial.dial-disabled .dial-pos.on .tick {
+  background: var(--ink-3);
+  width: 1px;
+  height: 18px;
+  top: -18px;
+}
+.settings-overlay-root .dial.dial-disabled .dial-pos.on .dial-label { color: var(--ink-3); font-weight: 500; }
+.settings-overlay-root .dial.dial-disabled .dial-pos.on .dial-rom   { color: var(--ink-3); }
+.settings-overlay-root .dial.dial-disabled .dial-explain {
+  border-left-color: var(--rule);
+  border-left-style: dashed;
+  color: var(--ink-3);
+}
+.settings-overlay-root .dial.dial-disabled .dial-explain strong { color: var(--ink-3); }
+
+/* "Also planned" band -------------------------------------------------- */
+
+.settings-overlay-root .future-list {
+  padding: 28px 56px 36px;
+  background: var(--bg);
+  border-top: 1px solid var(--rule-soft);
+}
+.settings-overlay-root .future-list .lbl {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 12px;
+}
+.settings-overlay-root .future-list .items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.settings-overlay-root .future-list .items .item {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+.settings-overlay-root .future-list .items .sep {
+  color: var(--rule);
+  font-family: var(--mono);
+  font-style: normal;
+}
+
+/* Sheet foot ---------------------------------------------------------- */
+
+.settings-overlay-root .settings-foot {
+  padding: 24px 56px 32px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.settings-overlay-root .settings-foot .foot-note {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+.settings-overlay-root .settings-foot .spacer { flex: 1; }
+.settings-overlay-root .settings-foot .btn {
+  background: var(--ink);
+  color: var(--bg);
+  border: 0;
+  padding: 10px 22px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .12s;
+}
+.settings-overlay-root .settings-foot .btn:hover { background: var(--accent); }
+
+/* Settings link in the editorial appbar (HomeFlow) -------------------- */
+
+.creator-v2 .appbar .nav-settings {
+  background: transparent;
+  border: 0;
+  padding: 6px 0;
+  color: var(--ink-3);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-family: var(--sans);
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  transition: color .12s;
+}
+.creator-v2 .appbar .nav-settings:hover { color: var(--ink); }
+.creator-v2 .appbar .nav-settings .glyph {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 0;
+}

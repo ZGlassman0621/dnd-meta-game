@@ -12,6 +12,7 @@
 import { dbAll, dbGet } from '../database.js';
 import { addToQueue } from './narrativeQueueService.js';
 import { chat as claudeChat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 // ============================================================
@@ -124,7 +125,12 @@ export async function generateMailContent(npc, rel, character, campaign, mailTyp
   try {
     const prompt = buildMailPrompt(npc, rel, character, mailType);
     const messages = [{ role: 'user', content: prompt }];
-    const response = await claudeChat(null, messages, 1, 'opus');
+    const response = await loggedChat(
+      { call_purpose: 'npc_mail_gen', prompt_builder: 'npcMailService',
+        character_id: character?.id, campaign_id: campaign?.id,
+        metadata: { npc_id: npc?.id, npc_name: npc?.name, mailType } },
+      null, messages, 1, 'opus'
+    );
 
     if (response) {
       const text = typeof response === 'string' ? response : response.content?.[0]?.text || response.content || '';

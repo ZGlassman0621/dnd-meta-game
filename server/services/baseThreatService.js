@@ -13,6 +13,8 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+import { registerThresholdConsumer } from './timeBoundedState.js';
 import {
   RAID_CAPABLE_EVENTS,
   SIEGE_FORCE_THRESHOLD,
@@ -68,6 +70,22 @@ function hydrateThreat(row) {
  * queues narrative warnings.
  *
  * Returns summary: { generated: [{ threat, baseName, sourceLabel }], checked: N }
+ *
+ * **DEPRECATED as of Phase 3.7 SC-3.7.1 (v1.0.164).** Marker-driven
+ * fortress threat origination via `[FORTRESS_THREAT]` is the canonical
+ * mechanism post-Phase-3.7 (handler registered below in this file).
+ * This world-event-tick path remains in place but is unused in production
+ * because no codepath creates `world_events` rows with raid-capable
+ * `event_type` values (the producer gap surfaced in
+ * `triage/kingdom-management-survey.md` §0).
+ *
+ * Per spec PHASE_3_7_SPEC.md §1.2 ("Replacing or removing the world-event-
+ * tick threat creation path"): removing this path would touch the
+ * living-world tick architecture — explicitly out of Phase 3.7 scope.
+ * Q2 ruling: keep deprecated, do not delete; if a future ship lands a
+ * producer that emits raid-capable event_types, this path becomes a
+ * second origination mechanism alongside the marker handler. Same row
+ * shape either way.
  */
 export async function generateThreatsForCampaign(campaignId, currentGameDay) {
   const summary = { generated: [], checked: 0 };
@@ -512,10 +530,62 @@ export async function initiatePlayerDefense(threatId) {
 }
 
 /**
+ * Synthesize the `outcomeCalc` shape that `computeDamageFromOutcome`
+ * expects from a marker-reported outcome. Auto-resolve produces this
+ * shape via `computeAutoResolveOutcome` (with real d20 rolls + margin);
+ * player-led defense doesn't roll dice — the AI DM narrates the result —
+ * so we synthesize equivalent values.
+ *
+ * Phase 3.7 SC-3.7.2 (per spec §3.4): player-led `damaged` defaults to
+ * the **mild** sub-tier (margin treated as 0 → 25% treasury, 20% garrison,
+ * 1-2 buildings damaged). Rationale: player engaged with the defense;
+ * even a "damaged" outcome reflects active resistance. Penalize players
+ * who engaged less harshly than players who didn't.
+ *
+ * Severity field on `[BASE_DEFENSE_RESULT]` (mild|severe) is future work
+ * per §3.4 — not Phase 3.7 scope. When that field lands, this helper can
+ * branch on it to set margin to -3 for severe.
+ */
+function synthesizeOutcomeCalcFromMarker(outcome) {
+  // Margin is what `computeDamageFromOutcome` keys on for the damaged
+  // sub-tier branch. For repelled + captured it's irrelevant (those
+  // branches don't read margin). For damaged, 0 = mild sub-tier.
+  let margin;
+  if (outcome === 'repelled') margin = 5;       // any value ≥ 0 works for the no-damage branch
+  else if (outcome === 'damaged') margin = 0;   // mild sub-tier per §3.4
+  else if (outcome === 'captured') margin = -10; // any value ≤ -6 works
+  else margin = 0;
+
+  return {
+    outcome,
+    margin,
+    // Synthetic placeholder rolls + totals — populated so the damage_report
+    // JSON's `rolls` / `attacker_total` / `defender_total` fields stay
+    // present. Marked `synthetic: true` so analytics can distinguish
+    // marker-driven outcomes from auto-resolve outcomes.
+    rolls: { attackerRoll: null, defenderRoll: null, synthetic: true },
+    attackerTotal: null,
+    defenderTotal: null,
+    garrisonBonus: null
+  };
+}
+
+/**
  * Record a player-led defense outcome. Called from dmSession after the
  * narrative combat concludes with a [BASE_DEFENSE_RESULT] marker or an
  * explicit UI action. Typically passes outcome='repelled' or 'damaged';
  * 'captured' is possible if the session represents a catastrophic defeat.
+ *
+ * Phase 3.7 SC-3.7.2 (per spec §3): closes the mechanical-damage
+ * asymmetry. Pre-SC-3.7.2, this function persisted the outcome but did
+ * NOT mutate buildings/treasury/garrison columns — only auto-resolve
+ * applied mechanical damage. That created a perverse incentive (engaging
+ * was mechanically free; ignoring threats cost real resources). Per the
+ * 2026-05-05 user ruling "damage is always mechanical regardless of
+ * resolution path," this function now runs the same `computeDamageFromOutcome`
+ * helper auto-resolve uses. If the caller supplies a pre-computed
+ * `damageReport`, it's preserved on the row but the mechanical mutation
+ * still runs underneath.
  */
 export async function recordPlayerDefenseOutcome(threatId, args) {
   const { outcome, damageReport, narrative, gameDay } = args;
@@ -525,40 +595,54 @@ export async function recordPlayerDefenseOutcome(threatId, args) {
     throw new Error(`Threat is ${threat.status}, not defending`);
   }
 
-  // Apply damage effects (same helper path as auto-resolve, but margin/roll
-  // are simulated from the declared outcome since the DM decides narratively)
   const base = await dbGet('SELECT * FROM party_bases WHERE id = ?', [threat.base_id]);
-  if (damageReport && typeof damageReport === 'object') {
-    // Caller may supply a pre-computed damage report; persist as-is
-  }
+  if (!base) throw new Error('Base not found for threat');
+
+  // Phase 3.7 SC-3.7.2 — apply mechanical damage matching auto-resolve.
+  // `repelled` short-circuits to no-damage in `computeDamageFromOutcome`;
+  // `damaged` and `captured` mutate buildings/treasury/garrison.
+  const outcomeCalc = synthesizeOutcomeCalcFromMarker(outcome);
+  const { damage_report: mechanicalReport, narrative: mechanicalNarrative } =
+    await computeDamageFromOutcome(threat, base, outcomeCalc);
+
+  // Persist. Caller-supplied damageReport (if any) wins on the JSON blob
+  // — preserves backwards-compat for any UI / analytics path that fed in
+  // a richer pre-computed report. The mechanical mutation still ran.
+  // When no damageReport is supplied, we use computeDamageFromOutcome's
+  // output (which carries the mechanical detail: buildings_damaged,
+  // treasury_lost_gp, garrison_lost) so the row reflects what actually
+  // happened mechanically.
+  const finalReport = damageReport && typeof damageReport === 'object'
+    ? { ...mechanicalReport, ...damageReport, player_defended: true }
+    : { ...mechanicalReport, player_defended: true };
 
   return recordThreatOutcome(threatId, {
     outcome,
-    damageReport: damageReport || { player_defended: true },
-    narrative: narrative || `Player-led defense: ${outcome}.`,
+    damageReport: finalReport,
+    narrative: narrative || mechanicalNarrative || `Player-led defense: ${outcome}.`,
     gameDay
   });
 }
 
-/**
- * After the recapture window closes, flip captured bases to 'abandoned'
- * permanently. Runs per tick.
- */
-export async function expireStaleCapturedBases(campaignId, currentGameDay) {
-  const stale = await dbAll(
-    `SELECT t.id, t.base_id, b.name as base_name
-     FROM base_threats t
-     JOIN party_bases b ON t.base_id = b.id
-     WHERE t.campaign_id = ?
-       AND t.outcome = 'captured'
-       AND t.recapture_deadline_game_day IS NOT NULL
-       AND t.recapture_deadline_game_day <= ?
-       AND b.status != 'abandoned'`,
-    [campaignId, currentGameDay]
-  );
-  const expired = [];
-  for (const row of stale) {
-    // Flip the base itself to abandoned + mark the threat outcome as abandoned
+// ============================================================
+// Phase 3.3 SC-7.5 — Base recapture expiry threshold consumer
+// ============================================================
+//
+// Threshold = 0 (fire when current_game_day reaches recapture_deadline).
+// Same SELECT-pre-filter idempotency strategy as the four sibling
+// consumers in SC-7.5 — orchestrator only loads captured bases with
+// active deadlines; handler flips outcome to 'abandoned' so subsequent
+// ticks don't see the row.
+//
+// Side effects: flip party_bases.status = 'abandoned' + base_threats.outcome
+// = 'abandoned' + best-effort narrative queue entry. All three preserved
+// from legacy.
+
+const BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER = registerThresholdConsumer({
+  name: 'base_recapture_expire',
+  threshold: 0,
+  handler: async (contextKey, daysElapsed, hints) => {
+    const { row, campaignId } = hints;
     await dbRun(
       `UPDATE party_bases SET status = 'abandoned', is_primary = 0 WHERE id = ?`,
       [row.base_id]
@@ -567,8 +651,6 @@ export async function expireStaleCapturedBases(campaignId, currentGameDay) {
       `UPDATE base_threats SET outcome = 'abandoned', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [row.id]
     );
-
-    // Narrative warning
     try {
       const character = await dbGet(
         'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
@@ -588,8 +670,249 @@ export async function expireStaleCapturedBases(campaignId, currentGameDay) {
         });
       }
     } catch (e) { /* best-effort */ }
+    return row;
+  },
+  idempotency: {
+    async hasFiredRecently() { return false; },  // SELECT pre-filters by outcome='captured' + base.status != 'abandoned'
+    async recordFired() {}
+  },
+  repository: {
+    async readAnchor(contextKey) {
+      return contextKey.row?.recapture_deadline_game_day || null;
+    }
+  }
+});
 
-    expired.push(row);
+/**
+ * After the recapture window closes, flip captured bases to 'abandoned'
+ * permanently. Runs per tick.
+ *
+ * Phase 3.3 SC-7.5: per-base threshold check delegates to
+ * BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER. SELECT pre-filter retained
+ * (only loads captured bases with deadlines, not yet abandoned).
+ */
+export async function expireStaleCapturedBases(campaignId, currentGameDay) {
+  const stale = await dbAll(
+    `SELECT t.id, t.base_id, t.recapture_deadline_game_day, b.name as base_name
+     FROM base_threats t
+     JOIN party_bases b ON t.base_id = b.id
+     WHERE t.campaign_id = ?
+       AND t.outcome = 'captured'
+       AND t.recapture_deadline_game_day IS NOT NULL
+       AND t.recapture_deadline_game_day <= ?
+       AND b.status != 'abandoned'`,
+    [campaignId, currentGameDay]
+  );
+  const expired = [];
+  for (const row of stale) {
+    const result = await BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER.checkAndFire(
+      { row, currentGameDay },
+      currentGameDay,
+      { row, campaignId }
+    );
+    if (result.fired && result.handlerResult) expired.push(result.handlerResult);
   }
   return expired;
 }
+
+// Export for direct test access.
+export { BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER };
+
+// ============================================================
+// Phase 3.7 SC-3.7.1 — FORTRESS_THREAT marker handler
+// ============================================================
+//
+// Marker-driven fortress threat origination. AI DM emits
+// `[FORTRESS_THREAT: BaseId=N EventType="..." Force=N WarningDays=N ...]`;
+// this handler creates the `base_threats` row directly. Replaces the
+// world-event-tick path (`generateThreatsForCampaign`) as the canonical
+// origination mechanism per spec §2 + §1.2.
+//
+// Validation:
+//   - Base must exist + belong to the dispatching character's campaign
+//   - Base must be active (not abandoned/captured)
+//   - No existing approaching/defending/resolving threat on the base
+//     (single-active-threat invariant — same as `generateThreatsForCampaign`)
+//
+// Source/Category fallbacks land HERE, not in the schema (Q3 ruling):
+// schema validates structure + enums; handler does the lookup against
+// RAID_CAPABLE_EVENTS for absent optional fields.
+//
+// Multi-instance — pipeline dispatches once per emitted marker. Same
+// shape as PIETY_CHANGE / BOND_SHIFT / LOOT_DROP handlers.
+
+registerMarkerHandler('FORTRESS_THREAT', async (parsed, context) => {
+  if (!context?.characterId) return null;
+
+  // Fetch the dispatching character's campaign to validate ownership.
+  const character = await dbGet(
+    'SELECT id, campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character?.campaign_id) {
+    return {
+      type: 'fortress_threat',
+      baseId: parsed.BaseId,
+      error: 'no_campaign',
+      systemNote: '[SYSTEM: FORTRESS_THREAT failed — character has no campaign.]'
+    };
+  }
+
+  // Validate base ownership + status.
+  const base = await dbGet(
+    'SELECT id, name, subtype, defense_rating, garrison_strength, status, campaign_id FROM party_bases WHERE id = ?',
+    [parsed.BaseId]
+  );
+  if (!base) {
+    return {
+      type: 'fortress_threat',
+      baseId: parsed.BaseId,
+      error: 'base_not_found',
+      systemNote: `[SYSTEM: FORTRESS_THREAT failed — base #${parsed.BaseId} not found.]`
+    };
+  }
+  if (base.campaign_id !== character.campaign_id) {
+    return {
+      type: 'fortress_threat',
+      baseId: parsed.BaseId,
+      error: 'base_not_owned',
+      systemNote: `[SYSTEM: FORTRESS_THREAT failed — base #${parsed.BaseId} does not belong to this campaign.]`
+    };
+  }
+  if (base.status !== 'active') {
+    return {
+      type: 'fortress_threat',
+      baseId: parsed.BaseId,
+      error: 'base_not_active',
+      systemNote: `[SYSTEM: FORTRESS_THREAT failed — base #${parsed.BaseId} is ${base.status}, not active.]`
+    };
+  }
+
+  // Single-active-threat-per-base invariant.
+  const existingThreat = await dbGet(
+    `SELECT id FROM base_threats
+     WHERE base_id = ?
+       AND status IN ('approaching','defending','resolving')
+     LIMIT 1`,
+    [parsed.BaseId]
+  );
+  if (existingThreat) {
+    return {
+      type: 'fortress_threat',
+      baseId: parsed.BaseId,
+      error: 'threat_already_active',
+      existingThreatId: existingThreat.id,
+      systemNote: `[SYSTEM: FORTRESS_THREAT skipped — base #${parsed.BaseId} already has active threat #${existingThreat.id}.]`
+    };
+  }
+
+  // Source/Category fallbacks via RAID_CAPABLE_EVENTS lookup (Q3).
+  const eventCfg = RAID_CAPABLE_EVENTS[parsed.EventType] || {};
+  const source = parsed.Source || eventCfg.sourceLabel || parsed.EventType;
+  const category = parsed.Category || eventCfg.category || 'military';
+
+  const threatType = parsed.Force >= SIEGE_FORCE_THRESHOLD ? 'siege' : 'raid';
+  const currentGameDay = character.game_day || 0;
+  const deadlineGameDay = currentGameDay + parsed.WarningDays;
+
+  // Insert. The `damage_report` JSON blob is repurposed at threat-end to
+  // carry the post-resolution damage summary; until then we stash the
+  // marker's `Reason` (if any) so prompt injection during the threat's
+  // lifecycle can reference it. Keeping it here avoids a schema migration.
+  const reasonBlob = parsed.Reason ? { reason: parsed.Reason, origin: 'marker' } : { origin: 'marker' };
+  const result = await dbRun(
+    `INSERT INTO base_threats
+     (base_id, campaign_id, threat_type, attacker_source, attacker_category,
+      attacker_force, source_event_id, warning_game_day, deadline_game_day,
+      damage_report)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+    [
+      base.id, character.campaign_id, threatType,
+      source, category, parsed.Force,
+      currentGameDay, deadlineGameDay,
+      JSON.stringify(reasonBlob)
+    ]
+  );
+  const threatId = Number(result.lastInsertRowid);
+
+  // Narrative queue entry — same shape as `generateThreatsForCampaign` so
+  // downstream consumers (UI badges, prompt injection) treat marker-
+  // originated and event-originated threats identically.
+  try {
+    const verb = threatType === 'siege' ? 'is preparing to lay siege to' : 'is moving on';
+    const reasonSuffix = parsed.Reason ? ` — ${parsed.Reason}` : '';
+    await narrativeQueueService.addToQueue({
+      campaign_id: character.campaign_id,
+      character_id: character.id,
+      event_type: 'base_threat_approaching',
+      priority: threatType === 'siege' ? 'urgent' : 'normal',
+      title: `${source} threaten ${base.name}`,
+      description:
+        `A rider brings word: ${source} ${verb} ${base.name}. ` +
+        `Estimated arrival: ${parsed.WarningDays} day${parsed.WarningDays === 1 ? '' : 's'}. ` +
+        `Defense rating: ${base.defense_rating}.${reasonSuffix} ` +
+        `You can return to defend or accept the base's fate at the deadline.`,
+      context: {
+        threat_id: threatId,
+        base_id: base.id,
+        attacker_force: parsed.Force,
+        warning_days: parsed.WarningDays,
+        origin: 'marker'
+      }
+    });
+  } catch (e) {
+    console.warn('[baseThreatService] FORTRESS_THREAT narrative queue write failed:', e.message);
+  }
+
+  return {
+    type: 'fortress_threat',
+    threatId,
+    threatType,
+    baseId: base.id,
+    baseName: base.name,
+    source,
+    category,
+    deadlineGameDay,
+    systemNote: `[SYSTEM: ${source} (${threatType}, force ${parsed.Force}) approaching ${base.name}. Deadline: day ${deadlineGameDay}.]`
+  };
+});
+
+// ============================================================
+// SC-6.4d — BASE_DEFENSE_RESULT marker handler
+// ============================================================
+
+/**
+ * BASE_DEFENSE_RESULT handler. Multi-instance — one per emitted marker
+ * (rare in practice; usually one defense per turn). Calls
+ * recordPlayerDefenseOutcome to flip the threat status. Returns the
+ * systemNote text the route handler pushes to result.messages
+ * (success or failure variant).
+ */
+registerMarkerHandler('BASE_DEFENSE_RESULT', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  try {
+    await recordPlayerDefenseOutcome(parsed.Threat, {
+      outcome: parsed.Outcome,
+      narrative: parsed.Narrative,
+      gameDay: character?.game_day || null
+    });
+    return {
+      type: 'base_defense_result',
+      threatId: parsed.Threat,
+      outcome: parsed.Outcome,
+      systemNote: `[SYSTEM: Base defense outcome recorded. Threat #${parsed.Threat} resolved as ${parsed.Outcome}.]`
+    };
+  } catch (e) {
+    return {
+      type: 'base_defense_result',
+      threatId: parsed.Threat,
+      outcome: parsed.Outcome,
+      error: e.message,
+      systemNote: `[SYSTEM: BASE_DEFENSE_RESULT failed — ${e.message}]`
+    };
+  }
+});

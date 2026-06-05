@@ -8,6 +8,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from '../services/claude.js';
+import { loggedChat } from '../services/aiCallLogger.js';
 
 /**
  * Rough token estimation (chars / 4)
@@ -183,7 +184,8 @@ async function generateMessageSummary(messages, model) {
 
 Write as a factual recap, not as narrative. Focus on information the DM needs to maintain continuity.`;
 
-  const response = await chat(
+  const response = await loggedChat(
+    { call_purpose: 'context_compression', prompt_builder: 'contextManager' },
     summaryPrompt,
     [{ role: 'user', content: input }],
     2, // fewer retries for background task

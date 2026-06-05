@@ -1,6 +1,8 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { ENTANGLEMENT_THRESHOLDS, rollEntanglement, getEntanglementRisk } from '../config/partyBaseConfig.js';
 import * as narrativeQueueService from './narrativeQueueService.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+import { registerDecayConsumer, DECAY_SEMANTICS } from './timeBoundedState.js';
 
 /**
  * Notoriety Service
@@ -84,10 +86,91 @@ export async function processNotorietyTick(campaignId, characterId, currentGameD
 }
 
 /**
+ * Notoriety decay consumer (Phase 3.3 SC-7.4 — third Pattern D port).
+ *
+ * **WRITTEN_BACK semantics** — anchor (`last_decay_game_day`) advances
+ * to currentGameDay after each decay tick. Distinguishes notoriety from
+ * the HIGH_WATER_MARK shape (NPC absence, where anchor is `last_event`
+ * and stays put across ticks) and the CONSUMED shape (companion mood,
+ * where anchor NULLs at floor). Anchor here is "last time we ticked,"
+ * not "last time the event occurred."
+ *
+ * Anchor fallback chain preserved exactly: `last_decay_game_day ||
+ * last_event_game_day || currentGameDay`. The third fallback yields a
+ * 0-elapsed read on first-ever-decay-tick where neither field is set —
+ * the abstraction's `daysElapsed === 0` short-circuit handles this as
+ * a no-op naturally.
+ *
+ * Tiered decay rate per legacy: above 50 → 1/day (heat is sticky at
+ * high levels); ≤50 → 2/day. The decay function inspects currentValue
+ * to choose the rate, then multiplies by daysElapsed.
+ *
+ * **Two-step write trade-off (mirrors SC-7.2):** legacy writes both
+ * `score` and `last_decay_game_day` in one UPDATE; the abstraction
+ * splits into writeValue (score) + advanceAnchor (last_decay_game_day).
+ * 2 statements vs 1. Acceptable cost: notoriety decay runs on the
+ * living-world tick (not session start), entries per character are
+ * small (typically <10), most ticks are no-ops (no elapsed since
+ * last decay).
+ */
+const NOTORIETY_DECAY_CONSUMER = registerDecayConsumer({
+  name: 'character_notoriety_decay',
+  semantics: DECAY_SEMANTICS.WRITTEN_BACK,
+  decayFunction: (daysElapsed, currentValue) => {
+    const rate = currentValue > SLOW_DECAY_THRESHOLD ? 1 : DECAY_PER_DAY;
+    return rate * daysElapsed;
+  },
+  floor: 0,
+  ceiling: MAX_SCORE,
+  repository: {
+    async readAnchor(contextKey) {
+      const row = await dbGet(
+        'SELECT last_decay_game_day, last_event_game_day FROM character_notoriety WHERE id = ?',
+        [contextKey.entryId]
+      );
+      if (!row) return null;
+      // Fallback chain: last_decay → last_event → currentGameDay (caller
+      // hint). The third fallback only applies if BOTH columns are null;
+      // the abstraction's 0-elapsed short-circuit handles that as no-op.
+      return row.last_decay_game_day || row.last_event_game_day || contextKey.currentGameDayFallback || null;
+    },
+    async readValue(contextKey) {
+      const row = await dbGet(
+        'SELECT score FROM character_notoriety WHERE id = ?',
+        [contextKey.entryId]
+      );
+      return row ? row.score : 0;
+    },
+    async writeValue(contextKey, newValue) {
+      await dbRun(
+        'UPDATE character_notoriety SET score = ? WHERE id = ?',
+        [newValue, contextKey.entryId]
+      );
+    },
+    async advanceAnchor(contextKey, newAnchor) {
+      await dbRun(
+        'UPDATE character_notoriety SET last_decay_game_day = ? WHERE id = ?',
+        [newAnchor, contextKey.entryId]
+      );
+    }
+  }
+});
+
+/**
  * Decay all notoriety scores by the daily rate.
  * Above 50: decay 1/day (heat is sticky at high levels).
  * Below 50: decay 2/day.
  * Entries at 0 are cleaned up after 30 days of inactivity.
+ *
+ * Phase 3.3 SC-7.4 (v1.0.158): per-entry decay logic delegated to
+ * NOTORIETY_DECAY_CONSUMER above. This function stays as the
+ * orchestrator (SELECT entries → for each: skip+GC if zeroed,
+ * otherwise applyDecay → aggregate results). Same shape as SC-7.2
+ * decayMoods + SC-7.3 processAbsenceEffects orchestrators.
+ *
+ * The skip-and-GC of zeroed entries stays consumer-side — it's
+ * housekeeping adjacent to decay, not a decay operation itself. Pushing
+ * it into the abstraction would leak consumer-specific cleanup logic.
  */
 export async function decayScores(characterId, campaignId, currentGameDay) {
   const entries = await getNotoriety(characterId, campaignId);
@@ -95,39 +178,35 @@ export async function decayScores(characterId, campaignId, currentGameDay) {
 
   for (const entry of entries) {
     if (entry.score <= 0) {
-      // Clean up old zeroed entries
+      // Clean up old zeroed entries (housekeeping; not decay).
       if (entry.last_event_game_day && (currentGameDay - entry.last_event_game_day) > 30) {
         await dbRun('DELETE FROM character_notoriety WHERE id = ?', [entry.id]);
       }
       continue;
     }
 
-    const lastDecay = entry.last_decay_game_day || entry.last_event_game_day || currentGameDay;
-    const daysSinceDecay = currentGameDay - lastDecay;
+    const oldScore = entry.score;
+    const decayResult = await NOTORIETY_DECAY_CONSUMER.applyDecay(
+      { entryId: entry.id, currentGameDayFallback: currentGameDay },
+      currentGameDay
+    );
 
-    if (daysSinceDecay < MIN_DECAY_INTERVAL) continue;
-
-    const rate = entry.score > SLOW_DECAY_THRESHOLD ? 1 : DECAY_PER_DAY;
-    const totalDecay = rate * daysSinceDecay;
-    const newScore = Math.max(0, entry.score - totalDecay);
-
-    await dbRun(`
-      UPDATE character_notoriety
-      SET score = ?, last_decay_game_day = ?
-      WHERE id = ?
-    `, [newScore, currentGameDay, entry.id]);
-
-    results.push({
-      source: entry.source,
-      category: entry.category,
-      oldScore: entry.score,
-      newScore,
-      decayed: entry.score - newScore
-    });
+    if (decayResult) {
+      results.push({
+        source: entry.source,
+        category: entry.category,
+        oldScore,
+        newScore: decayResult.newValue,
+        decayed: decayResult.decayAmount
+      });
+    }
   }
 
   return results;
 }
+
+// Exported for direct test access.
+export { NOTORIETY_DECAY_CONSUMER };
 
 /**
  * Check each notoriety entry for entanglement triggers.
@@ -223,3 +302,79 @@ export async function getNotorietyForPrompt(characterId, campaignId) {
 
   return `\n=== NOTORIETY ===\n${lines.join('\n')}\n`;
 }
+
+// ============================================================
+// SC-6.4c — NOTORIETY_GAIN / NOTORIETY_LOSS marker handlers
+// ============================================================
+
+/**
+ * NOTORIETY_GAIN handler. Multi-instance — pipeline dispatches once per
+ * marker. Replaces the inline detect-call dispatch at the pre-SC-6.4c
+ * routes/dmSession.js:1906 site.
+ *
+ * **Resolves the silent-drop bug** (KNOWN_BUGS.md archive entry, found
+ * during SC-6.4 prep): the legacy detect path used `parseMarkerKeyValue`
+ * which only parsed comma-separated unquoted values; the AI prompt
+ * instructs the canonical quoted-space-separated format
+ * (`source="City Watch" amount=15 category="criminal"`). Canonical-format
+ * markers were silently dropped because parseMarkerKeyValue's
+ * `str.split(',')` returned one entry containing the whole quoted string,
+ * which the key-extraction routine couldn't decode. Migration through
+ * the marker pipeline uses `markerSchemas.js`'s `extractField` regex,
+ * which natively handles BOTH formats — auto-resolving the bug.
+ */
+registerMarkerHandler('NOTORIETY_GAIN', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character?.campaign_id) return null;
+  try {
+    await addNotoriety(context.characterId, character.campaign_id, {
+      source: parsed.source,
+      amount: parsed.amount,
+      category: parsed.category,
+      reason: `Session event (game day ${character.game_day || 0})`
+    });
+    return {
+      type: 'notoriety_gain',
+      source: parsed.source,
+      amount: parsed.amount,
+      category: parsed.category
+    };
+  } catch (e) {
+    console.error(`[notorietyService] NOTORIETY_GAIN handler failed for ${parsed.source}:`, e.message);
+    return null;
+  }
+});
+
+/**
+ * NOTORIETY_LOSS handler. Same shape as GAIN but inverts amount.
+ * Schema doesn't carry a `category` field for losses — legacy code
+ * hardcoded 'criminal'; preserved here.
+ */
+registerMarkerHandler('NOTORIETY_LOSS', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet(
+    'SELECT campaign_id, game_day FROM characters WHERE id = ?',
+    [context.characterId]
+  );
+  if (!character?.campaign_id) return null;
+  try {
+    await addNotoriety(context.characterId, character.campaign_id, {
+      source: parsed.source,
+      amount: -parsed.amount,
+      category: 'criminal',
+      reason: `Cleared name (game day ${character.game_day || 0})`
+    });
+    return {
+      type: 'notoriety_loss',
+      source: parsed.source,
+      amount: parsed.amount
+    };
+  } catch (e) {
+    console.error(`[notorietyService] NOTORIETY_LOSS handler failed for ${parsed.source}:`, e.message);
+    return null;
+  }
+});

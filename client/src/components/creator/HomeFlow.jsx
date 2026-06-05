@@ -1,10 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import HomeScreenV2 from './HomeScreenV2.jsx'
 import PathChoiceScreen from './PathChoiceScreen.jsx'
 import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
 import PreludeCreatorV2 from './PreludeCreatorV2.jsx'
 import PreludeArcPreview from '../PreludeArcPreview.jsx'
 import PreludeSession from '../PreludeSession.jsx'
+import SettingsOverlay from '../settings/SettingsOverlay.jsx'
+
+// Phase 4a SC-4a.4 — lazy-load the diagnostic page; only fetched when
+// the user clicks the AI Behavior appbar link.
+const AIBehaviorDebugPage = lazy(() => import('../AIBehaviorDebugPage.jsx'))
 import {
   rehydrateManualCreatorState,
   rehydrateHandoffCreatorState
@@ -52,6 +57,16 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   const [preludeDraftState, setPreludeDraftState] = useState(null)
   const [preludeDraftCharacterId, setPreludeDraftCharacterId] = useState(null)
   const [error, setError] = useState(null)
+  // Phase 3.5 — Settings overlay open state. Scoped per-character; the
+  // home appbar's `Settings` link picks the most-recently-updated active
+  // character (or a 'creating'/'ready_for_primary' draft if no actives
+  // exist) so the per-character `survival_intensity` PUT writes
+  // somewhere sensible. Link is hidden when there are zero characters.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Phase 4a SC-4a.4 — AI Behavior debug page open state. Same access
+  // pattern as Settings (appbar link, both home + path routes), but
+  // distinct surface — a full-screen page rather than an overlay sheet.
+  const [aiBehaviorOpen, setAiBehaviorOpen] = useState(false)
 
   const loadCharacters = useCallback(async () => {
     setLoading(true)
@@ -194,7 +209,45 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
     setRoute('home')
   }, [])
 
+  // Phase 3.5 — pick the per-character row Settings should scope to when
+  // the user opens it from the home appbar. Active characters take
+  // precedence, then in-progress drafts; tiebreaker is most-recent
+  // updated_at. Returns null when there's nothing — the link won't render.
+  const settingsCharacter = useMemo(() => {
+    if (!characters.length) return null
+    const byUpdated = (a, b) => {
+      const ad = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const bd = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return bd - ad
+    }
+    const actives = characters.filter(c => (c.creation_phase || 'active') === 'active').sort(byUpdated)
+    if (actives.length) return actives[0]
+    return [...characters].sort(byUpdated)[0] || null
+  }, [characters])
+
+  const handleSettingsSaved = useCallback((updated) => {
+    // Patch the character into the local list so subsequent home renders
+    // reflect the new survival_intensity (status-display, future use).
+    if (!updated?.id) return
+    setCharacters(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))
+  }, [])
+
   // --- Render ---------------------------------------------------------------
+
+  // Phase 4a SC-4a.4 — AI Behavior debug page takes over full-screen when
+  // open (same pattern as the wizard / prelude routes). Independent of
+  // the dashboard activeView path (which doesn't reach here) so the link
+  // works from home or the path-choice screen alike.
+  if (aiBehaviorOpen) {
+    return (
+      <Suspense fallback={<div style={{ padding: 32, color: '#999', fontFamily: 'monospace' }}>Loading AI Behavior debug page…</div>}>
+        <AIBehaviorDebugPage
+          onBack={() => setAiBehaviorOpen(false)}
+          defaultCharacterId={settingsCharacter?.id || null}
+        />
+      </Suspense>
+    )
+  }
 
   if (route === 'wizard.manual') {
     return (
@@ -274,6 +327,25 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
           </div>
           <div className="crumbs">A choice of beginnings</div>
           <div className="spacer" />
+          <button
+            type="button"
+            className="nav-settings"
+            onClick={() => setAiBehaviorOpen(true)}
+            aria-label="AI Behavior debug"
+            title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
+          >
+            <span className="glyph">◇</span>AI Behavior
+          </button>
+          {settingsCharacter && (
+            <button
+              type="button"
+              className="nav-settings"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+            >
+              <span className="glyph">✦</span>Settings
+            </button>
+          )}
         </div>
         <div className="stage center">
           <PathChoiceScreen
@@ -282,6 +354,14 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
             onBack={() => setRoute('home')}
           />
         </div>
+        {settingsOpen && settingsCharacter && (
+          <SettingsOverlay
+            character={settingsCharacter}
+            context="home"
+            onClose={() => setSettingsOpen(false)}
+            onSaved={handleSettingsSaved}
+          />
+        )}
       </div>
     )
   }
@@ -296,6 +376,25 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
         </div>
         <div className="crumbs">The roster</div>
         <div className="spacer" />
+        <button
+          type="button"
+          className="nav-settings"
+          onClick={() => setAiBehaviorOpen(true)}
+          aria-label="AI Behavior debug"
+          title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
+        >
+          <span className="glyph">◇</span>AI Behavior
+        </button>
+        {settingsCharacter && (
+          <button
+            type="button"
+            className="nav-settings"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+          >
+            <span className="glyph">✦</span>Settings
+          </button>
+        )}
       </div>
       <div className="stage">
         {loading && (
@@ -324,6 +423,14 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
           />
         )}
       </div>
+      {settingsOpen && settingsCharacter && (
+        <SettingsOverlay
+          character={settingsCharacter}
+          context="home"
+          onClose={() => setSettingsOpen(false)}
+          onSaved={handleSettingsSaved}
+        />
+      )}
     </div>
   )
 }

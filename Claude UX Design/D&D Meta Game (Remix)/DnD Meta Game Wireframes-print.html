@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>D&D Meta Game — Wireframes (print)</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Parchment theme for print — prints beautifully on paper */
+      --bg: #f6f0dc;
+      --bg-2: #faf4e0;
+      --panel: #fffbe8;
+      --ink: #2d2418;
+      --ink-dim: #6b5c40;
+      --ink-faint: #9a8a68;
+      --accent: #a64b1c;
+      --accent-2: #6e3c8a;
+      --warn: #b73a3a;
+      --ok: #4a7d3f;
+      --stroke: #6b5c40;
+      --stroke-faint: #b9a984;
+
+      --gap: 14px;
+      --pad: 14px;
+      --radius: 8px;
+      --row-h: 34px;
+      --font: 14px;
+      --font-sm: 12px;
+      --font-lg: 18px;
+
+      --hand: "Architects Daughter", "Caveat", cursive;
+      --note: "Caveat", "Architects Daughter", cursive;
+      --ui: "Inter", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #d9d0b7;
+      color: var(--ink);
+      font-family: var(--ui);
+      font-size: var(--font);
+    }
+
+    /* Force color printing */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* Page setup: landscape letter */
+    @page {
+      size: landscape;
+      margin: 0.4in;
+    }
+
+    /* Each page of the PDF */
+    .print-page, .print-cover {
+      width: 11in;
+      height: 8.5in;
+      background: var(--bg);
+      margin: 0.2in auto;
+      padding: 0.35in 0.4in;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      break-after: page;
+      page-break-after: always;
+      overflow: hidden;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+    }
+    .print-page:last-child { break-after: auto; page-break-after: auto; }
+
+    .print-page-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      border-bottom: 1px dashed var(--stroke-faint);
+      flex-shrink: 0;
+    }
+    .print-page-head .w-mono {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--ink-dim);
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .print-page-head .w-sub {
+      font-family: var(--hand);
+      font-size: 20px;
+      color: var(--ink);
+    }
+    .print-page-body {
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    /* The screen <section> inside the body stretches */
+    .print-page-body > section.screen {
+      display: flex !important;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    .print-page-body .section-head { display: none; }
+    .print-page-body > section > *:last-child {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Force fixed heights that rely on vh to compute against the page */
+    .print-page-body [style*="calc(100vh"] {
+      height: 7.1in !important;
+      min-height: 7.1in !important;
+    }
+
+    /* Cover page */
+    .print-cover {
+      justify-content: center;
+      align-items: flex-start;
+      padding: 1in;
+    }
+    .print-cover-title {
+      font-family: var(--hand);
+      font-size: 72px;
+      line-height: 1.05;
+      letter-spacing: 1px;
+      margin: 0 0 10px;
+      color: var(--ink);
+    }
+    .print-cover-title b { color: var(--accent); }
+    .print-cover-sub {
+      font-family: var(--note);
+      font-size: 28px;
+      line-height: 1.2;
+      color: var(--ink-dim);
+      margin: 0 0 10px;
+    }
+    .print-cover-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-faint);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin: 0 0 36px;
+    }
+    .print-toc {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-family: var(--hand);
+      font-size: 22px;
+      line-height: 1.5;
+      counter-reset: toc;
+    }
+    .print-toc li {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--stroke-faint);
+      max-width: 700px;
+    }
+    .print-toc li .n {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      min-width: 36px;
+      letter-spacing: 1.5px;
+    }
+    .print-toc li .t { color: var(--ink); }
+
+    /* Hide the top bar, intro, and anything else from the live app */
+    .topbar, .intro, .section-head { display: none !important; }
+    .canvas { padding: 0 !important; max-width: none !important; margin: 0 !important; }
+
+    /* --- All the same primitive styles from the live file --- */
+
+    .w-box {
+      border: 1.4px solid var(--stroke);
+      border-radius: 6px;
+      padding: 10px;
+      position: relative;
+      background: color-mix(in oklab, var(--panel) 50%, transparent);
+    }
+    .w-box.dashed { border-style: dashed; }
+    .w-box.panel { background: var(--panel); }
+    .w-box.hollow { background: transparent; }
+    .w-box.accent {
+      border-color: var(--accent);
+      background: color-mix(in oklab, var(--accent) 10%, transparent);
+    }
+    .w-box.accent-2 {
+      border-color: var(--accent-2);
+      background: color-mix(in oklab, var(--accent-2) 10%, transparent);
+    }
+    .w-box.ok { border-color: var(--ok); }
+    .w-box.warn { border-color: var(--warn); }
+
+    .w-title { font-family: var(--hand); font-size: var(--font-lg); margin-bottom: 6px; }
+    .w-sub { font-family: var(--hand); font-size: 14px; color: var(--ink-dim); }
+    .w-mono { font-family: var(--mono); font-size: var(--font-sm); color: var(--ink-dim); }
+    .w-ph {
+      display: block; height: 8px; border-radius: 3px;
+      background: repeating-linear-gradient(90deg, var(--ink-faint) 0 8px, transparent 8px 12px);
+      opacity: 0.55; margin: 6px 0;
+    }
+    .w-ph.short { width: 40%; } .w-ph.med { width: 70%; } .w-ph.full { width: 100%; }
+
+    .w-btn {
+      font-family: var(--hand); font-size: 14px;
+      border: 1.5px solid var(--stroke); padding: 6px 14px; border-radius: 999px;
+      background: transparent; color: var(--ink);
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    }
+    .w-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .w-btn.ghost { border-style: dashed; color: var(--ink-dim); }
+
+    .w-chip {
+      font-family: var(--mono); font-size: 10.5px;
+      padding: 3px 8px; border-radius: 999px;
+      border: 1px solid var(--stroke-faint); color: var(--ink-dim);
+    }
+    .w-chip.accent { color: var(--accent); border-color: var(--accent); }
+    .w-chip.warn { color: var(--warn); border-color: var(--warn); }
+    .w-chip.ok { color: var(--ok); border-color: var(--ok); }
+
+    .w-row { display: flex; align-items: center; gap: 8px; }
+    .w-col { display: flex; flex-direction: column; gap: 8px; }
+
+    .w-img {
+      background-color: color-mix(in oklab, var(--ink-dim) 15%, transparent);
+      background-image: repeating-linear-gradient(135deg,
+        color-mix(in oklab, var(--ink-dim) 20%, transparent) 0 6px,
+        transparent 6px 12px);
+      border: 1.4px dashed var(--stroke-faint);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 10px; color: var(--ink-dim);
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .w-portrait {
+      aspect-ratio: 1; border-radius: 50%;
+      background-color: color-mix(in oklab, var(--ink-dim) 20%, transparent);
+      background-image: repeating-linear-gradient(135deg,
+        color-mix(in oklab, var(--ink-dim) 30%, transparent) 0 4px,
+        transparent 4px 8px);
+      border: 1.4px dashed var(--stroke-faint);
+      flex-shrink: 0;
+    }
+
+    .ui-tabs {
+      display: flex; gap: 2px;
+      border-bottom: 1px dashed var(--stroke-faint);
+      padding-bottom: 2px; margin-bottom: 10px;
+    }
+    .ui-tabs .t {
+      font-family: var(--hand); font-size: 14px;
+      padding: 4px 10px; color: var(--ink-dim);
+      border-radius: 4px 4px 0 0;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .ui-tabs .t.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+    .bubble {
+      border-radius: 10px; padding: 10px 12px;
+      font-family: var(--hand); font-size: 14px; line-height: 1.4;
+      max-width: 80%; position: relative;
+    }
+    .bubble.dm { background: color-mix(in oklab, var(--panel) 80%, transparent); border: 1.3px solid var(--stroke-faint); }
+    .bubble.you { background: color-mix(in oklab, var(--accent) 15%, transparent); border: 1.3px solid var(--accent); align-self: flex-end; }
+    .bubble.system {
+      background: transparent; border: 1.3px dashed var(--stroke-faint);
+      color: var(--ink-dim); font-family: var(--mono); font-size: 11.5px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); }
+
+    .stat {
+      text-align: center; padding: 6px 4px;
+      border: 1.2px solid var(--stroke-faint); border-radius: 8px;
+      background: color-mix(in oklab, var(--panel) 40%, transparent);
+    }
+    .stat .label { font-family: var(--mono); font-size: 9.5px; color: var(--ink-dim); letter-spacing: 1px; }
+    .stat .value { font-family: var(--hand); font-size: 22px; color: var(--ink); line-height: 1; margin: 2px 0; }
+    .stat .mod { font-family: var(--hand); font-size: 12px; color: var(--accent); }
+
+    .w-hr {
+      height: 1px; border: 0;
+      background: repeating-linear-gradient(90deg, var(--stroke-faint) 0 6px, transparent 6px 10px);
+      margin: 10px 0;
+    }
+
+    .screen { display: block; }
+    .card { border: 1.5px solid var(--stroke-faint); border-radius: 10px; padding: 12px; background: var(--panel); }
+    .ui-sidebar { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+    .ui-sidebar .item {
+      font-family: var(--hand); font-size: 15px;
+      padding: 6px 10px; border-radius: 6px;
+      color: var(--ink-dim); border-left: 2px solid transparent;
+    }
+    .ui-sidebar .item.active {
+      color: var(--ink); border-left-color: var(--accent);
+      background: color-mix(in oklab, var(--accent) 10%, transparent);
+    }
+
+    @media print {
+      html, body { background: white; }
+      .print-page, .print-cover {
+        margin: 0;
+        box-shadow: none;
+        page-break-after: always;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="screens"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="wireframes/shared.jsx"></script>
+  <script type="text/babel" src="wireframes/dashboard-v2-full.jsx"></script>
+  <script type="text/babel" src="wireframes/winners.jsx"></script>
+  <script type="text/babel" src="wireframes/print-app.jsx"></script>
+</body>
+</html>

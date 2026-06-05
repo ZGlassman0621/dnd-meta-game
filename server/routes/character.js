@@ -312,11 +312,25 @@ router.put('/:id', async (req, res) => {
       // Phase 2 chunk 5 batch 3 sub-checkpoint 2 — Step 7's "build" field
       // (slim / heavy / wiry / etc., per spec §5.7.4). Column added by
       // migration 050.
-      'physical_build'
+      'physical_build',
+      // Phase 3.3 SC-7.6.5 (v1.0.162) — player-tunable survival intensity
+      // per spec §3.3.10. Validated against the four-value enum below;
+      // invalid values silently fall back (skip the update) so client
+      // bugs never corrupt the row.
+      'survival_intensity'
     ];
+
+    const VALID_SURVIVAL_INTENSITIES = new Set(['off', 'lenient', 'standard', 'strict']);
 
     for (const [key, value] of Object.entries(req.body)) {
       if (allowedFields.includes(key)) {
+        // Phase 3.3 SC-7.6.5: enforce the survival_intensity enum at the
+        // PUT boundary (spec §3.3.10 — the migration's CHECK constraint
+        // shape isn't expressible inline on SQLite ALTER, so the
+        // application layer guards the column).
+        if (key === 'survival_intensity' && !VALID_SURVIVAL_INTENSITIES.has(value)) {
+          continue;
+        }
         updates.push(`${key} = ?`);
         values.push(value);
       }
@@ -1695,6 +1709,7 @@ router.post('/:id/generate-campaign-notes', async (req, res) => {
     // Import LLM services dynamically to avoid circular dependencies
     const claude = (await import('../services/claude.js')).default;
     const ollama = (await import('../services/ollama.js')).default;
+    const { loggedChat } = await import('../services/aiCallLogger.js');
 
     // Determine which LLM provider to use
     let provider = null;
@@ -1767,9 +1782,12 @@ Be concise but specific. Use names and details from the sessions. Only include t
 
     let generatedNotes = '';
     if (provider === 'claude') {
-      generatedNotes = await claude.chat('You are a helpful assistant organizing campaign notes for a D&D character.', [
-        { role: 'user', content: extractionPrompt }
-      ]);
+      generatedNotes = await loggedChat(
+        { call_purpose: 'character_notes_gen', prompt_builder: 'character_route',
+          character_id: parseInt(req.params.id) },
+        'You are a helpful assistant organizing campaign notes for a D&D character.',
+        [{ role: 'user', content: extractionPrompt }]
+      );
     } else {
       generatedNotes = await ollama.chat([
         { role: 'system', content: 'You are a helpful assistant organizing campaign notes for a D&D character.' },

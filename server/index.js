@@ -34,6 +34,7 @@ import partyBaseRoutes from './routes/partyBase.js';
 import progressionRoutes from './routes/progression.js';
 import merchantRoutes from './routes/merchant.js';
 import preludeRoutes from './routes/prelude.js';
+import aiBehaviorRoutes from './routes/aiBehavior.js';
 import authRoutes from './routes/auth.js';
 import authMiddleware from './middleware/auth.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
@@ -104,6 +105,7 @@ app.use('/api', partyBaseRoutes);
 app.use('/api/progression', progressionRoutes);
 app.use('/api/merchant', merchantRoutes);
 app.use('/api/prelude', preludeRoutes);
+app.use('/api/ai-behavior', aiBehaviorRoutes);
 
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {

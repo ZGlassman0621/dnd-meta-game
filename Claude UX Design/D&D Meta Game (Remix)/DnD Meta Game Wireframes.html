@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>D&D Meta Game — Wireframes</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Theme: semi-dark (default) */
+      --bg: #1b1f2a;
+      --bg-2: #242938;
+      --panel: #2b3143;
+      --ink: #d8dee9;
+      --ink-dim: #8a95ad;
+      --ink-faint: #5a6378;
+      --accent: #6ca9ff;
+      --accent-2: #9c8cff;
+      --warn: #ff7a7a;
+      --ok: #7dd4a2;
+      --stroke: #6a7389;
+      --stroke-faint: #3c4359;
+      --paper-tint: transparent;
+
+      /* Density */
+      --gap: 14px;
+      --pad: 14px;
+      --radius: 8px;
+      --row-h: 34px;
+      --font: 14px;
+      --font-sm: 12px;
+      --font-lg: 18px;
+
+      --hand: "Architects Daughter", "Caveat", cursive;
+      --note: "Caveat", "Architects Daughter", cursive;
+      --ui: "Inter", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    [data-theme="parchment"] {
+      --bg: #e9dfc3;
+      --bg-2: #f1e9d1;
+      --panel: #f6f0dc;
+      --ink: #2d2418;
+      --ink-dim: #6b5c40;
+      --ink-faint: #9a8a68;
+      --accent: #a64b1c;
+      --accent-2: #6e3c8a;
+      --warn: #b73a3a;
+      --ok: #4a7d3f;
+      --stroke: #6b5c40;
+      --stroke-faint: #b9a984;
+      --paper-tint: url(#paperTint);
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f4ee;
+      --bg-2: #ffffff;
+      --panel: #ffffff;
+      --ink: #1b1f2a;
+      --ink-dim: #5c6472;
+      --ink-faint: #9aa1ad;
+      --accent: #2563eb;
+      --accent-2: #7a5af8;
+      --warn: #e04b4b;
+      --ok: #2f9e65;
+      --stroke: #2f3340;
+      --stroke-faint: #c7c7c0;
+    }
+
+    [data-theme="midnight"] {
+      --bg: #0e1016;
+      --bg-2: #161a24;
+      --panel: #1c2130;
+      --ink: #cbd5e1;
+      --ink-dim: #7b8497;
+      --ink-faint: #4c5466;
+      --accent: #79ffe1;
+      --accent-2: #ff9ed2;
+      --warn: #ff8a8a;
+      --ok: #7effa0;
+      --stroke: #3a4256;
+      --stroke-faint: #262c3b;
+    }
+
+    [data-density="compact"] {
+      --gap: 8px;
+      --pad: 8px;
+      --row-h: 26px;
+      --font: 12px;
+      --font-sm: 10.5px;
+      --font-lg: 15px;
+    }
+    [data-density="spacious"] {
+      --gap: 22px;
+      --pad: 22px;
+      --row-h: 42px;
+      --font: 15px;
+      --font-sm: 13px;
+      --font-lg: 22px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--ui);
+      font-size: var(--font);
+      min-height: 100vh;
+    }
+
+    body {
+      background-image:
+        radial-gradient(circle at 20% 10%, rgba(108,169,255,0.04), transparent 40%),
+        radial-gradient(circle at 80% 90%, rgba(156,140,255,0.04), transparent 40%);
+    }
+
+    /* --- Top bar --- */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: color-mix(in oklab, var(--bg) 85%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px dashed var(--stroke-faint);
+      padding: 12px 22px;
+      display: flex; align-items: center; gap: 18px;
+    }
+    .brand {
+      font-family: var(--hand);
+      font-size: 22px;
+      color: var(--ink);
+      letter-spacing: 0.5px;
+    }
+    .brand b { color: var(--accent); }
+    .tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-dim);
+      padding: 3px 8px;
+      border: 1px dashed var(--stroke-faint);
+      border-radius: 999px;
+    }
+    .tabs {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      margin-left: 8px;
+    }
+    .tab {
+      font-family: var(--hand);
+      font-size: 15px;
+      color: var(--ink-dim);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      position: relative;
+    }
+    .tab:hover { color: var(--ink); }
+    .tab.active {
+      color: var(--ink);
+      background: color-mix(in oklab, var(--accent) 12%, transparent);
+    }
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      left: 10%; right: 10%; bottom: 1px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+      transform: rotate(-0.3deg);
+    }
+    .spacer { flex: 1; }
+
+    /* --- Canvas --- */
+    .canvas {
+      padding: 28px 24px 80px;
+      max-width: 1820px;
+      margin: 0 auto;
+    }
+    .section-head {
+      display: flex; align-items: baseline; gap: 16px;
+      margin: 10px 0 4px;
+      padding-bottom: 6px;
+    }
+    .section-title {
+      font-family: var(--hand);
+      font-size: 30px;
+      letter-spacing: 0.3px;
+    }
+    .section-sub {
+      font-family: var(--note);
+      font-size: 18px;
+      color: var(--ink-dim);
+    }
+    .variations {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+      gap: 26px;
+      margin-top: 18px;
+    }
+
+    /* --- Artboard --- */
+    .artboard {
+      background: var(--bg-2);
+      border: 1.5px solid var(--stroke-faint);
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 6px 0 -3px color-mix(in oklab, var(--stroke) 40%, transparent);
+    }
+    .artboard-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px dashed var(--stroke-faint);
+      background: color-mix(in oklab, var(--panel) 60%, transparent);
+    }
+    .artboard-title {
+      font-family: var(--hand);
+      font-size: 18px;
+    }
+    .artboard-label {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--ink-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+    }
+    .artboard-body {
+      padding: 18px;
+      position: relative;
+      min-height: 360px;
+    }
+    .artboard.wide { grid-column: span 2; }
+    @media (max-width: 1200px) { .artboard.wide { grid-column: span 1; } }
+
+    /* --- Sketchy primitives --- */
+    .w-box {
+      border: 1.4px solid var(--stroke);
+      border-radius: 6px;
+      padding: 10px;
+      position: relative;
+      background: color-mix(in oklab, var(--panel) 50%, transparent);
+    }
+    .w-box.dashed { border-style: dashed; }
+    .w-box.panel {
+      background: var(--panel);
+    }
+    .w-box.hollow { background: transparent; }
+    .w-box.accent {
+      border-color: var(--accent);
+      background: color-mix(in oklab, var(--accent) 10%, transparent);
+    }
+    .w-box.accent-2 {
+      border-color: var(--accent-2);
+      background: color-mix(in oklab, var(--accent-2) 10%, transparent);
+    }
+    .w-box.ok { border-color: var(--ok); }
+    .w-box.warn { border-color: var(--warn); }
+    .w-box.tilt-l { transform: rotate(-0.3deg); }
+    .w-box.tilt-r { transform: rotate(0.3deg); }
+
+    .w-title {
+      font-family: var(--hand);
+      font-size: var(--font-lg);
+      margin-bottom: 6px;
+    }
+    .w-sub {
+      font-family: var(--hand);
+      font-size: 14px;
+      color: var(--ink-dim);
+    }
+    .w-mono {
+      font-family: var(--mono);
+      font-size: var(--font-sm);
+      color: var(--ink-dim);
+    }
+    .w-ph {
+      /* placeholder text lines */
+      display: block;
+      height: 8px;
+      border-radius: 3px;
+      background: repeating-linear-gradient(90deg,
+        var(--ink-faint) 0 8px,
+        transparent 8px 12px);
+      opacity: 0.55;
+      margin: 6px 0;
+    }
+    .w-ph.short { width: 40%; }
+    .w-ph.med { width: 70%; }
+    .w-ph.full { width: 100%; }
+
+    .w-btn {
+      font-family: var(--hand);
+      font-size: 14px;
+      border: 1.5px solid var(--stroke);
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      display: inline-flex; align-items: center; gap: 6px;
+      cursor: pointer;
+    }
+    .w-btn.primary {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+    .w-btn.ghost { border-style: dashed; color: var(--ink-dim); }
+
+    .w-chip {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke-faint);
+      color: var(--ink-dim);
+    }
+    .w-chip.accent { color: var(--accent); border-color: var(--accent); }
+    .w-chip.warn { color: var(--warn); border-color: var(--warn); }
+    .w-chip.ok { color: var(--ok); border-color: var(--ok); }
+
+    .w-row { display: flex; align-items: center; gap: 8px; }
+    .w-col { display: flex; flex-direction: column; gap: 8px; }
+
+    /* Placeholder image — striped */
+    .w-img {
+      background-color: color-mix(in oklab, var(--ink-dim) 15%, transparent);
+      background-image: repeating-linear-gradient(
+        135deg,
+        color-mix(in oklab, var(--ink-dim) 20%, transparent) 0 6px,
+        transparent 6px 12px
+      );
+      border: 1.4px dashed var(--stroke-faint);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .w-portrait {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background-color: color-mix(in oklab, var(--ink-dim) 20%, transparent);
+      background-image: repeating-linear-gradient(
+        135deg,
+        color-mix(in oklab, var(--ink-dim) 30%, transparent) 0 4px,
+        transparent 4px 8px
+      );
+      border: 1.4px dashed var(--stroke-faint);
+      flex-shrink: 0;
+    }
+
+    /* Annotation arrow + red note */
+    .annot {
+      position: absolute;
+      font-family: var(--note);
+      color: var(--warn);
+      font-size: 16px;
+      line-height: 1.2;
+      pointer-events: none;
+      max-width: 180px;
+    }
+    .annot.show-notes-off { display: none; }
+    [data-notes="off"] .annot { display: none; }
+
+    /* Sketchy underline for handwritten text */
+    .scribble {
+      text-decoration: underline wavy var(--accent);
+      text-underline-offset: 4px;
+    }
+
+    /* Sidebar pattern */
+    .ui-sidebar {
+      width: 180px;
+      flex-shrink: 0;
+      display: flex; flex-direction: column;
+      gap: 4px;
+    }
+    .ui-sidebar .item {
+      font-family: var(--hand);
+      font-size: 15px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      color: var(--ink-dim);
+      border-left: 2px solid transparent;
+    }
+    .ui-sidebar .item.active {
+      color: var(--ink);
+      border-left-color: var(--accent);
+      background: color-mix(in oklab, var(--accent) 10%, transparent);
+    }
+
+    /* Tab pattern inside artboard */
+    .ui-tabs {
+      display: flex; gap: 2px;
+      border-bottom: 1px dashed var(--stroke-faint);
+      padding-bottom: 2px;
+      margin-bottom: 10px;
+    }
+    .ui-tabs .t {
+      font-family: var(--hand);
+      font-size: 14px;
+      padding: 4px 10px;
+      color: var(--ink-dim);
+      border-radius: 4px 4px 0 0;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .ui-tabs .t.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+    /* A "card" for campaign/character selector */
+    .card {
+      border: 1.5px solid var(--stroke-faint);
+      border-radius: 10px;
+      padding: 12px;
+      background: var(--panel);
+      cursor: pointer;
+    }
+    .card:hover { border-color: var(--accent); }
+
+    /* Chat bubble pattern */
+    .bubble {
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: var(--hand);
+      font-size: 14px;
+      line-height: 1.4;
+      max-width: 80%;
+      position: relative;
+    }
+    .bubble.dm {
+      background: color-mix(in oklab, var(--panel) 80%, transparent);
+      border: 1.3px solid var(--stroke-faint);
+    }
+    .bubble.you {
+      background: color-mix(in oklab, var(--accent) 15%, transparent);
+      border: 1.3px solid var(--accent);
+      align-self: flex-end;
+    }
+    .bubble.system {
+      background: transparent;
+      border: 1.3px dashed var(--stroke-faint);
+      color: var(--ink-dim);
+      font-family: var(--mono);
+      font-size: 11.5px;
+    }
+
+    /* Grid helpers */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); }
+
+    /* Stat block */
+    .stat {
+      text-align: center;
+      padding: 6px 4px;
+      border: 1.2px solid var(--stroke-faint);
+      border-radius: 8px;
+      background: color-mix(in oklab, var(--panel) 40%, transparent);
+    }
+    .stat .label { font-family: var(--mono); font-size: 9.5px; color: var(--ink-dim); letter-spacing: 1px; }
+    .stat .value { font-family: var(--hand); font-size: 22px; color: var(--ink); line-height: 1; margin: 2px 0; }
+    .stat .mod { font-family: var(--hand); font-size: 12px; color: var(--accent); }
+
+    /* HR */
+    .w-hr {
+      height: 1px;
+      border: 0;
+      background: repeating-linear-gradient(90deg, var(--stroke-faint) 0 6px, transparent 6px 10px);
+      margin: 10px 0;
+    }
+
+    /* Intro card */
+    .intro {
+      border: 1.5px dashed var(--accent);
+      border-radius: 12px;
+      padding: 18px 22px;
+      background: color-mix(in oklab, var(--accent) 8%, transparent);
+      margin-bottom: 20px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+    }
+    .intro h1 {
+      font-family: var(--hand);
+      font-size: 28px;
+      margin: 0 0 6px;
+    }
+    .intro p {
+      margin: 0;
+      color: var(--ink-dim);
+      font-size: 13px;
+      line-height: 1.55;
+      max-width: 780px;
+    }
+
+    /* Hide scroll bar styling */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: var(--stroke-faint); border-radius: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* Screen sections show one at a time */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* Legend */
+    .legend {
+      display: flex; gap: 14px; flex-wrap: wrap;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-dim);
+    }
+    .legend .sw {
+      display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+      margin-right: 5px; vertical-align: -1px;
+      border: 1px solid var(--stroke-faint);
+    }
+
+    /* Small connector arrow for annotations (SVG elsewhere) */
+  </style>
+</head>
+<body>
+  <!-- SVG defs for future use -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <filter id="roughen">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="t" />
+        <feDisplacementMap in="SourceGraphic" in2="t" scale="1.4" />
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">D<b>&</b>D Meta Game</div>
+    <span class="tag">WIREFRAMES · v0.1</span>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-screen="dashboard">Dashboard</button>
+      <button class="tab" data-screen="session">DM Session</button>
+      <button class="tab" data-screen="wizard">Creation Wizard</button>
+      <button class="tab" data-screen="sheet">Character Sheet</button>
+      <button class="tab" data-screen="base">Party Base</button>
+      <button class="tab" data-screen="merchant">Merchant Shop</button>
+      <button class="tab" data-screen="npc">NPC Codex</button>
+      <button class="tab" data-screen="dash-v2-full" style="margin-left: 10px; border: 1px dashed var(--accent); color: var(--accent);">★ V2 Full</button>
+      <span style="width: 14px; display: inline-block;"></span>
+      <button class="tab" data-screen="win-session" style="border: 1px solid var(--accent); color: var(--accent);">★ Session</button>
+      <button class="tab" data-screen="win-wizard" style="border: 1px solid var(--accent); color: var(--accent);">★ Wizard</button>
+      <button class="tab" data-screen="win-sheet" style="border: 1px solid var(--accent); color: var(--accent);">★ Sheet</button>
+      <button class="tab" data-screen="win-base" style="border: 1px solid var(--accent); color: var(--accent);">★ Base</button>
+      <button class="tab" data-screen="win-merchant" style="border: 1px solid var(--accent); color: var(--accent);">★ Merchant</button>
+      <button class="tab" data-screen="win-npc" style="border: 1px solid var(--accent); color: var(--accent);">★ NPC</button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="w-mono" id="screenHint">1 / 7</span>
+  </div>
+
+  <div class="canvas" id="canvas">
+    <!-- INTRO -->
+    <div class="intro">
+      <div>
+        <h1>Wireframe exploration — D&D Meta Game</h1>
+        <p>
+          Seven key screens, each with 3 distinct variations that explore <b>navigation patterns</b> (tabs vs. sidebar vs. command palette),
+          <b>chat-first vs. tool-first</b> balance, and <b>information hierarchy</b>. Sketchy modern wireframes, desktop-only,
+          semi-dark by default. Use the <b>Tweaks</b> panel to switch theme, density, and toggle annotations. Variations are not
+          meant to be "the answer" — they're atomic options to mix and match.
+        </p>
+      </div>
+      <div class="legend">
+        <div><span class="sw" style="background:var(--accent)"></span>primary action / active</div>
+        <div><span class="sw" style="background:var(--accent-2)"></span>AI / generated</div>
+        <div><span class="sw" style="background:var(--warn)"></span>annotation</div>
+        <div><span class="sw" style="background:var(--ok)"></span>positive state</div>
+      </div>
+    </div>
+
+    <!-- SCREENS: each is its own <section> — populated by React below -->
+    <div id="screens"></div>
+  </div>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="wireframes/shared.jsx"></script>
+  <script type="text/babel" src="wireframes/dashboard.jsx"></script>
+  <script type="text/babel" src="wireframes/session.jsx"></script>
+  <script type="text/babel" src="wireframes/wizard.jsx"></script>
+  <script type="text/babel" src="wireframes/sheet.jsx"></script>
+  <script type="text/babel" src="wireframes/base.jsx"></script>
+  <script type="text/babel" src="wireframes/merchant.jsx"></script>
+  <script type="text/babel" src="wireframes/npc.jsx"></script>
+  <script type="text/babel" src="wireframes/dashboard-v2-full.jsx"></script>
+  <script type="text/babel" src="wireframes/winners.jsx"></script>
+  <script type="text/babel" src="wireframes/app.jsx"></script>
+</body>
+</html>

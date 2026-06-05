@@ -5,6 +5,8 @@
 
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { generateInventory, generateBuybackPrices, PROSPERITY_CONFIG, buildCustomItem, lookupItemByName } from '../data/merchantLootTables.js';
+import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+import { extractMarkerBodies, parseMarkerBody } from './markerSchemas.js';
 
 /**
  * Create merchant inventory entries from a campaign plan.
@@ -300,3 +302,119 @@ export async function ensureItemAtMerchant(campaignId, merchantName, itemName, i
 }
 
 export { generateBuybackPrices };
+
+// ============================================================
+// SC-6.4b — Merchant cluster marker handlers
+// ============================================================
+
+/**
+ * MERCHANT_SHOP handler — orchestrates the full merchant-shop activation
+ * sequence. Replaces the inline dispatch at the pre-SC-6.4b
+ * routes/dmSession.js:1500-1591 site.
+ *
+ * Per the SC-6.4b cluster-2 design (DECISION_LOG entry, consolidated at
+ * v1.0.153): this handler INTERNALLY processes the coupled ADD_ITEM
+ * markers from the same narrative because the legacy code orchestrated
+ * them together (ADD_ITEM only does anything when MERCHANT_SHOP set the
+ * "current merchant" context). Splitting into independent handlers
+ * would break the implicit ordering. ADD_ITEM stays as schema-only
+ * (parked from independent dispatch) — schema validation still fires
+ * for correction-loop feedback on malformed item markers.
+ *
+ * Returns a structured object the route handler reads from
+ * handlerResults to assemble the final inventoryContext system note +
+ * persist to dm_sessions.messages. Side effects done in handler;
+ * AI-context message construction stays at the route call site so the
+ * messages-array reference (closed over in the route) gets the push.
+ */
+registerMarkerHandler('MERCHANT_SHOP', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet('SELECT campaign_id, level FROM characters WHERE id = ?', [context.characterId]);
+  if (!character?.campaign_id) return null;
+
+  const merchantName = parsed.Merchant;
+  const merchantType = parsed.Type;
+  const location = parsed.Location;
+
+  console.log(`🏪 MERCHANT_SHOP detected: "${merchantName}" (${merchantType}) at ${location}`);
+
+  let dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
+  if (!dbMerchant) {
+    dbMerchant = await createMerchantOnTheFly(
+      character.campaign_id, merchantName, merchantType, location, character.level || 1
+    );
+  }
+
+  // Process coupled ADD_ITEM markers from the same narrative. ADD_ITEM
+  // schema is registered (correction loop active); independent handler
+  // dispatch is parked because it requires the MERCHANT_SHOP-established
+  // "current merchant" context.
+  const addItemBodies = extractMarkerBodies(context.narrative || '', 'ADD_ITEM', { all: true });
+  const addedItems = [];
+  for (const body of addItemBodies) {
+    const parseResult = parseMarkerBody(body, 'ADD_ITEM');
+    if (!parseResult.ok) continue;
+    try {
+      await addItemToMerchant(dbMerchant.id, {
+        name: parseResult.data.Name,
+        price_gp: parseResult.data.Price_GP,
+        quality: parseResult.data.Quality,
+        category: parseResult.data.Category
+      });
+      addedItems.push(parseResult.data.Name);
+    } catch (e) {
+      console.error('Error adding item to merchant:', e);
+    }
+  }
+
+  // Re-fetch inventory after any additions so the inventoryContext
+  // reflects the post-ADD_ITEM state.
+  if (addedItems.length > 0) {
+    dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
+  }
+
+  // Build the inventoryContext system note. Route handler appends to
+  // result.messages and persists.
+  const itemList = dbMerchant.inventory
+    .map(i => {
+      let line = `- ${i.name} (${i.price_gp}gp${i.quantity > 1 ? `, qty: ${i.quantity}` : ''}${i.quality ? ` [${i.quality}]` : ''})`;
+      if (i.cursed && i.true_name) {
+        line += ` [CURSED: actually ${i.true_name} — ${i.curse_description}]`;
+      }
+      return line;
+    })
+    .join('\n');
+  const hasCursedItems = dbMerchant.inventory.some(i => i.cursed);
+  const cursedInstructions = hasCursedItems
+    ? '\nCURSED ITEMS: Items marked [CURSED] APPEAR to the player as the normal item listed. Do NOT reveal the curse — describe it convincingly as the item it appears to be. The curse reveals itself only when used or identified with Identify/Detect Magic. If the player casts Identify, THEN reveal the true nature.'
+    : '';
+  const inventoryContext = `[SYSTEM: ${merchantName}'s actual inventory — ONLY reference these items when the player asks what's available:\n${itemList}\nMerchant gold: ${dbMerchant.gold_gp}gp. Do NOT invent items not on this list. The shop UI shows this inventory to the player. If an item isn't here, suggest an alternative or refer to another merchant with [MERCHANT_REFER]. You can add fitting custom items with [ADD_ITEM].${cursedInstructions}]`;
+
+  return {
+    type: 'merchant_shop',
+    merchantId: dbMerchant.id,
+    merchantName,
+    merchantType,
+    location,
+    addedItems,
+    inventoryContext // route handler appends to result.messages + persists
+  };
+});
+
+/**
+ * MERCHANT_REFER handler — ensure the referenced item exists at the
+ * destination merchant before the player travels there. Simple,
+ * single-purpose; no AI-context message push.
+ */
+registerMarkerHandler('MERCHANT_REFER', async (parsed, context) => {
+  if (!context?.characterId) return null;
+  const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [context.characterId]);
+  if (!character?.campaign_id) return null;
+  try {
+    await ensureItemAtMerchant(character.campaign_id, parsed.To, parsed.Item);
+    return { type: 'merchant_refer', from: parsed.From, to: parsed.To, item: parsed.Item };
+  } catch (e) {
+    console.error('Error ensuring item at referred merchant:', e);
+    return null;
+  }
+});

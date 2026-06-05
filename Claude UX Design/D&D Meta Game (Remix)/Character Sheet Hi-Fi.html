@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Character Sheet — Hi-Fi</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Dark modern — matches wireframe semi-dark mode */
+      --bg:        #1b1f2a;
+      --bg-2:      #242938;
+      --surface:   #2b3143;
+      --surface-2: #343b51;
+      --ink:       #e8edf7;
+      --ink-2:     #c9d1e0;
+      --ink-dim:   #8a95ad;
+      --ink-faint: #5a6378;
+
+      /* Accent set — tuned for dark background */
+      --terracotta:   #ff8a5b;
+      --terracotta-2: #ffa27a;
+      --forest:       #7dd4a2;
+      --forest-2:     #9be8bc;
+      --ink-purple:   #b19cff;
+      --ink-purple-2: #c9b8ff;
+      --faction-blue: #6ca9ff;
+      --danger:       #ff7a7a;
+
+      /* Chrome */
+      --line:       #4a5269;
+      --line-soft:  #3c4359;
+      --line-faint: #2e344a;
+
+      /* Type */
+      --display: "Fraunces", "Cormorant Garamond", Georgia, serif;
+      --body:    "Inter", system-ui, -apple-system, sans-serif;
+      --num:     "Inter", system-ui, -apple-system, sans-serif;
+      --mono:    "JetBrains Mono", ui-monospace, monospace;
+
+      /* Shadow for dark */
+      --sh-soft:  0 1px 2px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.18);
+      --sh-card:  0 1px 2px rgba(0,0,0,0.3), 0 8px 22px rgba(0,0,0,0.25);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--body);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "ss01", "ss02", "cv11";
+    }
+    body {
+      background-image:
+        radial-gradient(circle at 20% 10%, rgba(108,169,255,0.04), transparent 45%),
+        radial-gradient(circle at 80% 90%, rgba(177,156,255,0.04), transparent 45%);
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ─────────────────────────────────────── */
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line-soft);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .brand {
+      font-family: var(--display);
+      font-weight: 600;
+      font-variation-settings: "opsz" 144, "SOFT" 100;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+    }
+    .brand .amp { color: var(--terracotta); font-style: italic; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      padding: 3px 9px;
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+    }
+    .spacer { flex: 1; }
+    .topbar-link {
+      font-family: var(--body);
+      font-size: 13px;
+      color: var(--ink-dim);
+      text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .topbar-link:hover { color: var(--terracotta); }
+
+    /* ── Canvas ──────────────────────────────────────── */
+    .canvas {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 24px 24px 80px;
+    }
+
+    /* ── Hero / identity ─────────────────────────────── */
+    .hero {
+      display: grid;
+      grid-template-columns: 128px 1fr auto;
+      gap: 28px;
+      padding: 24px 28px;
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 14px;
+      box-shadow: var(--sh-card);
+      margin-bottom: 18px;
+      align-items: center;
+    }
+
+    /* Heraldic crest — class sigil */
+    .crest {
+      width: 128px; height: 128px;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.4), transparent 45%),
+        linear-gradient(135deg, #c95e2a 0%, #a64b1c 100%);
+      border-radius: 14px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.35),
+        inset 0 -2px 0 rgba(0,0,0,0.1),
+        0 2px 6px rgba(70,50,20,0.15);
+    }
+    .crest svg { width: 68%; height: 68%; }
+    .crest-badge {
+      position: absolute; bottom: -6px; right: -6px;
+      width: 30px; height: 30px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--terracotta);
+      box-shadow: var(--sh-soft);
+    }
+
+    .identity h1 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-variation-settings: "opsz" 144;
+      font-size: 44px;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      margin: 0 0 4px;
+      color: var(--ink);
+    }
+    .identity .subtitle {
+      font-family: var(--body);
+      font-size: 14px;
+      color: var(--ink-dim);
+      margin-bottom: 12px;
+    }
+    .identity .subtitle em {
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--ink-2);
+    }
+
+    /* Status pills */
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-2);
+      font-feature-settings: "tnum";
+    }
+    .pill .label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .pill .v { color: var(--ink); }
+    .pill.accent { border-color: var(--terracotta); color: var(--terracotta); background: color-mix(in oklab, var(--terracotta) 8%, var(--surface-2)); }
+    .pill.forest { border-color: var(--forest); color: var(--forest); background: color-mix(in oklab, var(--forest) 8%, var(--surface-2)); }
+    .pill.purple { border-color: var(--ink-purple); color: var(--ink-purple); background: color-mix(in oklab, var(--ink-purple) 8%, var(--surface-2)); }
+
+    /* HP inline */
+    .hp-pill {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 14px;
+      background: color-mix(in oklab, var(--forest) 12%, var(--surface-2));
+      border: 1px solid var(--forest);
+      border-radius: 999px;
+    }
+    .hp-pill .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--forest); }
+    .hp-pill .v { font-family: var(--num); font-size: 14px; font-weight: 600; color: var(--forest); font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+    .hp-bar { width: 70px; height: 5px; background: color-mix(in oklab, var(--forest) 20%, var(--surface)); border-radius: 999px; overflow: hidden; }
+    .hp-bar .fill { width: 81%; height: 100%; background: linear-gradient(90deg, var(--forest-2), var(--forest)); }
+
+    /* Hero action stack */
+    .hero-actions { display: flex; flex-direction: column; gap: 8px; min-width: 140px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 9px 16px;
+      font-family: var(--body);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.002em;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      background: var(--surface-2);
+      color: var(--ink-2);
+      border-color: var(--line-soft);
+    }
+    .btn:hover { border-color: var(--line); background: var(--surface); }
+    .btn.primary {
+      background: var(--terracotta);
+      color: #1b1f2a;
+      border-color: var(--terracotta);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .btn.primary:hover { background: var(--terracotta-2); }
+    .btn.ghost {
+      background: transparent;
+      border-color: var(--line-soft);
+      color: var(--ink-dim);
+    }
+    .btn.ghost:hover { color: var(--ink-2); border-color: var(--line); }
+    .btn .icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* ── Tabs ─────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--line-soft);
+      margin-bottom: 22px;
+    }
+    .tab {
+      padding: 11px 18px;
+      font-family: var(--body);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      display: inline-flex; align-items: center; gap: 8px;
+      transition: color 0.12s ease;
+    }
+    .tab:hover { color: var(--ink-2); }
+    .tab.active { color: var(--terracotta); border-bottom-color: var(--terracotta); font-weight: 600; }
+    .tab .icon { width: 14px; height: 14px; }
+    .tab .count {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 1px 6px;
+      background: var(--surface-2);
+      border-radius: 999px;
+      color: var(--ink-dim);
+    }
+
+    /* ── Section headings with ornamental dividers ────── */
+    .section-head {
+      display: flex; align-items: center; gap: 14px;
+      margin: 0 0 14px;
+    }
+    .section-head h2 {
+      font-family: var(--display);
+      font-variation-settings: "opsz" 24;
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      color: var(--ink);
+    }
+    .section-head .sub {
+      font-family: var(--body);
+      font-size: 12px;
+      color: var(--ink-dim);
+    }
+    .fleuron {
+      flex: 1;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--line);
+    }
+    .fleuron::before, .fleuron::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line-soft);
+    }
+    .fleuron svg { flex-shrink: 0; opacity: 0.7; }
+
+    /* ── Grid ─────────────────────────────────────────── */
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr 0.9fr;
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+    .grid-secondary {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 22px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: var(--sh-soft);
+    }
+
+    /* ── Abilities grid ──────────────────────────────── */
+    .abilities {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .ability {
+      position: relative;
+      padding: 14px 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      text-align: center;
+    }
+    .ability .name {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 2px;
+    }
+    .ability .score {
+      font-family: var(--num);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-size: 30px;
+      line-height: 1;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+    }
+    .ability .mod {
+      font-family: var(--num);
+      font-weight: 600;
+      font-feature-settings: "tnum";
+      font-size: 14px;
+      color: var(--terracotta);
+      margin-top: 3px;
+    }
+    .ability.prime {
+      background: color-mix(in oklab, var(--terracotta) 10%, var(--surface-2));
+      border-color: color-mix(in oklab, var(--terracotta) 40%, var(--line));
+    }
+    .ability.prime::before {
+      content: "";
+      position: absolute; top: 6px; right: 6px;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--terracotta);
+    }
+
+    /* ── Saves list ──────────────────────────────────── */
+    .save-list { display: flex; flex-direction: column; gap: 2px; }
+    .save-row {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 10px; align-items: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .save-row.prof {
+      background: color-mix(in oklab, var(--terracotta) 6%, transparent);
+    }
+    .save-row .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: transparent; border: 1.3px solid var(--line);
+      justify-self: center;
+    }
+    .save-row.prof .dot { background: var(--terracotta); border-color: var(--terracotta); }
+    .save-row .nm { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+    .save-row.prof .nm { color: var(--terracotta); }
+    .save-row .mod {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+    }
+    .save-row.prof .mod { color: var(--terracotta); }
+
+    /* ── Senses ──────────────────────────────────────── */
+    .senses { display: flex; flex-direction: column; gap: 8px; }
+    .sense-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 0;
+    }
+    .sense-row .lbl {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .sense-row .lbl .icon { width: 14px; height: 14px; color: var(--ink-dim); }
+    .sense-row .v {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+    }
+    .senses-note {
+      font-size: 12px;
+      color: var(--ink-dim);
+      padding-top: 10px;
+      margin-top: 4px;
+      border-top: 1px solid var(--line-faint);
+      font-style: italic;
+    }
+
+    /* ── Skills ──────────────────────────────────────── */
+    .skills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px 18px;
+    }
+    .skill {
+      display: grid;
+      grid-template-columns: 14px 1fr auto auto;
+      gap: 8px; align-items: center;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .skill.prof {
+      background: color-mix(in oklab, var(--terracotta) 6%, transparent);
+    }
+    .skill.expert {
+      background: color-mix(in oklab, var(--ink-purple) 6%, transparent);
+    }
+    .skill .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: transparent; border: 1.3px solid var(--line);
+      justify-self: center;
+    }
+    .skill.prof .dot { background: var(--terracotta); border-color: var(--terracotta); }
+    .skill.expert .dot {
+      background: var(--ink-purple); border-color: var(--ink-purple);
+      box-shadow: 0 0 0 2px color-mix(in oklab, var(--ink-purple) 30%, transparent);
+    }
+    .skill .nm { color: var(--ink-2); }
+    .skill.prof .nm { color: var(--ink); font-weight: 500; }
+    .skill.expert .nm { color: var(--ink-purple); font-weight: 600; }
+    .skill .abil {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+    }
+    .skill .mod {
+      font-family: var(--num);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--ink);
+      font-feature-settings: "tnum";
+      min-width: 22px; text-align: right;
+    }
+
+    /* ── Languages / Tools / Armor ───────────────────── */
+    .kv-block { margin-bottom: 14px; }
+    .kv-block:last-child { margin-bottom: 0; }
+    .kv-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 6px;
+    }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .tag .icon { width: 11px; height: 11px; color: var(--ink-dim); }
+    .prose {
+      font-family: var(--body);
+      font-size: 13px;
+      color: var(--ink-2);
+      line-height: 1.55;
+    }
+
+    /* ── Inspiration callout ─────────────────────────── */
+    .insp {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 11px;
+      background: color-mix(in oklab, var(--ink-purple) 12%, var(--surface-2));
+      border: 1px solid var(--ink-purple);
+      border-radius: 999px;
+      font-family: var(--body);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-purple);
+    }
+    .insp .icon { width: 12px; height: 12px; }
+
+    /* Tab footnote */
+    .tab-footnote {
+      text-align: center;
+      font-family: var(--body);
+      font-size: 12px;
+      color: var(--ink-faint);
+      font-style: italic;
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line-faint);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Reusable SVG defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <!-- Lucide-style icons -->
+      <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+      <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+      <symbol id="i-backpack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8"/><path d="M8 21v1M16 21v1"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.8l-6.3 4.2L8 13.8 2 9.4h7.6z"/></symbol>
+      <symbol id="i-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 14l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/><path d="M5 15l.5 1.5L7 17l-1.5.5L5 19l-.5-1.5L3 17l1.5-.5z"/></symbol>
+      <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></symbol>
+      <symbol id="i-bed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17V7M2 11h20v6M22 11a2 2 0 0 0-2-2h-7v4"/><circle cx="6.5" cy="11.5" r="1.5"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+
+      <!-- D&D thematic glyphs -->
+      <symbol id="g-sword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
+        <path d="M13 19l6-6"/>
+        <path d="M16 16l4 4"/>
+        <path d="M19 21l2-2"/>
+      </symbol>
+      <symbol id="g-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </symbol>
+      <symbol id="g-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z"/>
+      </symbol>
+      <symbol id="g-eye-mystic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 12c3-5 6-7 10-7s7 2 10 7c-3 5-6 7-10 7s-7-2-10-7z"/>
+        <circle cx="12" cy="12" r="3.5"/>
+        <path d="M12 8v2M12 14v2M8 12h2M14 12h2"/>
+      </symbol>
+      <symbol id="g-fleuron" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3c-1 2-3 3-5 3 2 0 4 1 5 3 1-2 3-3 5-3-2 0-4-1-5-3z"/>
+        <path d="M12 15c-1 2-3 3-5 3 2 0 4 1 5 3 1-2 3-3 5-3-2 0-4-1-5-3z"/>
+        <path d="M12 9v6"/>
+      </symbol>
+
+      <!-- Class crest: Warlock — pact rod crossed over an occult star -->
+      <symbol id="crest-warlock" viewBox="0 0 100 100" fill="none" stroke="#fff8ea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <!-- Outer heraldic shield -->
+        <path d="M50 10 L85 22 L85 52 C85 72 68 86 50 92 C32 86 15 72 15 52 L15 22 Z" fill="rgba(255,248,234,0.08)" stroke-width="2.2"/>
+        <!-- Inscribed circle (pact seal) -->
+        <circle cx="50" cy="50" r="20" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.85"/>
+        <!-- Pentagram / occult star inside the seal -->
+        <path d="M50 34 L56 48 L71 48 L58.5 56.5 L63.5 70 L50 62 L36.5 70 L41.5 56.5 L29 48 L44 48 Z" fill="rgba(255,248,234,0.22)" stroke-width="1.3"/>
+        <!-- Eye in the center -->
+        <ellipse cx="50" cy="53" rx="5" ry="2.8" fill="rgba(255,248,234,0.9)" stroke="none"/>
+        <circle cx="50" cy="53" r="1.4" fill="#a64b1c" stroke="none"/>
+        <!-- Rays/pact flames above -->
+        <path d="M50 18 L50 26 M43 20 L45 27 M57 20 L55 27" stroke-width="1.3" opacity="0.75"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">D<span class="amp">&amp;</span>D Meta Game</div>
+    <span class="tag">Hi-Fi · Character Sheet</span>
+    <div class="spacer"></div>
+    <a class="topbar-link" href="DnD Meta Game Wireframes.html">
+      <svg class="icon" style="width:14px;height:14px"><use href="#i-book"/></svg>
+      back to wireframes
+    </a>
+  </header>
+
+  <main class="canvas">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="crest">
+        <svg viewBox="0 0 100 100" aria-label="Warlock crest"><use href="#crest-warlock"/></svg>
+        <div class="crest-badge">7</div>
+      </div>
+
+      <div class="identity">
+        <h1>Kaelen Voss</h1>
+        <div class="subtitle">
+          <em>Tiefling</em> · <em>Warlock</em> of the Hexblade · <em>Noble</em> background
+          &nbsp;·&nbsp; <span style="color:var(--ink-faint)">Crowned Shadow campaign</span>
+        </div>
+        <div class="pills">
+          <span class="hp-pill">
+            <span class="label">HP</span>
+            <span class="v">42 / 52</span>
+            <span class="hp-bar"><span class="fill"></span></span>
+          </span>
+          <span class="pill"><span class="label">AC</span><span class="v">15</span></span>
+          <span class="pill"><span class="label">Init</span><span class="v">+2</span></span>
+          <span class="pill"><span class="label">Spd</span><span class="v">30 ft</span></span>
+          <span class="pill accent"><span class="label">Prof</span><span class="v">+3</span></span>
+          <span class="pill"><span class="label">Hit Dice</span><span class="v">3 / 7 d8</span></span>
+          <span class="insp"><svg class="icon"><use href="#i-star"/></svg>Inspiration</span>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <button class="btn primary">
+          <svg class="icon"><use href="#i-chevrons-up"/></svg>
+          Level up
+        </button>
+        <button class="btn ghost">
+          <svg class="icon"><use href="#i-coffee"/></svg>
+          Short rest
+        </button>
+        <button class="btn ghost">
+          <svg class="icon"><use href="#i-bed"/></svg>
+          Long rest
+        </button>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <nav class="tabs" aria-label="Character sections">
+      <div class="tab active"><svg class="icon"><use href="#i-brain"/></svg>Stats</div>
+      <div class="tab"><svg class="icon"><use href="#g-sword"/></svg>Combat</div>
+      <div class="tab"><svg class="icon"><use href="#g-flame"/></svg>Spells<span class="count">12</span></div>
+      <div class="tab"><svg class="icon"><use href="#i-backpack"/></svg>Inventory<span class="count">18</span></div>
+      <div class="tab"><svg class="icon"><use href="#i-sparkles"/></svg>Features</div>
+      <div class="tab"><svg class="icon"><use href="#i-scroll"/></svg>Background</div>
+      <div class="tab"><svg class="icon"><use href="#i-chevrons-up"/></svg>Progression</div>
+      <div class="tab"><svg class="icon"><use href="#g-eye-mystic"/></svg>Mythic</div>
+    </nav>
+
+    <!-- Main grid row -->
+    <div class="grid-main">
+
+      <!-- Abilities -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Abilities</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+          <span class="sub">point-buy · Tiefling +2 Cha</span>
+        </div>
+        <div class="abilities">
+          <div class="ability"><div class="name">Str</div><div class="score">10</div><div class="mod">+0</div></div>
+          <div class="ability"><div class="name">Dex</div><div class="score">14</div><div class="mod">+2</div></div>
+          <div class="ability"><div class="name">Con</div><div class="score">14</div><div class="mod">+2</div></div>
+          <div class="ability"><div class="name">Int</div><div class="score">11</div><div class="mod">+0</div></div>
+          <div class="ability"><div class="name">Wis</div><div class="score">12</div><div class="mod">+1</div></div>
+          <div class="ability prime"><div class="name">Cha</div><div class="score">18</div><div class="mod">+4</div></div>
+        </div>
+      </section>
+
+      <!-- Saves -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Saving throws</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+          <span class="sub">Cha · Wis</span>
+        </div>
+        <div class="save-list">
+          <div class="save-row"><span class="dot"></span><span class="nm">Strength</span><span class="mod">+0</span></div>
+          <div class="save-row"><span class="dot"></span><span class="nm">Dexterity</span><span class="mod">+2</span></div>
+          <div class="save-row"><span class="dot"></span><span class="nm">Constitution</span><span class="mod">+2</span></div>
+          <div class="save-row"><span class="dot"></span><span class="nm">Intelligence</span><span class="mod">+0</span></div>
+          <div class="save-row prof"><span class="dot"></span><span class="nm">Wisdom</span><span class="mod">+4</span></div>
+          <div class="save-row prof"><span class="dot"></span><span class="nm">Charisma</span><span class="mod">+7</span></div>
+        </div>
+      </section>
+
+      <!-- Senses -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Passive senses</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+        </div>
+        <div class="senses">
+          <div class="sense-row">
+            <span class="lbl"><svg class="icon"><use href="#i-eye"/></svg>Perception</span>
+            <span class="v">11</span>
+          </div>
+          <div class="sense-row">
+            <span class="lbl"><svg class="icon"><use href="#i-brain"/></svg>Insight</span>
+            <span class="v">11</span>
+          </div>
+          <div class="sense-row">
+            <span class="lbl"><svg class="icon"><use href="#i-search"/></svg>Investigation</span>
+            <span class="v">10</span>
+          </div>
+          <div class="senses-note">
+            Darkvision 60 ft · Devil's Sight 120 ft (pierces magical darkness)
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Secondary row -->
+    <div class="grid-secondary">
+
+      <!-- Skills -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Skills</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+          <span class="sub">
+            <span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);display:inline-block"></span>proficient</span>
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--ink-purple);display:inline-block"></span>expertise</span>
+          </span>
+        </div>
+        <div class="skills">
+          <div class="skill"><span class="dot"></span><span class="nm">Acrobatics</span><span class="abil">Dex</span><span class="mod">+2</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Animal Handling</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill prof"><span class="dot"></span><span class="nm">Arcana</span><span class="abil">Int</span><span class="mod">+3</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Athletics</span><span class="abil">Str</span><span class="mod">+0</span></div>
+          <div class="skill expert"><span class="dot"></span><span class="nm">Deception</span><span class="abil">Cha</span><span class="mod">+10</span></div>
+          <div class="skill prof"><span class="dot"></span><span class="nm">History</span><span class="abil">Int</span><span class="mod">+3</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Insight</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill prof"><span class="dot"></span><span class="nm">Intimidation</span><span class="abil">Cha</span><span class="mod">+7</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Investigation</span><span class="abil">Int</span><span class="mod">+0</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Medicine</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Nature</span><span class="abil">Int</span><span class="mod">+0</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Perception</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Performance</span><span class="abil">Cha</span><span class="mod">+4</span></div>
+          <div class="skill expert"><span class="dot"></span><span class="nm">Persuasion</span><span class="abil">Cha</span><span class="mod">+10</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Religion</span><span class="abil">Int</span><span class="mod">+0</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Sleight of Hand</span><span class="abil">Dex</span><span class="mod">+2</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Stealth</span><span class="abil">Dex</span><span class="mod">+2</span></div>
+          <div class="skill"><span class="dot"></span><span class="nm">Survival</span><span class="abil">Wis</span><span class="mod">+1</span></div>
+        </div>
+      </section>
+
+      <!-- Languages, tools, armor -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Proficiencies</h2>
+          <div class="fleuron"><svg width="14" height="14"><use href="#g-fleuron"/></svg></div>
+        </div>
+
+        <div class="kv-block">
+          <div class="kv-label">Languages</div>
+          <div class="tag-row">
+            <span class="tag">Common</span>
+            <span class="tag">Infernal</span>
+            <span class="tag">Elvish</span>
+          </div>
+        </div>
+
+        <div class="kv-block">
+          <div class="kv-label">Armor &amp; weapons</div>
+          <div class="prose">Light &amp; medium armor · shields · simple &amp; martial weapons <em style="color:var(--ink-faint)">(Hexblade patron)</em></div>
+        </div>
+
+        <div class="kv-block">
+          <div class="kv-label">Tools</div>
+          <div class="tag-row">
+            <span class="tag"><svg class="icon"><use href="#i-book"/></svg>Dragonchess</span>
+            <span class="tag"><svg class="icon"><use href="#i-scroll"/></svg>Calligrapher's</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="tab-footnote">
+      Stats tab shown · switch tabs above for Combat · Spells · Inventory · Features · Background · Progression · Mythic
+    </div>
+  </main>
+</body>
+</html>

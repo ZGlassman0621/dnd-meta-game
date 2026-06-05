@@ -4,6 +4,259 @@ Feature ideas for future implementation.
 
 ---
 
+# Entry to Add to FUTURE_FEATURES.md
+
+Paste this entry into `FUTURE_FEATURES.md` under the appropriate section (likely the same content/system-additions area that holds the Themes content lift and Ancestry Feats progression-layer entries). It's a content-addition workstream, not infrastructure.
+
+---
+
+## Self-hostability roadmap (offline-capable LLM operation)
+
+**Priority:** Strategic — load-bearing for the project's "end of the world" framing
+**Status:** Planning entry. No work scheduled. Captures the path from current cloud-dependent state to fully self-hostable operation.
+
+The project's stated goal is software that runs when nothing else works — when the cloud is gone, when Anthropic's API is unreachable, when long-distance infrastructure has failed. Current architecture depends entirely on Anthropic's hosted Claude for narrative AI work. Without a path to local inference, the program degrades to a character-sheet manager in any "end of the world" scenario.
+
+This entry captures the realistic path. Not custom model training (out of solo-developer scope). Not "build our own LLM" (years of community-scale work). The realistic version: become *swap-ready* for whatever local model is sufficient when the moment arrives, and build toward that incrementally.
+
+### What "swap-ready" means concretely
+
+A clean separation between game logic and AI inference such that the inference endpoint can be replaced — local model, different cloud provider, hybrid — without touching game code. The architecture today is partially there: `apiService.js` is a real seam, prompt builders are deterministic functions of game state, and the marker pipeline / chronicle extraction / DM dispatch layers don't know what model produced their inputs. What's missing is a formal *provider abstraction* that takes "AI work intent" (gameplay prose, structured extraction, etc.) and routes to whatever's currently configured.
+
+### Five levels of "modifying an existing local LLM"
+
+When the time comes to actually run a local model, "modify" can mean any of the following. Realistic path likely includes most of them at different stages:
+
+**Level 1 — Use as-is, your prompts.** Pull an open-weights model (Llama, Qwen, Mistral, DeepSeek — whatever's good when you do this), serve via Ollama / llama.cpp / vLLM, point the provider abstraction at the local endpoint. No model modification; the model runs on your hardware with your existing prompts. Effort: days to weeks once provider abstraction exists.
+
+**Level 2 — Prompt-engineer for the local model.** Same model, retuned prompts. Different models have different sensitivities; what works on Opus may not work on a 13B local model. Per-system prompt tuning to match the local model's optimal shape. Effort: ongoing iteration, real data-driven work, gated on diagnostic infrastructure (see "What needs to come first," below).
+
+**Level 3 — Full fine-tuning.** Continue training an open-weights base model on data from your campaigns. Produces a model that's internalized your game's prose voice, world consistency, and narrative shape. Real engineering: training data preparation, GPU compute (cloud or local), evaluation, iteration. Probably overkill for solo use; included for completeness.
+
+**Level 4 — LoRA / QLoRA adapters.** Cheaper, faster fine-tuning that produces small swappable "adapter" layers instead of modifying all the model's weights. Doable on consumer GPU hardware overnight. Multiple specialized adapters per use case (DM voice, chronicle extraction, in-character NPC dialogue, etc.). Tools: Axolotl, Unsloth, Ollama's emerging fine-tuning support. **Likely the eventual production path for this project.**
+
+**Level 5 — Architectural augmentation.** Beyond the model itself: retrieval-augmented generation (RAG) pulling from chronicles, agent loops with verification stages, specialized smaller models for subtasks, prompt-time context optimization for smaller windows. Some pieces already exist in primitive forms (chronicle injection ≈ RAG; correction-loop ≈ agent loop). A local-model future likely leans harder into these to compensate for raw model quality.
+
+### What needs to come first (work to enable the path)
+
+Three specific pieces of work that aren't on the plan today, in rough priority order:
+
+**1. Provider abstraction at `apiService.js`.** A formal seam that takes intent (e.g., `'gameplay-prose'`, `'structured-extraction'`) and routes to a configurable provider. Today's implementation: route everything to Anthropic. Tomorrow's implementation: route per-intent to whatever backend's appropriate (local Ollama for prose, hosted API for fallback, mixed routing during transition periods). Doesn't change anything operational; sets up the swap.
+
+This is the single highest-leverage piece of swap-readiness work. Without it, every other piece is harder. With it, every other piece is bounded.
+
+Likely a small dedicated phase — "Phase 3.5" or "Phase 4.5" — with clear deliverables, isolated scope, no competition for attention. Realistic effort: weeks of focused work.
+
+**2. Prompt-shape diagnostics (widening Phase 4 scope).** Different models respond differently to the same prompts. Today's prompts are tuned for Opus. A future local model — even a very good one — has different sensitivities, different context window characteristics, different prompt-shape preferences. What's missing today: visibility into how prompts perform.
+
+A diagnostic layer that records *prompt → response → quality signals* for every AI call would let us, over time, characterize the prompts empirically. Which prompts trigger marker malformation? Which trigger rule violations? Which run too long for a hypothetical smaller context window? The marker correction-loop is the closest existing thing; this is its broader generalization.
+
+Phase 4 (AI behavior diagnostic) is the natural home. The current Phase 4 framing focuses on diagnosing specific AI behavior issues (shelter-fixation, etc.). Widening Phase 4's scope to include "prompt characterization for swap-readiness" costs scope but is high-value if Phase 4 is happening anyway.
+
+This work also doubles as **data collection for Level 4 LoRA fine-tuning.** Each Opus campaign session generates training data for a future fine-tuned local model. The diagnostic layer is the capture mechanism. Setting it up early means we have the data when we need it.
+
+**3. Context window discipline (prompt accounting).** Opus's context window is large. Local models in 2026 have meaningful but smaller windows. Prompts have grown organically — chronicles inject, marker schemas inject, mythic context, NPC blocks, faction blocks, companion blocks, world state. There's no current mechanism to *measure* how much context each system contributes per turn.
+
+A "prompt accounting" pass — measure, log, expose — would surface what's actually in the prompt and let us make priority calls about what to trim if a smaller context becomes necessary. Could pair with Phase 4's diagnostic widening or land standalone. Smaller piece of work than #1 or #2.
+
+### Realistic milestones (rough sequencing, no commitment to dates)
+
+- **Milestone A: Provider abstraction shipped.** A small dedicated phase. After this lands: nothing changes operationally; everything routes through the abstraction; Anthropic stays the configured backend.
+- **Milestone B: First Level 1 test.** Pick a currently-strong open-weights model (whichever's best when you do this), run sample prompts side-by-side with Opus, characterize the gap on this project's specific prompts. Days of work; produces concrete information about today's quality gap.
+- **Milestone C: Diagnostic layer ships (Phase 4 expansion).** Captures prompt-response pairs with quality signals. Active use: diagnosing existing AI behavior issues. Side benefit: training data accumulating.
+- **Milestone D: Context accounting ships.** Visibility into prompt composition; informs trimming priorities.
+- **Milestone E: Level 2 prompt tuning per system.** As specific systems show quality gaps on local models, retune. Iterative; ongoing.
+- **Milestone F: First LoRA fine-tune.** Once campaign data has accumulated and base model quality has improved enough that fine-tuning earns its keep. Probably starts with the most prose-quality-sensitive system (DM session generation).
+- **Milestone G: Production-quality local-model gameplay.** The actual swap. Local model becomes the default; cloud provider becomes optional fallback or fully retired. Full self-hostability achieved.
+
+### What's deliberately not in scope
+
+- **Custom model training from scratch.** Years of community-scale work. Not a solo-developer project.
+- **Active multi-provider operation.** Provider abstraction enables it; running multiple providers simultaneously in production adds operational complexity without gameplay benefit. Build the abstraction; flip the switch when ready.
+- **Aggressive prompt optimization for hypothetical local models today.** Today's prompts are tuned for Opus because Opus is the production backend. Building toward hypothetical model shapes now means building twice. Build for what's running; collect data; retune fast when the moment comes.
+
+### Trigger conditions to revisit
+
+- **A particular open-weights model release hits the right shape** — atmospheric prose quality on long-context narrative work approaches usable level. Could happen any time given current model release cadence.
+- **Anthropic API access becomes meaningfully constrained** — pricing changes, capability changes, geographic availability changes, anything that creates urgency on the swap.
+- **Phase 7 (long-running play) starts hitting realistic timescales** — once campaigns are running for months and years of game-time, the "what if I lose API access mid-campaign" question becomes felt rather than theoretical.
+- **Another solo developer or small project demonstrates production-quality local-LLM gameplay** — proof point that the path is viable. Lowers risk on committing to the work.
+
+### Estimated effort
+
+Provider abstraction: a small dedicated phase, weeks of focused work.
+Diagnostic layer (Phase 4 expansion): variable depending on Phase 4 scope.
+Context accounting: smaller, days to weeks.
+Level 1 testing: days, post-provider-abstraction.
+Level 2 prompt tuning: ongoing, distributed across many phases.
+Level 4 LoRA fine-tuning: weeks of dedicated work when data is ready.
+Total path to Milestone G (production-quality local-model gameplay): plausibly 2027-2028 given current model release trajectory; sooner with luck on open-weights releases.
+
+### Related docs
+
+- `PROJECT_BRIEF.md` (the "end of the world program" framing this entry takes seriously)
+- `CONSOLIDATED_TODO.md` Phase 4 (AI behavior diagnostic — natural home for diagnostic widening)
+- `CLAUDE.md` model-split documentation (the prose-vs-non-prose principle that extends naturally to provider selection)
+- `apiService.js` (the seam where provider abstraction lands)
+- `dmPromptBuilder.js`, `preludePromptBuilder.js`, `dmModePromptBuilder.js` (the prompt-builders that benefit from accounting + diagnostic instrumentation)
+
+### What this entry isn't
+
+Not a commitment to do the work. Not a schedule. Not a feasibility assessment of any particular open-weights model. **A planning entry to capture the realistic path while it's clearly in mind**, so future scoping decisions can shape current work around keeping the path open. The day Milestone A becomes urgent, this entry should make scoping fast: the path is already mapped; only execution remains.
+
+## Drow Lolth Standing Tracker
+
+**Priority:** Deferred — character-content-specific
+**Status:** Designed in `AI_NARRATIVE_PERSISTENCE.md` (Drow Lolth standing tracker entry) and `ANCESTRY_FEATS.md` (Drow L13 Lolth's Favor / Defiance). Has zero footprint in code today.
+**Depends on:** Phase 3 standing-scalar abstraction. Once that abstraction lands, building this becomes "instantiate the abstraction for a new locus" rather than designing a new bespoke schema.
+
+**What it is:** A scalar value tracking a Drow character's standing with Lolth — devout-and-favored to apostate-and-cursed. Updates via player actions that align with or defy Lolth (assisting Drow, killing Drow, defending or opposing Lolth's interests, how Lolth-aligned NPC interactions resolve). At L13, the summoned spider's reliability and behavior under Lolth's Favor / Defiance depends on current standing.
+
+**Why deferred:** User does not play Drow. Lolth standing is Drow-specific — it doesn't apply to non-Drow companions or any other system. With nobody likely to ever trigger it in practice, building it now would be premature. The Phase 3 standing-scalar abstraction is justified by other consumers (companion loyalty, faction standing, Mythic piety, NPC disposition, DM Mode bond-shifts, Aasimar Path's Choice); Lolth was an example of "trivially addable once the abstraction exists," not a justifier. Removing it from Phase 3 scope keeps that phase focused.
+
+**Trigger to revisit:**
+- User decides to play a Drow character in Player Mode, or
+- A Drow companion the user has actually recruited reaches L13 and Lolth's Favor / Defiance becomes mechanically active in their play, or
+- A campaign with significant Drow content gets started and standing-with-Lolth becomes a live story dimension
+
+**Scope when revisited:**
+- Build the standing tracker as a new instantiation of the Phase 3 standing-scalar abstraction (per-character per-deity-or-faction-equivalent scalar + label + audit trail). Most of the structural work is the abstraction; this is the consumer.
+- Wire L13 Lolth's Favor / Defiance ability to consult standing for spider reliability.
+- Author the standing-shift events (what the AI watches for, how big the shifts are, what NPC interactions move the needle).
+- Decide whether standing is visible to the player (always-on UI element, surfaced only when consequences fire, never).
+
+**Estimated effort when reactivated:** Small — a few days of work assuming the abstraction is in place. The abstraction is the load-bearing piece; this is content + wiring.
+
+**Related docs:**
+- `AI_NARRATIVE_PERSISTENCE.md` (Drow Lolth standing tracker entry — design source)
+- `ANCESTRY_FEATS.md` (Drow L13 Lolth's Favor / Defiance ability)
+- `ANCESTRY_FEATS_REDESIGN_DEFERRED.md` (the broader feat-vs-race-quest framing question may reshape this when both are reactivated)
+- Phase 3 standing-scalar abstraction (when shipped) — the dependency
+
+### Nardo's Manual of Martial Mastery — weapon-tier and fighting-style feat layer
+
+**What:** Add a layer of L4+ feats giving martial characters meaningful weapon-specific identity and weapon-pair fighting styles. Source content is *Nardo D&D's Manual of Martial Mastery* (a homebrew supplement found online, attributed to "Nardo D&D @ Youtube.com"). Two categories:
+
+- **Weapon Mastery Feats — 36 feats**, one per PHB weapon (battleaxe, blowgun, club, dagger, dart, flail, glaive, greataxe, greatclub, halberd, handaxe, hand crossbow, heavy crossbow, lance, light crossbow, light hammer, longbow, longsword, mace, maul, morningstar, musket, pike, pistol, quarterstaff, rapier, scimitar, shield, shortbow, shortsword, sickle, sling, spear, trident, war pick, warhammer, whip). Each grants an ability score increase plus three weapon-specific features that typically: add a weapon mastery property, modify the weapon's damage die or range, and grant a signature technique (e.g., Greataxe's "Skull Splitter" triple-dice-on-crit, Trident's "Sword Catcher" disarm reaction, Shield's "Bashing" extra attack).
+
+- **Fighting Style Feats — 16 feats** for specific weapon-pair combos and specialty styles: Anvil of Thunder (warhammer + battleaxe), Bear Fang (battleaxe/handaxe + dagger), Blowgun and Scimitar, Greatclub and Dart, Hammer and Piton, Hammer's Edge (longsword + warhammer), Hand Crossbow and Greatsword, Maul and Greataxe, Morningstar and Wand, Shielded Axe, Spellrazor (dagger + touch cantrip), Spinning Halberd, Three Mountains, Trident and Net, Turtle Dart (heavy armor + shield + shortsword), and Weapon and Torch.
+
+The thematic appeal is real: this is exactly the kind of "your weapon means something" texture 5.5e gestures at with weapon mastery properties but doesn't fully deliver on. Gives every martial weapon a 4th-level "I'm a [weapon] specialist" upgrade path, and the fighting-style feats fill a niche 5.5e left empty when it folded fighting styles into class features.
+
+**Why deferred:**
+
+1. **Licensing question is unresolved.** This is fan content from a YouTube creator, not WotC material. For private personal-table use, fine. For shipping in a public product — even free — we'd need either Nardo's permission or a clean rewrite using these as inspiration rather than direct adaptation. The licensing decision wants to be made consciously, not slid past.
+2. **Active threads outrank it.** Prose-quality work, Phase 5 prelude handoff, Themes content lift, and the Ancestry-Feats redesign question are all higher priority. This is additive content, not load-bearing infrastructure.
+3. **AI-trigger spec work is non-trivial.** Like Themes (which the Themes review flagged as "AI-trigger specs absent — load-bearing risk"), every one of these 52 feats needs the AI DM to know when to invoke it. Without spec work, they become invisible character-sheet text. The AI persistence engineering thread should make headway before we add another 52 features dependent on it.
+
+**Trigger to revisit:**
+- After Themes content lift completes — the AI-trigger-spec pattern will be established and reusable for these feats.
+- After the Ancestry Feats redesign question resolves — that decision determines whether the L4+ feat slot is even available for these (current 5.5e cadence puts ASIs at L4, but the redesign may reshape the progression layer).
+- If a martial-heavy playtest surfaces "weapons feel interchangeable past the basic mastery property" as a real complaint — confirms the design pressure these solve.
+- If the user wants to use a specific feat at the table during private play (one-off pick is much lower cost than full integration).
+
+**Scope when revisited:**
+
+1. **Licensing call (non-engineering).** Reach out to Nardo for permission to adapt, OR commit to "inspiration only" and rewrite each feat in the project's own voice. Affects every downstream step.
+
+2. **Balance pass.** Several feats need pressure-testing against the existing system before integration. Specific watch-list (not exhaustive):
+   - Greataxe Skull Splitter — triple dice on crit + crit on 19, stacks dangerously with Champion Fighter's improved crit range.
+   - Rapier Successive Piercing — second attack rolls and damages twice; large multiplier for action-economy classes.
+   - Trident Sword Catcher — disarm-and-break-mundane-weapons reaction may invalidate certain encounter designs.
+   - Heavy Crossbow Portable Ballista — 1d12 base, double damage to objects, +Slow mastery; may overshadow other ranged options.
+   - Maul and Greataxe Densely Packed Strikes — flat +2d6 to every attack while wielding both is a big static damage floor.
+   - Morningstar Long Hafted — converts a non-versatile weapon into a Versatile + Reach + Slow weapon for 1 hour of crafting; effectively rewrites the weapon's slot in the equipment table.
+   - Anvil of Thunder "The Thunder" — AoE thunder damage from a weapon attack is a meaningful step outside martial design space.
+   - Several feats stack their granted Weapon Mastery on top of the weapon's existing one, effectively giving 2-3 masteries per attack — needs explicit ruling on how that interacts with the per-turn mastery limits.
+
+3. **AI-trigger specs.** Each feat needs guidance for when the AI DM should narrate or invoke it. Patterns will likely cluster (passive damage adders, conditional reactions, named special techniques) — design the patterns first, apply across all 52.
+
+4. **Schema and integration.** New feat category, new feat data, integration with `LevelUpPage.jsx` for selection, integration with the DM prompt for awareness. Likely smaller than Ancestry Feats since these don't have the multi-tier progression — flat L4+ unlock with a prereq check.
+
+5. **Editing pass.** The PDF has a fair number of typos and wording ambiguities that need cleanup regardless of licensing path: "wiled" (Light Crossbow), "Halberd" appearing in Heavy Crossbow text, "loner" (Blowgun and Scimitar), "Continues" (Whip — should be "Continuous"), "Closing Jaws" damage timing wording, etc.
+
+**Estimated effort:** Multi-day to multi-week depending on choices. Licensing permission + light adaptation is the cheapest path (~few days for balance pass + AI-trigger specs + integration). "Inspiration only" rewrite is closer to multi-week — 52 feats × original-design effort plus everything above.
+
+**Related docs:**
+- `Nardo_D_D_s_Manual_of_Martial_Mastery.pdf` — source material (project files)
+- `THEMES_REVIEW.md` — analogous AI-trigger-spec problem at scale
+- `ANCESTRY_FEATS_REDESIGN_DEFERRED.md` — progression-layer cadence question that interacts with this
+- `AI_NARRATIVE_PERSISTENCE.md` — the AI-memory thread these depend on for "AI knows when to invoke"
+
+**Independent of code work — research tasks before this thread reactivates:**
+- Locate Nardo's contact channel (YouTube channel description, Patreon, etc.) and any stated terms of use for the manual.
+- Cross-reference these feats against current 5.5e weapon mastery properties to identify any direct duplication of post-2024 official content.
+
+## LLM infrastructure follow-up pass
+What: Pick up the remaining deferred items from the LLM Setup audit and Phase 2 fixes (v1.0.102). Includes the Ollama fallback smoke test, tagged-error coverage extension to non-/message paths, doc-hygiene polish, and any new findings that surface in the smoke test.
+Why deferred: The high-priority fixes shipped in v1.0.102 (auth/billing handling, rate-limit retry, Ollama model verification, doc drift). Combined with the user's manual setting of an Anthropic console spending cap, the major operational risks are now bounded. Remaining items are quality-of-life rather than safety-critical.
+Trigger to revisit:
+
+Before starting a long-running campaign (the smoke test ensures fallback actually works before you depend on it)
+When the project moves to a new machine, or after any major prompt refactor (validates the fallback against a changed system prompt)
+If a real failure surfaces in a non-/message path that should have produced a clear tagged error
+If costs ever shift in a way that makes the console cap insufficient
+
+Scope when revisited:
+
+Ollama fallback smoke test (the big one). Pull gpt-oss:20b (~12GB), unset ANTHROPIC_API_KEY, play 2-3 turns of an actual session. Three possible outcomes, each leading to different downstream work:
+
+Fallback works cleanly → no further action needed beyond documenting that it's been validated
+Fallback half-works (some features broken, basic narration OK) → identify what's broken; decide whether to fix or document limitations
+Fallback is broken → significant engineering work; reassess whether Ollama is still load-bearing for the project
+
+
+Tagged-error coverage extension. The new tagged-error infrastructure (AUTH_FAILURE, RATE_LIMITED, OVERLOADED) is wired through dmSession.js /message only. Extend to /start, /restart, DM Mode routes, and generator services (campaign plans, NPCs, quests, locations, companions, adventures). Each route currently surfaces a 401/403/429 as a generic error.
+Doc-hygiene polish on LLM_SETUP.md:
+
+Line 49 module structure description (still describes ollama.js as "Session Orchestrator" — misleading post-Claude-default)
+Cross-platform Ollama install instructions (currently macOS-only)
+API key rotation procedure (what to do if a key is leaked)
+Workspace-scoped keys with per-key spending caps as best practice
+User-facing fallback experience documentation (what does the player see when fallback fires)
+
+
+Cost monitoring deepening (only if needed). Per-call cost calculation logging, persisted lifetime totals. Currently deferred because the console cap is the real backstop. Revisit only if cost shape changes dramatically.
+
+Estimated effort: Multi-hour to multi-day depending on smoke test outcome. Smoke test alone is ~1 hour of work plus the 12GB Ollama model download. Tagged-error coverage extension is ~1-2 hours. Doc polish is ~1 hour. If smoke test surfaces broken fallback, scope expands significantly.
+Related docs:
+
+LLM_SETUP.md (current operational documentation)
+LLM_SETUP_REVIEW.md (review findings, deferred-action list)
+v1.0.102 changelog (Phase 2 fixes)
+DECISION_LOG.md (cost decisions and Opus-default rationale)
+
+Independent of code work — user task to verify before this thread reactivates:
+
+Run git log -p | grep -i "sk-ant" in the project repo to confirm no API key has ever been committed to git history. If the search returns anything, rotate the key immediately at console.anthropic.com.
+
+## Downtime system activation
+What: Bring the Downtime v3 system from designed-but-dormant state to functional in-play feature. This includes implementation reality assessment (what's built vs not), reconciling the original-intent vs v3-design tension, balance pass on the 30+ activities, UX design for the Downtime Planning screen, and first-playtest validation with a long-running character.
+Why deferred: Downtime is the project's origin system but has fallen into disrepair while the project has been in building mode (short-lived test characters rather than continuous campaigns). Activating Downtime in isolation would be premature optimization — it should pair naturally with the transition out of building mode into long-running character play. Additionally, the system has the heaviest AI memory dependency of any system reviewed so far; full activation likely requires the AI Narrative Persistence engineering thread to be further along.
+Trigger to revisit:
+
+User starts a long-running character intended for sustained play (the natural pairing event)
+AND the AI Narrative Persistence engineering thread has progressed enough to support per-NPC tracking, companion personality state, faction standing tracking at scale
+OR a partial activation makes sense before either of the above (e.g., player-driven planning mode without the AI-memory-heavy features like Reflection or vignette curation)
+
+Scope when revisited:
+
+Implementation reality assessment. Audit what exists in code (v2 functionality, partial v3, nothing). Determines whether activation is "implement v3 from scratch" (multi-week engineering) or "repair existing v2 to v3 spec."
+Reconcile original-intent vs v3-design tension. Original was time-driven (passive, while player is away). v3 is session-driven (explicit allocation between sessions). Decide which version is being built — or whether v3 is the planning layer with a future passive-progression layer added later.
+Numeric balance pass. Pressure-test the 30+ activities against each other for cost/benefit parity. Currently explicitly deferred from design phase.
+Define "minimum interesting Downtime" threshold and 90-day cap rationale. Sub-5-day Downtimes feel useless; need either a minimum or short-Downtime-specific activities. The 90-day cap needs documented rationale.
+UX design pass for Downtime Planning screen. Currently a one-line implementation note. Will be one of the screens players spend the most time in. Non-trivial design work.
+AI Narrative Persistence prerequisites. Many Downtime features (companion requests, Reflection triggers, vignette curation, NPC absence-decay tracking) require AI memory architecture being further along. Activation may need to wait for or coordinate with that thread.
+First playtest with a long-running character. The system gets stress-tested against actual sustained play.
+
+Estimated effort: Multi-week to multi-month engineering thread, depending on implementation reality. Not a small fix.
+Related docs:
+
+DOWNTIME_DESIGN.md (the v3 spec)
+DOWNTIME_REVIEW.md (review findings, deferred-action list)
+AI_NARRATIVE_PERSISTENCE.md (Downtime adds significant entries here)
+Mobile Notifications future feature (the original-intent ghost — passive while-player-is-away mode)
+
 ## Themes System (Leveling Backgrounds)
 
 **Priority:** Medium
@@ -55,6 +308,28 @@ Four directions worth exploring:
 3. **Cross-Theme Training** — At higher tiers, characters who travel together long enough can pick up a single L1 ability from a party member's Theme via extended downtime. The Fighter who spends a year alongside a Sage gains the Sage's L1 trait. This rewards long campaigns and deepening interconnection — and pairs naturally with the Downtime v2 system already in place.
 
 4. **Group Activations** — At L11+, a party member can spend their reaction (or a downtime hour) to **share** their Theme's Expertise Die with an adjacent ally for one check. The Sage lends their d6 to the Fighter making a critical Religion check; the Soldier lends their d6 to the Bard's Intimidation roll. This creates active party-level decisions instead of passive "everyone has their own die" play.
+
+### Avatar feature deferred from MVP creator rebuild. 
+Original placement was Step 3 (post-theme-lock, for informed visual identity choice). When revived, slot back into Step 3 unless creator structure has shifted. Existing characters.avatar_url (or equivalent) column is dormant in DB and can be leveraged when feature returns.
+
+### Cross-system progression integration check
+What: Verify that the four progression systems (Ancestry Feats, Themes, Mythic, Class) don't produce broken combinations, dead levels, or pathological power stacking when applied together to the same character.
+Why deferred: Surfaced during Ancestry Feats system review (April 2026). Identified as the highest-leverage piece of unfinished design work in the Ancestry Feats spec, but doing it well requires Themes and Mythic to also have been reviewed and stabilized. Doing the integration check before reviewing those systems individually means any of them may shift afterward and invalidate the check.
+Trigger to revisit: After Themes review and Mythic review are both complete, OR if a specific combination problem surfaces in real play that requires resolution.
+Scope when revisited:
+
+Cross-reference Ancestry Feat picks against Theme abilities at every tier — flag overlaps, redundancies, and pathological stacking.
+Cross-reference Subclass × Theme synergies (per SUBCLASS_THEME_SYNERGIES.md) — verify the synergy tags are real and balanced.
+Cross-reference Mythic × Theme amplification combos (per MYTHIC_THEME_AMPLIFICATIONS.md) — same concern.
+Audit level cadence: at every character level (1-20), enumerate what each progression system grants. Flag levels that grant nothing (dead levels) and levels that grant too much (firehose levels).
+For each character class, verify that at least one race × theme × mythic combination is viable for that class without forcing class-misaligned picks.
+
+Estimated effort: 1-3 dedicated sessions, depending on how deep the audit goes. Could surface real design problems requiring further work.
+Related docs:
+
+ANCESTRY_FEATS.md (current system spec)
+THEME_DESIGNS.md, SUBCLASS_THEME_SYNERGIES.md, MYTHIC_THEME_AMPLIFICATIONS.md, PARTY_SYNERGIES.md
+Claude UX Design/D&D Meta Game (Remix)/Themes-Replace-Backgrounds.md
 
 **Locked-in decisions (2026):**
 - **Theme replaces Background entirely.** "Background" becomes "Theme" everywhere in the UI. Existing characters auto-convert at their current tier. The L1 Theme tier preserves the existing Background's skills, equipment, and feature.

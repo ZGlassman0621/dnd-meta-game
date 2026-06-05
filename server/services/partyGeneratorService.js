@@ -4,6 +4,7 @@
  */
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 
 const CHARACTER_COLORS = ['#60a5fa', '#c084fc', '#10b981', '#f59e0b'];
@@ -156,7 +157,8 @@ export async function generateParty(config = {}) {
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildGenerationPrompt(config);
 
-  const response = await claudeChat(
+  const response = await loggedChat(
+    { call_purpose: 'dm_mode_party_gen', prompt_builder: 'partyGeneratorService' },
     systemPrompt,
     [{ role: 'user', content: userPrompt }],
     3,       // maxRetries

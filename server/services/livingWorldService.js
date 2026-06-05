@@ -90,8 +90,16 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     const spawnedEvents = await checkAndSpawnFactionEvents(campaignId, factionResults);
     results.spawned_events = spawnedEvents;
 
-    // 3. Process world events (stages advance, deadlines enforced)
-    const eventResults = await worldEventService.processEventTick(campaignId, gameDaysPassed);
+    // 3. Process world events (stages advance, deadlines enforced).
+    // Phase 3.3 SC-7.7: world event tick now uses currentGameDay
+    // (game-day clock) instead of gameDaysPassed (real-time delta).
+    // Standardizes on the same clock as the rest of the codebase.
+    const worldEventGameDayRow = await dbGet(
+      'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
+      [campaignId]
+    );
+    const worldEventCurrentGameDay = worldEventGameDayRow?.max_day || 0;
+    const eventResults = await worldEventService.processEventTick(campaignId, worldEventCurrentGameDay);
     results.event_results = eventResults;
 
     // Count expired effects

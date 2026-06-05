@@ -1,5 +1,5 @@
 # Prose Quality — Triage
-
+***CLOSED 2026-04-26 — see DECISION_LOG entries from this date.***
 **Started:** 2026-04-25
 **Status:** ACTIVE — fix shipped, validation pending
 **Last updated:** 2026-04-26

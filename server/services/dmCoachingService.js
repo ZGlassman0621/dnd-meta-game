@@ -5,6 +5,7 @@
 
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { extractLLMJson } from '../utils/llmJson.js';
+import { loggedChat } from './aiCallLogger.js';
 
 const COACHING_SYSTEM_PROMPT = `You are an experienced, friendly D&D Dungeon Master coach. You're helping a new DM run their first games. Your tone is encouraging but practical — give specific, actionable advice, not vague platitudes.
 
@@ -48,7 +49,8 @@ ${messageContext}
 Analyze this and provide coaching tips. What should the DM do next? What character hooks are available? What kind of encounter would fit this moment?`;
 
   try {
-    const response = await claudeChat(
+    const response = await loggedChat(
+      { call_purpose: 'dm_coaching_tip', prompt_builder: 'dmCoachingService' },
       COACHING_SYSTEM_PROMPT,
       [{ role: 'user', content: userPrompt }],
       2,        // maxRetries

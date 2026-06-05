@@ -9,6 +9,7 @@ import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { REQUIREMENT_TYPES } from '../config/eventTypes.js';
 import { extractLLMJson } from '../utils/llmJson.js';
+import { loggedChat } from './aiCallLogger.js';
 
 /**
  * Generate a main quest (5-stage epic storyline)
@@ -519,7 +520,8 @@ async function generateWithAI(prompt) {
   // Try Claude first
   if (isClaudeAvailable()) {
     try {
-      const response = await claudeChat(
+      const response = await loggedChat(
+        { call_purpose: 'quest_gen', prompt_builder: 'questGenerator' },
         'You are a D&D quest designer. Return ONLY valid JSON, no explanation or markdown.',
         [{ role: 'user', content: prompt }],
         3, 'opus'

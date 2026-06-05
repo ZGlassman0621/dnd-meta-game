@@ -31,6 +31,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import * as claude from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 
 // Occupations / relationship-types that warrant immediate palette generation.
@@ -140,7 +141,8 @@ export async function generateVoicePalette(npcId) {
     const systemPrompt = 'You are a precise assistant that outputs JSON only, with no explanations.';
     const userPrompt = buildVoicePrompt(npc);
 
-    const response = await claude.chat(
+    const response = await loggedChat(
+      { call_purpose: 'npc_voice_extraction', prompt_builder: 'npcVoiceService', metadata: { npc_id: npc?.id, npc_name: npc?.name } },
       systemPrompt,
       [{ role: 'user', content: userPrompt }],
       2,      // retries

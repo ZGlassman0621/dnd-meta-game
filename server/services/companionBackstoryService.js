@@ -1,5 +1,6 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { adjustStanding, AUDIT_STRATEGIES, mapToLabel } from './standingScalar.js';
+import { registerDecayConsumer, DECAY_SEMANTICS } from './timeBoundedState.js';
 
 /**
  * Companion Backstory Service - CRUD operations for companion backstories
@@ -601,16 +602,87 @@ export async function setMood(companionId, mood, cause, intensity, gameDaySet) {
 }
 
 /**
+ * Companion mood decay consumer (Phase 3.3 SC-7.2 — first Pattern D port).
+ *
+ * **CONSUMED semantics** — distinguishes companion mood from the
+ * high-water-mark decays in Pattern A consumers (NPC disposition,
+ * notoriety). When intensity decays to floor (0), the entire mood state
+ * gets reset (mood='content', cause=NULL, intensity=1, anchor NULLed).
+ * Subsequent ticks no-op until setMood re-establishes a non-content mood
+ * with a fresh anchor.
+ *
+ * Decay function: 1 intensity per 2 game days elapsed
+ * (`Math.floor(daysElapsed / 2)`) — matches legacy behavior exactly.
+ *
+ * **Two-step reset trade-off** — when newValue reaches 0, the abstraction
+ * calls writeValue(0) THEN consumeAnchor. The consumeAnchor callback does
+ * the full state reset (writes intensity=1 over the just-written 0).
+ * Net: 2 UPDATEs per reset vs. legacy's 1 UPDATE. Acceptable cost: mood
+ * decay runs at session-start only, companions per character are small,
+ * resets are rare. Documented here so future review doesn't get confused
+ * by the redundant intensity write.
+ */
+const MOOD_DECAY_CONSUMER = registerDecayConsumer({
+  name: 'companion_mood',
+  semantics: DECAY_SEMANTICS.CONSUMED,
+  decayFunction: (daysElapsed) => Math.floor(daysElapsed / 2),
+  floor: 0,
+  repository: {
+    async readAnchor(contextKey) {
+      const row = await dbGet(
+        'SELECT mood_set_game_day FROM companion_backstories WHERE id = ?',
+        [contextKey.backstoryId]
+      );
+      return row ? row.mood_set_game_day : null;
+    },
+    async readValue(contextKey) {
+      const row = await dbGet(
+        'SELECT mood_intensity FROM companion_backstories WHERE id = ?',
+        [contextKey.backstoryId]
+      );
+      return row ? (row.mood_intensity || 1) : 1;
+    },
+    async writeValue(contextKey, newValue) {
+      await dbRun(
+        `UPDATE companion_backstories SET mood_intensity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [newValue, contextKey.backstoryId]
+      );
+    },
+    async consumeAnchor(contextKey) {
+      // Full state reset — preserves legacy reset semantics:
+      // mood='content', cause=NULL, intensity=1 (NOT 0), anchor=NULL.
+      // Overwrites the writeValue(0) call that just landed.
+      await dbRun(`
+        UPDATE companion_backstories SET
+          mood = 'content', mood_cause = NULL, mood_intensity = 1, mood_set_game_day = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [contextKey.backstoryId]);
+    }
+  }
+});
+
+/**
  * Decay moods for all active companions of a character.
  * Intensity decays by 1 per 2 game days elapsed.
  * Resets to 'content' when intensity reaches 0.
+ *
+ * Phase 3.3 SC-7.2 (v1.0.156): per-companion decay logic delegated to
+ * MOOD_DECAY_CONSUMER above. This function stays as the orchestrator
+ * (SELECT all eligible companions for the character + iterate) — same
+ * shape as Pattern A's per-consumer wrappers around adjustStanding.
+ *
+ * The SELECT filter (mood != 'content', mood_set_game_day IS NOT NULL)
+ * is preserved here rather than pushed into the abstraction — it's a
+ * consumer-specific scope decision (which companions to even consider),
+ * not a per-companion decay decision. The abstraction's per-companion
+ * applyDecay does the rest.
  */
 export async function decayMoods(characterId, currentGameDay) {
   if (!currentGameDay) return;
 
-  // Get all active companions for this character with non-content moods
   const companions = await dbAll(`
-    SELECT cb.id, cb.companion_id, cb.mood, cb.mood_intensity, cb.mood_set_game_day
+    SELECT cb.id
     FROM companion_backstories cb
     JOIN companions c ON cb.companion_id = c.id
     WHERE c.recruited_by_character_id = ? AND c.status = 'active'
@@ -619,30 +691,13 @@ export async function decayMoods(characterId, currentGameDay) {
   `, [characterId]);
 
   for (const comp of companions) {
-    const daysElapsed = currentGameDay - (comp.mood_set_game_day || currentGameDay);
-    if (daysElapsed <= 0) continue;
-
-    const decay = Math.floor(daysElapsed / 2);
-    const newIntensity = (comp.mood_intensity || 1) - decay;
-
-    if (newIntensity <= 0) {
-      // Reset to content
-      await dbRun(`
-        UPDATE companion_backstories SET
-          mood = 'content', mood_cause = NULL, mood_intensity = 1, mood_set_game_day = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [comp.id]);
-    } else if (newIntensity < comp.mood_intensity) {
-      // Reduce intensity
-      await dbRun(`
-        UPDATE companion_backstories SET
-          mood_intensity = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [newIntensity, comp.id]);
-    }
+    await MOOD_DECAY_CONSUMER.applyDecay({ backstoryId: comp.id }, currentGameDay);
   }
 }
+
+// Exported for direct use in tests + future composition. Production
+// callers should use `decayMoods` (the orchestrator).
+export { MOOD_DECAY_CONSUMER };
 
 /**
  * Get RP guidance string for a mood

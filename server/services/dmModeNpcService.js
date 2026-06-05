@@ -9,6 +9,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat, isClaudeAvailable } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 
 // ============================================================
 // NPC CODEX
@@ -311,7 +312,8 @@ export async function extractNpcVoiceNotes(sessionId, partyId) {
   }
 
   try {
-    const response = await chat(
+    const response = await loggedChat(
+      { call_purpose: 'dm_mode_npc_voice_extraction', prompt_builder: 'dmModeNpcService' },
       VOICE_PROMPT,
       [{ role: 'user', content: input }],
       2,

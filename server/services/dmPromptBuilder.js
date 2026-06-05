@@ -7,6 +7,7 @@
  */
 
 import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
+import { formatFactionStandingFragment } from './factionService.js';
 
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
@@ -1582,15 +1583,19 @@ function formatWorldStateSnapshot(worldState) {
 
   const sections = [];
 
-  // 1. Faction Standings (skip neutrals unless member)
+  // 1. Faction Standings (skip neutrals unless member). Phase 3 SC-3:
+  // the "LABEL (+N)" fragment now comes from FACTION_STANDING_CONFIG via
+  // formatFactionStandingFragment — single source of truth for label
+  // bands. Output is byte-identical to the legacy hand-rolled string;
+  // tests/faction-standing-prompt-snapshot.test.js guards this.
   const meaningfulStandings = (worldState.factionStandings || [])
     .filter(s => s.standing !== 0 || s.is_member);
   if (meaningfulStandings.length > 0) {
     const lines = meaningfulStandings.slice(0, 6).map(s => {
-      const label = (s.standing_label || 'neutral').toUpperCase();
+      const fragment = formatFactionStandingFragment(s.standing);
       const memberNote = s.is_member ? ', Member' : '';
       const behavior = getStandingBehavior(s.standing_label || 'neutral');
-      return `- ${s.faction_name}: ${label} (${s.standing > 0 ? '+' : ''}${s.standing})${memberNote} - ${behavior}`;
+      return `- ${s.faction_name}: ${fragment}${memberNote} - ${behavior}`;
     });
     sections.push('FACTION STANDINGS:\n' + lines.join('\n'));
   }
@@ -2415,7 +2420,7 @@ ${char2 ? '\n\n' + char2.dynamicText : ''}
 ${sessionContext.usedNames?.length > 0 ? `\nNAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n` : ''}
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.pietyContext ? '\n\n' + sessionContext.pietyContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 
 ═══════════════════════════════════════════════════════════════
 BEFORE YOU SEND — SELF-CHECK

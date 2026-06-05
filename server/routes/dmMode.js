@@ -7,12 +7,19 @@ import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { generateParty } from '../services/partyGeneratorService.js';
 import { createDMModeSystemPrompt } from '../services/dmModePromptBuilder.js';
-import { detectSkillChecks, detectAttacks, detectSpellCasts, detectBondShifts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
+import { detectSkillChecks, detectAttacks, detectSpellCasts, cleanDMModeNarrative, parseCharacterSegments } from '../services/dmModeService.js';
+import { applyBondShift } from '../services/dmModeBondShiftService.js';
+// Importing dmModeBondShiftService also fires its module-level
+// registerMarkerHandler('BOND_SHIFT', ...) — the marker pipeline now
+// owns dispatch, replacing this file's old detect-function call site
+// (Phase 3 SC-5).
+import { processResponseMarkers } from '../services/markerPipeline.js';
 import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService.js';
 import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
 import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, updateNpc, createNpc, deleteNpc, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
 import { getPrep, getPrepItem, createPrep, updatePrep, archivePrep, deletePrep, duplicatePrep, getPrepCounts, reorderPrep } from '../services/dmModePrepService.js';
 import * as claude from '../services/claude.js';
+import { wrapClaudeCall, loggedChat } from '../services/aiCallLogger.js';
 
 const router = express.Router();
 
@@ -201,7 +208,19 @@ router.post('/start', async (req, res) => {
     let openingNarrative;
 
     if (claude.isClaudeAvailable()) {
-      const result = await claude.startSession(systemPrompt, openingPrompt, modelChoice);
+      // Phase 4a SC-4a.1 — wrap with the call logger.
+      const result = await wrapClaudeCall(
+        {
+          campaign_id: party.campaign_id,
+          turn_number: 0,
+          prompt_builder: 'dmModePromptBuilder',
+          call_purpose: 'dm_mode_session_start',
+          system_prompt: systemPrompt,
+          user_message: openingPrompt,
+          metadata: { partyId, modelChoice, isFirstSession }
+        },
+        (chatOptions) => claude.startSession(systemPrompt, openingPrompt, modelChoice, chatOptions)
+      );
       openingNarrative = result.response;
     } else {
       openingNarrative = `**${characters[0]?.name || 'Character 1'}:** *looks around at the group* "So. We're really doing this."\n\n**${characters[1]?.name || 'Character 2'}:** "Apparently. Try not to get us killed."\n\n*The party waits for the DM to set the scene.*`;
@@ -286,7 +305,20 @@ router.post('/:sessionId/message', async (req, res) => {
     // Call AI
     let narrative;
     if (claude.isClaudeAvailable()) {
-      const result = await claude.continueSession(systemPrompt, messages, aiInput, 'sonnet');
+      // Phase 4a SC-4a.1 — wrap with the call logger.
+      const result = await wrapClaudeCall(
+        {
+          campaign_id: session?.campaign_id,
+          session_id: parseInt(sessionId),
+          turn_number: Math.ceil(messages.length / 2),
+          prompt_builder: 'dmModePromptBuilder',
+          call_purpose: 'dm_mode_turn',
+          system_prompt: systemPrompt,
+          user_message: aiInput,
+          conversation_history: messages.filter(m => m.role !== 'system')
+        },
+        (chatOptions) => claude.continueSession(systemPrompt, messages, aiInput, 'sonnet', chatOptions)
+      );
       narrative = result.response;
     } else {
       return res.status(503).json({ error: 'No AI provider available' });
@@ -296,35 +328,28 @@ router.post('/:sessionId/message', async (req, res) => {
     const skillChecks = isOOC ? [] : detectSkillChecks(narrative);
     const attacks = isOOC ? [] : detectAttacks(narrative);
     const spellCasts = isOOC ? [] : detectSpellCasts(narrative);
-    const bondShifts = isOOC ? [] : detectBondShifts(narrative);
 
-    // Apply bond shifts to party_data immediately
+    // Phase 3 SC-5: bond-shift dispatch moved to the marker pipeline
+    // (dmModeBondShiftService.js handler). The pipeline parses BOND_SHIFT
+    // markers, validates against the schema, and applies via the
+    // service-layer wrapper. We skip for OOC turns (matches legacy
+    // detectBondShifts gate). Per-shift dispatch fires the handler N
+    // times — typically 0-2 BOND_SHIFTs per turn.
     let updatedCharacters = null;
-    if (bondShifts.length > 0) {
-      const party = await dbGet('SELECT party_data FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
-      if (party) {
-        const characters = JSON.parse(party.party_data || '[]');
+    if (!isOOC) {
+      try {
         const sessionNum = parseInt(session.title?.match(/\d+/)?.[0] || '0');
-        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-        for (const shift of bondShifts) {
-          const fromChar = characters.find(c => c.name === shift.from);
-          if (!fromChar?.party_relationships) continue;
-          const rel = fromChar.party_relationships[shift.to];
-          if (!rel) continue;
-          rel.warmth = clamp((rel.warmth || 0) + shift.warmthDelta, -5, 5);
-          rel.trust = clamp((rel.trust || 0) + shift.trustDelta, -5, 5);
-          if (!rel.history) rel.history = [];
-          const deltas = [];
-          if (shift.warmthDelta) deltas.push(`warmth${shift.warmthDelta > 0 ? '+' : ''}${shift.warmthDelta}`);
-          if (shift.trustDelta) deltas.push(`trust${shift.trustDelta > 0 ? '+' : ''}${shift.trustDelta}`);
-          rel.history.push({ session: sessionNum, shift: deltas.join(', '), reason: shift.reason });
-          if (rel.history.length > 10) rel.history = rel.history.slice(-10);
-        }
-        await dbRun(
-          'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [JSON.stringify(characters), session.dm_mode_party_id]
-        );
-        updatedCharacters = characters;
+        await processResponseMarkers(narrative, {
+          partyId: session.dm_mode_party_id,
+          sessionLabel: sessionNum
+        });
+        // Reload characters for the response payload — the handler
+        // mutated party_data in place, so reflect those changes back to
+        // the client.
+        const refreshed = await dbGet('SELECT party_data FROM dm_mode_parties WHERE id = ?', [session.dm_mode_party_id]);
+        if (refreshed) updatedCharacters = JSON.parse(refreshed.party_data || '[]');
+      } catch (err) {
+        console.error('[markerPipeline] BOND_SHIFT dispatch failed (non-fatal):', err.message);
       }
     }
 
@@ -385,7 +410,21 @@ router.post('/:sessionId/roll-result', async (req, res) => {
     // Get AI reaction to the resolved roll
     let narrative;
     if (claude.isClaudeAvailable()) {
-      const result = await claude.continueSession(systemPrompt, messages, rollNote, 'sonnet');
+      // Phase 4a SC-4a.1 — wrap with the call logger.
+      const result = await wrapClaudeCall(
+        {
+          campaign_id: session?.campaign_id,
+          session_id: parseInt(sessionId),
+          turn_number: Math.ceil(messages.length / 2),
+          prompt_builder: 'dmModePromptBuilder',
+          call_purpose: 'dm_mode_roll_reaction',
+          system_prompt: systemPrompt,
+          user_message: rollNote,
+          conversation_history: messages.filter(m => m.role !== 'system'),
+          metadata: { rollType, rollResult, dc, success }
+        },
+        (chatOptions) => claude.continueSession(systemPrompt, messages, rollNote, 'sonnet', chatOptions)
+      );
       narrative = result.response;
     } else {
       return res.status(503).json({ error: 'No AI provider available' });
@@ -618,7 +657,9 @@ router.post('/:sessionId/end', async (req, res) => {
         const recentMessages = messages.filter(m => m.role !== 'system').slice(-20);
         const contextStr = recentMessages.map(m => `${m.role === 'user' ? 'DM' : 'Players'}: ${m.content.substring(0, 300)}`).join('\n');
 
-        summary = await claude.chat(
+        summary = await loggedChat(
+          { call_purpose: 'dm_mode_session_summary', prompt_builder: 'dmMode_summary',
+            session_id: parseInt(sessionId) },
           'You summarize D&D sessions concisely. Return only the summary text, no formatting.',
           [{ role: 'user', content: `${summaryPrompt}\n\nSession transcript:\n${contextStr}` }],
           2, 'sonnet', 500
@@ -997,43 +1038,35 @@ router.post('/party/:partyId/game-day', async (req, res) => {
 // ============================================================
 
 // PUT /api/dm-mode/party/:partyId/relationship — Manually adjust warmth/trust between characters
+// Phase 3 SC-5: delegates to dmModeBondShiftService.applyBondShift (single-
+// shift wrapper). Per-route delta clamp to [-2, +2] preserved at this call
+// site — it's a per-path policy (manual adjustments capped tighter than
+// AI-emitted markers), not an abstraction concern.
 router.put('/party/:partyId/relationship', async (req, res) => {
   try {
     const partyId = parseInt(req.params.partyId);
     const { fromCharacter, toCharacter, warmthDelta = 0, trustDelta = 0, note = '' } = req.body;
     if (!fromCharacter || !toCharacter) return res.status(400).json({ error: 'fromCharacter and toCharacter are required' });
 
-    const party = await dbGet('SELECT party_data FROM dm_mode_parties WHERE id = ?', [partyId]);
-    if (!party) return res.status(404).json({ error: 'Party not found' });
-
-    const characters = JSON.parse(party.party_data || '[]');
-    const fromChar = characters.find(c => c.name === fromCharacter);
-    if (!fromChar?.party_relationships) return res.status(404).json({ error: 'Character not found' });
-    const rel = fromChar.party_relationships[toCharacter];
-    if (!rel) return res.status(404).json({ error: 'Relationship not found' });
-
-    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    // Per-path delta clamp (manual adjustments are tighter than markers).
     const wd = Math.max(-2, Math.min(2, parseInt(warmthDelta) || 0));
     const td = Math.max(-2, Math.min(2, parseInt(trustDelta) || 0));
 
-    rel.warmth = clamp((rel.warmth || 0) + wd, -5, 5);
-    rel.trust = clamp((rel.trust || 0) + td, -5, 5);
-
-    if (!rel.history) rel.history = [];
-    const deltas = [];
-    if (wd) deltas.push(`warmth${wd > 0 ? '+' : ''}${wd}`);
-    if (td) deltas.push(`trust${td > 0 ? '+' : ''}${td}`);
-    if (deltas.length > 0) {
-      rel.history.push({ session: 'dm', shift: deltas.join(', '), reason: note || 'Manual adjustment' });
-      if (rel.history.length > 10) rel.history = rel.history.slice(-10);
-    }
-
-    await dbRun(
-      'UPDATE dm_mode_parties SET party_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(characters), partyId]
+    const result = await applyBondShift(
+      partyId,
+      fromCharacter,
+      toCharacter,
+      wd,
+      td,
+      note || 'Manual adjustment',
+      'dm'
     );
+    if (!result) return res.status(404).json({ error: 'Party or relationship not found' });
 
-    res.json({ characters });
+    // Refresh the full character array for the client (the wrapper
+    // returns just the affected pair's new state).
+    const refreshed = await dbGet('SELECT party_data FROM dm_mode_parties WHERE id = ?', [partyId]);
+    res.json({ characters: refreshed ? JSON.parse(refreshed.party_data || '[]') : [] });
   } catch (error) {
     console.error('Error updating relationship:', error);
     res.status(500).json({ error: 'Failed to update relationship' });

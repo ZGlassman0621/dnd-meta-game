@@ -14,6 +14,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
+import { loggedChat } from './aiCallLogger.js';
 import { estimateTokens } from '../utils/contextManager.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 import { saveNpcConversation, recordInteraction } from './npcRelationshipService.js';
@@ -159,7 +160,16 @@ Guidelines for npc_deaths:
 - If no NPCs died, return an empty array`;
 
   try {
-    const response = await chat(
+    // Phase 4a SC-4a.1 — wrap with the call logger.
+    const response = await loggedChat(
+      {
+        character_id: session?.character_id,
+        campaign_id: session?.campaign_id,
+        session_id: session?.id,
+        prompt_builder: 'storyChronicleService',
+        call_purpose: 'chronicle_extraction',
+        metadata: { game_day: session?.game_day }
+      },
       chroniclePrompt,
       [{ role: 'user', content: input }],
       2,
