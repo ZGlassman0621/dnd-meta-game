@@ -7,6 +7,17 @@
    Fonts (EB Garamond / Inter / JetBrains Mono) are loaded in index.html.
    ================================================================= */
 
+/* ── Isolation from the legacy global index.css ───────────────────
+   The standalone Hearth design HTML assumes browser defaults; the app's
+   index.css styles bare elements (e.g. `h1 { color:#f39c12; text-shadow }`),
+   and those leak into any element a ported design left at its default — which
+   is why the character name was rendering gold with a drop-shadow. Neutralize
+   the common element-level leaks inside every .hearth surface. */
+.hearth h1, .hearth h2, .hearth h3, .hearth h4, .hearth h5, .hearth h6 {
+  color: var(--ink); text-shadow: none;
+}
+.hearth a { text-shadow: none; }
+
 .hearth {
   /* ---- surfaces · warm near-black, like dark aged paper ---- */
   --bg:        #1a1712;
@@ -435,7 +446,7 @@
    READABILITY — no italics in the sheet body (per user preference).
    Only the brand "&" keeps its italic flourish.
    ================================================================= */
-.hearth .lede, .hearth .help, .hearth .id-main .sub, .hearth .senses-note,
+.hearth .lede, .hearth .help, .hearth .senses-note,
 .hearth .theme-hero .th-desc, .hearth .tier .tab-ab, .hearth .tier .tab-ab em,
 .hearth .path-poles .pole, .hearth .path-note, .hearth .attune-slot,
 .hearth .grp-note, .hearth .ac-break .acform, .hearth .ac-break .acform em,
