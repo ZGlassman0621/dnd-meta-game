@@ -32,3 +32,17 @@ The full pre-reduction tree is also recoverable from the git "Safety snapshot" c
 Migration files under `server/migrations/` were **left in place** (they are append-only DB
 history; removing them would break the migration runner). The tables owned by archived
 systems remain in the schema but are simply never read/written. Harmless.
+
+## Archived documentation (2026-06-05)
+- `docs/` — root design/spec docs for cut systems (DM_MODE, DOWNTIME_DESIGN, MYTHIC_*,
+  SUBCLASS_THEME_SYNERGIES, PARTY_SYNERGIES, PRELUDE_IMPLEMENTATION_PLAN,
+  ANCESTRY_FEATS_REDESIGN_DEFERRED) **plus** superseded phase/process/roadmap docs
+  (IMPLEMENTATION_PLAN, the `PHASE_*`/`Phase_*` specs, CONSOLIDATED_TODO, PROJECT_TODO,
+  OPEN_QUESTIONS, TEST_RESULTS, AI_NARRATIVE_PERSISTENCE).
+- `Claude PM Review Docs/` — historical PM review snapshots (mostly of cut systems).
+
+Kept at the project root: foundational docs (CLAUDE, README, CHANGELOG, PROJECT_BRIEF,
+DECISION_LOG, FUTURE_FEATURES, KNOWN_BUGS, LLM_SETUP) and docs for kept systems
+(COMPANIONS, THEME_DESIGNS, ANCESTRY_FEATS, CUSTOM_CLASSES, the two character-creator docs).
+Note: CLAUDE.md and PROJECT_BRIEF.md still contain a few links that now point into this
+archive — cosmetic, not load-bearing.
