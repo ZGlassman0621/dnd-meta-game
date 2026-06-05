@@ -1,19 +1,50 @@
 # CLAUDE.md — Project Instructions for Claude Code
 
+> ## ⚠️ MVP REDUCTION (v2.0.0, 2026-06-04) — READ FIRST
+>
+> The app was deliberately reduced to a focused **Player-Mode MVP**: play one
+> character with **Claude Opus 4.8** as the AI Dungeon Master. **Many systems
+> described in the sections below were removed and MOVED to `/archive/`** (nothing
+> was deleted; mirrored paths; see [`archive/README.md`](archive/README.md)).
+> Migrations were left in place — orphaned tables are harmless.
+>
+> **Live in the MVP:** character creator (`creator/CharacterCreatorV2`), character
+> sheet / inventory / spells / leveling, the full progression system (themes +
+> tier abilities + ancestry feats + knight paths), companions, the Player-Mode DM
+> chat session, session memory (story chronicles + canon facts + NPC recall + NPC
+> lifecycle/aging), campaign creation + Opus campaign plan + import + backstory
+> parser, dice/combat/conditions, session rewards, AI-behavior debug page.
+>
+> **Archived (the sections below largely describe these — treat as historical
+> until restored):** prelude, DM Mode, mythic/piety/boons/legendary, crafting,
+> party bases/raids, downtime, merchant economy/bargaining/commissions, notoriety,
+> living-world tick (weather/survival/factions/world-events/NPC-mail/narrative-
+> queue/consequences), factions/quests/locations/world-events/travel simulation,
+> achievements, the odds-based "adventure" loop, theme synergies/team-tactics/
+> mythic-amplifications.
+>
+> **Other deltas:** all gameplay AI → `claude-opus-4-8`; **login removed**
+> (no-op `server/middleware/auth.js` resolves one local user); DM marker set
+> trimmed to 6 live markers; `npm`/`npx` bin shims break on this folder's `&` in
+> the path — invoke binaries via `node node_modules/<pkg>/bin/...` (e.g.
+> `node node_modules/vite/bin/vite.js build` from `client/`).
+
 ## Project Overview
-D&D Meta Game: AI-powered solo D&D 5e campaign management system.
+D&D Meta Game: AI-powered solo D&D 5e campaign management system (MVP — see banner above).
 - **Frontend**: React 18 + Vite (SPA at `client/`)
 - **Backend**: Node.js + Express (ES modules at `server/`)
 - **Database**: SQLite via `@libsql/client` (local `file:local.db` or Turso cloud)
-- **AI**: Claude Opus (world building) + Claude Sonnet (DM sessions) + Ollama fallback
+- **AI**: Claude **Opus 4.8** (`claude-opus-4-8`) for all gameplay; Sonnet (`claude-sonnet-4-6`) for session-recap extraction. (Ollama fallback retained but dormant.)
 
 ## Development Commands
-- `npm run dev` — Start both server (port 3000) and client (port 5173)
+- `npm run dev` — Start both server (port 3000) and client (port 5173). NOTE: the
+  server needs **port 3000 free** — if another local app is using it, stop that
+  app or change `PORT` (server) + the `proxy.target` in `client/vite.config.js`.
 - `npm run server` — Server only with `--watch`
 - `npm run client` — Vite dev server only
-- `npm run build` — Production client build
+- `npm run build` — Production client build (or `node node_modules/vite/bin/vite.js build` from `client/` if the npm shim trips on the `&` path)
 - `npm run install-all` — Install root + client dependencies
-- Tests: `node tests/<testfile>.test.js` (no framework, custom assertions)
+- Tests: `node tests/<testfile>.test.js` (no framework; cut-system tests are in `/archive/tests/`)
 
 ## Architecture
 

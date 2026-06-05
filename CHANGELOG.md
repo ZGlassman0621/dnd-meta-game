@@ -2,6 +2,50 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.0.0] - 2026-06-04 — MVP reduction: Player-Mode core with Opus 4.8 as DM
+
+Deliberate, large reduction of the v1.0.167 system down to a focused, reliably
+playable MVP: **play one character with Claude Opus 4.8 as your AI Dungeon
+Master.** Nothing was deleted — every removed system was **moved to `/archive/`**
+(mirrored paths) and remains recoverable; migrations were left in place (orphaned
+tables are harmless).
+
+**Kept (the MVP):** the existing 8-step character creator (CharacterCreatorV2);
+character sheet / inventory / spells / **leveling**; the full **progression**
+system (themes + theme tier abilities + ancestry feats + knight moral paths);
+**companions** (recruit / sheet / level-up / backstory); the Player-Mode DM chat
+session; **session memory** (story chronicles + canon facts + NPC conversation /
+relationship recall + NPC lifecycle / aging); campaign creation + Opus campaign
+plan + JSON import + backstory parser; dice / combat / conditions; session
+rewards; the AI-behavior debug page; edit-in-wizard (legacy creator, edit-only).
+
+**Archived → `/archive/`:** prelude character-creator; DM Mode (user-as-DM);
+mythic + piety + epic boons + legendary items; crafting; party bases / fortresses
+/ raids; downtime activity system + long-term projects; merchant economy +
+bargaining + commissions + merchant relationships + economy sim; notoriety; the
+living-world tick (weather, survival, factions, world-events, NPC mail, narrative
+queue, consequence/promise automation); the factions / world-events / travel /
+locations / quests simulation cluster; achievements; the odds-based "adventure"
+meta-loop; subclass×theme synergies / team tactics / mythic×theme amplifications.
+
+**Other changes.**
+- All gameplay AI repointed to **`claude-opus-4-8`** (was `claude-opus-4-7`).
+- **Login removed** — a no-op auth middleware resolves a single local user; no
+  sign-in screen. (Revert `server/middleware/auth.js` + the App.jsx gate to
+  restore JWT auth.)
+- DM marker set reduced to the 6 live markers (COMBAT_START/END, LOOT_DROP,
+  CONDITION_ADD/REMOVE, NPC_WANTS_TO_JOIN); the DM prompt no longer documents
+  cut-system markers.
+- Cut-system tests moved to `/archive/tests/`; cut-system `server/tests/`
+  scripts archived.
+
+**Verification.** Server boots clean; client `vite build` passes (114 modules,
+down from 200+); ESLint shows no undefined-reference errors; a live Opus 4.8 DM
+turn was exercised end-to-end (start → message → prompt assembly → Opus →
+narrative → save).
+
+---
+
 ## [1.0.0.167] - 2026-05-06 — Phase 4a review fix part 2: home-route appbar missed the AI Behavior link
 
 PM 2026-05-06 review caught that v1.0.166's "fix" only landed on one of HomeFlow's two appbars. The path-route appbar (`route === 'path'`, the choice-of-beginnings screen) got the AI Behavior link; the home-route appbar (`route === 'home'`, the default — the user's primary surface) did not.
