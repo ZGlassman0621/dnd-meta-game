@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Campaigns</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+
+    .feature {
+      position: relative; overflow: hidden; display: grid; grid-template-columns: 1.5fr 1fr; gap: 0;
+      background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px;
+      box-shadow: var(--shadow); margin-bottom: 36px;
+    }
+    .feature::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), transparent); }
+    .feat-main { padding: 30px 32px; }
+    .feat-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--combat); margin-bottom: 14px; }
+    .feat-tag .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--combat); }
+    .feat-main h2 { font-family: var(--serif); font-weight: 500; font-size: 38px; letter-spacing: -.014em; margin: 0 0 14px; }
+    .premise { font-family: var(--serif); font-size: 18px; line-height: 1.62; color: var(--ink); max-width: 560px; text-wrap: pretty; margin-bottom: 24px; }
+    .premise em { font-style: italic; color: var(--ink-2); }
+    .feat-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .feat-actions { display: flex; gap: 10px; align-items: center; }
+    .spoiler-flag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--warn); border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--rule)); background: color-mix(in oklab, var(--warn) 10%, transparent); padding: 4px 9px; border-radius: 999px; }
+    .spoiler-flag .ic { width: 11px; height: 11px; }
+    .feat-side { border-left: 1px solid var(--rule); background: var(--bg-2); padding: 26px 26px; }
+    .feat-side h3 { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px; }
+    .plan-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--rule-soft); }
+    .plan-row:first-of-type { border-top: 0; }
+    .plan-row .k { font-family: var(--serif); font-size: 15px; color: var(--ink-2); white-space: nowrap; }
+    .plan-row .v { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink); text-align: right; white-space: nowrap; }
+    .plan-row .v.accent { color: var(--accent); }
+
+    .camp-list { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .camp {
+      display: block; text-decoration: none; position: relative;
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 12px;
+      padding: 22px 24px; transition: border-color .15s, transform .15s, background .15s;
+    }
+    .camp:hover { border-color: color-mix(in oklab, var(--accent) 38%, var(--rule)); transform: translateY(-2px); background: var(--bg-card); }
+    .camp .ct { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+    .camp .status { font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-3); }
+    .camp .status.paused { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 38%, var(--rule)); }
+    .camp .status.seed { color: var(--accent-2); border-color: color-mix(in oklab, var(--accent-2) 38%, var(--rule)); }
+    .camp h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 8px; letter-spacing: -.006em; color: var(--ink); }
+    .camp p { font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink-3); margin: 0; }
+    .camp .meta { margin-top: 13px; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Dashboard.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Dravyr's home</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="page">
+    <div class="page-eyebrow"><span class="eyebrow">Campaigns</span><span class="ln"></span></div>
+
+    <section class="feature">
+      <div class="feat-main">
+        <div class="feat-tag"><span class="pulse"></span>Active · last played Day 22</div>
+        <h2>The Hollow Man</h2>
+        <div class="premise">A salt-bitten harbor town is quietly losing its children. They walk out willingly into the dark and do not come back, and the only authority who could stop it has decided it is <em>not happening at all.</em> You arrived as a stranger passing through — and a net-mender chose to trust you with the truth.</div>
+        <div class="feat-meta">
+          <span class="chip">Level 3</span>
+          <span class="chip">Session 7</span>
+          <span class="chip">Saltcross</span>
+          <span class="chip">Mystery · horror</span>
+        </div>
+        <div class="feat-actions">
+          <button class="btn primary"><svg class="ic"><use href="#i-play"/></svg>Continue</button>
+          <a class="btn" href="Campaign Plan.html"><svg class="ic"><use href="#i-globe"/></svg>Campaign plan</a>
+          <span class="spoiler-flag"><svg class="ic"><use href="#i-eye-off"/></svg>Spoilers</span>
+        </div>
+      </div>
+      <div class="feat-side">
+        <h3>The world Opus wrote</h3>
+        <div class="plan-row"><span class="k">Region</span><span class="v">The Salt Marches</span></div>
+        <div class="plan-row"><span class="k">Locations</span><span class="v accent">9 mapped</span></div>
+        <div class="plan-row"><span class="k">Named NPCs</span><span class="v accent">14</span></div>
+        <div class="plan-row"><span class="k">Tone</span><span class="v">quiet dread</span></div>
+        <div class="plan-row"><span class="k">The truth</span><span class="v" style="color:var(--ink-4)">spoiler — hidden</span></div>
+      </div>
+    </section>
+
+    <div class="sec-head"><h2>Other campaigns</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">2</span></div>
+    <div class="camp-list">
+      <a class="camp" href="#">
+        <div class="ct"><span class="status paused">Paused</span></div>
+        <h3>The Verdant Debt</h3>
+        <p>A druid circle called in a favour you never agreed to. Left at a crossroads, three sessions deep, when this town caught your eye.</p>
+        <div class="meta">Level 3 · 3 sessions · Greenhollow</div>
+      </a>
+      <a class="camp" href="#">
+        <div class="ct"><span class="status seed">New seed</span></div>
+        <h3>Untitled · the high passes</h3>
+        <p>A premise Opus drafted from your backstory — a debt to a mountain monastery, waiting for you to begin.</p>
+        <div class="meta">Not started · drafted from backstory</div>
+      </a>
+    </div>
+
+    <div style="margin-top:28px">
+      <button class="btn lg"><svg class="ic"><use href="#i-plus"/></svg>Begin a new campaign</button>
+    </div>
+  </main>
+</body>
+</html>

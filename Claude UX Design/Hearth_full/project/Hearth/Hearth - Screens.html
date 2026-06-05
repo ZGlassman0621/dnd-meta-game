@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Screens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body { margin: 0; font-family: "Inter", sans-serif; }
+    .frame { width: 1440px; height: 900px; border: 0; display: block; background: #1a1712; border-radius: 10px; }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { createRoot } = ReactDOM;
+    function Screen({ src }) {
+      return <iframe className="frame" src={src} scrolling="no"></iframe>;
+    }
+    function App() {
+      return (
+        <DesignCanvas title="Hearth — Dark-Editorial D&D">
+          <DCSection id="tier1" title="Tier 1 · In-session DM cockpit" subtitle="The 90% screen — calm + combat states prove the design">
+            <DCArtboard id="calm" label="Calm · dialogue" width={1440} height={900}>
+              <Screen src="Cockpit - Calm.html" />
+            </DCArtboard>
+            <DCArtboard id="combat" label="Combat · initiative live" width={1440} height={900}>
+              <Screen src="Cockpit - Combat.html" />
+            </DCArtboard>
+          </DCSection>
+          <DCSection id="tier2" title="Tier 2 · Dashboard chrome" subtitle="Character home — the shell between sessions">
+            <DCArtboard id="home" label="Character home" width={1440} height={980}>
+              <Screen src="Dashboard.html" />
+            </DCArtboard>
+          </DCSection>
+          <DCSection id="tier3" title="Tier 3 · Character Sheet" subtitle="Overview + Progression tabs (click tabs inside)">
+            <DCArtboard id="sheet" label="5e sheet · Overview" width={1440} height={1120}>
+              <Screen src="Character Sheet.html" />
+            </DCArtboard>
+          </DCSection>
+          <DCSection id="tier4" title="Tier 4 · Supporting screens" subtitle="Every door on the dashboard, built out">
+            <DCArtboard id="companions" label="Companions" width={1440} height={840}>
+              <Screen src="Companions.html" />
+            </DCArtboard>
+            <DCArtboard id="campaigns" label="Campaigns" width={1440} height={840}>
+              <Screen src="Campaigns.html" />
+            </DCArtboard>
+            <DCArtboard id="plan" label="Campaign Plan · spoiler-toggled" width={1440} height={920}>
+              <Screen src="Campaign Plan.html" />
+            </DCArtboard>
+            <DCArtboard id="backstory" label="Backstory parser" width={1440} height={820}>
+              <Screen src="Backstory.html" />
+            </DCArtboard>
+            <DCArtboard id="settings" label="Settings · dials & rules" width={1440} height={1040}>
+              <Screen src="Settings.html" />
+            </DCArtboard>
+            <DCArtboard id="levelup" label="Level-up wizard" width={1440} height={760}>
+              <Screen src="Level Up.html" />
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

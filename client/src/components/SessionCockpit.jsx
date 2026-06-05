@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { HearthSprite, Ic } from './hearthUI.jsx'
+import classesData from '../data/classes.json'
 import QuickReferencePanel from './QuickReferencePanel.jsx'
 import CompanionsPanel from './CompanionsPanel.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
@@ -6,43 +8,38 @@ import ConditionPanel from './ConditionPanel.jsx'
 import '../styles/hearth.css'
 
 /* ───────────────────────── Hearth DM Session Cockpit ─────────────────────────
-   Dark-editorial three-column reading cockpit (left party · center reading
-   stage + composer · right combat/dice rail). Pure presentation — all session
-   logic lives in DMSession.jsx, which renders this with state + handlers as
-   props. Styles in styles/hearth.css (.cockpit, .transcript, .composer, …).
+   Faithful build of Hearth/Cockpit - Calm.html: dark-editorial three-column
+   reading cockpit. Pure presentation — all session logic lives in DMSession.jsx,
+   which renders this with state + handlers as props. Styles in hearth.css.
+   Panels that need data the MVP doesn't track yet (scene weather/mood, spell-
+   effect durations, dice receipts, speaker labels) are wired to real data where
+   available and otherwise omitted rather than faked.
    ──────────────────────────────────────────────────────────────────────── */
 
 const cap = (s) => (s == null || s === '') ? s : String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 const hpKind = (cur, max) => { const r = max ? cur / max : 1; return r > 0.5 ? '' : r > 0.25 ? 'warn' : 'bad' }
-const mono = (name) => (name || '?').trim().charAt(0).toUpperCase()
+const monogram = (name) => (name || '?').trim().charAt(0).toUpperCase()
+const pct = (cur, max) => max ? Math.max(0, Math.min(100, (cur / max) * 100)) : 100
 
-function PartyMem({ name, sub, cur, max, conditions = [], you, active }) {
-  const pct = max ? Math.max(0, Math.min(100, (cur / max) * 100)) : 100
-  return (
-    <div className={`party-mem${you ? ' you' : ''}${active ? ' active' : ''}`}>
-      <div className="av">{mono(name)}{active ? <span className="turn" /> : null}</div>
-      <div style={{ minWidth: 0 }}>
-        <div className="pm-name">{name}</div>
-        {sub ? <div className="pm-sub">{sub}</div> : null}
-        {max ? (
-          <div className="pm-hp">
-            <div className={`hpbar ${hpKind(cur, max)}`}><div className="fill" style={{ width: `${pct}%` }} /></div>
-            <span className="hpnum">{cur}/{max}</span>
-          </div>
-        ) : null}
-        {conditions.length > 0 && (
-          <div className="party-tags">
-            {conditions.map((c, i) => <span key={i} className={`ptag${/poison|bleed|frighten|stun|prone|paral|exhaust/i.test(c) ? ' bad' : ''}`}>{cap(c)}</span>)}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+// short descriptions for the conditions we track, for the Active-effects rail
+const COND_DESC = {
+  blinded: "Can't see; attacks against you have advantage, yours have disadvantage.",
+  charmed: "Can't attack the charmer; they have advantage on social checks against you.",
+  frightened: 'Disadvantage while the source is in sight; you can\'t move closer to it.',
+  grappled: 'Your speed is 0 until you break free.',
+  incapacitated: "Can't take actions or reactions.",
+  invisible: 'Unseen; attacks against you have disadvantage, yours have advantage.',
+  paralyzed: 'Incapacitated; auto-fail Str/Dex saves; hits within 5 ft crit.',
+  poisoned: 'Disadvantage on attack rolls and ability checks.',
+  prone: 'Disadvantage to attack; melee attackers near you have advantage.',
+  restrained: 'Speed 0; disadvantage on attacks and Dex saves.',
+  stunned: 'Incapacitated; auto-fail Str/Dex saves.',
+  unconscious: 'Incapacitated, prone, unaware; hits within 5 ft crit.'
 }
 
 export default function SessionCockpit(props) {
   const {
-    character, companions = [], awayCompanions = [], secondCharacter, activeSession,
+    character, companions = [], awayCompanions = [], secondCharacter, activeSession, sessionNumber,
     messages = [], isLoading, error, sessionRecap, onClearRecap,
     inputAction, onInputChange, onSend, messagesEndRef,
     combatState, onAdvanceTurn, onEndCombat,
@@ -57,14 +54,33 @@ export default function SessionCockpit(props) {
     itemsGainedThisSession, onDiscard, onCharacterUpdated, onSendActivity, onRecallCompanion
   } = props
 
-  const closeAll = () => { setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false) }
-  const openOnly = (setter, cur) => { closeAll(); setter(!cur) }
+  const [focused, setFocused] = useState(false)
+
+  const level = character?.level || 1
+  const classKey = character?.class?.toLowerCase()
+  const classData = classesData[classKey]
+  const isMonk = classKey === 'monk'
   const charName = character?.nickname || character?.name || 'You'
+  const speed = character?.speed || 30
+  const ac = character?.armor_class ?? 10
+  const curHp = character?.current_hp ?? 0
+  const maxHp = character?.max_hp ?? 0
+
   const actionLabel = secondCharacter
     ? `${charName} & ${secondCharacter.nickname || secondCharacter.name}`
     : charName
 
-  const slotLevels = spellSlots?.max ? Object.keys(spellSlots.max).map(Number).filter(l => spellSlots.max[l] > 0).sort((a, b) => a - b) : []
+  // class abilities for the right rail (real data from class features)
+  const abilities = (() => {
+    const fbl = classData?.featuresByLevel
+    if (!fbl) return []
+    const out = []
+    Object.entries(fbl).filter(([l]) => parseInt(l) <= level).forEach(([l, fs]) => (fs || []).forEach(f => out.push({ name: f.name, lvl: parseInt(l) })))
+    return out.slice(-6)
+  })()
+
+  const closeAll = () => { setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false) }
+  const openOnly = (setter, cur) => { closeAll(); setter(!cur) }
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -72,192 +88,278 @@ export default function SessionCockpit(props) {
       if (inputAction.trim() && !isLoading) onSend(e)
     }
   }
-  const quickInsert = (text) => onInputChange((inputAction ? inputAction.trimEnd() + ' ' : '') + text)
+
+  // narrative prose → paragraphs, with quoted speech tinted gold
+  const renderProse = (text) => {
+    const paras = String(text || '').split(/\n\s*\n/).filter(p => p.trim())
+    const src = paras.length ? paras : [String(text || '')]
+    return src.map((p, i) => (
+      <p key={i}>
+        {p.split(/("[^"]*")/g).map((seg, j) => /^".*"$/.test(seg)
+          ? <span key={j} style={{ color: 'var(--accent)', fontStyle: 'italic' }}>{seg}</span>
+          : seg)}
+      </p>
+    ))
+  }
 
   const renderMessage = (msg, idx) => {
     if (msg.type === 'action') {
       return (
-        <div key={idx} className="you-block">
-          <div className="who">{actionLabel}</div>
-          <div className="body">{msg.content}</div>
+        <div key={idx} className="you-act">
+          <div className="inner">
+            <div className="who">You · {actionLabel}</div>
+            <div className="body">{msg.content}</div>
+          </div>
         </div>
       )
     }
     if (msg.type === 'summary') {
       return (
-        <div key={idx} className="narr-card top" style={{ margin: '4px 0' }}>
-          <div className="marker">Adventure Summary</div>
-          <div className="ncbody">{msg.content}</div>
+        <div key={idx} className="measure">
+          <div className="narr-card top"><div className="marker">Session summary</div><div className="ncbody">{msg.content}</div></div>
         </div>
       )
     }
-    // narrative — split on blank lines into paragraphs for breathing room
-    const paras = String(msg.content || '').split(/\n\s*\n/).filter(p => p.trim())
     return (
-      <div key={idx} className="dm-block">
+      <div key={idx} className="measure dm">
         <div className="who">Dungeon Master</div>
-        <div className="prose">
-          {paras.length ? paras.map((p, i) => <p key={i} style={{ margin: i ? '0.7em 0 0' : 0 }}>{p}</p>) : <p style={{ margin: 0 }}>{msg.content}</p>}
-        </div>
+        <div className="prose">{renderProse(msg.content)}</div>
       </div>
     )
   }
 
+  // right-rail active effects from tracked conditions (no fake durations)
+  const activeEffects = playerConditions.map(c => ({ name: cap(c), desc: COND_DESC[String(c).toLowerCase().replace(/_\d+$/, '')] || 'Active condition.' }))
+
+  // scene panel: only the data we actually have
+  const scenePlace = activeSession?.startingLocation?.name || activeSession?.startingLocation || null
+  const sceneWhen = gameDate?.displayDate || null
+
   return (
-    <div className="hearth">
+    <div className="hearth cockpit-shell app-bg">
       <HearthSprite />
 
-      <header className="dash-hdr">
+      {/* ───────── HEADER ───────── */}
+      <header className="hdr">
         <div className="wordmark">D<span className="amp">&amp;</span>D</div>
         <div className="vr"></div>
-        <button className="back" onClick={onShowEnd}><Ic n="pause" />Pause / end</button>
+        <div className="hdr-title">
+          <span className="nm">{character?.name}</span>
+          {sessionNumber ? <span className="sx">Session {sessionNumber}</span> : null}
+        </div>
         <div className="spacer"></div>
-        <button className="hdr-link" onClick={() => openOnly(setShowQuickRef, showQuickRef)}><Ic n="scroll" />Character</button>
-        {companions.length > 0 && (
-          <button className="hdr-link" onClick={() => openOnly(setShowCompanionsRef, showCompanionsRef)}><Ic n="users" />Party</button>
+        {isMonk && (
+          <>
+            <div className="ki-quick">
+              <span className="kl">Ki</span>
+              <div className="pips">{Array.from({ length: level }).map((_, i) => <span key={i} className="pip magic full" />)}</div>
+            </div>
+            <div className="vr"></div>
+          </>
         )}
-        <button className="hdr-link" onClick={onOpenNotes}><Ic n="feather" />Notes</button>
-        <button className="hdr-link" onClick={() => openOnly(setShowInventory, showInventory)}><Ic n="pack" />Inventory</button>
-        <button className="hdr-link" onClick={() => openOnly(setShowConditionPanel, showConditionPanel)}>
-          <Ic n="flame" />Conditions{playerConditions.length > 0 ? ` · ${playerConditions.length}` : ''}
-        </button>
+        <button className="btn ghost sm" disabled={isLoading} onClick={() => onRest('short')}><Ic n="coffee" />Short rest</button>
+        <button className="btn ghost sm" disabled={isLoading} onClick={() => onRest('long')}><Ic n="moon" />Long rest</button>
+        <div className="vr"></div>
+        <div className="toggles">
+          <button className="btn-icon" title="Quick reference" onClick={() => openOnly(setShowQuickRef, showQuickRef)}><Ic n="scroll" /></button>
+          <button className="btn-icon" title="Inventory" onClick={() => openOnly(setShowInventory, showInventory)}><Ic n="pack" /></button>
+          <button className="btn-icon" title="Conditions" onClick={() => openOnly(setShowConditionPanel, showConditionPanel)}><Ic n="tag" /></button>
+          <button className="btn-icon" title="Campaign notes" onClick={onOpenNotes}><Ic n="pen" /></button>
+        </div>
         <div className="vr"></div>
         <button className="opus" onClick={onToggleModel} title="Switch the DM model for the next turn" style={{ background: 'none', border: 0, cursor: 'pointer' }}>
           <span className="dot" style={useSonnet ? { background: 'var(--accent-2)', boxShadow: '0 0 7px var(--accent-2)' } : undefined}></span>{useSonnet ? 'Sonnet' : 'Opus'}
         </button>
+        <button className="btn danger sm" onClick={onShowEnd}>End session</button>
       </header>
 
-      <div className="cockpit">
-        {/* LEFT RAIL — party */}
-        <aside className="ck-rail left scroll">
-          <div className="ck-panel">
-            <div className="label">Party<span className="ln" /></div>
-            <PartyMem you name={charName} sub={`${cap(character?.class) || ''} · Lv ${character?.level || 1}`}
-              cur={character?.current_hp} max={character?.max_hp} conditions={playerConditions}
-              active={combatState && combatState.turnOrder?.[combatState.currentTurn]?.type === 'player'} />
-            {companions.map((c, i) => (
-              <PartyMem key={i} name={c.nickname || c.name} sub={cap(c.class)}
-                cur={c.current_hp} max={c.max_hp} conditions={companionConditions[c.name] || []}
-                active={combatState && combatState.turnOrder?.[combatState.currentTurn]?.name === (c.name)} />
-            ))}
-            {awayCompanions.map((c, i) => (
-              <div key={`a${i}`} className="party-mem" style={{ opacity: 0.5 }}>
-                <div className="av">{mono(c.name)}</div>
-                <div><div className="pm-name">{c.name}</div><div className="pm-sub">away</div></div>
+      {/* ───────── COCKPIT ───────── */}
+      <main className="cockpit">
+
+        {/* LEFT · party + scene */}
+        <aside className="rail scroll">
+          <section className="panel">
+            <div className="panel-head">
+              <svg className="ph-ic"><use href="#i-users" /></svg>
+              <span className="ph-t">Party</span>
+              <span className="ph-sub">{1 + companions.length}</span>
+            </div>
+            <div className="panel-body">
+              <div className={`pm you${combatState && combatState.turnOrder?.[combatState.currentTurn]?.type === 'player' ? ' active' : ''}`}>
+                <div className="mono-portrait d">{monogram(character?.name)}</div>
+                <div>
+                  <div className="pm-name"><span className="n">{charName}</span><span className="r">you · L{level} {classKey}</span></div>
+                  <div className="pm-meta">HP {curHp}/{maxHp} · AC {ac}</div>
+                  <div className={`hpbar ${hpKind(curHp, maxHp)}`}><div className="fill" style={{ width: `${pct(curHp, maxHp)}%` }} /></div>
+                  {playerConditions.length > 0 && (
+                    <div className="pm-tags">{playerConditions.map((c, i) => <span key={i} className="chip">{cap(c)}</span>)}</div>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
+              {companions.map((c, i) => {
+                const cn = c.nickname || c.name
+                const active = combatState && combatState.turnOrder?.[combatState.currentTurn]?.name === c.name
+                return (
+                  <div key={i} className={`pm${active ? ' active' : ''}`}>
+                    <div className="mono-portrait v">{monogram(cn)}</div>
+                    <div>
+                      <div className="pm-name"><span className="n">{cn}</span><span className="r">L{c.level || level} {(c.class || '').toLowerCase()}</span></div>
+                      <div className="pm-meta">HP {c.current_hp ?? '–'}/{c.max_hp ?? '–'}{c.armor_class ? ` · AC ${c.armor_class}` : ''}</div>
+                      {c.max_hp ? <div className={`hpbar ${hpKind(c.current_hp, c.max_hp)}`}><div className="fill" style={{ width: `${pct(c.current_hp, c.max_hp)}%` }} /></div> : null}
+                      {(companionConditions[c.name] || []).length > 0 && (
+                        <div className="pm-tags">{(companionConditions[c.name] || []).map((t, j) => <span key={j} className="chip">{cap(t)}</span>)}</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {awayCompanions.map((c, i) => (
+                <div key={`a${i}`} className="pm" style={{ opacity: 0.5 }}>
+                  <div className="mono-portrait v">{monogram(c.name)}</div>
+                  <div><div className="pm-name"><span className="n">{c.name}</span><span className="r">away</span></div></div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {(scenePlace || sceneWhen) && (
+            <section className="panel">
+              <div className="panel-head">
+                <svg className="ph-ic"><use href="#i-pin" /></svg>
+                <span className="ph-t">This scene</span>
+              </div>
+              <div className="panel-body">
+                {scenePlace && <div className="env-row"><span className="k">Place</span><span className="v">{scenePlace}</span></div>}
+                {sceneWhen && <div className="env-row"><span className="k">When</span><span className="v">{sceneWhen}</span></div>}
+              </div>
+            </section>
+          )}
         </aside>
 
-        {/* CENTER STAGE */}
-        <section className="ck-stage">
-          <div className="stage-strip">
-            {combatState && <span className="strip-pill combat"><span className="pulse" />combat · round {combatState.round || 1}</span>}
-            <span className="strip-pill scene"><Ic n="pin" />{activeSession?.startingLocation?.name || activeSession?.title || 'In the world'}</span>
-            {gameDate?.displayDate && <span className="strip-pill"><Ic n="clock" />{gameDate.displayDate}</span>}
+        {/* CENTER · reading stage */}
+        <section className="stage">
+          <div className="context-strip">
+            {combatState && <><span className="cs-campaign" style={{ color: 'var(--combat)' }}>Combat · round {combatState.round || 1}</span><span className="cs-dot"></span></>}
+            <span className="cs-campaign">{activeSession?.title || 'Adventure'}</span>
+            {scenePlace && <><span className="cs-dot"></span><span className="cs-loc">{scenePlace}</span></>}
+            {sceneWhen && <span className="cs-time"><svg className="ic" style={{ width: 12, height: 12 }}><use href="#i-clock" /></svg>{sceneWhen}</span>}
           </div>
 
           <div className="transcript scroll">
-            <div className="read-col">
-              {sessionRecap && (
-                <div className="narr-card" style={{ marginBottom: 4 }}>
-                  <div className="marker">Previously…</div>
-                  <div className="ncbody">{sessionRecap}</div>
-                  <button className="btn ghost sm" style={{ marginTop: 12 }} onClick={onClearRecap}>Continue</button>
-                </div>
-              )}
-              {messages.map(renderMessage)}
-              {isLoading && (
-                <div className="dm-block"><div className="who">Dungeon Master</div>
-                  <div className="prose" style={{ color: 'var(--ink-3)', fontStyle: 'normal' }}>The Dungeon Master is writing…</div></div>
-              )}
-              {error && <div className="sys-event" style={{ color: 'var(--bad)' }}>{error}</div>}
-              <div ref={messagesEndRef} />
-            </div>
+            {sessionRecap && (
+              <div className="measure">
+                <div className="narr-card"><div className="marker">Previously…</div><div className="ncbody">{sessionRecap}</div>
+                  <button className="btn ghost sm" style={{ marginTop: 12 }} onClick={onClearRecap}>Continue</button></div>
+              </div>
+            )}
+            {messages.map(renderMessage)}
+            {isLoading && (
+              <div className="measure dm"><div className="who">Dungeon Master</div>
+                <div className="prose" style={{ color: 'var(--ink-3)' }}>The Dungeon Master is writing…</div></div>
+            )}
+            {error && <div className="measure"><div className="sys" style={{ color: 'var(--bad)' }}>{error}</div></div>}
+            <div ref={messagesEndRef} />
           </div>
 
-          <div className="composer-wrap">
-            <form className="composer" onSubmit={onSend}>
-              <textarea
-                value={inputAction}
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={handleKey}
-                placeholder={secondCharacter ? 'What do you both do?  (Shift+Enter for a new line)' : 'What do you do?  (Shift+Enter for a new line)'}
-                disabled={isLoading}
-                autoFocus
-                rows={2}
-              />
-              <button type="button" className="btn" title="Quick die roll" onClick={() => quickInsert('I roll a d20.')}><Ic n="die" /></button>
-              <button type="submit" className="btn primary lg" disabled={isLoading || !inputAction.trim()}>Act</button>
-            </form>
-            <div className="quick-row">
-              <span className="ql">quick</span>
-              <span className="qchip" onClick={() => quickInsert('I look around and take in the scene.')}>look around</span>
-              <span className="qchip" onClick={() => quickInsert('I make a Perception check.')}>perception</span>
-              <span className="qchip" onClick={() => quickInsert('I make an Insight check.')}>insight</span>
-              {combatState && <span className="qchip" onClick={() => quickInsert('I end my turn.')}>end turn</span>}
+          {/* COMPOSER */}
+          <div className="composer">
+            <div className="composer-inner">
+              <div className={`writing-surface${focused ? ' focused' : ''}`}>
+                <textarea
+                  value={inputAction}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={handleKey}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  placeholder={secondCharacter ? 'What do you both do?' : 'What do you do?'}
+                  disabled={isLoading}
+                  autoFocus
+                  rows={2}
+                  style={{ width: '100%', resize: 'none', background: 'transparent', border: 0, outline: 0, fontFamily: 'var(--serif)', fontSize: 17, lineHeight: 1.55, color: 'var(--ink)', minHeight: 46 }}
+                />
+              </div>
+              <div className="composer-bar">
+                <span className="composer-hint">{isLoading ? 'The Dungeon Master is writing…' : 'Speak, act, or ask — the table is yours.'}</span>
+                <span className="spacer"></span>
+                <button className="btn primary" disabled={isLoading || !inputAction.trim()} onClick={onSend}><Ic n="send" />Send</button>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* RIGHT RAIL — vitals + combat + dice */}
-        <aside className="ck-rail right scroll">
-          <div className="hp-block">
-            <div className="hp-row"><span className="cur">{character?.current_hp ?? 0}</span><span className="slash">/</span><span className="max">{character?.max_hp ?? 0}</span><span className="lbl">{charName}</span></div>
-            <div className={`hptrack ${hpKind(character?.current_hp ?? 0, character?.max_hp ?? 1)}`}><div className="fill" style={{ width: `${character?.max_hp ? Math.max(0, Math.min(100, (character.current_hp / character.max_hp) * 100)) : 100}%` }} /></div>
-            <div className="res-row"><span className="rl">AC</span><span className="num" style={{ fontSize: 15 }}>{character?.armor_class ?? 10}</span><span className="rl" style={{ marginLeft: 'auto' }}>Gold</span><span className="num" style={{ fontSize: 15, color: 'var(--accent)' }}>{character?.gold_gp ?? 0}</span></div>
-          </div>
-
-          {slotLevels.length > 0 && (
-            <div className="ck-panel">
-              <div className="label">Spell slots<span className="ln" /></div>
-              {slotLevels.map(l => {
-                const m = spellSlots.max[l], u = spellSlots.used?.[l] || 0
-                return (
-                  <div key={l} className="res-row" style={{ marginTop: 4 }}>
-                    <span className="rl">Lv {l}</span>
-                    <div className="pips">{Array.from({ length: m }).map((_, i) => <span key={i} className={`pip${i >= u ? ' full' : ' spent'}`} />)}</div>
-                  </div>
-                )
-              })}
+        {/* RIGHT · mechanics */}
+        <aside className="rail scroll">
+          <section className="panel">
+            <div className="panel-head">
+              <svg className="ph-ic"><use href="#i-shield" /></svg>
+              <span className="ph-t">{charName}</span>
+              <span className="ph-sub">L{level} {classKey}</span>
             </div>
-          )}
+            <div className="panel-body">
+              <div className="vitals">
+                <div className="vital hp">
+                  <div className="vl">Hit points</div>
+                  <div className="vv" style={{ color: hpKind(curHp, maxHp) === 'bad' ? 'var(--bad)' : hpKind(curHp, maxHp) === 'warn' ? 'var(--warn)' : 'var(--good)' }}>{curHp}<span className="max"> / {maxHp}</span></div>
+                  <div className={`hptrack ${hpKind(curHp, maxHp)}`}><div className="fill" style={{ width: `${pct(curHp, maxHp)}%` }} /></div>
+                </div>
+                <div className="vital"><div className="vl">Armor</div><div className="vv">{ac}</div></div>
+                <div className="vital"><div className="vl">Speed</div><div className="vv">{speed}<span className="un"> ft</span></div></div>
+              </div>
+              {isMonk && (
+                <>
+                  <div style={{ height: 11 }}></div>
+                  <div className="ki-block"><span className="kl">Ki points</span><div className="pips">{Array.from({ length: level }).map((_, i) => <span key={i} className="pip magic full" />)}</div></div>
+                </>
+              )}
+              <div className="hr-soft" style={{ margin: '10px 0' }}></div>
+              <div className="ki-block"><span className="kl">Gold</span><span className="num" style={{ fontSize: 15, color: 'var(--accent)' }}>{character?.gold_gp ?? 0} <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>gp</span></span></div>
+            </div>
+          </section>
 
-          {playerConditions.length > 0 && (
-            <div className="ck-panel">
-              <div className="label">Conditions<span className="ln" /></div>
-              <div className="party-tags" style={{ marginTop: 0 }}>
-                {playerConditions.map((c, i) => (
-                  <span key={i} className="ptag bad" style={{ cursor: 'pointer' }} title="Click to clear" onClick={() => onToggleCondition(c, 'player')}>{cap(c)} ✕</span>
+          {activeEffects.length > 0 && (
+            <section className="panel">
+              <div className="panel-head"><svg className="ph-ic"><use href="#i-sparkles" /></svg><span className="ph-t">Active effects</span></div>
+              <div className="panel-body">
+                {activeEffects.map((e, i) => (
+                  <div key={i} className="effect">
+                    <svg className="ei"><use href="#i-flame" /></svg>
+                    <div><div className="en">{e.name}</div><div className="es">{e.desc}</div></div>
+                    <span className="et" style={{ cursor: 'pointer' }} title="Clear" onClick={() => onToggleCondition(playerConditions[i], 'player')}>clear</span>
+                  </div>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
           {combatState?.turnOrder?.length > 0 && (
-            <div className="ck-panel">
-              <div className="label">Initiative · round {combatState.round || 1}<span className="ln" /></div>
-              {combatState.turnOrder.map((t, i) => (
-                <div key={i} className={`init-row${i === combatState.currentTurn ? ' active' : i < combatState.currentTurn ? ' acted' : ''}${t.type === 'enemy' ? ' enemy' : ''}`}>
-                  <span className="ord">{i + 1}</span><span className="inm">{t.name}</span><span className="ihp">{t.type}</span>
+            <section className="panel">
+              <div className="panel-head"><svg className="ph-ic"><use href="#i-bolt" /></svg><span className="ph-t">Initiative</span><span className="ph-sub">round {combatState.round || 1}</span></div>
+              <div className="panel-body">
+                {combatState.turnOrder.map((t, i) => (
+                  <div key={i} className="abil-row" style={i === combatState.currentTurn ? { borderColor: 'color-mix(in oklab, var(--combat) 50%, var(--rule))' } : i < combatState.currentTurn ? { opacity: 0.5 } : undefined}>
+                    <span className="an" style={t.type === 'enemy' ? { color: 'var(--bad)' } : undefined}>{i + 1}. {t.name}</span><span className="ac">{t.type}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 9 }}>
+                  <button className="btn sm" onClick={onAdvanceTurn}>Next turn</button>
+                  <button className="btn ghost sm" onClick={onEndCombat}>End combat</button>
                 </div>
-              ))}
-              <div className="dice-grid" style={{ marginTop: 8 }}>
-                <button className="btn sm" onClick={onAdvanceTurn}>Next turn</button>
-                <button className="btn ghost sm" onClick={onEndCombat}>End combat</button>
               </div>
-            </div>
+            </section>
           )}
 
-          <div className="ck-panel">
-            <div className="label">Rest<span className="ln" /></div>
-            <div className="dice-grid">
-              <button className="btn sm" disabled={isLoading} onClick={() => onRest('short')}><Ic n="coffee" />Short</button>
-              <button className="btn sm" disabled={isLoading} onClick={() => onRest('long')}><Ic n="moon" />Long</button>
-            </div>
-          </div>
+          {abilities.length > 0 && (
+            <section className="panel">
+              <div className="panel-head"><svg className="ph-ic"><use href="#i-bolt" /></svg><span className="ph-t">{isMonk ? 'Ki abilities' : 'Class features'}</span></div>
+              <div className="panel-body">
+                {abilities.map((a, i) => (
+                  <div key={i} className="abil-row"><span className="an">{a.name}</span><span className="ac">Lv {a.lvl}</span></div>
+                ))}
+              </div>
+            </section>
+          )}
         </aside>
-      </div>
+      </main>
 
       {/* slide-in reference panels (existing components) */}
       {showQuickRef && <QuickReferencePanel character={character} onClose={() => setShowQuickRef(false)} spellSlots={spellSlots} />}
@@ -271,11 +373,20 @@ export default function SessionCockpit(props) {
       {showEndOptions && (
         <div className="scrim" onClick={onCancelEnd}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><h3>Pause or end?</h3></div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button className="btn" disabled={isLoading} onClick={onPause} style={{ justifyContent: 'flex-start', padding: '14px 16px' }}><Ic n="pause" />Pause — save and return later</button>
-              <button className="btn primary" disabled={isLoading} onClick={onComplete} style={{ justifyContent: 'flex-start', padding: '14px 16px' }}><Ic n="check" />Complete — wrap up and claim rewards</button>
-              <button className="btn danger" disabled={isLoading} onClick={onAbort} style={{ justifyContent: 'flex-start', padding: '14px 16px' }}><Ic n="x" />Abort — discard, no rewards</button>
+            <div className="modal-head"><h3>End this session?</h3></div>
+            <div className="modal-body">
+              <button className="mchoice primary" disabled={isLoading} onClick={onPause}>
+                <span className="mci"><Ic n="pause" /></span>
+                <span><span className="mct">Pause &amp; leave</span><span className="mcd">Set the scene down exactly here. Pick up on this beat next time.</span></span>
+              </button>
+              <button className="mchoice" disabled={isLoading} onClick={onComplete}>
+                <span className="mci"><Ic n="check" /></span>
+                <span><span className="mct">Complete the session</span><span className="mcd">Wrap here, bank rewards, and tidy a recap of what happened.</span></span>
+              </button>
+              <button className="mchoice danger" disabled={isLoading} onClick={onAbort}>
+                <span className="mci"><Ic n="x" /></span>
+                <span><span className="mct">Abandon</span><span className="mcd">Discard everything since your last save. This cannot be undone.</span></span>
+              </button>
             </div>
             <div className="modal-foot"><button className="btn ghost" disabled={isLoading} onClick={onCancelEnd}>Keep playing</button></div>
           </div>
@@ -286,25 +397,24 @@ export default function SessionCockpit(props) {
       {pendingRecruitment && (
         <div className="scrim" onClick={onDismissRecruit}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><h3>A new companion?</h3></div>
+            <div className="modal-head"><div className="meyebrow">An ally at the door</div><h3>Travel with {pendingRecruitment.npc?.name || pendingRecruitment.npcName}?</h3></div>
             <div className="modal-body">
-              <p className="lede" style={{ fontStyle: 'normal', fontSize: 18, color: 'var(--ink)', margin: '0 0 6px' }}>
-                {pendingRecruitment.npc?.name || pendingRecruitment.npcName}
-              </p>
-              <p className="help" style={{ fontStyle: 'normal', margin: '0 0 14px' }}>
-                {[pendingRecruitment.npc?.race, pendingRecruitment.npc?.occupation].filter(Boolean).join(' · ')}
-              </p>
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 16, lineHeight: 1.55, color: 'var(--ink-2)', margin: 0 }}>
-                {pendingRecruitment.npcNotFound
-                  ? `${pendingRecruitment.npcName} agreed to join you, but isn't in your NPC records yet — you can add them as a companion later.`
-                  : `${pendingRecruitment.npc?.name} has agreed to join your party. Add them as a permanent companion?`}
-              </p>
+              <div className="cpv">
+                <span className="cpc">{monogram(pendingRecruitment.npc?.name || pendingRecruitment.npcName)}</span>
+                <div>
+                  <div className="cpn">{pendingRecruitment.npc?.name || pendingRecruitment.npcName}</div>
+                  <div className="cpr">{[pendingRecruitment.npc?.race, pendingRecruitment.npc?.occupation].filter(Boolean).join(' · ') || 'A new companion'}</div>
+                </div>
+              </div>
+              {pendingRecruitment.npcNotFound && (
+                <p className="help" style={{ marginTop: 14 }}>They aren't in your NPC records yet — you can add them as a companion later.</p>
+              )}
             </div>
             <div className="modal-foot">
-              {!pendingRecruitment.npcNotFound && (
-                <button className="btn primary" disabled={recruitmentLoading} onClick={() => onConfirmRecruit('npc_stats')}>{recruitmentLoading ? 'Adding…' : 'Add companion'}</button>
-              )}
               <button className="btn ghost" disabled={recruitmentLoading} onClick={onDismissRecruit}>{pendingRecruitment.npcNotFound ? 'Got it' : 'Not now'}</button>
+              {!pendingRecruitment.npcNotFound && (
+                <button className="btn primary" disabled={recruitmentLoading} onClick={() => onConfirmRecruit('npc_stats')}><Ic n="check" />{recruitmentLoading ? 'Adding…' : 'Welcome them'}</button>
+              )}
             </div>
           </div>
         </div>

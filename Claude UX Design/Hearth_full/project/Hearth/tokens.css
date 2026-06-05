@@ -1,0 +1,409 @@
+/* =================================================================
+   HEARTH · dark-editorial design system
+   One shared token + component sheet. Every screen imports this.
+   Fonts (load in each HTML <head>):
+     EB Garamond  — prose, headings, italic emphasis  (the voice)
+     Inter        — UI chrome: labels, eyebrows, buttons, nav
+     JetBrains Mono — numbers, dice, system lines, timestamps
+   ================================================================= */
+
+:root {
+  /* ---- surfaces · warm near-black, like dark aged paper ---- */
+  --bg:        #1a1712;   /* app background */
+  --bg-2:      #221e18;   /* raised: rails, header, panels */
+  --bg-card:   #272219;   /* cards, modals */
+  --page:      #211d17;   /* reading column behind DM prose */
+  --raise:     #2e2820;   /* hover / nested surfaces */
+
+  /* ---- ink · warm parchment text ---- */
+  --ink:       #ece4d6;   /* primary text / DM prose */
+  --ink-2:     #b8af9b;   /* secondary text */
+  --ink-3:     #988e77;   /* labels, metadata, the quiet stuff */
+  --ink-4:     #7c7360;   /* faintest — quiet text, still legible */
+
+  /* ---- rules ---- */
+  --rule:      #3a3328;   /* hairline borders */
+  --rule-soft: #2c2620;   /* softer dividers */
+
+  /* ---- accents · used sparingly, with meaning ---- */
+  --accent:    #c9a96a;   /* muted manuscript gold: primary action, emphasis */
+  --accent-d:  #b1925a;   /* gold, pressed */
+  --accent-2:  #8ba2c6;   /* muted ink-blue: secondary, info, links */
+  --selection: rgba(201,169,106,.20);
+
+  /* ---- semantic game-state · all muted, inside the calm ---- */
+  --good:   #93b98a;   /* healthy HP, success */
+  --warn:   #d8b46b;   /* bloodied HP, caution */
+  --bad:    #cf8478;   /* low HP, danger, damage taken */
+  --combat: #d2895a;   /* terracotta: combat flags, active turn */
+  --magic:  #ab9fda;   /* muted violet: spells, concentration */
+
+  /* ---- type families ---- */
+  --serif: "EB Garamond", "Iowan Old Style", Georgia, serif;
+  --sans:  "Inter", system-ui, -apple-system, sans-serif;
+  --mono:  "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ---- shadows · soft, deep, candlelit ---- */
+  --shadow:    0 1px 2px rgba(0,0,0,.35), 0 14px 44px rgba(0,0,0,.5);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.30), 0 4px 14px rgba(0,0,0,.32);
+
+  --radius:    7px;
+  --radius-lg: 11px;
+}
+
+* { box-sizing: border-box; }
+::selection { background: var(--selection); }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle candlelit lift in the corners — barely there */
+body.app-bg {
+  min-height: 100vh;
+  background-image:
+    radial-gradient(900px 520px at 50% -8%, rgba(201,169,106,.045), transparent 70%),
+    radial-gradient(700px 700px at 100% 100%, rgba(139,162,198,.03), transparent 70%);
+}
+
+/* =================================================================
+   TYPE PRIMITIVES
+   display 56 / step 44 / section 24 / lede 20i / body 18 /
+   help 16i / eyebrow 11 .22em / label 11 .18em / button 12 .14em
+   ================================================================= */
+.display { font-family: var(--serif); font-weight: 500; font-size: 56px; line-height: 1.04; letter-spacing: -.015em; }
+.step    { font-family: var(--serif); font-weight: 500; font-size: 44px; line-height: 1.08; letter-spacing: -.012em; }
+.section { font-family: var(--serif); font-weight: 500; font-size: 24px; line-height: 1.2;  letter-spacing: -.006em; }
+.lede    { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 20px; line-height: 1.5; color: var(--ink-2); }
+.help    { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-3); }
+
+.eyebrow {
+  font-family: var(--sans); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .22em; color: var(--ink-3);
+}
+.label {
+  font-family: var(--sans); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .18em; color: var(--ink-3);
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.num  { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+/* =================================================================
+   HAIRLINE DIVIDERS
+   ================================================================= */
+.hr { height: 1px; background: var(--rule); border: 0; margin: 0; }
+.hr-soft { height: 1px; background: var(--rule-soft); border: 0; margin: 0; }
+
+/* Ornamented scene-break divider (hairline + centered asterism) */
+.scene-break {
+  display: flex; align-items: center; gap: 16px;
+  color: var(--ink-4);
+  margin: 8px 0;
+}
+.scene-break::before, .scene-break::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--rule), transparent);
+}
+.scene-break .glyph {
+  font-family: var(--serif); font-size: 15px; color: var(--ink-3);
+  letter-spacing: .35em; padding-left: .35em; line-height: 1;
+}
+.scene-break .lbl {
+  font-family: var(--serif); font-style: italic; font-size: 13px;
+  color: var(--ink-3); letter-spacing: .01em; white-space: nowrap;
+}
+
+/* =================================================================
+   BUTTONS  ·  default / primary (gold) / ghost / danger  + .lg
+   ================================================================= */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 15px;
+  font-family: var(--sans); font-weight: 600; font-size: 12px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .14s, border-color .14s, color .14s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--raise); border-color: #4a4032; color: var(--ink); }
+.btn .ic { width: 14px; height: 14px; }
+
+.btn.primary {
+  color: #211d17; background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+}
+.btn.primary:hover { background: #d8b87a; border-color: #d8b87a; }
+
+.btn.ghost { background: transparent; border-color: transparent; color: var(--ink-3); }
+.btn.ghost:hover { background: var(--bg-card); border-color: var(--rule); color: var(--ink-2); }
+
+.btn.danger { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 34%, var(--rule)); }
+.btn.danger:hover { background: color-mix(in oklab, var(--bad) 12%, var(--bg-card)); color: var(--bad); }
+
+.btn.lg { padding: 12px 22px; font-size: 12.5px; }
+.btn.sm { padding: 5px 10px; font-size: 10.5px; gap: 6px; }
+
+/* Icon-only quiet button (header toggles) */
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  color: var(--ink-3); background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius);
+  cursor: pointer; transition: background .14s, color .14s, border-color .14s;
+}
+.btn-icon:hover { background: var(--bg-card); border-color: var(--rule); color: var(--ink-2); }
+.btn-icon .ic { width: 16px; height: 16px; }
+
+/* =================================================================
+   CHIPS / PILLS  ·  default + .on (selected) — conditions, tags
+   ================================================================= */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px;
+  font-family: var(--sans); font-weight: 500; font-size: 11px;
+  letter-spacing: .02em;
+  color: var(--ink-2);
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+.chip .ic { width: 11px; height: 11px; color: var(--ink-3); }
+.chip.on {
+  color: #211d17; background: var(--accent); border-color: var(--accent);
+}
+/* semantic condition chips — muted tints */
+.chip.warn  { color: var(--warn);  border-color: color-mix(in oklab, var(--warn) 36%, var(--rule));  background: color-mix(in oklab, var(--warn) 9%, var(--bg-card)); }
+.chip.bad   { color: var(--bad);   border-color: color-mix(in oklab, var(--bad) 36%, var(--rule));   background: color-mix(in oklab, var(--bad) 9%, var(--bg-card)); }
+.chip.magic { color: var(--magic); border-color: color-mix(in oklab, var(--magic) 36%, var(--rule)); background: color-mix(in oklab, var(--magic) 9%, var(--bg-card)); }
+.chip.combat{ color: var(--combat);border-color: color-mix(in oklab, var(--combat) 36%, var(--rule));background: color-mix(in oklab, var(--combat) 9%, var(--bg-card)); }
+
+/* Eyebrow pill (mono, framed) — used for context strip + meta */
+.tagpill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--bg-2);
+}
+.tagpill .ic { width: 11px; height: 11px; }
+.tagpill.combat {
+  color: var(--combat); border-color: color-mix(in oklab, var(--combat) 45%, var(--rule));
+  background: color-mix(in oklab, var(--combat) 10%, var(--bg-2));
+}
+
+/* =================================================================
+   CARDS / PANELS
+   ================================================================= */
+.panel {
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Panel header: small icon + uppercase mono title + right-aligned sub */
+.panel-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px 10px;
+}
+.panel-head .ph-ic { width: 13px; height: 13px; color: var(--ink-4); }
+.panel-head .ph-t {
+  font-family: var(--sans); font-weight: 600; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3);
+}
+.panel-head .ph-sub {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .06em;
+  color: var(--ink-4);
+}
+.panel-body { padding: 0 14px 13px; }
+
+/* Narrative / celebration card — 3px accent bar, marker label, serif body.
+   Reused for DM scene cards and milestone moments. */
+.narr-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 16px 18px 16px 20px;
+  box-shadow: var(--shadow-sm);
+}
+.narr-card::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 999px; background: var(--accent);
+}
+.narr-card.top::before { left: 14px; right: 14px; top: 0; bottom: auto; width: auto; height: 3px; }
+.narr-card.magic::before  { background: var(--magic); }
+.narr-card.combat::before { background: var(--combat); }
+.narr-card .marker {
+  font-family: var(--sans); font-weight: 600; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .2em; color: var(--accent);
+  margin-bottom: 7px;
+}
+.narr-card.magic .marker  { color: var(--magic); }
+.narr-card.combat .marker { color: var(--combat); }
+.narr-card .ncbody {
+  font-family: var(--serif); font-size: 16px; line-height: 1.55; color: var(--ink);
+}
+
+/* =================================================================
+   HP BARS  ·  good / warn / bad by health
+   ================================================================= */
+.hpbar {
+  height: 4px; border-radius: 999px;
+  background: var(--rule-soft); overflow: hidden;
+}
+.hpbar .fill { height: 100%; border-radius: 999px; background: var(--good); }
+.hpbar.warn .fill { background: var(--warn); }
+.hpbar.bad  .fill { background: var(--bad); }
+
+/* Thicker tracked HP bar (right-rail resource) */
+.hptrack {
+  height: 7px; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--rule-soft);
+  overflow: hidden;
+}
+.hptrack .fill { height: 100%; background: var(--good); }
+.hptrack.warn .fill { background: var(--warn); }
+.hptrack.bad  .fill { background: var(--bad); }
+
+/* Resource pips (ki, spell slots) */
+.pips { display: flex; gap: 5px; }
+.pip {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--rule); background: transparent;
+}
+.pip.full { background: var(--accent); border-color: var(--accent); }
+.pip.magic.full { background: var(--magic); border-color: var(--magic); }
+.pip.spent { opacity: .5; }
+
+/* Tall pip (slot bars) */
+.pip-bar { flex: 1; height: 20px; border-radius: 4px; border: 1.5px solid var(--rule); background: transparent; }
+.pip-bar.full { background: color-mix(in oklab, var(--accent) 26%, transparent); border-color: var(--accent); }
+
+/* =================================================================
+   SCROLLBARS — quiet
+   ================================================================= */
+.scroll::-webkit-scrollbar { width: 9px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+.scroll::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+.scroll::-webkit-scrollbar-thumb:hover { background: #4a4032; background-clip: padding-box; }
+
+/* =================================================================
+   BRAND WORDMARK — serif "D&D" with gold ampersand
+   ================================================================= */
+.wordmark {
+  font-family: var(--serif); font-weight: 600; font-size: 19px;
+  letter-spacing: -.01em; color: var(--ink); white-space: nowrap;
+}
+.wordmark .amp { color: var(--accent); font-style: italic; padding: 0 .02em; }
+
+/* Opus model indicator */
+.opus {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.opus .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 70%, transparent); }
+
+/* =================================================================
+   MODAL / OVERLAY family
+   ================================================================= */
+.scrim {
+  position: fixed; inset: 0;
+  background: rgba(12,10,7,.62);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 80;
+}
+.modal {
+  width: 460px; max-width: calc(100vw - 48px);
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.modal-head { padding: 22px 24px 6px; }
+.modal-head h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0; letter-spacing: -.01em; }
+.modal-body { padding: 10px 24px 22px; }
+.modal-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 24px; border-top: 1px solid var(--rule-soft); }
+
+/* Slide-in right sheet (panel family) */
+.sheet {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 380px; max-width: 92vw;
+  background: var(--bg-2);
+  border-left: 1px solid var(--rule);
+  box-shadow: -20px 0 60px rgba(0,0,0,.5);
+  z-index: 70;
+  display: flex; flex-direction: column;
+}
+.sheet-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--rule-soft);
+}
+.sheet-head h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; }
+.sheet-body { flex: 1; overflow-y: auto; padding: 18px 20px; }
+
+/* utility */
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.gap6 { gap: 6px; } .gap8 { gap: 8px; } .gap10 { gap: 10px; } .gap12 { gap: 12px; } .gap16 { gap: 16px; }
+.spacer { flex: 1; }
+.muted { color: var(--ink-3); }
+.serif { font-family: var(--serif); }
+.italic { font-style: italic; }
+
+/* =================================================================
+   SHARED PAGE CHROME (dashboard + sub-pages)
+   ================================================================= */
+.dash-hdr {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 28px; height: 58px;
+  background: color-mix(in oklab, var(--bg-2) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--rule);
+}
+.dash-hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+.back { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: none; transition: color .14s; }
+.back:hover { color: var(--ink); }
+.back .ic { width: 15px; height: 15px; }
+.hdr-link { font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; transition: color .14s; }
+.hdr-link:hover { color: var(--ink-2); }
+.hdr-link .ic { width: 14px; height: 14px; }
+
+/* page canvas + eyebrow rule */
+.page { max-width: 1120px; margin: 0 auto; padding: 40px 28px 80px; }
+.page-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.page-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+
+/* section heading w/ fleuron rule */
+.sec-head { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
+.sec-head h2 { font-family: var(--serif); font-weight: 500; font-size: 21px; letter-spacing: -.008em; margin: 0; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
+.sec-head .sub { font-family: var(--sans); font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.sec-head .fl { flex: 1; height: 1px; background: var(--rule); }
+.sec-head .glyph { color: var(--ink-4); font-size: 13px; }
+
+/* heraldic monogram crest */
+.crest { border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; background: linear-gradient(150deg, #3a3326, #211c14); border: 1px solid var(--rule); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+.crest .mono { font-family: var(--serif); font-weight: 600; color: var(--accent); line-height: 1; }
+.crest .lvl { position: absolute; bottom: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-2); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--sans); font-weight: 700; font-size: 12px; color: var(--accent); box-shadow: var(--shadow-sm); }

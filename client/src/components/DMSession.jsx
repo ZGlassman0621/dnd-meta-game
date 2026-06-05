@@ -1288,7 +1288,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   if (activeSession && !sessionEnded) {
     return (
       <SessionCockpit
-        character={character} companions={companions} awayCompanions={awayCompanions} secondCharacter={secondCharacter} activeSession={activeSession}
+        character={character} companions={companions} awayCompanions={awayCompanions} secondCharacter={secondCharacter} activeSession={activeSession} sessionNumber={(sessionHistory?.length || 0) + 1}
         messages={messages} isLoading={isLoading} error={error} sessionRecap={sessionRecap} onClearRecap={() => setSessionRecap(null)}
         inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
         combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}

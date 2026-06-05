@@ -445,100 +445,269 @@
 }
 
 /* =================================================================
-   DM SESSION COCKPIT — three-column reading cockpit
-   left party rail · center reading stage + composer · right combat/dice rail
+   DM SESSION COCKPIT — ported from Hearth/Cockpit - Calm.html
    ================================================================= */
-.hearth .cockpit { display: grid; grid-template-columns: 252px minmax(0, 1fr) 300px; height: calc(100vh - 58px); overflow: hidden; }
-.hearth .ck-rail { overflow-y: auto; background: var(--bg-2); display: flex; flex-direction: column; gap: 16px; padding: 18px 16px 28px; }
-.hearth .ck-rail.left { border-right: 1px solid var(--rule); }
-.hearth .ck-rail.right { border-left: 1px solid var(--rule); }
-.hearth .ck-stage { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.hearth .panel-head { display:flex; align-items:center; gap:8px; padding:12px 14px 10px; }
+.hearth .panel-head .ph-ic { width:13px; height:13px; color:var(--ink-4); }
+.hearth .panel-head .ph-t { font-family:var(--sans); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.16em; color:var(--ink-3); }
+.hearth .panel-head .ph-sub { margin-left:auto; font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:var(--ink-4); }
+.hearth .panel-body { padding:0 14px 13px; }
+.hearth .pip.full { background:var(--accent); border-color:var(--accent); }
+.hearth .pip.magic.full { background:var(--magic); border-color:var(--magic); }
+.hearth .pip.spent { opacity:.5; }
+.hearth .hptrack.warn .fill { background:var(--warn); }
+.hearth .hptrack.bad .fill { background:var(--bad); }
+.hearth .hpbar.warn .fill { background:var(--warn); }
+.hearth .hpbar.bad .fill { background:var(--bad); }
+.hearth.cockpit-shell { display:flex; flex-direction:column; overflow:hidden; }
+.hearth.cockpit-shell *, .hearth.cockpit-shell *::before, .hearth.cockpit-shell *::after { box-sizing:border-box; }
 
-/* rail panel block */
-.hearth .ck-panel { display: flex; flex-direction: column; gap: 9px; }
-.hearth .ck-panel > .label { font-family: var(--sans); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .18em; color: var(--ink-4); display: flex; align-items: center; gap: 8px; }
-.hearth .ck-panel > .label .ln { flex: 1; height: 1px; background: var(--rule-soft); }
+.hearth.cockpit-shell { display: flex; flex-direction: column; height: 100vh; }
+.hearth .hdr { display: flex; align-items: center; gap: 14px;
+      padding: 0 18px; height: 54px; flex-shrink: 0;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--rule); }
+.hearth .hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+.hearth .hdr-title { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; white-space: nowrap; }
+.hearth .hdr-title .nm { font-family: var(--serif); font-size: 16px; color: var(--ink); letter-spacing: -.005em; white-space: nowrap; }
+.hearth .hdr-title .sx { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .ki-quick { display: inline-flex; align-items: center; gap: 8px; }
+.hearth .ki-quick .kl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .toggles { display: flex; align-items: center; gap: 2px; }
+.hearth .lvlpill { display: inline-flex; align-items: center; gap: 7px; font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); background: color-mix(in oklab, var(--accent) 11%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--rule)); border-radius: 999px; padding: 5px 11px; cursor: pointer; transition: background .14s; white-space: nowrap; }
+.hearth .lvlpill:hover { background: color-mix(in oklab, var(--accent) 18%, transparent); }
+.hearth .lvlpill .ic { width: 12px; height: 12px; }
+.hearth .party-add { width: 22px; height: 22px; border-radius: 6px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule)); background: color-mix(in oklab, var(--accent) 10%, transparent); color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .14s; }
+.hearth .party-add:hover { background: color-mix(in oklab, var(--accent) 20%, transparent); }
+.hearth .party-add .ic { width: 13px; height: 13px; }
+.hearth .cockpit { flex: 1; min-height: 0;
+      display: grid;
+      grid-template-columns: 248px 1fr 296px;
+      gap: 14px;
+      padding: 14px; }
+.hearth .rail { display: flex; flex-direction: column; gap: 14px; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.hearth .pm { display: grid; grid-template-columns: 38px 1fr; gap: 11px;
+      padding: 10px; border-radius: var(--radius);
+      border: 1px solid transparent; }
+.hearth .pm + .pm { margin-top: 2px; }
+.hearth .pm.you { background: color-mix(in oklab, var(--accent) 7%, var(--bg-card));
+      border-color: color-mix(in oklab, var(--accent) 30%, var(--rule)); }
+.hearth .pm:not(.you):hover { background: var(--bg-card); }
+.hearth .mono-portrait { width: 38px; height: 38px; border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--serif); font-weight: 600; font-size: 18px;
+      border: 1px solid var(--rule); position: relative; flex-shrink: 0; }
+.hearth .mono-portrait.d { background: linear-gradient(150deg, #3a3326, #221d16); color: var(--accent); }
+.hearth .mono-portrait.v { background: linear-gradient(150deg, #2e3340, #1d2128); color: var(--accent-2); }
+.hearth .pm > div:last-child { min-width: 0; }
+.hearth .pm-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.hearth .pm-name .n { font-family: var(--serif); font-size: 15px; color: var(--ink); white-space: nowrap; }
+.hearth .pm-name .r { font-family: var(--mono); font-size: 8.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-4); white-space: nowrap; flex-shrink: 0; }
+.hearth .pm-meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); margin-top: 2px; letter-spacing: .02em; }
+.hearth .pm .hpbar { margin-top: 6px; }
+.hearth .pm-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.hearth .pm-tags .chip { font-size: 10px; padding: 2px 7px; }
+.hearth .env-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 12.5px; }
+.hearth .env-row + .env-row { border-top: 1px solid var(--rule-soft); }
+.hearth .env-row .k { font-family: var(--sans); color: var(--ink-3); white-space: nowrap; }
+.hearth .env-row .v { font-family: var(--serif); font-style: italic; color: var(--ink-2); font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hearth .stage { display: flex; flex-direction: column; min-height: 0; min-width: 0;
+      background: var(--page);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden; }
+.hearth .context-strip { display: flex; align-items: center; gap: 14px;
+      padding: 11px 22px; flex-shrink: 0; min-width: 0;
+      border-bottom: 1px solid var(--rule-soft);
+      background: color-mix(in oklab, var(--bg-2) 55%, var(--page)); }
+.hearth .cs-campaign { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .cs-loc { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink); letter-spacing: .005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hearth .cs-campaign { white-space: nowrap; }
+.hearth .cs-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-4); }
+.hearth .cs-time { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); display: inline-flex; align-items: center; gap: 7px; }
+.hearth .transcript { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+      padding: 30px 0 26px;
+      display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.hearth .measure { width: 100%; max-width: 690px; padding: 0 26px; }
+.hearth .dm .who { font-family: var(--sans); font-weight: 600; font-size: 9.5px;
+      letter-spacing: .22em; text-transform: uppercase; color: var(--accent);
+      display: inline-flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.hearth .dm .who::before { content: ""; width: 16px; height: 1px; background: var(--accent); opacity: .8; }
+.hearth .dm .prose { font-family: var(--serif); font-weight: 400; font-size: 18.5px; line-height: 1.72;
+      color: var(--ink); letter-spacing: .002em; text-wrap: pretty; }
+.hearth .dm .prose p { margin: 0 0 16px; }
+.hearth .dm .prose p:last-child { margin-bottom: 0; }
+.hearth .dm .prose em { font-style: italic; color: var(--ink-2); }
+.hearth .npc { font-family: var(--serif); font-style: italic; font-size: 18.5px; line-height: 1.7;
+      color: var(--accent); letter-spacing: .004em;
+      padding-left: 18px; border-left: 2px solid color-mix(in oklab, var(--accent) 45%, transparent); }
+.hearth .npc .speaker { display: block; font-family: var(--sans); font-style: normal; font-weight: 600;
+      font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase;
+      color: color-mix(in oklab, var(--accent) 78%, var(--ink-3)); margin-bottom: 6px; }
+.hearth .you-act { align-self: center; width: 100%; max-width: 690px; padding: 0 26px; }
+.hearth .you-act .inner { margin-left: 30px; padding-left: 16px;
+      border-left: 1px solid var(--rule); }
+.hearth .you-act .who { font-family: var(--sans); font-weight: 600; font-size: 9px;
+      letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px; }
+.hearth .you-act .body { font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); }
+.hearth .you-act .body em { font-style: italic; color: var(--ink); }
+.hearth .sys { align-self: center; display: inline-flex; align-items: center; gap: 9px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: .01em;
+      color: var(--ink-3); max-width: 640px; text-align: center;
+      padding: 3px 0; }
+.hearth .sys .glyph { color: var(--ink-4); }
+.hearth .sys .num { color: var(--accent); font-weight: 500; }
+.hearth .sys .good { color: var(--good); }
+.hearth .sys .bad { color: var(--bad); }
+.hearth .sys em { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-2); }
+.hearth .composer { flex-shrink: 0; padding: 16px 22px 18px;
+      border-top: 1px solid var(--rule-soft);
+      background: color-mix(in oklab, var(--bg-2) 45%, var(--page)); }
+.hearth .composer-inner { max-width: 690px; margin: 0 auto; }
+.hearth .writing-surface { position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 14px 16px; min-height: 76px;
+      box-shadow: inset 0 0 0 0 transparent;
+      transition: border-color .16s, box-shadow .16s; }
+.hearth .writing-surface.focused { border-color: color-mix(in oklab, var(--accent) 55%, var(--rule));
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent); }
+.hearth .writing-surface .draft { font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--ink); }
+.hearth .writing-surface .draft em { font-style: italic; color: var(--ink-2); }
+.hearth .writing-surface .caret { display: inline-block; width: 2px; height: 19px; vertical-align: -3px;
+      background: var(--accent); margin-left: 1px; animation: blink 1.1s steps(1) infinite; }
+.hearth .composer-bar { display: flex; align-items: center; gap: 12px; margin-top: 11px; }
+.hearth .composer-hint { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); white-space: nowrap; }
+.hearth .vitals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hearth .vital { padding: 11px 12px; border-radius: var(--radius);
+      background: var(--bg-card); border: 1px solid var(--rule-soft); }
+.hearth .vital .vl { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .vital .vv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 23px; letter-spacing: -.01em; color: var(--ink); margin-top: 3px; line-height: 1; }
+.hearth .vital .vv .max { font-size: 14px; color: var(--ink-3); font-weight: 500; }
+.hearth .vital .vv .un { font-size: 12px; color: var(--ink-3); font-weight: 500; }
+.hearth .vital.hp { grid-column: 1 / -1; }
+.hearth .vital.hp .vv { color: var(--good); }
+.hearth .vital .hptrack { margin-top: 9px; }
+.hearth .ki-block { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+.hearth .ki-block .kl { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .effect { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px;
+      padding: 8px 10px; border-radius: var(--radius);
+      background: var(--bg-card); border: 1px solid var(--rule-soft);
+      border-left: 3px solid var(--magic); }
+.hearth .effect + .effect { margin-top: 6px; }
+.hearth .effect.buff { border-left-color: var(--good); }
+.hearth .effect .ei { width: 13px; height: 13px; color: var(--ink-3); }
+.hearth .effect .en { font-family: var(--serif); font-size: 14px; color: var(--ink); }
+.hearth .effect .en em { font-style: italic; }
+.hearth .effect .es { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-top: 1px; letter-spacing: .02em; }
+.hearth .effect .et { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: .04em; }
+.hearth .abil-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: var(--radius);
+      border: 1px solid var(--rule-soft); background: var(--bg-card);
+      cursor: default; }
+.hearth .abil-row + .abil-row { margin-top: 5px; }
+.hearth .abil-row .an { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); }
+.hearth .abil-row .ac { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); }
+.hearth .panel-scrim { position: fixed; inset: 0; background: rgba(12,10,7,.5); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .22s; z-index: 60; }
+.hearth .panel-scrim.show { opacity: 1; pointer-events: auto; }
+.hearth .pnl { position: fixed; top: 0; right: 0; bottom: 0; width: 408px; max-width: 92vw;
+      background: var(--bg-2); border-left: 1px solid var(--rule);
+      box-shadow: -24px 0 60px rgba(0,0,0,.5);
+      transform: translateX(100%); transition: transform .26s cubic-bezier(.4,0,.2,1);
+      z-index: 61; display: flex; flex-direction: column; }
+.hearth .pnl.open { transform: translateX(0); }
+.hearth .pnl-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px 15px; border-bottom: 1px solid var(--rule-soft); flex-shrink: 0; }
+.hearth .pnl-head .ph-ic2 { width: 18px; height: 18px; color: var(--accent); }
+.hearth .pnl-head h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; letter-spacing: -.005em; white-space: nowrap; flex-shrink: 0; }
+.hearth .pnl-head .ph-sub2 { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-left: 2px; align-self: flex-end; padding-bottom: 3px; }
+.hearth .pnl-close { margin-left: auto; width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--rule); background: var(--bg-card); color: var(--ink-3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .14s; }
+.hearth .pnl-close:hover { color: var(--ink); border-color: #4a4032; }
+.hearth .pnl-close .ic { width: 15px; height: 15px; }
+.hearth .pnl-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 18px 20px 24px; }
+.hearth .pnl-sec { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin: 22px 0 12px; display: flex; align-items: center; gap: 10px; }
+.hearth .pnl-sec:first-child { margin-top: 0; }
+.hearth .pnl-sec .ln { flex: 1; height: 1px; background: var(--rule-soft); }
+.hearth .qr-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.hearth .qr-stat { padding: 10px 11px; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--rule-soft); text-align: center; }
+.hearth .qr-stat .l { font-family: var(--sans); font-weight: 600; font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .qr-stat .v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 20px; color: var(--ink); margin-top: 3px; line-height: 1; }
+.hearth .qr-stat .v .mx { font-size: 12px; color: var(--ink-3); }
+.hearth .qr-stat.hp .v { color: var(--good); }
+.hearth .tech { padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .tech:first-of-type { border-top: 0; }
+.hearth .tech .tt { font-family: var(--serif); font-size: 16px; color: var(--ink); display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+.hearth .tech .tt .cost { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--magic); margin-left: auto; }
+.hearth .tech .tdsc { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; }
+.hearth .cheat { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13.5px; }
+.hearth .cheat .ck { font-family: var(--sans); font-weight: 600; color: var(--ink-2); }
+.hearth .cheat .cv { font-family: var(--serif); color: var(--ink-3); }
+.hearth .pnl-foot { padding: 14px 20px; border-top: 1px solid var(--rule-soft); flex-shrink: 0; }
+.hearth .pnl-foot .btn { width: 100%; }
+.hearth .inv { display: flex; flex-direction: column; }
+.hearth .inv-row { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; padding: 9px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .inv-row:first-child { border-top: 0; }
+.hearth .inv-row .ii { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--ink-3); flex-shrink: 0; }
+.hearth .inv-row .ii .ic { width: 15px; height: 15px; }
+.hearth .inv-row .inm { font-family: var(--serif); font-size: 15.5px; color: var(--ink); }
+.hearth .inv-row .idesc { font-family: var(--mono); font-size: 9.5px; letter-spacing: .03em; color: var(--ink-4); text-transform: uppercase; margin-top: 1px; }
+.hearth .inv-row .iqty { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink-2); }
+.hearth .gold-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 13px 15px; border-radius: var(--radius); background: color-mix(in oklab, var(--accent) 8%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--rule)); }
+.hearth .gold-row .gl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.hearth .gold-row .gv { margin-left: auto; font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 20px; color: var(--accent); }
+.hearth .gold-row .gv .un { font-size: 12px; }
+.hearth .cond { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; padding: 13px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .cond:first-of-type { border-top: 0; }
+.hearth .cond .cn { font-family: var(--serif); font-size: 16.5px; color: var(--ink-2); }
+.hearth .cond.on .cn { color: var(--ink); }
+.hearth .cond .cd { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.45; margin-top: 3px; }
+.hearth .cond .cd em { font-style: italic; color: var(--ink-2); }
+.hearth .sw { width: 40px; height: 23px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--rule); position: relative; cursor: pointer; flex-shrink: 0; transition: background .16s, border-color .16s; }
+.hearth .sw .kn { position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: var(--ink-3); transition: transform .16s, background .16s; }
+.hearth .sw.on { background: color-mix(in oklab, var(--magic) 28%, var(--bg-card)); border-color: var(--magic); }
+.hearth .sw.on .kn { transform: translateX(17px); background: var(--magic); }
+.hearth .notes-area { width: 100%; min-height: 420px; resize: none; background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 17px; font-family: var(--serif); font-size: 16px; line-height: 1.65; color: var(--ink); outline: none; transition: border-color .15s; }
+.hearth .notes-area:focus { border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+.hearth .notes-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .notes-meta .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+.hearth .modal-head { padding: 24px 26px 4px; }
+.hearth .modal-head .meyebrow { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; }
+.hearth .modal-head h3 { font-family: var(--serif); font-weight: 500; font-size: 27px; margin: 0; letter-spacing: -.01em; }
+.hearth .modal-head .msub { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 8px; }
+.hearth .modal-body { padding: 16px 26px 22px; }
+.hearth .modal-body > .lede { font-family: var(--serif); font-style: italic; font-size: 16.5px; line-height: 1.5; color: var(--ink-2); margin: 0 0 16px; }
+.hearth .modal-foot { display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding: 15px 26px; border-top: 1px solid var(--rule-soft); }
+.hearth .modal-foot .lspace { margin-right: auto; }
+.hearth .mchoice { display: grid; grid-template-columns: auto 1fr auto; gap: 13px; align-items: center; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: border-color .14s, background .14s; }
+.hearth .mchoice + .mchoice { margin-top: 9px; }
+.hearth .mchoice:hover { border-color: #4a4032; background: var(--raise); }
+.hearth .mchoice.primary { border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); }
+.hearth .mchoice.danger:hover { border-color: color-mix(in oklab, var(--bad) 45%, var(--rule)); }
+.hearth .mchoice .mci { width: 34px; height: 34px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.hearth .mchoice.danger .mci { color: var(--bad); }
+.hearth .mchoice .mci .ic { width: 17px; height: 17px; }
+.hearth .mchoice .mct { font-family: var(--serif); font-size: 18px; color: var(--ink); display: block; }
+.hearth .mchoice .mcd { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.4; margin-top: 2px; display: block; }
+.hearth .mchoice .mcarrow { color: var(--ink-4); }
+.hearth .mchoice .mcarrow .ic { width: 16px; height: 16px; }
+.hearth .ledger { display: flex; flex-direction: column; }
+.hearth .led { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .led:first-child { border-top: 0; }
+.hearth .led .lk { font-family: var(--serif); font-size: 16px; color: var(--ink-2); }
+.hearth .led .ld { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); }
+.hearth .led .lv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 16px; color: var(--ink); }
+.hearth .led .lv .gain { color: var(--good); }
+.hearth .led .lv .gold { color: var(--accent); }
+.hearth .xpbar { height: 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--rule-soft); overflow: hidden; margin: 4px 0 2px; }
+.hearth .xpbar .fill { height: 100%; background: var(--accent); }
+.hearth .milestone { display: flex; align-items: center; gap: 11px; margin-top: 16px; padding: 13px 15px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--rule)); }
+.hearth .milestone .ic { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+.hearth .milestone .mt { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink); }
+.hearth .cpv { display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center; padding: 16px; border-radius: 11px; background: var(--bg-2); border: 1px solid var(--rule); margin-bottom: 4px; }
+.hearth .cpv .cpc { width: 56px; height: 56px; border-radius: 11px; background: linear-gradient(150deg, #3a2e26, #211a14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 26px; color: var(--accent); }
+.hearth .cpv .cpn { font-family: var(--serif); font-size: 21px; color: var(--ink); }
+.hearth .cpv .cpr { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+.hearth .cpv .cpt { display: flex; gap: 6px; margin-top: 8px; }
+@keyframes blink { 50% { opacity: 0; } }
 
-/* party member card (left rail) */
-.hearth .party-mem { display: grid; grid-template-columns: 34px 1fr; gap: 11px; align-items: center; padding: 10px 11px; border-radius: 9px; border: 1px solid var(--rule-soft); background: var(--bg-card); }
-.hearth .party-mem.you { border-color: color-mix(in oklab, var(--accent) 32%, var(--rule)); }
-.hearth .party-mem.active { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--combat) 50%, transparent); }
-.hearth .party-mem .av { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(150deg, #3a3326, #211c14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 17px; color: var(--accent); position: relative; }
-.hearth .party-mem .av .turn { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--combat); box-shadow: 0 0 7px var(--combat); }
-.hearth .party-mem .pm-name { font-family: var(--serif); font-size: 15.5px; color: var(--ink); line-height: 1.1; }
-.hearth .party-mem .pm-sub { font-family: var(--sans); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-4); margin-top: 1px; }
-.hearth .party-mem .pm-hp { display: flex; align-items: center; gap: 7px; margin-top: 5px; }
-.hearth .party-mem .pm-hp .hpbar { flex: 1; }
-.hearth .party-mem .pm-hp .hpnum { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); }
-.hearth .party-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-.hearth .ptag { font-family: var(--sans); font-size: 9.5px; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-3); background: var(--bg-2); }
-.hearth .ptag.bad { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 36%, var(--rule)); }
-.hearth .ptag.magic { color: var(--magic); border-color: color-mix(in oklab, var(--magic) 36%, var(--rule)); }
-
-/* stage context strip */
-.hearth .stage-strip { display: flex; align-items: center; gap: 10px; padding: 11px 22px; border-bottom: 1px solid var(--rule); background: color-mix(in oklab, var(--bg-2) 70%, transparent); flex-wrap: wrap; }
-.hearth .strip-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 3px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--bg-2); }
-.hearth .strip-pill.scene { font-family: var(--serif); font-style: italic; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink-2); border: 0; background: transparent; padding-left: 0; }
-.hearth .strip-pill.combat { color: var(--combat); border-color: color-mix(in oklab, var(--combat) 45%, var(--rule)); background: color-mix(in oklab, var(--combat) 10%, var(--bg-2)); }
-.hearth .strip-pill.combat .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--combat); box-shadow: 0 0 7px var(--combat); }
-.hearth .strip-end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-
-/* transcript reading column */
-.hearth .transcript { flex: 1; overflow-y: auto; padding: 28px 22px 8px; }
-.hearth .read-col { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
-.hearth .scene-break { display: flex; align-items: center; gap: 16px; color: var(--ink-4); margin: 4px 0; }
-.hearth .scene-break::before, .hearth .scene-break::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--rule), transparent); }
-.hearth .scene-break .lbl { font-family: var(--serif); font-size: 12.5px; color: var(--ink-3); letter-spacing: .04em; white-space: nowrap; }
-
-.hearth .dm-block .who, .hearth .you-block .who { font-family: var(--sans); font-weight: 600; font-size: 9.5px; text-transform: uppercase; letter-spacing: .2em; color: var(--ink-4); margin-bottom: 7px; }
-.hearth .dm-block .prose { font-family: var(--serif); font-size: 18.5px; line-height: 1.72; color: var(--ink); text-wrap: pretty; }
-.hearth .dm-block .prose .dialog { color: var(--accent); }
-.hearth .dm-block .prose em, .hearth .dm-block .prose i { font-style: italic; color: var(--ink); }
-
-.hearth .you-block { margin-left: 40px; padding: 13px 16px; border-left: 2px solid var(--rule); background: color-mix(in oklab, var(--bg-2) 55%, transparent); border-radius: 0 8px 8px 0; }
-.hearth .you-block .who { color: var(--accent-2); }
-.hearth .you-block .body { font-family: var(--serif); font-size: 16px; line-height: 1.55; color: var(--ink-2); }
-
-.hearth .sys-event { display: flex; align-items: center; justify-content: center; gap: 9px; font-family: var(--mono); font-size: 11px; letter-spacing: .02em; color: var(--ink-3); text-align: center; }
-.hearth .sys-event .ic { width: 13px; height: 13px; color: var(--ink-4); }
-.hearth .sys-event.combat { color: var(--combat); }
-.hearth .sys-event.good { color: var(--good); }
-.hearth .sys-event.loot { color: var(--accent); }
-
-/* composer */
-.hearth .composer-wrap { border-top: 1px solid var(--rule); padding: 14px 22px 18px; background: var(--bg-2); }
-.hearth .composer { max-width: 700px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: end; }
-.hearth .composer textarea { width: 100%; resize: none; min-height: 52px; max-height: 220px; font-family: var(--serif); font-size: 17px; line-height: 1.5; color: var(--ink); background: var(--bg-card); border: 1px solid var(--rule); border-radius: 9px; padding: 12px 14px; outline: none; transition: border-color .14s; }
-.hearth .composer textarea:focus { border-color: color-mix(in oklab, var(--accent) 55%, var(--rule)); }
-.hearth .composer textarea::placeholder { color: var(--ink-4); font-style: normal; }
-.hearth .quick-row { max-width: 700px; margin: 9px auto 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.hearth .quick-row .ql { font-family: var(--sans); font-size: 9.5px; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-4); }
-.hearth .qchip { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--bg-card); cursor: pointer; transition: color .14s, border-color .14s; }
-.hearth .qchip:hover { color: var(--ink); border-color: #4a4032; }
-
-/* right-rail HP + resources + initiative */
-.hearth .hp-block { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius-lg); padding: 14px 15px; }
-.hearth .hp-block .hp-row { display: flex; align-items: baseline; gap: 6px; }
-.hearth .hp-block .cur { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; color: var(--ink); line-height: 1; }
-.hearth .hp-block .slash, .hearth .hp-block .max { font-family: var(--sans); font-weight: 500; font-size: 18px; color: var(--ink-3); }
-.hearth .hp-block .lbl { margin-left: auto; font-family: var(--serif); font-size: 14px; color: var(--ink-3); }
-.hearth .hp-block .hptrack { margin-top: 10px; }
-.hearth .res-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-.hearth .res-row .rl { font-family: var(--sans); font-weight: 600; font-size: 9.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-4); min-width: 56px; }
-
-.hearth .init-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 9px; align-items: center; padding: 7px 9px; border-radius: 7px; }
-.hearth .init-row.active { background: color-mix(in oklab, var(--combat) 13%, transparent); }
-.hearth .init-row.acted { opacity: .45; }
-.hearth .init-row .ord { font-family: var(--mono); font-size: 12px; color: var(--ink-3); text-align: center; }
-.hearth .init-row.active .ord { color: var(--combat); }
-.hearth .init-row .inm { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); }
-.hearth .init-row.active .inm { color: var(--ink); }
-.hearth .init-row.enemy .inm { color: var(--bad); }
-.hearth .init-row .ihp { font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
-.hearth .dice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-
-/* empty-state / pre-session card on the stage */
-.hearth .stage-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
-.hearth .stage-empty .inner { max-width: 460px; text-align: center; }
-.hearth .stage-empty h2 { font-family: var(--serif); font-weight: 500; font-size: 30px; color: var(--ink); margin: 0 0 10px; }
-.hearth .stage-empty p { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-3); margin: 0 0 22px; }
