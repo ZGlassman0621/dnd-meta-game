@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Character Sheet</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+
+    .dash-hdr {
+      position: sticky; top: 0; z-index: 30;
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 28px; height: 58px;
+      background: color-mix(in oklab, var(--bg-2) 88%, transparent);
+      backdrop-filter: blur(8px); border-bottom: 1px solid var(--rule);
+    }
+    .dash-hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+    .back { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: none; transition: color .14s; }
+    .back:hover { color: var(--ink); }
+    .back .ic { width: 15px; height: 15px; }
+
+    .sheet-canvas { max-width: 1180px; margin: 0 auto; padding: 34px 28px 90px; }
+
+    /* identity hero */
+    .id-hero {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 26px; align-items: center;
+      background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px;
+      box-shadow: var(--shadow-sm); padding: 24px 28px; margin-bottom: 20px;
+    }
+    .crest { width: 84px; height: 84px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; background: linear-gradient(150deg, #3a3326, #211c14); border: 1px solid var(--rule); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+    .crest .mono { font-family: var(--serif); font-weight: 600; font-size: 40px; color: var(--accent); }
+    .crest .lvl { position: absolute; bottom: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-2); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--sans); font-weight: 700; font-size: 12px; color: var(--accent); box-shadow: var(--shadow-sm); }
+    .id-main h1 { font-family: var(--serif); font-weight: 500; font-size: 40px; line-height: 1.05; letter-spacing: -.014em; margin: 0 0 6px; }
+    .id-main .sub { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); margin-bottom: 13px; }
+    .id-main .sub .sep { color: var(--ink-4); font-style: normal; padding: 0 6px; }
+    .id-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ipill { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--bg-2); }
+    .ipill .l { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+    .ipill .v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); letter-spacing: -.01em; }
+    .ipill .v .mx { color: var(--ink-3); font-weight: 500; }
+    .ipill.hp { border-color: color-mix(in oklab, var(--good) 40%, var(--rule)); background: color-mix(in oklab, var(--good) 9%, var(--bg-2)); }
+    .ipill.hp .v, .ipill.hp .l { color: var(--good); }
+    .ipill.accent { border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); }
+    .ipill.accent .v { color: var(--accent); }
+    .id-actions { display: flex; flex-direction: column; gap: 8px; min-width: 138px; }
+
+    /* tabs */
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; flex-wrap: wrap; }
+    .tab { padding: 11px 16px; font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px; transition: color .12s; background: none; border-top: 0; border-left: 0; border-right: 0; }
+    .tab:hover { color: var(--ink); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab .ic { width: 15px; height: 15px; }
+    .tab .ct { font-family: var(--mono); font-size: 10px; padding: 1px 6px; background: var(--bg-card); border-radius: 999px; color: var(--ink-3); }
+
+    /* section heading w/ fleuron */
+    .sec-head { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+    .sec-head h2 { font-family: var(--serif); font-weight: 500; font-size: 21px; letter-spacing: -.008em; margin: 0; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
+    .sec-head .sub { font-family: var(--sans); font-size: 12px; color: var(--ink-3); }
+    .sec-head .fl { flex: 1; height: 1px; background: var(--rule); }
+    .sec-head .glyph { color: var(--ink-4); font-size: 13px; }
+
+    .panel-pad { padding: 18px 20px; }
+    .grid3 { display: grid; grid-template-columns: 1.1fr .9fr .9fr; gap: 18px; margin-bottom: 18px; }
+    .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
+
+    /* abilities */
+    .abilities { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+    .ability { position: relative; padding: 13px 8px 11px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 9px; text-align: center; }
+    .ability .nm { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+    .ability .sc { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 28px; line-height: 1; color: var(--ink); letter-spacing: -.02em; }
+    .ability .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--accent); margin-top: 4px; }
+    .ability.prime { background: color-mix(in oklab, var(--accent) 9%, var(--bg-2)); border-color: color-mix(in oklab, var(--accent) 38%, var(--rule)); }
+    .ability.prime::after { content: ""; position: absolute; top: 7px; right: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+
+    /* rows (saves) */
+    .rows { display: flex; flex-direction: column; gap: 1px; }
+    .rrow { display: grid; grid-template-columns: 12px 1fr auto; gap: 11px; align-items: center; padding: 7px 9px; border-radius: 6px; }
+    .rrow.prof { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+    .rrow .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--rule); justify-self: center; }
+    .rrow.prof .dot { background: var(--accent); border-color: var(--accent); }
+    .rrow .nm { font-family: var(--sans); font-size: 12px; color: var(--ink-2); }
+    .rrow.prof .nm { color: var(--ink); font-weight: 500; }
+    .rrow .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); }
+    .rrow.prof .md { color: var(--accent); }
+
+    /* senses */
+    .senses { display: flex; flex-direction: column; gap: 2px; }
+    .srow { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px; }
+    .srow .l { display: inline-flex; align-items: center; gap: 9px; font-family: var(--serif); font-size: 15px; color: var(--ink-2); white-space: nowrap; }
+    .srow .l .ic { width: 15px; height: 15px; color: var(--ink-3); }
+    .srow .v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 17px; color: var(--ink); }
+    .senses-note { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-3); padding-top: 11px; margin-top: 6px; border-top: 1px solid var(--rule-soft); line-height: 1.5; }
+
+    /* skills */
+    .skills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px 18px; }
+    .skill { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 9px; align-items: center; padding: 5px 8px; border-radius: 6px; }
+    .skill.prof { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+    .skill .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--rule); justify-self: center; }
+    .skill.prof .dot { background: var(--accent); border-color: var(--accent); }
+    .skill .nm { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+    .skill.prof .nm { color: var(--ink); font-weight: 500; }
+    .skill .ab { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+    .skill .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink); min-width: 22px; text-align: right; }
+
+    /* attacks */
+    .atk { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--rule-soft); background: var(--bg-2); }
+    .atk + .atk { margin-top: 7px; }
+    .atk .an { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+    .atk .an .meta { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); text-transform: uppercase; margin-left: 8px; }
+    .atk .hit { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 15px; color: var(--accent); }
+    .atk .dmg { font-family: var(--mono); font-size: 12px; color: var(--ink-2); letter-spacing: .02em; }
+
+    /* kv tags */
+    .kv { margin-bottom: 15px; }
+    .kv:last-child { margin-bottom: 0; }
+    .kv .kl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+    .kv .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .kv .prose { font-family: var(--serif); font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+
+    /* feature list (overview right) */
+    .feat { padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+    .feat:first-child { border-top: 0; padding-top: 2px; }
+    .feat .ft { font-family: var(--serif); font-size: 16px; color: var(--ink); margin-bottom: 3px; display: flex; align-items: baseline; gap: 9px; }
+    .feat .ft .src { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); }
+    .feat .fd { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; }
+
+    /* ── PROGRESSION ─────────────────────────────────── */
+    .theme-hero {
+      position: relative; overflow: hidden; background: var(--bg-card); border: 1px solid var(--rule);
+      border-radius: 12px; padding: 22px 24px; margin-bottom: 18px;
+    }
+    .theme-hero::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+    .theme-hero .th-eyebrow { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+    .theme-hero h2 { font-family: var(--serif); font-weight: 500; font-size: 30px; margin: 0 0 6px; letter-spacing: -.01em; }
+    .theme-hero .th-desc { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); max-width: 720px; line-height: 1.5; }
+
+    .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .tier { position: relative; padding: 16px 15px 15px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); }
+    .tier.done { border-color: color-mix(in oklab, var(--accent) 38%, var(--rule)); background: color-mix(in oklab, var(--accent) 7%, var(--bg-2)); }
+    .tier.next { border-style: dashed; }
+    .tier.locked { opacity: .55; }
+    .tier .tnum { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
+    .tier.done .tnum { color: var(--accent); }
+    .tier .tnum .lv { margin-left: auto; }
+    .tier .tname { font-family: var(--serif); font-size: 19px; color: var(--ink); margin-bottom: 7px; }
+    .tier .tab-ab { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; }
+    .tier .tab-ab em { font-style: italic; color: var(--ink-2); }
+    .tier .check { position: absolute; top: 14px; right: 14px; width: 16px; height: 16px; color: var(--accent); }
+
+    /* ancestry feats */
+    .anc { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .anc-feat { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 13px 15px; border-radius: 9px; border: 1px solid var(--rule-soft); background: var(--bg-2); }
+    .anc-feat .ai { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent-2); flex-shrink: 0; }
+    .anc-feat .ai .ic { width: 15px; height: 15px; }
+    .anc-feat .at { font-family: var(--serif); font-size: 16px; color: var(--ink); margin-bottom: 2px; }
+    .anc-feat .ad { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.4; }
+
+    /* moral path / conviction track */
+    .path-card { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 12px; padding: 22px 24px; }
+    .path-track { margin: 18px 0 14px; }
+    .path-poles { display: flex; justify-content: space-between; margin-bottom: 9px; }
+    .path-poles .pole { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); }
+    .path-bar { position: relative; height: 6px; border-radius: 999px; background: linear-gradient(90deg, color-mix(in oklab, var(--accent-2) 50%, var(--bg-2)), var(--bg-2) 50%, color-mix(in oklab, var(--accent) 50%, var(--bg-2))); border: 1px solid var(--rule-soft); }
+    .path-bar .marker { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-card); transform: translate(-50%, -50%); box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 55%, transparent); }
+    .path-ticks { display: flex; justify-content: space-between; margin-top: 8px; }
+    .path-ticks .tk { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+    .path-ticks .tk.cur { color: var(--accent); }
+    .path-note { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); line-height: 1.55; padding-top: 14px; border-top: 1px solid var(--rule-soft); }
+
+    /* placeholder for other tabs */
+    .placeholder { padding: 60px 30px; text-align: center; border: 1px dashed var(--rule); border-radius: 12px; background: var(--bg-2); }
+    .placeholder .ph-glyph { font-size: 26px; color: var(--ink-4); margin-bottom: 12px; }
+    .placeholder h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 8px; color: var(--ink-2); }
+    .placeholder p { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-3); margin: 0 auto; max-width: 460px; line-height: 1.5; }
+
+    /* ── built-out tabs ── */
+    .grp-note { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); margin: -6px 0 14px; }
+    .ab-detail { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 8px; }
+    .ab-card { padding: 14px 15px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); }
+    .ab-card .top { display: flex; align-items: baseline; justify-content: space-between; }
+    .ab-card .nm { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+    .ab-card .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--accent); }
+    .ab-card .sc { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; line-height: 1; color: var(--ink); margin-top: 2px; }
+    .ab-card .gov { font-family: var(--serif); font-size: 13px; color: var(--ink-3); margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--rule-soft); line-height: 1.4; }
+    .skillrow { display: grid; grid-template-columns: 12px 1fr auto 76px auto; gap: 11px; align-items: center; padding: 8px 9px; border-radius: 6px; }
+    .skillrow + .skillrow { border-top: 1px solid var(--rule-soft); }
+    .skillrow.prof { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+    .skillrow .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--rule); justify-self: center; }
+    .skillrow.prof .dot { background: var(--accent); border-color: var(--accent); }
+    .skillrow .snm { font-family: var(--sans); font-size: 13px; color: var(--ink-2); }
+    .skillrow.prof .snm { color: var(--ink); font-weight: 500; }
+    .skillrow .sab { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+    .skillrow .ssrc { font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); opacity: .85; text-align: right; }
+    .skillrow .smd { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink); min-width: 24px; text-align: right; }
+    .ac-break { display: flex; align-items: center; gap: 18px; }
+    .ac-break .acbig { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 44px; color: var(--ink); line-height: 1; }
+    .ac-break .acform { font-family: var(--serif); font-size: 15.5px; color: var(--ink-2); line-height: 1.5; }
+    .ac-break .acform em { font-style: italic; color: var(--ink); }
+    .attune { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+    .attune-slot { padding: 20px 12px; border: 1px dashed var(--rule); border-radius: 10px; text-align: center; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); }
+    .invrow { display: grid; grid-template-columns: auto 1fr auto auto; gap: 13px; align-items: center; padding: 9px 4px; }
+    .invrow + .invrow { border-top: 1px solid var(--rule-soft); }
+    .invrow .ii { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--ink-3); flex-shrink: 0; }
+    .invrow .ii svg { width: 15px; height: 15px; }
+    .invrow .inm { font-family: var(--serif); font-size: 15.5px; color: var(--ink); }
+    .invrow .isub { font-family: var(--mono); font-size: 9px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-4); margin-top: 1px; }
+    .invrow .iq { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink-2); }
+    .invrow .iw { font-family: var(--mono); font-size: 11px; color: var(--ink-4); min-width: 48px; text-align: right; }
+    .carry { display: flex; align-items: center; gap: 14px; }
+    .carry .cbar { flex: 1; height: 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--rule-soft); overflow: hidden; }
+    .carry .cbar .fill { height: 100%; background: var(--good); }
+    .carry .cnum { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .04em; }
+    .goldcard { display: flex; align-items: center; gap: 12px; padding: 15px 17px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--rule)); margin-bottom: 14px; }
+    .goldcard .gl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+    .goldcard .gv { margin-left: auto; font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 22px; color: var(--accent); }
+    .vows { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .vow { padding: 16px 18px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); border-left: 3px solid var(--accent); }
+    .vow.bond { border-left-color: var(--accent-2); }
+    .vow.flaw { border-left-color: var(--bad); }
+    .vow.trait { border-left-color: var(--good); }
+    .vow .vl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+    .vow .vt { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink); line-height: 1.5; }
+    .bg-prose { font-family: var(--serif); font-size: 17px; line-height: 1.7; color: var(--ink); max-width: 760px; text-wrap: pretty; }
+    .bg-prose p { margin: 0 0 20px; }
+    .bg-prose p:last-child { margin-bottom: 0; }
+
+    .tabpane { display: none; }
+    .tabpane.show { display: block; }
+    .footnote { text-align: center; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--rule-soft); }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></symbol>
+    <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-sword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+    <symbol id="i-pack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z"/></symbol>
+    <symbol id="i-chevrons-up2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></symbol>
+    <symbol id="i-moon2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-vial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v15a3 3 0 0 0 6 0V2"/><path d="M8 2h8"/><path d="M9 11h6"/></symbol>
+    <symbol id="i-bow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19A12 12 0 0 0 19 5"/><path d="M5 19l3-3M5 19H9M5 19V15"/><path d="M3 21l5-5"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z"/></symbol>
+    <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></symbol>
+    <symbol id="i-rope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M12 9v6"/></symbol>
+    <symbol id="i-token" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Dashboard.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Dravyr's home</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="sheet-canvas">
+
+    <!-- identity -->
+    <section class="id-hero">
+      <div class="crest"><span class="mono">D</span><span class="lvl">3</span></div>
+      <div class="id-main">
+        <h1>Dravyr Wyrmrest</h1>
+        <div class="sub">Wood elf <span class="sep">·</span> Monk of the Open Hand <span class="sep">·</span> Hermit <span class="sep">·</span> <span style="color:var(--ink-3)">The Hollow Man</span></div>
+        <div class="id-pills">
+          <span class="ipill hp"><span class="l">HP</span><span class="v">24<span class="mx"> / 27</span></span></span>
+          <span class="ipill"><span class="l">AC</span><span class="v">15</span></span>
+          <span class="ipill"><span class="l">Init</span><span class="v">+3</span></span>
+          <span class="ipill"><span class="l">Speed</span><span class="v">40 ft</span></span>
+          <span class="ipill accent"><span class="l">Prof</span><span class="v">+2</span></span>
+          <span class="ipill"><span class="l">Ki</span><span class="v">3 / 3</span></span>
+          <span class="ipill"><span class="l">Hit Dice</span><span class="v">3d8</span></span>
+        </div>
+      </div>
+      <div class="id-actions">
+        <button class="btn primary"><svg class="ic"><use href="#i-chevrons-up"/></svg>Level up</button>
+        <button class="btn ghost"><svg class="ic"><use href="#i-coffee"/></svg>Short rest</button>
+        <button class="btn ghost"><svg class="ic"><use href="#i-moon"/></svg>Long rest</button>
+      </div>
+    </section>
+
+    <!-- tabs -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview"><svg class="ic"><use href="#i-brain"/></svg>Overview</button>
+      <button class="tab" data-tab="abilities"><svg class="ic"><use href="#i-target"/></svg>Abilities &amp; Skills</button>
+      <button class="tab" data-tab="features"><svg class="ic"><use href="#i-sparkles"/></svg>Features &amp; Traits</button>
+      <button class="tab" data-tab="progression"><svg class="ic"><use href="#i-chevrons-up2"/></svg>Progression</button>
+      <button class="tab" data-tab="equipment"><svg class="ic"><use href="#i-sword"/></svg>Equipment</button>
+      <button class="tab" data-tab="inventory"><svg class="ic"><use href="#i-pack"/></svg>Inventory<span class="ct">9</span></button>
+      <button class="tab" data-tab="background"><svg class="ic"><use href="#i-scroll"/></svg>Background</button>
+    </nav>
+
+    <!-- ════ OVERVIEW ════ -->
+    <div class="tabpane show" data-pane="overview">
+      <div class="grid3">
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Abilities</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Dex · Wis prime</span></div>
+          <div class="abilities">
+            <div class="ability"><div class="nm">Str</div><div class="sc">12</div><div class="md">+1</div></div>
+            <div class="ability prime"><div class="nm">Dex</div><div class="sc">17</div><div class="md">+3</div></div>
+            <div class="ability"><div class="nm">Con</div><div class="sc">14</div><div class="md">+2</div></div>
+            <div class="ability"><div class="nm">Int</div><div class="sc">10</div><div class="md">+0</div></div>
+            <div class="ability prime"><div class="nm">Wis</div><div class="sc">16</div><div class="md">+3</div></div>
+            <div class="ability"><div class="nm">Cha</div><div class="sc">8</div><div class="md">−1</div></div>
+          </div>
+        </section>
+
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Saves</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Str · Dex</span></div>
+          <div class="rows">
+            <div class="rrow prof"><span class="dot"></span><span class="nm">Strength</span><span class="md">+3</span></div>
+            <div class="rrow prof"><span class="dot"></span><span class="nm">Dexterity</span><span class="md">+5</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Constitution</span><span class="md">+2</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Intelligence</span><span class="md">+0</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Wisdom</span><span class="md">+3</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Charisma</span><span class="md">−1</span></div>
+          </div>
+        </section>
+
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Senses</h2><span class="glyph">❧</span><span class="fl"></span></div>
+          <div class="senses">
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-eye"/></svg>Perception</span><span class="v">13</span></div>
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-brain"/></svg>Insight</span><span class="v">15</span></div>
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-search"/></svg>Investigation</span><span class="v">10</span></div>
+            <div class="senses-note">Darkvision 60 ft · Fey Ancestry (advantage vs charm, no magic sleep) · Trance (4 hr rest).</div>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid2">
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Skills</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block"></span>proficient</span></span></div>
+          <div class="skills">
+            <div class="skill prof"><span class="dot"></span><span class="nm">Acrobatics</span><span class="ab">Dex</span><span class="md">+5</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Animal H.</span><span class="ab">Wis</span><span class="md">+3</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Arcana</span><span class="ab">Int</span><span class="md">+0</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Athletics</span><span class="ab">Str</span><span class="md">+1</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Deception</span><span class="ab">Cha</span><span class="md">−1</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">History</span><span class="ab">Int</span><span class="md">+0</span></div>
+            <div class="skill prof"><span class="dot"></span><span class="nm">Insight</span><span class="ab">Wis</span><span class="md">+5</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Intimidation</span><span class="ab">Cha</span><span class="md">−1</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Investig.</span><span class="ab">Int</span><span class="md">+0</span></div>
+            <div class="skill prof"><span class="dot"></span><span class="nm">Medicine</span><span class="ab">Wis</span><span class="md">+5</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Nature</span><span class="ab">Int</span><span class="md">+0</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Perception</span><span class="ab">Wis</span><span class="md">+3</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Performance</span><span class="ab">Cha</span><span class="md">−1</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Persuasion</span><span class="ab">Cha</span><span class="md">−1</span></div>
+            <div class="skill prof"><span class="dot"></span><span class="nm">Religion</span><span class="ab">Int</span><span class="md">+2</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Sleight</span><span class="ab">Dex</span><span class="md">+3</span></div>
+            <div class="skill prof"><span class="dot"></span><span class="nm">Stealth</span><span class="ab">Dex</span><span class="md">+5</span></div>
+            <div class="skill"><span class="dot"></span><span class="nm">Survival</span><span class="ab">Wis</span><span class="md">+3</span></div>
+          </div>
+        </section>
+
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Proficiencies</h2><span class="glyph">❧</span><span class="fl"></span></div>
+          <div class="kv"><div class="kl">Languages</div><div class="tags"><span class="chip">Common</span><span class="chip">Elvish</span><span class="chip">Sylvan</span></div></div>
+          <div class="kv"><div class="kl">Weapons &amp; armor</div><div class="prose">Simple weapons · shortswords · <em style="color:var(--ink-4)">no armor (Unarmored Defense)</em></div></div>
+          <div class="kv"><div class="kl">Tools</div><div class="tags"><span class="chip"><svg class="ic"><use href="#i-leaf"/></svg>Herbalism kit</span><span class="chip">Calligrapher's</span></div></div>
+        </section>
+      </div>
+
+      <div class="grid2">
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Attacks</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Martial Arts die 1d6</span></div>
+          <div class="atk"><span class="an">Quarterstaff <span class="meta">melee · reach 5</span></span><span class="hit">+5</span><span class="dmg">1d6+3 bludg.</span></div>
+          <div class="atk"><span class="an">Unarmed strike <span class="meta">melee · flurry</span></span><span class="hit">+5</span><span class="dmg">1d6+3 bludg.</span></div>
+          <div class="atk"><span class="an">Shortbow <span class="meta">ranged · 80/320</span></span><span class="hit">+5</span><span class="dmg">1d6+3 pierc.</span></div>
+        </section>
+
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Key features</h2><span class="glyph">❧</span><span class="fl"></span></div>
+          <div class="feat"><div class="ft">Unarmored Defense <span class="src">Monk 1</span></div><div class="fd">AC = 10 + Dex + Wis while unarmored and unshielded.</div></div>
+          <div class="feat"><div class="ft">Open Hand Technique <span class="src">Monk 3</span></div><div class="fd">Flurry of Blows can knock prone, push 15 ft, or deny reactions.</div></div>
+          <div class="feat"><div class="ft">Deflect Missiles <span class="src">Monk 3</span></div><div class="fd">Reaction to reduce ranged damage by 1d10 + Dex + level.</div></div>
+        </section>
+      </div>
+      <div class="footnote">Overview shown · the other tabs reuse these same blocks — Progression is built out next.</div>
+    </div>
+
+    <!-- ════ PROGRESSION ════ -->
+    <div class="tabpane" data-pane="progression">
+      <section class="theme-hero">
+        <div class="th-eyebrow">Theme · replaces background</div>
+        <h2>The Hermit</h2>
+        <div class="th-desc">A life withdrawn from the world, in study or penance, that left you with a discovery the world has not yet caught up to. The Hermit advances in four tiers — each unlocking as you grow.</div>
+      </section>
+
+      <div class="sec-head"><h2>Theme tiers</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Tier I reached · Tier II at level 5</span></div>
+      <div class="tiers" style="margin-bottom:26px">
+        <div class="tier done">
+          <svg class="check"><use href="#i-check"/></svg>
+          <div class="tnum">Tier I<span class="lv">Lv 1</span></div>
+          <div class="tname">Seclusion</div>
+          <div class="tab-ab"><em>The Discovery:</em> a unique secret learned in isolation. Herbalism kit &amp; one extra language.</div>
+        </div>
+        <div class="tier next">
+          <div class="tnum">Tier II<span class="lv">Lv 5</span></div>
+          <div class="tname">The Long Path</div>
+          <div class="tab-ab">Advantage on saves against exhaustion; you need only half the food and water of others.</div>
+        </div>
+        <div class="tier locked">
+          <div class="tnum">Tier III<span class="lv">Lv 11</span></div>
+          <div class="tname">Inner Quiet</div>
+          <div class="tab-ab">Once per long rest, enter a trance to recall any fact you have ever read or been told.</div>
+        </div>
+        <div class="tier locked">
+          <div class="tnum">Tier IV<span class="lv">Lv 17</span></div>
+          <div class="tname">The Unmade Name</div>
+          <div class="tab-ab">Those who seek you must succeed on a divination contest, or the world forgets where you are.</div>
+        </div>
+      </div>
+
+      <div class="sec-head"><h2>Ancestry feats</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Wood elf</span></div>
+      <div class="anc" style="margin-bottom:26px">
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-wind"/></svg></span><div><div class="at">Fleet of Foot</div><div class="ad">Base walking speed rises to 35 ft, before monk movement.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-leaf"/></svg></span><div><div class="at">Mask of the Wild</div><div class="ad">Hide even when only lightly obscured by foliage, rain, mist, or snow.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-eye"/></svg></span><div><div class="at">Keen Senses</div><div class="ad">Proficiency in Perception, carried into the monk's watchfulness.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-moon2"/></svg></span><div><div class="at">Trance</div><div class="ad">Meditate 4 hours for the benefit of a long rest; you do not sleep.</div></div></div>
+      </div>
+
+      <div class="sec-head"><h2>The Hermit's Path</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">a quiet conviction, shaped by play</span></div>
+      <section class="path-card">
+        <div class="path-track">
+          <div class="path-poles"><span class="pole">Solitude</span><span class="pole">Communion</span></div>
+          <div class="path-bar"><span class="marker" style="left:38%"></span></div>
+          <div class="path-ticks">
+            <span class="tk">Hidden</span>
+            <span class="tk cur">Wary</span>
+            <span class="tk">Open</span>
+            <span class="tk">Devoted</span>
+          </div>
+        </div>
+        <div class="path-note">Sharing bread with the net-mender pulled you a step toward <em>Communion.</em> The path is not a score to win — it bends the discoveries the Dungeon Master offers, and the company that will trust you.</div>
+      </section>
+    </div>
+
+    <!-- ════ ABILITIES & SKILLS ════ -->
+    <div class="tabpane" data-pane="abilities">
+      <div class="sec-head"><h2>Ability scores</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">point-buy · Wood Elf +2 Dex, +1 Wis</span></div>
+      <div class="ab-detail">
+        <div class="ab-card"><div class="top"><span class="nm">Strength</span><span class="md">+1</span></div><div class="sc">12</div><div class="gov">Athletics · carrying · grapples &amp; shoves</div></div>
+        <div class="ab-card"><div class="top"><span class="nm">Dexterity</span><span class="md">+3</span></div><div class="sc">17</div><div class="gov">Unarmored AC · attacks · Acrobatics, Stealth · initiative</div></div>
+        <div class="ab-card"><div class="top"><span class="nm">Constitution</span><span class="md">+2</span></div><div class="sc">14</div><div class="gov">Hit points · concentration saves</div></div>
+        <div class="ab-card"><div class="top"><span class="nm">Intelligence</span><span class="md">+0</span></div><div class="sc">10</div><div class="gov">Arcana · History · Investigation</div></div>
+        <div class="ab-card"><div class="top"><span class="nm">Wisdom</span><span class="md">+3</span></div><div class="sc">16</div><div class="gov">Unarmored AC · Ki save DC 13 · Insight, Perception</div></div>
+        <div class="ab-card"><div class="top"><span class="nm">Charisma</span><span class="md">−1</span></div><div class="sc">8</div><div class="gov">Persuasion · Deception · Intimidation</div></div>
+      </div>
+
+      <div class="grid2" style="margin-top:18px">
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Saving throws</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Str · Dex</span></div>
+          <div class="rows">
+            <div class="rrow prof"><span class="dot"></span><span class="nm">Strength</span><span class="md">+3</span></div>
+            <div class="rrow prof"><span class="dot"></span><span class="nm">Dexterity</span><span class="md">+5</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Constitution</span><span class="md">+2</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Intelligence</span><span class="md">+0</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Wisdom</span><span class="md">+3</span></div>
+            <div class="rrow"><span class="dot"></span><span class="nm">Charisma</span><span class="md">−1</span></div>
+          </div>
+        </section>
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>At a glance</h2><span class="glyph">❧</span><span class="fl"></span></div>
+          <div class="senses">
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-eye"/></svg>Passive Perception</span><span class="v">13</span></div>
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-brain"/></svg>Passive Insight</span><span class="v">15</span></div>
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-target"/></svg>Proficiency bonus</span><span class="v">+2</span></div>
+            <div class="srow"><span class="l"><svg class="ic"><use href="#i-wind"/></svg>Initiative</span><span class="v">+3</span></div>
+            <div class="senses-note">Darkvision 60 ft · Fey Ancestry (advantage vs charm, immune to magic sleep) · Trance.</div>
+          </div>
+        </section>
+      </div>
+
+      <section class="card panel-pad" style="margin-top:18px">
+        <div class="sec-head"><h2>Skills</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">proficiency · ability · source · modifier</span></div>
+        <div class="skillrow prof"><span class="dot"></span><span class="snm">Acrobatics</span><span class="sab">Dex</span><span class="ssrc">Monk</span><span class="smd">+5</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Animal Handling</span><span class="sab">Wis</span><span class="ssrc"></span><span class="smd">+3</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Arcana</span><span class="sab">Int</span><span class="ssrc"></span><span class="smd">+0</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Athletics</span><span class="sab">Str</span><span class="ssrc"></span><span class="smd">+1</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Deception</span><span class="sab">Cha</span><span class="ssrc"></span><span class="smd">−1</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">History</span><span class="sab">Int</span><span class="ssrc"></span><span class="smd">+0</span></div>
+        <div class="skillrow prof"><span class="dot"></span><span class="snm">Insight</span><span class="sab">Wis</span><span class="ssrc">Hermit</span><span class="smd">+5</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Intimidation</span><span class="sab">Cha</span><span class="ssrc"></span><span class="smd">−1</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Investigation</span><span class="sab">Int</span><span class="ssrc"></span><span class="smd">+0</span></div>
+        <div class="skillrow prof"><span class="dot"></span><span class="snm">Medicine</span><span class="sab">Wis</span><span class="ssrc">Hermit</span><span class="smd">+5</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Nature</span><span class="sab">Int</span><span class="ssrc"></span><span class="smd">+0</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Perception</span><span class="sab">Wis</span><span class="ssrc"></span><span class="smd">+3</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Performance</span><span class="sab">Cha</span><span class="ssrc"></span><span class="smd">−1</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Persuasion</span><span class="sab">Cha</span><span class="ssrc"></span><span class="smd">−1</span></div>
+        <div class="skillrow prof"><span class="dot"></span><span class="snm">Religion</span><span class="sab">Int</span><span class="ssrc">Hermit</span><span class="smd">+2</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Sleight of Hand</span><span class="sab">Dex</span><span class="ssrc"></span><span class="smd">+3</span></div>
+        <div class="skillrow prof"><span class="dot"></span><span class="snm">Stealth</span><span class="sab">Dex</span><span class="ssrc">Monk</span><span class="smd">+5</span></div>
+        <div class="skillrow"><span class="dot"></span><span class="snm">Survival</span><span class="sab">Wis</span><span class="ssrc"></span><span class="smd">+3</span></div>
+      </section>
+    </div>
+
+    <!-- ════ FEATURES & TRAITS ════ -->
+    <div class="tabpane" data-pane="features">
+      <div class="sec-head"><h2>Monk</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Way of the Open Hand · level 3</span></div>
+      <div class="anc" style="margin-bottom:26px">
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-shield"/></svg></span><div><div class="at">Unarmored Defense</div><div class="ad">With no armor or shield, your AC is 10 + Dex + Wis.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-bolt"/></svg></span><div><div class="at">Martial Arts</div><div class="ad">Use Dex for unarmed strikes &amp; monk weapons; they deal 1d6, with a bonus-action strike.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-flame"/></svg></span><div><div class="at">Ki · 3 points</div><div class="ad">Fuels Flurry of Blows, Patient Defense, and Step of the Wind. Refills on a rest.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-wind"/></svg></span><div><div class="at">Unarmored Movement</div><div class="ad">+10 ft speed while you wear no armor and no shield.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-shield"/></svg></span><div><div class="at">Deflect Missiles</div><div class="ad">Reaction to reduce a ranged attack's damage by 1d10 + Dex + level.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-target"/></svg></span><div><div class="at">Open Hand Technique</div><div class="ad">On a Flurry hit: knock prone, push 15 ft, or deny reactions until your next turn.</div></div></div>
+      </div>
+
+      <div class="sec-head"><h2>Wood Elf</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">ancestry</span></div>
+      <div class="anc" style="margin-bottom:26px">
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-eye"/></svg></span><div><div class="at">Darkvision</div><div class="ad">See 60 ft in dim light as if bright, and in darkness as if dim.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-search"/></svg></span><div><div class="at">Keen Senses</div><div class="ad">A lifetime of watchfulness — sharp eyes and sharper ears.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-sparkles"/></svg></span><div><div class="at">Fey Ancestry</div><div class="ad">Advantage on saves against being charmed; magic can't put you to sleep.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-moon2"/></svg></span><div><div class="at">Trance</div><div class="ad">Meditate 4 hours for the benefit of a long rest; you do not sleep.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-wind"/></svg></span><div><div class="at">Fleet of Foot</div><div class="ad">Your base walking speed is 35 ft, before a monk's swiftness.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-leaf"/></svg></span><div><div class="at">Mask of the Wild</div><div class="ad">Hide when only lightly obscured by foliage, rain, mist, or snow.</div></div></div>
+      </div>
+
+      <div class="sec-head"><h2>Hermit</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">theme · tier I</span></div>
+      <div class="anc">
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-scroll"/></svg></span><div><div class="at">Seclusion</div><div class="ad">Herbalism kit, an extra language, and proficiency in Insight, Medicine &amp; Religion.</div></div></div>
+        <div class="anc-feat"><span class="ai"><svg class="ic"><use href="#i-flame"/></svg></span><div><div class="at">The Discovery</div><div class="ad">A unique secret uncovered in isolation. <em style="font-style:italic;color:var(--ink-2)">See Progression for how it grows.</em></div></div></div>
+      </div>
+    </div>
+
+    <!-- ════ EQUIPMENT ════ -->
+    <div class="tabpane" data-pane="equipment">
+      <section class="card panel-pad">
+        <div class="sec-head"><h2>Wielded</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">Martial Arts die 1d6</span></div>
+        <div class="atk"><span class="an">Quarterstaff <span class="meta">melee · reach 5</span></span><span class="hit">+5</span><span class="dmg">1d6+3 bludg.</span></div>
+        <div class="atk"><span class="an">Unarmed strike <span class="meta">melee · flurry</span></span><span class="hit">+5</span><span class="dmg">1d6+3 bludg.</span></div>
+        <div class="atk"><span class="an">Shortbow <span class="meta">ranged · 80/320</span></span><span class="hit">+5</span><span class="dmg">1d6+3 pierc.</span></div>
+      </section>
+
+      <div class="grid2" style="margin-top:18px">
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Armor Class</h2><span class="glyph">❧</span><span class="fl"></span></div>
+          <div class="ac-break">
+            <span class="acbig">15</span>
+            <span class="acform"><em>Unarmored Defense</em> — 10 + your Dexterity and Wisdom, with no armor and no shield. Monk's swiftness keeps you harder to pin than the number suggests.</span>
+          </div>
+        </section>
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Worn</h2><span class="glyph">❧</span><span class="fl"></span></div>
+          <div class="kv"><div class="kl">Body</div><div class="prose">Explorer's clothes — travel-worn, deliberately plain.</div></div>
+          <div class="kv"><div class="kl">Bonuses</div><div class="prose">No armor by choice; the Open Hand asks for none.</div></div>
+        </section>
+      </div>
+
+      <div class="sec-head" style="margin-top:18px"><h2>Attunement</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">0 of 3 used</span></div>
+      <div class="attune">
+        <div class="attune-slot">An open slot</div>
+        <div class="attune-slot">An open slot</div>
+        <div class="attune-slot">An open slot</div>
+      </div>
+    </div>
+
+    <!-- ════ INVENTORY ════ -->
+    <div class="tabpane" data-pane="inventory">
+      <div class="grid2">
+        <section class="card panel-pad">
+          <div class="sec-head"><h2>Carried</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">12 items</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-bolt"/></svg></span><div><div class="inm">Quarterstaff</div><div class="isub">simple · versatile</div></div><span class="iq"></span><span class="iw">4 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-bow"/></svg></span><div><div class="inm">Shortbow</div><div class="isub">ranged · 80/320</div></div><span class="iq"></span><span class="iw">2 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-bow"/></svg></span><div><div class="inm">Arrows</div><div class="isub">ammunition</div></div><span class="iq">×20</span><span class="iw">1 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-vial"/></svg></span><div><div class="inm">Potion of Healing</div><div class="isub">2d4+2 · action</div></div><span class="iq">×2</span><span class="iw">1 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-vial"/></svg></span><div><div class="inm">Healer's kit</div><div class="isub">stabilize · 3 uses left</div></div><span class="iq">3</span><span class="iw">3 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-pack"/></svg></span><div><div class="inm">Explorer's pack</div><div class="isub">bedroll · mess kit · tinderbox</div></div><span class="iq"></span><span class="iw">10 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-rope"/></svg></span><div><div class="inm">Hempen rope</div><div class="isub">50 ft</div></div><span class="iq"></span><span class="iw">10 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-flame"/></svg></span><div><div class="inm">Torch</div><div class="isub">light · 1 hr each</div></div><span class="iq">×5</span><span class="iw">5 lb</span></div>
+          <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-vial"/></svg></span><div><div class="inm">Rations</div><div class="isub">a day's travel food</div></div><span class="iq">×5</span><span class="iw">10 lb</span></div>
+        </section>
+
+        <div>
+          <div class="goldcard"><svg class="ic" style="width:17px;height:17px;color:var(--accent)"><use href="#i-coin"/></svg><span class="gl">Gold</span><span class="gv">112 gp</span></div>
+          <section class="card panel-pad">
+            <div class="sec-head"><h2>Burden</h2><span class="glyph">❧</span><span class="fl"></span></div>
+            <div class="carry"><span class="cnum">38 lb</span><div class="cbar"><div class="fill" style="width:21%"></div></div><span class="cnum">/ 180</span></div>
+            <div class="grp-note" style="margin:12px 0 0">Comfortably within your limit — a hermit travels light.</div>
+          </section>
+          <section class="card panel-pad" style="margin-top:14px">
+            <div class="sec-head"><h2>Notable</h2><span class="glyph">❧</span><span class="fl"></span></div>
+            <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-token"/></svg></span><div><div class="inm">A child's carved token</div><div class="isub">quest · found near the Welds</div></div><span class="iq"></span><span class="iw"></span></div>
+            <div class="invrow"><span class="ii"><svg class="ic"><use href="#i-feather"/></svg></span><div><div class="inm">Hermit's herbalism notes</div><div class="isub">advantage on foraging</div></div><span class="iq"></span><span class="iw"></span></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ BACKGROUND ════ -->
+    <div class="tabpane" data-pane="background">
+      <div class="sec-head"><h2>The life that shaped him</h2><span class="glyph">❧</span><span class="fl"></span></div>
+      <div class="bg-prose">
+        <p>Raised in the <strong style="font-weight:500">Wraithwood hermitage</strong> by Master Yrre — a wandering monk who took in the children no village would — Dravyr learned the Open Hand, long silences, and how to listen to a forest until it told him its secrets.</p>
+        <p>The winter Yrre walked into the trees and did not return, Dravyr found what his master had hidden: a discovery the orders would kill to bury. He has carried it down out of the high passes ever since — travelling light, owing debts, and stopping, against his better judgement, wherever the hungry remind him of the boy he used to be.</p>
+      </div>
+
+      <div class="sec-head" style="margin-top:26px"><h2>What drives him</h2><span class="glyph">❧</span><span class="fl"></span></div>
+      <div class="vows">
+        <div class="vow"><div class="vl">Ideal</div><div class="vt">"No one should go hungry in a strange town. Mercy is the one thing the road can't take from me."</div></div>
+        <div class="vow bond"><div class="vl">Bond</div><div class="vt">"Yrre's secret is mine to keep — and his vanishing mine to answer for."</div></div>
+        <div class="vow flaw"><div class="vl">Flaw</div><div class="vt">"I trust the desperate too quickly, and any authority not at all."</div></div>
+        <div class="vow trait"><div class="vl">Personality</div><div class="vt">"Quiet to the edge of rudeness — until there's a wrong standing in front of me."</div></div>
+      </div>
+      <div class="grp-note" style="margin-top:18px">Edit the full story, and the people and places woven from it, in the <a href="Backstory.html" style="color:var(--accent-2);text-decoration:none">Backstory parser →</a></div>
+    </div>
+
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const panes = document.querySelectorAll('.tabpane');
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      const id = t.dataset.tab;
+      panes.forEach(p => p.classList.toggle('show', p.dataset.pane === id));
+      window.scrollTo({ top: 0 });
+    }));
+  </script>
+</body>
+</html>

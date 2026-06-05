@@ -4,3519 +4,743 @@ import racesData from '../data/races.json'
 import backgroundsData from '../data/backgrounds.json'
 import deitiesData from '../data/deities.json'
 import equipmentData from '../data/equipment.json'
-import spellsData from '../data/spells/index.js'
-import NicknameManagerPanel from './NicknameManagerPanel.jsx'
+import '../styles/hearth.css'
+
+/* ───────────────────────── Hearth Character Sheet ─────────────────────────
+   Implements the Claude Design "Hearth · Character Sheet" handoff
+   (Claude UX Design/Hearth/design_handoff_character_sheet/). Dark-editorial,
+   full-screen read view with its own header. Wires the design's actions
+   (back · level up · short/long rest) to live character data; deep editing
+   stays in the legacy wizard (onEditInWizard). Styles in styles/hearth.css.
+   ──────────────────────────────────────────────────────────────────────── */
+
+const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+const ABILITY_NAME = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' }
+const ABILITY_SHORT = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wis', cha: 'Cha' }
+const ABILITY_GOVERNS = {
+  str: 'Athletics · carrying · grapples & shoves',
+  dex: 'AC · attacks · Acrobatics, Stealth · initiative',
+  con: 'Hit points · concentration saves',
+  int: 'Arcana · History · Investigation · Nature · Religion',
+  wis: 'Insight, Perception, Medicine, Survival · many save DCs',
+  cha: 'Persuasion · Deception · Intimidation · Performance'
+}
+const SKILL_LIST = [
+  { key: 'acrobatics', name: 'Acrobatics', ab: 'dex' },
+  { key: 'animal_handling', name: 'Animal Handling', ab: 'wis' },
+  { key: 'arcana', name: 'Arcana', ab: 'int' },
+  { key: 'athletics', name: 'Athletics', ab: 'str' },
+  { key: 'deception', name: 'Deception', ab: 'cha' },
+  { key: 'history', name: 'History', ab: 'int' },
+  { key: 'insight', name: 'Insight', ab: 'wis' },
+  { key: 'intimidation', name: 'Intimidation', ab: 'cha' },
+  { key: 'investigation', name: 'Investigation', ab: 'int' },
+  { key: 'medicine', name: 'Medicine', ab: 'wis' },
+  { key: 'nature', name: 'Nature', ab: 'int' },
+  { key: 'perception', name: 'Perception', ab: 'wis' },
+  { key: 'performance', name: 'Performance', ab: 'cha' },
+  { key: 'persuasion', name: 'Persuasion', ab: 'cha' },
+  { key: 'religion', name: 'Religion', ab: 'int' },
+  { key: 'sleight_of_hand', name: 'Sleight of Hand', ab: 'dex' },
+  { key: 'stealth', name: 'Stealth', ab: 'dex' },
+  { key: 'survival', name: 'Survival', ab: 'wis' }
+]
+const THEME_TIER_LEVELS = { 1: 1, 2: 5, 3: 11, 4: 17 }
+const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' }
+
+const Ic = ({ n, style }) => <svg className="ic" style={style}><use href={`#i-${n}`} /></svg>
+const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '')
+const modStr = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`)
+const parseJson = (field, dflt) => {
+  if (field == null) return dflt
+  if (typeof field !== 'string') return field
+  try { return JSON.parse(field) } catch { return dflt }
+}
+
+function HearthSprite() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></symbol>
+      <symbol id="i-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11" /><polyline points="17 18 12 13 7 18" /></symbol>
+      <symbol id="i-chevrons-up2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11" /><polyline points="17 18 12 13 7 18" /></symbol>
+      <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" /><line x1="6" y1="2" x2="6" y2="4" /><line x1="10" y1="2" x2="10" y2="4" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></symbol>
+      <symbol id="i-moon2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></symbol>
+      <symbol id="i-sword" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5" /><path d="M13 19l6-6" /><path d="M16 16l4 4" /><path d="M19 21l2-2" /></symbol>
+      <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /></symbol>
+      <symbol id="i-pack" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8" /></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></symbol>
+      <symbol id="i-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2" /></symbol>
+      <symbol id="i-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z" /><path d="M2 21c0-3 1.85-5.36 5.08-6" /></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></symbol>
+      <symbol id="i-vial" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2v15a3 3 0 0 0 6 0V2" /><path d="M8 2h8" /><path d="M9 11h6" /></symbol>
+      <symbol id="i-bow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19A12 12 0 0 0 19 5" /><path d="M5 19l3-3M5 19H9M5 19V15" /><path d="M3 21l5-5" /></symbol>
+      <symbol id="i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4" /></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z" /></symbol>
+      <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" /><line x1="16" y1="8" x2="2" y2="22" /><line x1="17.5" y1="15" x2="9" y2="15" /></symbol>
+      <symbol id="i-token" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /></symbol>
+    </defs></svg>
+  )
+}
+
+const SecHead = ({ title, sub }) => (
+  <div className="sec-head"><h2>{title}</h2><span className="glyph">❧</span><span className="fl"></span>{sub ? <span className="sub">{sub}</span> : null}</div>
+)
 
 function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdated, onEditInWizard, onLevelUp }) {
   const [character, setCharacter] = useState(initialCharacter)
   const [activeTab, setActiveTab] = useState('overview')
-  const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState({})
-  const [isSaving, setIsSaving] = useState(false)
   const [canLevelUp, setCanLevelUp] = useState(false)
-
-  // Inventory management state
-  const [showAddItem, setShowAddItem] = useState(false)
-  const [showNicknames, setShowNicknames] = useState(false)
-  const [newItemName, setNewItemName] = useState('')
-  const [newItemQuantity, setNewItemQuantity] = useState(1)
-  const [selectedEquipmentCategory, setSelectedEquipmentCategory] = useState('')
-
-  // Spell management state
-  const [showCantripSelection, setShowCantripSelection] = useState(false)
-  const [selectedCantrip, setSelectedCantrip] = useState(null)
   const [spellSlots, setSpellSlots] = useState(null)
-  const [showPrepareSpells, setShowPrepareSpells] = useState(false)
-  const [pendingPrepared, setPendingPrepared] = useState([])
-  const [spellLevelFilter, setSpellLevelFilter] = useState('all')
-  const [spellSearch, setSpellSearch] = useState('')
-  const [showLearnSpell, setShowLearnSpell] = useState(false)
-  const [pendingKnown, setPendingKnown] = useState([])
-
-  // Progression tab state
   const [progression, setProgression] = useState(null)
-  const [progressionLoading, setProgressionLoading] = useState(false)
-  const [progressionError, setProgressionError] = useState(null)
+  const [resting, setResting] = useState(false)
+  const [restMsg, setRestMsg] = useState(null)
 
-  // Fetch fresh character data on mount to ensure we have all fields
   useEffect(() => {
-    const fetchCharacter = async () => {
-      try {
-        const response = await fetch(`/api/character/${initialCharacter.id}`)
-        const data = await response.json()
-        setCharacter(data)
-      } catch (error) {
-        console.error('Error fetching character:', error)
-      }
-    }
-    fetchCharacter()
+    fetch(`/api/character/${initialCharacter.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setCharacter(d) })
+      .catch(() => {})
   }, [initialCharacter.id])
 
-  // Fetch progression data (theme, ancestry feats) — loads once per character
   useEffect(() => {
     let cancelled = false
-    setProgressionLoading(true)
-    setProgressionError(null)
     fetch(`/api/character/${character.id}/progression`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(data => { if (!cancelled) { setProgression(data); setProgressionLoading(false) } })
-      .catch(err => {
-        if (!cancelled) { setProgressionError(err.message); setProgressionLoading(false) }
-      })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d) setProgression(d) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [character.id])
 
-  // Check if character can level up
   useEffect(() => {
-    const checkLevelUp = async () => {
-      try {
-        const response = await fetch(`/api/character/can-level-up/${character.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          setCanLevelUp(data.canLevelUp)
-        }
-      } catch (error) {
-        console.error('Error checking level-up status:', error)
-      }
-    }
-    checkLevelUp()
+    fetch(`/api/character/can-level-up/${character.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setCanLevelUp(!!d.canLevelUp) })
+      .catch(() => {})
   }, [character.id, character.experience])
 
-  // Fetch spell slots for spellcasting classes
   useEffect(() => {
-    const fetchSpellSlots = async () => {
-      try {
-        const response = await fetch(`/api/character/spell-slots/${character.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          setSpellSlots(data)
-        }
-      } catch (error) {
-        console.error('Error fetching spell slots:', error)
-      }
-    }
-    fetchSpellSlots()
+    fetch(`/api/character/spell-slots/${character.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSpellSlots(d) })
+      .catch(() => {})
   }, [character.id, character.level, character.class])
-
-  const useSpellSlot = async (level) => {
-    try {
-      const response = await fetch(`/api/character/spell-slots/${character.id}/use`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level })
-      })
-      if (response.ok) {
-        setSpellSlots(prev => ({
-          ...prev,
-          used: { ...prev.used, [level]: (prev.used[level] || 0) + 1 }
-        }))
-      }
-    } catch (error) {
-      console.error('Error using spell slot:', error)
-    }
-  }
-
-  const restoreSpellSlot = async (level) => {
-    try {
-      const response = await fetch(`/api/character/spell-slots/${character.id}/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level })
-      })
-      if (response.ok) {
-        setSpellSlots(prev => ({
-          ...prev,
-          used: { ...prev.used, [level]: Math.max(0, (prev.used[level] || 0) - 1) }
-        }))
-      }
-    } catch (error) {
-      console.error('Error restoring spell slot:', error)
-    }
-  }
 
   const handleGrantXP = async (amount) => {
     try {
-      const response = await fetch(`/api/character/grant-xp/${character.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount })
+      const r = await fetch(`/api/character/grant-xp/${character.id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount })
       })
-      if (response.ok) {
-        const data = await response.json()
-        setCharacter(data.character)
-        setCanLevelUp(data.canLevelUp)
-        onCharacterUpdated?.(data.character)
-      }
-    } catch (error) {
-      console.error('Error granting XP:', error)
-    }
+      if (r.ok) { const d = await r.json(); setCharacter(d.character); setCanLevelUp(!!d.canLevelUp); onCharacterUpdated?.(d.character) }
+    } catch (e) { console.error('grant xp', e) }
   }
 
-  // Start editing with current character data
-  const startEditing = () => {
-    setEditData({
-      nickname: character.nickname || '',
-      alignment: character.alignment || '',
-      faith: character.faith || '',
-      lifestyle: character.lifestyle || '',
-      current_location: character.current_location || '',
-      current_quest: character.current_quest || '',
-      personality_traits: character.personality_traits || '',
-      ideals: character.ideals || '',
-      bonds: character.bonds || '',
-      flaws: character.flaws || '',
-      backstory: character.backstory || '',
-      organizations: character.organizations || '',
-      allies: character.allies || '',
-      enemies: character.enemies || '',
-      other_notes: character.other_notes || '',
-      hair_color: character.hair_color || '',
-      eye_color: character.eye_color || '',
-      skin_color: character.skin_color || '',
-      height: character.height || '',
-      weight: character.weight || '',
-      age: character.age || ''
-    })
-    setIsEditing(true)
-  }
-
-  // Save edits to the server
-  const saveEdits = async () => {
-    setIsSaving(true)
+  const handleRest = async (restType) => {
+    if (resting) return
+    setResting(true); setRestMsg(null)
     try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editData)
+      const r = await fetch(`/api/character/rest/${character.id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ restType })
       })
-      const updatedCharacter = await response.json()
-      setCharacter(updatedCharacter) // Update local state
-      onCharacterUpdated && onCharacterUpdated(updatedCharacter)
-      setIsEditing(false)
-    } catch (error) {
-      console.error('Error saving character:', error)
-      alert('Failed to save changes')
-    } finally {
-      setIsSaving(false)
-    }
+      if (r.ok) {
+        const d = await r.json()
+        if (d.character) { setCharacter(d.character); onCharacterUpdated?.(d.character) }
+        else { setCharacter(prev => ({ ...prev, current_hp: d.newHp ?? prev.current_hp })) }
+        setRestMsg(d.message || `${restType === 'long' ? 'Long' : 'Short'} rest taken.`)
+        try { const s = await fetch(`/api/character/spell-slots/${character.id}`); if (s.ok) setSpellSlots(await s.json()) } catch { /* noop */ }
+      }
+    } catch (e) { console.error('rest', e) } finally { setResting(false); setTimeout(() => setRestMsg(null), 4000) }
   }
 
-  const handleEditChange = (field, value) => {
-    setEditData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const capitalize = (str) => {
-    if (!str) return str
-    // Replace underscores with spaces, then capitalize each word
-    return str.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-  }
-
-  const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2)
-    return mod >= 0 ? `+${mod}` : mod.toString()
-  }
-
-  // Parse JSON fields safely
-  const parseJson = (field, defaultValue = []) => {
-    if (!field) return defaultValue
-    if (typeof field !== 'string') return field
-    try { return JSON.parse(field) } catch { return defaultValue }
-  }
-
+  // ── derived data ──────────────────────────────────────────────
   const abilities = parseJson(character.ability_scores, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
-  const skills = parseJson(character.skills, [])
+  const charSkills = parseJson(character.skills, [])
   const inventory = parseJson(character.inventory, [])
-  const advantages = parseJson(character.advantages, [])
+  const equipment = parseJson(character.equipment, {})
   const knownCantrips = parseJson(character.known_cantrips, [])
   const knownSpells = parseJson(character.known_spells, [])
   const preparedSpells = parseJson(character.prepared_spells, [])
-  const equipment = parseJson(character.equipment, {})
+  const charLanguages = parseJson(character.languages, [])
 
-  // Equipment helper functions
-  const getAllWeapons = () => {
-    const weapons = []
-    Object.values(equipmentData.simpleWeapons).forEach(category => {
-      category.forEach(w => weapons.push(w))
-    })
-    Object.values(equipmentData.martialWeapons).forEach(category => {
-      category.forEach(w => weapons.push(w))
-    })
-    return weapons
-  }
+  const level = character.level || 1
+  const profBonus = Math.ceil(level / 4) + 1
+  const abilityMod = (key) => Math.floor(((abilities[key] ?? 10) - 10) / 2)
+  const isSkillProf = (name) => charSkills.some(s => norm(s) === norm(name))
 
-  const getAllArmor = () => {
-    const armor = []
-    equipmentData.armor.light.forEach(a => armor.push(a))
-    equipmentData.armor.medium.forEach(a => armor.push(a))
-    equipmentData.armor.heavy.forEach(a => armor.push(a))
-    return armor
-  }
-
-  const ALL_WEAPONS = getAllWeapons()
-  const ALL_ARMOR = getAllArmor()
-  const ALL_SHIELDS = equipmentData.armor.shields
-  const QUALITY_RANKS = equipmentData.qualityRanks
-
-  // Calculate AC based on equipped armor
-  const calculateEquipmentAC = () => {
-    const dexMod = Math.floor((abilities.dex - 10) / 2)
-    let ac = 10 + dexMod // Base AC (no armor)
-
-    const equippedArmor = equipment.armor
-    if (equippedArmor) {
-      const armorData = ALL_ARMOR.find(a => a.name === equippedArmor.name)
-      if (armorData) {
-        if (armorData.armorType === 'heavy') {
-          ac = armorData.baseAC
-        } else if (armorData.armorType === 'medium') {
-          const cappedDex = Math.min(dexMod, armorData.maxDexBonus || 2)
-          ac = armorData.baseAC + cappedDex
-        } else {
-          // Light armor
-          ac = armorData.baseAC + dexMod
-        }
-      } else if (equippedArmor.isCustom && equippedArmor.baseAC) {
-        // Custom armor
-        if (equippedArmor.armorType === 'heavy') {
-          ac = equippedArmor.baseAC
-        } else if (equippedArmor.armorType === 'medium') {
-          const cappedDex = Math.min(dexMod, equippedArmor.maxDexBonus || 2)
-          ac = equippedArmor.baseAC + cappedDex
-        } else {
-          ac = equippedArmor.baseAC + dexMod
-        }
-      }
-      // Add quality bonus
-      if (equippedArmor.quality && QUALITY_RANKS[equippedArmor.quality]?.armorBonus) {
-        ac += QUALITY_RANKS[equippedArmor.quality].armorBonus
-      }
-    }
-
-    // Add shield bonus
-    const equippedShield = equipment.offHand
-    if (equippedShield) {
-      const shieldData = ALL_SHIELDS.find(s => s.name === equippedShield.name)
-      if (shieldData?.acBonus) {
-        ac += shieldData.acBonus
-      } else if (equippedShield.acBonus) {
-        ac += equippedShield.acBonus
-      }
-    }
-
-    return ac
-  }
-
-  // Get weapon attack bonus
-  const getWeaponAttackBonus = (weapon) => {
-    if (!weapon) return null
-    const weaponData = ALL_WEAPONS.find(w => w.name === weapon.name)
-
-    const strMod = Math.floor((abilities.str - 10) / 2)
-    const dexMod = Math.floor((abilities.dex - 10) / 2)
-
-    // Determine which ability to use
-    let abilityMod
-    if (weaponData) {
-      const isFinesse = weaponData.properties?.includes('finesse')
-      const isRanged = weaponData.rangeType === 'ranged'
-      if (isFinesse) {
-        abilityMod = Math.max(strMod, dexMod)
-      } else if (isRanged) {
-        abilityMod = dexMod
-      } else {
-        abilityMod = strMod
-      }
-    } else if (weapon.isCustom) {
-      // Custom weapon - check properties
-      const isFinesse = weapon.properties?.includes('finesse')
-      const isRanged = weapon.rangeType === 'ranged'
-      if (isFinesse) {
-        abilityMod = Math.max(strMod, dexMod)
-      } else if (isRanged) {
-        abilityMod = dexMod
-      } else {
-        abilityMod = strMod
-      }
-    } else {
-      abilityMod = strMod
-    }
-
-    // Proficiency bonus
-    const profBonus = Math.ceil(character.level / 4) + 1
-
-    // Quality bonus
-    let qualityBonus = 0
-    if (weapon.quality && QUALITY_RANKS[weapon.quality]?.weaponBonus) {
-      qualityBonus = QUALITY_RANKS[weapon.quality].weaponBonus
-    }
-
-    return abilityMod + profBonus + qualityBonus
-  }
-
-  // Get weapon damage string with quality
-  const getWeaponDamage = (weapon) => {
-    if (!weapon) return null
-    const weaponData = ALL_WEAPONS.find(w => w.name === weapon.name)
-    const baseDamage = weaponData?.damage || weapon.damage || '1d4'
-    const damageType = weaponData?.damageType || weapon.damageType || 'bludgeoning'
-
-    const strMod = Math.floor((abilities.str - 10) / 2)
-    const dexMod = Math.floor((abilities.dex - 10) / 2)
-
-    // Determine which ability to use for damage
-    let abilityMod
-    if (weaponData) {
-      const isFinesse = weaponData.properties?.includes('finesse')
-      const isRanged = weaponData.rangeType === 'ranged'
-      if (isFinesse) {
-        abilityMod = Math.max(strMod, dexMod)
-      } else if (isRanged) {
-        abilityMod = dexMod
-      } else {
-        abilityMod = strMod
-      }
-    } else {
-      const isFinesse = weapon.properties?.includes('finesse')
-      const isRanged = weapon.rangeType === 'ranged'
-      if (isFinesse) {
-        abilityMod = Math.max(strMod, dexMod)
-      } else if (isRanged) {
-        abilityMod = dexMod
-      } else {
-        abilityMod = strMod
-      }
-    }
-
-    const modString = abilityMod >= 0 ? `+${abilityMod}` : abilityMod.toString()
-    return `${baseDamage}${modString} ${damageType}`
-  }
-
-  // Equipment management functions
-  const equipItem = async (slot, item) => {
-    const newEquipment = { ...equipment, [slot]: item }
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ equipment: JSON.stringify(newEquipment) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-    } catch (err) {
-      console.error('Error equipping item:', err)
-    }
-  }
-
-  const unequipItem = async (slot) => {
-    const newEquipment = { ...equipment }
-    delete newEquipment[slot]
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ equipment: JSON.stringify(newEquipment) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-    } catch (err) {
-      console.error('Error unequipping item:', err)
-    }
-  }
-
-  // Custom equipment state
-  const [showCustomItemForm, setShowCustomItemForm] = useState(false)
-  const [customItemType, setCustomItemType] = useState('weapon')
-  const [customItem, setCustomItem] = useState({
-    name: '',
-    quality: 'common',
-    damage: '1d6',
-    damageType: 'slashing',
-    properties: [],
-    rangeType: 'melee',
-    baseAC: 11,
-    armorType: 'light',
-    maxDexBonus: null,
-    acBonus: 2,
-    magicBonus: 0,
-    notes: ''
-  })
-
-  // Inventory management functions
-  const addItemToInventory = async (itemName, quantity = 1) => {
-    if (!itemName.trim()) return
-
-    const existingItem = inventory.find(i => (typeof i === 'string' ? i : i.name).toLowerCase() === itemName.toLowerCase())
-    let newInventory
-
-    if (existingItem) {
-      // Increase quantity of existing item
-      newInventory = inventory.map(i => {
-        const name = typeof i === 'string' ? i : i.name
-        if (name.toLowerCase() === itemName.toLowerCase()) {
-          return { name, quantity: (i.quantity || 1) + quantity, equipped: i.equipped || false }
-        }
-        return i
-      })
-    } else {
-      // Add new item
-      newInventory = [...inventory, { name: itemName.trim(), quantity, equipped: false }]
-    }
-
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventory: JSON.stringify(newInventory) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-      setNewItemName('')
-      setNewItemQuantity(1)
-      setShowAddItem(false)
-    } catch (err) {
-      console.error('Error adding item:', err)
-    }
-  }
-
-  const removeItemFromInventory = async (itemName) => {
-    const newInventory = inventory.filter(i => (typeof i === 'string' ? i : i.name) !== itemName)
-
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventory: JSON.stringify(newInventory) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-    } catch (err) {
-      console.error('Error removing item:', err)
-    }
-  }
-
-  const updateItemQuantity = async (itemName, delta) => {
-    const newInventory = inventory.map(i => {
-      const name = typeof i === 'string' ? i : i.name
-      if (name === itemName) {
-        const currentQty = i.quantity || 1
-        const newQty = currentQty + delta
-        if (newQty <= 0) {
-          return null // Mark for removal
-        }
-        return { ...i, name, quantity: newQty, equipped: i.equipped || false }
-      }
-      return i
-    }).filter(i => i !== null)
-
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventory: JSON.stringify(newInventory) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-    } catch (err) {
-      console.error('Error updating item quantity:', err)
-    }
-  }
-
-  // Cantrip management functions
-  const getAvailableCantrips = () => {
-    const classKey = character.class?.toLowerCase()
-    return spellsData.cantrips[classKey] || []
-  }
-
-  const getMaxCantrips = () => {
-    if (!classData?.spellcasting?.cantripsKnown) return 0
-    const cantripsKnown = classData.spellcasting.cantripsKnown
-    if (typeof cantripsKnown === 'object') {
-      // Find the highest level entry that's <= character level
-      let max = 0
-      for (const [level, count] of Object.entries(cantripsKnown)) {
-        if (parseInt(level) <= character.level) {
-          max = count
-        }
-      }
-      return max
-    }
-    return cantripsKnown
-  }
-
-  const addCantrip = async (cantripName) => {
-    const maxCantrips = getMaxCantrips()
-    if (knownCantrips.length >= maxCantrips) {
-      alert(`You can only know ${maxCantrips} cantrips at level ${character.level}.`)
-      return
-    }
-    if (knownCantrips.includes(cantripName)) {
-      alert('You already know this cantrip.')
-      return
-    }
-
-    const newCantrips = [...knownCantrips, cantripName]
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ known_cantrips: JSON.stringify(newCantrips) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-      setShowCantripSelection(false)
-    } catch (err) {
-      console.error('Error adding cantrip:', err)
-    }
-  }
-
-  const removeCantrip = async (cantripName) => {
-    const newCantrips = knownCantrips.filter(c => c !== cantripName)
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ known_cantrips: JSON.stringify(newCantrips) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated && onCharacterUpdated(updated)
-    } catch (err) {
-      console.error('Error removing cantrip:', err)
-    }
-  }
-
-  // Get max prepared spells for prepared casters
-  const getMaxPrepared = () => {
-    if (!classData?.spellcasting) return 0
-    const className = character.class?.toLowerCase()
-    const abilityKey = classData.spellcasting.ability?.toLowerCase().slice(0, 3)
-    const mod = Math.floor((abilities[abilityKey] - 10) / 2)
-    if (className === 'cleric' || className === 'druid') return Math.max(1, mod + character.level)
-    if (className === 'wizard') return Math.max(1, mod + character.level)
-    if (className === 'paladin') return Math.max(1, mod + Math.floor(character.level / 2))
-    if (className === 'artificer') return Math.max(1, mod + Math.floor(character.level / 2))
-    return 0
-  }
-
-  // Check if class is a prepared caster
-  const isPreparedCaster = () => {
-    const spellsKnown = classData?.spellcasting?.spellsKnown
-    return spellsKnown === 'All prepared' || spellsKnown === 'Spellbook'
-  }
-
-  // Check if class is a known caster
-  const isKnownCaster = () => {
-    return classData?.spellcasting?.spellsKnown === 'Limited known'
-  }
-
-  // Get available class spells for a given level
-  const getClassSpellsForLevel = (spellLevel) => {
-    const className = character.class?.toLowerCase()
-    const levelSpells = spellsData.spells[spellLevel] || []
-    return levelSpells.filter(s => s.classes?.includes(className))
-  }
-
-  // Get all spells the character can prepare from (by level)
-  const getPreparableSpells = () => {
-    if (!spellSlots) return []
-    const className = character.class?.toLowerCase()
-    const isWizard = className === 'wizard'
-    const results = []
-    for (const [level, max] of Object.entries(spellSlots.max || {})) {
-      if (max <= 0) continue
-      const levelKey = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
-      const spellsForLevel = spellsData.spells[levelKey] || []
-      const filtered = isWizard
-        ? spellsForLevel.filter(s => s.classes?.includes('wizard') && knownSpells.includes(s.name))
-        : spellsForLevel.filter(s => s.classes?.includes(className))
-      filtered.forEach(s => results.push({ ...s, spellLevel: levelKey }))
-    }
-    return results
-  }
-
-  // Get subclass always-prepared spell names
-  const getAlwaysPreparedSpellNames = () => {
-    const names = []
-    subclassSpells.forEach(([, spells]) => {
-      spells.forEach(name => names.push(name))
-    })
-    return names
-  }
-
-  // Save prepared spells to server
-  const savePreparedSpells = async (spellNames) => {
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prepared_spells: JSON.stringify(spellNames) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated?.(updated)
-    } catch (err) {
-      console.error('Error saving prepared spells:', err)
-    }
-  }
-
-  // Save known spells to server
-  const saveKnownSpells = async (spellNames) => {
-    try {
-      const response = await fetch(`/api/character/${character.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ known_spells: JSON.stringify(spellNames) })
-      })
-      const updated = await response.json()
-      setCharacter(updated)
-      onCharacterUpdated?.(updated)
-    } catch (err) {
-      console.error('Error saving known spells:', err)
-    }
-  }
-
-  // Look up spell details from spells data
-  const getSpellDetails = (spellName) => {
-    // Search through all spell levels
-    for (const level of Object.keys(spellsData.spells || {})) {
-      const spells = spellsData.spells[level]
-      const spell = spells?.find(s => s.name.toLowerCase() === spellName.toLowerCase())
-      if (spell) {
-        return { ...spell, level }
-      }
-    }
-    return null
-  }
-
-  // Build a list of common equipment items for quick-add
-  const getEquipmentOptions = () => {
-    const options = {
-      'Weapons - Simple Melee': equipmentData.simpleWeapons?.melee?.map(w => w.name) || [],
-      'Weapons - Simple Ranged': equipmentData.simpleWeapons?.ranged?.map(w => w.name) || [],
-      'Weapons - Martial Melee': equipmentData.martialWeapons?.melee?.map(w => w.name) || [],
-      'Weapons - Martial Ranged': equipmentData.martialWeapons?.ranged?.map(w => w.name) || [],
-      'Armor - Light': equipmentData.armor?.light?.map(a => a.name) || [],
-      'Armor - Medium': equipmentData.armor?.medium?.map(a => a.name) || [],
-      'Armor - Heavy': equipmentData.armor?.heavy?.map(a => a.name) || [],
-      'Armor - Shields': equipmentData.armor?.shields?.map(a => a.name) || [],
-      'Adventuring Gear': [
-        'Backpack', 'Bedroll', 'Blanket', 'Candle', 'Crowbar', 'Grappling Hook',
-        'Hammer', 'Lantern (hooded)', 'Lantern (bullseye)', 'Mirror', 'Oil (flask)',
-        'Pitons (10)', 'Pole (10 ft)', 'Rations (1 day)', 'Rope (50 ft, hempen)',
-        'Rope (50 ft, silk)', 'Sack', 'Spellbook', 'Spyglass', 'Tent', 'Tinderbox',
-        'Torch', 'Waterskin', 'Holy Symbol', 'Component Pouch', 'Arcane Focus'
-      ]
-    }
-    return options
-  }
-
-  // Get class and race data
   const classKey = character.class?.toLowerCase()
   const classData = classesData[classKey]
-  const raceKey = character.race?.toLowerCase().replace('-', '_').replace(' ', '_')
+  const raceKey = character.race?.toLowerCase().replace(/[-\s]/g, '_')
   const raceData = racesData[raceKey]
   const backgroundData = backgroundsData[character.background?.toLowerCase()]
-
-  // Get subclass data
   const subclassData = classData?.subclasses?.find(sc => sc.name === character.subclass)
 
-  // Get class features by level
-  const getClassFeatures = () => {
-    if (!classData?.featuresByLevel) return []
-    const features = []
-    Object.entries(classData.featuresByLevel)
-      .filter(([level]) => parseInt(level) <= character.level)
-      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-      .forEach(([level, feats]) => {
-        feats.forEach(feat => {
-          features.push({ ...feat, level: parseInt(level) })
-        })
-      })
-    return features
+  const saveProf = (key) => {
+    const list = (classData?.savingThrows || []).map(s => String(s).toLowerCase())
+    return list.includes(key) || list.includes(ABILITY_NAME[key].toLowerCase())
   }
+  const skillMod = (sk) => abilityMod(sk.ab) + (isSkillProf(sk.name) ? profBonus : 0)
+  const passive = (skillName, ab) => 10 + abilityMod(ab) + (isSkillProf(skillName) ? profBonus : 0)
+  const primeAbilities = (classData?.primaryAbility || []).map(a => String(a).toLowerCase())
 
-  // Get subclass features by level
-  const getSubclassFeatures = () => {
-    if (!subclassData?.featuresByLevel) return []
-    const features = []
-    Object.entries(subclassData.featuresByLevel)
-      .filter(([level]) => parseInt(level) <= character.level)
-      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-      .forEach(([level, feats]) => {
-        feats.forEach(feat => {
-          features.push({ ...feat, level: parseInt(level) })
-        })
-      })
-    return features
-  }
+  // ── equipment data + compute (harvested from legacy sheet) ──
+  const ALL_WEAPONS = (() => {
+    const w = []
+    Object.values(equipmentData.simpleWeapons || {}).forEach(c => c.forEach(x => w.push(x)))
+    Object.values(equipmentData.martialWeapons || {}).forEach(c => c.forEach(x => w.push(x)))
+    return w
+  })()
+  const ALL_ARMOR = [...(equipmentData.armor?.light || []), ...(equipmentData.armor?.medium || []), ...(equipmentData.armor?.heavy || [])]
+  const ALL_SHIELDS = equipmentData.armor?.shields || []
+  const QUALITY_RANKS = equipmentData.qualityRanks || {}
 
-  // Get subclass spells
-  const getSubclassSpells = () => {
-    if (!subclassData) return []
-    const spellListKey = subclassData.domainSpells ? 'domainSpells' :
-                        subclassData.oathSpells ? 'oathSpells' :
-                        subclassData.expandedSpells ? 'expandedSpells' :
-                        subclassData.circleSpells ? 'circleSpells' :
-                        subclassData.subclassSpells ? 'subclassSpells' :
-                        subclassData.originSpells ? 'originSpells' : null
-    if (!spellListKey || !subclassData[spellListKey]) return []
-
-    return Object.entries(subclassData[spellListKey])
-      .filter(([level]) => parseInt(level) <= character.level)
-      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-  }
-
-  // Get race traits
-  const getRaceTraits = () => {
-    if (!raceData) return []
-    const traits = []
-
-    // Check if character has a subrace and get subrace-specific traits
-    let subraceData = null
-    if (character.subrace && raceData.subraces) {
-      subraceData = raceData.subraces.find(sr => sr.name === character.subrace)
-    }
-
-    // Use subrace traits if available, otherwise use race traits (but filter out generic "Choose..." prompts)
-    if (subraceData?.traits) {
-      traits.push(...subraceData.traits)
-    } else if (raceData.traits) {
-      // Filter out traits that are just instructions to choose a subrace
-      const filteredTraits = raceData.traits.filter(trait =>
-        !trait.toLowerCase().includes('choose') || !trait.toLowerCase().includes('human')
-      )
-      traits.push(...filteredTraits)
-    }
-
-    if (raceData.speed) traits.push(`Speed: ${raceData.speed} ft`)
-    if (raceData.size) traits.push(`Size: ${raceData.size}`)
-
-    // Use character's actual languages if available, otherwise fall back to race data
-    if (character.languages) {
-      const charLanguages = typeof character.languages === 'string'
-        ? JSON.parse(character.languages)
-        : character.languages
-      if (Array.isArray(charLanguages) && charLanguages.length > 0) {
-        traits.push(`Languages: ${charLanguages.join(', ')}`)
+  const calcEquipmentAC = () => {
+    const dexMod = abilityMod('dex')
+    let ac = 10 + dexMod
+    const armor = equipment.armor
+    if (armor) {
+      const ad = ALL_ARMOR.find(a => a.name === armor.name) || (armor.isCustom ? armor : null)
+      if (ad?.baseAC != null) {
+        if (ad.armorType === 'heavy') ac = ad.baseAC
+        else if (ad.armorType === 'medium') ac = ad.baseAC + Math.min(dexMod, ad.maxDexBonus ?? 2)
+        else ac = ad.baseAC + dexMod
       }
-    } else if (raceData.languages) {
-      traits.push(`Languages: ${raceData.languages.join(', ')}`)
+      if (armor.quality && QUALITY_RANKS[armor.quality]?.armorBonus) ac += QUALITY_RANKS[armor.quality].armorBonus
     }
-
-    return traits
+    const shield = equipment.offHand
+    if (shield) {
+      const sd = ALL_SHIELDS.find(s => s.name === shield.name)
+      if (sd?.acBonus) ac += sd.acBonus; else if (shield.acBonus) ac += shield.acBonus
+    }
+    return ac
   }
+  const ac = character.armor_class ?? calcEquipmentAC()
 
-  const classFeatures = getClassFeatures()
-  const subclassFeatures = getSubclassFeatures()
-  const subclassSpells = getSubclassSpells()
-  const raceTraits = getRaceTraits()
+  const weaponAbilityMod = (weapon, wd) => {
+    const strMod = abilityMod('str'), dexMod = abilityMod('dex')
+    const src = wd || weapon
+    const finesse = src?.properties?.includes?.('finesse')
+    const ranged = src?.rangeType === 'ranged'
+    if (finesse) return Math.max(strMod, dexMod)
+    if (ranged) return dexMod
+    return strMod
+  }
+  const attackFor = (weapon) => {
+    if (!weapon) return null
+    const wd = ALL_WEAPONS.find(w => w.name === weapon.name)
+    const aMod = weaponAbilityMod(weapon, wd)
+    const qBonus = (weapon.quality && QUALITY_RANKS[weapon.quality]?.weaponBonus) || 0
+    const base = wd?.damage || weapon.damage || '1d4'
+    const dType = (wd?.damageType || weapon.damageType || 'bludgeoning').slice(0, 5)
+    return { name: weapon.name, hit: aMod + profBonus + qBonus, dmg: `${base}${modStr(aMod)} ${dType}`, meta: wd?.rangeType === 'ranged' ? 'ranged' : 'melee' }
+  }
+  const buildAttacks = () => {
+    const list = []
+    if (equipment.mainHand) { const a = attackFor(equipment.mainHand); if (a) list.push(a) }
+    if (equipment.offHand && (equipment.offHand.damage || ALL_WEAPONS.find(w => w.name === equipment.offHand.name))) {
+      const a = attackFor(equipment.offHand); if (a) list.push(a)
+    }
+    // Unarmed / martial-arts fallback
+    const isMonk = classKey === 'monk'
+    const uMod = isMonk ? Math.max(abilityMod('str'), abilityMod('dex')) : abilityMod('str')
+    list.push({ name: isMonk ? 'Unarmed strike' : 'Unarmed strike', hit: uMod + profBonus, dmg: `${isMonk ? '1d6' : '1'}${modStr(uMod)} bludg`, meta: isMonk ? 'flurry' : 'melee' })
+    return list
+  }
+  const attacks = buildAttacks()
+
+  // ── features / traits (harvested accessors) ──
+  const classFeatures = (() => {
+    const out = []
+    const fbl = classData?.featuresByLevel
+    if (fbl) Object.entries(fbl).filter(([l]) => parseInt(l) <= level).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .forEach(([l, fs]) => (fs || []).forEach(f => out.push({ ...f, level: parseInt(l) })))
+    return out
+  })()
+  const subclassFeatures = (() => {
+    const out = []
+    const fbl = subclassData?.featuresByLevel
+    if (fbl) Object.entries(fbl).filter(([l]) => parseInt(l) <= level).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .forEach(([l, fs]) => (fs || []).forEach(f => out.push({ ...f, level: parseInt(l) })))
+    return out
+  })()
+  const raceTraits = (() => {
+    if (!raceData) return []
+    const sub = character.subrace && raceData.subraces ? raceData.subraces.find(s => s.name === character.subrace) : null
+    const raw = (sub?.traits || raceData.traits || [])
+    return raw.map(t => {
+      const m = String(t).split(/\s+[—-]\s+/)
+      return m.length > 1 ? { name: m[0], desc: m.slice(1).join(' — ') } : { name: String(t), desc: '' }
+    })
+  })()
+  const themeUnlocks = progression?.theme_unlocks || []
+  const themeTiers = progression?.theme_all_tiers || []
+  const theme = progression?.theme
+  const ancestryFeats = progression?.ancestry_feats || []
+  const knightPath = progression?.knight_moral_path
+
+  const isCaster = !!classData?.spellcasting || (spellSlots && Object.values(spellSlots.max || {}).some(v => v > 0)) ||
+    knownCantrips.length > 0 || knownSpells.length > 0 || preparedSpells.length > 0
+
+  // identity
+  const monogram = (character.name || '?').trim().charAt(0).toUpperCase()
+  const deityName = character.faith ? (deitiesData[character.faith]?.name || deitiesData[character.faith]?.title || character.faith.replace(/_/g, ' ')) : null
+  const themeName = theme?.theme_name
+  const subtitleParts = [
+    character.subrace || character.race,
+    [character.class, character.subclass].filter(Boolean).join(' · '),
+    themeName || (character.background ? character.background : null)
+  ].filter(Boolean)
+
+  const hpRatio = character.max_hp ? (character.current_hp / character.max_hp) : 1
+  const hpClass = hpRatio > 0.5 ? 'hp' : hpRatio > 0.25 ? 'warn' : 'bad'
+  const speed = character.speed || raceData?.speed || 30
+  const hitDie = classData?.hitDie || 8
 
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'abilities', label: 'Abilities & Skills' },
-    { id: 'features', label: 'Features & Traits' },
-    { id: 'progression', label: 'Progression' },
-    { id: 'spells', label: 'Spells' },
-    { id: 'equipment', label: 'Equipment' },
-    { id: 'inventory', label: 'Inventory' },
-    { id: 'background', label: 'Background' }
+    { id: 'overview', label: 'Overview', icon: 'brain' },
+    { id: 'abilities', label: 'Abilities & Skills', icon: 'target' },
+    { id: 'features', label: 'Features & Traits', icon: 'sparkles' },
+    { id: 'progression', label: 'Progression', icon: 'chevrons-up2' },
+    ...(isCaster ? [{ id: 'spells', label: 'Spells', icon: 'sparkles' }] : []),
+    { id: 'equipment', label: 'Equipment', icon: 'sword' },
+    { id: 'inventory', label: 'Inventory', icon: 'pack', count: inventory.length },
+    { id: 'background', label: 'Background', icon: 'scroll' }
   ]
 
-  // Alignment options
-  const ALIGNMENTS = [
-    { value: 'LG', label: 'Lawful Good' },
-    { value: 'NG', label: 'Neutral Good' },
-    { value: 'CG', label: 'Chaotic Good' },
-    { value: 'LN', label: 'Lawful Neutral' },
-    { value: 'N', label: 'True Neutral' },
-    { value: 'CN', label: 'Chaotic Neutral' },
-    { value: 'LE', label: 'Lawful Evil' },
-    { value: 'NE', label: 'Neutral Evil' },
-    { value: 'CE', label: 'Chaotic Evil' }
-  ]
+  const setTab = (id) => { setActiveTab(id); const el = document.querySelector('.hearth'); if (el) el.scrollTo({ top: 0 }) }
 
-  const LIFESTYLES = [
-    { value: 'wretched', label: 'Wretched' },
-    { value: 'squalid', label: 'Squalid' },
-    { value: 'poor', label: 'Poor' },
-    { value: 'modest', label: 'Modest' },
-    { value: 'comfortable', label: 'Comfortable' },
-    { value: 'wealthy', label: 'Wealthy' },
-    { value: 'aristocratic', label: 'Aristocratic' }
-  ]
-
-  // Render edit mode
-  if (isEditing) {
-    return (
-      <div className="character-sheet">
-        <div className="sheet-header">
-          <button className="button button-secondary" onClick={() => setIsEditing(false)}>
-            ← Cancel
-          </button>
-          <div className="sheet-title">
-            <div>
-              <h1>Edit {character.nickname || character.name}</h1>
-              <p className="subtitle">Modify your character details</p>
-            </div>
+  // ───────────────────────── tab renderers ─────────────────────────
+  const renderOverview = () => (
+    <div>
+      <div className="grid3">
+        <section className="card panel-pad">
+          <SecHead title="Abilities" sub={primeAbilities.length ? `${primeAbilities.map(a => ABILITY_SHORT[a]).join(' · ')} prime` : null} />
+          <div className="abilities">
+            {ABILITY_ORDER.map(k => (
+              <div key={k} className={`ability${primeAbilities.includes(k) ? ' prime' : ''}`}>
+                <div className="nm">{ABILITY_SHORT[k]}</div>
+                <div className="sc">{abilities[k] ?? 10}</div>
+                <div className="md">{modStr(abilityMod(k))}</div>
+              </div>
+            ))}
           </div>
-          <button
-            className="button"
-            onClick={saveEdits}
-            disabled={isSaving}
-            style={{ background: '#2ecc71' }}
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </button>
+        </section>
+        <section className="card panel-pad">
+          <SecHead title="Saves" sub={ABILITY_ORDER.filter(saveProf).map(k => ABILITY_SHORT[k]).join(' · ') || null} />
+          <div className="rows">
+            {ABILITY_ORDER.map(k => (
+              <div key={k} className={`rrow${saveProf(k) ? ' prof' : ''}`}>
+                <span className="dot"></span><span className="nm">{ABILITY_NAME[k]}</span>
+                <span className="md">{modStr(abilityMod(k) + (saveProf(k) ? profBonus : 0))}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="card panel-pad">
+          <SecHead title="Senses" />
+          <div className="senses">
+            <div className="srow"><span className="l"><Ic n="eye" />Perception</span><span className="v">{passive('Perception', 'wis')}</span></div>
+            <div className="srow"><span className="l"><Ic n="brain" />Insight</span><span className="v">{passive('Insight', 'wis')}</span></div>
+            <div className="srow"><span className="l"><Ic n="search" />Investigation</span><span className="v">{passive('Investigation', 'int')}</span></div>
+            {raceTraits.length > 0 && (
+              <div className="senses-note">{raceTraits.slice(0, 3).map(t => t.name).join(' · ')}</div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <div className="grid2">
+        <section className="card panel-pad">
+          <SecHead title="Skills" sub="● proficient" />
+          <div className="skills">
+            {SKILL_LIST.map(sk => (
+              <div key={sk.key} className={`skill${isSkillProf(sk.name) ? ' prof' : ''}`}>
+                <span className="dot"></span><span className="nm">{sk.name}</span>
+                <span className="ab">{ABILITY_SHORT[sk.ab]}</span><span className="md">{modStr(skillMod(sk))}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="card panel-pad">
+          <SecHead title="Proficiencies" />
+          {charLanguages.length > 0 && (
+            <div className="kv"><div className="kl">Languages</div><div className="tags">{charLanguages.map((l, i) => <span key={i} className="chip">{l}</span>)}</div></div>
+          )}
+          <div className="kv"><div className="kl">Weapons & armor</div><div className="prose">{(classData?.weaponProficiencies || []).join(', ') || 'Simple weapons'}{classData?.armorProficiencies?.length ? ` · ${classData.armorProficiencies.join(', ')} armor` : ' · no armor'}</div></div>
+          {classData?.toolProficiencies?.length > 0 && (
+            <div className="kv"><div className="kl">Tools</div><div className="tags">{classData.toolProficiencies.map((t, i) => <span key={i} className="chip">{t}</span>)}</div></div>
+          )}
+        </section>
+      </div>
+
+      <div className="grid2">
+        <section className="card panel-pad">
+          <SecHead title="Attacks" />
+          {attacks.map((a, i) => (
+            <div key={i} className="atk"><span className="an">{a.name} <span className="meta">{a.meta}</span></span><span className="hit">{modStr(a.hit)}</span><span className="dmg">{a.dmg}</span></div>
+          ))}
+        </section>
+        <section className="card panel-pad">
+          <SecHead title="Key features" />
+          {[...subclassFeatures, ...classFeatures].slice(0, 3).map((f, i) => (
+            <div key={i} className="feat"><div className="ft">{f.name}<span className="src">{character.class} {f.level}</span></div><div className="fd">{f.description}</div></div>
+          ))}
+          {classFeatures.length === 0 && subclassFeatures.length === 0 && raceTraits.slice(0, 3).map((t, i) => (
+            <div key={i} className="feat"><div className="ft">{t.name}<span className="src">{character.race}</span></div><div className="fd">{t.desc}</div></div>
+          ))}
+        </section>
+      </div>
+      <div className="footnote">{character.name} · level {level} {character.class}{character.subclass ? ` · ${character.subclass}` : ''}</div>
+    </div>
+  )
+
+  const renderAbilities = () => (
+    <div>
+      <SecHead title="Ability scores" sub={`proficiency bonus ${modStr(profBonus)}`} />
+      <div className="ab-detail">
+        {ABILITY_ORDER.map(k => (
+          <div key={k} className="ab-card">
+            <div className="top"><span className="nm">{ABILITY_NAME[k]}</span><span className="md">{modStr(abilityMod(k))}</span></div>
+            <div className="sc">{abilities[k] ?? 10}</div>
+            <div className="gov">{ABILITY_GOVERNS[k]}</div>
+          </div>
+        ))}
+      </div>
+      <div className="grid2" style={{ marginTop: 18 }}>
+        <section className="card panel-pad">
+          <SecHead title="Saving throws" sub={ABILITY_ORDER.filter(saveProf).map(k => ABILITY_SHORT[k]).join(' · ') || null} />
+          <div className="rows">
+            {ABILITY_ORDER.map(k => (
+              <div key={k} className={`rrow${saveProf(k) ? ' prof' : ''}`}>
+                <span className="dot"></span><span className="nm">{ABILITY_NAME[k]}</span>
+                <span className="md">{modStr(abilityMod(k) + (saveProf(k) ? profBonus : 0))}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="card panel-pad">
+          <SecHead title="At a glance" />
+          <div className="senses">
+            <div className="srow"><span className="l"><Ic n="eye" />Passive Perception</span><span className="v">{passive('Perception', 'wis')}</span></div>
+            <div className="srow"><span className="l"><Ic n="brain" />Passive Insight</span><span className="v">{passive('Insight', 'wis')}</span></div>
+            <div className="srow"><span className="l"><Ic n="target" />Proficiency bonus</span><span className="v">{modStr(profBonus)}</span></div>
+            <div className="srow"><span className="l"><Ic n="wind" />Initiative</span><span className="v">{modStr(abilityMod('dex'))}</span></div>
+          </div>
+        </section>
+      </div>
+      <section className="card panel-pad" style={{ marginTop: 18 }}>
+        <SecHead title="Skills" sub="proficiency · ability · modifier" />
+        {SKILL_LIST.map(sk => (
+          <div key={sk.key} className={`skillrow${isSkillProf(sk.name) ? ' prof' : ''}`}>
+            <span className="dot"></span><span className="snm">{sk.name}</span><span className="sab">{ABILITY_SHORT[sk.ab]}</span>
+            <span className="ssrc">{isSkillProf(sk.name) ? 'proficient' : ''}</span><span className="smd">{modStr(skillMod(sk))}</span>
+          </div>
+        ))}
+      </section>
+    </div>
+  )
+
+  const FeatGroup = ({ title, sub, items }) => items.length === 0 ? null : (
+    <div style={{ marginBottom: 26 }}>
+      <SecHead title={title} sub={sub} />
+      <div className="anc">
+        {items.map((f, i) => (
+          <div key={i} className="anc-feat"><span className="ai"><Ic n={f.icon || 'sparkles'} /></span>
+            <div><div className="at">{f.name}</div>{f.desc ? <div className="ad">{f.desc}</div> : null}</div></div>
+        ))}
+      </div>
+    </div>
+  )
+  const renderFeatures = () => (
+    <div>
+      <FeatGroup title={character.class || 'Class'} sub={character.subclass ? `${character.subclass} · level ${level}` : `level ${level}`}
+        items={[...classFeatures, ...subclassFeatures].map(f => ({ name: f.name, desc: f.description, icon: 'bolt' }))} />
+      <FeatGroup title={character.subrace || character.race || 'Ancestry'} sub="ancestry"
+        items={raceTraits.map(t => ({ name: t.name, desc: t.desc, icon: 'leaf' }))} />
+      <FeatGroup title={themeName || 'Theme'} sub="theme"
+        items={themeUnlocks.map(u => ({ name: u.ability_name, desc: u.ability_description, icon: 'scroll' }))} />
+      {backgroundData?.feature && (
+        <FeatGroup title={character.background ? character.background : 'Background'} sub="background feature"
+          items={[{ name: backgroundData.feature.name, desc: backgroundData.feature.description, icon: 'feather' }]} />
+      )}
+      {classFeatures.length === 0 && subclassFeatures.length === 0 && raceTraits.length === 0 && themeUnlocks.length === 0 && (
+        <div className="placeholder"><div className="ph-glyph">❧</div><h3>No features recorded yet</h3><p>Features appear as you choose a class, ancestry, and theme.</p></div>
+      )}
+    </div>
+  )
+
+  const renderProgression = () => {
+    if (!theme) {
+      return <div className="placeholder"><div className="ph-glyph">❧</div><h3>No theme chosen</h3><p>Themes replace 5e backgrounds and advance in four tiers as you grow. This character has no theme recorded.</p></div>
+    }
+    const tiers = [1, 2, 3, 4].map(n => {
+      const t = themeTiers.find(x => x.tier === n) || {}
+      const unlockLv = THEME_TIER_LEVELS[n]
+      const done = level >= unlockLv
+      return { n, unlockLv, done, name: t.ability_name, ability: t.ability_description }
+    })
+    const firstNotDone = tiers.find(t => !t.done)?.n
+    return (
+      <div>
+        <section className="theme-hero">
+          <div className="th-eyebrow">Theme · replaces background</div>
+          <h2>{themeName}</h2>
+          {theme.identity ? <div className="th-desc">{theme.identity}</div> : null}
+        </section>
+
+        <SecHead title="Theme tiers" sub={`Tier ${ROMAN[Math.max(1, ...tiers.filter(t => t.done).map(t => t.n), 1)]} reached`} />
+        <div className="tiers" style={{ marginBottom: 26 }}>
+          {tiers.map(t => (
+            <div key={t.n} className={`tier ${t.done ? 'done' : t.n === firstNotDone ? 'next' : 'locked'}`}>
+              {t.done ? <svg className="check"><use href="#i-check" /></svg> : null}
+              <div className="tnum">Tier {ROMAN[t.n]}<span className="lv">Lv {t.unlockLv}</span></div>
+              <div className="tname">{t.name || `Tier ${ROMAN[t.n]}`}</div>
+              <div className="tab-ab">{t.ability || 'An ability revealed as the theme deepens.'}</div>
+            </div>
+          ))}
         </div>
 
-        <div className="edit-form" style={{ padding: '1rem', maxHeight: 'calc(100vh - 150px)', overflowY: 'auto' }}>
-          {/* Basic Info */}
-          <section className="edit-section" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: '#3498db', marginBottom: '1rem' }}>Basic Info</h3>
-            <div className="form-group">
-              <label>Nickname</label>
-              <input
-                type="text"
-                value={editData.nickname}
-                onChange={(e) => handleEditChange('nickname', e.target.value)}
-                placeholder="A shorter name or alias"
-              />
+        {ancestryFeats.length > 0 && (
+          <>
+            <SecHead title="Ancestry feats" sub={character.subrace || character.race} />
+            <div className="anc" style={{ marginBottom: 26 }}>
+              {ancestryFeats.map((f, i) => (
+                <div key={i} className="anc-feat"><span className="ai"><Ic n="leaf" /></span>
+                  <div><div className="at">{f.feat_name}</div><div className="ad">{f.description}</div></div></div>
+              ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label>Alignment</label>
-                <select
-                  value={editData.alignment}
-                  onChange={(e) => handleEditChange('alignment', e.target.value)}
-                >
-                  <option value="">Select alignment</option>
-                  {ALIGNMENTS.map(a => (
-                    <option key={a.value} value={a.value}>{a.label}</option>
-                  ))}
-                </select>
+          </>
+        )}
+
+        {knightPath && (
+          <>
+            <SecHead title="Moral path" sub="a conviction, shaped by play" />
+            <section className="path-card">
+              <div className="path-note" style={{ borderTop: 0, paddingTop: 0 }}>
+                Current path: <em style={{ color: 'var(--accent)', fontStyle: 'normal' }}>{(knightPath.current_path || 'true').replace(/_/g, ' ')}</em>.
+                {knightPath.last_path_change_reason ? ` ${knightPath.last_path_change_reason}` : ' The path is not a score to win — it bends the choices the Dungeon Master offers you.'}
               </div>
-              <div className="form-group">
-                <label>Faith</label>
-                <select
-                  value={editData.faith}
-                  onChange={(e) => handleEditChange('faith', e.target.value)}
-                >
-                  <option value="">Select deity</option>
-                  {Object.keys(deitiesData).map(key => (
-                    <option key={key} value={key}>{deitiesData[key].name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Lifestyle</label>
-              <select
-                value={editData.lifestyle}
-                onChange={(e) => handleEditChange('lifestyle', e.target.value)}
-              >
-                <option value="">Select lifestyle</option>
-                {LIFESTYLES.map(l => (
-                  <option key={l.value} value={l.value}>{l.label}</option>
-                ))}
-              </select>
+            </section>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  const renderSpells = () => {
+    const max = spellSlots?.max || {}
+    const used = spellSlots?.used || {}
+    const levels = Object.keys(max).map(Number).filter(l => max[l] > 0).sort((a, b) => a - b)
+    return (
+      <div>
+        {levels.length > 0 && (
+          <section className="card panel-pad" style={{ marginBottom: 18 }}>
+            <SecHead title="Spell slots" sub="restored on a long rest" />
+            <div className="slot-grid">
+              {levels.map(l => {
+                const m = max[l], u = used[l] || 0
+                return (
+                  <div key={l} className="slot-cell">
+                    <div className="sl-lv">Level {l}</div>
+                    <div className="sl-pips">{Array.from({ length: m }).map((_, i) => <span key={i} className={`pip${i >= u ? ' full' : ' spent'}`}></span>)}</div>
+                  </div>
+                )
+              })}
             </div>
           </section>
-
-          {/* Current Status */}
-          <section className="edit-section" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: '#3498db', marginBottom: '1rem' }}>Current Status</h3>
-            <div className="form-group">
-              <label>Current Location</label>
-              <input
-                type="text"
-                value={editData.current_location}
-                onChange={(e) => handleEditChange('current_location', e.target.value)}
-                placeholder="Where is your character?"
-              />
-            </div>
-            <div className="form-group">
-              <label>Current Quest</label>
-              <textarea
-                value={editData.current_quest}
-                onChange={(e) => handleEditChange('current_quest', e.target.value)}
-                placeholder="What are you working on?"
-                rows="2"
-              />
+        )}
+        <div className="grid2">
+          <section className="card panel-pad">
+            <SecHead title={preparedSpells.length ? 'Prepared spells' : 'Known spells'} sub={`${(preparedSpells.length ? preparedSpells : knownSpells).length} total`} />
+            <div className="spell-list">
+              {(preparedSpells.length ? preparedSpells : knownSpells).map((s, i) => (
+                <div key={i} className="spellrow"><span className="spn">{typeof s === 'string' ? s : s.name}</span></div>
+              ))}
+              {(preparedSpells.length ? preparedSpells : knownSpells).length === 0 && <div className="grp-note">No spells recorded.</div>}
             </div>
           </section>
-
-          {/* Physical Appearance */}
-          <section className="edit-section" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: '#3498db', marginBottom: '1rem' }}>Physical Appearance</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label>Age</label>
-                <input
-                  type="text"
-                  value={editData.age}
-                  onChange={(e) => handleEditChange('age', e.target.value)}
-                  placeholder="e.g., 25"
-                />
-              </div>
-              <div className="form-group">
-                <label>Height</label>
-                <input
-                  type="text"
-                  value={editData.height}
-                  onChange={(e) => handleEditChange('height', e.target.value)}
-                  placeholder="e.g., 5'10&quot;"
-                />
-              </div>
-              <div className="form-group">
-                <label>Weight</label>
-                <input
-                  type="text"
-                  value={editData.weight}
-                  onChange={(e) => handleEditChange('weight', e.target.value)}
-                  placeholder="e.g., 170 lbs"
-                />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label>Hair Color</label>
-                <input
-                  type="text"
-                  value={editData.hair_color}
-                  onChange={(e) => handleEditChange('hair_color', e.target.value)}
-                  placeholder="e.g., Black"
-                />
-              </div>
-              <div className="form-group">
-                <label>Eye Color</label>
-                <input
-                  type="text"
-                  value={editData.eye_color}
-                  onChange={(e) => handleEditChange('eye_color', e.target.value)}
-                  placeholder="e.g., Blue"
-                />
-              </div>
-              <div className="form-group">
-                <label>Skin Color</label>
-                <input
-                  type="text"
-                  value={editData.skin_color}
-                  onChange={(e) => handleEditChange('skin_color', e.target.value)}
-                  placeholder="e.g., Fair"
-                />
-              </div>
+          <section className="card panel-pad">
+            <SecHead title="Cantrips" sub={`${knownCantrips.length} known`} />
+            <div className="spell-list">
+              {knownCantrips.map((s, i) => (
+                <div key={i} className="spellrow"><span className="spn">{typeof s === 'string' ? s : s.name}</span><span className="spm">at will</span></div>
+              ))}
+              {knownCantrips.length === 0 && <div className="grp-note">No cantrips.</div>}
             </div>
           </section>
+        </div>
+      </div>
+    )
+  }
 
-          {/* Personality */}
-          <section className="edit-section" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: '#3498db', marginBottom: '1rem' }}>Personality</h3>
-            <div className="form-group">
-              <label>Personality Traits</label>
-              <textarea
-                value={editData.personality_traits}
-                onChange={(e) => handleEditChange('personality_traits', e.target.value)}
-                placeholder="Describe your character's personality..."
-                rows="3"
-              />
-            </div>
-            <div className="form-group">
-              <label>Ideals</label>
-              <textarea
-                value={editData.ideals}
-                onChange={(e) => handleEditChange('ideals', e.target.value)}
-                placeholder="What does your character believe in?"
-                rows="2"
-              />
-            </div>
-            <div className="form-group">
-              <label>Bonds</label>
-              <textarea
-                value={editData.bonds}
-                onChange={(e) => handleEditChange('bonds', e.target.value)}
-                placeholder="What connections does your character have?"
-                rows="2"
-              />
-            </div>
-            <div className="form-group">
-              <label>Flaws</label>
-              <textarea
-                value={editData.flaws}
-                onChange={(e) => handleEditChange('flaws', e.target.value)}
-                placeholder="What are your character's weaknesses?"
-                rows="2"
-              />
+  const renderEquipment = () => {
+    const wornArmor = equipment.armor
+    const isUnarmored = !wornArmor && (classKey === 'monk' || classKey === 'barbarian')
+    return (
+      <div>
+        <section className="card panel-pad">
+          <SecHead title="Wielded" />
+          {attacks.map((a, i) => (
+            <div key={i} className="atk"><span className="an">{a.name} <span className="meta">{a.meta}</span></span><span className="hit">{modStr(a.hit)}</span><span className="dmg">{a.dmg}</span></div>
+          ))}
+        </section>
+        <div className="grid2" style={{ marginTop: 18 }}>
+          <section className="card panel-pad">
+            <SecHead title="Armor Class" />
+            <div className="ac-break">
+              <span className="acbig">{ac}</span>
+              <span className="acform">{isUnarmored
+                ? <><em>Unarmored Defense</em> — your AC rises with your own discipline rather than armor.</>
+                : wornArmor ? <><em>{wornArmor.name}</em> with your Dexterity.</> : <>10 + your Dexterity, unarmored.</>}</span>
             </div>
           </section>
-
-          {/* Background Story */}
-          <section className="edit-section" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: '#3498db', marginBottom: '1rem' }}>Background & Story</h3>
-            <div className="form-group">
-              <label>Backstory</label>
-              <textarea
-                value={editData.backstory}
-                onChange={(e) => handleEditChange('backstory', e.target.value)}
-                placeholder="Tell your character's story..."
-                rows="5"
-              />
-            </div>
-            <div className="form-group">
-              <label>Organizations</label>
-              <textarea
-                value={editData.organizations}
-                onChange={(e) => handleEditChange('organizations', e.target.value)}
-                placeholder="Guilds, factions, or groups..."
-                rows="2"
-              />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label>Allies</label>
-                <textarea
-                  value={editData.allies}
-                  onChange={(e) => handleEditChange('allies', e.target.value)}
-                  placeholder="Friends and allies..."
-                  rows="2"
-                />
-              </div>
-              <div className="form-group">
-                <label>Enemies</label>
-                <textarea
-                  value={editData.enemies}
-                  onChange={(e) => handleEditChange('enemies', e.target.value)}
-                  placeholder="Rivals and enemies..."
-                  rows="2"
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Other Notes</label>
-              <textarea
-                value={editData.other_notes}
-                onChange={(e) => handleEditChange('other_notes', e.target.value)}
-                placeholder="Any additional notes..."
-                rows="3"
-              />
-            </div>
+          <section className="card panel-pad">
+            <SecHead title="Worn" />
+            <div className="kv"><div className="kl">Body</div><div className="prose">{wornArmor?.name || 'Explorer’s clothes — no armor by choice.'}</div></div>
+            {equipment.offHand?.name && <div className="kv"><div className="kl">Off hand</div><div className="prose">{equipment.offHand.name}</div></div>}
           </section>
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-            <button
-              className="button button-secondary"
-              onClick={() => setIsEditing(false)}
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </button>
-            <button
-              className="button"
-              onClick={saveEdits}
-              disabled={isSaving}
-              style={{ flex: 1, background: '#2ecc71' }}
-            >
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <SecHead title="Attunement" sub="0 of 3 used" />
+          <div className="attune">
+            <div className="attune-slot">An open slot</div>
+            <div className="attune-slot">An open slot</div>
+            <div className="attune-slot">An open slot</div>
           </div>
         </div>
       </div>
     )
   }
 
+  const renderInventory = () => {
+    const gp = character.gold_gp || 0, sp = character.gold_sp || 0, cp = character.gold_cp || 0
+    return (
+      <div className="grid2">
+        <section className="card panel-pad">
+          <SecHead title="Carried" sub={`${inventory.length} item${inventory.length === 1 ? '' : 's'}`} />
+          {inventory.length === 0 && <div className="grp-note">Nothing carried yet.</div>}
+          {inventory.map((it, i) => (
+            <div key={i} className="invrow">
+              <span className="ii"><Ic n={it.equipped ? 'sword' : 'pack'} /></span>
+              <div><div className="inm">{it.name}</div>{it.equipped ? <div className="isub">equipped</div> : null}</div>
+              <span className="iq">{it.quantity > 1 ? `×${it.quantity}` : ''}</span>
+              <span className="iw"></span>
+            </div>
+          ))}
+        </section>
+        <div>
+          <div className="goldcard"><Ic n="coin" style={{ width: 17, height: 17, color: 'var(--accent)' }} /><span className="gl">Gold</span><span className="gv">{gp} gp</span></div>
+          {(sp > 0 || cp > 0) && (
+            <section className="card panel-pad" style={{ marginBottom: 14 }}>
+              <SecHead title="Coin" />
+              <div className="kv"><div className="prose">{gp} gold · {sp} silver · {cp} copper</div></div>
+            </section>
+          )}
+          <section className="card panel-pad">
+            <SecHead title="Carrying" />
+            <div className="grp-note" style={{ margin: 0 }}>Items the Dungeon Master grants you in play appear here automatically. Strength {abilities.str} · carry up to {abilities.str * 15} lb.</div>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
+  const renderBackground = () => {
+    const paras = (character.backstory || '').split(/\n\s*\n/).filter(Boolean)
+    const vows = [
+      { cls: '', label: 'Ideal', text: character.ideals },
+      { cls: 'bond', label: 'Bond', text: character.bonds },
+      { cls: 'flaw', label: 'Flaw', text: character.flaws },
+      { cls: 'trait', label: 'Personality', text: character.personality_traits }
+    ].filter(v => v.text)
+    return (
+      <div>
+        <SecHead title="The life that shaped them" />
+        {paras.length > 0
+          ? <div className="bg-prose">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+          : <div className="placeholder"><div className="ph-glyph">❧</div><h3>No backstory yet</h3><p>Write {character.name}’s story in the wizard, or let it grow through play.</p></div>}
+        {vows.length > 0 && (
+          <>
+            <SecHead title="What drives them" />
+            <div className="vows">
+              {vows.map((v, i) => (
+                <div key={i} className={`vow ${v.cls}`}><div className="vl">{v.label}</div><div className="vt">{v.text}</div></div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  const PANES = {
+    overview: renderOverview, abilities: renderAbilities, features: renderFeatures,
+    progression: renderProgression, spells: renderSpells, equipment: renderEquipment,
+    inventory: renderInventory, background: renderBackground
+  }
+
   return (
-    <div className="character-sheet">
-      <div className="sheet-header">
-        <button className="button button-secondary" onClick={onBack}>
-          ← Back to Characters
-        </button>
-        <div className="sheet-title">
-          {character.avatar && (
-            <img
-              src={character.avatar}
-              alt={character.name}
-              className="sheet-avatar"
-            />
-          )}
-          <div>
+    <div className="hearth scroll">
+      <HearthSprite />
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr"></div>
+        <button className="back" onClick={onBack}><Ic n="arrow-left" />{character.name ? `${character.name.split(' ')[0]}’s home` : 'Back'}</button>
+        <div className="spacer"></div>
+        {onEditInWizard && <button className="hdr-link" onClick={() => onEditInWizard(character)}><Ic n="feather" />Edit in wizard</button>}
+        <span className="opus"><span className="dot"></span>Opus</span>
+      </header>
+
+      <main className="sheet-canvas">
+        <section className="id-hero">
+          <div className="crest"><span className="mono">{monogram}</span><span className="lvl">{level}</span></div>
+          <div className="id-main">
             <h1>{character.name}</h1>
-            {character.nickname && <p className="nickname">"{character.nickname}"</p>}
-            <button
-              onClick={() => setShowNicknames(true)}
-              style={{
-                marginTop: '0.2rem',
-                padding: '0.25rem 0.6rem',
-                background: 'rgba(217, 70, 239, 0.12)',
-                border: '1px solid rgba(217, 70, 239, 0.4)',
-                borderRadius: '4px',
-                color: '#d946ef',
-                fontSize: '0.72rem',
-                cursor: 'pointer',
-                letterSpacing: '0.03em'
-              }}
-              title="Manage what each NPC calls this character"
-            >
-              ✎ Manage names & nicknames
-            </button>
-            <p className="subtitle">
-              Level {character.level} {capitalize(character.race)}{' '}
-              {character.class_levels ? (
-                // Multiclass display
-                JSON.parse(character.class_levels).map((c, i) => (
-                  <span key={c.class}>
-                    {i > 0 && ' / '}
-                    {capitalize(c.class)} {c.level}
-                    {c.subclass && ` (${c.subclass})`}
-                  </span>
-                ))
-              ) : (
-                // Single class display
-                <>
-                  {capitalize(character.class)}
-                  {character.subclass && ` (${character.subclass})`}
-                </>
-              )}
-            </p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {canLevelUp && onLevelUp && (
-            <button
-              className="button level-up-button"
-              onClick={onLevelUp}
-              title="Level up your character!"
-            >
-              Level Up!
-            </button>
-          )}
-          <button
-            className="button"
-            onClick={startEditing}
-            style={{ background: '#9b59b6' }}
-            title="Edit flavor details like personality, backstory, appearance"
-          >
-            Edit Details
-          </button>
-          {onEditInWizard && (
-            <button
-              className="button"
-              onClick={() => onEditInWizard(character)}
-              style={{ background: '#e67e22' }}
-              title="Rebuild character in wizard (preserves XP, level, gold, inventory)"
-            >
-              Rebuild
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Level Up Banner */}
-      {canLevelUp && onLevelUp && (
-        <div className="level-up-banner-sheet">
-          <div className="level-up-banner-content">
-            <span className="level-up-message">
-              {character.nickname || character.name} has enough XP to reach Level {character.level + 1}!
-            </span>
-            <button
-              className="button level-up-button"
-              onClick={onLevelUp}
-            >
-              Level Up Now →
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="sheet-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="sheet-content">
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
-          <div className="tab-panel">
-            <div className="overview-grid">
-              {/* Vital Stats */}
-              <section className="sheet-section vital-stats">
-                <h3>Vital Statistics</h3>
-                <div className="vital-grid">
-                  <div className="vital-stat hp">
-                    <div className="vital-label">Hit Points</div>
-                    <div className="vital-value">
-                      <span className={character.current_hp <= character.max_hp * 0.3 ? 'danger' : ''}>
-                        {character.current_hp}
-                      </span>
-                      <span className="separator">/</span>
-                      <span>{character.max_hp}</span>
-                    </div>
-                    <div className="vital-bar">
-                      <div
-                        className="vital-bar-fill hp-bar"
-                        style={{ width: `${(character.current_hp / character.max_hp) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="vital-stat">
-                    <div className="vital-label">Armor Class</div>
-                    <div className="vital-value large">{character.armor_class}</div>
-                  </div>
-                  <div className="vital-stat">
-                    <div className="vital-label">Speed</div>
-                    <div className="vital-value large">{character.speed} ft</div>
-                  </div>
-                  <div className="vital-stat">
-                    <div className="vital-label">Proficiency</div>
-                    <div className="vital-value large">+{Math.ceil(character.level / 4) + 1}</div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Experience */}
-              <section className="sheet-section experience">
-                <h3>Experience</h3>
-                <div className="xp-display">
-                  <div className="xp-numbers">
-                    <span className="current">{character.experience}</span>
-                    <span className="separator">/</span>
-                    <span className="target">{character.experience_to_next_level}</span>
-                  </div>
-                  <div className="xp-bar">
-                    <div
-                      className="xp-bar-fill"
-                      style={{ width: `${(character.experience / character.experience_to_next_level) * 100}%` }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div className="xp-percent">
-                      {Math.floor((character.experience / character.experience_to_next_level) * 100)}% to Level {character.level + 1}
-                    </div>
-                    {character.level < 20 && (
-                      <button
-                        onClick={() => handleGrantXP(500)}
-                        style={{
-                          background: '#27ae60',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '0.25rem 0.6rem',
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                          fontWeight: '600'
-                        }}
-                        title="Grant 500 XP"
-                      >
-                        +500 XP
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* Ability Scores Quick View */}
-              <section className="sheet-section abilities-quick">
-                <h3>Ability Scores</h3>
-                <div className="ability-grid-quick">
-                  {['str', 'dex', 'con', 'int', 'wis', 'cha'].map(ability => (
-                    <div key={ability} className="ability-quick">
-                      <div className="ability-name">{ability.toUpperCase()}</div>
-                      <div className="ability-score">{abilities[ability]}</div>
-                      <div className="ability-mod">{getModifier(abilities[ability])}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Wealth */}
-              <section className="sheet-section wealth">
-                <h3>Wealth</h3>
-                <div className="currency-grid">
-                  <div className="currency gp">
-                    <div className="currency-value">{character.gold_gp || 0}</div>
-                    <div className="currency-label">GP</div>
-                  </div>
-                  <div className="currency sp">
-                    <div className="currency-value">{character.gold_sp || 0}</div>
-                    <div className="currency-label">SP</div>
-                  </div>
-                  <div className="currency cp">
-                    <div className="currency-value">{character.gold_cp || 0}</div>
-                    <div className="currency-label">CP</div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Character Details */}
-              <section className="sheet-section details">
-                <h3>Character Details</h3>
-                <div className="details-grid">
-                  {character.background && (
-                    <div className="detail-item">
-                      <span className="detail-label">Background</span>
-                      <span className="detail-value">{capitalize(character.background)}</span>
-                    </div>
-                  )}
-                  {character.alignment && (
-                    <div className="detail-item">
-                      <span className="detail-label">Alignment</span>
-                      <span className="detail-value">
-                        {ALIGNMENTS.find(a => a.value === character.alignment)?.label || character.alignment}
-                      </span>
-                    </div>
-                  )}
-                  {character.faith && (
-                    <div className="detail-item">
-                      <span className="detail-label">Faith</span>
-                      <span className="detail-value">
-                        {deitiesData[character.faith]?.name || capitalize(character.faith)}
-                      </span>
-                    </div>
-                  )}
-                  {character.lifestyle && (
-                    <div className="detail-item">
-                      <span className="detail-label">Lifestyle</span>
-                      <span className="detail-value">{capitalize(character.lifestyle)}</span>
-                    </div>
-                  )}
-                  {character.gender && (
-                    <div className="detail-item">
-                      <span className="detail-label">Gender</span>
-                      <span className="detail-value">{capitalize(character.gender)}</span>
-                    </div>
-                  )}
-                  {character.age && (
-                    <div className="detail-item">
-                      <span className="detail-label">Age</span>
-                      <span className="detail-value">{character.age}</span>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Current Status */}
-              <section className="sheet-section status">
-                <h3>Current Status</h3>
-                <div className="status-info">
-                  <div className="status-item">
-                    <span className="status-label">Location</span>
-                    <span className="status-value">{character.current_location || 'Unknown'}</span>
-                  </div>
-                  {character.current_quest && (
-                    <div className="status-item">
-                      <span className="status-label">Current Quest</span>
-                      <span className="status-value">{character.current_quest}</span>
-                    </div>
-                  )}
-                </div>
-              </section>
+            <div className="sub">
+              {subtitleParts.map((p, i) => (
+                <span key={i}>{i > 0 ? <span className="sep">·</span> : null}{p}</span>
+              ))}
+              {character.nickname ? <><span className="sep">·</span><span style={{ color: 'var(--ink-3)' }}>{character.nickname}</span></> : null}
+            </div>
+            <div className="id-pills">
+              <span className={`ipill ${hpClass}`}><span className="l">HP</span><span className="v">{character.current_hp ?? 0}<span className="mx"> / {character.max_hp ?? 0}</span></span></span>
+              <span className="ipill"><span className="l">AC</span><span className="v">{ac}</span></span>
+              <span className="ipill"><span className="l">Init</span><span className="v">{modStr(abilityMod('dex'))}</span></span>
+              <span className="ipill"><span className="l">Speed</span><span className="v">{speed} ft</span></span>
+              <span className="ipill accent"><span className="l">Prof</span><span className="v">{modStr(profBonus)}</span></span>
+              {classKey === 'monk' && <span className="ipill"><span className="l">Ki</span><span className="v">{level} / {level}</span></span>}
+              <span className="ipill"><span className="l">Hit Dice</span><span className="v">{level}d{hitDie}</span></span>
+              {deityName && <span className="ipill"><span className="l">Faith</span><span className="v" style={{ fontSize: 12, textTransform: 'capitalize' }}>{deityName}</span></span>}
             </div>
           </div>
-        )}
-
-        {/* Abilities & Skills Tab */}
-        {activeTab === 'abilities' && (
-          <div className="tab-panel">
-            <div className="abilities-panel">
-              {/* Full Ability Scores */}
-              <section className="sheet-section">
-                <h3>Ability Scores</h3>
-                <div className="ability-grid-full">
-                  {[
-                    { key: 'str', name: 'Strength', skills: ['Athletics'] },
-                    { key: 'dex', name: 'Dexterity', skills: ['Acrobatics', 'Sleight of Hand', 'Stealth'] },
-                    { key: 'con', name: 'Constitution', skills: [] },
-                    { key: 'int', name: 'Intelligence', skills: ['Arcana', 'History', 'Investigation', 'Nature', 'Religion'] },
-                    { key: 'wis', name: 'Wisdom', skills: ['Animal Handling', 'Insight', 'Medicine', 'Perception', 'Survival'] },
-                    { key: 'cha', name: 'Charisma', skills: ['Deception', 'Intimidation', 'Performance', 'Persuasion'] }
-                  ].map(ability => (
-                    <div key={ability.key} className="ability-full">
-                      <div className="ability-header">
-                        <div className="ability-name-full">{ability.name}</div>
-                        <div className="ability-score-large">{abilities[ability.key]}</div>
-                        <div className="ability-mod-large">{getModifier(abilities[ability.key])}</div>
-                      </div>
-                      {ability.skills.length > 0 && (
-                        <div className="ability-skills">
-                          {ability.skills.map(skill => {
-                            const isProficient = skills.includes(skill)
-                            const mod = Math.floor((abilities[ability.key] - 10) / 2)
-                            const profBonus = Math.ceil(character.level / 4) + 1
-                            const totalMod = isProficient ? mod + profBonus : mod
-                            return (
-                              <div key={skill} className={`skill-item ${isProficient ? 'proficient' : ''}`}>
-                                <span className="skill-prof">{isProficient ? '●' : '○'}</span>
-                                <span className="skill-name">{skill}</span>
-                                <span className="skill-mod">{totalMod >= 0 ? `+${totalMod}` : totalMod}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Saving Throws */}
-              <section className="sheet-section">
-                <h3>Saving Throws</h3>
-                <div className="saving-throws-grid">
-                  {['str', 'dex', 'con', 'int', 'wis', 'cha'].map(ability => {
-                    const isProficient = classData?.savingThrows?.includes(ability.toUpperCase())
-                    const mod = Math.floor((abilities[ability] - 10) / 2)
-                    const profBonus = Math.ceil(character.level / 4) + 1
-                    const totalMod = isProficient ? mod + profBonus : mod
-                    return (
-                      <div key={ability} className={`save-item ${isProficient ? 'proficient' : ''}`}>
-                        <span className="save-prof">{isProficient ? '●' : '○'}</span>
-                        <span className="save-name">{ability.toUpperCase()}</span>
-                        <span className="save-mod">{totalMod >= 0 ? `+${totalMod}` : totalMod}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-
-              {/* Proficiencies */}
-              {classData && (
-                <section className="sheet-section">
-                  <h3>Proficiencies</h3>
-                  <div className="proficiencies-list">
-                    {classData.armorProficiencies?.length > 0 && (
-                      <div className="prof-group">
-                        <span className="prof-label">Armor:</span>
-                        <span className="prof-value">{classData.armorProficiencies.map(p => capitalize(p)).join(', ')}</span>
-                      </div>
-                    )}
-                    {classData.weaponProficiencies?.length > 0 && (
-                      <div className="prof-group">
-                        <span className="prof-label">Weapons:</span>
-                        <span className="prof-value">{classData.weaponProficiencies.map(p => capitalize(p)).join(', ')}</span>
-                      </div>
-                    )}
-                    {classData.toolProficiencies?.length > 0 && (
-                      <div className="prof-group">
-                        <span className="prof-label">Tools:</span>
-                        <span className="prof-value">{classData.toolProficiencies.map(p => capitalize(p)).join(', ')}</span>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              {/* Advantages */}
-              {advantages.length > 0 && (
-                <section className="sheet-section">
-                  <h3>Advantages & Resistances</h3>
-                  <ul className="advantages-list">
-                    {advantages.map((adv, idx) => (
-                      <li key={idx}>{adv}</li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </div>
+          <div className="id-actions">
+            <button className={`btn ${canLevelUp ? 'primary' : ''}`} onClick={() => onLevelUp?.(character)} disabled={!onLevelUp}>
+              <Ic n="chevrons-up" />{canLevelUp ? 'Level up' : 'Level up'}
+            </button>
+            <button className="btn ghost" onClick={() => handleRest('short')} disabled={resting}><Ic n="coffee" />Short rest</button>
+            <button className="btn ghost" onClick={() => handleRest('long')} disabled={resting}><Ic n="moon" />Long rest</button>
+            <button className="btn ghost sm" onClick={() => handleGrantXP(500)} title="Grant 500 XP (testing)"><Ic n="sparkles" />+500 XP</button>
+            {restMsg && <div className="grp-note" style={{ margin: '4px 0 0', textAlign: 'center' }}>{restMsg}</div>}
           </div>
-        )}
+        </section>
 
-        {/* Features & Traits Tab */}
-        {activeTab === 'features' && (
-          <div className="tab-panel">
-            {/* Race Traits */}
-            {raceTraits.length > 0 && (
-              <section className="sheet-section">
-                <h3>{character.subrace ? character.subrace : capitalize(character.race)} Traits</h3>
-                <ul className="traits-list">
-                  {raceTraits.map((trait, idx) => (
-                    <li key={idx}>{trait}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
+        <nav className="tabs">
+          {tabs.map(t => (
+            <button key={t.id} className={`tab${activeTab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+              <Ic n={t.icon} />{t.label}{t.count != null ? <span className="ct">{t.count}</span> : null}
+            </button>
+          ))}
+        </nav>
 
-            {/* Class Features */}
-            {classFeatures.length > 0 && (
-              <section className="sheet-section">
-                <h3>{capitalize(character.class)} Features</h3>
-                <div className="features-list">
-                  {classFeatures.map((feature, idx) => (
-                    <div key={idx} className="feature-item">
-                      <div className="feature-header">
-                        <span className="feature-name">{feature.name}</span>
-                        <span className="feature-level">Level {feature.level}</span>
-                      </div>
-                      {feature.description && (
-                        <p className="feature-description">{feature.description}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Subclass Features */}
-            {character.subclass && subclassFeatures.length > 0 && (
-              <section className="sheet-section subclass-section">
-                <h3>{character.subclass} Features</h3>
-                {subclassData.bonusProficiencies?.length > 0 && (
-                  <div className="bonus-profs">
-                    <strong>Bonus Proficiencies:</strong> {subclassData.bonusProficiencies.join(', ')}
-                  </div>
-                )}
-                <div className="features-list">
-                  {subclassFeatures.map((feature, idx) => (
-                    <div key={idx} className="feature-item">
-                      <div className="feature-header">
-                        <span className="feature-name">{feature.name}</span>
-                        <span className="feature-level">Level {feature.level}</span>
-                      </div>
-                      {feature.description && (
-                        <p className="feature-description">{feature.description}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Background Feature */}
-            {backgroundData?.feature && (
-              <section className="sheet-section">
-                <h3>Background: {capitalize(character.background)}</h3>
-                <div className="feature-item">
-                  <div className="feature-header">
-                    <span className="feature-name">{backgroundData.feature.name}</span>
-                  </div>
-                  <p className="feature-description">{backgroundData.feature.description}</p>
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-
-        {/* Progression Tab — Theme + Ancestry Feats */}
-        {activeTab === 'progression' && (
-          <div className="tab-panel">
-            {progressionLoading && (
-              <div style={{ padding: '1rem', opacity: 0.7 }}>Loading progression...</div>
-            )}
-            {progressionError && (
-              <div style={{
-                padding: '1rem', background: 'rgba(239,68,68,0.15)',
-                border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
-                color: '#fca5a5'
-              }}>
-                Failed to load progression: {progressionError}
-              </div>
-            )}
-            {progression && !progression.theme && (
-              <div style={{ padding: '1rem', opacity: 0.7 }}>
-                This character has no Theme assigned. Themes replace the legacy Background system;
-                existing characters have not yet been migrated.
-              </div>
-            )}
-            {progression && progression.theme && (
-              <>
-                {/* Theme identity section */}
-                <section className="sheet-section">
-                  <h3 style={{ color: '#8b5cf6' }}>
-                    Theme: {progression.theme.theme_name}
-                    {progression.theme.path_choice && (
-                      <span style={{
-                        marginLeft: '0.75rem', fontSize: '0.85em', color: '#a78bfa'
-                      }}>
-                        ({progression.theme.path_choice.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')})
-                      </span>
-                    )}
-                  </h3>
-                  <p style={{ fontStyle: 'italic', opacity: 0.9, marginBottom: '0.5rem' }}>
-                    {progression.theme.identity}
-                  </p>
-                  <p style={{ fontSize: '0.9em', opacity: 0.8 }}>
-                    <strong>Signature Skills:</strong> {progression.theme.signature_skill_1}
-                    {progression.theme.signature_skill_2 && `, ${progression.theme.signature_skill_2}`}
-                  </p>
-                  {progression.knight_moral_path && (
-                    <p style={{ fontSize: '0.9em', opacity: 0.8, marginTop: '0.5rem' }}>
-                      <strong>Moral Path:</strong>{' '}
-                      <span style={{ color: '#a78bfa', textTransform: 'capitalize' }}>
-                        {progression.knight_moral_path.current_path}
-                      </span>
-                      {progression.knight_moral_path.last_path_change_reason && (
-                        <span style={{ opacity: 0.7, marginLeft: '0.5rem' }}>
-                          — {progression.knight_moral_path.last_path_change_reason}
-                        </span>
-                      )}
-                    </p>
-                  )}
-                </section>
-
-                {/* Theme tier abilities (unlocked + upcoming) */}
-                <section className="sheet-section">
-                  <h3 style={{ color: '#8b5cf6' }}>Theme Progression</h3>
-                  <div className="features-list">
-                    {(progression.theme_all_tiers || [])
-                      .filter(t => !t.path_variant) // Hide path-variant duplicates; base ability covers both
-                      .map(tier => {
-                        const unlocked = (progression.theme_unlocks || []).some(u => u.tier === tier.tier)
-                        const expectedLevel = tier.tier === 1 ? 1 : tier.tier // L1/L5/L11/L17
-                        const canUnlock = (progression.character.level || 1) >= expectedLevel
-                        return (
-                          <div
-                            key={tier.tier}
-                            className="feature-item"
-                            style={{
-                              borderLeft: `3px solid ${unlocked ? '#8b5cf6' : 'rgba(139,92,246,0.3)'}`,
-                              opacity: unlocked ? 1 : 0.55
-                            }}
-                          >
-                            <div className="feature-header">
-                              <span className="feature-name" style={{ color: unlocked ? '#ddd' : '#aaa' }}>
-                                L{expectedLevel}: {tier.ability_name}
-                              </span>
-                              <span style={{
-                                fontSize: '0.75em',
-                                color: unlocked ? '#a78bfa' : canUnlock ? '#f59e0b' : '#888',
-                                marginLeft: '0.5rem',
-                                padding: '0.1rem 0.4rem',
-                                background: unlocked
-                                  ? 'rgba(139,92,246,0.15)'
-                                  : canUnlock
-                                    ? 'rgba(245,158,11,0.15)'
-                                    : 'rgba(136,136,136,0.1)',
-                                border: `1px solid ${unlocked ? 'rgba(139,92,246,0.4)' : canUnlock ? 'rgba(245,158,11,0.4)' : 'rgba(136,136,136,0.3)'}`,
-                                borderRadius: '10px'
-                              }}>
-                                {unlocked ? '✓ Unlocked' : canUnlock ? 'Ready to unlock' : `Level ${expectedLevel}`}
-                              </span>
-                            </div>
-                            <p className="feature-description" style={{ opacity: unlocked ? 1 : 0.8 }}>
-                              {tier.ability_description}
-                            </p>
-                            {tier.mechanics && (
-                              <p style={{
-                                fontSize: '0.8em', color: '#888', marginTop: '0.3rem',
-                                fontStyle: 'italic'
-                              }}>
-                                {tier.mechanics}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
-                  </div>
-                </section>
-
-                {/* Ancestry feats */}
-                <section className="sheet-section">
-                  <h3 style={{ color: '#14b8a6' }}>Ancestry Feats</h3>
-                  {progression.ancestry_feats && progression.ancestry_feats.length > 0 ? (
-                    <div className="features-list">
-                      {progression.ancestry_feats.map((feat, idx) => (
-                        <div
-                          key={idx}
-                          className="feature-item"
-                          style={{ borderLeft: '3px solid #14b8a6' }}
-                        >
-                          <div className="feature-header">
-                            <span className="feature-name">{feat.feat_name}</span>
-                            <span style={{
-                              fontSize: '0.75em', color: '#14b8a6',
-                              marginLeft: '0.5rem', padding: '0.1rem 0.4rem',
-                              background: 'rgba(20,184,166,0.15)',
-                              border: '1px solid rgba(20,184,166,0.4)',
-                              borderRadius: '10px'
-                            }}>
-                              L{feat.tier} · {feat.list_id.replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                          <p className="feature-description">{feat.description}</p>
-                          {feat.mechanics && (
-                            <p style={{
-                              fontSize: '0.8em', color: '#888', marginTop: '0.3rem',
-                              fontStyle: 'italic'
-                            }}>
-                              {feat.mechanics}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p style={{ opacity: 0.6, fontSize: '0.9em' }}>
-                      No Ancestry Feats selected yet. (Tiers unlock at L1, L3, L7, L13, L18.)
-                    </p>
-                  )}
-                </section>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Spells Tab */}
-        {activeTab === 'spells' && (
-          <div className="tab-panel">
-            {classData?.spellcasting ? (
-              <>
-                <section className="sheet-section">
-                  <h3>Spellcasting</h3>
-                  <div className="spellcasting-info">
-                    <div className="spell-stat">
-                      <span className="spell-stat-label">Spellcasting Ability</span>
-                      <span className="spell-stat-value">{classData.spellcasting.ability?.toUpperCase()}</span>
-                    </div>
-                    <div className="spell-stat">
-                      <span className="spell-stat-label">Spell Save DC</span>
-                      <span className="spell-stat-value">
-                        {8 + Math.ceil(character.level / 4) + 1 + Math.floor((abilities[classData.spellcasting.ability?.toLowerCase().slice(0, 3)] - 10) / 2)}
-                      </span>
-                    </div>
-                    <div className="spell-stat">
-                      <span className="spell-stat-label">Spell Attack Bonus</span>
-                      <span className="spell-stat-value">
-                        +{Math.ceil(character.level / 4) + 1 + Math.floor((abilities[classData.spellcasting.ability?.toLowerCase().slice(0, 3)] - 10) / 2)}
-                      </span>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Spell Slots */}
-                {spellSlots && Object.keys(spellSlots.max || {}).length > 0 && (
-                  <section className="sheet-section">
-                    <h3>{character.class?.toLowerCase() === 'warlock' ? 'Pact Magic Slots' : 'Spell Slots'}</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {Object.entries(spellSlots.max)
-                        .filter(([, max]) => max > 0)
-                        .sort(([a], [b]) => Number(a) - Number(b))
-                        .map(([level, max]) => {
-                          const used = spellSlots.used[level] || 0
-                          const remaining = max - used
-                          const levelLabel = character.class?.toLowerCase() === 'warlock'
-                            ? `Level ${level}`
-                            : `${level}${level === '1' ? 'st' : level === '2' ? 'nd' : level === '3' ? 'rd' : 'th'}`
-                          return (
-                            <div key={level} style={{
-                              display: 'flex', alignItems: 'center', gap: '0.75rem',
-                              padding: '0.4rem 0.6rem', background: 'rgba(255,255,255,0.03)',
-                              borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)'
-                            }}>
-                              <span style={{
-                                minWidth: '36px', fontWeight: '600', fontSize: '0.85rem',
-                                color: '#b0b0b0'
-                              }}>{levelLabel}</span>
-                              <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
-                                {Array.from({ length: max }, (_, i) => (
-                                  <div key={i} style={{
-                                    width: '18px', height: '18px', borderRadius: '50%',
-                                    border: '2px solid ' + (i < remaining ? '#6c63ff' : '#444'),
-                                    background: i < remaining ? '#6c63ff' : 'transparent',
-                                    transition: 'all 0.2s ease'
-                                  }} />
-                                ))}
-                              </div>
-                              <span style={{
-                                fontSize: '0.8rem', color: '#888', minWidth: '30px', textAlign: 'center'
-                              }}>{remaining}/{max}</span>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <button
-                                  onClick={() => useSpellSlot(Number(level))}
-                                  disabled={remaining <= 0}
-                                  style={{
-                                    background: remaining > 0 ? '#c0392b' : '#555',
-                                    color: '#fff', border: 'none', borderRadius: '4px',
-                                    padding: '2px 8px', fontSize: '0.75rem', cursor: remaining > 0 ? 'pointer' : 'not-allowed',
-                                    opacity: remaining > 0 ? 1 : 0.5
-                                  }}
-                                  title="Use a spell slot"
-                                >Use</button>
-                                <button
-                                  onClick={() => restoreSpellSlot(Number(level))}
-                                  disabled={used <= 0}
-                                  style={{
-                                    background: used > 0 ? '#27ae60' : '#555',
-                                    color: '#fff', border: 'none', borderRadius: '4px',
-                                    padding: '2px 8px', fontSize: '0.75rem', cursor: used > 0 ? 'pointer' : 'not-allowed',
-                                    opacity: used > 0 ? 1 : 0.5
-                                  }}
-                                  title="Restore a spell slot"
-                                >+1</button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                    </div>
-                  </section>
-                )}
-
-                {/* Subclass Spells */}
-                {subclassSpells.length > 0 && (
-                  <section className="sheet-section">
-                    <h3>{character.subclass} Spells</h3>
-                    <p className="spell-note">These spells are always prepared and don't count against your prepared spell limit.</p>
-                    <div className="spell-list-detailed">
-                      {subclassSpells.map(([level, spells]) => (
-                        <div key={level} className="spell-level-group-detailed">
-                          <div className="spell-level-header-detailed">Gained at Level {level}</div>
-                          <div className="spells-at-level">
-                            {spells.map((spellName, idx) => {
-                              const spellDetails = getSpellDetails(spellName)
-                              return (
-                                <div key={idx} className="spell-item">
-                                  <div className="spell-header">
-                                    <span className="spell-name-detailed">{spellName}</span>
-                                    {spellDetails && (
-                                      <>
-                                        <span className="spell-school">{spellDetails.school}</span>
-                                        <span className="spell-level-badge">{spellDetails.level}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                  {spellDetails ? (
-                                    <div className="spell-details">
-                                      <div className="spell-meta-row">
-                                        <span className="spell-meta-item"><strong>Casting Time:</strong> {spellDetails.castingTime}</span>
-                                        <span className="spell-meta-item"><strong>Range:</strong> {spellDetails.range}</span>
-                                      </div>
-                                      <div className="spell-meta-row">
-                                        <span className="spell-meta-item"><strong>Duration:</strong> {spellDetails.duration}</span>
-                                        <span className="spell-meta-item"><strong>Components:</strong> {spellDetails.components}</span>
-                                      </div>
-                                      {spellDetails.damage && (
-                                        <div className="spell-damage">
-                                          <strong>Damage:</strong> {spellDetails.damage}
-                                        </div>
-                                      )}
-                                      {spellDetails.healing && (
-                                        <div className="spell-healing">
-                                          <strong>Healing:</strong> {spellDetails.healing}
-                                        </div>
-                                      )}
-                                      <p className="spell-description">{spellDetails.description}</p>
-                                    </div>
-                                  ) : (
-                                    <p className="spell-no-details">Spell details not available in database.</p>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* Prepared Spells - for Cleric, Druid, Paladin, Wizard, Artificer */}
-                {isPreparedCaster() && (
-                  <section className="sheet-section">
-                    <h3>Prepared Spells ({preparedSpells.length}/{getMaxPrepared()})</h3>
-                    {classData?.spellcasting?.spellsKnown === 'Spellbook' && (
-                      <p className="spell-note" style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>
-                        Wizard: Prepare spells from your spellbook. Spellbook contains {knownSpells.length} spell{knownSpells.length !== 1 ? 's' : ''}.
-                      </p>
-                    )}
-
-                    {/* Currently Prepared */}
-                    {preparedSpells.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
-                        {preparedSpells.map(spellName => {
-                          const details = getSpellDetails(spellName)
-                          return (
-                            <div key={spellName} style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '0.4rem 0.6rem', background: 'rgba(108,99,255,0.08)',
-                              borderRadius: '6px', border: '1px solid rgba(108,99,255,0.2)'
-                            }}>
-                              <div style={{ flex: 1 }}>
-                                <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{spellName}</span>
-                                {details && (
-                                  <span style={{ color: '#888', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
-                                    {details.level} • {details.school}
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  const newPrepared = preparedSpells.filter(s => s !== spellName)
-                                  savePreparedSpells(newPrepared)
-                                }}
-                                style={{
-                                  background: 'transparent', border: 'none', color: '#e74c3c',
-                                  cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px'
-                                }}
-                                title="Unprepare spell"
-                              >×</button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.75rem' }}>No spells prepared.</p>
-                    )}
-
-                    {/* Prepare Spells Button */}
-                    {!showPrepareSpells && (
-                      <button
-                        onClick={() => {
-                          setPendingPrepared([...preparedSpells])
-                          setShowPrepareSpells(true)
-                          setSpellLevelFilter('all')
-                          setSpellSearch('')
-                        }}
-                        style={{
-                          background: '#6c63ff', color: '#fff', border: 'none', borderRadius: '6px',
-                          padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem'
-                        }}
-                      >Prepare Spells</button>
-                    )}
-
-                    {/* Prepare Spells Panel */}
-                    {showPrepareSpells && (
-                      <div style={{
-                        border: '1px solid rgba(108,99,255,0.3)', borderRadius: '8px',
-                        padding: '1rem', background: 'rgba(108,99,255,0.05)'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                          <span style={{ fontWeight: '600' }}>
-                            Preparing: {pendingPrepared.length}/{getMaxPrepared()}
-                          </span>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button
-                              onClick={() => {
-                                savePreparedSpells(pendingPrepared)
-                                setShowPrepareSpells(false)
-                              }}
-                              style={{
-                                background: '#27ae60', color: '#fff', border: 'none', borderRadius: '4px',
-                                padding: '0.3rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600'
-                              }}
-                            >Save</button>
-                            <button
-                              onClick={() => setShowPrepareSpells(false)}
-                              style={{
-                                background: '#555', color: '#fff', border: 'none', borderRadius: '4px',
-                                padding: '0.3rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem'
-                              }}
-                            >Cancel</button>
-                          </div>
-                        </div>
-
-                        {/* Level Filter */}
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                          <button
-                            onClick={() => setSpellLevelFilter('all')}
-                            style={{
-                              background: spellLevelFilter === 'all' ? '#6c63ff' : '#333',
-                              color: '#fff', border: 'none', borderRadius: '4px',
-                              padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
-                            }}
-                          >All</button>
-                          {spellSlots && Object.keys(spellSlots.max || {}).filter(l => spellSlots.max[l] > 0).sort((a, b) => a - b).map(level => {
-                            const key = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
-                            return (
-                              <button key={level}
-                                onClick={() => setSpellLevelFilter(key)}
-                                style={{
-                                  background: spellLevelFilter === key ? '#6c63ff' : '#333',
-                                  color: '#fff', border: 'none', borderRadius: '4px',
-                                  padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
-                                }}
-                              >{key}</button>
-                            )
-                          })}
-                        </div>
-
-                        {/* Search */}
-                        <input
-                          type="text" placeholder="Search spells..."
-                          value={spellSearch}
-                          onChange={e => setSpellSearch(e.target.value)}
-                          style={{
-                            width: '100%', padding: '0.4rem 0.6rem', borderRadius: '4px',
-                            border: '1px solid #444', background: '#2a2a2a', color: '#eee',
-                            fontSize: '0.85rem', marginBottom: '0.5rem', boxSizing: 'border-box'
-                          }}
-                        />
-
-                        {/* Spell List */}
-                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                          {(() => {
-                            const alwaysPrepared = getAlwaysPreparedSpellNames()
-                            let spells = getPreparableSpells()
-                            if (spellLevelFilter !== 'all') {
-                              spells = spells.filter(s => s.spellLevel === spellLevelFilter)
-                            }
-                            if (spellSearch) {
-                              const q = spellSearch.toLowerCase()
-                              spells = spells.filter(s => s.name.toLowerCase().includes(q))
-                            }
-                            // Remove always-prepared spells
-                            spells = spells.filter(s => !alwaysPrepared.includes(s.name))
-                            if (spells.length === 0) {
-                              return <p style={{ color: '#888', fontSize: '0.8rem' }}>No spells available for this filter.</p>
-                            }
-                            return spells.map(spell => {
-                              const isPrepped = pendingPrepared.includes(spell.name)
-                              const atMax = pendingPrepared.length >= getMaxPrepared()
-                              return (
-                                <div key={spell.name} style={{
-                                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                  padding: '0.35rem 0.5rem', borderRadius: '4px',
-                                  background: isPrepped ? 'rgba(108,99,255,0.15)' : 'transparent',
-                                  cursor: (isPrepped || !atMax) ? 'pointer' : 'not-allowed',
-                                  opacity: (!isPrepped && atMax) ? 0.5 : 1
-                                }}
-                                  onClick={() => {
-                                    if (isPrepped) {
-                                      setPendingPrepared(prev => prev.filter(s => s !== spell.name))
-                                    } else if (!atMax) {
-                                      setPendingPrepared(prev => [...prev, spell.name])
-                                    }
-                                  }}
-                                >
-                                  <div style={{
-                                    width: '16px', height: '16px', borderRadius: '3px',
-                                    border: '2px solid ' + (isPrepped ? '#6c63ff' : '#555'),
-                                    background: isPrepped ? '#6c63ff' : 'transparent',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: '#fff', fontSize: '10px', flexShrink: 0
-                                  }}>{isPrepped ? '✓' : ''}</div>
-                                  <div style={{ flex: 1 }}>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{spell.name}</span>
-                                    <span style={{ color: '#888', fontSize: '0.7rem', marginLeft: '0.4rem' }}>
-                                      {spell.spellLevel} • {spell.school}
-                                    </span>
-                                  </div>
-                                </div>
-                              )
-                            })
-                          })()}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Wizard: Add to Spellbook */}
-                    {classData?.spellcasting?.spellsKnown === 'Spellbook' && !showPrepareSpells && (
-                      <button
-                        onClick={() => {
-                          const spellName = prompt('Enter spell name to add to your spellbook:')
-                          if (spellName && !knownSpells.includes(spellName)) {
-                            saveKnownSpells([...knownSpells, spellName])
-                          }
-                        }}
-                        style={{
-                          background: '#2980b9', color: '#fff', border: 'none', borderRadius: '6px',
-                          padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', marginLeft: '0.5rem'
-                        }}
-                      >+ Add to Spellbook</button>
-                    )}
-                  </section>
-                )}
-
-                {/* Known Spells - for Bard, Ranger, Sorcerer, Warlock */}
-                {isKnownCaster() && (
-                  <section className="sheet-section">
-                    <h3>Known Spells ({knownSpells.length}
-                      {classData?.spellcasting?.spellsKnownByLevel && (
-                        <span>/{classData.spellcasting.spellsKnownByLevel[character.level - 1] || '?'}</span>
-                      )}
-                    )</h3>
-
-                    {/* Known Spells List */}
-                    {knownSpells.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
-                        {knownSpells.map(spellName => {
-                          const details = getSpellDetails(spellName)
-                          return (
-                            <div key={spellName} style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '0.4rem 0.6rem', background: 'rgba(46,204,113,0.08)',
-                              borderRadius: '6px', border: '1px solid rgba(46,204,113,0.2)'
-                            }}>
-                              <div style={{ flex: 1 }}>
-                                <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{spellName}</span>
-                                {details && (
-                                  <span style={{ color: '#888', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
-                                    {details.level} • {details.school}
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Forget ${spellName}?`)) {
-                                    saveKnownSpells(knownSpells.filter(s => s !== spellName))
-                                  }
-                                }}
-                                style={{
-                                  background: 'transparent', border: 'none', color: '#e74c3c',
-                                  cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px'
-                                }}
-                                title="Forget spell"
-                              >×</button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.75rem' }}>No spells known yet.</p>
-                    )}
-
-                    {/* Learn Spell Button */}
-                    {!showLearnSpell && classData?.spellcasting?.spellsKnownByLevel &&
-                      knownSpells.length < (classData.spellcasting.spellsKnownByLevel[character.level - 1] || 0) && (
-                      <button
-                        onClick={() => {
-                          setShowLearnSpell(true)
-                          setSpellLevelFilter('all')
-                          setSpellSearch('')
-                        }}
-                        style={{
-                          background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '6px',
-                          padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem'
-                        }}
-                      >+ Learn New Spell ({(classData.spellcasting.spellsKnownByLevel[character.level - 1] || 0) - knownSpells.length} remaining)</button>
-                    )}
-
-                    {/* Learn Spell Panel */}
-                    {showLearnSpell && (
-                      <div style={{
-                        border: '1px solid rgba(46,204,113,0.3)', borderRadius: '8px',
-                        padding: '1rem', background: 'rgba(46,204,113,0.05)'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                          <span style={{ fontWeight: '600' }}>Learn a Spell</span>
-                          <button
-                            onClick={() => setShowLearnSpell(false)}
-                            style={{
-                              background: '#555', color: '#fff', border: 'none', borderRadius: '4px',
-                              padding: '0.3rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem'
-                            }}
-                          >Close</button>
-                        </div>
-
-                        {/* Level Filter */}
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                          <button
-                            onClick={() => setSpellLevelFilter('all')}
-                            style={{
-                              background: spellLevelFilter === 'all' ? '#2ecc71' : '#333',
-                              color: '#fff', border: 'none', borderRadius: '4px',
-                              padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
-                            }}
-                          >All</button>
-                          {spellSlots && Object.keys(spellSlots.max || {}).filter(l => spellSlots.max[l] > 0).sort((a, b) => a - b).map(level => {
-                            const key = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
-                            return (
-                              <button key={level}
-                                onClick={() => setSpellLevelFilter(key)}
-                                style={{
-                                  background: spellLevelFilter === key ? '#2ecc71' : '#333',
-                                  color: '#fff', border: 'none', borderRadius: '4px',
-                                  padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer'
-                                }}
-                              >{key}</button>
-                            )
-                          })}
-                        </div>
-
-                        {/* Search */}
-                        <input
-                          type="text" placeholder="Search spells..."
-                          value={spellSearch}
-                          onChange={e => setSpellSearch(e.target.value)}
-                          style={{
-                            width: '100%', padding: '0.4rem 0.6rem', borderRadius: '4px',
-                            border: '1px solid #444', background: '#2a2a2a', color: '#eee',
-                            fontSize: '0.85rem', marginBottom: '0.5rem', boxSizing: 'border-box'
-                          }}
-                        />
-
-                        {/* Available Spells */}
-                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                          {(() => {
-                            const className = character.class?.toLowerCase()
-                            let spells = []
-                            if (spellSlots) {
-                              for (const [level, max] of Object.entries(spellSlots.max || {})) {
-                                if (max <= 0) continue
-                                const levelKey = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
-                                const levelSpells = (spellsData.spells[levelKey] || []).filter(s => s.classes?.includes(className))
-                                levelSpells.forEach(s => spells.push({ ...s, spellLevel: levelKey }))
-                              }
-                            }
-                            // Filter out already known
-                            spells = spells.filter(s => !knownSpells.includes(s.name))
-                            if (spellLevelFilter !== 'all') {
-                              spells = spells.filter(s => s.spellLevel === spellLevelFilter)
-                            }
-                            if (spellSearch) {
-                              const q = spellSearch.toLowerCase()
-                              spells = spells.filter(s => s.name.toLowerCase().includes(q))
-                            }
-                            if (spells.length === 0) {
-                              return <p style={{ color: '#888', fontSize: '0.8rem' }}>No spells available.</p>
-                            }
-                            return spells.map(spell => (
-                              <div key={spell.name} style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '0.35rem 0.5rem', borderRadius: '4px',
-                                cursor: 'pointer'
-                              }}
-                                onClick={() => {
-                                  saveKnownSpells([...knownSpells, spell.name])
-                                  setShowLearnSpell(false)
-                                }}
-                              >
-                                <div>
-                                  <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{spell.name}</span>
-                                  <span style={{ color: '#888', fontSize: '0.7rem', marginLeft: '0.4rem' }}>
-                                    {spell.spellLevel} • {spell.school}
-                                  </span>
-                                </div>
-                                <span style={{ color: '#2ecc71', fontSize: '0.8rem', fontWeight: '600' }}>Learn</span>
-                              </div>
-                            ))
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </section>
-                )}
-
-                {/* Cantrips - if class has them */}
-                {classData.spellcasting.cantripsKnown && (
-                  <section className="sheet-section">
-                    <h3>Cantrips ({knownCantrips.length}/{getMaxCantrips()})</h3>
-
-                    {/* Known Cantrips */}
-                    {knownCantrips.length > 0 ? (
-                      <div className="cantrip-list">
-                        {knownCantrips.map(cantripName => {
-                          const cantrip = getAvailableCantrips().find(c => c.name === cantripName)
-                          return (
-                            <div key={cantripName} className="cantrip-item">
-                              <div className="cantrip-header">
-                                <span className="cantrip-name">{cantripName}</span>
-                                {cantrip && <span className="cantrip-school">{cantrip.school}</span>}
-                                <button
-                                  className="remove-cantrip-btn"
-                                  onClick={() => {
-                                    if (confirm(`Remove ${cantripName}?`)) {
-                                      removeCantrip(cantripName)
-                                    }
-                                  }}
-                                  title="Remove cantrip"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                              {cantrip && (
-                                <div className="cantrip-details">
-                                  <span className="cantrip-meta">{cantrip.castingTime} • {cantrip.range} • {cantrip.duration}</span>
-                                  <p className="cantrip-description">{cantrip.description}</p>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <p className="no-cantrips">No cantrips selected yet.</p>
-                    )}
-
-                    {/* Add Cantrip Button */}
-                    {knownCantrips.length < getMaxCantrips() && !showCantripSelection && (
-                      <button
-                        onClick={() => setShowCantripSelection(true)}
-                        className="add-cantrip-btn"
-                      >
-                        + Add Cantrip ({getMaxCantrips() - knownCantrips.length} remaining)
-                      </button>
-                    )}
-
-                    {/* Cantrip Selection Modal */}
-                    {showCantripSelection && (
-                      <div className="cantrip-selection">
-                        <div className="cantrip-selection-header">
-                          <h4>Select a Cantrip</h4>
-                          <button
-                            onClick={() => {
-                              setShowCantripSelection(false)
-                              setSelectedCantrip(null)
-                            }}
-                            className="close-selection-btn"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="available-cantrips">
-                          {getAvailableCantrips()
-                            .filter(c => !knownCantrips.includes(c.name))
-                            .map(cantrip => (
-                              <div
-                                key={cantrip.name}
-                                className={`available-cantrip ${selectedCantrip?.name === cantrip.name ? 'selected' : ''}`}
-                                onClick={() => setSelectedCantrip(cantrip)}
-                              >
-                                <div className="available-cantrip-header">
-                                  <span className="cantrip-name">{cantrip.name}</span>
-                                  <span className="cantrip-school">{cantrip.school}</span>
-                                </div>
-                                <div className="cantrip-meta">{cantrip.castingTime} • {cantrip.range}</div>
-                              </div>
-                            ))}
-                        </div>
-
-                        {/* Selected Cantrip Preview */}
-                        {selectedCantrip && (
-                          <div className="selected-cantrip-preview">
-                            <h5>{selectedCantrip.name}</h5>
-                            <div className="cantrip-meta">
-                              {selectedCantrip.school} • {selectedCantrip.castingTime} • {selectedCantrip.range} • {selectedCantrip.duration}
-                            </div>
-                            <p className="cantrip-description">{selectedCantrip.description}</p>
-                            <button
-                              onClick={() => addCantrip(selectedCantrip.name)}
-                              className="button"
-                            >
-                              Learn {selectedCantrip.name}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </section>
-                )}
-              </>
-            ) : (
-              <section className="sheet-section">
-                <h3>Spellcasting</h3>
-                <p className="no-spells">{capitalize(character.class)} is not a spellcasting class.</p>
-              </section>
-            )}
-          </div>
-        )}
-
-        {/* Equipment Tab */}
-        {activeTab === 'equipment' && (
-          <div className="tab-panel">
-            {/* Calculated Stats Summary */}
-            <section className="sheet-section" style={{ marginBottom: '1.5rem' }}>
-              <div style={{
-                display: 'flex',
-                gap: '2rem',
-                justifyContent: 'center',
-                flexWrap: 'wrap'
-              }}>
-                <div style={{
-                  background: 'rgba(46, 204, 113, 0.15)',
-                  border: '2px solid #2ecc71',
-                  borderRadius: '12px',
-                  padding: '1rem 2rem',
-                  textAlign: 'center'
-                }}>
-                  <div style={{ color: '#888', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Armor Class</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#2ecc71' }}>{calculateEquipmentAC()}</div>
-                  {equipment.armor && (
-                    <div style={{ color: '#aaa', fontSize: '0.8rem' }}>
-                      {equipment.armor.quality && equipment.armor.quality !== 'common' && (
-                        <span style={{ color: QUALITY_RANKS[equipment.armor.quality]?.armorBonus > 0 ? '#f1c40f' : '#888' }}>
-                          {capitalize(equipment.armor.quality)}{' '}
-                        </span>
-                      )}
-                      {equipment.armor.name}
-                    </div>
-                  )}
-                </div>
-
-                {equipment.mainHand && (
-                  <div style={{
-                    background: 'rgba(231, 76, 60, 0.15)',
-                    border: '2px solid #e74c3c',
-                    borderRadius: '12px',
-                    padding: '1rem 2rem',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ color: '#888', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Attack Bonus</div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#e74c3c' }}>+{getWeaponAttackBonus(equipment.mainHand)}</div>
-                    <div style={{ color: '#aaa', fontSize: '0.8rem' }}>
-                      {equipment.mainHand.quality && equipment.mainHand.quality !== 'common' && (
-                        <span style={{ color: QUALITY_RANKS[equipment.mainHand.quality]?.weaponBonus > 0 ? '#f1c40f' : '#888' }}>
-                          {capitalize(equipment.mainHand.quality)}{' '}
-                        </span>
-                      )}
-                      {equipment.mainHand.name}
-                    </div>
-                  </div>
-                )}
-
-                {equipment.mainHand && (
-                  <div style={{
-                    background: 'rgba(52, 152, 219, 0.15)',
-                    border: '2px solid #3498db',
-                    borderRadius: '12px',
-                    padding: '1rem 2rem',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ color: '#888', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Damage</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3498db' }}>{getWeaponDamage(equipment.mainHand)}</div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* Weapon Slots */}
-            <section className="sheet-section" style={{
-              background: 'rgba(231, 76, 60, 0.1)',
-              border: '1px solid #e74c3c',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1rem'
-            }}>
-              <h3 style={{ color: '#e74c3c', margin: '0 0 1rem 0' }}>Weapons</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                {/* Main Hand */}
-                <div>
-                  <label style={{ color: '#888', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>
-                    Main Hand
-                  </label>
-                  <select
-                    value={equipment.mainHand?.name || ''}
-                    onChange={(e) => {
-                      if (e.target.value === '__custom__') {
-                        setCustomItemType('weapon')
-                        setShowCustomItemForm(true)
-                      } else if (e.target.value) {
-                        const weapon = ALL_WEAPONS.find(w => w.name === e.target.value)
-                        equipItem('mainHand', { ...weapon, quality: 'common' })
-                      } else {
-                        unequipItem('mainHand')
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem',
-                      background: '#2a2a2a',
-                      border: '1px solid #444',
-                      borderRadius: '4px',
-                      color: '#fff'
-                    }}
-                  >
-                    <option value="">-- Empty --</option>
-                    <optgroup label="Simple Melee">
-                      {equipmentData.simpleWeapons.melee.map(w => (
-                        <option key={w.name} value={w.name}>{w.name} ({w.damage})</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Simple Ranged">
-                      {equipmentData.simpleWeapons.ranged.map(w => (
-                        <option key={w.name} value={w.name}>{w.name} ({w.damage})</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Martial Melee">
-                      {equipmentData.martialWeapons.melee.map(w => (
-                        <option key={w.name} value={w.name}>{w.name} ({w.damage})</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Martial Ranged">
-                      {equipmentData.martialWeapons.ranged.map(w => (
-                        <option key={w.name} value={w.name}>{w.name} ({w.damage})</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Special">
-                      <option value="__custom__">+ Add Custom/Magic Weapon...</option>
-                    </optgroup>
-                  </select>
-                  {equipment.mainHand && (
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <select
-                        value={equipment.mainHand.quality || 'common'}
-                        onChange={(e) => equipItem('mainHand', { ...equipment.mainHand, quality: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '0.4rem',
-                          background: '#1a1a1a',
-                          border: '1px solid #333',
-                          borderRadius: '4px',
-                          color: '#f1c40f',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        {Object.entries(QUALITY_RANKS).map(([key, rank]) => (
-                          <option key={key} value={key}>
-                            {rank.name} {rank.weaponBonus !== 0 && `(${rank.weaponBonus > 0 ? '+' : ''}${rank.weaponBonus} attack)`}
-                          </option>
-                        ))}
-                      </select>
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#bbb' }}>
-                        <span style={{ color: '#e74c3c' }}>{getWeaponDamage(equipment.mainHand)}</span>
-                        {(ALL_WEAPONS.find(w => w.name === equipment.mainHand.name)?.properties || equipment.mainHand.properties)?.length > 0 && (
-                          <div style={{ color: '#888', marginTop: '0.25rem' }}>
-                            {(ALL_WEAPONS.find(w => w.name === equipment.mainHand.name)?.properties || equipment.mainHand.properties).join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Off Hand */}
-                <div>
-                  <label style={{ color: '#888', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>
-                    Off Hand
-                  </label>
-                  <select
-                    value={equipment.offHand?.name || ''}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        const shield = ALL_SHIELDS.find(s => s.name === e.target.value)
-                        const weapon = ALL_WEAPONS.find(w => w.name === e.target.value)
-                        equipItem('offHand', shield || { ...weapon, quality: 'common' })
-                      } else {
-                        unequipItem('offHand')
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem',
-                      background: '#2a2a2a',
-                      border: '1px solid #444',
-                      borderRadius: '4px',
-                      color: '#fff'
-                    }}
-                  >
-                    <option value="">-- Empty --</option>
-                    <optgroup label="Shields">
-                      {ALL_SHIELDS.map(s => (
-                        <option key={s.name} value={s.name}>{s.name} (+{s.acBonus} AC)</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Light Weapons">
-                      {ALL_WEAPONS.filter(w => w.properties?.includes('light')).map(w => (
-                        <option key={w.name} value={w.name}>{w.name} ({w.damage})</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                  {equipment.offHand && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#bbb' }}>
-                      {equipment.offHand.acBonus
-                        ? <span style={{ color: '#2ecc71' }}>+{equipment.offHand.acBonus} AC</span>
-                        : <span style={{ color: '#e74c3c' }}>{getWeaponDamage(equipment.offHand)}</span>
-                      }
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            {/* Armor Slot */}
-            <section className="sheet-section" style={{
-              background: 'rgba(52, 152, 219, 0.1)',
-              border: '1px solid #3498db',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1rem'
-            }}>
-              <h3 style={{ color: '#3498db', margin: '0 0 1rem 0' }}>Armor</h3>
-              <select
-                value={equipment.armor?.name || ''}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    setCustomItemType('armor')
-                    setShowCustomItemForm(true)
-                  } else if (e.target.value) {
-                    const armor = ALL_ARMOR.find(a => a.name === e.target.value)
-                    equipItem('armor', { ...armor, quality: 'common' })
-                  } else {
-                    unequipItem('armor')
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  padding: '0.6rem',
-                  background: '#2a2a2a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff'
-                }}
-              >
-                <option value="">-- No Armor (AC = 10 + DEX) --</option>
-                <optgroup label="Light Armor">
-                  {equipmentData.armor.light.map(a => (
-                    <option key={a.name} value={a.name}>{a.name} (AC {a.baseAC} + DEX)</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Medium Armor">
-                  {equipmentData.armor.medium.map(a => (
-                    <option key={a.name} value={a.name}>{a.name} (AC {a.baseAC} + DEX max 2)</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Heavy Armor">
-                  {equipmentData.armor.heavy.map(a => (
-                    <option key={a.name} value={a.name}>
-                      {a.name} (AC {a.baseAC}){a.strReq ? ` [STR ${a.strReq}]` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Special">
-                  <option value="__custom__">+ Add Custom/Magic Armor...</option>
-                </optgroup>
-              </select>
-              {equipment.armor && (
-                <div style={{ marginTop: '0.75rem' }}>
-                  <select
-                    value={equipment.armor.quality || 'common'}
-                    onChange={(e) => equipItem('armor', { ...equipment.armor, quality: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '0.4rem',
-                      background: '#1a1a1a',
-                      border: '1px solid #333',
-                      borderRadius: '4px',
-                      color: '#f1c40f',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    {Object.entries(QUALITY_RANKS).map(([key, rank]) => (
-                      <option key={key} value={key}>
-                        {rank.name} {rank.armorBonus !== 0 && `(${rank.armorBonus > 0 ? '+' : ''}${rank.armorBonus} AC)`}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#bbb' }}>
-                    <span style={{ color: '#3498db' }}>Base AC: {equipment.armor.baseAC}</span>
-                    {equipment.armor.stealthDisadvantage && (
-                      <span style={{ color: '#e74c3c', marginLeft: '1rem' }}>Stealth Disadvantage</span>
-                    )}
-                    {equipment.armor.strReq && (
-                      <span style={{ color: '#f1c40f', marginLeft: '1rem' }}>Requires STR {equipment.armor.strReq}</span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {/* Quality Ranks Reference */}
-            <section className="sheet-section" style={{
-              background: 'rgba(241, 196, 15, 0.05)',
-              border: '1px solid #444',
-              borderRadius: '8px',
-              padding: '1rem'
-            }}>
-              <h4 style={{ color: '#f1c40f', margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>Quality Ranks Reference</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', fontSize: '0.75rem' }}>
-                {Object.entries(QUALITY_RANKS).map(([key, rank]) => (
-                  <div key={key} style={{
-                    background: 'rgba(0,0,0,0.2)',
-                    padding: '0.5rem',
-                    borderRadius: '4px'
-                  }}>
-                    <div style={{ color: '#f1c40f', fontWeight: 'bold' }}>{rank.name}</div>
-                    <div style={{ color: '#888' }}>
-                      {rank.weaponBonus !== 0 && <span>Weapon: {rank.weaponBonus > 0 ? '+' : ''}{rank.weaponBonus} </span>}
-                      {rank.armorBonus !== 0 && <span>Armor: {rank.armorBonus > 0 ? '+' : ''}{rank.armorBonus}</span>}
-                      {rank.weaponBonus === 0 && rank.armorBonus === 0 && <span>Standard</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Custom Item Modal */}
-            {showCustomItemForm && (
-              <div className="modal-overlay" onClick={() => setShowCustomItemForm(false)}>
-                <div
-                  className="modal-content"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ maxWidth: '500px' }}
-                >
-                  <h3 style={{ color: '#9b59b6', marginTop: 0 }}>
-                    Add Custom {customItemType === 'weapon' ? 'Weapon' : 'Armor'}
-                  </h3>
-
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                      Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={customItem.name}
-                      onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
-                      placeholder={customItemType === 'weapon' ? 'e.g., Flame Tongue Longsword' : 'e.g., Mithral Chain Shirt'}
-                      style={{
-                        width: '100%',
-                        padding: '0.6rem',
-                        background: '#2a2a2a',
-                        border: '1px solid #444',
-                        borderRadius: '4px',
-                        color: '#fff'
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                    <div className="form-group">
-                      <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                        Quality
-                      </label>
-                      <select
-                        value={customItem.quality}
-                        onChange={(e) => setCustomItem({ ...customItem, quality: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '0.6rem',
-                          background: '#2a2a2a',
-                          border: '1px solid #444',
-                          borderRadius: '4px',
-                          color: '#fff'
-                        }}
-                      >
-                        {Object.entries(QUALITY_RANKS).map(([key, rank]) => (
-                          <option key={key} value={key}>{rank.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {customItemType === 'weapon' ? (
-                      <div className="form-group">
-                        <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                          Range Type
-                        </label>
-                        <select
-                          value={customItem.rangeType}
-                          onChange={(e) => setCustomItem({ ...customItem, rangeType: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '0.6rem',
-                            background: '#2a2a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: '#fff'
-                          }}
-                        >
-                          <option value="melee">Melee</option>
-                          <option value="ranged">Ranged</option>
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="form-group">
-                        <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                          Armor Type
-                        </label>
-                        <select
-                          value={customItem.armorType}
-                          onChange={(e) => setCustomItem({ ...customItem, armorType: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '0.6rem',
-                            background: '#2a2a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: '#fff'
-                          }}
-                        >
-                          <option value="light">Light</option>
-                          <option value="medium">Medium</option>
-                          <option value="heavy">Heavy</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {customItemType === 'weapon' ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                      <div className="form-group">
-                        <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                          Damage Dice
-                        </label>
-                        <input
-                          type="text"
-                          value={customItem.damage}
-                          onChange={(e) => setCustomItem({ ...customItem, damage: e.target.value })}
-                          placeholder="e.g., 2d6"
-                          style={{
-                            width: '100%',
-                            padding: '0.6rem',
-                            background: '#2a2a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: '#fff'
-                          }}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                          Damage Type
-                        </label>
-                        <select
-                          value={customItem.damageType}
-                          onChange={(e) => setCustomItem({ ...customItem, damageType: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '0.6rem',
-                            background: '#2a2a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: '#fff'
-                          }}
-                        >
-                          <option value="slashing">Slashing</option>
-                          <option value="piercing">Piercing</option>
-                          <option value="bludgeoning">Bludgeoning</option>
-                          <option value="fire">Fire</option>
-                          <option value="cold">Cold</option>
-                          <option value="lightning">Lightning</option>
-                          <option value="radiant">Radiant</option>
-                          <option value="necrotic">Necrotic</option>
-                        </select>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                      <div className="form-group">
-                        <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                          Base AC
-                        </label>
-                        <input
-                          type="number"
-                          value={customItem.baseAC}
-                          onChange={(e) => setCustomItem({ ...customItem, baseAC: parseInt(e.target.value) || 10 })}
-                          style={{
-                            width: '100%',
-                            padding: '0.6rem',
-                            background: '#2a2a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: '#fff'
-                          }}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                          Max DEX Bonus
-                        </label>
-                        <input
-                          type="number"
-                          value={customItem.maxDexBonus === null ? '' : customItem.maxDexBonus}
-                          onChange={(e) => setCustomItem({ ...customItem, maxDexBonus: e.target.value === '' ? null : parseInt(e.target.value) })}
-                          placeholder="Leave empty for no cap"
-                          style={{
-                            width: '100%',
-                            padding: '0.6rem',
-                            background: '#2a2a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: '#fff'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ color: '#bbb', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
-                      Notes (special properties, magic effects, etc.)
-                    </label>
-                    <textarea
-                      value={customItem.notes}
-                      onChange={(e) => setCustomItem({ ...customItem, notes: e.target.value })}
-                      placeholder="e.g., +1d6 fire damage, glows in darkness..."
-                      rows={2}
-                      style={{
-                        width: '100%',
-                        padding: '0.6rem',
-                        background: '#2a2a2a',
-                        border: '1px solid #444',
-                        borderRadius: '4px',
-                        color: '#fff',
-                        resize: 'vertical'
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button
-                      className="button button-secondary"
-                      onClick={() => setShowCustomItemForm(false)}
-                      style={{ flex: 1 }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="button"
-                      onClick={() => {
-                        if (!customItem.name.trim()) {
-                          alert('Please enter a name for the item')
-                          return
-                        }
-                        const slot = customItemType === 'weapon' ? 'mainHand' : 'armor'
-                        equipItem(slot, {
-                          ...customItem,
-                          isCustom: true
-                        })
-                        setShowCustomItemForm(false)
-                        setCustomItem({
-                          name: '',
-                          quality: 'common',
-                          damage: '1d6',
-                          damageType: 'slashing',
-                          properties: [],
-                          rangeType: 'melee',
-                          baseAC: 11,
-                          armorType: 'light',
-                          maxDexBonus: null,
-                          acBonus: 2,
-                          magicBonus: 0,
-                          notes: ''
-                        })
-                      }}
-                      style={{ flex: 1, background: '#2ecc71' }}
-                    >
-                      Add {customItemType === 'weapon' ? 'Weapon' : 'Armor'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Inventory Tab */}
-        {activeTab === 'inventory' && (
-          <div className="tab-panel">
-            {/* Empty Inventory Notice */}
-            {inventory.length === 0 && (
-              <section className="sheet-section" style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid rgba(231, 76, 60, 0.3)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
-                <h3 style={{ color: '#e74c3c', marginTop: 0 }}>No Starting Equipment</h3>
-                <p style={{ marginBottom: '1rem' }}>This character was created before the equipment system was implemented, or the equipment wasn't saved properly.</p>
-                <button
-                  onClick={() => onEditInWizard && onEditInWizard(character)}
-                  style={{
-                    background: '#3498db',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Edit in Wizard to Select Equipment
-                </button>
-              </section>
-            )}
-
-            {/* Equipped Items */}
-            <section className="sheet-section">
-              <h3>Equipped</h3>
-              {(() => {
-                const equippedItems = inventory.filter(item => item.equipped)
-                if (equippedItems.length === 0) {
-                  return <p className="empty-inventory">No equipped items. Click an item below to equip it.</p>
-                }
-                return (
-                  <div className="inventory-list equipped-list">
-                    {equippedItems.map((item, idx) => {
-                      const itemName = typeof item === 'string' ? item : item.name
-                      return (
-                        <div key={idx} className="inventory-item equipped" onClick={() => {
-                          const newInventory = inventory.map(i =>
-                            (typeof i === 'string' ? i : i.name) === itemName
-                              ? { ...i, equipped: false }
-                              : i
-                          )
-                          fetch(`/api/character/${character.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ inventory: JSON.stringify(newInventory) })
-                          })
-                            .then(res => res.json())
-                            .then(updated => {
-                              setCharacter(updated)
-                              onCharacterUpdated && onCharacterUpdated(updated)
-                            })
-                            .catch(err => console.error('Error updating inventory:', err))
-                        }} style={{ cursor: 'pointer' }}>
-                          <span className="equip-indicator">⚔️</span>
-                          <span className="item-name">{itemName}</span>
-                          <span className="item-quantity-controls" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className="qty-btn"
-                              onClick={() => updateItemQuantity(itemName, -1)}
-                              title="Decrease quantity"
-                            >
-                              −
-                            </button>
-                            <span className="item-quantity">{item.quantity || 1}</span>
-                            <button
-                              className="qty-btn"
-                              onClick={() => updateItemQuantity(itemName, 1)}
-                              title="Increase quantity"
-                            >
-                              +
-                            </button>
-                          </span>
-                          <button
-                            className="remove-item-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (confirm(`Remove ${itemName} from inventory?`)) {
-                                removeItemFromInventory(itemName)
-                              }
-                            }}
-                            title="Remove item"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })()}
-            </section>
-
-            {/* Backpack Items */}
-            <section className="sheet-section">
-              <h3>Backpack</h3>
-              {(() => {
-                const backpackItems = inventory.filter(item => !item.equipped)
-                if (backpackItems.length === 0) {
-                  return <p className="empty-inventory">Backpack is empty.</p>
-                }
-                return (
-                  <div className="inventory-list backpack-list">
-                    {backpackItems.map((item, idx) => {
-                      const itemName = typeof item === 'string' ? item : item.name
-                      return (
-                        <div key={idx} className="inventory-item" onClick={() => {
-                          const newInventory = inventory.map(i =>
-                            (typeof i === 'string' ? i : i.name) === itemName
-                              ? { ...(typeof i === 'string' ? { name: i, quantity: 1 } : i), equipped: true }
-                              : i
-                          )
-                          fetch(`/api/character/${character.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ inventory: JSON.stringify(newInventory) })
-                          })
-                            .then(res => res.json())
-                            .then(updated => {
-                              setCharacter(updated)
-                              onCharacterUpdated && onCharacterUpdated(updated)
-                            })
-                            .catch(err => console.error('Error updating inventory:', err))
-                        }} style={{ cursor: 'pointer' }}>
-                          <span className="equip-indicator">🎒</span>
-                          <span className="item-name">{itemName}</span>
-                          <span className="item-quantity-controls" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className="qty-btn"
-                              onClick={() => updateItemQuantity(itemName, -1)}
-                              title="Decrease quantity"
-                            >
-                              −
-                            </button>
-                            <span className="item-quantity">{item.quantity || 1}</span>
-                            <button
-                              className="qty-btn"
-                              onClick={() => updateItemQuantity(itemName, 1)}
-                              title="Increase quantity"
-                            >
-                              +
-                            </button>
-                          </span>
-                          <button
-                            className="remove-item-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (confirm(`Remove ${itemName} from inventory?`)) {
-                                removeItemFromInventory(itemName)
-                              }
-                            }}
-                            title="Remove item"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })()}
-            </section>
-
-            {/* Add Item Section */}
-            <section className="sheet-section">
-              <h3>Manage Inventory</h3>
-              {!showAddItem ? (
-                <button
-                  onClick={() => setShowAddItem(true)}
-                  className="add-item-btn"
-                >
-                  + Add Item
-                </button>
-              ) : (
-                <div className="add-item-form">
-                  <div className="form-row">
-                    <div className="form-group" style={{ flex: 2 }}>
-                      <label>Item Name</label>
-                      <input
-                        type="text"
-                        value={newItemName}
-                        onChange={(e) => setNewItemName(e.target.value)}
-                        placeholder="Enter item name or select below..."
-                        onKeyPress={(e) => e.key === 'Enter' && addItemToInventory(newItemName, newItemQuantity)}
-                      />
-                    </div>
-                    <div className="form-group" style={{ flex: 0, minWidth: '80px' }}>
-                      <label>Qty</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={newItemQuantity}
-                        onChange={(e) => setNewItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Quick Add from Category</label>
-                    <select
-                      value={selectedEquipmentCategory}
-                      onChange={(e) => setSelectedEquipmentCategory(e.target.value)}
-                    >
-                      <option value="">Select a category...</option>
-                      {Object.keys(getEquipmentOptions()).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedEquipmentCategory && (
-                    <div className="quick-add-items">
-                      {getEquipmentOptions()[selectedEquipmentCategory]?.map(item => (
-                        <button
-                          key={item}
-                          className="quick-add-item"
-                          onClick={() => addItemToInventory(item, newItemQuantity)}
-                        >
-                          {item}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="add-item-actions">
-                    <button
-                      onClick={() => addItemToInventory(newItemName, newItemQuantity)}
-                      disabled={!newItemName.trim()}
-                      className="button"
-                    >
-                      Add Item
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAddItem(false)
-                        setNewItemName('')
-                        setNewItemQuantity(1)
-                        setSelectedEquipmentCategory('')
-                      }}
-                      className="button button-secondary"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {/* Wealth Section */}
-            <section className="sheet-section">
-              <h3>Currency</h3>
-              <div className="currency-display" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <div className="currency-item gold" style={{
-                  background: 'rgba(241, 196, 15, 0.15)',
-                  border: '1px solid #f1c40f',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  textAlign: 'center',
-                  minWidth: '100px'
-                }}>
-                  <input
-                    type="number"
-                    min="0"
-                    value={character.gold_gp || 0}
-                    onChange={async (e) => {
-                      const newValue = Math.max(0, parseInt(e.target.value) || 0)
-                      try {
-                        const response = await fetch(`/api/character/${character.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ gold_gp: newValue })
-                        })
-                        const updated = await response.json()
-                        setCharacter(updated)
-                        onCharacterUpdated && onCharacterUpdated(updated)
-                      } catch (err) {
-                        console.error('Error updating gold:', err)
-                      }
-                    }}
-                    style={{
-                      width: '80px',
-                      padding: '0.5rem',
-                      background: '#1a1a1a',
-                      border: '1px solid #f1c40f',
-                      borderRadius: '4px',
-                      color: '#f1c40f',
-                      fontWeight: 'bold',
-                      fontSize: '1.2rem',
-                      textAlign: 'center'
-                    }}
-                  />
-                  <div style={{ color: '#f1c40f', fontSize: '0.8rem', marginTop: '0.25rem' }}>Gold (gp)</div>
-                </div>
-                <div className="currency-item silver" style={{
-                  background: 'rgba(189, 195, 199, 0.15)',
-                  border: '1px solid #bdc3c7',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  textAlign: 'center',
-                  minWidth: '100px'
-                }}>
-                  <input
-                    type="number"
-                    min="0"
-                    value={character.gold_sp || 0}
-                    onChange={async (e) => {
-                      const newValue = Math.max(0, parseInt(e.target.value) || 0)
-                      try {
-                        const response = await fetch(`/api/character/${character.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ gold_sp: newValue })
-                        })
-                        const updated = await response.json()
-                        setCharacter(updated)
-                        onCharacterUpdated && onCharacterUpdated(updated)
-                      } catch (err) {
-                        console.error('Error updating silver:', err)
-                      }
-                    }}
-                    style={{
-                      width: '80px',
-                      padding: '0.5rem',
-                      background: '#1a1a1a',
-                      border: '1px solid #bdc3c7',
-                      borderRadius: '4px',
-                      color: '#bdc3c7',
-                      fontWeight: 'bold',
-                      fontSize: '1.2rem',
-                      textAlign: 'center'
-                    }}
-                  />
-                  <div style={{ color: '#bdc3c7', fontSize: '0.8rem', marginTop: '0.25rem' }}>Silver (sp)</div>
-                </div>
-                <div className="currency-item copper" style={{
-                  background: 'rgba(205, 127, 50, 0.15)',
-                  border: '1px solid #cd7f32',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  textAlign: 'center',
-                  minWidth: '100px'
-                }}>
-                  <input
-                    type="number"
-                    min="0"
-                    value={character.gold_cp || 0}
-                    onChange={async (e) => {
-                      const newValue = Math.max(0, parseInt(e.target.value) || 0)
-                      try {
-                        const response = await fetch(`/api/character/${character.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ gold_cp: newValue })
-                        })
-                        const updated = await response.json()
-                        setCharacter(updated)
-                        onCharacterUpdated && onCharacterUpdated(updated)
-                      } catch (err) {
-                        console.error('Error updating copper:', err)
-                      }
-                    }}
-                    style={{
-                      width: '80px',
-                      padding: '0.5rem',
-                      background: '#1a1a1a',
-                      border: '1px solid #cd7f32',
-                      borderRadius: '4px',
-                      color: '#cd7f32',
-                      fontWeight: 'bold',
-                      fontSize: '1.2rem',
-                      textAlign: 'center'
-                    }}
-                  />
-                  <div style={{ color: '#cd7f32', fontSize: '0.8rem', marginTop: '0.25rem' }}>Copper (cp)</div>
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* Background Tab */}
-        {activeTab === 'background' && (
-          <div className="tab-panel">
-            {/* Physical Description */}
-            {(character.height || character.weight || character.age || character.hair_color || character.eye_color || character.skin_color) && (
-              <section className="sheet-section">
-                <h3>Physical Description</h3>
-                <div className="physical-grid">
-                  {character.age && <div className="physical-item"><span>Age:</span> {character.age}</div>}
-                  {character.height && <div className="physical-item"><span>Height:</span> {character.height}</div>}
-                  {character.weight && <div className="physical-item"><span>Weight:</span> {character.weight}</div>}
-                  {character.hair_color && <div className="physical-item"><span>Hair:</span> {character.hair_color}</div>}
-                  {character.eye_color && <div className="physical-item"><span>Eyes:</span> {character.eye_color}</div>}
-                  {character.skin_color && <div className="physical-item"><span>Skin:</span> {character.skin_color}</div>}
-                </div>
-              </section>
-            )}
-
-            {/* Background Info */}
-            {character.background && (
-              <section className="sheet-section">
-                <h3>Background: {capitalize(character.background)}</h3>
-                {backgroundData && (
-                  <div className="background-info">
-                    {backgroundData.description && <p>{backgroundData.description}</p>}
-                    {backgroundData.skillProficiencies?.length > 0 && (
-                      <div className="bg-detail">
-                        <strong>Skill Proficiencies:</strong> {backgroundData.skillProficiencies.map(s => capitalize(s)).join(', ')}
-                      </div>
-                    )}
-                    {backgroundData.toolProficiencies?.length > 0 && (
-                      <div className="bg-detail">
-                        <strong>Tool Proficiencies:</strong> {backgroundData.toolProficiencies.join(', ')}
-                      </div>
-                    )}
-                    {backgroundData.languages && (
-                      <div className="bg-detail">
-                        <strong>Languages:</strong> {
-                          typeof backgroundData.languages === 'number'
-                            ? `${backgroundData.languages} additional language${backgroundData.languages > 1 ? 's' : ''} of your choice`
-                            : backgroundData.languages
-                        }
-                      </div>
-                    )}
-                    {backgroundData.feature && (
-                      <div className="bg-feature">
-                        <strong>{backgroundData.feature.name}:</strong> {backgroundData.feature.description}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-            )}
-
-            {/* Personality */}
-            {(character.personality_traits || character.ideals || character.bonds || character.flaws) && (
-              <section className="sheet-section">
-                <h3>Personality</h3>
-                <div className="personality-section">
-                  {character.personality_traits && (
-                    <div className="personality-item">
-                      <h4>Personality Traits</h4>
-                      <p>{character.personality_traits}</p>
-                    </div>
-                  )}
-                  {character.ideals && (
-                    <div className="personality-item">
-                      <h4>Ideals</h4>
-                      <p>{character.ideals}</p>
-                    </div>
-                  )}
-                  {character.bonds && (
-                    <div className="personality-item">
-                      <h4>Bonds</h4>
-                      <p>{character.bonds}</p>
-                    </div>
-                  )}
-                  {character.flaws && (
-                    <div className="personality-item">
-                      <h4>Flaws</h4>
-                      <p>{character.flaws}</p>
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {/* Backstory */}
-            {character.backstory && (
-              <section className="sheet-section">
-                <h3>Backstory</h3>
-                <div className="backstory-content">
-                  <p>{character.backstory}</p>
-                </div>
-              </section>
-            )}
-
-            {/* Connections */}
-            {(character.organizations || character.allies || character.enemies) && (
-              <section className="sheet-section">
-                <h3>Connections</h3>
-                <div className="connections-section">
-                  {character.organizations && (
-                    <div className="connection-item">
-                      <h4>Organizations</h4>
-                      <p>{character.organizations}</p>
-                    </div>
-                  )}
-                  {character.allies && (
-                    <div className="connection-item">
-                      <h4>Allies</h4>
-                      <p>{character.allies}</p>
-                    </div>
-                  )}
-                  {character.enemies && (
-                    <div className="connection-item">
-                      <h4>Enemies</h4>
-                      <p>{character.enemies}</p>
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {/* Other Notes */}
-            {character.other_notes && (
-              <section className="sheet-section">
-                <h3>Other Notes</h3>
-                <div className="notes-content">
-                  <p>{character.other_notes}</p>
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-      </div>
-
-      {showNicknames && (
-        <NicknameManagerPanel
-          character={character}
-          onClose={() => setShowNicknames(false)}
-        />
-      )}
+        <div className="tabpane show">
+          {(PANES[activeTab] || renderOverview)()}
+        </div>
+      </main>
     </div>
   )
 }

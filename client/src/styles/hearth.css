@@ -1,0 +1,432 @@
+/* =================================================================
+   HEARTH · dark-editorial design system  (ported from the Claude
+   Design handoff: Claude UX Design/Hearth/design_handoff_character_sheet/)
+   Everything is scoped under `.hearth` so it coexists with the legacy
+   index.css without class-name collisions. The CharacterSheet renders
+   as a full-screen `.hearth` surface with its own header.
+   Fonts (EB Garamond / Inter / JetBrains Mono) are loaded in index.html.
+   ================================================================= */
+
+.hearth {
+  /* ---- surfaces · warm near-black, like dark aged paper ---- */
+  --bg:        #1a1712;
+  --bg-2:      #221e18;
+  --bg-card:   #272219;
+  --page:      #211d17;
+  --raise:     #2e2820;
+
+  /* ---- ink · warm parchment text ---- */
+  --ink:       #ece4d6;
+  --ink-2:     #b8af9b;
+  --ink-3:     #988e77;
+  --ink-4:     #7c7360;
+
+  /* ---- rules ---- */
+  --rule:      #3a3328;
+  --rule-soft: #2c2620;
+
+  /* ---- accents · used sparingly, with meaning ---- */
+  --accent:    #c9a96a;
+  --accent-d:  #b1925a;
+  --accent-2:  #8ba2c6;
+  --selection: rgba(201,169,106,.20);
+
+  /* ---- semantic game-state · all muted, inside the calm ---- */
+  --good:   #93b98a;
+  --warn:   #d8b46b;
+  --bad:    #cf8478;
+  --combat: #d2895a;
+  --magic:  #ab9fda;
+
+  /* ---- type families ---- */
+  --serif: "EB Garamond", "Iowan Old Style", Georgia, serif;
+  --sans:  "Inter", system-ui, -apple-system, sans-serif;
+  --mono:  "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ---- shadows · soft, deep, candlelit ---- */
+  --shadow:    0 1px 2px rgba(0,0,0,.35), 0 14px 44px rgba(0,0,0,.5);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.30), 0 4px 14px rgba(0,0,0,.32);
+
+  --radius:    7px;
+  --radius-lg: 11px;
+
+  /* full-screen takeover surface */
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--bg);
+  background-image:
+    radial-gradient(900px 520px at 50% -8%, rgba(201,169,106,.045), transparent 70%),
+    radial-gradient(700px 700px at 100% 100%, rgba(139,162,198,.03), transparent 70%);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.hearth *, .hearth *::before, .hearth *::after { box-sizing: border-box; }
+.hearth ::selection { background: var(--selection); }
+.hearth svg.ic { width: 15px; height: 15px; flex-shrink: 0; }
+
+/* ---- type primitives ---- */
+.hearth .display { font-family: var(--serif); font-weight: 500; font-size: 56px; line-height: 1.04; letter-spacing: -.015em; }
+.hearth .step    { font-family: var(--serif); font-weight: 500; font-size: 44px; line-height: 1.08; letter-spacing: -.012em; }
+.hearth .section { font-family: var(--serif); font-weight: 500; font-size: 24px; line-height: 1.2;  letter-spacing: -.006em; }
+.hearth .lede    { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 20px; line-height: 1.5; color: var(--ink-2); }
+.hearth .help    { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-3); }
+.hearth .eyebrow { font-family: var(--sans); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .22em; color: var(--ink-3); }
+.hearth .label   { font-family: var(--sans); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: var(--ink-3); }
+.hearth .mono    { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.hearth .num     { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+/* ---- dividers ---- */
+.hearth .hr { height: 1px; background: var(--rule); border: 0; margin: 0; }
+.hearth .hr-soft { height: 1px; background: var(--rule-soft); border: 0; margin: 0; }
+
+/* ---- buttons ---- */
+.hearth .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 15px;
+  font-family: var(--sans); font-weight: 600; font-size: 12px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-2); background: var(--bg-card);
+  border: 1px solid var(--rule); border-radius: var(--radius);
+  cursor: pointer; transition: background .14s, border-color .14s, color .14s;
+  white-space: nowrap;
+}
+.hearth .btn:hover { background: var(--raise); border-color: #4a4032; color: var(--ink); }
+.hearth .btn .ic { width: 14px; height: 14px; }
+.hearth .btn.primary { color: #211d17; background: var(--accent); border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.22); }
+.hearth .btn.primary:hover { background: #d8b87a; border-color: #d8b87a; }
+.hearth .btn.ghost { background: transparent; border-color: transparent; color: var(--ink-3); }
+.hearth .btn.ghost:hover { background: var(--bg-card); border-color: var(--rule); color: var(--ink-2); }
+.hearth .btn.danger { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 34%, var(--rule)); }
+.hearth .btn.danger:hover { background: color-mix(in oklab, var(--bad) 12%, var(--bg-card)); color: var(--bad); }
+.hearth .btn.lg { padding: 12px 22px; font-size: 12.5px; }
+.hearth .btn.sm { padding: 5px 10px; font-size: 10.5px; gap: 6px; }
+.hearth .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.hearth .btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  color: var(--ink-3); background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius);
+  cursor: pointer; transition: background .14s, color .14s, border-color .14s;
+}
+.hearth .btn-icon:hover { background: var(--bg-card); border-color: var(--rule); color: var(--ink-2); }
+.hearth .btn-icon .ic { width: 16px; height: 16px; }
+
+/* ---- chips / pills ---- */
+.hearth .chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px;
+  font-family: var(--sans); font-weight: 500; font-size: 11px; letter-spacing: .02em;
+  color: var(--ink-2); background: var(--bg-card);
+  border: 1px solid var(--rule); border-radius: 999px;
+}
+.hearth .chip .ic { width: 11px; height: 11px; color: var(--ink-3); }
+.hearth .chip.on { color: #211d17; background: var(--accent); border-color: var(--accent); }
+.hearth .chip.warn  { color: var(--warn);  border-color: color-mix(in oklab, var(--warn) 36%, var(--rule));  background: color-mix(in oklab, var(--warn) 9%, var(--bg-card)); }
+.hearth .chip.bad   { color: var(--bad);   border-color: color-mix(in oklab, var(--bad) 36%, var(--rule));   background: color-mix(in oklab, var(--bad) 9%, var(--bg-card)); }
+.hearth .chip.magic { color: var(--magic); border-color: color-mix(in oklab, var(--magic) 36%, var(--rule)); background: color-mix(in oklab, var(--magic) 9%, var(--bg-card)); }
+.hearth .chip.combat{ color: var(--combat);border-color: color-mix(in oklab, var(--combat) 36%, var(--rule));background: color-mix(in oklab, var(--combat) 9%, var(--bg-card)); }
+
+.hearth .tagpill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3); border: 1px solid var(--rule); border-radius: 999px; background: var(--bg-2);
+}
+
+/* ---- cards / panels ---- */
+.hearth .panel { background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.hearth .card  { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.hearth .narr-card { position: relative; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 18px 16px 20px; box-shadow: var(--shadow-sm); }
+.hearth .narr-card::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 999px; background: var(--accent); }
+.hearth .narr-card .marker { font-family: var(--sans); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .2em; color: var(--accent); margin-bottom: 7px; }
+.hearth .narr-card .ncbody { font-family: var(--serif); font-size: 16px; line-height: 1.55; color: var(--ink); }
+
+/* ---- hp bars / pips ---- */
+.hearth .hpbar { height: 4px; border-radius: 999px; background: var(--rule-soft); overflow: hidden; }
+.hearth .hpbar .fill { height: 100%; border-radius: 999px; background: var(--good); }
+.hearth .hpbar.warn .fill { background: var(--warn); }
+.hearth .hpbar.bad  .fill { background: var(--bad); }
+.hearth .pips { display: flex; gap: 5px; }
+.hearth .pip { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--rule); background: transparent; }
+.hearth .pip.full { background: var(--accent); border-color: var(--accent); }
+.hearth .pip.magic.full { background: var(--magic); border-color: var(--magic); }
+.hearth .pip.spent { opacity: .5; }
+.hearth .pip-bar { flex: 1; height: 20px; border-radius: 4px; border: 1.5px solid var(--rule); background: transparent; }
+.hearth .pip-bar.full { background: color-mix(in oklab, var(--accent) 26%, transparent); border-color: var(--accent); }
+
+/* ---- quiet scrollbars ---- */
+.hearth::-webkit-scrollbar { width: 11px; }
+.hearth::-webkit-scrollbar-track { background: transparent; }
+.hearth::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+.hearth::-webkit-scrollbar-thumb:hover { background: #4a4032; background-clip: padding-box; }
+
+/* ---- brand wordmark + opus indicator ---- */
+.hearth .wordmark { font-family: var(--serif); font-weight: 600; font-size: 19px; letter-spacing: -.01em; color: var(--ink); white-space: nowrap; }
+.hearth .wordmark .amp { color: var(--accent); font-style: italic; padding: 0 .02em; }
+.hearth .opus { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .opus .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 70%, transparent); }
+
+/* ---- modal / sheet family ---- */
+.hearth .scrim { position: fixed; inset: 0; background: rgba(12,10,7,.62); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 80; }
+.hearth .modal { width: 460px; max-width: calc(100vw - 48px); background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+.hearth .modal-head { padding: 22px 24px 6px; }
+.hearth .modal-head h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0; letter-spacing: -.01em; }
+.hearth .modal-body { padding: 10px 24px 22px; }
+.hearth .modal-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 24px; border-top: 1px solid var(--rule-soft); }
+
+/* ---- utility ---- */
+.hearth .row { display: flex; align-items: center; }
+.hearth .col { display: flex; flex-direction: column; }
+.hearth .gap6 { gap: 6px; } .hearth .gap8 { gap: 8px; } .hearth .gap10 { gap: 10px; } .hearth .gap12 { gap: 12px; } .hearth .gap16 { gap: 16px; }
+.hearth .spacer { flex: 1; }
+.hearth .muted { color: var(--ink-3); }
+.hearth .serif { font-family: var(--serif); }
+.hearth .italic { font-style: italic; }
+
+/* =================================================================
+   PAGE CHROME — header
+   ================================================================= */
+.hearth .dash-hdr {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 28px; height: 58px;
+  background: color-mix(in oklab, var(--bg-2) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--rule);
+}
+.hearth .dash-hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+.hearth .back { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: none; transition: color .14s; background: none; border: 0; cursor: pointer; padding: 0; }
+.hearth .back:hover { color: var(--ink); }
+.hearth .back .ic { width: 15px; height: 15px; }
+.hearth .hdr-link { font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; transition: color .14s; background: none; border: 0; cursor: pointer; }
+.hearth .hdr-link:hover { color: var(--ink-2); }
+
+.hearth .sheet-canvas { max-width: 1180px; margin: 0 auto; padding: 34px 28px 90px; }
+
+/* section heading with fleuron rule */
+.hearth .sec-head { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+.hearth .sec-head h2 { font-family: var(--serif); font-weight: 500; font-size: 21px; letter-spacing: -.008em; margin: 0; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
+.hearth .sec-head .sub { font-family: var(--sans); font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.hearth .sec-head .fl { flex: 1; height: 1px; background: var(--rule); }
+.hearth .sec-head .glyph { color: var(--ink-4); font-size: 13px; }
+
+/* heraldic monogram crest */
+.hearth .crest { width: 84px; height: 84px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; background: linear-gradient(150deg, #3a3326, #211c14); border: 1px solid var(--rule); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+.hearth .crest .mono { font-family: var(--serif); font-weight: 600; font-size: 40px; color: var(--accent); }
+.hearth .crest .lvl { position: absolute; bottom: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-2); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--sans); font-weight: 700; font-size: 12px; color: var(--accent); box-shadow: var(--shadow-sm); }
+
+/* =================================================================
+   IDENTITY HERO
+   ================================================================= */
+.hearth .id-hero { display: grid; grid-template-columns: auto 1fr auto; gap: 26px; align-items: center; background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 24px 28px; margin-bottom: 20px; }
+.hearth .id-main h1 { font-family: var(--serif); font-weight: 500; font-size: 40px; line-height: 1.05; letter-spacing: -.014em; margin: 0 0 6px; }
+.hearth .id-main .sub { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); margin-bottom: 13px; }
+.hearth .id-main .sub .sep { color: var(--ink-4); font-style: normal; padding: 0 6px; }
+.hearth .id-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.hearth .ipill { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--bg-2); }
+.hearth .ipill .l { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .ipill .v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); letter-spacing: -.01em; }
+.hearth .ipill .v .mx { color: var(--ink-3); font-weight: 500; }
+.hearth .ipill.hp { border-color: color-mix(in oklab, var(--good) 40%, var(--rule)); background: color-mix(in oklab, var(--good) 9%, var(--bg-2)); }
+.hearth .ipill.hp .v, .hearth .ipill.hp .l { color: var(--good); }
+.hearth .ipill.warn { border-color: color-mix(in oklab, var(--warn) 40%, var(--rule)); background: color-mix(in oklab, var(--warn) 9%, var(--bg-2)); }
+.hearth .ipill.warn .v, .hearth .ipill.warn .l { color: var(--warn); }
+.hearth .ipill.bad { border-color: color-mix(in oklab, var(--bad) 40%, var(--rule)); background: color-mix(in oklab, var(--bad) 9%, var(--bg-2)); }
+.hearth .ipill.bad .v, .hearth .ipill.bad .l { color: var(--bad); }
+.hearth .ipill.accent { border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); }
+.hearth .ipill.accent .v { color: var(--accent); }
+.hearth .id-actions { display: flex; flex-direction: column; gap: 8px; min-width: 138px; }
+
+/* =================================================================
+   TABS
+   ================================================================= */
+.hearth .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; flex-wrap: wrap; }
+.hearth .tab { padding: 11px 16px; font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px; transition: color .12s; background: none; border-top: 0; border-left: 0; border-right: 0; }
+.hearth .tab:hover { color: var(--ink); }
+.hearth .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.hearth .tab .ic { width: 15px; height: 15px; }
+.hearth .tab .ct { font-family: var(--mono); font-size: 10px; padding: 1px 6px; background: var(--bg-card); border-radius: 999px; color: var(--ink-3); }
+
+/* =================================================================
+   OVERVIEW + shared tab blocks
+   ================================================================= */
+.hearth .panel-pad { padding: 18px 20px; }
+.hearth .grid3 { display: grid; grid-template-columns: 1.1fr .9fr .9fr; gap: 18px; margin-bottom: 18px; }
+.hearth .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
+
+.hearth .abilities { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.hearth .ability { position: relative; padding: 13px 8px 11px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 9px; text-align: center; }
+.hearth .ability .nm { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+.hearth .ability .sc { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 28px; line-height: 1; color: var(--ink); letter-spacing: -.02em; }
+.hearth .ability .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--accent); margin-top: 4px; }
+.hearth .ability.prime { background: color-mix(in oklab, var(--accent) 9%, var(--bg-2)); border-color: color-mix(in oklab, var(--accent) 38%, var(--rule)); }
+.hearth .ability.prime::after { content: ""; position: absolute; top: 7px; right: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+
+.hearth .rows { display: flex; flex-direction: column; gap: 1px; }
+.hearth .rrow { display: grid; grid-template-columns: 12px 1fr auto; gap: 11px; align-items: center; padding: 7px 9px; border-radius: 6px; }
+.hearth .rrow.prof { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+.hearth .rrow .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--rule); justify-self: center; }
+.hearth .rrow.prof .dot { background: var(--accent); border-color: var(--accent); }
+.hearth .rrow .nm { font-family: var(--sans); font-size: 12px; color: var(--ink-2); }
+.hearth .rrow.prof .nm { color: var(--ink); font-weight: 500; }
+.hearth .rrow .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); }
+.hearth .rrow.prof .md { color: var(--accent); }
+
+.hearth .senses { display: flex; flex-direction: column; gap: 2px; }
+.hearth .srow { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px; }
+.hearth .srow .l { display: inline-flex; align-items: center; gap: 9px; font-family: var(--serif); font-size: 15px; color: var(--ink-2); white-space: nowrap; }
+.hearth .srow .l .ic { width: 15px; height: 15px; color: var(--ink-3); }
+.hearth .srow .v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 17px; color: var(--ink); }
+.hearth .senses-note { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-3); padding-top: 11px; margin-top: 6px; border-top: 1px solid var(--rule-soft); line-height: 1.5; }
+
+.hearth .skills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px 18px; }
+.hearth .skill { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 9px; align-items: center; padding: 5px 8px; border-radius: 6px; }
+.hearth .skill.prof { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+.hearth .skill .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--rule); justify-self: center; }
+.hearth .skill.prof .dot { background: var(--accent); border-color: var(--accent); }
+.hearth .skill .nm { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+.hearth .skill.prof .nm { color: var(--ink); font-weight: 500; }
+.hearth .skill .ab { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .skill .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink); min-width: 22px; text-align: right; }
+
+.hearth .atk { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--rule-soft); background: var(--bg-2); }
+.hearth .atk + .atk { margin-top: 7px; }
+.hearth .atk .an { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+.hearth .atk .an .meta { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); text-transform: uppercase; margin-left: 8px; }
+.hearth .atk .hit { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 15px; color: var(--accent); }
+.hearth .atk .dmg { font-family: var(--mono); font-size: 12px; color: var(--ink-2); letter-spacing: .02em; }
+
+.hearth .kv { margin-bottom: 15px; }
+.hearth .kv:last-child { margin-bottom: 0; }
+.hearth .kv .kl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+.hearth .kv .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.hearth .kv .prose { font-family: var(--serif); font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+
+.hearth .feat { padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .feat:first-child { border-top: 0; padding-top: 2px; }
+.hearth .feat .ft { font-family: var(--serif); font-size: 16px; color: var(--ink); margin-bottom: 3px; display: flex; align-items: baseline; gap: 9px; }
+.hearth .feat .ft .src { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .feat .fd { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; }
+
+/* =================================================================
+   PROGRESSION
+   ================================================================= */
+.hearth .theme-hero { position: relative; overflow: hidden; background: var(--bg-card); border: 1px solid var(--rule); border-radius: 12px; padding: 22px 24px; margin-bottom: 18px; }
+.hearth .theme-hero::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+.hearth .theme-hero .th-eyebrow { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+.hearth .theme-hero h2 { font-family: var(--serif); font-weight: 500; font-size: 30px; margin: 0 0 6px; letter-spacing: -.01em; }
+.hearth .theme-hero .th-desc { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); max-width: 720px; line-height: 1.5; }
+
+.hearth .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.hearth .tier { position: relative; padding: 16px 15px 15px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); }
+.hearth .tier.done { border-color: color-mix(in oklab, var(--accent) 38%, var(--rule)); background: color-mix(in oklab, var(--accent) 7%, var(--bg-2)); }
+.hearth .tier.next { border-style: dashed; }
+.hearth .tier.locked { opacity: .55; }
+.hearth .tier .tnum { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
+.hearth .tier.done .tnum { color: var(--accent); }
+.hearth .tier .tnum .lv { margin-left: auto; }
+.hearth .tier .tname { font-family: var(--serif); font-size: 19px; color: var(--ink); margin-bottom: 7px; }
+.hearth .tier .tab-ab { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; }
+.hearth .tier .tab-ab em { font-style: italic; color: var(--ink-2); }
+.hearth .tier .check { position: absolute; top: 14px; right: 14px; width: 16px; height: 16px; color: var(--accent); }
+
+.hearth .anc { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.hearth .anc-feat { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 13px 15px; border-radius: 9px; border: 1px solid var(--rule-soft); background: var(--bg-2); }
+.hearth .anc-feat .ai { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent-2); flex-shrink: 0; }
+.hearth .anc-feat .ai .ic { width: 15px; height: 15px; }
+.hearth .anc-feat .at { font-family: var(--serif); font-size: 16px; color: var(--ink); margin-bottom: 2px; }
+.hearth .anc-feat .ad { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.4; }
+
+.hearth .path-card { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 12px; padding: 22px 24px; }
+.hearth .path-track { margin: 18px 0 14px; }
+.hearth .path-poles { display: flex; justify-content: space-between; margin-bottom: 9px; }
+.hearth .path-poles .pole { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); }
+.hearth .path-bar { position: relative; height: 6px; border-radius: 999px; background: linear-gradient(90deg, color-mix(in oklab, var(--accent-2) 50%, var(--bg-2)), var(--bg-2) 50%, color-mix(in oklab, var(--accent) 50%, var(--bg-2))); border: 1px solid var(--rule-soft); }
+.hearth .path-bar .marker { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-card); transform: translate(-50%, -50%); box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 55%, transparent); }
+.hearth .path-ticks { display: flex; justify-content: space-between; margin-top: 8px; }
+.hearth .path-ticks .tk { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .path-ticks .tk.cur { color: var(--accent); }
+.hearth .path-note { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); line-height: 1.55; padding-top: 14px; border-top: 1px solid var(--rule-soft); }
+
+/* =================================================================
+   ABILITIES & SKILLS deep view / EQUIPMENT / INVENTORY / BACKGROUND
+   ================================================================= */
+.hearth .placeholder { padding: 60px 30px; text-align: center; border: 1px dashed var(--rule); border-radius: 12px; background: var(--bg-2); }
+.hearth .placeholder .ph-glyph { font-size: 26px; color: var(--ink-4); margin-bottom: 12px; }
+.hearth .placeholder h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 8px; color: var(--ink-2); }
+.hearth .placeholder p { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-3); margin: 0 auto; max-width: 460px; line-height: 1.5; }
+
+.hearth .grp-note { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); margin: -6px 0 14px; }
+.hearth .ab-detail { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 8px; }
+.hearth .ab-card { padding: 14px 15px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); }
+.hearth .ab-card .top { display: flex; align-items: baseline; justify-content: space-between; }
+.hearth .ab-card .nm { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .ab-card .md { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--accent); }
+.hearth .ab-card .sc { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; line-height: 1; color: var(--ink); margin-top: 2px; }
+.hearth .ab-card .gov { font-family: var(--serif); font-size: 13px; color: var(--ink-3); margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--rule-soft); line-height: 1.4; }
+
+.hearth .skillrow { display: grid; grid-template-columns: 12px 1fr auto 76px auto; gap: 11px; align-items: center; padding: 8px 9px; border-radius: 6px; }
+.hearth .skillrow + .skillrow { border-top: 1px solid var(--rule-soft); }
+.hearth .skillrow.prof { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+.hearth .skillrow .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid var(--rule); justify-self: center; }
+.hearth .skillrow.prof .dot { background: var(--accent); border-color: var(--accent); }
+.hearth .skillrow .snm { font-family: var(--sans); font-size: 13px; color: var(--ink-2); }
+.hearth .skillrow.prof .snm { color: var(--ink); font-weight: 500; }
+.hearth .skillrow .sab { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .skillrow .ssrc { font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); opacity: .85; text-align: right; }
+.hearth .skillrow .smd { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink); min-width: 24px; text-align: right; }
+
+.hearth .ac-break { display: flex; align-items: center; gap: 18px; }
+.hearth .ac-break .acbig { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 44px; color: var(--ink); line-height: 1; }
+.hearth .ac-break .acform { font-family: var(--serif); font-size: 15.5px; color: var(--ink-2); line-height: 1.5; }
+.hearth .ac-break .acform em { font-style: italic; color: var(--ink); }
+
+.hearth .attune { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+.hearth .attune-slot { padding: 20px 12px; border: 1px dashed var(--rule); border-radius: 10px; text-align: center; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); }
+
+.hearth .invrow { display: grid; grid-template-columns: auto 1fr auto auto; gap: 13px; align-items: center; padding: 9px 4px; }
+.hearth .invrow + .invrow { border-top: 1px solid var(--rule-soft); }
+.hearth .invrow .ii { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--ink-3); flex-shrink: 0; }
+.hearth .invrow .ii svg { width: 15px; height: 15px; }
+.hearth .invrow .inm { font-family: var(--serif); font-size: 15.5px; color: var(--ink); }
+.hearth .invrow .isub { font-family: var(--mono); font-size: 9px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-4); margin-top: 1px; }
+.hearth .invrow .iq { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink-2); }
+.hearth .invrow .iw { font-family: var(--mono); font-size: 11px; color: var(--ink-4); min-width: 48px; text-align: right; }
+
+.hearth .carry { display: flex; align-items: center; gap: 14px; }
+.hearth .carry .cbar { flex: 1; height: 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--rule-soft); overflow: hidden; }
+.hearth .carry .cbar .fill { height: 100%; background: var(--good); }
+.hearth .carry .cnum { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .04em; }
+
+.hearth .goldcard { display: flex; align-items: center; gap: 12px; padding: 15px 17px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--rule)); margin-bottom: 14px; }
+.hearth .goldcard .gl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.hearth .goldcard .gv { margin-left: auto; font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 22px; color: var(--accent); }
+
+.hearth .vows { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.hearth .vow { padding: 16px 18px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); border-left: 3px solid var(--accent); }
+.hearth .vow.bond { border-left-color: var(--accent-2); }
+.hearth .vow.flaw { border-left-color: var(--bad); }
+.hearth .vow.trait { border-left-color: var(--good); }
+.hearth .vow .vl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+.hearth .vow .vt { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink); line-height: 1.5; }
+
+.hearth .bg-prose { font-family: var(--serif); font-size: 17px; line-height: 1.7; color: var(--ink); max-width: 760px; text-wrap: pretty; }
+.hearth .bg-prose p { margin: 0 0 20px; }
+.hearth .bg-prose p:last-child { margin-bottom: 0; }
+
+.hearth .footnote { text-align: center; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--rule-soft); }
+
+/* spell-slot row (kept for casters; not in the static mock) */
+.hearth .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.hearth .slot-cell { padding: 12px 14px; border-radius: 9px; border: 1px solid var(--rule); background: var(--bg-2); }
+.hearth .slot-cell .sl-lv { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+.hearth .slot-cell .sl-pips { display: flex; gap: 5px; flex-wrap: wrap; }
+.hearth .spell-list { display: flex; flex-direction: column; gap: 1px; }
+.hearth .spellrow { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: baseline; padding: 8px 9px; border-radius: 6px; }
+.hearth .spellrow + .spellrow { border-top: 1px solid var(--rule-soft); }
+.hearth .spellrow .spn { font-family: var(--serif); font-size: 15px; color: var(--ink); }
+.hearth .spellrow .spm { font-family: var(--mono); font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-4); }
