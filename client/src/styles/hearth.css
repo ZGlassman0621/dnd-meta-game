@@ -443,3 +443,102 @@
 .hearth .feat .fd, .hearth .feat .ft, .hearth .scene-break .lbl {
   font-style: normal;
 }
+
+/* =================================================================
+   DM SESSION COCKPIT — three-column reading cockpit
+   left party rail · center reading stage + composer · right combat/dice rail
+   ================================================================= */
+.hearth .cockpit { display: grid; grid-template-columns: 252px minmax(0, 1fr) 300px; height: calc(100vh - 58px); overflow: hidden; }
+.hearth .ck-rail { overflow-y: auto; background: var(--bg-2); display: flex; flex-direction: column; gap: 16px; padding: 18px 16px 28px; }
+.hearth .ck-rail.left { border-right: 1px solid var(--rule); }
+.hearth .ck-rail.right { border-left: 1px solid var(--rule); }
+.hearth .ck-stage { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+
+/* rail panel block */
+.hearth .ck-panel { display: flex; flex-direction: column; gap: 9px; }
+.hearth .ck-panel > .label { font-family: var(--sans); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .18em; color: var(--ink-4); display: flex; align-items: center; gap: 8px; }
+.hearth .ck-panel > .label .ln { flex: 1; height: 1px; background: var(--rule-soft); }
+
+/* party member card (left rail) */
+.hearth .party-mem { display: grid; grid-template-columns: 34px 1fr; gap: 11px; align-items: center; padding: 10px 11px; border-radius: 9px; border: 1px solid var(--rule-soft); background: var(--bg-card); }
+.hearth .party-mem.you { border-color: color-mix(in oklab, var(--accent) 32%, var(--rule)); }
+.hearth .party-mem.active { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--combat) 50%, transparent); }
+.hearth .party-mem .av { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(150deg, #3a3326, #211c14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 17px; color: var(--accent); position: relative; }
+.hearth .party-mem .av .turn { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--combat); box-shadow: 0 0 7px var(--combat); }
+.hearth .party-mem .pm-name { font-family: var(--serif); font-size: 15.5px; color: var(--ink); line-height: 1.1; }
+.hearth .party-mem .pm-sub { font-family: var(--sans); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-4); margin-top: 1px; }
+.hearth .party-mem .pm-hp { display: flex; align-items: center; gap: 7px; margin-top: 5px; }
+.hearth .party-mem .pm-hp .hpbar { flex: 1; }
+.hearth .party-mem .pm-hp .hpnum { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); }
+.hearth .party-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.hearth .ptag { font-family: var(--sans); font-size: 9.5px; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-3); background: var(--bg-2); }
+.hearth .ptag.bad { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 36%, var(--rule)); }
+.hearth .ptag.magic { color: var(--magic); border-color: color-mix(in oklab, var(--magic) 36%, var(--rule)); }
+
+/* stage context strip */
+.hearth .stage-strip { display: flex; align-items: center; gap: 10px; padding: 11px 22px; border-bottom: 1px solid var(--rule); background: color-mix(in oklab, var(--bg-2) 70%, transparent); flex-wrap: wrap; }
+.hearth .strip-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 3px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--bg-2); }
+.hearth .strip-pill.scene { font-family: var(--serif); font-style: italic; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink-2); border: 0; background: transparent; padding-left: 0; }
+.hearth .strip-pill.combat { color: var(--combat); border-color: color-mix(in oklab, var(--combat) 45%, var(--rule)); background: color-mix(in oklab, var(--combat) 10%, var(--bg-2)); }
+.hearth .strip-pill.combat .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--combat); box-shadow: 0 0 7px var(--combat); }
+.hearth .strip-end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+/* transcript reading column */
+.hearth .transcript { flex: 1; overflow-y: auto; padding: 28px 22px 8px; }
+.hearth .read-col { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.hearth .scene-break { display: flex; align-items: center; gap: 16px; color: var(--ink-4); margin: 4px 0; }
+.hearth .scene-break::before, .hearth .scene-break::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--rule), transparent); }
+.hearth .scene-break .lbl { font-family: var(--serif); font-size: 12.5px; color: var(--ink-3); letter-spacing: .04em; white-space: nowrap; }
+
+.hearth .dm-block .who, .hearth .you-block .who { font-family: var(--sans); font-weight: 600; font-size: 9.5px; text-transform: uppercase; letter-spacing: .2em; color: var(--ink-4); margin-bottom: 7px; }
+.hearth .dm-block .prose { font-family: var(--serif); font-size: 18.5px; line-height: 1.72; color: var(--ink); text-wrap: pretty; }
+.hearth .dm-block .prose .dialog { color: var(--accent); }
+.hearth .dm-block .prose em, .hearth .dm-block .prose i { font-style: italic; color: var(--ink); }
+
+.hearth .you-block { margin-left: 40px; padding: 13px 16px; border-left: 2px solid var(--rule); background: color-mix(in oklab, var(--bg-2) 55%, transparent); border-radius: 0 8px 8px 0; }
+.hearth .you-block .who { color: var(--accent-2); }
+.hearth .you-block .body { font-family: var(--serif); font-size: 16px; line-height: 1.55; color: var(--ink-2); }
+
+.hearth .sys-event { display: flex; align-items: center; justify-content: center; gap: 9px; font-family: var(--mono); font-size: 11px; letter-spacing: .02em; color: var(--ink-3); text-align: center; }
+.hearth .sys-event .ic { width: 13px; height: 13px; color: var(--ink-4); }
+.hearth .sys-event.combat { color: var(--combat); }
+.hearth .sys-event.good { color: var(--good); }
+.hearth .sys-event.loot { color: var(--accent); }
+
+/* composer */
+.hearth .composer-wrap { border-top: 1px solid var(--rule); padding: 14px 22px 18px; background: var(--bg-2); }
+.hearth .composer { max-width: 700px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: end; }
+.hearth .composer textarea { width: 100%; resize: none; min-height: 52px; max-height: 220px; font-family: var(--serif); font-size: 17px; line-height: 1.5; color: var(--ink); background: var(--bg-card); border: 1px solid var(--rule); border-radius: 9px; padding: 12px 14px; outline: none; transition: border-color .14s; }
+.hearth .composer textarea:focus { border-color: color-mix(in oklab, var(--accent) 55%, var(--rule)); }
+.hearth .composer textarea::placeholder { color: var(--ink-4); font-style: normal; }
+.hearth .quick-row { max-width: 700px; margin: 9px auto 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hearth .quick-row .ql { font-family: var(--sans); font-size: 9.5px; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-4); }
+.hearth .qchip { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--bg-card); cursor: pointer; transition: color .14s, border-color .14s; }
+.hearth .qchip:hover { color: var(--ink); border-color: #4a4032; }
+
+/* right-rail HP + resources + initiative */
+.hearth .hp-block { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius-lg); padding: 14px 15px; }
+.hearth .hp-block .hp-row { display: flex; align-items: baseline; gap: 6px; }
+.hearth .hp-block .cur { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; color: var(--ink); line-height: 1; }
+.hearth .hp-block .slash, .hearth .hp-block .max { font-family: var(--sans); font-weight: 500; font-size: 18px; color: var(--ink-3); }
+.hearth .hp-block .lbl { margin-left: auto; font-family: var(--serif); font-size: 14px; color: var(--ink-3); }
+.hearth .hp-block .hptrack { margin-top: 10px; }
+.hearth .res-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.hearth .res-row .rl { font-family: var(--sans); font-weight: 600; font-size: 9.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-4); min-width: 56px; }
+
+.hearth .init-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 9px; align-items: center; padding: 7px 9px; border-radius: 7px; }
+.hearth .init-row.active { background: color-mix(in oklab, var(--combat) 13%, transparent); }
+.hearth .init-row.acted { opacity: .45; }
+.hearth .init-row .ord { font-family: var(--mono); font-size: 12px; color: var(--ink-3); text-align: center; }
+.hearth .init-row.active .ord { color: var(--combat); }
+.hearth .init-row .inm { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); }
+.hearth .init-row.active .inm { color: var(--ink); }
+.hearth .init-row.enemy .inm { color: var(--bad); }
+.hearth .init-row .ihp { font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
+.hearth .dice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* empty-state / pre-session card on the stage */
+.hearth .stage-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.hearth .stage-empty .inner { max-width: 460px; text-align: center; }
+.hearth .stage-empty h2 { font-family: var(--serif); font-weight: 500; font-size: 30px; color: var(--ink); margin: 0 0 10px; }
+.hearth .stage-empty p { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-3); margin: 0 0 22px; }
