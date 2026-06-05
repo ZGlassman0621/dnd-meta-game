@@ -1,0 +1,102 @@
+/* =================================================================
+   HEARTH · Campaign Plan screen
+   Ported from "Campaign Plan.html". Every selector scoped under .hearth.
+   The shared component classes (.btn .chip .panel .page .dash-hdr etc.)
+   live in hearth.css — only screen-specific rules live here.
+   ================================================================= */
+
+/* ── plan title block ───────────────────────────────────────────── */
+.hearth .plan-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+.hearth .plan-head h1 { font-family: var(--serif); font-weight: 500; font-size: 40px; letter-spacing: -.014em; margin: 0; }
+.hearth .plan-head .by { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding-bottom: 9px; display: inline-flex; align-items: center; gap: 7px; }
+.hearth .plan-head .by .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 70%, transparent); }
+.hearth .plan-sub { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink-2); margin-bottom: 24px; max-width: 760px; }
+
+/* regenerate row sits to the right of the title */
+.hearth .plan-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; padding-bottom: 4px; }
+.hearth .plan-confirm { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--bad); }
+
+/* ── tabs ───────────────────────────────────────────────────────── */
+.hearth .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: 26px; flex-wrap: wrap; }
+.hearth .tab { padding: 11px 18px; font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); cursor: pointer; border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px; transition: color .12s; }
+.hearth .tab:hover { color: var(--ink); }
+.hearth .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.hearth .tab .ic { width: 15px; height: 15px; }
+.hearth .tab .ct { font-family: var(--mono); font-size: 10px; padding: 1px 6px; background: var(--bg-card); border-radius: 999px; color: var(--ink-3); }
+
+/* ── reading grid + cards ───────────────────────────────────────── */
+.hearth .read-grid { columns: 2; column-gap: 18px; }
+.hearth .read-grid.single { columns: 1; max-width: 760px; }
+.hearth .read {
+  break-inside: avoid; display: inline-block; width: 100%; margin: 0 0 18px;
+  background: var(--bg-card); border: 1px solid var(--rule); border-radius: 11px;
+  padding: 20px 22px; box-shadow: var(--shadow-sm); position: relative;
+}
+.hearth .read .marker { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; display: flex; align-items: center; gap: 9px; }
+.hearth .read .marker .ic { width: 13px; height: 13px; }
+.hearth .read .marker.blue { color: var(--accent-2); }
+.hearth .read h3 { font-family: var(--serif); font-weight: 500; font-size: 23px; margin: 0 0 9px; letter-spacing: -.006em; }
+.hearth .read p { font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); margin: 0 0 11px; text-wrap: pretty; }
+.hearth .read p:last-child { margin-bottom: 0; }
+.hearth .read p em { font-style: italic; color: var(--ink); }
+.hearth .read .tagline { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* labelled sub-rows inside a card (location, motivation, rewards…) */
+.hearth .read .kv { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2); margin: 7px 0 0; }
+.hearth .read .kv .k { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-right: 7px; }
+.hearth .read .kv.blue .v { color: var(--accent-2); }
+.hearth .read .kv.gold .v { color: var(--accent); }
+.hearth .read ul.note { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2); margin: 5px 0 0; padding-left: 18px; }
+.hearth .read ul.note li { margin: 2px 0; }
+.hearth .read .scene-sep { height: 1px; background: var(--rule-soft); margin: 14px 0; border: 0; }
+
+/* act / event index marker */
+.hearth .read .ord { font-family: var(--mono); font-size: 11px; color: var(--ink-4); letter-spacing: .08em; }
+
+/* ── spoiler veil ───────────────────────────────────────────────── */
+.hearth .spoiler { position: relative; }
+.hearth .spoiler .veil { filter: blur(7px); user-select: none; transition: filter .3s; }
+.hearth .spoiler.open .veil { filter: none; }
+.hearth .spoiler .reveal {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--bg-card) 55%, transparent); border-radius: 11px;
+  cursor: pointer; transition: opacity .25s; z-index: 2;
+}
+.hearth .spoiler.open .reveal { opacity: 0; pointer-events: none; }
+.hearth .spoiler .reveal .rl { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 999px; padding: 8px 16px; background: var(--bg-2); }
+.hearth .spoiler .reveal .rl .ic { width: 13px; height: 13px; }
+.hearth .read.spoiler-card { border-color: color-mix(in oklab, var(--combat) 30%, var(--rule)); }
+.hearth .read .marker.spoiler-m { color: var(--combat); }
+
+/* inline spoiler — a small blurred block inside an otherwise-plain card
+   (used for "secrets", "stakes", per-act details that are gated). */
+.hearth .ispoiler { position: relative; margin-top: 12px; }
+.hearth .ispoiler .ireveal {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--combat); border: 1px solid color-mix(in oklab, var(--combat) 36%, var(--rule));
+  background: color-mix(in oklab, var(--combat) 9%, var(--bg-card));
+  border-radius: 999px; padding: 6px 12px;
+}
+.hearth .ispoiler .ireveal .ic { width: 12px; height: 12px; }
+.hearth .ispoiler .ibody { margin-top: 10px; padding-left: 13px; border-left: 2px solid color-mix(in oklab, var(--combat) 45%, var(--rule)); }
+.hearth .ispoiler .ihide { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); background: none; border: 0; cursor: pointer; padding: 0; margin-bottom: 7px; }
+
+/* ── generation / empty states ──────────────────────────────────── */
+.hearth .gen-panel { max-width: 640px; margin: 0 auto; text-align: center; padding: 40px 36px; }
+.hearth .gen-panel h2 { font-family: var(--serif); font-weight: 500; font-size: 30px; margin: 0 0 10px; letter-spacing: -.008em; }
+.hearth .gen-panel p { font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); margin: 0 auto 18px; max-width: 480px; }
+.hearth .gen-prog { max-width: 460px; margin: 18px auto 0; text-align: left; }
+.hearth .gen-prog .gprow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+.hearth .gen-prog .gpstep { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink); }
+.hearth .gen-prog .gppct { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+.hearth .gen-prog .gptrack { height: 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--rule-soft); overflow: hidden; }
+.hearth .gen-prog .gptrack .fill { height: 100%; background: var(--accent); transition: width .3s ease; }
+.hearth .gen-prog .gpcap { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); margin-top: 11px; }
+
+.hearth .err-line { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--bad); margin: 0 0 16px; }
+.hearth .empty-note { font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-3); }
+.hearth .loading-note { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--ink-3); text-align: center; padding: 80px 0; }
+
+/* in-page generation banner shown above tabs when regenerating */
+.hearth .gen-banner { background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 22px; box-shadow: var(--shadow-sm); }

@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import CompanionSheet from './CompanionSheet'
 import PartyBuilder from './PartyBuilder'
+import '../styles/hearth.css'
+import '../styles/hearth-companions.css'
+
+/* ───────────────────────── Hearth · Companions ─────────────────────────
+   Faithful build of Hearth/Companions.html: the dark-editorial roster of
+   "those travelling with you". Pure presentation swap — all companion
+   data, fetching, recruiting, dismissing and the XP-progress maths are
+   preserved from the original CompanionsPage. Card fields are wired to the
+   real companion record; anything the record doesn't carry (concentration
+   flags, a written bio) is omitted rather than faked. Styles live in
+   hearth.css (shared) + hearth-companions.css (this screen).
+   ──────────────────────────────────────────────────────────────────── */
 
 // XP thresholds for each level (same as character progression)
 const XP_THRESHOLDS = [
@@ -8,7 +20,28 @@ const XP_THRESHOLDS = [
   85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000
 ]
 
-function CompanionsPage({ character, onCharacterUpdated }) {
+// ── local icon sprite (paths copied from the design's icon defs) ──
+const HSprite = () => (
+  <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></symbol>
+  </defs></svg>
+)
+const Ic = ({ n }) => <svg className="ic"><use href={'#i-' + n} /></svg>
+
+// ── small helpers ──
+const cap = (s) => (s == null || s === '') ? s : String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+const monogram = (name) => (name || '?').trim().charAt(0).toUpperCase()
+const hpKind = (cur, max) => { const r = max ? cur / max : 1; return r > 0.5 ? '' : r > 0.25 ? 'warn' : 'bad' }
+const pct = (cur, max) => max ? Math.max(0, Math.min(100, (cur / max) * 100)) : 100
+const parseJson = (v, dflt) => { if (v == null) return dflt; if (typeof v !== 'string') return v; try { return JSON.parse(v) } catch { return dflt } }
+
+// the original card's display name (handles a nickname infixed into the full name)
+const displayName = (c) => (c.nickname && c.name)
+  ? `${c.name.split(' ')[0]} "${c.nickname}" ${c.name.split(' ').slice(1).join(' ')}`.trim()
+  : (c.name || c.nickname || 'A companion')
+
+function CompanionsPage({ character, onCharacterUpdated, onBack }) {
   const [companions, setCompanions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -116,95 +149,99 @@ function CompanionsPage({ character, onCharacterUpdated }) {
   const showCreateButton = !campaignConfig ||
     !['saga', 'ongoing'].includes(campaignConfig.campaign_length)
 
-  if (loading) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p style={{ color: '#888' }}>Loading companions...</p>
-      </div>
-    )
+  // back to the dashboard: CompanionsPage receives no onBack prop, so reach the
+  // app's existing "Home" affordance (still mounted under this overlay) and
+  // trigger it. Falls back to clearing the hash if that button isn't found.
+  const goHome = () => {
+    if (onBack) return onBack();
+    const home = Array.from(document.querySelectorAll('header button'))
+      .find(b => b.textContent.trim() === 'Home')
+    if (home) home.click()
   }
 
+  const charName = character?.nickname || character?.name || 'your'
+  const countLabel = `${activeCompanions.length} companion${activeCompanions.length === 1 ? '' : 's'}`
+
   return (
-    <div className="container" style={{ maxWidth: '1200px' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '1.5rem'
-      }}>
-        <div>
-          <h2 style={{ color: '#9b59b6', margin: 0 }}>Companions</h2>
-          <p style={{ color: '#888', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Party Members: {activeCompanions.length} / {MAX_PARTY_SIZE}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {showCreateButton && (
+    <div className="hearth companions">
+      <HSprite />
+
+      {/* ───────── HEADER ───────── */}
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr"></div>
+        <button className="back" onClick={goHome} style={{ background: 'none', border: 0, cursor: 'pointer', padding: 0 }}>
+          <Ic n="arrow-left" />{character?.name ? `${charName}'s home` : 'Home'}
+        </button>
+        <div className="spacer"></div>
+        <span className="opus"><span className="dot"></span>Opus</span>
+      </header>
+
+      {/* ───────── PAGE ───────── */}
+      <main className="page">
+        <div className="page-eyebrow"><span className="eyebrow">Companions</span><span className="ln"></span></div>
+
+        <div className="sec-head">
+          <h2>Travelling with you</h2>
+          <span className="glyph">❧</span>
+          <span className="fl"></span>
+          <span className="sub">{countLabel}</span>
+          <div className="comp-actions">
+            {showCreateButton && (
+              <button
+                className="btn ghost sm"
+                onClick={() => setShowPartyBuilder(true)}
+                disabled={!canAddMore}
+                title={!canAddMore ? `Party limit reached (${MAX_PARTY_SIZE})` : 'Create a party member'}
+              >
+                <Ic n="plus" />New member
+              </button>
+            )}
             <button
-              className="button"
-              onClick={() => setShowPartyBuilder(true)}
+              className="btn sm"
+              onClick={openRecruitModal}
               disabled={!canAddMore}
-              title={!canAddMore ? `Party limit reached (${MAX_PARTY_SIZE})` : ''}
+              title={!canAddMore ? `Party limit reached (${MAX_PARTY_SIZE})` : 'Recruit an NPC'}
             >
-              + Create Party Member
+              <Ic n="plus" />Recruit
             </button>
-          )}
-          <button
-            className="button button-secondary"
-            onClick={openRecruitModal}
-            disabled={!canAddMore}
-            title={!canAddMore ? `Party limit reached (${MAX_PARTY_SIZE})` : ''}
-          >
-            + Recruit NPC
-          </button>
+          </div>
         </div>
-      </div>
 
-      {error && (
-        <div style={{
-          background: 'rgba(231, 76, 60, 0.2)',
-          border: '1px solid #e74c3c',
-          borderRadius: '4px',
-          padding: '0.75rem',
-          marginBottom: '1rem',
-          color: '#e74c3c'
-        }}>
-          {error}
-        </div>
-      )}
+        <p className="comp-note">
+          Companions aren't recruited from a menu — they join your story as you earn their trust in play.
+          Each takes a place at the fire here.
+        </p>
 
-      {/* Companions Grid */}
-      {activeCompanions.length === 0 ? (
-        <div style={{
-          background: 'rgba(155, 89, 182, 0.1)',
-          border: '1px solid #9b59b6',
-          borderRadius: '8px',
-          padding: '2rem',
-          textAlign: 'center'
-        }}>
-          <p style={{ color: '#888', fontSize: '1rem', margin: 0 }}>
-            No companions yet. Recruit NPCs during your adventures or create custom party members!
-          </p>
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-          gap: '1rem'
-        }}>
-          {activeCompanions.map(companion => (
-            <CompanionCard
-              key={companion.id}
-              companion={companion}
-              xpProgress={getXpProgress(companion)}
-              onClick={() => setSelectedCompanion(companion)}
-            />
-          ))}
-        </div>
-      )}
+        {error && <div className="comp-error">{error}</div>}
 
-      {/* Companion Detail Modal */}
+        {loading ? (
+          <p className="help" style={{ color: 'var(--ink-3)' }}>Gathering those at the fire…</p>
+        ) : (
+          <div className="comp-grid">
+            {activeCompanions.map(companion => (
+              <CompanionCard
+                key={companion.id}
+                companion={companion}
+                xpProgress={getXpProgress(companion)}
+                onClick={() => setSelectedCompanion(companion)}
+              />
+            ))}
+
+            {/* one empty seat at the fire while there's still room */}
+            {canAddMore && (
+              <div className="comp empty">
+                <div>
+                  <div className="eg">❧</div>
+                  <div className="et">An empty place at the fire — kept for whoever the story brings next.</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Companion Detail Modal (unchanged behaviour) */}
       {selectedCompanion && (
         <CompanionSheet
           companion={selectedCompanion}
@@ -214,101 +251,59 @@ function CompanionsPage({ character, onCharacterUpdated }) {
         />
       )}
 
-      {/* Recruit Modal */}
+      {/* Recruit Modal — Hearth-styled, same flow */}
       {showRecruitModal && (
-        <div className="modal-overlay" onClick={() => setShowRecruitModal(false)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' }}
-          >
-            <h2 style={{ color: '#9b59b6', marginBottom: '0.5rem' }}>Recruit Companion</h2>
-            <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
-              Select an NPC to recruit. You'll customize their class, abilities, and other details.
-            </p>
-
-            {availableNpcs.length === 0 ? (
-              <p style={{ color: '#888' }}>
-                No NPCs are available for recruitment. NPCs must be marked as "Companion Available"
-                in the NPC manager to appear here.
+        <div className="scrim" onClick={() => setShowRecruitModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div className="eyebrow" style={{ marginBottom: 6 }}>An ally at the door</div>
+              <h3>Recruit a companion</h3>
+            </div>
+            <div className="modal-body">
+              <p className="help" style={{ marginTop: 0, marginBottom: 16 }}>
+                Choose someone from your records. You'll set their class, abilities, and the rest next.
               </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {availableNpcs.map(npc => (
-                  <div
-                    key={npc.id}
-                    onClick={() => {
-                      setNpcToRecruit(npc)
-                      setShowRecruitModal(false)
-                      setShowPartyBuilder(true)
-                    }}
-                    style={{
-                      background: 'rgba(52, 152, 219, 0.1)',
-                      border: '1px solid #3498db',
-                      borderRadius: '8px',
-                      padding: '0.75rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(52, 152, 219, 0.2)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(52, 152, 219, 0.1)'}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      {npc.avatar ? (
-                        <img
-                          src={npc.avatar}
-                          alt={npc.name}
-                          style={{
-                            width: '50px',
-                            height: '50px',
-                            borderRadius: '8px',
-                            objectFit: 'cover'
-                          }}
-                        />
-                      ) : (
-                        <div style={{
-                          width: '50px',
-                          height: '50px',
-                          borderRadius: '8px',
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '1.5rem',
-                          color: 'rgba(255, 255, 255, 0.4)'
-                        }}>
-                          ?
-                        </div>
-                      )}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 'bold', color: '#fff' }}>
-                          {npc.name}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#888' }}>
-                          {npc.race} {npc.occupation && `- ${npc.occupation}`}
-                        </div>
-                      </div>
-                      <div style={{ color: '#3498db', fontSize: '0.8rem' }}>
-                        Select
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
-            <button
-              className="button button-secondary"
-              onClick={() => setShowRecruitModal(false)}
-              style={{ marginTop: '1rem', width: '100%' }}
-            >
-              Cancel
-            </button>
+              {availableNpcs.length === 0 ? (
+                <p className="help" style={{ margin: 0, color: 'var(--ink-3)' }}>
+                  No-one is ready to be recruited yet. NPCs must be marked "Companion Available"
+                  in the NPC manager to appear here.
+                </p>
+              ) : (
+                <div className="recruit-list">
+                  {availableNpcs.map(npc => (
+                    <button
+                      key={npc.id}
+                      className="recruit-row"
+                      onClick={() => {
+                        setNpcToRecruit(npc)
+                        setShowRecruitModal(false)
+                        setShowPartyBuilder(true)
+                      }}
+                    >
+                      {npc.avatar
+                        ? <img src={npc.avatar} alt={npc.name} />
+                        : <span className="crest" style={{ width: 44, height: 44, borderRadius: 'var(--radius)' }}><span className="mono" style={{ fontSize: 20 }}>{monogram(npc.name)}</span></span>}
+                      <span style={{ flex: 1 }}>
+                        <span className="rr-name" style={{ display: 'block' }}>{npc.name}</span>
+                        <span className="rr-meta" style={{ display: 'block' }}>
+                          {[npc.race, npc.occupation].filter(Boolean).join(' · ') || 'Unknown'}
+                        </span>
+                      </span>
+                      <span className="eyebrow" style={{ color: 'var(--accent)' }}>Choose</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button className="btn ghost" onClick={() => setShowRecruitModal(false)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Party Builder Modal */}
+      {/* Party Builder Modal (unchanged behaviour) */}
       {showPartyBuilder && (
         <PartyBuilder
           characterId={character.id}
@@ -325,171 +320,91 @@ function CompanionsPage({ character, onCharacterUpdated }) {
   )
 }
 
-// Companion Card Component with HP and XP display
+// ── Companion card · faithful to the design's `.comp` block ──
 function CompanionCard({ companion, xpProgress, onClick }) {
   const isClassBased = companion.progression_type === 'class_based'
 
+  // role line: race · class (subclass)  —or—  race · occupation
+  const roleParts = []
+  if (companion.race) roleParts.push(companion.race)
+  if (isClassBased && companion.companion_class) {
+    roleParts.push(cap(companion.companion_class) + (companion.companion_subclass ? ` (${companion.companion_subclass})` : ''))
+  } else if (companion.occupation) {
+    roleParts.push(companion.occupation)
+  }
+
+  // ability scores → mods, for the stat chips (only when we actually have them)
+  const abil = parseJson(companion.companion_ability_scores || companion.npc_ability_scores, null)
+  const mods = abil
+    ? Object.entries({ STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' })
+        .map(([lbl, key]) => ({ lbl, val: Math.floor(((abil[key] ?? 10) - 10) / 2) }))
+        .sort((a, b) => b.val - a.val)
+        .slice(0, 1) // lead with the companion's strongest ability, as the mockup does
+    : []
+
+  const curHp = companion.companion_current_hp
+  const maxHp = companion.companion_max_hp
+  const hasHp = isClassBased && Number.isFinite(curHp) && Number.isFinite(maxHp) && maxHp > 0
+  // class-based companions carry their own `armor_class`; NPC-stat companions
+  // surface the joined NPC `ac`. (Default-10 rows still read as a real value.)
+  const ac = isClassBased ? companion.armor_class : companion.ac
+
+  // a real "bio": motivation, else a personality trait, else nothing (no fake copy)
+  const bio = companion.motivation || companion.personality_trait_1 || companion.personality_trait_2 || null
+
   return (
-    <div
-      onClick={onClick}
-      style={{
-        background: 'rgba(155, 89, 182, 0.1)',
-        border: '1px solid #9b59b6',
-        borderRadius: '12px',
-        padding: '1rem',
-        cursor: 'pointer',
-        transition: 'all 0.2s'
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(155, 89, 182, 0.2)'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(155, 89, 182, 0.1)'}
-    >
-      {/* Header with Avatar and Name */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
-        {companion.avatar ? (
-          <img
-            src={companion.avatar}
-            alt={companion.name}
-            style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '50%',
-              objectFit: 'cover',
-              border: '2px solid #9b59b6'
-            }}
-          />
-        ) : (
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            background: 'rgba(155, 89, 182, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.5rem',
-            color: '#9b59b6',
-            border: '2px solid #9b59b6'
-          }}>
-            {(companion.nickname || companion.name || '?').charAt(0).toUpperCase()}
+    <button type="button" className="comp" onClick={onClick}>
+      {companion.avatar
+        ? <span className="crest lg v"><img className="crest-img" src={companion.avatar} alt={companion.name} /></span>
+        : <span className={`crest lg ${isClassBased ? '' : 'v'}`}><span className="mono">{monogram(companion.nickname || companion.name)}</span></span>}
+
+      <div>
+        <h3 className="cm-name">{displayName(companion)}</h3>
+        {roleParts.length > 0 && (
+          <div className="cm-role">
+            {roleParts.map((p, i) => (
+              <span key={i}>{i > 0 && <span className="sep">·</span>}{p}</span>
+            ))}
           </div>
         )}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.1rem' }}>
-            {companion.nickname && companion.name
-              ? `${companion.name.split(' ')[0]} "${companion.nickname}" ${companion.name.split(' ').slice(1).join(' ')}`
-              : companion.name || companion.nickname}
-          </div>
-          <div style={{ fontSize: '0.85rem', color: '#888' }}>
-            {companion.race} {companion.occupation && `- ${companion.occupation}`}
-          </div>
-          {isClassBased && (
-            <div style={{ fontSize: '0.85rem', color: '#3498db', fontWeight: '500' }}>
-              Level {companion.companion_level} {companion.companion_class}
-              {companion.companion_subclass && ` (${companion.companion_subclass})`}
+
+        <div className="cm-stats">
+          {isClassBased && companion.companion_level != null && <span className="chip">L{companion.companion_level}</span>}
+          {!hasHp && Number.isFinite(curHp) && Number.isFinite(maxHp) && maxHp > 0 && <span className="chip">HP {curHp}/{maxHp}</span>}
+          {ac ? <span className="chip">AC {ac}</span> : null}
+          {mods.map(m => <span key={m.lbl} className="chip">{m.lbl} {m.val >= 0 ? '+' : ''}{m.val}</span>)}
+          {companion.cr ? <span className="chip">CR {companion.cr}</span> : null}
+        </div>
+
+        {hasHp && (
+          <div className="cm-hp">
+            <div className="cm-hp-row">
+              <span className="cm-hp-l">Hit points</span>
+              <span className="cm-hp-v">{curHp} / {maxHp}</span>
             </div>
-          )}
+            <div className={`hpbar ${hpKind(curHp, maxHp)}`}>
+              <div className="fill" style={{ width: `${pct(curHp, maxHp)}%` }} />
+            </div>
+            <div className="cm-hp-row" style={{ marginTop: 8, marginBottom: 5 }}>
+              <span className="cm-hp-l">Experience</span>
+              <span className="cm-hp-v">
+                {xpProgress.isMaxLevel ? 'Max level' : `${xpProgress.xpToNext.toLocaleString()} to next`}
+              </span>
+            </div>
+            <div className="hpbar">
+              <div className="fill" style={{ width: `${xpProgress.progress}%`, background: 'var(--accent)' }} />
+            </div>
+          </div>
+        )}
+
+        {bio && <div className="cm-bio">{bio}</div>}
+
+        <div className="cm-tags">
+          {!isClassBased && <span className="chip">NPC companion</span>}
+          {companion.occupation && isClassBased && <span className="chip">{companion.occupation}</span>}
         </div>
       </div>
-
-      {/* Stats Row */}
-      {isClassBased && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '0.75rem'
-        }}>
-          {/* HP */}
-          <div style={{
-            background: 'rgba(0, 0, 0, 0.2)',
-            borderRadius: '8px',
-            padding: '0.5rem'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '0.25rem'
-            }}>
-              <span style={{ color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>HP</span>
-              <span style={{
-                color: companion.companion_current_hp < companion.companion_max_hp * 0.5
-                  ? '#e74c3c'
-                  : '#2ecc71',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}>
-                {companion.companion_current_hp}/{companion.companion_max_hp}
-              </span>
-            </div>
-            <div style={{
-              height: '4px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '2px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${(companion.companion_current_hp / companion.companion_max_hp) * 100}%`,
-                background: companion.companion_current_hp < companion.companion_max_hp * 0.5
-                  ? '#e74c3c'
-                  : '#2ecc71',
-                transition: 'width 0.3s'
-              }} />
-            </div>
-          </div>
-
-          {/* XP */}
-          <div style={{
-            background: 'rgba(0, 0, 0, 0.2)',
-            borderRadius: '8px',
-            padding: '0.5rem'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '0.25rem'
-            }}>
-              <span style={{ color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>XP</span>
-              <span style={{
-                color: xpProgress.isMaxLevel ? '#f1c40f' : '#3498db',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}>
-                {xpProgress.isMaxLevel ? 'MAX' : `${xpProgress.xpToNext.toLocaleString()} to next`}
-              </span>
-            </div>
-            <div style={{
-              height: '4px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '2px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${xpProgress.progress}%`,
-                background: xpProgress.isMaxLevel ? '#f1c40f' : '#3498db',
-                transition: 'width 0.3s'
-              }} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Non-class based companions just show basic info */}
-      {!isClassBased && (
-        <div style={{
-          background: 'rgba(241, 196, 15, 0.1)',
-          border: '1px solid #f1c40f',
-          borderRadius: '8px',
-          padding: '0.5rem',
-          fontSize: '0.8rem',
-          color: '#f1c40f'
-        }}>
-          NPC Companion - Convert to class-based for full progression
-        </div>
-      )}
-    </div>
+    </button>
   )
 }
 

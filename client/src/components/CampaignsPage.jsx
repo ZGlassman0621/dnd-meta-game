@@ -1,292 +1,33 @@
 import { useState, useEffect } from 'react';
 import { STARTING_LOCATIONS } from '../data/forgottenRealms';
+import '../styles/hearth.css';
+import '../styles/hearth-campaigns.css';
 
-const styles = {
-  container: {
-    padding: '1rem',
-    maxWidth: '1400px',
-    margin: '0 auto'
-  },
-  header: {
-    marginBottom: '1.5rem'
-  },
-  title: {
-    fontSize: '1.8rem',
-    marginBottom: '0.5rem',
-    color: '#f5f5f5'
-  },
-  subtitle: {
-    color: '#888',
-    fontSize: '0.95rem'
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1.5fr',
-    gap: '1.5rem'
-  },
-  panel: {
-    background: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: '8px',
-    padding: '1rem',
-    border: '1px solid rgba(255, 255, 255, 0.1)'
-  },
-  panelTitle: {
-    fontSize: '1.1rem',
-    marginBottom: '1rem',
-    color: '#f5f5f5',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-    paddingBottom: '0.5rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  filterTabs: {
-    display: 'flex',
-    gap: '0.5rem',
-    marginBottom: '1rem',
-    flexWrap: 'wrap'
-  },
-  filterTab: {
-    padding: '0.4rem 0.8rem',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '0.85rem',
-    transition: 'all 0.2s',
-    background: 'rgba(255, 255, 255, 0.1)',
-    color: '#888'
-  },
-  filterTabActive: {
-    background: 'rgba(155, 89, 182, 0.3)',
-    color: '#9b59b6'
-  },
-  campaignList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    maxHeight: '500px',
-    overflowY: 'auto'
-  },
-  campaignCard: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '6px',
-    padding: '0.75rem',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    border: '1px solid transparent'
-  },
-  campaignCardSelected: {
-    border: '1px solid #9b59b6',
-    background: 'rgba(155, 89, 182, 0.1)'
-  },
-  campaignCardArchived: {
-    opacity: 0.6
-  },
-  campaignName: {
-    fontSize: '0.95rem',
-    color: '#f5f5f5',
-    fontWeight: '500',
-    marginBottom: '0.25rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem'
-  },
-  campaignMeta: {
-    display: 'flex',
-    gap: '0.5rem',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: '0.25rem'
-  },
-  badge: {
-    padding: '0.2rem 0.5rem',
-    borderRadius: '4px',
-    fontSize: '0.7rem',
-    fontWeight: '500',
-    textTransform: 'uppercase'
-  },
-  statusBadge: {
-    active: { background: 'rgba(46, 204, 113, 0.3)', color: '#2ecc71' },
-    archived: { background: 'rgba(149, 165, 166, 0.3)', color: '#95a5a6' }
-  },
-  detailSection: {
-    marginBottom: '1.5rem'
-  },
-  sectionTitle: {
-    fontSize: '0.9rem',
-    color: '#888',
-    marginBottom: '0.5rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px'
-  },
-  infoGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '1rem',
-    marginBottom: '1rem'
-  },
-  infoItem: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '0.75rem',
-    borderRadius: '6px'
-  },
-  infoLabel: {
-    fontSize: '0.75rem',
-    color: '#888',
-    marginBottom: '0.25rem'
-  },
-  infoValue: {
-    fontSize: '1rem',
-    color: '#f5f5f5'
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '1rem',
-    marginTop: '1rem'
-  },
-  statBox: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '1rem',
-    borderRadius: '6px',
-    textAlign: 'center'
-  },
-  statValue: {
-    fontSize: '1.5rem',
-    fontWeight: '600',
-    color: '#9b59b6'
-  },
-  statLabel: {
-    fontSize: '0.75rem',
-    color: '#888',
-    marginTop: '0.25rem'
-  },
-  description: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '1rem',
-    borderRadius: '6px',
-    fontSize: '0.9rem',
-    color: '#ccc',
-    lineHeight: '1.5',
-    fontStyle: 'italic'
-  },
-  characterList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-    marginTop: '0.75rem'
-  },
-  characterCard: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '6px',
-    padding: '0.75rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  characterInfo: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  characterName: {
-    fontSize: '0.9rem',
-    color: '#f5f5f5',
-    fontWeight: '500'
-  },
-  characterMeta: {
-    fontSize: '0.8rem',
-    color: '#888'
-  },
-  assignSection: {
-    marginTop: '1rem',
-    padding: '1rem',
-    background: 'rgba(155, 89, 182, 0.1)',
-    borderRadius: '6px',
-    border: '1px solid rgba(155, 89, 182, 0.2)'
-  },
-  actions: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-    marginTop: '1rem'
-  },
-  button: {
-    padding: '0.5rem 1rem',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '0.85rem',
-    transition: 'all 0.2s'
-  },
-  primaryButton: {
-    background: '#9b59b6',
-    color: '#fff'
-  },
-  secondaryButton: {
-    background: 'rgba(255, 255, 255, 0.1)',
-    color: '#fff',
-    border: '1px solid rgba(255, 255, 255, 0.2)'
-  },
-  successButton: {
-    background: '#2ecc71',
-    color: '#fff'
-  },
-  dangerButton: {
-    background: '#e74c3c',
-    color: '#fff'
-  },
-  emptyState: {
-    textAlign: 'center',
-    padding: '2rem',
-    color: '#888'
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
-    marginBottom: '1rem'
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.25rem'
-  },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '1rem'
-  },
-  label: {
-    fontSize: '0.85rem',
-    color: '#888'
-  },
-  input: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.3)',
-    color: '#f5f5f5',
-    fontSize: '0.9rem'
-  },
-  textarea: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.3)',
-    color: '#f5f5f5',
-    fontSize: '0.9rem',
-    minHeight: '80px',
-    resize: 'vertical'
-  },
-  select: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.3)',
-    color: '#f5f5f5',
-    fontSize: '0.9rem'
-  }
-};
+/* ───────────────────────── Hearth · Campaigns ─────────────────────────
+   Dark-editorial port of Hearth/Campaigns.html. Pure render + style swap:
+   every panel is wired to this component's REAL data and handlers — the
+   campaign list, create pipeline, JSON import, character assignment,
+   archive and delete flows are all preserved exactly as before.
+   The mockup's invented values (last-played day, session count, spoiler
+   flag, named-NPC count) are omitted where the app has no such data.
+   ──────────────────────────────────────────────────────────────────── */
+
+const cap = (s) => (s == null || s === '') ? s : String(s).replace(/\b\w/g, c => c.toUpperCase());
+
+// Local inline icon sprite (paths copied from the design's icon defs)
+const HearthCampaignSprite = () => (
+  <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z" /></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" /></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></symbol>
+  </defs></svg>
+);
+
+const Ic = ({ n }) => <svg className="ic"><use href={'#i-' + n} /></svg>;
 
 const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical', 'survival'];
 
@@ -304,7 +45,7 @@ const IMPORT_STEPS = [
   { key: 'done', label: 'Campaign imported!' }
 ];
 
-const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay }) => {
+const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay, onBack }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
@@ -648,702 +389,543 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
     c => !c.campaign_id || c.campaign_id !== selectedCampaign?.id
   ) || [];
 
-  return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>Campaigns</h2>
-        <p style={styles.subtitle}>
-          Organize your adventures into campaigns with their own world settings and timelines
-        </p>
-      </div>
+  // ── derive presentation data from real campaign records ──
+  // Feature = the first active campaign (or first in the active filter).
+  const featured = filteredCampaigns[0] || null;
+  const others = featured ? filteredCampaigns.filter(c => c.id !== featured.id) : filteredCampaigns;
 
-      <div style={styles.grid}>
-        {/* Left Panel - Campaign List */}
-        <div style={styles.panel}>
-          <div style={styles.panelTitle}>
-            <span>Campaigns</span>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                style={{ ...styles.button, ...styles.primaryButton }}
-                onClick={() => { setShowImport(false); resetImport(); setShowNewCampaign(!showNewCampaign); }}
-              >
-                {showNewCampaign ? 'Cancel' : '+ New'}
+  // Level chip on the feature comes from a real assigned character, if any.
+  const featureLevel = (() => {
+    if (!featured) return null;
+    if (character?.campaign_id === featured.id) return character.level;
+    return null;
+  })();
+
+  const statusClass = (status) => status === 'active' ? '' : status === 'archived' ? 'archived' : 'paused';
+  const toneLabel = (t) => cap(t || 'heroic fantasy');
+  const timeLabel = (t) => cap(t || 'normal');
+
+  const closePanels = () => { resetPipeline(); resetImport(); };
+
+  // map the create-pipeline progress to the design's step list
+  const renderPipeline = () => {
+    const stepIndex = PIPELINE_STEPS.findIndex(s => s.key === pipelineStep);
+    return (
+      <div className="pipe">
+        <div className="pipe-title serif">{pipelineStep === 'done' ? 'Your world is ready' : 'Setting up your campaign…'}</div>
+        {PIPELINE_STEPS.map((step, i) => {
+          const isCompleted = i < stepIndex || pipelineStep === 'done';
+          const isCurrent = step.key === pipelineStep && pipelineStep !== 'done';
+          // Skip parsing display if no backstory to parse
+          if (step.key === 'parsing' && (!character?.backstory || character?.parsed_backstory)) {
+            if (!isCurrent) return null;
+          }
+          // Skip character-dependent steps if there's no character
+          if (!character && ['assigning', 'parsing', 'generating'].includes(step.key)) return null;
+          const cls = isCompleted ? 'done' : isCurrent ? 'current' : '';
+          return (
+            <div key={step.key} className={`pipe-step ${cls}`}>
+              <span className="mark">{isCompleted ? '✓' : isCurrent ? '●' : '○'}</span>
+              <span className="txt">{step.label}</span>
+              {isCurrent && step.key === 'generating' && (
+                <div className="pipe-progress"><div className="bar" /></div>
+              )}
+            </div>
+          );
+        })}
+
+        {pipelineError && (
+          <div className="pipe-error">
+            <span>Error: {pipelineError}</span>
+            <button
+              className="btn primary sm"
+              onClick={() => {
+                setPipelineError(null);
+                if (createdCampaign) {
+                  setPipelineStep('generating');
+                  fetch(`/api/campaign/${createdCampaign.id}/plan/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ character_id: character?.id })
+                  }).then(res => {
+                    if (!res.ok) throw new Error('Retry failed');
+                    setPipelineStep('done');
+                    setSelectedCampaign(createdCampaign);
+                  }).catch(err => setPipelineError(err.message));
+                }
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {pipelineStep === 'done' && (
+          <div className="pipe-foot">
+            <button className="btn primary lg" onClick={() => { resetPipeline(); onNavigateToPlay?.(); }}>
+              <Ic n="play" />Play now
+            </button>
+            <button className="btn" onClick={resetPipeline}>Back to campaigns</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderImportProgress = () => {
+    const stepIndex = IMPORT_STEPS.findIndex(s => s.key === importStep);
+    return (
+      <div className="pipe">
+        <div className="pipe-title serif">{importStep === 'done' ? 'Campaign imported' : 'Importing campaign…'}</div>
+        {IMPORT_STEPS.map((step, i) => {
+          const isCompleted = i < stepIndex || importStep === 'done';
+          const isCurrent = step.key === importStep && importStep !== 'done';
+          const cls = isCompleted ? 'done' : isCurrent ? 'current' : '';
+          return (
+            <div key={step.key} className={`pipe-step ${cls}`}>
+              <span className="mark">{isCompleted ? '✓' : isCurrent ? '●' : '○'}</span>
+              <span className="txt">{step.label}</span>
+            </div>
+          );
+        })}
+        {importStep === 'done' && importResult && (
+          <>
+            <div className="pipe-note">
+              {importResult.characterId ? (
+                <>
+                  Created {importResult.sessionsCreated} session record{importResult.sessionsCreated !== 1 ? 's' : ''}
+                  {importResult.companionsCreated > 0 && `, ${importResult.companionsCreated} companion${importResult.companionsCreated !== 1 ? 's' : ''}`}.
+                </>
+              ) : (
+                'Campaign and plan imported. Create a character and assign them from the campaign details.'
+              )}
+            </div>
+            <div className="pipe-foot">
+              {importResult.characterId && (
+                <button className="btn primary lg" onClick={() => { resetImport(); onNavigateToPlay?.(); }}>
+                  <Ic n="play" />Play now
+                </button>
+              )}
+              <button className="btn" onClick={() => { setSelectedCampaign(importResult.campaign); resetImport(); }}>
+                View campaign
               </button>
-              <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                onClick={() => { setShowNewCampaign(false); resetPipeline(); setShowImport(!showImport); }}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const renderNewCampaignForm = () => (
+    <section className="panel form-panel">
+      <div className="panel-head">
+        <Ic n="plus" />
+        <span className="ph-t">Begin a new campaign</span>
+        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={resetPipeline}>Cancel</button>
+      </div>
+      <div className="panel-body">
+        <form onSubmit={handleCreateCampaign}>
+          <div className="field">
+            <label className="label">Campaign name *</label>
+            <input
+              className="hinp"
+              type="text"
+              value={newCampaign.name}
+              onChange={e => setNewCampaign({ ...newCampaign, name: e.target.value })}
+              required
+              placeholder="The Dragon's Hoard"
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Premise</label>
+            <textarea
+              className="htxt"
+              value={newCampaign.description}
+              onChange={e => setNewCampaign({ ...newCampaign, description: e.target.value })}
+              placeholder="An epic adventure in a world of magic and mystery…"
+            />
+          </div>
+
+          <div className="field-row">
+            <div className="field">
+              <label className="label">Setting</label>
+              <input
+                className="hinp"
+                type="text"
+                value={newCampaign.setting}
+                onChange={e => setNewCampaign({ ...newCampaign, setting: e.target.value })}
+                placeholder="Forgotten Realms"
+              />
+            </div>
+            <div className="field">
+              <label className="label">Tone</label>
+              <select
+                className="hsel"
+                value={newCampaign.tone}
+                onChange={e => setNewCampaign({ ...newCampaign, tone: e.target.value })}
               >
-                {showImport ? 'Cancel' : 'Import'}
-              </button>
+                {toneOptions.map(tone => (
+                  <option key={tone} value={tone}>{toneLabel(tone)}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div style={styles.filterTabs}>
+          <div className="field-row">
+            <div className="field">
+              <label className="label">
+                Starting location
+                {backstoryLocation && <span className="hint">from backstory</span>}
+              </label>
+              <select
+                className="hsel"
+                value={newCampaign.starting_location}
+                onChange={e => {
+                  setNewCampaign({ ...newCampaign, starting_location: e.target.value });
+                  if (e.target.value !== 'custom') setCustomLocation('');
+                }}
+              >
+                <option value="">Select a location…</option>
+                <optgroup label="Major Cities">
+                  {STARTING_LOCATIONS.filter(l => l.type === 'city').map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name} — {loc.region}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Regions">
+                  {STARTING_LOCATIONS.filter(l => l.type === 'region').map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name} — {loc.region}</option>
+                  ))}
+                </optgroup>
+                <option value="custom">Custom Location…</option>
+              </select>
+              {newCampaign.starting_location === 'custom' && (
+                <input
+                  className="hinp"
+                  style={{ marginTop: 8 }}
+                  type="text"
+                  value={customLocation}
+                  onChange={e => setCustomLocation(e.target.value)}
+                  placeholder="Enter custom location name"
+                />
+              )}
+            </div>
+            <div className="field">
+              <label className="label">Time ratio</label>
+              <select
+                className="hsel"
+                value={newCampaign.time_ratio}
+                onChange={e => setNewCampaign({ ...newCampaign, time_ratio: e.target.value })}
+              >
+                <option value="realtime">Realtime (1:1)</option>
+                <option value="leisurely">Leisurely (4:1)</option>
+                <option value="normal">Normal (8:1)</option>
+                <option value="fast">Fast (12:1)</option>
+                <option value="montage">Montage (24:1)</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" className="btn primary lg" style={{ marginTop: 8 }}>
+            <Ic n="globe" />Create campaign
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+
+  const renderImportForm = () => (
+    <section className="panel form-panel">
+      <div className="panel-head">
+        <Ic n="upload" />
+        <span className="ph-t">Import a campaign</span>
+        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={resetImport}>Cancel</button>
+      </div>
+      <div className="panel-body">
+        <p className="field-help">
+          Load a JSON file or paste campaign JSON below. Must contain a "campaign" section; "character" and "campaign_plan" are optional.
+        </p>
+        <div className="row gap8" style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.json';
+              input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => setImportJSON(ev.target.result);
+                reader.readAsText(file);
+              };
+              input.click();
+            }}
+          >
+            <Ic n="upload" />Load from file
+          </button>
+          {importJSON && <span className="file-loaded">{(importJSON.length / 1024).toFixed(1)} KB loaded</span>}
+        </div>
+        <div className="field">
+          <textarea
+            className="htxt mono"
+            value={importJSON}
+            onChange={e => setImportJSON(e.target.value)}
+            placeholder={'{\n  "campaign": { "name": "..." },\n  "campaign_plan": { ... },\n  "character": { "name": "...", "class": "...", "race": "..." }\n}'}
+          />
+        </div>
+        {importError && (
+          <div className="pipe-error" style={{ whiteSpace: 'pre-wrap', marginBottom: 12 }}>{importError}</div>
+        )}
+        <button
+          className="btn primary lg"
+          onClick={handleImportCampaign}
+          disabled={!importJSON.trim()}
+        >
+          <Ic n="upload" />Import campaign
+        </button>
+      </div>
+    </section>
+  );
+
+  const renderDetail = () => {
+    const c = selectedCampaign;
+    return (
+      <section className="panel detail-panel">
+        <div className="panel-head">
+          <Ic n="globe" />
+          <span className="ph-t">Campaign details</span>
+          <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={() => setSelectedCampaign(null)}>
+            <Ic n="x" />Close
+          </button>
+        </div>
+        <div className="panel-body">
+          <div className="detail-head">
+            <h2>{c.name}</h2>
+            <span className={`camp-status-pill chip ${c.status === 'archived' ? 'warn' : ''}`}>{cap(c.status)}</span>
+          </div>
+
+          {c.description && <p className="detail-desc">{c.description}</p>}
+
+          <div className="info-grid">
+            <div className="info-item">
+              <div className="info-label">Setting</div>
+              <div className="info-value">{c.setting || 'Forgotten Realms'}</div>
+            </div>
+            <div className="info-item">
+              <div className="info-label">Tone</div>
+              <div className="info-value">{toneLabel(c.tone)}</div>
+            </div>
+            {c.starting_location && (
+              <div className="info-item">
+                <div className="info-label">Starting location</div>
+                <div className="info-value">{c.starting_location}</div>
+              </div>
+            )}
+            <div className="info-item">
+              <div className="info-label">Time ratio</div>
+              <div className="info-value">{timeLabel(c.time_ratio)}</div>
+            </div>
+          </div>
+
+          {campaignStats && (
+            <div className="stat-grid">
+              <div className="stat-box"><div className="stat-value">{campaignStats.characters ?? 0}</div><div className="stat-label">Characters</div></div>
+              <div className="stat-box"><div className="stat-value">{campaignStats.quests ?? 0}</div><div className="stat-label">Quests</div></div>
+              <div className="stat-box"><div className="stat-value">{campaignStats.locations ?? 0}</div><div className="stat-label">Locations</div></div>
+              <div className="stat-box"><div className="stat-value">{campaignStats.companions ?? 0}</div><div className="stat-label">Companions</div></div>
+            </div>
+          )}
+
+          <div className="sec-head"><h2>Characters</h2><span className="glyph">❧</span><span className="fl" /><span className="sub">{campaignCharacters.length}</span></div>
+          {campaignCharacters.length === 0 ? (
+            <div className="camp-empty">No characters assigned to this campaign.</div>
+          ) : (
+            campaignCharacters.map(char => (
+              <div key={char.id} className="char-row">
+                <div>
+                  <div className="cn">{char.name}</div>
+                  <div className="cm">Level {char.level} · {char.race} {cap(char.class)}</div>
+                </div>
+                <button className="btn ghost sm" onClick={() => handleRemoveCharacter(char.id)}>Remove</button>
+              </div>
+            ))
+          )}
+
+          {c.status === 'active' && unassignedCharacters.length > 0 && (
+            <div className="assign-row">
+              <select
+                className="hsel"
+                style={{ flex: 1 }}
+                value={selectedCharacterToAssign}
+                onChange={e => setSelectedCharacterToAssign(e.target.value)}
+              >
+                <option value="">Assign a character…</option>
+                {unassignedCharacters.map(char => (
+                  <option key={char.id} value={char.id}>
+                    {char.name} (Level {char.level} {cap(char.class)})
+                  </option>
+                ))}
+              </select>
+              <button className="btn" onClick={handleAssignCharacter} disabled={!selectedCharacterToAssign}>Assign</button>
+            </div>
+          )}
+
+          <div className="row gap10" style={{ marginTop: 22, flexWrap: 'wrap' }}>
+            {c.status === 'active' && (
+              <button className="btn" onClick={handleArchiveCampaign}><Ic n="archive" />Archive</button>
+            )}
+            <button className="btn danger" onClick={() => setConfirmDelete(c)}><Ic n="trash" />Delete campaign</button>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const busy = showNewCampaign || pipelineStep || showImport || importStep;
+
+  return (
+    <div className="hearth campaigns">
+      <HearthCampaignSprite />
+
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr" />
+        {character?.name && <span className="back" onClick={onBack} style={{ cursor: 'pointer' }}>{character.name}'s campaigns</span>}
+        <div className="spacer" />
+        <span className="opus"><span className="dot" />Opus</span>
+      </header>
+
+      <main className="page">
+        <div className="page-eyebrow"><span className="eyebrow">Campaigns</span><span className="ln" /></div>
+
+        {/* toolbar: filters + create / import */}
+        <div className="camp-toolbar">
+          <div className="filter-tabs">
             {['active', 'archived', 'all'].map(f => (
               <button
                 key={f}
-                style={{
-                  ...styles.filterTab,
-                  ...(filter === f ? styles.filterTabActive : {})
-                }}
+                className={`filter-tab${filter === f ? ' on' : ''}`}
                 onClick={() => setFilter(f)}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {cap(f)}
               </button>
             ))}
           </div>
-
-          {showNewCampaign && !pipelineStep && (
-            <form style={styles.form} onSubmit={handleCreateCampaign}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Campaign Name *</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={newCampaign.name}
-                  onChange={e => setNewCampaign({ ...newCampaign, name: e.target.value })}
-                  required
-                  placeholder="The Dragon's Hoard"
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Description</label>
-                <textarea
-                  style={styles.textarea}
-                  value={newCampaign.description}
-                  onChange={e => setNewCampaign({ ...newCampaign, description: e.target.value })}
-                  placeholder="An epic adventure in a world of magic and mystery..."
-                />
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Setting</label>
-                  <input
-                    style={styles.input}
-                    type="text"
-                    value={newCampaign.setting}
-                    onChange={e => setNewCampaign({ ...newCampaign, setting: e.target.value })}
-                    placeholder="Forgotten Realms"
-                  />
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Tone</label>
-                  <select
-                    style={styles.select}
-                    value={newCampaign.tone}
-                    onChange={e => setNewCampaign({ ...newCampaign, tone: e.target.value })}
-                  >
-                    {toneOptions.map(tone => (
-                      <option key={tone} value={tone}>
-                        {tone.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>
-                    Starting Location
-                    {backstoryLocation && (
-                      <span style={{ color: '#9b59b6', marginLeft: '0.5rem', fontSize: '0.75rem' }}>
-                        (from backstory)
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    style={styles.select}
-                    value={newCampaign.starting_location}
-                    onChange={e => {
-                      setNewCampaign({ ...newCampaign, starting_location: e.target.value });
-                      if (e.target.value !== 'custom') setCustomLocation('');
-                    }}
-                  >
-                    <option value="">Select a location...</option>
-                    <optgroup label="Major Cities">
-                      {STARTING_LOCATIONS.filter(l => l.type === 'city').map(loc => (
-                        <option key={loc.id} value={loc.id}>{loc.name} — {loc.region}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Regions">
-                      {STARTING_LOCATIONS.filter(l => l.type === 'region').map(loc => (
-                        <option key={loc.id} value={loc.id}>{loc.name} — {loc.region}</option>
-                      ))}
-                    </optgroup>
-                    <option value="custom">Custom Location...</option>
-                  </select>
-                  {newCampaign.starting_location === 'custom' && (
-                    <input
-                      style={{ ...styles.input, marginTop: '0.5rem' }}
-                      type="text"
-                      value={customLocation}
-                      onChange={e => setCustomLocation(e.target.value)}
-                      placeholder="Enter custom location name"
-                    />
-                  )}
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Time Ratio</label>
-                  <select
-                    style={styles.select}
-                    value={newCampaign.time_ratio}
-                    onChange={e => setNewCampaign({ ...newCampaign, time_ratio: e.target.value })}
-                  >
-                    <option value="realtime">Realtime (1:1)</option>
-                    <option value="leisurely">Leisurely (4:1)</option>
-                    <option value="normal">Normal (8:1)</option>
-                    <option value="fast">Fast (12:1)</option>
-                    <option value="montage">Montage (24:1)</option>
-                  </select>
-                </div>
-              </div>
-
-              <button type="submit" style={{ ...styles.button, ...styles.successButton }}>
-                Create Campaign
-              </button>
-            </form>
-          )}
-
-          {pipelineStep && (
-            <div style={{
-              padding: '1.5rem',
-              background: 'rgba(155, 89, 182, 0.05)',
-              borderRadius: '8px',
-              border: '1px solid rgba(155, 89, 182, 0.2)',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ marginBottom: '1rem', fontSize: '1rem', color: '#f5f5f5', fontWeight: '500' }}>
-                {pipelineStep === 'done' ? 'Campaign Ready!' : 'Setting up your campaign...'}
-              </div>
-
-              {PIPELINE_STEPS.map((step, i) => {
-                const stepIndex = PIPELINE_STEPS.findIndex(s => s.key === pipelineStep);
-                const thisIndex = i;
-                const isCompleted = thisIndex < stepIndex || pipelineStep === 'done';
-                const isCurrent = step.key === pipelineStep && pipelineStep !== 'done';
-                const isPending = thisIndex > stepIndex && pipelineStep !== 'done';
-
-                // Skip parsing step display if no backstory
-                if (step.key === 'parsing' && (!character?.backstory || character?.parsed_backstory)) {
-                  if (!isCurrent) return null;
-                }
-                // Skip assign/parse/generate if no character
-                if (!character && ['assigning', 'parsing', 'generating'].includes(step.key)) return null;
-
-                return (
-                  <div key={step.key} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.5rem 0',
-                    color: isCompleted ? '#2ecc71' : isCurrent ? '#f5f5f5' : '#555'
-                  }}>
-                    <span style={{ fontSize: '1rem', width: '1.5rem', textAlign: 'center' }}>
-                      {isCompleted ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'}
-                    </span>
-                    <span style={{ fontSize: '0.9rem' }}>{step.label}</span>
-                    {isCurrent && step.key === 'generating' && (
-                      <div style={{
-                        flex: 1,
-                        height: '4px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: '2px',
-                        overflow: 'hidden',
-                        marginLeft: '0.5rem'
-                      }}>
-                        <div style={{
-                          height: '100%',
-                          background: 'linear-gradient(90deg, #9b59b6, #8e44ad)',
-                          borderRadius: '2px',
-                          animation: 'pipelineProgress 60s ease-out forwards',
-                          width: '0%'
-                        }} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {pipelineError && (
-                <div style={{
-                  marginTop: '1rem',
-                  padding: '0.75rem',
-                  background: 'rgba(231, 76, 60, 0.1)',
-                  border: '1px solid rgba(231, 76, 60, 0.3)',
-                  borderRadius: '6px',
-                  color: '#e74c3c',
-                  fontSize: '0.85rem'
-                }}>
-                  Error: {pipelineError}
-                  <button
-                    style={{ ...styles.button, ...styles.primaryButton, marginLeft: '1rem', padding: '0.3rem 0.75rem' }}
-                    onClick={() => {
-                      setPipelineError(null);
-                      if (createdCampaign) {
-                        setPipelineStep('generating');
-                        fetch(`/api/campaign/${createdCampaign.id}/plan/generate`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ character_id: character?.id })
-                        }).then(res => {
-                          if (!res.ok) throw new Error('Retry failed');
-                          setPipelineStep('done');
-                          setSelectedCampaign(createdCampaign);
-                        }).catch(err => setPipelineError(err.message));
-                      }
-                    }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {pipelineStep === 'done' && (
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button
-                    style={{
-                      ...styles.button,
-                      background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                      color: '#fff',
-                      padding: '0.75rem 2rem',
-                      fontSize: '1rem',
-                      fontWeight: '600'
-                    }}
-                    onClick={() => {
-                      resetPipeline();
-                      onNavigateToPlay?.();
-                    }}
-                  >
-                    Play Now
-                  </button>
-                  <button
-                    style={{ ...styles.button, ...styles.secondaryButton }}
-                    onClick={resetPipeline}
-                  >
-                    Back to Campaigns
-                  </button>
-                </div>
-              )}
-
-              <style>{`
-                @keyframes pipelineProgress {
-                  0% { width: 0%; }
-                  10% { width: 15%; }
-                  30% { width: 35%; }
-                  50% { width: 55%; }
-                  70% { width: 70%; }
-                  90% { width: 85%; }
-                  100% { width: 95%; }
-                }
-              `}</style>
-            </div>
-          )}
-
-          {showImport && !importStep && (
-            <div style={styles.form}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Import Campaign JSON</label>
-                <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 0.5rem 0' }}>
-                  Load a JSON file or paste campaign JSON below. Must contain a "campaign" section; "character" and "campaign_plan" are optional.
-                </p>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <button
-                    style={{
-                      padding: '0.5rem 1rem',
-                      background: 'rgba(52, 152, 219, 0.15)',
-                      border: '1px solid rgba(52, 152, 219, 0.4)',
-                      borderRadius: '6px',
-                      color: '#3498db',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem'
-                    }}
-                    onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = '.json';
-                      input.onchange = (e) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (ev) => setImportJSON(ev.target.result);
-                        reader.readAsText(file);
-                      };
-                      input.click();
-                    }}
-                  >
-                    Load from File
-                  </button>
-                  {importJSON && (
-                    <span style={{ fontSize: '0.8rem', color: '#27ae60', alignSelf: 'center' }}>
-                      {(importJSON.length / 1024).toFixed(1)} KB loaded
-                    </span>
-                  )}
-                </div>
-                <textarea
-                  style={{
-                    ...styles.textarea,
-                    minHeight: '300px',
-                    fontFamily: 'monospace',
-                    fontSize: '0.8rem',
-                    resize: 'vertical'
-                  }}
-                  value={importJSON}
-                  onChange={e => setImportJSON(e.target.value)}
-                  placeholder={'{\n  "campaign": { "name": "..." },\n  "campaign_plan": { ... },\n  "character": { "name": "...", "class": "...", "race": "..." }\n}'}
-                />
-              </div>
-
-              {importError && (
-                <div style={{
-                  padding: '0.75rem',
-                  background: 'rgba(231, 76, 60, 0.1)',
-                  border: '1px solid rgba(231, 76, 60, 0.3)',
-                  borderRadius: '6px',
-                  color: '#e74c3c',
-                  fontSize: '0.85rem',
-                  whiteSpace: 'pre-wrap',
-                  marginBottom: '0.75rem'
-                }}>
-                  {importError}
-                </div>
-              )}
-
-              <button
-                style={{ ...styles.button, ...styles.successButton }}
-                onClick={handleImportCampaign}
-                disabled={!importJSON.trim()}
-              >
-                Import Campaign
-              </button>
-            </div>
-          )}
-
-          {importStep && (
-            <div style={{
-              padding: '1.5rem',
-              background: 'rgba(155, 89, 182, 0.05)',
-              borderRadius: '8px',
-              border: '1px solid rgba(155, 89, 182, 0.2)',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ marginBottom: '1rem', fontSize: '1rem', color: '#f5f5f5', fontWeight: '500' }}>
-                {importStep === 'done' ? 'Campaign Imported!' : 'Importing campaign...'}
-              </div>
-
-              {IMPORT_STEPS.map((step, i) => {
-                const stepIndex = IMPORT_STEPS.findIndex(s => s.key === importStep);
-                const isCompleted = i < stepIndex || importStep === 'done';
-                const isCurrent = step.key === importStep && importStep !== 'done';
-
-                return (
-                  <div key={step.key} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.5rem 0',
-                    color: isCompleted ? '#2ecc71' : isCurrent ? '#f5f5f5' : '#555'
-                  }}>
-                    <span style={{ fontSize: '1rem', width: '1.5rem', textAlign: 'center' }}>
-                      {isCompleted ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'}
-                    </span>
-                    <span style={{ fontSize: '0.9rem' }}>{step.label}</span>
-                  </div>
-                );
-              })}
-
-              {importStep === 'done' && importResult && (
-                <div style={{ marginTop: '1rem' }}>
-                  <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.75rem' }}>
-                    {importResult.characterId ? (
-                      <>
-                        Created {importResult.sessionsCreated} session record{importResult.sessionsCreated !== 1 ? 's' : ''}
-                        {importResult.companionsCreated > 0 && `, ${importResult.companionsCreated} companion${importResult.companionsCreated !== 1 ? 's' : ''}`}
-                      </>
-                    ) : (
-                      'Campaign and plan imported. Create a character and assign them from the campaign details panel.'
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    {importResult.characterId && (
-                      <button
-                        style={{
-                          ...styles.button,
-                          background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                          color: '#fff',
-                          padding: '0.75rem 2rem',
-                          fontSize: '1rem',
-                          fontWeight: '600'
-                        }}
-                        onClick={() => {
-                          resetImport();
-                          onNavigateToPlay?.();
-                        }}
-                      >
-                        Play Now
-                      </button>
-                    )}
-                    <button
-                      style={{ ...styles.button, ...styles.secondaryButton }}
-                      onClick={() => {
-                        setSelectedCampaign(importResult.campaign);
-                        resetImport();
-                      }}
-                    >
-                      View Campaign
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!showNewCampaign && !showImport && !pipelineStep && !importStep && (
-            <div style={styles.campaignList}>
-              {loading ? (
-                <div style={styles.emptyState}>Loading campaigns...</div>
-              ) : filteredCampaigns.length === 0 ? (
-                <div style={styles.emptyState}>
-                  No {filter !== 'all' ? filter : ''} campaigns found
-                </div>
-              ) : (
-                filteredCampaigns.map(campaign => (
-                  <div
-                    key={campaign.id}
-                    style={{
-                      ...styles.campaignCard,
-                      ...(selectedCampaign?.id === campaign.id ? styles.campaignCardSelected : {}),
-                      ...(campaign.status === 'archived' ? styles.campaignCardArchived : {})
-                    }}
-                    onClick={() => setSelectedCampaign(campaign)}
-                  >
-                    <div style={styles.campaignName}>
-                      {campaign.name}
-                    </div>
-                    <div style={styles.campaignMeta}>
-                      <span style={{
-                        ...styles.badge,
-                        ...styles.statusBadge[campaign.status]
-                      }}>
-                        {campaign.status}
-                      </span>
-                      {campaign.setting && (
-                        <span style={{ fontSize: '0.8rem', color: '#888' }}>
-                          {campaign.setting}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="spacer" />
+          {!busy && (
+            <>
+              <button className="btn" onClick={() => { closePanels(); setShowImport(true); }}><Ic n="upload" />Import</button>
+              <button className="btn primary" onClick={() => { closePanels(); setShowNewCampaign(true); }}><Ic n="plus" />New campaign</button>
+            </>
           )}
         </div>
 
-        {/* Right Panel - Campaign Details */}
-        <div style={styles.panel}>
-          <h3 style={styles.panelTitle}>Campaign Details</h3>
-
-          {!selectedCampaign ? (
-            <div style={styles.emptyState}>Select a campaign to view details</div>
-          ) : (
+        {/* create / import flows take over the canvas when active */}
+        {pipelineStep ? renderPipeline()
+          : showNewCampaign ? renderNewCampaignForm()
+          : importStep ? renderImportProgress()
+          : showImport ? renderImportForm()
+          : (
             <>
-              <div style={styles.detailSection}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <h3 style={{ margin: 0, color: '#f5f5f5', fontSize: '1.25rem' }}>
-                    {selectedCampaign.name}
-                  </h3>
-                  <span style={{
-                    ...styles.badge,
-                    ...styles.statusBadge[selectedCampaign.status]
-                  }}>
-                    {selectedCampaign.status}
-                  </span>
+              {loading ? (
+                <div className="camp-empty">Loading campaigns…</div>
+              ) : filteredCampaigns.length === 0 ? (
+                <div className="camp-empty">
+                  No {filter !== 'all' ? filter : ''} campaigns yet. Begin one below.
                 </div>
+              ) : (
+                <>
+                  {/* FEATURED campaign */}
+                  {featured && (
+                    <section className="feature">
+                      <div className="feat-main">
+                        <div className="feat-tag"><span className="pulse" />{cap(featured.status)}</div>
+                        <h2>{featured.name}</h2>
+                        {featured.description && <div className="premise">{featured.description}</div>}
+                        <div className="feat-meta">
+                          {featureLevel != null && <span className="chip">Level {featureLevel}</span>}
+                          {featured.setting && <span className="chip">{featured.setting}</span>}
+                          {featured.starting_location && <span className="chip">{featured.starting_location}</span>}
+                          {featured.tone && <span className="chip">{toneLabel(featured.tone)}</span>}
+                        </div>
+                        <div className="feat-actions">
+                          {character?.campaign_id === featured.id && (
+                            <button className="btn primary" onClick={() => onNavigateToPlay?.()}><Ic n="play" />Continue</button>
+                          )}
+                          <button className="btn" onClick={() => setSelectedCampaign(featured)}><Ic n="globe" />Details</button>
+                        </div>
+                      </div>
+                      <div className="feat-side">
+                        <h3>The world Opus wrote</h3>
+                        {featured.starting_location && (
+                          <div className="plan-row"><span className="k">Starts in</span><span className="v">{featured.starting_location}</span></div>
+                        )}
+                        <div className="plan-row"><span className="k">Setting</span><span className="v">{featured.setting || 'Forgotten Realms'}</span></div>
+                        <div className="plan-row"><span className="k">Tone</span><span className="v">{toneLabel(featured.tone)}</span></div>
+                        <div className="plan-row"><span className="k">Time ratio</span><span className="v">{timeLabel(featured.time_ratio)}</span></div>
+                        {selectedCampaign?.id === featured.id && campaignStats && (
+                          <div className="plan-row"><span className="k">Locations</span><span className="v accent">{campaignStats.locations} mapped</span></div>
+                        )}
+                      </div>
+                    </section>
+                  )}
 
-                {selectedCampaign.description && (
-                  <div style={styles.description}>
-                    {selectedCampaign.description}
-                  </div>
-                )}
-              </div>
-
-              <div style={styles.infoGrid}>
-                <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>Setting</div>
-                  <div style={styles.infoValue}>{selectedCampaign.setting || 'Forgotten Realms'}</div>
-                </div>
-                <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>Tone</div>
-                  <div style={styles.infoValue}>
-                    {(selectedCampaign.tone || 'heroic fantasy').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                  </div>
-                </div>
-                {selectedCampaign.starting_location && (
-                  <div style={styles.infoItem}>
-                    <div style={styles.infoLabel}>Starting Location</div>
-                    <div style={styles.infoValue}>{selectedCampaign.starting_location}</div>
-                  </div>
-                )}
-                <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>Time Ratio</div>
-                  <div style={styles.infoValue}>
-                    {(selectedCampaign.time_ratio || 'normal').charAt(0).toUpperCase() + (selectedCampaign.time_ratio || 'normal').slice(1)}
-                  </div>
-                </div>
-              </div>
-
-              {campaignStats && (
-                <div style={styles.statsGrid}>
-                  <div style={styles.statBox}>
-                    <div style={styles.statValue}>{campaignStats.character_count || 0}</div>
-                    <div style={styles.statLabel}>Characters</div>
-                  </div>
-                  <div style={styles.statBox}>
-                    <div style={styles.statValue}>{campaignStats.quest_count || 0}</div>
-                    <div style={styles.statLabel}>Quests</div>
-                  </div>
-                  <div style={styles.statBox}>
-                    <div style={styles.statValue}>{campaignStats.location_count || 0}</div>
-                    <div style={styles.statLabel}>Locations</div>
-                  </div>
-                </div>
+                  {/* OTHER campaigns */}
+                  {others.length > 0 && (
+                    <>
+                      <div className="sec-head"><h2>Other campaigns</h2><span className="glyph">❧</span><span className="fl" /><span className="sub">{others.length}</span></div>
+                      <div className="camp-list">
+                        {others.map(c => (
+                          <button
+                            key={c.id}
+                            className={`camp${selectedCampaign?.id === c.id ? ' selected' : ''}`}
+                            onClick={() => setSelectedCampaign(c)}
+                          >
+                            <div className="ct"><span className={`status ${statusClass(c.status)}`}>{cap(c.status)}</span></div>
+                            <h3>{c.name}</h3>
+                            {c.description && <p>{c.description}</p>}
+                            <div className="meta">
+                              {[c.setting, c.starting_location].filter(Boolean).join(' · ') || timeLabel(c.time_ratio)}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
               )}
 
-              {/* Characters Section */}
-              <div style={{ ...styles.detailSection, marginTop: '1.5rem' }}>
-                <div style={styles.sectionTitle}>
-                  Characters ({campaignCharacters.length})
-                </div>
+              {/* selected-campaign detail panel */}
+              {selectedCampaign && (
+                <div style={{ marginTop: 36 }}>{renderDetail()}</div>
+              )}
 
-                {campaignCharacters.length === 0 ? (
-                  <div style={{ ...styles.emptyState, padding: '1rem' }}>
-                    No characters assigned to this campaign
-                  </div>
-                ) : (
-                  <div style={styles.characterList}>
-                    {campaignCharacters.map(char => (
-                      <div key={char.id} style={styles.characterCard}>
-                        <div style={styles.characterInfo}>
-                          <span style={styles.characterName}>{char.name}</span>
-                          <span style={styles.characterMeta}>
-                            Level {char.level} {char.race} {char.class?.charAt(0).toUpperCase() + char.class?.slice(1)}
-                          </span>
-                        </div>
-                        <button
-                          style={{ ...styles.button, ...styles.secondaryButton, padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                          onClick={() => handleRemoveCharacter(char.id)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {selectedCampaign.status === 'active' && unassignedCharacters.length > 0 && (
-                  <div style={styles.assignSection}>
-                    <div style={styles.sectionTitle}>Assign Character</div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <select
-                        style={{ ...styles.select, flex: 1 }}
-                        value={selectedCharacterToAssign}
-                        onChange={e => setSelectedCharacterToAssign(e.target.value)}
-                      >
-                        <option value="">Select a character...</option>
-                        {unassignedCharacters.map(char => (
-                          <option key={char.id} value={char.id}>
-                            {char.name} (Level {char.level} {char.class?.charAt(0).toUpperCase() + char.class?.slice(1)})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        style={{ ...styles.button, ...styles.successButton }}
-                        onClick={handleAssignCharacter}
-                        disabled={!selectedCharacterToAssign}
-                      >
-                        Assign
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div style={styles.actions}>
-                {selectedCampaign.status === 'active' && (
-                  <button
-                    style={{ ...styles.button, ...styles.dangerButton }}
-                    onClick={handleArchiveCampaign}
-                  >
-                    Archive Campaign
-                  </button>
-                )}
-                <button
-                  style={{
-                    ...styles.button,
-                    background: 'transparent',
-                    color: '#e74c3c',
-                    border: '1px solid rgba(231, 76, 60, 0.4)',
-                    fontSize: '0.8rem'
-                  }}
-                  onClick={() => setConfirmDelete(selectedCampaign)}
-                >
-                  Delete Campaign
+              {/* begin-new entry point */}
+              <div style={{ marginTop: 28 }}>
+                <button className="btn lg" onClick={() => { closePanels(); setShowNewCampaign(true); }}>
+                  <Ic n="plus" />Begin a new campaign
                 </button>
               </div>
             </>
           )}
-        </div>
-      </div>
+      </main>
 
-      {/* Delete Confirmation Modal */}
+      {/* delete confirmation */}
       {confirmDelete && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000
-        }} onClick={() => setConfirmDelete(null)}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.99) 0%, rgba(40, 30, 35, 0.99) 100%)',
-            borderRadius: '8px',
-            padding: '1.5rem',
-            maxWidth: '400px',
-            width: '90%',
-            border: '1px solid rgba(231, 76, 60, 0.3)',
-            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
-          }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 0.75rem', color: '#e74c3c', fontSize: '1.1rem' }}>
-              Delete Campaign?
-            </h3>
-            <p style={{ color: '#ccc', fontSize: '0.9rem', lineHeight: '1.5', margin: '0 0 1rem' }}>
-              This will permanently delete <strong style={{ color: '#f5f5f5' }}>{confirmDelete.name}</strong> and
-              all associated locations, quests, factions, merchants, and world data. Characters will be unassigned
-              but not deleted.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                onClick={() => setConfirmDelete(null)}
-              >
-                Cancel
-              </button>
-              <button
-                style={{ ...styles.button, ...styles.dangerButton }}
-                onClick={handleDeleteCampaign}
-              >
-                Delete Forever
-              </button>
+        <div className="scrim" onClick={() => setConfirmDelete(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><h3>Delete this campaign?</h3></div>
+            <div className="modal-body">
+              <p className="lede" style={{ margin: 0 }}>
+                This permanently deletes <span className="serif" style={{ color: 'var(--ink)', fontStyle: 'normal' }}>{confirmDelete.name}</span> and
+                all of its locations, quests, factions, merchants, and world data. Characters are unassigned but not deleted.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn ghost" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="btn danger" onClick={handleDeleteCampaign}><Ic n="trash" />Delete forever</button>
             </div>
           </div>
         </div>

@@ -1,0 +1,45 @@
+/* =================================================================
+   HEARTH · Settings screen (per-screen styles)
+   Scoped under .hearth — reuses the shared design system in hearth.css.
+   Ported from Hearth/Settings.html. Only the rules this screen actually
+   uses are kept; the DM-preference dial/slider/switch controls from the
+   mockup are dropped because the app has no backing data for them
+   (see component note). Maintenance actions are presented in the
+   design's set-card / set-row vocabulary, with danger-tinted rows for
+   destructive operations.
+   ================================================================= */
+
+.hearth .settings { max-width: 720px; margin: 0 auto; padding: 46px 28px 90px; }
+
+.hearth .set-title { font-family: var(--serif); font-weight: 500; font-size: 38px; letter-spacing: -.014em; margin: 0 0 6px; }
+.hearth .set-sub { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink-2); margin-bottom: 30px; }
+
+.hearth .set-card { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 13px; box-shadow: var(--shadow-sm); overflow: hidden; }
+.hearth .set-row { padding: 20px 24px; border-top: 1px solid var(--rule-soft); }
+.hearth .set-row:first-child { border-top: 0; }
+.hearth .set-row .sr-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.hearth .set-row .sr-name { font-family: var(--serif); font-size: 20px; color: var(--ink); white-space: nowrap; }
+.hearth .set-row .sr-val { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.hearth .set-row .sr-desc { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-3); margin-top: 5px; line-height: 1.5; }
+
+/* a danger-tinted row, for the destructive actions */
+.hearth .set-row.danger .sr-name { color: var(--bad); }
+.hearth .set-row.danger .sr-val { color: var(--bad); }
+
+/* confirm cluster for the irreversible delete */
+.hearth .confirm { display: flex; flex-direction: column; gap: 10px; }
+.hearth .confirm .cwarn { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--bad); text-align: center; line-height: 1.5; }
+.hearth .confirm .crow { display: flex; gap: 10px; }
+.hearth .confirm .crow .btn { flex: 1; }
+
+/* footer message / saved toast — reuses the design's .saved affordance */
+.hearth .set-foot { display: flex; align-items: center; gap: 14px; margin-top: 22px; min-height: 20px; }
+.hearth .saved { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.hearth .saved.good { color: var(--good); }
+.hearth .saved.bad { color: var(--bad); }
+.hearth .saved .ic { width: 15px; height: 15px; }
+
+/* closing note */
+.hearth .set-note { margin-top: 22px; padding: 16px 18px; background: color-mix(in oklab, var(--accent-2) 8%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent-2) 24%, var(--rule)); border-radius: var(--radius); }
+.hearth .set-note .nt { font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-2); margin-bottom: 6px; }
+.hearth .set-note .nb { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2); }

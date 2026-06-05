@@ -28,6 +28,67 @@ import HomeFlow from './components/creator/HomeFlow.jsx'
 // header below.
 import SettingsOverlay from './components/settings/SettingsOverlay.jsx'
 
+// Phase — Hearth dashboard conversion. The per-character landing (hero +
+// navigation grid) and the persistent header are restyled to the
+// dark-editorial Hearth system. Class hit-die data backs HP fallbacks.
+import classesData from './data/classes.json'
+import './styles/hearth.css'
+import './styles/hearth-dashboard.css'
+
+/* ── local Hearth icon sprite (paths copied from Dashboard.html defs) ── */
+function DashboardSprite() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></symbol>
+      <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" /></symbol>
+      <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" /><line x1="16" y1="8" x2="2" y2="22" /><line x1="17.5" y1="15" x2="9" y2="15" /></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></symbol>
+    </defs></svg>
+  )
+}
+const Ic = ({ n }) => <svg className="ic"><use href={"#i-" + n} /></svg>
+
+// Derive display HP / AC / speed for the hero, mirroring SessionCockpit's
+// fallback logic so an unfilled stored value (0/0, AC 10) still shows a
+// computed figure rather than a hole. Pure helpers — no fabricated data;
+// they only compute from real ability scores + class hit-die.
+const parseJson = (v, dflt) => { if (v == null) return dflt; if (typeof v !== 'string') return v; try { return JSON.parse(v) } catch { return dflt } }
+function deriveVitals(character) {
+  if (!character) return null
+  const level = character.level || 1
+  const classKey = character.class?.toLowerCase()
+  const classData = classesData[classKey]
+  const isMonk = classKey === 'monk'
+  const abil = parseJson(character.ability_scores, null) || {
+    str: character.strength, dex: character.dexterity, con: character.constitution,
+    int: character.intelligence, wis: character.wisdom, cha: character.charisma
+  }
+  const mod = (k) => Math.floor((((abil?.[k]) ?? 10) - 10) / 2)
+  const hitDie = classData?.hitDie || 8
+  const conMod = mod('con')
+  const computedMaxHp = Math.max(1, hitDie + conMod + Math.max(0, level - 1) * (Math.floor(hitDie / 2) + 1 + conMod))
+  const maxHp = character.max_hp > 0 ? character.max_hp : computedMaxHp
+  const curHp = character.current_hp > 0 ? character.current_hp : maxHp
+  const ac = isMonk ? 10 + mod('dex') + mod('wis')
+    : classKey === 'barbarian' ? 10 + mod('dex') + mod('con')
+    : (character.armor_class && character.armor_class > 0) ? character.armor_class : 10 + mod('dex')
+  return {
+    level, classKey, isMonk,
+    curHp, maxHp, ac,
+    speed: character.speed || 30,
+    gold: character.gold_gp,
+    hpKind: (maxHp ? curHp / maxHp : 1) > 0.5 ? '' : (maxHp ? curHp / maxHp : 1) > 0.25 ? 'warn' : 'bad'
+  }
+}
+const titleCase = (s) => (s == null || s === '') ? '' : String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+
 
 // Global fetch interceptor — adds auth token to all /api requests automatically.
 // This avoids touching every fetch call across all components.
@@ -83,37 +144,19 @@ function App() {
   // here since the dashboard branch is only reached when one is selected.
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // Phase 4a SC-4a.4 — shared style for the appbar text-link buttons
-  // (Settings, AI Behavior). Mirrors HomeFlow's `.nav-settings` class
-  // semantically; the dashboard chrome uses dark-aesthetic inline styles.
-  const appbarLinkStyle = {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.15)',
-    color: '#ccc',
-    padding: '0.4rem 0.85rem',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.75rem',
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase',
-    fontFamily: 'Inter, system-ui, sans-serif',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px'
-  }
-  const appbarLinkGlyph = {
-    fontFamily: "'EB Garamond', Georgia, serif",
-    fontStyle: 'italic',
-    fontSize: '15px',
-    letterSpacing: 0,
-    color: '#d4a86a'
-  }
+  // (The dashboard appbar links — Settings, AI Behavior — are now styled
+  // via the Hearth `.hdr-link` class in the persistent header below, so the
+  // former inline appbarLinkStyle/appbarLinkGlyph objects were removed.)
   const [showCreationForm, setShowCreationForm] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
   const [llmStatus, setLlmStatus] = useState(null)
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
+  // Hearth hero — the campaign's display name (the characters table doesn't
+  // carry it; we read it from the campaign record). Null when the character
+  // has no campaign assigned, in which case the hero omits the campaign line.
+  const [campaignName, setCampaignName] = useState(null)
   // NOTE: hasStartedAdventure is kept — it drives the "Play" card copy
   // (Continue vs Start). It is derived from DM-session history, not the
   // removed odds-based adventure system.
@@ -181,9 +224,16 @@ function App() {
         .then(res => res.json())
         .then(data => setHasStartedAdventure((data?.sessions?.length || 0) > 0))
         .catch(() => setHasStartedAdventure(false))
+      // Campaign display name for the Hearth hero. Best-effort; omitted
+      // gracefully if the fetch fails or the record lacks a name.
+      fetch(`/api/campaign/${selectedCharacter.campaign_id}`)
+        .then(res => res.json())
+        .then(data => setCampaignName(data?.name || null))
+        .catch(() => setCampaignName(null))
     } else {
       setCampaignPlanReady(false)
       setHasStartedAdventure(false)
+      setCampaignName(null)
     }
   }, [selectedCharacter])
 
@@ -275,112 +325,54 @@ function App() {
     )
   }
 
-  return (
-    <div className="app">
-      <header style={{ paddingTop: '3rem' }}>
-        {/* Back-to-roster affordance per Phase 2 chunk 5 batch 3
-           sub-checkpoint 2 — clears selectedCharacter so HomeFlow
-           takes over again. Always available when a character is
-           selected (which is always true in this branch since the
-           !selectedCharacter case is handled by the early return). */}
-        {selectedCharacter && (
-          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setSelectedCharacter(null)}
-              style={{
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.15)',
-                color: '#ccc',
-                padding: '0.4rem 0.85rem',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
-            >
-              ← Your characters
-            </button>
-            {/* Phase 3.5 — Settings access in the dashboard appbar. Mirrors
-               the HomeFlow appbar's editorial-aesthetic Settings link
-               using the dark dashboard's button register.
-               Phase 4a SC-4a.4 — AI Behavior link added beside it; same
-               appbar treatment, different surface. */}
-            <span style={{ flex: 1 }} />
-            <button
-              type="button"
-              onClick={() => setActiveView('showAIBehavior')}
-              aria-label="AI Behavior debug"
-              title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
-              style={appbarLinkStyle}
-            >
-              <span style={{ ...appbarLinkGlyph, color: '#7aafff' }}>◇</span>
-              AI Behavior
-            </button>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Settings"
-              title="Settings"
-              style={appbarLinkStyle}
-            >
-              <span style={appbarLinkGlyph}>✦</span>
-              Settings
-            </button>
-          </div>
-        )}
-        <h1>D&D Meta Game</h1>
-        <p className="subtitle">Adventure awaits while you're away</p>
-        {llmStatus && (() => {
-          // When Claude is available, the pill becomes a clickable Sonnet/Opus
-          // toggle. Opus is the production default (v1.0.99); the toggle now
-          // selects Sonnet as an opt-down. Any non-Claude case stays a plain
-          // status indicator.
-          const isClickable = llmStatus.available && llmStatus.provider === 'claude'
-          const accent = !llmStatus.available
-            ? { bg: 'rgba(231, 76, 60, 0.2)', border: '#e74c3c', text: '#e74c3c', dot: '🔴', label: 'AI Offline' }
-            : isClickable && useSonnet
-              ? { bg: 'rgba(139, 92, 246, 0.2)', border: '#8b5cf6', text: '#a78bfa', dot: '🟣', label: 'Sonnet' }
-              : isClickable
-                ? { bg: 'rgba(255, 140, 0, 0.2)', border: '#ff8c00', text: '#ff8c00', dot: '🟠', label: 'Opus' }
-                : { bg: 'rgba(46, 204, 113, 0.2)', border: '#2ecc71', text: '#2ecc71', dot: '🟢', label: 'Ollama' }
-          const baseStyle = {
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            padding: '0.25rem 0.75rem',
-            borderRadius: '12px',
-            fontSize: '0.75rem',
-            background: accent.bg,
-            border: `1px solid ${accent.border}`,
-            color: accent.text,
-            marginTop: '0.5rem',
-            cursor: isClickable ? 'pointer' : 'default'
-          }
-          const tooltip = isClickable
-            ? (useSonnet
-              ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (the production default).'
-              : 'Using Opus (production default — better prose at ~$1.50/hour). Click to opt down to Sonnet.')
-            : undefined
-          const inner = (
-            <>
-              <span style={{ fontSize: '0.8rem' }}>{accent.dot}</span>
-              <span>{accent.label}</span>
-            </>
-          )
-          return isClickable ? (
-            <button
-              type="button"
-              onClick={() => updateUseSonnet(!useSonnet)}
-              title={tooltip}
-              style={{ ...baseStyle, font: 'inherit', fontSize: '0.75rem' }}
-            >
-              {inner}
-            </button>
-          ) : (
-            <div style={baseStyle} title={tooltip}>{inner}</div>
-          )
-        })()}
+  // Hearth model pill — the persistent header carries a Sonnet/Opus
+  // indicator that doubles as a toggle when Claude is the provider.
+  // Opus is the production default (v1.0.99); clicking opts down to Sonnet.
+  const modelPill = llmStatus && (() => {
+    const isClickable = llmStatus.available && llmStatus.provider === 'claude'
+    const accent = !llmStatus.available
+      ? { dot: 'var(--bad)', text: 'var(--bad)', label: 'AI Offline' }
+      : isClickable && useSonnet
+        ? { dot: 'var(--accent-2)', text: 'var(--accent-2)', label: 'Sonnet' }
+        : isClickable
+          ? { dot: 'var(--accent)', text: 'var(--accent)', label: 'Opus' }
+          : { dot: 'var(--good)', text: 'var(--good)', label: 'Ollama' }
+    const tooltip = isClickable
+      ? (useSonnet
+        ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (the production default).'
+        : 'Using Opus (production default — better prose at ~$1.50/hour). Click to opt down to Sonnet.')
+      : undefined
+    return (
+      <button
+        type="button"
+        className="hdr-pill"
+        disabled={!isClickable}
+        onClick={isClickable ? () => updateUseSonnet(!useSonnet) : undefined}
+        title={tooltip}
+        style={{ color: accent.text }}
+      >
+        <span className="pdot" style={{ background: accent.dot, boxShadow: `0 0 7px ${accent.dot}` }} />
+        {accent.label}
+      </button>
+    )
+  })()
 
+  return (
+    <div className="hearth dashboard app-bg">
+      <DashboardSprite />
+
+      {/* ───────── persistent header ───────── */}
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr"></div>
+        {/* Back-to-roster affordance — clears selectedCharacter so HomeFlow
+           takes over again. Always available in this branch. */}
+        <button type="button" className="back as-btn" onClick={() => setSelectedCharacter(null)}>
+          <Ic n="arrow-left" />Your characters
+        </button>
+        <div className="spacer"></div>
+
+        {/* NavigationMenu (Character / Story / Play) flows inline here */}
         <NavigationMenu
           activeView={activeView}
           onNavigate={navigateTo}
@@ -388,6 +380,30 @@ function App() {
           onHome={goHome}
           user={user}
         />
+
+        <div className="vr"></div>
+        {/* Phase 4a SC-4a.4 — AI Behavior diagnostic surface. */}
+        <button
+          type="button"
+          className="hdr-link as-btn"
+          onClick={() => setActiveView('showAIBehavior')}
+          aria-label="AI Behavior debug"
+          title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
+        >
+          AI Behavior
+        </button>
+        {/* Phase 3.5 — Settings overlay access. */}
+        <button
+          type="button"
+          className="hdr-link as-btn"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <Ic n="settings" />Settings
+        </button>
+        <div className="vr"></div>
+        {modelPill}
       </header>
 
       <ErrorBoundary>
@@ -425,17 +441,20 @@ function App() {
         <CompanionsPage
           character={selectedCharacter}
           onCharacterUpdated={handleCharacterUpdated}
+          onBack={goHome}
         />
       ) : activeView === 'showParsedBackstory' && selectedCharacter ? (
         <BackstoryParserPage
           character={selectedCharacter}
           onCharacterUpdated={handleCharacterUpdated}
+          onBack={goHome}
         />
       ) : activeView === 'showCampaigns' && selectedCharacter ? (
         <CampaignsPage
           character={selectedCharacter}
           allCharacters={characters}
           onCharacterUpdated={() => loadCharacters()}
+          onBack={goHome}
           onNavigateToPlay={() => {
             loadCharacters()
             navigateTo('showDMSession')
@@ -444,6 +463,7 @@ function App() {
       ) : activeView === 'showCampaignPlan' && selectedCharacter ? (
         <CampaignPlanPage
           character={selectedCharacter}
+          onBack={goHome}
         />
       ) : activeView === 'showBackstories' && selectedCharacter ? (
         <CompanionBackstoryPage
@@ -453,44 +473,10 @@ function App() {
         <CharacterSettings
           character={selectedCharacter}
           onSettingsChanged={handleSettingsChanged}
+          onBack={goHome}
         />
       ) : (
         <>
-          {selectedCharacter && !showCreationForm && campaignPlanReady && (
-            <div
-              onClick={() => navigateTo('showDMSession')}
-              style={{
-                marginBottom: '1.5rem',
-                padding: '1.25rem 2rem',
-                background: 'linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.2))',
-                border: '1px solid rgba(46, 204, 113, 0.4)',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(46, 204, 113, 0.5), rgba(39, 174, 96, 0.35))'
-                e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(46, 204, 113, 0.3)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.2))'
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
-            >
-              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#f5f5f5', marginBottom: '0.25rem' }}>
-                Play
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#6ee7b7' }}>
-                {hasStartedAdventure
-                  ? `Continue your adventure with ${selectedCharacter.name}`
-                  : `Start your adventure with ${selectedCharacter.name}!`}
-              </div>
-            </div>
-          )}
-
           {/*
             Phase 2 chunk 5 batch 3 sub-checkpoint 2 — CharacterManager
             is now hidden by default (HomeFlow handles the roster + new
@@ -517,62 +503,136 @@ function App() {
             />
           )}
 
-          {selectedCharacter && !showCreationForm && (
-            <div style={{
-              marginTop: '2rem',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-              gap: '1rem'
-            }}>
-              {[
-                { key: 'showCharacterSheet', label: 'Character Sheet', desc: 'View stats, equipment, abilities, and level up', color: '#3498db' },
-                { key: 'showCompanions', label: 'Companions', desc: 'Manage your companion characters and their stories', color: '#1abc9c' },
-                { key: 'showParsedBackstory', label: 'Backstory Parser', desc: 'AI-parse your backstory into structured elements', color: '#e67e22' },
-                { key: 'showCampaigns', label: 'Campaigns', desc: 'Create campaigns with auto-generated world plans', color: '#9b59b6' },
-                { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
-                { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
-                { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
-                // Phase 4a SC-4a.4 — AI Behavior debug page is reached via
-                // the appbar link (right side, beside Settings). Removed
-                // from the dashboard nav grid per PM 2026-05-06 review:
-                // "appbar near Settings, distinct from but parallel to
-                // Settings access pattern" — single canonical entry point.
-              ].map(card => (
-                <div
-                  key={card.key}
-                  onClick={() => navigateTo(card.key)}
-                  style={{
-                    padding: '1.25rem',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: `1px solid ${card.color}44`,
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    borderLeft: `3px solid ${card.color}`
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = `${card.color}1a`
-                    e.currentTarget.style.borderColor = `${card.color}88`
-                    e.currentTarget.style.transform = 'translateY(-2px)'
-                    e.currentTarget.style.boxShadow = `0 4px 12px ${card.color}22`
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                    e.currentTarget.style.borderColor = `${card.color}44`
-                    e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
-                >
-                  <div style={{ fontSize: '1rem', fontWeight: '600', color: card.color, marginBottom: '0.4rem' }}>
-                    {card.label}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#999', lineHeight: '1.3' }}>
-                    {card.desc}
-                  </div>
+          {/* ───────── Hearth dashboard landing (hero + navigation) ───────── */}
+          {selectedCharacter && !showCreationForm && (() => {
+            const v = deriveVitals(selectedCharacter)
+            const name = selectedCharacter.name || selectedCharacter.nickname || 'Adventurer'
+            const monogram = (name || '?').trim().charAt(0).toUpperCase()
+            // descriptor line — race · class/subclass · background, omitting blanks
+            const klass = selectedCharacter.subclass
+              ? `${titleCase(selectedCharacter.class)} · ${titleCase(selectedCharacter.subclass)}`
+              : titleCase(selectedCharacter.class)
+            const descParts = [
+              titleCase(selectedCharacter.subrace || selectedCharacter.race),
+              klass,
+              titleCase(selectedCharacter.background)
+            ].filter(Boolean)
+
+            // Hero navigation cards — the full Manage set. The Campaign Plan
+            // card carries the design's spoiler flag. Each maps to an existing
+            // activeView target via navigateTo.
+            const navCards = [
+              { key: 'showCharacterSheet', icon: 'scroll', title: 'Character Sheet', desc: 'Abilities, features, spells, equipment, and progression.' },
+              { key: 'showCompanions', icon: 'users', title: 'Companions', desc: 'The allies who travel with you and their stories.' },
+              { key: 'showCampaigns', icon: 'compass', title: 'Campaigns', desc: "The adventures you've begun, and the ones waiting." },
+              { key: 'showCampaignPlan', icon: 'globe', title: 'Campaign Plan', desc: 'The world bible Opus wrote — locations, NPCs, lore.', spoiler: true },
+              { key: 'showParsedBackstory', icon: 'feather', title: 'Backstory', desc: 'Your origin, parsed into people, places, and hooks.' },
+              { key: 'showSettings', icon: 'sliders', title: 'Settings', desc: 'Difficulty, tone, and how the Dungeon Master behaves.' }
+            ]
+
+            return (
+              <main className="home">
+                <div className="home-eyebrow">
+                  <span className="eyebrow">Character home</span>
+                  <span className="ln"></span>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* HERO · continue / start */}
+                <section className="hero">
+                  <div className="hero-top">
+                    <div className="crest">
+                      <span className="mono">{monogram}</span>
+                      {v?.level ? <span className="lvl">{v.level}</span> : null}
+                    </div>
+                    <div className="hero-id">
+                      <h1>{name}</h1>
+                      {descParts.length > 0 && (
+                        <div className="desc">
+                          {descParts.map((p, i) => (
+                            <span key={i}>{i > 0 && <span className="sep">·</span>}{p}</span>
+                          ))}
+                        </div>
+                      )}
+                      {campaignName && (
+                        <div className="campaign">
+                          <span className="ct">Campaign</span>
+                          <span className="cn">{campaignName}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="hero-cta">
+                      {campaignPlanReady ? (
+                        <button className="btn primary lg" onClick={() => navigateTo('showDMSession')}>
+                          <Ic n="play" />{hasStartedAdventure ? 'Continue' : 'Begin'}
+                        </button>
+                      ) : (
+                        <button className="btn primary lg" onClick={() => navigateTo('showCampaigns')}>
+                          <Ic n="compass" />Start a campaign
+                        </button>
+                      )}
+                      <span className="last">
+                        {campaignPlanReady
+                          ? (hasStartedAdventure
+                            ? `Continue your adventure with ${name}`
+                            : `Begin your adventure with ${name}`)
+                          : 'No campaign yet — create one to play'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* The app does not yet persist a "where you left off" recap
+                     blurb for the dashboard, so the design's recap prose block
+                     is omitted rather than faked. */}
+
+                  {v && (
+                    <div className="hero-stats">
+                      <span className="stat hp">
+                        <span className="sl">HP</span>
+                        <span className="sv" style={{ color: v.hpKind === 'bad' ? 'var(--bad)' : v.hpKind === 'warn' ? 'var(--warn)' : 'var(--good)' }}>
+                          {v.curHp}<span className="mx"> / {v.maxHp}</span>
+                        </span>
+                      </span>
+                      <span className="stat"><span className="sl">AC</span><span className="sv">{v.ac}</span></span>
+                      <span className="stat"><span className="sl">Speed</span><span className="sv">{v.speed} ft</span></span>
+                      {v.isMonk && v.level > 0 && (
+                        <span className="stat">
+                          <span className="sl">Ki</span>
+                          <span className="stat-pips">
+                            {Array.from({ length: v.level }).map((_, i) => <span key={i} className="pip magic full" />)}
+                          </span>
+                        </span>
+                      )}
+                      {typeof v.gold === 'number' && (
+                        <span className="stat gold"><span className="sl">Gold</span><span className="sv">{v.gold} gp</span></span>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                {/* NAVIGATION */}
+                <div className="home-eyebrow">
+                  <span className="eyebrow">Manage {name.split(' ')[0]}</span>
+                  <span className="ln"></span>
+                </div>
+
+                <div className="nav-grid">
+                  {navCards.map(card => (
+                    <button type="button" key={card.key} className="nav-card" onClick={() => navigateTo(card.key)}>
+                      <div className="arrow"><Ic n="arrow-right" /></div>
+                      <div className="nc-top">
+                        <span className="nc-ic"><Ic n={card.icon} /></span>
+                        {card.spoiler && (
+                          <span className="spoiler-flag"><Ic n="eye-off" />Spoilers</span>
+                        )}
+                      </div>
+                      <h3>{card.title}</h3>
+                      <p>{card.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </main>
+            )
+          })()}
         </>
       )}
       </Suspense>

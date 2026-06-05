@@ -3,6 +3,22 @@ import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
 import { STANDARD_TEXTS, RARE_TEXTS, RECITATIONS, SUBCLASS_TEXTS } from '../data/keeperTexts.js'
+import '../styles/hearth.css'
+import '../styles/hearth-levelup.css'
+
+/* Local inline icon sprite + helper (do not import hearthUI.jsx) */
+const LevelUpSprite = () => (
+  <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8" /><path d="M4 7v12a2 2 0 0 0 2 2" /><path d="M4 7a2 2 0 0 1 4 0v12" /></symbol>
+  </defs></svg>
+)
+const Ic = ({ n }) => <svg className="ic"><use href={'#i-' + n} /></svg>
 
 const ALL_CLASSES = [
   'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
@@ -464,25 +480,34 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
   if (loading) {
     return (
-      <div className="level-up-page">
-        <div className="level-up-loading">
-          <p>Loading level-up information...</p>
-        </div>
+      <div className="hearth levelup app-bg">
+        <LevelUpSprite />
+        <header className="dash-hdr">
+          <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+          <div className="vr"></div>
+          <button className="back" onClick={onBack}><Ic n="arrow-left" />Character sheet</button>
+          <div className="spacer"></div>
+          <span className="opus"><span className="dot"></span>Opus</span>
+        </header>
+        <div className="lu-state"><span className="lede">Gathering what this level grants…</span></div>
       </div>
     )
   }
 
   if (error && !levelUpInfo) {
     return (
-      <div className="level-up-page">
-        <div className="level-up-header">
-          <button className="button button-secondary" onClick={onBack}>
-            ← Back to Character
-          </button>
-          <h1>Cannot Level Up</h1>
-        </div>
-        <div className="level-up-error">
-          <p>{error}</p>
+      <div className="hearth levelup app-bg">
+        <LevelUpSprite />
+        <header className="dash-hdr">
+          <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+          <div className="vr"></div>
+          <button className="back" onClick={onBack}><Ic n="arrow-left" />Character sheet</button>
+          <div className="spacer"></div>
+          <span className="opus"><span className="dot"></span>Opus</span>
+        </header>
+        <div className="lu-state">
+          <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 27, margin: '0 0 10px' }}>Cannot level up</h2>
+          <span className="lede">{error}</span>
         </div>
       </div>
     )
@@ -494,121 +519,138 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   const activeHpGain = selectedClassOption?.hpGain || {}
   const activeNewFeatures = selectedClassOption?.newFeatures || []
 
+  // ── Step rail model — reflects the component's REAL flow ──
+  const showSpellsStep = needsSpellsStep()
+  const railSteps = [
+    { key: 'class-selection', title: 'Class', sub: 'choose a path' },
+    { key: 'choices', title: 'Choices', sub: selectedClassOption ? `${selectedClassOption.class.toLowerCase()} · l${selectedClassOption.newLevel}` : 'level reward' },
+    ...(showSpellsStep ? [{ key: 'spells', title: 'Spells', sub: 'learn & swap' }] : []),
+    { key: 'review', title: 'Review', sub: 'confirm' }
+  ]
+  const stepOrder = railSteps.map(s => s.key)
+  const curStepIdx = stepOrder.indexOf(step)
+  const monogram = ((character.nickname || character.name || '?').trim().charAt(0) || '?').toUpperCase()
+
   return (
-    <div className="level-up-page">
-      {/* Header */}
-      <div className="level-up-header">
-        <button className="button button-secondary" onClick={onBack}>
-          ← Back to Character
-        </button>
-        <div className="level-up-title">
-          <h1>Level Up!</h1>
-          <p className="subtitle">
-            {character.nickname || character.name} ({getClassDisplay()}) → Level {levelUpInfo?.newLevel}
-          </p>
-        </div>
-        <div className="level-up-progress">
-          <div className={`progress-step ${step === 'class-selection' ? 'active' : ''} ${step !== 'class-selection' ? 'completed' : ''}`}>
-            1. Class
-          </div>
-          <div className={`progress-step ${step === 'choices' ? 'active' : ''} ${['spells', 'review'].includes(step) ? 'completed' : ''}`}>
-            2. Choices
-          </div>
-          {needsSpellsStep() && (
-            <div className={`progress-step ${step === 'spells' ? 'active' : ''} ${step === 'review' ? 'completed' : ''}`}>
-              3. Spells
-            </div>
-          )}
-          <div className={`progress-step ${step === 'review' ? 'active' : ''}`}>
-            {needsSpellsStep() ? '4' : '3'}. Review
-          </div>
-        </div>
-      </div>
+    <div className="hearth levelup app-bg">
+      <LevelUpSprite />
 
-      {error && (
-        <div className="level-up-error-banner">
-          {error}
-        </div>
-      )}
+      {/* ───────── HEADER ───────── */}
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr"></div>
+        <button className="back" onClick={onBack}><Ic n="arrow-left" />Character sheet</button>
+        <div className="spacer"></div>
+        <span className="opus"><span className="dot"></span>Opus</span>
+      </header>
 
-      <div className="level-up-content">
+      <main className="wiz">
+        {/* ───────── HERO ───────── */}
+        <div className="wiz-hero">
+          <div className="crest"><span className="mono">{monogram}</span></div>
+          <div className="wh-txt">
+            <span className="eyebrow">Level up</span>
+            <h1>{character.nickname || character.name}</h1>
+            <div className="sub">{getClassDisplay()}</div>
+          </div>
+          <div className="lvlchip">
+            <span className="n">{levelUpInfo?.currentLevel}</span>
+            <svg className="ic ar"><use href="#i-arrow-right" /></svg>
+            <span className="n to">{levelUpInfo?.newLevel}</span>
+          </div>
+        </div>
+
+        <div className="wiz-grid">
+          {/* ───────── STEP RAIL ───────── */}
+          <nav className="steprail">
+            {railSteps.map((s, i) => {
+              const isActive = step === s.key
+              const isDone = i < curStepIdx
+              // can only jump backward to a completed step
+              const canJump = i < curStepIdx
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  className={`lu-step${isActive ? ' active' : ''}${isDone ? ' done' : ''}`}
+                  disabled={!canJump}
+                  onClick={() => {
+                    if (s.key === 'class-selection') handleBackToClassSelection()
+                    else if (s.key === 'choices') handleBackToChoices()
+                    else if (s.key === 'spells') handleBackToSpells()
+                  }}
+                >
+                  <span className="sn">{isDone ? <Ic n="check" /> : i + 1}</span>
+                  <div><div className="st">{s.title}</div><div className="substep">{s.sub}</div></div>
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* ───────── STAGE ───────── */}
+          <div className="stage">
+            <div className="stage-body">
+              {error && <div className="lu-error">{error}</div>}
+
         {/* Step 1: Class Selection */}
         {step === 'class-selection' && (
-          <div className="level-up-step">
-            <h2>Choose a Class to Level Up</h2>
-            <p className="step-description">
-              Continue with your current class, or multiclass into a new one.
-            </p>
+          <div className="pane">
+            <h2>Choose a class to level up</h2>
+            <div className="lede">Continue along a path you already walk, or branch into something new — your character begins at level 1 in any class you've not yet taken.</div>
 
             {/* Existing Classes */}
-            <div className="class-section">
-              <h3>Continue Current Class{existingClassOptions.length > 1 ? 'es' : ''}</h3>
-              <div className="class-options">
+            <div className="lu-group">
+              <h3>Continue current class{existingClassOptions.length > 1 ? 'es' : ''}</h3>
+              <div className="choices">
                 {existingClassOptions.map((option, idx) => {
-                  // Get subclass features for preview
                   const subclassFeatures = option.subclass
                     ? getSubclassFeatures(option.class, option.subclass, option.newLevel)
                     : []
                   const subclassSpells = option.subclass
                     ? getSubclassSpells(option.class, option.subclass, option.newLevel)
                     : []
-
                   const allFeatureNames = [
                     ...option.newFeatures,
                     ...subclassFeatures.map(f => f.name)
                   ]
 
                   return (
-                    <div
+                    <button
                       key={idx}
-                      className="class-option existing"
+                      type="button"
+                      className="choice"
                       onClick={() => handleClassSelect(option)}
                     >
-                      <div className="class-option-header">
-                        <span className="class-name">{option.class}</span>
-                        <span className="class-level">Level {option.currentLevel} → {option.newLevel}</span>
+                      <div className="ct">
+                        {option.class}
+                        {option.subclass && <span className="syn">{option.subclass}</span>}
                       </div>
-                      {option.subclass && (
-                        <span className="class-subclass">{option.subclass}</span>
-                      )}
-                      <div className="class-option-info">
-                        <span className="hp-gain">+{option.hpGain.average} HP avg</span>
-                        {allFeatureNames.length > 0 && (
-                          <span className="features-preview">
-                            New: {allFeatureNames.slice(0, 2).join(', ')}
-                            {allFeatureNames.length > 2 && '...'}
-                          </span>
-                        )}
-                        {subclassSpells.length > 0 && (
-                          <span className="features-preview" style={{ color: '#2ecc71' }}>
-                            Spells: {subclassSpells.slice(0, 2).join(', ')}
-                            {subclassSpells.length > 2 && '...'}
-                          </span>
-                        )}
+                      <div className="cd">
+                        Level {option.currentLevel} → {option.newLevel} · <em>+{option.hpGain.average} HP avg</em>
+                        {allFeatureNames.length > 0 && <>. New: {allFeatureNames.slice(0, 2).join(', ')}{allFeatureNames.length > 2 && '…'}</>}
+                        {subclassSpells.length > 0 && <>. Spells: {subclassSpells.slice(0, 2).join(', ')}{subclassSpells.length > 2 && '…'}</>}
                       </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
             </div>
 
             {/* Multiclass Options */}
-            <div className="class-section">
-              <h3>Multiclass into New Class</h3>
-              <p className="section-note">
-                Choose any class to begin multiclassing. Your character will start at level 1 in the new class.
-              </p>
-              <div className="class-options multiclass-grid">
+            <div className="lu-group">
+              <h3>Multiclass into a new class</h3>
+              <p className="gsub">Begin again at level 1 in another discipline.</p>
+              <div className="classgrid">
                 {allMulticlassOptions.map((option, idx) => (
-                  <div
+                  <button
                     key={idx}
-                    className="class-option multiclass"
+                    type="button"
+                    className="choice"
                     onClick={() => handleClassSelect(option)}
                   >
-                    <span className="class-name">{option.class}</span>
-                    <span className="class-hit-die">d{option.hpGain.hitDie} hit die</span>
-                    <span className="hp-gain">+{option.hpGain.average} HP avg</span>
-                  </div>
+                    <div className="ct">{option.class}</div>
+                    <div className="cmeta">d{option.hpGain.hitDie} · +{option.hpGain.average} HP avg</div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -617,19 +659,14 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
         {/* Step 2: Level Up Choices */}
         {step === 'choices' && selectedClassOption && (
-          <div className="level-up-step">
-            <button className="back-link" onClick={handleBackToClassSelection}>
-              ← Back to class selection
-            </button>
+          <div className="pane">
+            <h2>{selectedClassOption.type === 'multiclass' ? `Take up the ${selectedClassOption.class.toLowerCase()}'s path` : 'Shape this level'}</h2>
+            <div className="lede">Everything this level asks of you, gathered in one place. Make your choices, then review before it's written down.</div>
 
-            <div className="selected-class-banner" data-type={selectedClassOption.type}>
-              <span className="banner-label">
-                {selectedClassOption.type === 'multiclass' ? 'Multiclassing into' : 'Continuing as'}
-              </span>
-              <span className="banner-class">{selectedClassOption.class}</span>
-              <span className="banner-level">
-                Level {selectedClassOption.currentLevel} → {selectedClassOption.newLevel}
-              </span>
+            <div className="lu-banner">
+              <span className="bl">{selectedClassOption.type === 'multiclass' ? 'Multiclassing into' : 'Continuing as'}</span>
+              <span className="bc">{selectedClassOption.class}</span>
+              <span className="bv">Level {selectedClassOption.currentLevel} → {selectedClassOption.newLevel}</span>
             </div>
 
             {/* New Features */}
@@ -650,93 +687,69 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               if (!hasAnyFeatures) return null
 
               return (
-                <section className="choice-section features-section">
-                  <h3>New Features at Level {newLevel}</h3>
+                <div className="lu-group">
+                  <h3>What level {newLevel} grants</h3>
+                  <p className="gsub">These come automatically with the level — new ground beneath you.</p>
 
-                  {/* Base Class Features */}
-                  {activeNewFeatures.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4 style={{ color: '#60a5fa', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
-                        {className} Features
-                      </h4>
-                      <ul className="features-list">
-                        {activeNewFeatures.map((feature, idx) => (
-                          <li key={idx}>{feature}</li>
-                        ))}
-                      </ul>
+                  {activeNewFeatures.length > 0 && activeNewFeatures.map((feature, idx) => (
+                    <div className="nf" key={`base-${idx}`}>
+                      <span className="nfi"><Ic n="sparkles" /></span>
+                      <div>
+                        <div className="nft">{feature} <span className="src">{className} {newLevel}</span></div>
+                      </div>
                     </div>
-                  )}
+                  ))}
 
-                  {/* Subclass Features */}
-                  {subclassFeatures.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4 style={{ color: '#a78bfa', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
-                        {subclass} Features
-                      </h4>
-                      <ul className="features-list" style={{ paddingLeft: '1.25rem' }}>
-                        {subclassFeatures.map((feature, idx) => (
-                          <li key={idx} style={{ marginBottom: '0.5rem' }}>
-                            <strong>{feature.name}</strong>
-                            {feature.description && (
-                              <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#aaa' }}>
-                                {feature.description.length > 200
-                                  ? feature.description.substring(0, 200) + '...'
-                                  : feature.description}
-                              </p>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
+                  {subclassFeatures.map((feature, idx) => (
+                    <div className="nf" key={`sub-${idx}`}>
+                      <span className="nfi"><Ic n="bolt" /></span>
+                      <div>
+                        <div className="nft">{feature.name} <span className="src">{subclass}</span></div>
+                        {feature.description && (
+                          <div className="nfd">
+                            {feature.description.length > 200
+                              ? feature.description.substring(0, 200) + '…'
+                              : feature.description}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
+                  ))}
 
-                  {/* Subclass Spells (Domain Spells, etc.) */}
                   {subclassSpells.length > 0 && (
-                    <div>
-                      <h4 style={{ color: '#2ecc71', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
-                        {subclass} Spells (Always Prepared)
-                      </h4>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        {subclassSpells.map((spell, idx) => (
-                          <span key={idx} style={{
-                            background: 'rgba(46, 204, 113, 0.15)',
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '4px',
-                            fontSize: '0.9rem'
-                          }}>
-                            {spell}
-                          </span>
-                        ))}
+                    <div className="nf">
+                      <span className="nfi"><Ic n="scroll" /></span>
+                      <div>
+                        <div className="nft">{subclass} spells <span className="src">always prepared</span></div>
+                        <div className="nfd">{subclassSpells.join(', ')}</div>
                       </div>
                     </div>
                   )}
-                </section>
+                </div>
               )
             })()}
 
             {/* Proficiency Bonus Increase */}
             {levelUpInfo.proficiencyBonus.increased && (
-              <section className="choice-section proficiency-section">
-                <h3>Proficiency Bonus Increased!</h3>
-                <p>
-                  Your proficiency bonus increases from +{levelUpInfo.proficiencyBonus.current} to +{levelUpInfo.proficiencyBonus.new}
-                </p>
-              </section>
+              <div className="lu-group">
+                <div className="lu-callout gold">
+                  <div className="cot">Proficiency bonus rises</div>
+                  <div className="cod">From +{levelUpInfo.proficiencyBonus.current} to +{levelUpInfo.proficiencyBonus.new} — every trained skill, save, and attack sharpens.</div>
+                </div>
+              </div>
             )}
 
             {/* Subclass Selection */}
             {activeChoices.needsSubclass && (
-              <section className="choice-section subclass-section">
-                <h3>Choose Your Subclass</h3>
-                <p>
-                  At level {selectedClassOption.subclassLevel}, {selectedClassOption.class}s choose their specialization.
-                </p>
+              <div className="lu-group">
+                <h3>Choose your subclass</h3>
+                <p className="gsub">At level {selectedClassOption.subclassLevel}, {selectedClassOption.class}s choose their specialization.</p>
                 <select
                   value={selectedSubclass}
                   onChange={(e) => setSelectedSubclass(e.target.value)}
-                  className="subclass-select"
+                  className="lu-select"
                 >
-                  <option value="">Select a subclass...</option>
+                  <option value="">Select a subclass…</option>
                   {getSubclassOptions(selectedClassOption.class).map(subclass => (
                     <option key={subclass.name} value={subclass.name}>
                       {subclass.name}
@@ -744,223 +757,128 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                   ))}
                 </select>
                 {selectedSubclass && (
-                  <p className="subclass-description">
+                  <p className="lu-note">
                     {getSubclassOptions(selectedClassOption.class).find(s => s.name === selectedSubclass)?.description}
                   </p>
                 )}
-              </section>
+              </div>
             )}
 
             {/* Keeper: Genre Domain Selection (Level 3) */}
             {selectedClassOption.class.toLowerCase() === 'keeper' && selectedClassOption.newLevel === 3 && (
-              <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
-                <h3 style={{ color: '#a78bfa' }}>Choose Your Genre Domain</h3>
-                <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                  Your genre defines your scholarly specialization. You'll gain a passive benefit and a bonus text.
-                </p>
+              <div className="lu-group">
+                <h3>Choose your genre domain</h3>
+                <p className="gsub">Your genre defines your scholarly specialization — a passive benefit and a bonus text.</p>
                 {classesData.keeper?.genreDomains?.map(genre => (
                   <div
                     key={genre.name}
+                    className={`pickrow${selectedGenreDomain === genre.name ? ' sel' : ''}`}
                     onClick={() => setSelectedGenreDomain(genre.name)}
-                    style={{
-                      padding: '0.75rem',
-                      marginBottom: '0.5rem',
-                      borderRadius: '6px',
-                      border: `2px solid ${selectedGenreDomain === genre.name ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
-                      background: selectedGenreDomain === genre.name ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
-                      cursor: 'pointer'
-                    }}
                   >
-                    <div style={{ fontWeight: 'bold', color: selectedGenreDomain === genre.name ? '#c4b5fd' : '#ccc' }}>
-                      {genre.name}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>{genre.description}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.25rem' }}>
-                      <strong>Passive:</strong> {genre.passive}
-                    </div>
+                    <div className="pt">{genre.name}</div>
+                    <div className="pd">{genre.description}</div>
+                    <div className="pd"><strong>Passive:</strong> {genre.passive}</div>
                     {genre.bonusText && (
-                      <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-                        <strong>Bonus Text:</strong> {genre.bonusText.name} ({genre.bonusText.weapon})
-                      </div>
+                      <div className="pmeta">Bonus text: {genre.bonusText.name} ({genre.bonusText.weapon})</div>
                     )}
                   </div>
                 ))}
-              </section>
+              </div>
             )}
 
             {/* Keeper: Specialization or Polymath (Level 6) */}
             {selectedClassOption.class.toLowerCase() === 'keeper' && selectedClassOption.newLevel === 6 && (
-              <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
-                <h3 style={{ color: '#a78bfa' }}>Specialization or Polymath</h3>
-                <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                  Choose a combat specialization or embrace the Polymath path for breadth over depth.
-                </p>
+              <div className="lu-group">
+                <h3>Specialization or Polymath</h3>
+                <p className="gsub">Choose a combat specialization, or embrace the Polymath path for breadth over depth.</p>
                 <div
+                  className={`pickrow${keeperSpecialization === 'polymath' ? ' sel' : ''}`}
                   onClick={() => { setKeeperSpecialization('polymath'); setSelectedSubclass('') }}
-                  style={{
-                    padding: '0.75rem',
-                    marginBottom: '0.5rem',
-                    borderRadius: '6px',
-                    border: `2px solid ${keeperSpecialization === 'polymath' ? '#10b981' : 'rgba(255,255,255,0.1)'}`,
-                    background: keeperSpecialization === 'polymath' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)',
-                    cursor: 'pointer'
-                  }}
                 >
-                  <div style={{ fontWeight: 'bold', color: keeperSpecialization === 'polymath' ? '#6ee7b7' : '#ccc' }}>
-                    Polymath (Pure Keeper)
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-                    +2 skill proficiencies, +2 Literary Recall uses, manifest weapons as a free action. Further improvements at L11 and L15.
-                  </div>
+                  <div className="pt">Polymath (Pure Keeper)</div>
+                  <div className="pd">+2 skill proficiencies, +2 Literary Recall uses, manifest weapons as a free action. Further improvements at L11 and L15.</div>
                 </div>
                 {classesData.keeper?.subclasses?.map(sub => {
-                  // Get genre interaction for current genre domain
                   const currentGenre = character.keeper_genre_domain || selectedGenreDomain || ''
                   const genreKey = currentGenre.toLowerCase().replace(/ /g, '_')
                   const interaction = sub.genreInteractions?.[genreKey]
-                  const ratingColors = { 'A+': '#22c55e', 'A': '#4ade80', 'B+': '#86efac', 'B': '#94a3b8', 'B-': '#9ca3af', 'C': '#ef4444' }
 
                   return (
                     <div
                       key={sub.name}
+                      className={`pickrow${keeperSpecialization === sub.name ? ' sel' : ''}`}
                       onClick={() => { setKeeperSpecialization(sub.name); setSelectedSubclass(sub.name) }}
-                      style={{
-                        padding: '0.75rem',
-                        marginBottom: '0.5rem',
-                        borderRadius: '6px',
-                        border: `2px solid ${keeperSpecialization === sub.name ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
-                        background: keeperSpecialization === sub.name ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
-                        cursor: 'pointer'
-                      }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontWeight: 'bold', color: keeperSpecialization === sub.name ? '#c4b5fd' : '#ccc' }}>
-                          {sub.name}
-                        </div>
-                        {interaction && (
-                          <span style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold',
-                            padding: '0.15rem 0.5rem',
-                            borderRadius: '4px',
-                            background: `${ratingColors[interaction.rating] || '#888'}22`,
-                            color: ratingColors[interaction.rating] || '#888',
-                            border: `1px solid ${ratingColors[interaction.rating] || '#888'}44`
-                          }}>
-                            {currentGenre} Synergy: {interaction.rating}
-                          </span>
-                        )}
+                      <div className="pt">
+                        <span>{sub.name}</span>
+                        {interaction && <span className="chip magic">{currentGenre} · {interaction.rating}</span>}
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>{sub.description}</div>
-                      {interaction && (
-                        <div style={{ fontSize: '0.75rem', color: '#aaa', marginTop: '0.25rem', fontStyle: 'italic' }}>
-                          {interaction.synergy}
-                        </div>
-                      )}
-                      {/* Show subclass text they'll get */}
+                      <div className="pd">{sub.description}</div>
+                      {interaction && <div className="pd" style={{ fontStyle: 'italic' }}>{interaction.synergy}</div>}
                       {(() => {
                         const subKey = sub.name.toLowerCase()
                         const subText = SUBCLASS_TEXTS[subKey]?.find(t => t.unlockedAt === 6)
                         if (!subText) return null
                         return (
-                          <div style={{ fontSize: '0.75rem', color: '#c084fc', marginTop: '0.35rem', padding: '0.3rem 0.5rem', background: 'rgba(192,132,252,0.08)', borderRadius: '4px' }}>
-                            <strong>Bonus Text:</strong> {subText.name} ({subText.weapon}) — {subText.passage.name}
-                          </div>
+                          <div className="pmeta">Bonus text: {subText.name} ({subText.weapon}) — {subText.passage.name}</div>
                         )
                       })()}
                     </div>
                   )
                 })}
-              </section>
+              </div>
             )}
 
             {/* Keeper: Second Genre Domain or Genre Mastery (Level 15) */}
             {selectedClassOption.class.toLowerCase() === 'keeper' && selectedClassOption.newLevel === 15 && (
-              <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
-                <h3 style={{ color: '#a78bfa' }}>Second Genre Domain or Genre Mastery</h3>
-                <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                  Deepen your primary Genre ({character.keeper_genre_domain}) with Genre Mastery, or broaden your knowledge with a second Genre Domain.
-                </p>
+              <div className="lu-group">
+                <h3>Second genre or genre mastery</h3>
+                <p className="gsub">Deepen your primary genre (<span className="hl">{character.keeper_genre_domain}</span>) with mastery, or broaden with a second genre domain.</p>
 
                 {/* Genre Mastery option */}
                 <div
+                  className={`pickrow${genreMasteryChoice === 'mastery' ? ' sel' : ''}`}
                   onClick={() => { setGenreMasteryChoice('mastery'); setSelectedSecondGenre('') }}
-                  style={{
-                    padding: '0.75rem',
-                    marginBottom: '0.5rem',
-                    borderRadius: '6px',
-                    border: `2px solid ${genreMasteryChoice === 'mastery' ? '#f59e0b' : 'rgba(255,255,255,0.1)'}`,
-                    background: genreMasteryChoice === 'mastery' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.03)',
-                    cursor: 'pointer'
-                  }}
                 >
-                  <div style={{ fontWeight: 'bold', color: genreMasteryChoice === 'mastery' ? '#fbbf24' : '#ccc' }}>
-                    Genre Mastery — Deepen {character.keeper_genre_domain}
-                  </div>
+                  <div className="pt">Genre Mastery — deepen {character.keeper_genre_domain}</div>
                   {(() => {
                     const genre = classesData.keeper?.genreDomains?.find(g => g.name === character.keeper_genre_domain)
                     return genre ? (
-                      <>
-                        <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-                          <strong>Mastery Capstone:</strong> {genre.masteryCapstone}
-                        </div>
-                      </>
+                      <div className="pd"><strong>Mastery capstone:</strong> {genre.masteryCapstone}</div>
                     ) : null
                   })()}
                 </div>
 
                 {/* Second Genre option */}
                 <div
+                  className={`pickrow${genreMasteryChoice === 'second_genre' ? ' sel' : ''}`}
                   onClick={() => setGenreMasteryChoice('second_genre')}
-                  style={{
-                    padding: '0.75rem',
-                    marginBottom: '0.5rem',
-                    borderRadius: '6px',
-                    border: `2px solid ${genreMasteryChoice === 'second_genre' ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
-                    background: genreMasteryChoice === 'second_genre' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
-                    cursor: 'pointer'
-                  }}
                 >
-                  <div style={{ fontWeight: 'bold', color: genreMasteryChoice === 'second_genre' ? '#c4b5fd' : '#ccc' }}>
-                    Second Genre Domain
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-                    Choose a second Genre for its passive benefit and bonus text. More breadth, less depth.
-                  </div>
+                  <div className="pt">Second Genre Domain</div>
+                  <div className="pd">Choose a second genre for its passive benefit and bonus text. More breadth, less depth.</div>
                 </div>
 
                 {/* Genre picker (only if second genre selected) */}
                 {genreMasteryChoice === 'second_genre' && (
-                  <div style={{ marginTop: '0.75rem', paddingLeft: '0.5rem', borderLeft: '2px solid rgba(167, 139, 250, 0.3)' }}>
+                  <div style={{ marginTop: 10 }}>
                     {classesData.keeper?.genreDomains
                       ?.filter(g => g.name !== character.keeper_genre_domain)
                       .map(genre => (
                         <div
                           key={genre.name}
+                          className={`pickrow${selectedSecondGenre === genre.name ? ' sel' : ''}`}
                           onClick={() => setSelectedSecondGenre(genre.name)}
-                          style={{
-                            padding: '0.6rem',
-                            marginBottom: '0.4rem',
-                            borderRadius: '6px',
-                            border: `1px solid ${selectedSecondGenre === genre.name ? '#a78bfa' : 'rgba(255,255,255,0.1)'}`,
-                            background: selectedSecondGenre === genre.name ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                            cursor: 'pointer'
-                          }}
                         >
-                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: selectedSecondGenre === genre.name ? '#c4b5fd' : '#ccc' }}>
-                            {genre.name}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.15rem' }}>{genre.passive}</div>
+                          <div className="pt">{genre.name}</div>
+                          <div className="pd">{genre.passive}</div>
                           {genre.bonusText && (
-                            <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.15rem' }}>
-                              Bonus Text: {genre.bonusText.name} ({genre.bonusText.weapon})
-                            </div>
+                            <div className="pmeta">Bonus text: {genre.bonusText.name} ({genre.bonusText.weapon})</div>
                           )}
                         </div>
                       ))}
                   </div>
                 )}
-              </section>
+              </div>
             )}
 
             {/* Keeper: Subclass Text Notification (L6/L11/L15) */}
@@ -975,27 +893,16 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               if (newLevel === 6 && keeperSpecialization) return null
 
               return (
-                <section className="choice-section" style={{ borderLeft: '3px solid #c084fc' }}>
-                  <h3 style={{ color: '#c084fc' }}>New Subclass Text Unlocked</h3>
-                  <div style={{
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    background: 'rgba(192, 132, 252, 0.1)',
-                    border: '1px solid rgba(192, 132, 252, 0.3)'
-                  }}>
-                    <div style={{ fontWeight: 'bold', color: '#c4b5fd' }}>{grantedText.name}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>{grantedText.description}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.25rem' }}>
-                      <strong>Weapon:</strong> {grantedText.weapon} | <strong>Passage:</strong> {grantedText.passage.name}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>
-                      {grantedText.passage.description}
-                    </div>
+                <div className="lu-group">
+                  <h3>New subclass text unlocked</h3>
+                  <div className="lu-callout">
+                    <div className="cot">{grantedText.name}</div>
+                    <div className="cod">{grantedText.description}</div>
+                    <div className="cod" style={{ marginTop: 6 }}><strong>Weapon:</strong> {grantedText.weapon} · <strong>Passage:</strong> {grantedText.passage.name}</div>
+                    <div className="coflavor">{grantedText.passage.description}</div>
                   </div>
-                  <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.5rem' }}>
-                    This text is automatically added to your Library as a {subKey.charAt(0).toUpperCase() + subKey.slice(1)} exclusive.
-                  </p>
-                </section>
+                  <p className="lu-note">Automatically added to your Library as a {subKey.charAt(0).toUpperCase() + subKey.slice(1)} exclusive.</p>
+                </div>
               )
             })()}
 
@@ -1016,51 +923,34 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 : STANDARD_TEXTS.filter(t => !existingTexts.includes(t.name))
 
               return (
-                <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
-                  <h3 style={{ color: '#a78bfa' }}>Learn New Text{textsToChoose > 1 ? 's' : ''}</h3>
-                  <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                <div className="lu-group">
+                  <h3>Learn new text{textsToChoose > 1 ? 's' : ''}</h3>
+                  <p className="gsub">
                     Choose {textsToChoose} new text{textsToChoose > 1 ? 's' : ''} for your Library.
-                    {newLevel >= 9 && <span style={{ color: '#c084fc' }}> Rare texts are now available!</span>}
+                    {newLevel >= 9 && <span className="hl"> Rare texts are now available.</span>}
                   </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div className="pickgrid">
                     {availableTexts.map(text => {
                       const isSelected = selectedKeeperTexts.includes(text.name)
                       const isDisabled = !isSelected && selectedKeeperTexts.length >= textsToChoose
                       return (
                         <div
                           key={text.name}
+                          className={`pickrow${isSelected ? ' sel' : ''}${isDisabled ? ' disabled' : ''}`}
                           onClick={() => {
                             if (isSelected) setSelectedKeeperTexts(prev => prev.filter(t => t !== text.name))
                             else if (selectedKeeperTexts.length < textsToChoose) setSelectedKeeperTexts(prev => [...prev, text.name])
                           }}
-                          style={{
-                            padding: '0.5rem 0.75rem',
-                            borderRadius: '6px',
-                            border: `1px solid ${isSelected ? '#a78bfa' : text.rare ? 'rgba(192, 132, 252, 0.3)' : 'rgba(255,255,255,0.15)'}`,
-                            background: isSelected ? 'rgba(139, 92, 246, 0.25)' : text.rare ? 'rgba(192, 132, 252, 0.05)' : 'rgba(255,255,255,0.05)',
-                            cursor: isDisabled ? 'not-allowed' : 'pointer',
-                            opacity: isDisabled ? 0.4 : 1,
-                            flex: '1 1 280px',
-                            minWidth: '200px'
-                          }}
                         >
-                          <div style={{ fontSize: '0.85rem', color: isSelected ? '#c4b5fd' : text.rare ? '#c084fc' : '#ccc', fontWeight: 'bold' }}>
-                            {text.name} {text.rare && '(Rare)'}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#888' }}>
-                            Weapon: {text.weapon} | Passage: {text.passage.name}
-                          </div>
-                          <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.15rem' }}>
-                            {text.passage.description}
-                          </div>
+                          <div className="pt">{text.name} {text.rare && '· Rare'}</div>
+                          <div className="pmeta">Weapon: {text.weapon} · Passage: {text.passage.name}</div>
+                          <div className="pd">{text.passage.description}</div>
                         </div>
                       )
                     })}
                   </div>
-                  <p style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem' }}>
-                    Selected: {selectedKeeperTexts.length}/{textsToChoose}
-                  </p>
-                </section>
+                  <p className="pickcount">Selected: {selectedKeeperTexts.length}/{textsToChoose}</p>
+                </div>
               )
             })()}
 
@@ -1079,136 +969,87 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               const availableRec = RECITATIONS.filter(r => !existingRec.includes(r.name))
 
               return (
-                <section className="choice-section" style={{ borderLeft: '3px solid #a78bfa' }}>
-                  <h3 style={{ color: '#a78bfa' }}>Learn New Recitation{recToChoose > 1 ? 's' : ''}</h3>
-                  <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                    Choose {recToChoose} new recitation{recToChoose > 1 ? 's' : ''}.
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div className="lu-group">
+                  <h3>Learn new recitation{recToChoose > 1 ? 's' : ''}</h3>
+                  <p className="gsub">Choose {recToChoose} new recitation{recToChoose > 1 ? 's' : ''}.</p>
+                  <div className="pickgrid">
                     {availableRec.map(rec => {
                       const isSelected = selectedKeeperRecitations.includes(rec.name)
                       const isDisabled = !isSelected && selectedKeeperRecitations.length >= recToChoose
                       return (
                         <div
                           key={rec.name}
+                          className={`pickrow${isSelected ? ' sel' : ''}${isDisabled ? ' disabled' : ''}`}
                           onClick={() => {
                             if (isSelected) setSelectedKeeperRecitations(prev => prev.filter(r => r !== rec.name))
                             else if (selectedKeeperRecitations.length < recToChoose) setSelectedKeeperRecitations(prev => [...prev, rec.name])
                           }}
-                          style={{
-                            padding: '0.5rem 0.75rem',
-                            borderRadius: '6px',
-                            border: `1px solid ${isSelected ? '#a78bfa' : 'rgba(255,255,255,0.15)'}`,
-                            background: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
-                            cursor: isDisabled ? 'not-allowed' : 'pointer',
-                            opacity: isDisabled ? 0.4 : 1,
-                            flex: '1 1 280px',
-                            minWidth: '200px'
-                          }}
                         >
-                          <div style={{ fontSize: '0.85rem', color: isSelected ? '#c4b5fd' : '#ccc', fontWeight: 'bold' }}>
-                            {rec.name}
-                          </div>
-                          <div style={{ fontSize: '0.7rem', color: '#666' }}>{rec.description}</div>
+                          <div className="pt">{rec.name}</div>
+                          <div className="pd">{rec.description}</div>
                         </div>
                       )
                     })}
                   </div>
-                  <p style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem' }}>
-                    Selected: {selectedKeeperRecitations.length}/{recToChoose}
-                  </p>
-                </section>
+                  <p className="pickcount">Selected: {selectedKeeperRecitations.length}/{recToChoose}</p>
+                </div>
               )
             })()}
 
             {/* HP Gain */}
-            <section className="choice-section hp-section">
-              <h3>Hit Points</h3>
-              <p>
-                Roll your hit die (d{activeHpGain.hitDie}) or take the average.
-                <span className="con-mod">CON modifier: {getModifier(currentAbilityScores.con)}</span>
-              </p>
-
-              <div className="hp-options">
-                <button
-                  className={`hp-option ${hpChoice === 'average' ? 'selected' : ''}`}
-                  onClick={() => {
-                    setHpChoice('average')
-                    setHpRoll(null)
-                  }}
-                >
-                  <span className="hp-option-label">Take Average</span>
-                  <span className="hp-option-value">+{activeHpGain.average} HP</span>
-                </button>
-                <button
-                  className={`hp-option ${hpChoice === 'roll' ? 'selected' : ''}`}
-                  onClick={rollHitDie}
-                >
-                  <span className="hp-option-label">Roll d{activeHpGain.hitDie}</span>
-                  {hpChoice === 'roll' && hpRoll !== null ? (
-                    <span className={`hp-option-value rolled ${hpRoll === 1 ? 'low' : hpRoll === activeHpGain.hitDie ? 'high' : ''}`}>
-                      Rolled: {hpRoll} (+{Math.max(1, hpRoll + activeHpGain.conMod)} HP)
-                    </span>
-                  ) : (
-                    <span className="hp-option-value">Click to roll</span>
-                  )}
-                </button>
-              </div>
-
-              {hpChoice === 'roll' && hpRoll !== null && (
-                <button className="reroll-button" onClick={rollHitDie}>
-                  Re-roll
-                </button>
-              )}
-
-              <p className="current-hp">Current HP: {character.current_hp}/{character.max_hp}</p>
-            </section>
+            {(() => {
+              const conMod = activeHpGain.conMod || 0
+              const conSign = conMod >= 0 ? `+${conMod}` : `${conMod}`
+              const rolledGain = hpRoll !== null ? Math.max(1, hpRoll + conMod) : null
+              return (
+                <div className="lu-group">
+                  <h3>Roll your hit points</h3>
+                  <p className="gsub">A d{activeHpGain.hitDie} each level, plus your Constitution modifier ({conSign}). Take the safe average, or trust the dice.</p>
+                  <div className="choices two">
+                    <button
+                      type="button"
+                      className={`choice${hpChoice === 'average' ? ' sel' : ''}`}
+                      onClick={() => { setHpChoice('average'); setHpRoll(null) }}
+                    >
+                      <div className="ct">Take the average</div>
+                      <div className="cn">+{activeHpGain.average}</div>
+                      <div className="cd">A flat <em>{Math.floor(activeHpGain.hitDie / 2) + 1}</em> + {conSign} CON. Reliable. HP {character.max_hp} → <em>{character.max_hp + activeHpGain.average}</em>.</div>
+                    </button>
+                    <button
+                      type="button"
+                      className={`choice${hpChoice === 'roll' ? ' sel rolled' : ''}`}
+                      onClick={rollHitDie}
+                    >
+                      <div className="ct">Roll the d{activeHpGain.hitDie}</div>
+                      <div className="cn">{hpChoice === 'roll' && rolledGain !== null ? `+${rolledGain}` : `+${Math.max(1, 1 + conMod)} … +${activeHpGain.hitDie + conMod}`}</div>
+                      <div className="cd">
+                        {hpChoice === 'roll' && hpRoll !== null
+                          ? <>Rolled a <em>{hpRoll}</em> on the d{activeHpGain.hitDie}, {conSign} CON. HP {character.max_hp} → <em>{character.max_hp + rolledGain}</em>.</>
+                          : <>1d{activeHpGain.hitDie} {conSign} CON. Could be a triumph or a regret — no take-backs.</>}
+                      </div>
+                      {hpChoice === 'roll' && hpRoll !== null && <div className="cmeta">Click again to re-roll</div>}
+                    </button>
+                  </div>
+                  <p className="lu-note">Current HP {character.current_hp}/{character.max_hp}</p>
+                </div>
+              )
+            })()}
 
             {/* ASI or Feat choice */}
             {activeChoices.needsASI && (
-              <section className="choice-section asi-section">
-                <h3>Ability Score Improvement or Feat</h3>
-                <p>At this level, choose either to increase your ability scores by 2 points total, or to take a feat instead.</p>
+              <div className="lu-group">
+                <h3>Sharpen yourself</h3>
+                <p className="gsub">Raise your ability scores by 2 points total, or take a feat instead.</p>
 
                 {/* Toggle between ASI and Feat */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => setAsiOrFeat('asi')}
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem',
-                      borderRadius: '6px',
-                      border: asiOrFeat === 'asi' ? '2px solid #f39c12' : '1px solid rgba(255,255,255,0.15)',
-                      background: asiOrFeat === 'asi' ? 'rgba(243,156,18,0.15)' : 'rgba(255,255,255,0.03)',
-                      color: asiOrFeat === 'asi' ? '#f39c12' : '#ccc',
-                      cursor: 'pointer',
-                      fontWeight: asiOrFeat === 'asi' ? 'bold' : 'normal'
-                    }}
-                  >
-                    Increase Ability Scores (+2 total)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAsiOrFeat('feat')}
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem',
-                      borderRadius: '6px',
-                      border: asiOrFeat === 'feat' ? '2px solid #f39c12' : '1px solid rgba(255,255,255,0.15)',
-                      background: asiOrFeat === 'feat' ? 'rgba(243,156,18,0.15)' : 'rgba(255,255,255,0.03)',
-                      color: asiOrFeat === 'feat' ? '#f39c12' : '#ccc',
-                      cursor: 'pointer',
-                      fontWeight: asiOrFeat === 'feat' ? 'bold' : 'normal'
-                    }}
-                  >
-                    Take a Feat
-                  </button>
+                <div className="seg">
+                  <button type="button" className={asiOrFeat === 'asi' ? 'on' : ''} onClick={() => setAsiOrFeat('asi')}>Improve abilities</button>
+                  <button type="button" className={asiOrFeat === 'feat' ? 'on' : ''} onClick={() => setAsiOrFeat('feat')}>Take a feat</button>
                 </div>
 
                 {asiOrFeat === 'asi' ? (
                   <>
-                    <div className="asi-points-remaining" data-complete={asiPoints === 0}>
+                    <div className="asi-remaining" data-complete={asiPoints === 0}>
                       Points remaining: {asiPoints}
                     </div>
 
@@ -1220,99 +1061,63 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         const atMax = newScore >= 20
 
                         return (
-                          <div key={ability} className="asi-ability">
-                            <div className="asi-ability-name">{ability.toUpperCase()}</div>
-                            <div className={`asi-ability-score ${increase > 0 ? 'increased' : ''}`}>
+                          <div key={ability} className={`asi-cell${increase > 0 ? ' up' : ''}`}>
+                            <div className="ab">{ability.toUpperCase()}</div>
+                            <div className="sc">
                               {newScore}
-                              {increase > 0 && <span className="increase-badge">+{increase}</span>}
+                              {increase > 0 && <span className="badge">+{increase}</span>}
                             </div>
-                            <div className="asi-ability-mod">{getModifier(newScore)}</div>
-                            <div className="asi-controls">
-                              <button
-                                onClick={() => handleAsiChange(ability, -1)}
-                                disabled={increase <= 0}
-                                className="asi-button decrease"
-                              >
-                                -
-                              </button>
-                              <button
-                                onClick={() => handleAsiChange(ability, 1)}
-                                disabled={asiPoints <= 0 || atMax || increase >= 2}
-                                className="asi-button increase"
-                              >
-                                +
-                              </button>
+                            <div className="md">{getModifier(newScore)}</div>
+                            <div className="asi-ctl">
+                              <button onClick={() => handleAsiChange(ability, -1)} disabled={increase <= 0}>−</button>
+                              <button onClick={() => handleAsiChange(ability, 1)} disabled={asiPoints <= 0 || atMax || increase >= 2}>+</button>
                             </div>
-                            {atMax && increase === 0 && <span className="at-max-label">Max</span>}
+                            {atMax && increase === 0 && <div className="maxlbl">Max</div>}
                           </div>
                         )
                       })}
                     </div>
                   </>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.9rem', color: '#ccc' }}>
-                        Choose a feat:
-                      </label>
-                      <select
-                        value={selectedFeatKey}
-                        onChange={e => {
-                          setSelectedFeatKey(e.target.value)
-                          setSelectedFeatAbility('')
-                        }}
-                        style={{
-                          width: '100%', padding: '0.5rem',
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px', color: '#ddd'
-                        }}
-                      >
-                        <option value="">Select a feat...</option>
-                        {Object.entries(featsData).map(([key, f]) => (
-                          <option key={key} value={key}>{f.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                  <div>
+                    <label className="lu-fieldlabel">Choose a feat</label>
+                    <select
+                      className="lu-select"
+                      value={selectedFeatKey}
+                      onChange={e => {
+                        setSelectedFeatKey(e.target.value)
+                        setSelectedFeatAbility('')
+                      }}
+                    >
+                      <option value="">Select a feat…</option>
+                      {Object.entries(featsData).map(([key, f]) => (
+                        <option key={key} value={key}>{f.name}</option>
+                      ))}
+                    </select>
 
                     {selectedFeatKey && featsData[selectedFeatKey] && (
-                      <div style={{
-                        padding: '0.75rem', background: 'rgba(243,156,18,0.08)',
-                        border: '1px solid rgba(243,156,18,0.3)', borderRadius: '4px'
-                      }}>
-                        <div style={{ fontWeight: 'bold', color: '#f39c12', marginBottom: '0.3rem' }}>
-                          {featsData[selectedFeatKey].name}
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: '#ddd', marginBottom: '0.5rem', lineHeight: 1.5 }}>
-                          {featsData[selectedFeatKey].description}
-                        </div>
+                      <div className="lu-detail">
+                        <div className="dt">{featsData[selectedFeatKey].name}</div>
+                        <div className="dd">{featsData[selectedFeatKey].description}</div>
                         {featsData[selectedFeatKey].prerequisites && (
-                          <div style={{ fontSize: '0.8rem', color: '#f59e0b' }}>
-                            <strong>Prerequisite:</strong> {featsData[selectedFeatKey].prerequisites}
-                          </div>
+                          <div className="dmeta">Prerequisite: {featsData[selectedFeatKey].prerequisites}</div>
                         )}
                         {featsData[selectedFeatKey].benefits && (
-                          <ul style={{ fontSize: '0.82rem', color: '#bbb', marginTop: '0.4rem', paddingLeft: '1.2rem' }}>
+                          <ul>
                             {featsData[selectedFeatKey].benefits.map((b, i) => (
-                              <li key={i} style={{ marginBottom: '0.2rem' }}>{b}</li>
+                              <li key={i}>{b}</li>
                             ))}
                           </ul>
                         )}
                         {featsData[selectedFeatKey].abilityIncrease && (
-                          <div style={{ marginTop: '0.75rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#f39c12' }}>
-                              This feat grants +1 to one ability. Choose:
-                            </label>
+                          <div style={{ marginTop: 12 }}>
+                            <label className="lu-fieldlabel">This feat grants +1 to one ability</label>
                             <select
+                              className="lu-select"
                               value={selectedFeatAbility}
                               onChange={e => setSelectedFeatAbility(e.target.value)}
-                              style={{
-                                padding: '0.4rem', background: 'rgba(255,255,255,0.05)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                borderRadius: '4px', color: '#ddd'
-                              }}
                             >
-                              <option value="">Select ability...</option>
+                              <option value="">Select ability…</option>
                               {(Array.isArray(featsData[selectedFeatKey].abilityIncrease)
                                 ? featsData[selectedFeatKey].abilityIncrease
                                 : Object.keys(featsData[selectedFeatKey].abilityIncrease || {})
@@ -1326,111 +1131,54 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                     )}
                   </div>
                 )}
-              </section>
+              </div>
             )}
 
             {/* Progression: Theme tier unlock (auto — no choice) */}
             {levelUpInfo?.progression?.theme_tier_unlock && (
-              <section className="choice-section" style={{
-                border: '1px solid rgba(139, 92, 246, 0.4)',
-                background: 'rgba(139, 92, 246, 0.08)',
-                borderRadius: '6px',
-                padding: '1rem'
-              }}>
-                <h3 style={{ color: '#a78bfa' }}>
-                  Theme Tier Unlock — L{levelUpInfo.progression.theme_tier_unlock.tier}
-                </h3>
-                <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.5rem' }}>
-                  Your <strong>{levelUpInfo.progression.theme_tier_unlock.theme_name}</strong> theme
-                  awakens to a new tier. This ability will be granted automatically when you complete this level-up.
+              <div className="lu-group">
+                <h3>Theme tier unlock — L{levelUpInfo.progression.theme_tier_unlock.tier}</h3>
+                <p className="gsub">
+                  Your <span className="hl">{levelUpInfo.progression.theme_tier_unlock.theme_name}</span> theme
+                  awakens to a new tier — granted automatically when you complete this level-up.
                 </p>
-                <div style={{
-                  padding: '0.75rem',
-                  background: 'rgba(139, 92, 246, 0.12)',
-                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                  borderRadius: '4px'
-                }}>
-                  <div style={{ fontWeight: 'bold', color: '#c4b5fd', marginBottom: '0.3rem' }}>
-                    {levelUpInfo.progression.theme_tier_unlock.ability_name}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#ddd', lineHeight: 1.5 }}>
-                    {levelUpInfo.progression.theme_tier_unlock.ability_description}
-                  </div>
+                <div className="lu-callout">
+                  <div className="cot">{levelUpInfo.progression.theme_tier_unlock.ability_name}</div>
+                  <div className="cod">{levelUpInfo.progression.theme_tier_unlock.ability_description}</div>
                   {levelUpInfo.progression.theme_tier_unlock.flavor_text && (
-                    <div style={{
-                      fontSize: '0.8rem', color: '#a78bfa', marginTop: '0.5rem',
-                      fontStyle: 'italic'
-                    }}>
-                      {levelUpInfo.progression.theme_tier_unlock.flavor_text}
-                    </div>
+                    <div className="coflavor">{levelUpInfo.progression.theme_tier_unlock.flavor_text}</div>
                   )}
                 </div>
-              </section>
+              </div>
             )}
 
             {/* Progression: Ancestry feat choice (L3/L7/L13/L18) */}
             {levelUpInfo?.progression?.ancestry_feat_tier && (
-              <section className="choice-section" style={{
-                border: '1px solid rgba(20, 184, 166, 0.4)',
-                background: 'rgba(20, 184, 166, 0.06)',
-                borderRadius: '6px',
-                padding: '1rem'
-              }}>
-                <h3 style={{ color: '#14b8a6' }}>
-                  Ancestry Feat — L{levelUpInfo.progression.ancestry_feat_tier.tier}
-                </h3>
-                <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.75rem' }}>
-                  Your heritage deepens. Choose one feat from your ancestry's tier {levelUpInfo.progression.ancestry_feat_tier.tier} options:
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {levelUpInfo.progression.ancestry_feat_tier.options.map(opt => {
-                    const isSelected = selectedAncestryFeatId === opt.id
-                    return (
-                      <div
-                        key={opt.id}
-                        onClick={() => setSelectedAncestryFeatId(opt.id)}
-                        style={{
-                          padding: '0.75rem',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          border: isSelected
-                            ? '2px solid #14b8a6'
-                            : '1px solid rgba(255,255,255,0.15)',
-                          background: isSelected
-                            ? 'rgba(20, 184, 166, 0.15)'
-                            : 'rgba(255,255,255,0.03)'
-                        }}
-                      >
-                        <div style={{
-                          fontWeight: 'bold',
-                          color: isSelected ? '#2dd4bf' : '#ddd',
-                          marginBottom: '0.25rem'
-                        }}>
-                          {opt.feat_name}
-                        </div>
-                        <div style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: 1.5 }}>
-                          {opt.description}
-                        </div>
-                        {opt.mechanics && (
-                          <div style={{
-                            fontSize: '0.78rem', opacity: 0.75,
-                            fontStyle: 'italic', marginTop: '0.35rem'
-                          }}>
-                            {opt.mechanics}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
+              <div className="lu-group">
+                <h3>Ancestry feat — L{levelUpInfo.progression.ancestry_feat_tier.tier}</h3>
+                <p className="gsub">Your heritage deepens. Choose one feat from your ancestry's tier {levelUpInfo.progression.ancestry_feat_tier.tier} options.</p>
+                {levelUpInfo.progression.ancestry_feat_tier.options.map(opt => {
+                  const isSelected = selectedAncestryFeatId === opt.id
+                  return (
+                    <div
+                      key={opt.id}
+                      className={`pickrow${isSelected ? ' sel' : ''}`}
+                      onClick={() => setSelectedAncestryFeatId(opt.id)}
+                    >
+                      <div className="pt">{opt.feat_name}</div>
+                      <div className="pd">{opt.description}</div>
+                      {opt.mechanics && <div className="pmeta">{opt.mechanics}</div>}
+                    </div>
+                  )
+                })}
+              </div>
             )}
 
             {/* Spells preview (details on next step) */}
             {(activeChoices.newCantrips > 0 || activeChoices.newSpellsKnown > 0) && (
-              <section className="choice-section notification-section">
+              <div className="lu-group">
                 <h3>Spells</h3>
-                <p style={{ color: '#aaa', fontSize: '0.9rem' }}>
+                <p className="gsub">
                   {activeChoices.newCantrips > 0 && (
                     <span>{activeChoices.newCantrips} new cantrip{activeChoices.newCantrips > 1 ? 's' : ''}</span>
                   )}
@@ -1444,75 +1192,39 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                   )}
                   {' — you\'ll choose on the next step.'}
                 </p>
-              </section>
+              </div>
             )}
-
-            {/* Continue Button */}
-            <div className="step-actions">
-              <button
-                className="button"
-                onClick={handleProceedFromChoices}
-                disabled={
-                  // ASI validation: if user chose 'asi', must spend all 2 points.
-                  // If user chose 'feat', must select a feat AND (if the feat needs
-                  // an ability pick) have selected that ability.
-                  (activeChoices.needsASI && asiOrFeat === 'asi' && asiPoints > 0) ||
-                  (activeChoices.needsASI && asiOrFeat === 'feat' && !selectedFeatKey) ||
-                  (activeChoices.needsASI && asiOrFeat === 'feat' && selectedFeatKey &&
-                    featsData[selectedFeatKey]?.abilityIncrease && !selectedFeatAbility) ||
-                  (activeChoices.needsSubclass && !selectedSubclass) ||
-                  (hpChoice === 'roll' && hpRoll === null) ||
-                  // Progression: ancestry feat pick required when tier crossed
-                  (levelUpInfo?.progression?.ancestry_feat_tier && !selectedAncestryFeatId)
-                }
-              >
-                {needsSpellsStep() ? 'Choose Spells →' : 'Review Level Up →'}
-              </button>
-            </div>
           </div>
         )}
 
         {/* Step 3: Spells (conditional) */}
         {step === 'spells' && selectedClassOption && (
-          <div className="level-up-step">
-            <button className="back-link" onClick={handleBackToChoices}>
-              ← Back to choices
-            </button>
-
+          <div className="pane">
             <h2>
               {isWizard(selectedClassOption.class)
-                ? 'Add Spells to Spellbook'
-                : 'Learn New Spells'}
+                ? 'Add spells to your spellbook'
+                : 'Learn new spells'}
             </h2>
-            <p className="step-description">
+            <div className="lede">
               {isWizard(selectedClassOption.class)
                 ? `Through study, you add ${activeChoices.newSpellsKnown || 2} new spells to your spellbook.`
                 : isKnownCaster(selectedClassOption.class)
                   ? 'Choose which spells to learn as you grow in power.'
                   : 'Select new spells for your repertoire.'}
-            </p>
+            </div>
 
             {/* New Cantrips */}
             {activeChoices.newCantrips > 0 && (
-              <section className="choice-section" style={{ marginBottom: '1.5rem' }}>
-                <h3>New Cantrips ({selectedNewCantrips.length}/{activeChoices.newCantrips})</h3>
-                <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
-                  Choose {activeChoices.newCantrips} new cantrip{activeChoices.newCantrips > 1 ? 's' : ''} to learn permanently.
-                </p>
+              <div className="lu-group">
+                <h3>New cantrips <span style={{ color: 'var(--accent)' }}>({selectedNewCantrips.length}/{activeChoices.newCantrips})</span></h3>
+                <p className="gsub">Choose {activeChoices.newCantrips} new cantrip{activeChoices.newCantrips > 1 ? 's' : ''} to learn permanently.</p>
 
                 {/* Selected cantrips */}
                 {selectedNewCantrips.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <div className="lu-tags" style={{ marginBottom: 12 }}>
                     {selectedNewCantrips.map(name => (
-                      <span key={name} style={{
-                        background: 'rgba(96, 165, 250, 0.2)',
-                        border: '1px solid rgba(96, 165, 250, 0.4)',
-                        padding: '0.3rem 0.75rem',
-                        borderRadius: '4px',
-                        fontSize: '0.9rem',
-                        cursor: 'pointer'
-                      }} onClick={() => setSelectedNewCantrips(prev => prev.filter(c => c !== name))}>
-                        {name} ✕
+                      <span key={name} className="selchip" onClick={() => setSelectedNewCantrips(prev => prev.filter(c => c !== name))}>
+                        {name} <span className="x">✕</span>
                       </span>
                     ))}
                   </div>
@@ -1520,36 +1232,26 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
                 {/* Available cantrips */}
                 {selectedNewCantrips.length < activeChoices.newCantrips && (
-                  <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem' }}>
+                  <div className="spelllist" style={{ maxHeight: 200 }}>
                     {getAvailableCantrips(selectedClassOption.class).map(cantrip => (
-                      <div key={cantrip.name} style={{
-                        padding: '0.4rem 0.6rem',
-                        cursor: 'pointer',
-                        borderRadius: '4px',
-                        fontSize: '0.9rem',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                      className="spell-option-row"
-                      onClick={() => setSelectedNewCantrips(prev => [...prev, cantrip.name])}>
+                      <div key={cantrip.name} className="spell-row" onClick={() => setSelectedNewCantrips(prev => [...prev, cantrip.name])}>
                         <span>{cantrip.name}</span>
-                        <span style={{ color: '#888', fontSize: '0.8rem' }}>{cantrip.school}</span>
+                        <span className="lvl">{cantrip.school}</span>
                       </div>
                     ))}
                   </div>
                 )}
-              </section>
+              </div>
             )}
 
             {/* New Spells */}
             {activeChoices.newSpellsKnown > 0 && (
-              <section className="choice-section" style={{ marginBottom: '1.5rem' }}>
+              <div className="lu-group">
                 <h3>
-                  {isWizard(selectedClassOption.class) ? 'New Spellbook Spells' : 'New Spells Known'}
-                  {' '}({selectedNewSpells.length}/{activeChoices.newSpellsKnown})
+                  {isWizard(selectedClassOption.class) ? 'New spellbook spells' : 'New spells known'}
+                  {' '}<span style={{ color: 'var(--accent)' }}>({selectedNewSpells.length}/{activeChoices.newSpellsKnown})</span>
                 </h3>
-                <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                <p className="gsub">
                   {isWizard(selectedClassOption.class)
                     ? `Add ${activeChoices.newSpellsKnown} spells to your spellbook from any Wizard spell level you can cast.`
                     : `Choose ${activeChoices.newSpellsKnown} new spell${activeChoices.newSpellsKnown > 1 ? 's' : ''} from the ${selectedClassOption.class} spell list.`}
@@ -1557,17 +1259,10 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
                 {/* Selected spells */}
                 {selectedNewSpells.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <div className="lu-tags" style={{ marginBottom: 12 }}>
                     {selectedNewSpells.map(name => (
-                      <span key={name} style={{
-                        background: 'rgba(168, 85, 247, 0.2)',
-                        border: '1px solid rgba(168, 85, 247, 0.4)',
-                        padding: '0.3rem 0.75rem',
-                        borderRadius: '4px',
-                        fontSize: '0.9rem',
-                        cursor: 'pointer'
-                      }} onClick={() => setSelectedNewSpells(prev => prev.filter(s => s !== name))}>
-                        {name} ✕
+                      <span key={name} className="selchip" onClick={() => setSelectedNewSpells(prev => prev.filter(s => s !== name))}>
+                        {name} <span className="x">✕</span>
                       </span>
                     ))}
                   </div>
@@ -1576,21 +1271,13 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 {/* Filters */}
                 {selectedNewSpells.length < activeChoices.newSpellsKnown && (
                   <>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                    <div className="spell-filters">
                       {['all', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'].map(lvl => {
                         const available = getAvailableSpells(selectedClassOption.class)
                         const count = lvl === 'all' ? available.length : available.filter(s => s.level === lvl).length
                         if (lvl !== 'all' && count === 0) return null
                         return (
-                          <button key={lvl} onClick={() => setSpellFilterLevel(lvl)} style={{
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '4px',
-                            border: spellFilterLevel === lvl ? '1px solid #a855f7' : '1px solid #555',
-                            background: spellFilterLevel === lvl ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
-                            color: spellFilterLevel === lvl ? '#a855f7' : '#ccc',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem'
-                          }}>
+                          <button key={lvl} className={spellFilterLevel === lvl ? 'on' : ''} onClick={() => setSpellFilterLevel(lvl)}>
                             {lvl === 'all' ? 'All' : lvl} ({count})
                           </button>
                         )
@@ -1598,24 +1285,15 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                     </div>
                     <input
                       type="text"
-                      placeholder="Search spells..."
+                      className="lu-input"
+                      placeholder="Search spells…"
                       value={spellSearchText}
                       onChange={(e) => setSpellSearchText(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '0.4rem 0.6rem',
-                        borderRadius: '4px',
-                        border: '1px solid #555',
-                        background: '#1a1a2e',
-                        color: '#eee',
-                        fontSize: '0.9rem',
-                        marginBottom: '0.5rem',
-                        boxSizing: 'border-box'
-                      }}
+                      style={{ marginBottom: 10 }}
                     />
 
                     {/* Available spells list */}
-                    <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem' }}>
+                    <div className="spelllist">
                       {(() => {
                         let spells = getAvailableSpells(selectedClassOption.class)
                         if (spellFilterLevel !== 'all') {
@@ -1626,84 +1304,41 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                           spells = spells.filter(s => s.name.toLowerCase().includes(search))
                         }
                         if (spells.length === 0) {
-                          return <p style={{ color: '#666', textAlign: 'center', margin: '0.5rem 0', fontSize: '0.85rem' }}>No spells available</p>
+                          return <p className="spell-empty">No spells available</p>
                         }
                         return spells.map(spell => (
-                          <div key={spell.name} style={{
-                            padding: '0.4rem 0.6rem',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                            fontSize: '0.9rem',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}
-                          className="spell-option-row"
-                          onClick={() => setSelectedNewSpells(prev => [...prev, spell.name])}>
+                          <div key={spell.name} className="spell-row" onClick={() => setSelectedNewSpells(prev => [...prev, spell.name])}>
                             <span>{spell.name}</span>
-                            <span style={{ color: '#888', fontSize: '0.8rem' }}>{spell.level} {spell.school}</span>
+                            <span className="lvl">{spell.level} {spell.school}</span>
                           </div>
                         ))
                       })()}
                     </div>
                   </>
                 )}
-              </section>
+              </div>
             )}
 
             {/* Spell Swap (Bard, Sorcerer, Warlock, Ranger) */}
             {isKnownCaster(selectedClassOption.class) && getCurrentKnownSpells().length > 0 && (
-              <section className="choice-section" style={{ marginBottom: '1.5rem' }}>
-                <h3>Swap a Known Spell (Optional)</h3>
-                <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
-                  You may replace one spell you know with a different spell from the {selectedClassOption.class} spell list.
-                </p>
+              <div className="lu-group">
+                <h3>Swap a known spell <span style={{ color: 'var(--ink-4)', fontStyle: 'italic', fontSize: 15 }}>optional</span></h3>
+                <p className="gsub">You may replace one spell you know with a different spell from the {selectedClassOption.class} spell list.</p>
 
                 {swapSpell && swapSpell.new ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <span style={{
-                      background: 'rgba(239, 68, 68, 0.2)',
-                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                      padding: '0.3rem 0.75rem',
-                      borderRadius: '4px',
-                      fontSize: '0.9rem',
-                      textDecoration: 'line-through'
-                    }}>{swapSpell.old}</span>
-                    <span style={{ color: '#888' }}>→</span>
-                    <span style={{
-                      background: 'rgba(34, 197, 94, 0.2)',
-                      border: '1px solid rgba(34, 197, 94, 0.4)',
-                      padding: '0.3rem 0.75rem',
-                      borderRadius: '4px',
-                      fontSize: '0.9rem'
-                    }}>{swapSpell.new}</span>
-                    <button onClick={() => { setSwapSpell(null); setShowSwapPanel(false) }} style={{
-                      background: 'transparent',
-                      border: '1px solid #555',
-                      color: '#aaa',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.8rem'
-                    }}>Cancel Swap</button>
+                  <div className="swap-line">
+                    <span className="selchip old">{swapSpell.old}</span>
+                    <span className="ar">→</span>
+                    <span className="selchip new">{swapSpell.new}</span>
+                    <button className="btn ghost sm" onClick={() => { setSwapSpell(null); setShowSwapPanel(false) }}>Cancel swap</button>
                   </div>
                 ) : showSwapPanel ? (
                   <div>
-                    <p style={{ color: '#ccc', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Select a spell to replace:</p>
-                    <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem', marginBottom: '0.75rem' }}>
+                    <p className="lu-note" style={{ marginTop: 0 }}>Select a spell to replace:</p>
+                    <div className="spelllist" style={{ maxHeight: 150, marginBottom: 12 }}>
                       {getCurrentKnownSpells().map(spellName => (
-                        <div key={spellName}
-                          className="spell-option-row"
-                          style={{
-                            padding: '0.4rem 0.6rem',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                            fontSize: '0.9rem'
-                          }}
-                          onClick={() => {
-                            // Set swap old, now need to pick new
-                            setSwapSpell({ old: spellName, new: null })
-                          }}>
+                        <div key={spellName} className="spell-row"
+                          onClick={() => setSwapSpell({ old: spellName, new: null })}>
                           {spellName}
                         </div>
                       ))}
@@ -1711,102 +1346,52 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
                     {swapSpell?.old && !swapSpell?.new && (
                       <>
-                        <p style={{ color: '#ccc', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                          Replacing <strong style={{ color: '#ef4444' }}>{swapSpell.old}</strong> — choose a replacement:
+                        <p className="lu-note" style={{ marginTop: 0 }}>
+                          Replacing <strong style={{ color: 'var(--bad)' }}>{swapSpell.old}</strong> — choose a replacement:
                         </p>
-                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #333', borderRadius: '6px', padding: '0.5rem' }}>
+                        <div className="spelllist" style={{ maxHeight: 200 }}>
                           {getAvailableSpells(selectedClassOption.class).filter(s => s.name !== swapSpell.old).map(spell => (
-                            <div key={spell.name}
-                              className="spell-option-row"
-                              style={{
-                                padding: '0.4rem 0.6rem',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem',
-                                display: 'flex',
-                                justifyContent: 'space-between'
-                              }}
+                            <div key={spell.name} className="spell-row"
                               onClick={() => setSwapSpell({ old: swapSpell.old, new: spell.name })}>
                               <span>{spell.name}</span>
-                              <span style={{ color: '#888', fontSize: '0.8rem' }}>{spell.level} {spell.school}</span>
+                              <span className="lvl">{spell.level} {spell.school}</span>
                             </div>
                           ))}
                         </div>
                       </>
                     )}
 
-                    <button onClick={() => { setShowSwapPanel(false); setSwapSpell(null) }} style={{
-                      marginTop: '0.5rem',
-                      background: 'transparent',
-                      border: '1px solid #555',
-                      color: '#aaa',
-                      padding: '0.3rem 0.75rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem'
-                    }}>Cancel</button>
+                    <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={() => { setShowSwapPanel(false); setSwapSpell(null) }}>Cancel</button>
                   </div>
                 ) : (
-                  <button onClick={() => setShowSwapPanel(true)} style={{
-                    background: 'rgba(168, 85, 247, 0.15)',
-                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                    color: '#a855f7',
-                    padding: '0.4rem 1rem',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}>Swap a Spell</button>
+                  <button className="btn" onClick={() => setShowSwapPanel(true)}>Swap a spell</button>
                 )}
-              </section>
+              </div>
             )}
-
-            {/* Continue to Review */}
-            <div className="step-actions">
-              <button
-                className="button"
-                onClick={handleProceedToReview}
-                disabled={
-                  (activeChoices.newCantrips > 0 && selectedNewCantrips.length < activeChoices.newCantrips) ||
-                  (activeChoices.newSpellsKnown > 0 && selectedNewSpells.length < activeChoices.newSpellsKnown) ||
-                  (swapSpell && !swapSpell.new)
-                }
-              >
-                Review Level Up →
-              </button>
-            </div>
           </div>
         )}
 
         {/* Step 4: Review */}
         {step === 'review' && selectedClassOption && (
-          <div className="level-up-step">
-            <button className="back-link" onClick={needsSpellsStep() ? handleBackToSpells : handleBackToChoices}>
-              ← Back to {needsSpellsStep() ? 'spells' : 'choices'}
-            </button>
-
-            <h2>Review Your Level Up</h2>
-            <p className="step-description">
-              Confirm your choices before leveling up.
-            </p>
+          <div className="pane">
+            <h2>Confirm your ascent</h2>
+            <div className="lede">One last look before it's written into {character.nickname || character.name}'s story.</div>
 
             {(() => {
               const finalStats = calculateFinalStats()
               return (
-                <div className="review-summary">
+                <div className="review">
                   {/* Character Summary */}
-                  <div className="review-card">
+                  <div className="rv-group">
                     <h3>Character</h3>
-                    <div className="review-row">
-                      <span className="review-label">Name</span>
-                      <span className="review-value">{character.nickname || character.name}</span>
+                    <div className="rv">
+                      <span className="rk">Current</span>
+                      <span className="rvv">{getClassDisplay()}</span>
                     </div>
-                    <div className="review-row">
-                      <span className="review-label">Current</span>
-                      <span className="review-value">{getClassDisplay()}</span>
-                    </div>
-                    <div className="review-row highlight">
-                      <span className="review-label">After Level Up</span>
-                      <span className="review-value">
+                    <div className="rv">
+                      <span className="rk">After level up</span>
+                      <span className="rvv">
+                        <span className="to">
                         {selectedClassOption.type === 'multiclass'
                           ? `${getClassDisplay()} / ${selectedClassOption.class} 1`
                           : levelUpInfo.classLevels.map(c =>
@@ -1815,48 +1400,40 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                                 : `${c.class} ${c.level}`
                             ).join(' / ')
                         }
+                        </span>
                       </span>
                     </div>
-                    <div className="review-row">
-                      <span className="review-label">Total Level</span>
-                      <span className="review-value">{levelUpInfo.currentLevel} → {levelUpInfo.newLevel}</span>
+                    <div className="rv">
+                      <span className="rk">Total level</span>
+                      <span className="rvv"><span className="from">{levelUpInfo.currentLevel}</span><span className="ar">→</span><span className="to">{levelUpInfo.newLevel}</span></span>
                     </div>
                   </div>
 
                   {/* HP Summary */}
-                  <div className="review-card">
-                    <h3>Hit Points</h3>
-                    <div className="review-row">
-                      <span className="review-label">HP Gained</span>
-                      <span className="review-value highlight-green">+{finalStats.hpGain}</span>
+                  <div className="rv-group">
+                    <h3>Hit points</h3>
+                    <div className="rv">
+                      <span className="rk">HP gained</span>
+                      <span className="rvv good">+{finalStats.hpGain}</span>
                     </div>
-                    <div className="review-row">
-                      <span className="review-label">Current HP</span>
-                      <span className="review-value">{character.max_hp}</span>
+                    <div className="rv">
+                      <span className="rk">Max HP</span>
+                      <span className="rvv"><span className="from">{character.max_hp}</span><span className="ar">→</span><span className="to">{finalStats.newMaxHp}</span></span>
                     </div>
-                    <div className="review-row highlight">
-                      <span className="review-label">New Max HP</span>
-                      <span className="review-value">{finalStats.newMaxHp}</span>
-                    </div>
-                    <div className="review-row small">
-                      <span className="review-label">Method</span>
-                      <span className="review-value">
-                        {hpChoice === 'average' ? 'Average' : `Rolled ${hpRoll}`}
-                      </span>
+                    <div className="rv">
+                      <span className="rk">Method</span>
+                      <span className="rvv">{hpChoice === 'average' ? 'Average' : `Rolled ${hpRoll}`}</span>
                     </div>
                   </div>
 
                   {/* ASI Summary */}
                   {activeChoices.needsASI && asiOrFeat === 'asi' && finalStats.asiChanges.length > 0 && (
-                    <div className="review-card">
-                      <h3>Ability Score Improvements</h3>
+                    <div className="rv-group">
+                      <h3>Ability score improvements</h3>
                       {finalStats.asiChanges.map(([ability, increase]) => (
-                        <div key={ability} className="review-row">
-                          <span className="review-label">{ability.toUpperCase()}</span>
-                          <span className="review-value">
-                            {currentAbilityScores[ability]} → {finalStats.newAbilityScores[ability]}
-                            <span className="highlight-green"> (+{increase})</span>
-                          </span>
+                        <div key={ability} className="rv">
+                          <span className="rk">{ability.toUpperCase()}</span>
+                          <span className="rvv"><span className="from">{currentAbilityScores[ability]}</span><span className="ar">→</span><span className="to">{finalStats.newAbilityScores[ability]}</span></span>
                         </div>
                       ))}
                     </div>
@@ -1864,16 +1441,16 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
                   {/* Feat Summary */}
                   {activeChoices.needsASI && asiOrFeat === 'feat' && selectedFeatKey && (
-                    <div className="review-card">
-                      <h3>New Feat</h3>
-                      <div className="review-row">
-                        <span className="review-label">Feat</span>
-                        <span className="review-value">{featsData[selectedFeatKey]?.name || selectedFeatKey}</span>
+                    <div className="rv-group">
+                      <h3>New feat</h3>
+                      <div className="rv">
+                        <span className="rk">Feat</span>
+                        <span className="rvv"><span className="to">{featsData[selectedFeatKey]?.name || selectedFeatKey}</span></span>
                       </div>
                       {selectedFeatAbility && (
-                        <div className="review-row">
-                          <span className="review-label">+1 Ability</span>
-                          <span className="review-value">{selectedFeatAbility.toUpperCase()}</span>
+                        <div className="rv">
+                          <span className="rk">+1 ability</span>
+                          <span className="rvv">{selectedFeatAbility.toUpperCase()}</span>
                         </div>
                       )}
                     </div>
@@ -1881,42 +1458,42 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
                   {/* Subclass Summary */}
                   {selectedSubclass && (
-                    <div className="review-card">
+                    <div className="rv-group">
                       <h3>Subclass</h3>
-                      <div className="review-row">
-                        <span className="review-label">Chosen</span>
-                        <span className="review-value">{selectedSubclass}</span>
+                      <div className="rv">
+                        <span className="rk">Chosen</span>
+                        <span className="rvv"><span className="to">{selectedSubclass}</span></span>
                       </div>
                     </div>
                   )}
 
                   {/* Progression Summary (Theme tier + Ancestry feat) */}
                   {levelUpInfo?.progression?.theme_tier_unlock && (
-                    <div className="review-card">
-                      <h3 style={{ color: '#a78bfa' }}>Theme Tier Unlock</h3>
-                      <div className="review-row">
-                        <span className="review-label">Theme</span>
-                        <span className="review-value">{levelUpInfo.progression.theme_tier_unlock.theme_name}</span>
+                    <div className="rv-group">
+                      <h3>Theme tier unlock</h3>
+                      <div className="rv">
+                        <span className="rk">Theme</span>
+                        <span className="rvv">{levelUpInfo.progression.theme_tier_unlock.theme_name}</span>
                       </div>
-                      <div className="review-row">
-                        <span className="review-label">New ability (L{levelUpInfo.progression.theme_tier_unlock.tier})</span>
-                        <span className="review-value">{levelUpInfo.progression.theme_tier_unlock.ability_name}</span>
+                      <div className="rv">
+                        <span className="rk">New ability (L{levelUpInfo.progression.theme_tier_unlock.tier})</span>
+                        <span className="rvv"><span className="to">{levelUpInfo.progression.theme_tier_unlock.ability_name}</span></span>
                       </div>
                     </div>
                   )}
 
                   {levelUpInfo?.progression?.ancestry_feat_tier && selectedAncestryFeatId && (
-                    <div className="review-card">
-                      <h3 style={{ color: '#14b8a6' }}>Ancestry Feat</h3>
-                      <div className="review-row">
-                        <span className="review-label">Tier</span>
-                        <span className="review-value">L{levelUpInfo.progression.ancestry_feat_tier.tier}</span>
+                    <div className="rv-group">
+                      <h3>Ancestry feat</h3>
+                      <div className="rv">
+                        <span className="rk">Tier</span>
+                        <span className="rvv">L{levelUpInfo.progression.ancestry_feat_tier.tier}</span>
                       </div>
-                      <div className="review-row">
-                        <span className="review-label">Chosen</span>
-                        <span className="review-value">
+                      <div className="rv">
+                        <span className="rk">Chosen</span>
+                        <span className="rvv"><span className="to">
                           {levelUpInfo.progression.ancestry_feat_tier.options.find(o => o.id === selectedAncestryFeatId)?.feat_name}
-                        </span>
+                        </span></span>
                       </div>
                     </div>
                   )}
@@ -1936,50 +1513,48 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                       if (!hasGenre && !hasSpec && !hasTexts && !hasRec && !hasL15Genre && !grantedText) return null
 
                       return (
-                        <div className="review-card">
-                          <h3 style={{ color: '#a78bfa' }}>Keeper Choices</h3>
+                        <div className="rv-group">
+                          <h3>Keeper choices</h3>
                           {hasGenre && (
-                            <div className="review-row">
-                              <span className="review-label">Genre Domain</span>
-                              <span className="review-value" style={{ color: '#c4b5fd' }}>{selectedGenreDomain}</span>
+                            <div className="rv">
+                              <span className="rk">Genre domain</span>
+                              <span className="rvv"><span className="to">{selectedGenreDomain}</span></span>
                             </div>
                           )}
                           {hasSpec && (
-                            <div className="review-row">
-                              <span className="review-label">Specialization</span>
-                              <span className="review-value" style={{ color: keeperSpecialization === 'polymath' ? '#6ee7b7' : '#c4b5fd' }}>
-                                {keeperSpecialization === 'polymath' ? 'Polymath (Pure Keeper)' : keeperSpecialization}
-                              </span>
+                            <div className="rv">
+                              <span className="rk">Specialization</span>
+                              <span className="rvv"><span className="to">{keeperSpecialization === 'polymath' ? 'Polymath (Pure Keeper)' : keeperSpecialization}</span></span>
                             </div>
                           )}
                           {genreMasteryChoice === 'mastery' && (
-                            <div className="review-row">
-                              <span className="review-label">Genre Mastery</span>
-                              <span className="review-value" style={{ color: '#fbbf24' }}>Deepened {character.keeper_genre_domain}</span>
+                            <div className="rv">
+                              <span className="rk">Genre mastery</span>
+                              <span className="rvv"><span className="to">Deepened {character.keeper_genre_domain}</span></span>
                             </div>
                           )}
                           {genreMasteryChoice === 'second_genre' && selectedSecondGenre && (
-                            <div className="review-row">
-                              <span className="review-label">Second Genre</span>
-                              <span className="review-value" style={{ color: '#c4b5fd' }}>{selectedSecondGenre}</span>
+                            <div className="rv">
+                              <span className="rk">Second genre</span>
+                              <span className="rvv"><span className="to">{selectedSecondGenre}</span></span>
                             </div>
                           )}
                           {grantedText && (
-                            <div className="review-row">
-                              <span className="review-label">Subclass Text</span>
-                              <span className="review-value" style={{ color: '#c084fc' }}>{grantedText.name}</span>
+                            <div className="rv">
+                              <span className="rk">Subclass text</span>
+                              <span className="rvv"><span className="to">{grantedText.name}</span></span>
                             </div>
                           )}
                           {hasTexts && (
-                            <div className="review-row">
-                              <span className="review-label">New Texts</span>
-                              <span className="review-value">{selectedKeeperTexts.join(', ')}</span>
+                            <div className="rv">
+                              <span className="rk">New texts</span>
+                              <span className="rvv">{selectedKeeperTexts.join(', ')}</span>
                             </div>
                           )}
                           {hasRec && (
-                            <div className="review-row">
-                              <span className="review-label">New Recitations</span>
-                              <span className="review-value">{selectedKeeperRecitations.join(', ')}</span>
+                            <div className="rv">
+                              <span className="rk">New recitations</span>
+                              <span className="rvv">{selectedKeeperRecitations.join(', ')}</span>
                             </div>
                           )}
                         </div>
@@ -2005,36 +1580,27 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                     if (!hasAnyFeatures) return null
 
                     return (
-                      <div className="review-card">
-                        <h3>New Features</h3>
+                      <div className="rv-group">
+                        <h3>New features</h3>
                         {activeNewFeatures.length > 0 && (
-                          <ul className="review-features-list">
+                          <ul className="lu-featlist">
                             {activeNewFeatures.map((feature, idx) => (
                               <li key={idx}>{feature}</li>
                             ))}
                           </ul>
                         )}
                         {subclassFeatures.length > 0 && (
-                          <>
-                            <h4 style={{ color: '#a78bfa', margin: '0.75rem 0 0.5rem', fontSize: '0.9rem' }}>
-                              {subclass} Features
-                            </h4>
-                            <ul className="review-features-list">
-                              {subclassFeatures.map((feature, idx) => (
-                                <li key={idx}>{feature.name}</li>
-                              ))}
-                            </ul>
-                          </>
+                          <ul className="lu-featlist" style={{ marginTop: 8 }}>
+                            {subclassFeatures.map((feature, idx) => (
+                              <li key={idx}><strong>{feature.name}</strong> <span style={{ color: 'var(--ink-4)' }}>· {subclass}</span></li>
+                            ))}
+                          </ul>
                         )}
                         {subclassSpells.length > 0 && (
-                          <>
-                            <h4 style={{ color: '#2ecc71', margin: '0.75rem 0 0.5rem', fontSize: '0.9rem' }}>
-                              {subclass} Spells
-                            </h4>
-                            <p style={{ fontSize: '0.85rem', margin: 0 }}>
-                              {subclassSpells.join(', ')}
-                            </p>
-                          </>
+                          <div className="rv">
+                            <span className="rk">{subclass} spells</span>
+                            <span className="rvv" style={{ maxWidth: 320 }}>{subclassSpells.join(', ')}</span>
+                          </div>
                         )}
                       </div>
                     )
@@ -2042,83 +1608,125 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
                   {/* Spells Summary */}
                   {(selectedNewCantrips.length > 0 || selectedNewSpells.length > 0 || swapSpell) && (
-                    <div className="review-card">
+                    <div className="rv-group">
                       <h3>Spells</h3>
                       {selectedNewCantrips.length > 0 && (
-                        <>
-                          <h4 style={{ color: '#60a5fa', margin: '0.5rem 0 0.25rem', fontSize: '0.9rem' }}>
-                            New Cantrips
-                          </h4>
-                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
-                            {selectedNewCantrips.join(', ')}
-                          </p>
-                        </>
+                        <div className="rv">
+                          <span className="rk">New cantrips</span>
+                          <span className="rvv" style={{ maxWidth: 320 }}><span className="to">{selectedNewCantrips.join(', ')}</span></span>
+                        </div>
                       )}
                       {selectedNewSpells.length > 0 && (
-                        <>
-                          <h4 style={{ color: '#a855f7', margin: '0.75rem 0 0.25rem', fontSize: '0.9rem' }}>
-                            {isWizard(selectedClassOption.class) ? 'Spellbook Additions' : 'New Spells Known'}
-                          </h4>
-                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
-                            {selectedNewSpells.join(', ')}
-                          </p>
-                        </>
+                        <div className="rv">
+                          <span className="rk">{isWizard(selectedClassOption.class) ? 'Spellbook additions' : 'New spells known'}</span>
+                          <span className="rvv" style={{ maxWidth: 320 }}><span className="to">{selectedNewSpells.join(', ')}</span></span>
+                        </div>
                       )}
                       {swapSpell && swapSpell.old && swapSpell.new && (
-                        <>
-                          <h4 style={{ color: '#f59e0b', margin: '0.75rem 0 0.25rem', fontSize: '0.9rem' }}>
-                            Spell Swap
-                          </h4>
-                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
-                            <span style={{ textDecoration: 'line-through', color: '#ef4444' }}>{swapSpell.old}</span>
-                            {' → '}
-                            <span style={{ color: '#22c55e' }}>{swapSpell.new}</span>
-                          </p>
-                        </>
+                        <div className="rv">
+                          <span className="rk">Spell swap</span>
+                          <span className="rvv"><span className="from" style={{ textDecoration: 'line-through' }}>{swapSpell.old}</span><span className="ar">→</span><span className="to">{swapSpell.new}</span></span>
+                        </div>
                       )}
                     </div>
                   )}
 
                   {/* Proficiency Bonus */}
                   {levelUpInfo.proficiencyBonus.increased && (
-                    <div className="review-card">
-                      <h3>Proficiency Bonus</h3>
-                      <div className="review-row highlight">
-                        <span className="review-label">Bonus</span>
-                        <span className="review-value">
-                          +{levelUpInfo.proficiencyBonus.current} → +{levelUpInfo.proficiencyBonus.new}
-                        </span>
+                    <div className="rv-group">
+                      <h3>Proficiency bonus</h3>
+                      <div className="rv">
+                        <span className="rk">Bonus</span>
+                        <span className="rvv"><span className="from">+{levelUpInfo.proficiencyBonus.current}</span><span className="ar">→</span><span className="to">+{levelUpInfo.proficiencyBonus.new}</span></span>
                       </div>
                     </div>
                   )}
                 </div>
               )
             })()}
-
-            {/* Final Action */}
-            <div className="step-actions final">
-              <button
-                className="button button-secondary"
-                onClick={needsSpellsStep() ? handleBackToSpells : handleBackToChoices}
-                disabled={submitting}
-              >
-                ← Go Back
-              </button>
-              <button
-                className="button level-up-button"
-                onClick={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting ? 'Leveling Up...' : (
-                  selectedClassOption.type === 'multiclass'
-                    ? `Multiclass into ${selectedClassOption.class}!`
-                    : `Level Up to ${levelUpInfo.newLevel}!`
-                )}
-              </button>
-            </div>
           </div>
         )}
-      </div>
+
+            </div>{/* /stage-body */}
+
+            {/* ───────── SHARED STAGE FOOT ───────── */}
+            <div className="stage-foot">
+              <span className="prog">Step {curStepIdx + 1} of {railSteps.length}</span>
+              <span className="spacer"></span>
+
+              {step === 'class-selection' && (
+                <button className="btn" onClick={onBack}><Ic n="arrow-left" />Cancel</button>
+              )}
+
+              {step === 'choices' && (
+                <>
+                  <button className="btn" onClick={handleBackToClassSelection}><Ic n="arrow-left" />Back</button>
+                  <button
+                    className="btn primary"
+                    onClick={handleProceedFromChoices}
+                    disabled={
+                      // ASI validation: if user chose 'asi', must spend all 2 points.
+                      // If user chose 'feat', must select a feat AND (if the feat needs
+                      // an ability pick) have selected that ability.
+                      (activeChoices.needsASI && asiOrFeat === 'asi' && asiPoints > 0) ||
+                      (activeChoices.needsASI && asiOrFeat === 'feat' && !selectedFeatKey) ||
+                      (activeChoices.needsASI && asiOrFeat === 'feat' && selectedFeatKey &&
+                        featsData[selectedFeatKey]?.abilityIncrease && !selectedFeatAbility) ||
+                      (activeChoices.needsSubclass && !selectedSubclass) ||
+                      (hpChoice === 'roll' && hpRoll === null) ||
+                      // Progression: ancestry feat pick required when tier crossed
+                      (levelUpInfo?.progression?.ancestry_feat_tier && !selectedAncestryFeatId)
+                    }
+                  >
+                    {needsSpellsStep() ? 'Choose spells' : 'Review level up'}<Ic n="arrow-right" />
+                  </button>
+                </>
+              )}
+
+              {step === 'spells' && (
+                <>
+                  <button className="btn" onClick={handleBackToChoices}><Ic n="arrow-left" />Back</button>
+                  <button
+                    className="btn primary"
+                    onClick={handleProceedToReview}
+                    disabled={
+                      (activeChoices.newCantrips > 0 && selectedNewCantrips.length < activeChoices.newCantrips) ||
+                      (activeChoices.newSpellsKnown > 0 && selectedNewSpells.length < activeChoices.newSpellsKnown) ||
+                      (swapSpell && !swapSpell.new)
+                    }
+                  >
+                    Review level up<Ic n="arrow-right" />
+                  </button>
+                </>
+              )}
+
+              {step === 'review' && (
+                <>
+                  <button
+                    className="btn"
+                    onClick={needsSpellsStep() ? handleBackToSpells : handleBackToChoices}
+                    disabled={submitting}
+                  >
+                    <Ic n="arrow-left" />Back
+                  </button>
+                  <button
+                    className="btn primary"
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Leveling up…' : (
+                      selectedClassOption?.type === 'multiclass'
+                        ? `Multiclass into ${selectedClassOption.class}`
+                        : 'Confirm level up'
+                    )}
+                    {!submitting && <Ic n="check" />}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>{/* /stage */}
+        </div>{/* /wiz-grid */}
+      </main>
     </div>
   )
 }
