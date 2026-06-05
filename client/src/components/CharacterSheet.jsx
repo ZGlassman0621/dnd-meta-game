@@ -49,6 +49,37 @@ const THEME_TIER_LEVELS = { 1: 1, 2: 5, 3: 11, 4: 17 }
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' }
 
 const Ic = ({ n, style }) => <svg className="ic" style={style}><use href={`#i-${n}`} /></svg>
+// Keyword→icon map for per-feature variety (icon names must exist in HearthSprite).
+const FEATURE_ICON_RULES = [
+  [/defen|armor|shield/i, 'shield'],
+  [/ki|focus/i, 'bolt'],
+  [/strike|martial|flurry|fist/i, 'flame'],
+  [/step|wind|move|fleet/i, 'wind'],
+  [/sight|vision|perception|keen|eye/i, 'eye'],
+  [/search|investig/i, 'search'],
+  [/trance|sleep|moon/i, 'moon2'],
+  [/fey|charm|mask/i, 'leaf'],
+  [/spell|magic|cantrip/i, 'sparkles']
+]
+const featureIcon = (name, fallback) => {
+  const hit = FEATURE_ICON_RULES.find(([re]) => re.test(name || ''))
+  return hit ? hit[1] : fallback
+}
+// Keyword→icon map for inventory item variety (icon names must exist in HearthSprite).
+const ITEM_ICON_RULES = [
+  [/potion|vial|elixir/i, 'vial'],
+  [/bow|arrow/i, 'bow'],
+  [/staff|wand|rod/i, 'bolt'],
+  [/sword|blade|dagger|axe|weapon/i, 'sword'],
+  [/scroll|book|note|tome/i, 'scroll'],
+  [/coin|gold/i, 'coin'],
+  [/torch|lantern|flame/i, 'flame'],
+  [/token|trinket/i, 'token']
+]
+const itemIcon = (text, fallback) => {
+  const hit = ITEM_ICON_RULES.find(([re]) => re.test(text || ''))
+  return hit ? hit[1] : fallback
+}
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '')
 const cap = (s) => (s == null || s === '') ? s : String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 const modStr = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`)
@@ -366,7 +397,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
       <div className="grid2">
         <section className="card panel-pad">
-          <SecHead title="Skills" sub="● proficient" />
+          <SecHead title="Skills" sub={<><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block', marginRight: 5, verticalAlign: 'middle' }} />proficient</>} />
           <div className="skills">
             {SKILL_LIST.map(sk => (
               <div key={sk.key} className={`skill${isSkillProf(sk.name) ? ' prof' : ''}`}>
@@ -381,7 +412,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           {charLanguages.length > 0 && (
             <div className="kv"><div className="kl">Languages</div><div className="tags">{charLanguages.map((l, i) => <span key={i} className="chip">{l}</span>)}</div></div>
           )}
-          <div className="kv"><div className="kl">Weapons & armor</div><div className="prose">{(classData?.weaponProficiencies || []).join(', ') || 'Simple weapons'}{classData?.armorProficiencies?.length ? ` · ${classData.armorProficiencies.join(', ')} armor` : ' · no armor'}</div></div>
+          <div className="kv"><div className="kl">Weapons & armor</div><div className="prose">{(classData?.weaponProficiencies || []).join(' · ') || 'Simple weapons'}{classData?.armorProficiencies?.length ? ` · ${classData.armorProficiencies.join(', ')} armor` : <> · <em style={{ color: 'var(--ink-4)', fontStyle: 'normal' }}>no armor (Unarmored Defense)</em></>}</div></div>
           {classData?.toolProficiencies?.length > 0 && (
             <div className="kv"><div className="kl">Tools</div><div className="tags">{classData.toolProficiencies.map((t, i) => <span key={i} className="chip">{t}</span>)}</div></div>
           )}
@@ -390,7 +421,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
       <div className="grid2">
         <section className="card panel-pad">
-          <SecHead title="Attacks" />
+          <SecHead title="Attacks" sub={classKey === 'monk' ? 'Martial Arts die 1d6' : null} />
           {attacks.map((a, i) => (
             <div key={i} className="atk"><span className="an">{a.name} <span className="meta">{a.meta}</span></span><span className="hit">{modStr(a.hit)}</span><span className="dmg">{a.dmg}</span></div>
           ))}
@@ -439,6 +470,9 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             <div className="srow"><span className="l"><Ic n="brain" />Passive Insight</span><span className="v">{passive('Insight', 'wis')}</span></div>
             <div className="srow"><span className="l"><Ic n="target" />Proficiency bonus</span><span className="v">{modStr(profBonus)}</span></div>
             <div className="srow"><span className="l"><Ic n="wind" />Initiative</span><span className="v">{modStr(abilityMod('dex'))}</span></div>
+            {raceTraits.length > 0 && (
+              <div className="senses-note">{raceTraits.slice(0, 3).map(t => t.name).join(' · ')}</div>
+            )}
           </div>
         </section>
       </div>
@@ -447,7 +481,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
         {SKILL_LIST.map(sk => (
           <div key={sk.key} className={`skillrow${isSkillProf(sk.name) ? ' prof' : ''}`}>
             <span className="dot"></span><span className="snm">{sk.name}</span><span className="sab">{ABILITY_SHORT[sk.ab]}</span>
-            <span className="ssrc">{isSkillProf(sk.name) ? 'proficient' : ''}</span><span className="smd">{modStr(skillMod(sk))}</span>
+            <span className="ssrc"></span><span className="smd">{modStr(skillMod(sk))}</span>
           </div>
         ))}
       </section>
@@ -465,14 +499,17 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
       </div>
     </div>
   )
-  const renderFeatures = () => (
+  const renderFeatures = () => {
+    const themeTierReached = [1, 2, 3, 4].filter(n => level >= THEME_TIER_LEVELS[n]).pop()
+    const themeSub = themeTierReached ? `theme · tier ${ROMAN[themeTierReached]}` : 'theme'
+    return (
     <div>
-      <FeatGroup title={character.class || 'Class'} sub={character.subclass ? `${character.subclass} · level ${level}` : `level ${level}`}
-        items={[...classFeatures, ...subclassFeatures].map(f => ({ name: f.name, desc: f.description, icon: 'bolt' }))} />
+      <FeatGroup title={cap(character.class) || 'Class'} sub={character.subclass ? `${character.subclass} · level ${level}` : `level ${level}`}
+        items={[...classFeatures, ...subclassFeatures].map(f => ({ name: f.name, desc: f.description, icon: featureIcon(f.name, 'bolt') }))} />
       <FeatGroup title={character.subrace || character.race || 'Ancestry'} sub="ancestry"
-        items={raceTraits.map(t => ({ name: t.name, desc: t.desc, icon: 'leaf' }))} />
-      <FeatGroup title={themeName || 'Theme'} sub="theme"
-        items={themeUnlocks.map(u => ({ name: u.ability_name, desc: u.ability_description, icon: 'scroll' }))} />
+        items={raceTraits.map(t => ({ name: t.name, desc: t.desc, icon: featureIcon(t.name, 'leaf') }))} />
+      <FeatGroup title={themeName || 'Theme'} sub={themeSub}
+        items={themeUnlocks.map(u => ({ name: u.ability_name, desc: u.ability_description, icon: featureIcon(u.ability_name, 'scroll') }))} />
       {backgroundData?.feature && (
         <FeatGroup title={character.background ? character.background : 'Background'} sub="background feature"
           items={[{ name: backgroundData.feature.name, desc: backgroundData.feature.description, icon: 'feather' }]} />
@@ -481,7 +518,8 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
         <div className="placeholder"><div className="ph-glyph">❧</div><h3>No features recorded yet</h3><p>Features appear as you choose a class, ancestry, and theme.</p></div>
       )}
     </div>
-  )
+    )
+  }
 
   const renderProgression = () => {
     if (!theme) {
@@ -494,6 +532,11 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
       return { n, unlockLv, done, name: t.ability_name, ability: t.ability_description }
     })
     const firstNotDone = tiers.find(t => !t.done)?.n
+    const tierReached = Math.max(1, ...tiers.filter(t => t.done).map(t => t.n), 1)
+    const nextTier = tiers.find(t => !t.done)
+    const tierSub = nextTier
+      ? `Tier ${ROMAN[tierReached]} reached · Tier ${ROMAN[nextTier.n]} at level ${THEME_TIER_LEVELS[nextTier.n]}`
+      : `Tier ${ROMAN[tierReached]} reached`
     return (
       <div>
         <section className="theme-hero">
@@ -502,7 +545,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           {theme.identity ? <div className="th-desc">{theme.identity}</div> : null}
         </section>
 
-        <SecHead title="Theme tiers" sub={`Tier ${ROMAN[Math.max(1, ...tiers.filter(t => t.done).map(t => t.n), 1)]} reached`} />
+        <SecHead title="Theme tiers" sub={tierSub} />
         <div className="tiers" style={{ marginBottom: 26 }}>
           {tiers.map(t => (
             <div key={t.n} className={`tier ${t.done ? 'done' : t.n === firstNotDone ? 'next' : 'locked'}`}>
@@ -527,7 +570,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
         {knightPath && (
           <>
-            <SecHead title="Moral path" sub="a conviction, shaped by play" />
+            <SecHead title={themeName ? `The ${themeName}'s path` : 'The path'} sub="a quiet conviction, shaped by play" />
             <section className="path-card">
               <div className="path-note" style={{ borderTop: 0, paddingTop: 0 }}>
                 Current path: <em style={{ color: 'var(--accent)', fontStyle: 'normal' }}>{(knightPath.current_path || 'true').replace(/_/g, ' ')}</em>.
@@ -592,7 +635,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     return (
       <div>
         <section className="card panel-pad">
-          <SecHead title="Wielded" />
+          <SecHead title="Wielded" sub={classKey === 'monk' ? 'Martial Arts die 1d6' : null} />
           {attacks.map((a, i) => (
             <div key={i} className="atk"><span className="an">{a.name} <span className="meta">{a.meta}</span></span><span className="hit">{modStr(a.hit)}</span><span className="dmg">{a.dmg}</span></div>
           ))}
@@ -610,6 +653,13 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           <section className="card panel-pad">
             <SecHead title="Worn" />
             <div className="kv"><div className="kl">Body</div><div className="prose">{wornArmor?.name || 'Explorer’s clothes — no armor by choice.'}</div></div>
+            <div className="kv"><div className="kl">Bonuses</div><div className="prose">{(() => {
+              if (!wornArmor) return 'No armor by choice.'
+              const qBonus = wornArmor.quality && QUALITY_RANKS[wornArmor.quality]?.armorBonus
+              if (qBonus) return `${cap(wornArmor.quality)} make — +${qBonus} to AC.`
+              if (wornArmor.quality) return `${cap(wornArmor.quality)} make.`
+              return 'No special bonuses.'
+            })()}</div></div>
             {equipment.offHand?.name && <div className="kv"><div className="kl">Off hand</div><div className="prose">{equipment.offHand.name}</div></div>}
           </section>
         </div>
@@ -627,6 +677,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
   const renderInventory = () => {
     const gp = character.gold_gp || 0, sp = character.gold_sp || 0, cp = character.gold_cp || 0
+    const notable = inventory.filter(it => typeof it === 'object' && it && (it.quest || it.category === 'quest' || it.notable))
     return (
       <div className="grid2">
         <section className="card panel-pad">
@@ -636,12 +687,14 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             const nm = (typeof it === 'string') ? it : (it.name || it.label || it.item || 'Item')
             const sub = (typeof it === 'object' && it) ? (it.description || (it.equipped ? 'equipped' : '')) : ''
             const qty = (typeof it === 'object' && it && it.quantity > 1) ? `×${it.quantity}` : ''
+            const wt = (typeof it === 'object' && it && it.weight) ? `${it.weight} lb` : ''
+            const icon = itemIcon(`${nm} ${(typeof it === 'object' && it && it.category) || ''}`, (it && it.equipped) ? 'sword' : 'pack')
             return (
               <div key={i} className="invrow">
-                <span className="ii"><Ic n={it && it.equipped ? 'sword' : 'pack'} /></span>
+                <span className="ii"><Ic n={icon} /></span>
                 <div><div className="inm">{nm}</div>{sub ? <div className="isub">{sub}</div> : null}</div>
                 <span className="iq">{qty}</span>
-                <span className="iw"></span>
+                <span className="iw">{wt}</span>
               </div>
             )
           })}
@@ -653,6 +706,23 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             <section className="card panel-pad">
               <SecHead title="Coin" />
               <div className="kv"><div className="prose">{gp} gold · {sp} silver · {cp} copper</div></div>
+            </section>
+          )}
+          {notable.length > 0 && (
+            <section className="card panel-pad" style={{ marginTop: 14 }}>
+              <SecHead title="Notable" />
+              {notable.map((it, i) => {
+                const nm = it.name || it.label || it.item || 'Item'
+                const why = (it.quest || it.category === 'quest') ? 'quest item' : 'notable'
+                return (
+                  <div key={i} className="invrow">
+                    <span className="ii"><Ic n={itemIcon(`${nm} ${it.category || ''}`, 'token')} /></span>
+                    <div><div className="inm">{nm}</div><div className="isub">{why}</div></div>
+                    <span className="iq"></span>
+                    <span className="iw"></span>
+                  </div>
+                )
+              })}
             </section>
           )}
         </div>
@@ -676,7 +746,9 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           : <div className="placeholder"><div className="ph-glyph">❧</div><h3>No backstory yet</h3><p>Write {character.name}’s story in the wizard, or let it grow through play.</p></div>}
         {vows.length > 0 && (
           <>
-            <SecHead title="What drives them" />
+            <div style={{ marginTop: 26 }}>
+              <SecHead title="What drives them" />
+            </div>
             <div className="vows">
               {vows.map((v, i) => (
                 <div key={i} className={`vow ${v.cls}`}><div className="vl">{v.label}</div><div className="vt">{v.text}</div></div>
@@ -684,6 +756,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             </div>
           </>
         )}
+        <div className="grp-note" style={{ marginTop: 18 }}>Edit the full story — and the people and places woven from it — in the Backstory parser.</div>
       </div>
     )
   }
