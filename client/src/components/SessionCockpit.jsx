@@ -45,7 +45,7 @@ export default function SessionCockpit(props) {
     inputAction, onInputChange, onSend, messagesEndRef,
     combatState, onAdvanceTurn, onEndCombat,
     playerConditions = [], companionConditions = {}, onToggleCondition,
-    spellSlots, gameDate, onRest,
+    spellSlots, gameDate, onRest, scene,
     useSonnet, onToggleModel,
     showQuickRef, setShowQuickRef, showInventory, setShowInventory,
     showConditionPanel, setShowConditionPanel, showCompanionsRef, setShowCompanionsRef,
@@ -62,6 +62,7 @@ export default function SessionCockpit(props) {
   const classData = classesData[classKey]
   const isMonk = classKey === 'monk'
   const charName = character?.nickname || character?.name || 'You'
+  const shortName = character?.nickname || character?.name?.split(' ')[0] || 'You'
   const speed = character?.speed || 30
 
   // ability scores (JSON column, or separate columns as fallback)
@@ -92,11 +93,11 @@ export default function SessionCockpit(props) {
     const out = []
     if (Array.isArray(classData?.features)) classData.features.forEach(f => {
       const s = String(f); const d = s.indexOf(' - ')
-      out.push({ name: d > 0 ? s.slice(0, d) : s, tag: '' })
+      out.push({ name: d > 0 ? s.slice(0, d).trim() : s.trim(), desc: d > 0 ? s.slice(d + 3).trim() : '' })
     })
     const sub = classData?.subclasses?.find(sc => sc.name === character?.subclass)
     if (sub?.featuresByLevel) Object.entries(sub.featuresByLevel).filter(([l]) => parseInt(l) <= level)
-      .forEach(([l, fs]) => (fs || []).forEach(f => out.push({ name: f.name || String(f), tag: `Lv ${l}` })))
+      .forEach(([l, fs]) => (fs || []).forEach(f => out.push({ name: f.name || String(f), desc: f.description || '' })))
     return out.slice(0, 7)
   })()
 
@@ -112,8 +113,9 @@ export default function SessionCockpit(props) {
 
   // narrative prose → paragraphs, with quoted speech tinted gold
   const renderProse = (text) => {
-    const paras = String(text || '').split(/\n\s*\n/).filter(p => p.trim())
-    const src = paras.length ? paras : [String(text || '')]
+    const clean = String(text || '').replace(/\[SCENE:[^\]]+\]\s*/gi, '')
+    const paras = clean.split(/\n\s*\n/).filter(p => p.trim())
+    const src = paras.length ? paras : [clean]
     return src.map((p, i) => (
       <p key={i}>
         {p.split(/("[^"]*")/g).map((seg, j) => /^".*"$/.test(seg)
@@ -152,9 +154,16 @@ export default function SessionCockpit(props) {
   // right-rail active effects from tracked conditions (no fake durations)
   const activeEffects = playerConditions.map(c => ({ name: cap(c), desc: COND_DESC[String(c).toLowerCase().replace(/_\d+$/, '')] || 'Active condition.' }))
 
-  // scene panel: only the data we actually have
-  const scenePlace = activeSession?.startingLocation?.name || activeSession?.startingLocation || null
-  const sceneWhen = gameDate?.displayDate || null
+  // scene panel — from [SCENE] markers the DM emits, plus what we already have
+  const scenePlace = scene?.place || activeSession?.startingLocation?.name || (typeof activeSession?.startingLocation === 'string' ? activeSession.startingLocation : null) || null
+  const sceneWhen = scene?.when || gameDate?.displayDate || null
+  const sceneRows = [
+    ['Place', scenePlace],
+    ['Light', scene?.light],
+    ['Weather', scene?.weather],
+    ['Mood', scene?.mood],
+    ['When', sceneWhen]
+  ].filter(([, v]) => v)
 
   return (
     <div className="hearth cockpit-shell app-bg">
@@ -209,7 +218,7 @@ export default function SessionCockpit(props) {
               <div className={`pm you${combatState && combatState.turnOrder?.[combatState.currentTurn]?.type === 'player' ? ' active' : ''}`}>
                 <div className="mono-portrait d">{monogram(character?.name)}</div>
                 <div>
-                  <div className="pm-name"><span className="n">{charName}</span><span className="r">you · L{level} {classKey}</span></div>
+                  <div className="pm-name"><span className="n">{shortName}</span><span className="r">you · L{level} {classKey}</span></div>
                   <div className="pm-meta">HP {curHp}/{maxHp} · AC {ac}</div>
                   <div className={`hpbar ${hpKind(curHp, maxHp)}`}><div className="fill" style={{ width: `${pct(curHp, maxHp)}%` }} /></div>
                   {playerConditions.length > 0 && (
@@ -243,15 +252,16 @@ export default function SessionCockpit(props) {
             </div>
           </section>
 
-          {(scenePlace || sceneWhen) && (
+          {sceneRows.length > 0 && (
             <section className="panel">
               <div className="panel-head">
                 <svg className="ph-ic"><use href="#i-pin" /></svg>
                 <span className="ph-t">This scene</span>
               </div>
               <div className="panel-body">
-                {scenePlace && <div className="env-row"><span className="k">Place</span><span className="v">{scenePlace}</span></div>}
-                {sceneWhen && <div className="env-row"><span className="k">When</span><span className="v">{sceneWhen}</span></div>}
+                {sceneRows.map(([k, v], i) => (
+                  <div key={i} className="env-row"><span className="k">{k}</span><span className="v">{v}</span></div>
+                ))}
               </div>
             </section>
           )}
@@ -313,7 +323,7 @@ export default function SessionCockpit(props) {
           <section className="panel">
             <div className="panel-head">
               <svg className="ph-ic"><use href="#i-shield" /></svg>
-              <span className="ph-t">{charName}</span>
+              <span className="ph-t">{shortName}</span>
               <span className="ph-sub">L{level} {classKey}</span>
             </div>
             <div className="panel-body">
@@ -374,7 +384,9 @@ export default function SessionCockpit(props) {
               <div className="panel-head"><svg className="ph-ic"><use href="#i-bolt" /></svg><span className="ph-t">{isMonk ? 'Ki abilities' : 'Class features'}</span></div>
               <div className="panel-body">
                 {abilities.map((a, i) => (
-                  <div key={i} className="abil-row"><span className="an">{a.name}</span>{a.tag ? <span className="ac">{a.tag}</span> : null}</div>
+                  <div key={i} className="abil-row" style={{ alignItems: 'flex-start' }}>
+                    <div><div className="an">{a.name}</div>{a.desc ? <div className="ades">{a.desc}</div> : null}</div>
+                  </div>
                 ))}
               </div>
             </section>

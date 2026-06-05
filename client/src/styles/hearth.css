@@ -711,3 +711,8 @@
 .hearth .cpv .cpt { display: flex; gap: 6px; margin-top: 8px; }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* cockpit tweaks — ability descriptions + party-name truncation */
+.hearth .abil-row .ades { font-family: var(--serif); font-size: 13px; color: var(--ink-3); line-height: 1.4; margin-top: 3px; }
+.hearth .pm-name { min-width: 0; }
+.hearth .pm-name .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+

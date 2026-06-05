@@ -1465,6 +1465,25 @@ router.post('/:sessionId/message', async (req, res) => {
 
     // Strip all system markers from displayed narrative
     let cleanNarrative = result.narrative;
+
+    // [SCENE] — lightweight scene descriptor for the cockpit "This scene" panel.
+    // Display-only (no side effect); parse key=value pairs, then strip the tag.
+    let scene = null;
+    const sceneMatch = result.narrative && result.narrative.match(/\[SCENE:\s*([^\]]+)\]/i);
+    if (sceneMatch) {
+      scene = {};
+      sceneMatch[1].split(';').forEach(pair => {
+        const eq = pair.indexOf('=');
+        if (eq > 0) {
+          const k = pair.slice(0, eq).trim().toLowerCase();
+          const v = pair.slice(eq + 1).trim();
+          if (k && v) scene[k] = v;
+        }
+      });
+      if (Object.keys(scene).length === 0) scene = null;
+    }
+    cleanNarrative = cleanNarrative.replace(/\[SCENE:[^\]]+\]\s*/gi, '').trim();
+
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_SHOP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
@@ -1678,6 +1697,7 @@ router.post('/:sessionId/message', async (req, res) => {
 
     res.json({
       narrative: cleanNarrative,
+      scene: scene || undefined,
       messageCount: result.messages.length,
       recruitment: recruitmentData,
       downtime: downtimeDetected,

@@ -115,6 +115,16 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Combat tracker state
   const [combatState, setCombatState] = useState(null);
 
+  // Scene descriptor for the cockpit "This scene" panel (from [SCENE] markers)
+  const [sceneState, setSceneState] = useState(null);
+  const parseSceneTag = (text) => {
+    const m = (text || '').match(/\[SCENE:\s*([^\]]+)\]/i);
+    if (!m) return null;
+    const sc = {};
+    m[1].split(';').forEach(p => { const e = p.indexOf('='); if (e > 0) { const k = p.slice(0, e).trim().toLowerCase(); const v = p.slice(e + 1).trim(); if (k && v) sc[k] = v; } });
+    return Object.keys(sc).length ? sc : null;
+  };
+
   // Condition tracking state
   const [playerConditions, setPlayerConditions] = useState([]);
   const [companionConditions, setCompanionConditions] = useState({});
@@ -672,9 +682,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         setGameDate(data.gameDate);
       }
 
+      setSceneState(parseSceneTag(data.openingNarrative));
       setMessages([{
         type: 'narrative',
-        content: data.openingNarrative
+        content: (data.openingNarrative || '').replace(/\[SCENE:[^\]]+\]\s*/gi, '').trim()
       }]);
 
       setSessionEnded(false);
@@ -738,6 +749,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
 
       setMessages(prev => [...prev, { type: 'narrative', content: data.narrative }]);
+      if (data.scene) setSceneState(data.scene);
 
       // Check for recruitment detection
       if (data.recruitment?.detected) {
@@ -1293,7 +1305,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
         combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}
         playerConditions={playerConditions} companionConditions={companionConditions} onToggleCondition={toggleCondition}
-        spellSlots={spellSlots} gameDate={gameDate} onRest={takeRest}
+        spellSlots={spellSlots} gameDate={gameDate} onRest={takeRest} scene={sceneState}
         useSonnet={useSonnet} onToggleModel={() => updateUseSonnet(!useSonnet)}
         showQuickRef={showQuickRef} setShowQuickRef={setShowQuickRef}
         showInventory={showInventory} setShowInventory={setShowInventory}

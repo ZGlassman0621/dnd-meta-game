@@ -1900,6 +1900,14 @@ Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitate
 
 Describe conditions physically (pale and stumbling if poisoned, trembling if frightened).`);
 
+  blocks.push(`──────────── SCENE SNAPSHOT ────────────
+[SCENE: place=...; light=...; weather=...; mood=...] — the LAST line of every response.
+A quiet display tag that fills the player's "This scene" panel. It never appears in your prose; the system strips it.
+Examples:
+[SCENE: place=Fishmarket; light=failing; weather=salt wind; mood=wary, quiet]
+[SCENE: place=Candlekeep library; light=lamplit; weather=still; mood=hushed, watchful]
+Keep each value short (1–4 words). Update it as the scene changes; always include it.`);
+
   blocks.push(`──────────── COMPANION RECRUITMENT (rare) ────────────
 Only for NEW NPCs with genuine personal stakes — NEVER for existing companions expressing loyalty.
 
