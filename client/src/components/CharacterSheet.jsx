@@ -50,6 +50,7 @@ const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV' }
 
 const Ic = ({ n, style }) => <svg className="ic" style={style}><use href={`#i-${n}`} /></svg>
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '')
+const cap = (s) => (s == null || s === '') ? s : String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 const modStr = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`)
 const parseJson = (field, dflt) => {
   if (field == null) return dflt
@@ -219,7 +220,12 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     }
     return ac
   }
-  const ac = character.armor_class ?? calcEquipmentAC()
+  const ac = (() => {
+    const noArmor = !equipment.armor
+    if (noArmor && classKey === 'monk') return 10 + abilityMod('dex') + abilityMod('wis')
+    if (noArmor && classKey === 'barbarian') return 10 + abilityMod('dex') + abilityMod('con')
+    return (character.armor_class && character.armor_class > 0) ? character.armor_class : calcEquipmentAC()
+  })()
 
   const weaponAbilityMod = (weapon, wd) => {
     const strMod = abilityMod('str'), dexMod = abilityMod('dex')
@@ -291,15 +297,19 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   const deityName = character.faith ? (deitiesData[character.faith]?.name || deitiesData[character.faith]?.title || character.faith.replace(/_/g, ' ')) : null
   const themeName = theme?.theme_name
   const subtitleParts = [
-    character.subrace || character.race,
-    [character.class, character.subclass].filter(Boolean).join(' · '),
-    themeName || (character.background ? character.background : null)
+    cap(character.subrace || character.race),
+    [cap(character.class), cap(character.subclass)].filter(Boolean).join(' · '),
+    themeName || (character.background ? cap(character.background) : null)
   ].filter(Boolean)
 
-  const hpRatio = character.max_hp ? (character.current_hp / character.max_hp) : 1
+  const hitDie = classData?.hitDie || 8
+  const conMod = abilityMod('con')
+  const computedMaxHp = Math.max(1, hitDie + conMod + Math.max(0, level - 1) * (Math.floor(hitDie / 2) + 1 + conMod))
+  const maxHp = character.max_hp > 0 ? character.max_hp : computedMaxHp
+  const curHp = character.current_hp > 0 ? character.current_hp : maxHp
+  const hpRatio = maxHp ? curHp / maxHp : 1
   const hpClass = hpRatio > 0.5 ? 'hp' : hpRatio > 0.25 ? 'warn' : 'bad'
   const speed = character.speed || raceData?.speed || 30
-  const hitDie = classData?.hitDie || 8
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: 'brain' },
@@ -309,7 +319,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     ...(isCaster ? [{ id: 'spells', label: 'Spells', icon: 'sparkles' }] : []),
     { id: 'equipment', label: 'Equipment', icon: 'sword' },
     { id: 'inventory', label: 'Inventory', icon: 'pack', count: inventory.length },
-    { id: 'background', label: 'Background', icon: 'scroll' }
+    { id: 'background', label: 'Personal History', icon: 'scroll' }
   ]
 
   const setTab = (id) => { setActiveTab(id); const el = document.querySelector('.hearth'); if (el) el.scrollTo({ top: 0 }) }
@@ -395,7 +405,6 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           ))}
         </section>
       </div>
-      <div className="footnote">{character.name} · level {level} {character.class}{character.subclass ? ` · ${character.subclass}` : ''}</div>
     </div>
   )
 
@@ -488,7 +497,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     return (
       <div>
         <section className="theme-hero">
-          <div className="th-eyebrow">Theme · replaces background</div>
+          <div className="th-eyebrow">Theme</div>
           <h2>{themeName}</h2>
           {theme.identity ? <div className="th-desc">{theme.identity}</div> : null}
         </section>
@@ -497,7 +506,6 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
         <div className="tiers" style={{ marginBottom: 26 }}>
           {tiers.map(t => (
             <div key={t.n} className={`tier ${t.done ? 'done' : t.n === firstNotDone ? 'next' : 'locked'}`}>
-              {t.done ? <svg className="check"><use href="#i-check" /></svg> : null}
               <div className="tnum">Tier {ROMAN[t.n]}<span className="lv">Lv {t.unlockLv}</span></div>
               <div className="tname">{t.name || `Tier ${ROMAN[t.n]}`}</div>
               <div className="tab-ab">{t.ability || 'An ability revealed as the theme deepens.'}</div>
@@ -624,27 +632,29 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
         <section className="card panel-pad">
           <SecHead title="Carried" sub={`${inventory.length} item${inventory.length === 1 ? '' : 's'}`} />
           {inventory.length === 0 && <div className="grp-note">Nothing carried yet.</div>}
-          {inventory.map((it, i) => (
-            <div key={i} className="invrow">
-              <span className="ii"><Ic n={it.equipped ? 'sword' : 'pack'} /></span>
-              <div><div className="inm">{it.name}</div>{it.equipped ? <div className="isub">equipped</div> : null}</div>
-              <span className="iq">{it.quantity > 1 ? `×${it.quantity}` : ''}</span>
-              <span className="iw"></span>
-            </div>
-          ))}
+          {inventory.map((it, i) => {
+            const nm = (typeof it === 'string') ? it : (it.name || it.label || it.item || 'Item')
+            const sub = (typeof it === 'object' && it) ? (it.description || (it.equipped ? 'equipped' : '')) : ''
+            const qty = (typeof it === 'object' && it && it.quantity > 1) ? `×${it.quantity}` : ''
+            return (
+              <div key={i} className="invrow">
+                <span className="ii"><Ic n={it && it.equipped ? 'sword' : 'pack'} /></span>
+                <div><div className="inm">{nm}</div>{sub ? <div className="isub">{sub}</div> : null}</div>
+                <span className="iq">{qty}</span>
+                <span className="iw"></span>
+              </div>
+            )
+          })}
         </section>
         <div>
           <div className="goldcard"><Ic n="coin" style={{ width: 17, height: 17, color: 'var(--accent)' }} /><span className="gl">Gold</span><span className="gv">{gp} gp</span></div>
+          <div className="grp-note" style={{ margin: '0 0 14px' }}>Carry capacity {(abilities.str ?? 10) * 15} lb (Strength {abilities.str ?? 10}).</div>
           {(sp > 0 || cp > 0) && (
-            <section className="card panel-pad" style={{ marginBottom: 14 }}>
+            <section className="card panel-pad">
               <SecHead title="Coin" />
               <div className="kv"><div className="prose">{gp} gold · {sp} silver · {cp} copper</div></div>
             </section>
           )}
-          <section className="card panel-pad">
-            <SecHead title="Carrying" />
-            <div className="grp-note" style={{ margin: 0 }}>Items the Dungeon Master grants you in play appear here automatically. Strength {abilities.str} · carry up to {abilities.str * 15} lb.</div>
-          </section>
         </div>
       </div>
     )
@@ -708,7 +718,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
               {character.nickname ? <><span className="sep">·</span><span style={{ color: 'var(--ink-3)' }}>{character.nickname}</span></> : null}
             </div>
             <div className="id-pills">
-              <span className={`ipill ${hpClass}`}><span className="l">HP</span><span className="v">{character.current_hp ?? 0}<span className="mx"> / {character.max_hp ?? 0}</span></span></span>
+              <span className={`ipill ${hpClass}`}><span className="l">HP</span><span className="v">{curHp}<span className="mx"> / {maxHp}</span></span></span>
               <span className="ipill"><span className="l">AC</span><span className="v">{ac}</span></span>
               <span className="ipill"><span className="l">Init</span><span className="v">{modStr(abilityMod('dex'))}</span></span>
               <span className="ipill"><span className="l">Speed</span><span className="v">{speed} ft</span></span>
