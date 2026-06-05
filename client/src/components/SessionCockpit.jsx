@@ -20,6 +20,7 @@ const cap = (s) => (s == null || s === '') ? s : String(s).replace(/_/g, ' ').re
 const hpKind = (cur, max) => { const r = max ? cur / max : 1; return r > 0.5 ? '' : r > 0.25 ? 'warn' : 'bad' }
 const monogram = (name) => (name || '?').trim().charAt(0).toUpperCase()
 const pct = (cur, max) => max ? Math.max(0, Math.min(100, (cur / max) * 100)) : 100
+const parseJson = (v, dflt) => { if (v == null) return dflt; if (typeof v !== 'string') return v; try { return JSON.parse(v) } catch { return dflt } }
 
 // short descriptions for the conditions we track, for the Active-effects rail
 const COND_DESC = {
@@ -62,21 +63,41 @@ export default function SessionCockpit(props) {
   const isMonk = classKey === 'monk'
   const charName = character?.nickname || character?.name || 'You'
   const speed = character?.speed || 30
-  const ac = character?.armor_class ?? 10
-  const curHp = character?.current_hp ?? 0
-  const maxHp = character?.max_hp ?? 0
+
+  // ability scores (JSON column, or separate columns as fallback)
+  const abil = parseJson(character?.ability_scores, null) || {
+    str: character?.strength, dex: character?.dexterity, con: character?.constitution,
+    int: character?.intelligence, wis: character?.wisdom, cha: character?.charisma
+  }
+  const abilMod = (k) => Math.floor((((abil?.[k]) ?? 10) - 10) / 2)
+  const hitDie = classData?.hitDie || 8
+  const conMod = abilMod('con')
+  // HP / AC fall back to computed values when the stored ones are unset (0/0, AC 10)
+  const computedMaxHp = Math.max(1, hitDie + conMod + Math.max(0, level - 1) * (Math.floor(hitDie / 2) + 1 + conMod))
+  const maxHp = character?.max_hp > 0 ? character.max_hp : computedMaxHp
+  const curHp = character?.current_hp > 0 ? character.current_hp : maxHp
+  const ac = (() => {
+    if (isMonk) return 10 + abilMod('dex') + abilMod('wis')
+    if (classKey === 'barbarian') return 10 + abilMod('dex') + abilMod('con')
+    return (character?.armor_class && character.armor_class > 0) ? character.armor_class : 10 + abilMod('dex')
+  })()
 
   const actionLabel = secondCharacter
     ? `${charName} & ${secondCharacter.nickname || secondCharacter.name}`
     : charName
 
-  // class abilities for the right rail (real data from class features)
+  // class abilities for the right rail — classes.json stores a flat `features`
+  // array of "Name - description" strings; subclasses use featuresByLevel.
   const abilities = (() => {
-    const fbl = classData?.featuresByLevel
-    if (!fbl) return []
     const out = []
-    Object.entries(fbl).filter(([l]) => parseInt(l) <= level).forEach(([l, fs]) => (fs || []).forEach(f => out.push({ name: f.name, lvl: parseInt(l) })))
-    return out.slice(-6)
+    if (Array.isArray(classData?.features)) classData.features.forEach(f => {
+      const s = String(f); const d = s.indexOf(' - ')
+      out.push({ name: d > 0 ? s.slice(0, d) : s, tag: '' })
+    })
+    const sub = classData?.subclasses?.find(sc => sc.name === character?.subclass)
+    if (sub?.featuresByLevel) Object.entries(sub.featuresByLevel).filter(([l]) => parseInt(l) <= level)
+      .forEach(([l, fs]) => (fs || []).forEach(f => out.push({ name: f.name || String(f), tag: `Lv ${l}` })))
+    return out.slice(0, 7)
   })()
 
   const closeAll = () => { setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false) }
@@ -353,7 +374,7 @@ export default function SessionCockpit(props) {
               <div className="panel-head"><svg className="ph-ic"><use href="#i-bolt" /></svg><span className="ph-t">{isMonk ? 'Ki abilities' : 'Class features'}</span></div>
               <div className="panel-body">
                 {abilities.map((a, i) => (
-                  <div key={i} className="abil-row"><span className="an">{a.name}</span><span className="ac">Lv {a.lvl}</span></div>
+                  <div key={i} className="abil-row"><span className="an">{a.name}</span>{a.tag ? <span className="ac">{a.tag}</span> : null}</div>
                 ))}
               </div>
             </section>
