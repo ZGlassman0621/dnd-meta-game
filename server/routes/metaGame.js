@@ -22,7 +22,6 @@ import {
   getTimeOfDay,
   formatGameTime
 } from '../services/metaGame.js';
-import { processCharacterTimeAdvance, getCharacterWorldView } from '../services/livingWorldService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -372,7 +371,6 @@ router.post('/process/:characterId', async (req, res) => {
 /**
  * POST /api/meta-game/advance-time/:characterId
  * Manually advance in-game time (for montage/time skip scenarios)
- * Also triggers living world tick to advance factions and events
  */
 router.post('/advance-time/:characterId', async (req, res) => {
   try {
@@ -403,15 +401,6 @@ router.post('/advance-time/:characterId', async (req, res) => {
 
     const newDate = dayToHarptosDate(newTime.day, newTime.year);
 
-    // Process living world tick (faction goals, world events)
-    let livingWorldResults = null;
-    try {
-      livingWorldResults = await processCharacterTimeAdvance(req.params.characterId, totalHours);
-    } catch (worldError) {
-      console.error('Living world tick error (non-fatal):', worldError);
-      // Continue even if living world tick fails
-    }
-
     res.json({
       advanced: {
         hours: totalHours,
@@ -422,8 +411,7 @@ router.post('/advance-time/:characterId', async (req, res) => {
         hour: newTime.hour,
         timeOfDay: getTimeOfDay(newTime.hour),
         formattedTime: formatGameTime(newTime.hour)
-      },
-      livingWorld: livingWorldResults
+      }
     });
   } catch (error) {
     handleServerError(res, error, 'advance time');
@@ -546,23 +534,6 @@ router.post('/quick-activities/:characterId', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'add quick activities');
-  }
-});
-
-/**
- * GET /api/meta-game/world-view/:characterId
- * Get the living world state visible to a character
- * Includes visible events, faction standings, and known faction goals
- */
-router.get('/world-view/:characterId', async (req, res) => {
-  try {
-    const worldView = await getCharacterWorldView(req.params.characterId);
-    if (!worldView) {
-      return res.status(404).json({ error: 'Character not found or has no campaign' });
-    }
-    res.json(worldView);
-  } catch (error) {
-    handleServerError(res, error, 'get world view');
   }
 });
 

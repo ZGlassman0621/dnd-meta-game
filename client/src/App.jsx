@@ -1,37 +1,17 @@
 import { useState, useEffect, lazy, Suspense, Component } from 'react'
 import CharacterManager from './components/CharacterManager'
-import AdventureManager from './components/AdventureManager'
-import ActiveAdventure from './components/ActiveAdventure'
-import AdventureHistory from './components/AdventureHistory'
 import CharacterSettings from './components/CharacterSettings'
 import CharacterSheet from './components/CharacterSheet'
-import Downtime from './components/Downtime'
 import LevelUpPage from './components/LevelUpPage'
-import MetaGameDashboard from './components/MetaGameDashboard'
 import CompanionsPage from './components/CompanionsPage'
 import CampaignsPage from './components/CampaignsPage'
 import BackstoryParserPage from './components/BackstoryParserPage'
 import NavigationMenu from './components/NavigationMenu'
-import LoginPage from './components/LoginPage'
 
 // Lazy-loaded pages (loaded on demand to reduce initial bundle)
 const DMSession = lazy(() => import('./components/DMSession'))
 const CampaignPlanPage = lazy(() => import('./components/CampaignPlanPage'))
-const NPCGenerator = lazy(() => import('./components/NPCGenerator'))
-const FactionsPage = lazy(() => import('./components/FactionsPage'))
-const WorldEventsPage = lazy(() => import('./components/WorldEventsPage'))
-const TravelPage = lazy(() => import('./components/TravelPage'))
-const NPCRelationshipsPage = lazy(() => import('./components/NPCRelationshipsPage'))
-const LivingWorldPage = lazy(() => import('./components/LivingWorldPage'))
-const QuestsPage = lazy(() => import('./components/QuestsPage'))
-const LocationsPage = lazy(() => import('./components/LocationsPage'))
 const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstoryPage'))
-const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
-const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
-const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
-const DMMode = lazy(() => import('./components/DMMode'))
-const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
-const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 // Phase 4a SC-4a.4 — diagnostic surface for AI behavior. Lazy-loaded;
 // only opens when user navigates to it via the dashboard.
 const AIBehaviorDebugPage = lazy(() => import('./components/AIBehaviorDebugPage'))
@@ -90,11 +70,12 @@ class ErrorBoundary extends Component {
 }
 
 function App() {
-  const [user, setUser] = useState(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  // Auth/login was removed for the single-player MVP — a no-op server
+  // middleware resolves one local user. Keep a truthy placeholder user so
+  // downstream props (NavigationMenu) still receive a valid object.
+  const [user] = useState({ username: 'local' })
   const [characters, setCharacters] = useState([])
   const [selectedCharacter, setSelectedCharacter] = useState(null)
-  const [activeAdventure, setActiveAdventure] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState(null) // Single state for current view
   // Phase 3.5 — Settings overlay open state (dashboard branch). HomeFlow
@@ -133,6 +114,9 @@ function App() {
   const [llmStatus, setLlmStatus] = useState(null)
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
+  // NOTE: hasStartedAdventure is kept — it drives the "Play" card copy
+  // (Continue vs Start). It is derived from DM-session history, not the
+  // removed odds-based adventure system.
 
   // Sonnet vs Opus selector. Opus is the production default (v1.0.99 — see
   // DECISION_LOG "Opus as production default for main DM session continuations").
@@ -155,30 +139,6 @@ function App() {
   // time, so a developer can still trigger lean by setting that key in the
   // browser console for prompt-design experiments. The toggle is just no
   // longer surfaced to users.)
-
-  // Check for existing auth token on mount
-  useEffect(() => {
-    const token = localStorage.getItem('auth_token')
-    if (!token) {
-      setAuthLoading(false)
-      return
-    }
-    fetch('/api/auth/me', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => setUser(data.user))
-      .catch(() => localStorage.removeItem('auth_token'))
-      .finally(() => setAuthLoading(false))
-  }, [])
-
-  const handleLogout = () => {
-    localStorage.removeItem('auth_token')
-    setUser(null)
-    setCharacters([])
-    setSelectedCharacter(null)
-    setActiveView(null)
-  }
 
   // Navigation helper
   const navigateTo = (view) => {
@@ -209,14 +169,6 @@ function App() {
       setLlmStatus({ available: false, error: err.message })
     }
   }
-
-  useEffect(() => {
-    if (selectedCharacter) {
-      checkActiveAdventure()
-      const interval = setInterval(checkActiveAdventure, 30000) // Check every 30 seconds
-      return () => clearInterval(interval)
-    }
-  }, [selectedCharacter])
 
   // Check if selected character has a campaign plan ready + has past sessions
   useEffect(() => {
@@ -256,23 +208,6 @@ function App() {
     }
   }
 
-  const checkActiveAdventure = async () => {
-    if (!selectedCharacter) return
-
-    try {
-      const response = await fetch(`/api/adventure/status/${selectedCharacter.id}`)
-      const data = await response.json()
-
-      if (data.status === 'active' || data.status === 'completed') {
-        setActiveAdventure(data)
-      } else {
-        setActiveAdventure(null)
-      }
-    } catch (error) {
-      console.error('Error checking adventure status:', error)
-    }
-  }
-
   const handleCharacterCreated = (character) => {
     setCharacters([character, ...characters])
     setSelectedCharacter(character)
@@ -283,18 +218,8 @@ function App() {
     setSelectedCharacter(character)
   }
 
-  const handleAdventureStarted = () => {
-    checkActiveAdventure()
-  }
-
-  const handleAdventureClaimed = () => {
-    setActiveAdventure(null)
-    loadCharacters()
-  }
-
   const handleSettingsChanged = () => {
     loadCharacters()
-    checkActiveAdventure()
   }
 
   const handleEditInWizard = (character) => {
@@ -319,18 +244,6 @@ function App() {
     setSelectedCharacter(updatedCharacter)
     setShowLevelUp(false)
     setActiveView('showCharacterSheet')
-  }
-
-  if (authLoading) {
-    return (
-      <div className="app">
-        <div className="loading">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <LoginPage onLogin={setUser} />
   }
 
   if (loading) {
@@ -474,20 +387,12 @@ function App() {
           hasCharacter={!!selectedCharacter}
           onHome={goHome}
           user={user}
-          onLogout={handleLogout}
         />
       </header>
 
       <ErrorBoundary>
       <Suspense fallback={<div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>Loading...</div>}>
-      {activeView === 'showDMMode' ? (
-        <DMMode onBack={goHome} />
-      ) : activeView === 'showNPCGenerator' ? (
-        <NPCGenerator
-          onBack={goHome}
-          character={selectedCharacter}
-        />
-      ) : showLevelUp && selectedCharacter ? (
+      {showLevelUp && selectedCharacter ? (
         <LevelUpPage
           character={selectedCharacter}
           onLevelUp={handleLevelUpComplete}
@@ -516,44 +421,6 @@ function App() {
           onBack={goHome}
           defaultCharacterId={selectedCharacter?.id || null}
         />
-      ) : activeView === 'showDowntime' && selectedCharacter ? (
-        <div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-            <div>
-              <Downtime
-                character={selectedCharacter}
-                onCharacterUpdated={handleCharacterUpdated}
-              />
-            </div>
-            <div>
-              {activeAdventure && activeAdventure.status !== 'none' ? (
-                <ActiveAdventure
-                  adventure={activeAdventure}
-                  character={selectedCharacter}
-                  onAdventureClaimed={handleAdventureClaimed}
-                  onAdventureComplete={checkActiveAdventure}
-                />
-              ) : (
-                <AdventureManager
-                  character={selectedCharacter}
-                  onAdventureStarted={handleAdventureStarted}
-                />
-              )}
-            </div>
-          </div>
-          <MetaGameDashboard
-            character={selectedCharacter}
-            onCharacterUpdated={() => loadCharacters()}
-          />
-          <div style={{ marginTop: '1.5rem' }}>
-            <AdventureHistory character={selectedCharacter} />
-          </div>
-        </div>
-      ) : activeView === 'showMetaGame' && selectedCharacter ? (
-        <MetaGameDashboard
-          character={selectedCharacter}
-          onCharacterUpdated={() => loadCharacters()}
-        />
       ) : activeView === 'showCompanions' && selectedCharacter ? (
         <CompanionsPage
           character={selectedCharacter}
@@ -563,30 +430,6 @@ function App() {
         <BackstoryParserPage
           character={selectedCharacter}
           onCharacterUpdated={handleCharacterUpdated}
-        />
-      ) : activeView === 'showFactions' && selectedCharacter ? (
-        <FactionsPage
-          character={selectedCharacter}
-          onCharacterUpdated={() => loadCharacters()}
-        />
-      ) : activeView === 'showWorldEvents' && selectedCharacter ? (
-        <WorldEventsPage
-          character={selectedCharacter}
-          onCharacterUpdated={() => loadCharacters()}
-        />
-      ) : activeView === 'showTravel' && selectedCharacter ? (
-        <TravelPage
-          campaignId={selectedCharacter.campaign_id}
-          characters={characters}
-          locations={[]}
-        />
-      ) : activeView === 'showNPCRelationships' && selectedCharacter ? (
-        <NPCRelationshipsPage
-          character={selectedCharacter}
-        />
-      ) : activeView === 'showLivingWorld' && selectedCharacter ? (
-        <LivingWorldPage
-          character={selectedCharacter}
         />
       ) : activeView === 'showCampaigns' && selectedCharacter ? (
         <CampaignsPage
@@ -602,43 +445,9 @@ function App() {
         <CampaignPlanPage
           character={selectedCharacter}
         />
-      ) : activeView === 'showPlayerJournal' && selectedCharacter ? (
-        <PlayerJournalPage
-          character={selectedCharacter}
-          onBack={() => navigateTo('home')}
-        />
-      ) : activeView === 'showQuests' && selectedCharacter ? (
-        <QuestsPage
-          character={selectedCharacter}
-        />
-      ) : activeView === 'showLocations' && selectedCharacter ? (
-        <LocationsPage
-          character={selectedCharacter}
-        />
       ) : activeView === 'showBackstories' && selectedCharacter ? (
         <CompanionBackstoryPage
           characterId={selectedCharacter.id}
-        />
-      ) : activeView === 'showNarrativeQueue' && selectedCharacter ? (
-        <NarrativeQueuePage
-          character={selectedCharacter}
-        />
-      ) : activeView === 'showMythicProgression' && selectedCharacter ? (
-        <MythicProgressionPage
-          character={selectedCharacter}
-          onCharacterUpdated={(char) => {
-            setSelectedCharacter(char)
-            loadCharacters()
-          }}
-        />
-      ) : activeView === 'showPartyBase' && selectedCharacter ? (
-        <PartyBasePage
-          characterId={selectedCharacter.id}
-          campaignId={selectedCharacter.campaign_id}
-        />
-      ) : activeView === 'showGeneration' && selectedCharacter ? (
-        <GenerationControlsPage
-          character={selectedCharacter}
         />
       ) : activeView === 'showSettings' && selectedCharacter ? (
         <CharacterSettings
@@ -721,12 +530,7 @@ function App() {
                 { key: 'showParsedBackstory', label: 'Backstory Parser', desc: 'AI-parse your backstory into structured elements', color: '#e67e22' },
                 { key: 'showCampaigns', label: 'Campaigns', desc: 'Create campaigns with auto-generated world plans', color: '#9b59b6' },
                 { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
-                { key: 'showPlayerJournal', label: 'Player Journal', desc: 'NPCs met, places visited, faction standings, and quests', color: '#10b981' },
                 { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
-                { key: 'showDMMode', label: 'DM Mode', desc: 'You DM for 4 AI player characters', color: '#e67e22' },
-                { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
-                { key: 'showMythicProgression', label: 'Mythic Progression', desc: 'Mythic tiers, paths, piety, epic boons, and legendary items', color: '#ff6b35' },
-                { key: 'showPartyBase', label: 'Stronghold', desc: 'Manage your base, upgrades, staff, projects, and notoriety', color: '#b45309' },
                 { key: 'showSettings', label: 'Settings', desc: 'Configure character preferences and options', color: '#95a5a6' },
                 // Phase 4a SC-4a.4 — AI Behavior debug page is reached via
                 // the appbar link (right side, beside Settings). Removed

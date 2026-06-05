@@ -9,7 +9,6 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
-import { createMerchantsFromPlan } from './merchantService.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
 
@@ -80,13 +79,6 @@ export async function generateCampaignPlan(campaignId, characterId) {
     'UPDATE campaigns SET campaign_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [JSON.stringify(plan), campaignId]
   );
-
-  // Create persistent merchant inventory entries from the plan
-  try {
-    await createMerchantsFromPlan(campaignId, plan);
-  } catch (e) {
-    console.error('Error creating merchants from plan:', e.message);
-  }
 
   return plan;
 }

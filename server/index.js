@@ -6,34 +6,15 @@ import { dirname, join } from 'path';
 import { initDatabase } from './database.js';
 import characterRoutes from './routes/character.js';
 import nicknameRoutes from './routes/nickname.js';
-import adventureRoutes from './routes/adventure.js';
 import uploadRoutes from './routes/upload.js';
 import dmSessionRoutes from './routes/dmSession.js';
 import npcRoutes from './routes/npc.js';
-import downtimeRoutes from './routes/downtime.js';
 import companionRoutes from './routes/companion.js';
 import metaGameRoutes from './routes/metaGame.js';
-import storyThreadRoutes from './routes/storyThreads.js';
 import campaignRoutes from './routes/campaign.js';
-import locationRoutes from './routes/location.js';
-import questRoutes from './routes/quest.js';
-import narrativeQueueRoutes from './routes/narrativeQueue.js';
-import factionRoutes from './routes/faction.js';
-import worldEventRoutes from './routes/worldEvent.js';
-import travelRoutes from './routes/travel.js';
 import npcRelationshipRoutes from './routes/npcRelationship.js';
-import livingWorldRoutes from './routes/livingWorld.js';
-import dmModeRoutes from './routes/dmMode.js';
-import achievementRoutes from './routes/achievement.js';
 import chronicleRoutes from './routes/chronicle.js';
-import weatherRoutes from './routes/weather.js';
-import survivalRoutes from './routes/survival.js';
-import craftingRoutes from './routes/crafting.js';
-import mythicRoutes from './routes/mythic.js';
-import partyBaseRoutes from './routes/partyBase.js';
 import progressionRoutes from './routes/progression.js';
-import merchantRoutes from './routes/merchant.js';
-import preludeRoutes from './routes/prelude.js';
 import aiBehaviorRoutes from './routes/aiBehavior.js';
 import authRoutes from './routes/auth.js';
 import authMiddleware from './middleware/auth.js';
@@ -61,50 +42,32 @@ app.use(express.static(clientDistPath));
 // Initialize database (async for Turso cloud)
 await initDatabase();
 
-// Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
+// Initialize narrative systems (event handlers for chronicles, companions, etc.)
 await initNarrativeSystems();
 
-// Public routes (no authentication required)
+// Public routes (no authentication required). Login is disabled in the MVP, but
+// the auth routes stay mounted as harmless no-ops for back-compat.
 app.use('/api/auth', authRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
 });
 
-// Auth middleware for all other /api routes
+// Auth middleware resolves the single local user (login disabled in the MVP).
 app.use('/api', authMiddleware);
 
 // Protected routes
 app.use('/api/character', characterRoutes);
 app.use('/api/character', nicknameRoutes);
-app.use('/api/adventure', adventureRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/dm-session', dmSessionRoutes);
 app.use('/api/npc', npcRoutes);
-app.use('/api/downtime', downtimeRoutes);
 app.use('/api/companion', companionRoutes);
 app.use('/api/meta-game', metaGameRoutes);
-app.use('/api/story-threads', storyThreadRoutes);
 app.use('/api/campaign', campaignRoutes);
-app.use('/api/location', locationRoutes);
-app.use('/api/quest', questRoutes);
-app.use('/api/narrative-queue', narrativeQueueRoutes);
-app.use('/api/faction', factionRoutes);
-app.use('/api/world-event', worldEventRoutes);
-app.use('/api/travel', travelRoutes);
 app.use('/api/npc-relationship', npcRelationshipRoutes);
-app.use('/api/living-world', livingWorldRoutes);
-app.use('/api/dm-mode', dmModeRoutes);
-app.use('/api/achievement', achievementRoutes);
 app.use('/api/chronicle', chronicleRoutes);
-app.use('/api/weather', weatherRoutes);
-app.use('/api/survival', survivalRoutes);
-app.use('/api/crafting', craftingRoutes);
-app.use('/api/mythic', mythicRoutes);
-app.use('/api', partyBaseRoutes);
 app.use('/api/progression', progressionRoutes);
-app.use('/api/merchant', merchantRoutes);
-app.use('/api/prelude', preludeRoutes);
 app.use('/api/ai-behavior', aiBehaviorRoutes);
 
 // Serve index.html for all non-API routes (SPA support)

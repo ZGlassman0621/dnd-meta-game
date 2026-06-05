@@ -7,7 +7,6 @@
  */
 
 import db, { dbRun, dbGet } from '../database.js';
-import { createMerchantsFromPlan } from './merchantService.js';
 
 /**
  * Ensure a value is a JSON string for DB storage.
@@ -477,11 +476,6 @@ export async function importCampaign(payload, userId = null) {
  * they enhance the campaign but aren't required for it to function.
  */
 async function createPostImportRecords(campaignId, plan, characterId) {
-  try {
-    await createMerchantsFromPlan(campaignId, plan);
-  } catch (e) {
-    console.error('Error creating merchants from imported plan:', e.message);
-  }
   try {
     await createRelationalRecordsFromPlan(campaignId, plan);
   } catch (e) {

@@ -52,7 +52,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     fetchCharacter()
   }, [initialCharacter.id])
 
-  // Fetch progression data (theme, ancestry feats, synergies) — loads once per character
+  // Fetch progression data (theme, ancestry feats) — loads once per character
   useEffect(() => {
     let cancelled = false
     setProgressionLoading(true)
@@ -1606,7 +1606,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           </div>
         )}
 
-        {/* Progression Tab — Theme + Ancestry Feats + Synergies */}
+        {/* Progression Tab — Theme + Ancestry Feats */}
         {activeTab === 'progression' && (
           <div className="tab-panel">
             {progressionLoading && (
@@ -1760,91 +1760,6 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                     </p>
                   )}
                 </section>
-
-                {/* Subclass × Theme Synergy */}
-                {progression.subclass_theme_synergy && (
-                  <section className="sheet-section">
-                    <h3 style={{ color: '#6366f1' }}>
-                      Resonant Synergy: {progression.subclass_theme_synergy.synergy_name}
-                    </h3>
-                    <div
-                      className="feature-item"
-                      style={{ borderLeft: '3px solid #6366f1' }}
-                    >
-                      <div className="feature-header">
-                        <span className="feature-name">
-                          {progression.subclass_theme_synergy.subclass_name} + {progression.theme.theme_name}
-                        </span>
-                      </div>
-                      <p className="feature-description">
-                        {progression.subclass_theme_synergy.description}
-                      </p>
-                      {progression.subclass_theme_synergy.mechanics && (
-                        <p style={{
-                          fontSize: '0.8em', color: '#888', marginTop: '0.3rem',
-                          fontStyle: 'italic'
-                        }}>
-                          {progression.subclass_theme_synergy.mechanics}
-                        </p>
-                      )}
-                      {progression.subclass_theme_synergy.shared_tags && (
-                        <p style={{
-                          fontSize: '0.75em', color: '#a5b4fc', marginTop: '0.4rem'
-                        }}>
-                          <strong>Shared tags:</strong> {progression.subclass_theme_synergy.shared_tags}
-                        </p>
-                      )}
-                    </div>
-                  </section>
-                )}
-
-                {/* Mythic × Theme Amplification */}
-                {progression.mythic_theme_amplification && (
-                  <section className="sheet-section">
-                    <h3 style={{
-                      color: progression.mythic_theme_amplification.is_dissonant ? '#ef4444' : '#f59e0b'
-                    }}>
-                      Mythic {progression.mythic_theme_amplification.is_dissonant ? 'Arc' : 'Amplification'}: {progression.mythic_theme_amplification.combo_name}
-                    </h3>
-                    <div
-                      className="feature-item"
-                      style={{
-                        borderLeft: `3px solid ${progression.mythic_theme_amplification.is_dissonant ? '#ef4444' : '#f59e0b'}`
-                      }}
-                    >
-                      <p className="feature-description" style={{ fontStyle: 'italic' }}>
-                        {progression.mythic_theme_amplification.shared_identity}
-                      </p>
-                      {progression.mythic_theme_amplification.is_dissonant ? (
-                        <>
-                          <p style={{ marginTop: '0.5rem' }}>
-                            <strong style={{ color: '#ef4444' }}>Dissonant Arc:</strong>{' '}
-                            {progression.mythic_theme_amplification.dissonant_arc_description}
-                          </p>
-                          {progression.mythic_theme_amplification.required_threshold_acts && (
-                            <p style={{
-                              fontSize: '0.85em', color: '#f87171', marginTop: '0.4rem'
-                            }}>
-                              Arc completion requires {progression.mythic_theme_amplification.required_threshold_acts} threshold acts.
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ marginTop: '0.5rem', fontSize: '0.88em' }}>
-                          {['t1_bonus', 't2_bonus', 't3_bonus', 't4_bonus'].map((key, idx) => {
-                            const text = progression.mythic_theme_amplification[key]
-                            if (!text) return null
-                            return (
-                              <div key={key} style={{ marginBottom: '0.4rem' }}>
-                                <strong style={{ color: '#f59e0b' }}>T{idx + 1}:</strong> {text}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                )}
               </>
             )}
           </div>

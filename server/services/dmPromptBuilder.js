@@ -7,7 +7,6 @@
  */
 
 import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
-import { formatFactionStandingFragment } from './factionService.js';
 
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
@@ -1583,38 +1582,10 @@ function formatWorldStateSnapshot(worldState) {
 
   const sections = [];
 
-  // 1. Faction Standings (skip neutrals unless member). Phase 3 SC-3:
-  // the "LABEL (+N)" fragment now comes from FACTION_STANDING_CONFIG via
-  // formatFactionStandingFragment — single source of truth for label
-  // bands. Output is byte-identical to the legacy hand-rolled string;
-  // tests/faction-standing-prompt-snapshot.test.js guards this.
-  const meaningfulStandings = (worldState.factionStandings || [])
-    .filter(s => s.standing !== 0 || s.is_member);
-  if (meaningfulStandings.length > 0) {
-    const lines = meaningfulStandings.slice(0, 6).map(s => {
-      const fragment = formatFactionStandingFragment(s.standing);
-      const memberNote = s.is_member ? ', Member' : '';
-      const behavior = getStandingBehavior(s.standing_label || 'neutral');
-      return `- ${s.faction_name}: ${fragment}${memberNote} - ${behavior}`;
-    });
-    sections.push('FACTION STANDINGS:\n' + lines.join('\n'));
-  }
+  // Faction standings + world-events simulation were removed in the MVP. World
+  // memory now comes from NPC relationships + story chronicles + canon facts.
 
-  // 2. Active World Events (with stage info)
-  const events = worldState.visibleEvents || [];
-  if (events.length > 0) {
-    const lines = events.slice(0, 5).map(e => {
-      const totalStages = e.stages?.length || 0;
-      const stageNum = (e.current_stage || 0) + 1;
-      const stageInfo = totalStages > 0 ? ` - Stage ${stageNum}/${totalStages}` : '';
-      const stageDesc = e.stage_descriptions?.[e.current_stage];
-      const descSuffix = stageDesc ? ': ' + stageDesc.substring(0, 80) : '';
-      return `- "${e.title}" (${e.event_type}, ${e.scope})${stageInfo}${descSuffix}`;
-    });
-    sections.push('WORLD EVENTS IN PROGRESS:\n' + lines.join('\n'));
-  }
-
-  // 3. NPC Voicing Guide + Relationships
+  // NPC Voicing Guide + Relationships
   sections.push(`NPC VOICING GUIDE:
 When roleplaying NPCs, differentiate them through speech patterns:
 - USE their RP/Voice hint to shape dialogue (accent, vocabulary, tempo)
@@ -1901,26 +1872,9 @@ When the player's action would violate a higher tier (e.g. player greets an NPC 
 function formatMechanicalMarkers(sessionContext) {
   const blocks = [];
 
-  // --- Always-on markers (merchant, combat, loot, conditions, promises,
-  //     companion recruitment, observation-as-check, scene integrity) ---
-  blocks.push(`──────────── MERCHANT SHOPPING ────────────
-When the player asks to BUY, SELL, BROWSE, TRADE, or see what a merchant HAS — emit FIRST:
-[MERCHANT_SHOP: Merchant="Exact Name" Type="general|blacksmith|alchemist|magic|jeweler|tanner|tailor" Location="shop description"]
-
-Without this marker, the shop UI cannot open.
-
-After emit, the system injects the merchant's actual inventory as a [SYSTEM] message. Reference only items from that injected list — never invent.
-
-If the player wants something not on the shelf, pick one:
-• Suggest a similar item from current inventory (in-character)
-• [MERCHANT_REFER: From="Current" To="Other Merchant" Item="what they want"] — system guarantees the item exists at the referred shop
-• [ADD_ITEM: Name="x" Price_GP=N Quality="standard|fine|superior|masterwork" Category="cat"] — adds custom item to this merchant (must fit their specialty; never magic items at non-magic merchants)
-  Quality multipliers: standard 1×, fine 1.5×, superior 2×, masterwork 3×.
-
-Custom commissions (crafted to order):
-[MERCHANT_COMMISSION: Merchant="Name" Item="desc" Price_GP=N Deposit_GP=M Lead_Time_Days=D Quality="q" Hook="detail"]
-Deposit 30-50% of total. Lead 3d (fine leather) / 7d (masterwork weapon) / 14d+ (plate or enchanted).`);
-
+  // --- Always-on markers (combat, loot, conditions, companion recruitment,
+  //     observation-as-check, scene integrity). Merchant economy + promises were
+  //     removed in the MVP; the DM narrates shopping and obligations in prose. ---
   blocks.push(`──────────── COMBAT ────────────
 Combat starts: [COMBAT_START: Enemies="Enemy 1, Boss Name"] — LAST sentence. System rolls initiative.
 Combat ends: [COMBAT_END] — LAST sentence.
@@ -1945,17 +1899,6 @@ Never roll for the player.`);
 Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion_1 through exhaustion_6.
 
 Describe conditions physically (pale and stumbling if poisoned, trembling if frightened).`);
-
-  blocks.push(`──────────── PROMISES & CONSEQUENCES ────────────
-[PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10 Weight="major"] — INLINE
-
-Weight scale (REQUIRED): trivial | minor | moderate | major | critical
-Deadline optional (omit for open-ended). Use for personal commitments only — NOT routine quest acceptance.
-
-[PROMISE_FULFILLED: NPC="Elara" Promise="Return the stolen amulet"] — INLINE
-Promise text should closely match original.
-
-Breaking weighted promises damages disposition, ripples to nearby NPCs, affects faction standing, and shifts merchant prices. Fulfilling does the reverse.`);
 
   blocks.push(`──────────── COMPANION RECRUITMENT (rare) ────────────
 Only for NEW NPCs with genuine personal stakes — NEVER for existing companions expressing loyalty.
@@ -2258,7 +2201,7 @@ Pure narrative. No author voice, no mechanical exposition.
 ─────────────────────────────────────────────
 5. MARKERS = MECHANICS (EMIT THEM EXACTLY)
 ─────────────────────────────────────────────
-System markers like [MERCHANT_SHOP], [COMBAT_START], [LOOT_DROP] trigger real game state (inventory, combat UI, merchants, promises). Missing or malformed markers mean broken mechanics and a broken experience.
+System markers like [COMBAT_START], [LOOT_DROP], [CONDITION_ADD] trigger real game state (combat UI, inventory, conditions). Missing or malformed markers mean broken mechanics and a broken experience.
 
 • Full marker schemas are in the MECHANICAL MARKERS section below.
 • Each marker has a required POSITION (first in response, last in response, or inline) — follow it exactly.

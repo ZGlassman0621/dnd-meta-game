@@ -1,11 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 
-// Pages hidden from nav but code still exists for future reintegration / offline play:
-// Character: (Downtime is now its own combined page with meta game + adventure history)
-// World: showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld,
-//        showNPCGenerator, showNPCRelationships
-// Story: showNarrativeQueue, showQuests, showBackstories (covered by Campaign Plan)
-// Play: showMetaGame (embedded as DM Session tab), showGeneration (auto via campaign plan)
+// MVP navigation: Character (sheet / companions / backstory parser / settings),
+// Story (campaigns / campaign plan), Play (AI Dungeon Master).
 
 const menuCategories = {
   character: {
@@ -15,7 +11,6 @@ const menuCategories = {
       { key: 'showCharacterSheet', label: 'Character Sheet' },
       { key: 'showCompanions', label: 'Companions' },
       { key: 'showParsedBackstory', label: 'Backstory Parser' },
-      { key: 'showDowntime', label: 'Downtime & Stats' },
       { key: 'showSettings', label: 'Settings' }
     ]
   },
@@ -24,16 +19,14 @@ const menuCategories = {
     color: '#9b59b6',
     items: [
       { key: 'showCampaigns', label: 'Campaigns' },
-      { key: 'showCampaignPlan', label: 'Campaign Plan' },
-      { key: 'showPlayerJournal', label: 'Player Journal' }
+      { key: 'showCampaignPlan', label: 'Campaign Plan' }
     ]
   },
   play: {
     label: 'Play',
     color: '#e67e22',
     items: [
-      { key: 'showDMSession', label: 'AI Dungeon Master' },
-      { key: 'showDMMode', label: 'DM Mode' }
+      { key: 'showDMSession', label: 'AI Dungeon Master' }
     ]
   }
 }
@@ -100,7 +93,7 @@ function DropdownMenu({ category, isOpen, onToggle, activeView, onNavigate, hasC
         }}>
           {items.map(item => {
             // Skip character-dependent items if no character selected
-            if (!hasCharacter && item.key !== 'showNPCGenerator' && item.key !== 'showDMMode') {
+            if (!hasCharacter) {
               return null
             }
 

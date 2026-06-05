@@ -1,14 +1,8 @@
 import express from 'express';
 import db, { dbAll, dbGet, dbRun } from '../database.js';
-import * as questService from '../services/questService.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
-import { getCampaignLocations } from '../services/locationService.js';
-import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
-import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
-import { resetMythicPower } from '../services/mythicService.js';
-import { transferCanonToCampaign } from '../services/campaignCanonTransferService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import { safeParse } from '../utils/safeParse.js';
 import {
@@ -269,19 +263,6 @@ async function persistAncestryFeatSelection(characterId, featId, tier, selectedA
 // Update character
 router.put('/:id', async (req, res) => {
   try {
-    // --- Phase 2 chunk 5 batch 3 checkpoint 2 — phase-transition side
-    // effects (heirloom flip on handoff submit). Detected before the
-    // generic UPDATE so we can read the prior phase to gate the work.
-    let priorPhase = null
-    if (
-      req.body.creation_phase === 'active' &&
-      (req.body.chosen_heirloom_candidate_id !== undefined ||
-       /* defensive: any field-update to 'active' on a handoff row */ true)
-    ) {
-      const row = await dbGet('SELECT creation_phase FROM characters WHERE id = ?', [req.params.id])
-      priorPhase = row?.creation_phase || null
-    }
-
     const updates = [];
     const values = [];
 
@@ -345,70 +326,12 @@ router.put('/:id', async (req, res) => {
 
     await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    // --- Phase 2 chunk 5 batch 3 sub-checkpoint 2 — handoff submit ---
-    // When the PUT flips creation_phase to 'active' and the prior phase
-    // was 'ready_for_primary', this is the handoff submit. Run side
-    // effects: heirloom candidate flip + canon transfer to campaign tables.
-    if (priorPhase === 'ready_for_primary' && req.body.creation_phase === 'active') {
-      const chosenId = req.body.chosen_heirloom_candidate_id ?? null
-      await applyHeirloomChoiceOnSubmit(req.params.id, chosenId)
-      try {
-        const transferResult = await transferCanonToCampaign(req.params.id)
-        console.log(`[handoff submit] character ${req.params.id} canon transfer:`, transferResult)
-      } catch (transferErr) {
-        // Canon transfer failure is non-blocking — character still
-        // flips to 'active' and player can play; the prelude_canon_*
-        // data persists and a follow-up retry can re-run the transfer
-        // (it's idempotent). Surface the error in logs but don't fail
-        // the submit (the character is in a valid state either way).
-        console.error(`[handoff submit] canon transfer failed for character ${req.params.id}:`, transferErr)
-      }
-    }
-
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(character);
   } catch (error) {
     handleServerError(res, error, 'update character');
   }
 });
-
-/**
- * Phase 2 chunk 5 batch 3 checkpoint 2 — apply the player's heirloom
- * candidate choice at handoff submit. The chosen candidate flips to
- * 'carried_forward'; all other candidates for this character flip to
- * 'left_behind'. The chosen candidate's content is also reflected on
- * the character's inventory blob (already shaped client-side at
- * submit time per creatorPersistence.js).
- *
- * Per spec §8.1.2 status semantics: unpicked candidates are kept in the
- * table for narrative reference; the AI may surface "remember the
- * [object] you didn't take" in late-campaign play. No MVP mechanism
- * wires this surfacing today.
- *
- * Currently a no-op for every existing handoff character because the
- * heirloom producer is deferred per Option A — `prelude_canon_heirlooms`
- * has no rows. The function exists wired so it lights up automatically
- * when producer-side work lands.
- */
-async function applyHeirloomChoiceOnSubmit(characterId, chosenCandidateId) {
-  // Get all candidates for this character
-  const candidates = await dbAll(
-    `SELECT id FROM prelude_canon_heirlooms
-     WHERE character_id = ? AND status = 'candidate'`,
-    [characterId]
-  )
-  if (candidates.length === 0) return // No-op, no candidates to apply
-
-  for (const c of candidates) {
-    const newStatus = (chosenCandidateId != null && Number(c.id) === Number(chosenCandidateId))
-      ? 'carried_forward'
-      : 'left_behind'
-    await dbRun(
-      `UPDATE prelude_canon_heirlooms SET status = ? WHERE id = ?`,
-      [newStatus, c.id]
-    )
-  }
-}
 
 // Delete character and all related data.
 //
@@ -545,9 +468,6 @@ router.post('/rest/:id', async (req, res) => {
         WHERE id = ?
       `, [newHp, req.params.id]);
       spellSlotsRestored = true;
-
-      // Reset mythic power on long rest
-      try { await resetMythicPower(parseInt(req.params.id)); } catch (_) { /* no mythic record is fine */ }
     } else {
       // Short rest: restore 50% of missing HP, partial spell slot recovery for some classes
       const missingHp = character.max_hp - character.current_hp;
@@ -1542,98 +1462,6 @@ router.delete('/:id/campaign', async (req, res) => {
   }
 });
 
-// ============================================================
-// CHARACTER QUEST TRACKING
-// ============================================================
-
-// Get all quests for a character
-router.get('/:id/quests', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const { type, status } = req.query;
-    let quests;
-
-    if (type) {
-      quests = await questService.getQuestsByType(req.params.id, type);
-    } else if (status === 'active') {
-      quests = await questService.getActiveQuests(req.params.id);
-    } else {
-      quests = await questService.getCharacterQuests(req.params.id);
-    }
-
-    res.json(quests);
-  } catch (error) {
-    handleServerError(res, error, 'fetch quests');
-  }
-});
-
-// Get only active quests for a character
-router.get('/:id/quests/active', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const quests = await questService.getActiveQuests(req.params.id);
-    res.json(quests);
-  } catch (error) {
-    handleServerError(res, error, 'fetch active quests');
-  }
-});
-
-// Get the character's main quest
-router.get('/:id/quests/main', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const quest = await questService.getMainQuest(req.params.id);
-    res.json(quest);
-  } catch (error) {
-    handleServerError(res, error, 'fetch main quest');
-  }
-});
-
-// Get quest summary for a character (counts by type and status)
-router.get('/:id/quests/summary', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const allQuests = await questService.getCharacterQuests(req.params.id);
-
-    const summary = {
-      total: allQuests.length,
-      byStatus: {
-        active: allQuests.filter(q => q.status === 'active').length,
-        completed: allQuests.filter(q => q.status === 'completed').length,
-        failed: allQuests.filter(q => q.status === 'failed').length,
-        abandoned: allQuests.filter(q => q.status === 'abandoned').length
-      },
-      byType: {
-        main: allQuests.filter(q => q.quest_type === 'main').length,
-        side: allQuests.filter(q => q.quest_type === 'side').length,
-        companion: allQuests.filter(q => q.quest_type === 'companion').length,
-        one_time: allQuests.filter(q => q.quest_type === 'one_time').length
-      },
-      hasMainQuest: allQuests.some(q => q.quest_type === 'main' && q.status === 'active')
-    };
-
-    res.json(summary);
-  } catch (error) {
-    handleServerError(res, error, 'fetch quest summary');
-  }
-});
-
 // Get campaign notes for a character
 router.get('/:id/campaign-notes', async (req, res) => {
   try {
@@ -1944,15 +1772,16 @@ router.get('/:id/journal', async (req, res) => {
 
     const campaignId = character.campaign_id;
 
-    // Fetch all data sources in parallel
-    const [relationships, allLocations, standings, visibleGoals, quests, visibleEvents] = await Promise.all([
-      getCharacterRelationshipsWithNpcs(character.id).catch(() => []),
-      campaignId ? getCampaignLocations(campaignId).catch(() => []) : [],
-      getCharacterStandings(character.id).catch(() => []),
-      getGoalsVisibleToCharacter(character.id).catch(() => []),
-      questService.getCharacterQuests(character.id).catch(() => []),
-      getEventsVisibleToCharacter(character.id).catch(() => [])
-    ]);
+    // KEPT: NPC relationships (session memory). The faction-standings,
+    // visible-goals, quests, campaign-locations, and world-event data
+    // sources were part of the cut world-simulation cluster — they now
+    // resolve to empty arrays so the endpoint still returns valid JSON.
+    const relationships = await getCharacterRelationshipsWithNpcs(character.id).catch(() => []);
+    const allLocations = [];
+    const standings = [];
+    const visibleGoals = [];
+    const quests = [];
+    const visibleEvents = [];
 
     // Get campaign plan for unknown counts
     let campaignPlan = null;

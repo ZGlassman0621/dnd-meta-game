@@ -16,7 +16,6 @@ import * as companionBackstoryGenerator from '../services/companionBackstoryGene
 import * as companionBackstoryService from '../services/companionBackstoryService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 import { propagateNpcDeath, canRecruit } from '../services/npcLifecycleService.js';
-import { sendOnActivity, getAwayCompanions, getActivityById, recallCompanion } from '../services/companionActivityService.js';
 import {
   autoAssignCompanionTheme,
   autoSeedCompanionAncestryFeatTier1,
@@ -2002,84 +2001,6 @@ router.post('/:id/backstory/secret/:secretId/reveal', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'reveal secret');
-  }
-});
-
-// ============================================================
-// COMPANION ACTIVITY ROUTES
-// ============================================================
-
-// Send companion on independent activity
-router.post('/:id/send-activity', async (req, res) => {
-  try {
-    const companion = await dbGet(`
-      SELECT c.*, n.name FROM companions c
-      JOIN npcs n ON c.npc_id = n.id
-      WHERE c.id = ? AND c.status = 'active'
-    `, [req.params.id]);
-
-    if (!companion) {
-      return res.status(404).json({ error: 'Companion not found or not active' });
-    }
-
-    const character = await dbGet('SELECT campaign_id, game_day FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
-
-    const activity = await sendOnActivity(companion.id, {
-      activity_type: req.body.activity_type,
-      description: req.body.description,
-      location: req.body.location,
-      objectives: req.body.objectives || [],
-      duration_days: req.body.duration_days || 3,
-      campaign_id: character?.campaign_id,
-      current_game_day: character?.game_day || 1
-    });
-
-    res.json({
-      message: `${companion.name} has been sent on a ${req.body.activity_type} activity.`,
-      activity
-    });
-  } catch (error) {
-    handleServerError(res, error, 'send companion on activity');
-  }
-});
-
-// Get away companions for a character
-router.get('/character/:characterId/away', async (req, res) => {
-  try {
-    const companions = await getAwayCompanions(parseInt(req.params.characterId));
-    res.json(companions);
-  } catch (error) {
-    handleServerError(res, error, 'fetch away companions');
-  }
-});
-
-// Recall companion from activity early
-router.post('/activity/:activityId/recall', async (req, res) => {
-  try {
-    const activity = await getActivityById(parseInt(req.params.activityId));
-    if (!activity) {
-      return res.status(404).json({ error: 'Activity not found' });
-    }
-
-    const character = await dbGet('SELECT game_day FROM characters WHERE id = ?', [activity.character_id]);
-    const result = await recallCompanion(parseInt(req.params.activityId), character?.game_day || 1);
-
-    res.json(result);
-  } catch (error) {
-    handleServerError(res, error, 'recall companion');
-  }
-});
-
-// Get activity status
-router.get('/activity/:activityId', async (req, res) => {
-  try {
-    const activity = await getActivityById(parseInt(req.params.activityId));
-    if (!activity) {
-      return res.status(404).json({ error: 'Activity not found' });
-    }
-    res.json(activity);
-  } catch (error) {
-    handleServerError(res, error, 'fetch activity status');
   }
 });
 

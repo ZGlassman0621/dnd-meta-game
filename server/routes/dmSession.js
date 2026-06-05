@@ -5,32 +5,15 @@ import claude from '../services/claude.js';
 import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat } from '../services/aiCallLogger.js';
 import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
 import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
-import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted } from '../services/narrativeIntegration.js';
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
-import { getCharacterWorldView, processLivingWorldTick } from '../services/livingWorldService.js';
-import { getActiveFactions } from '../services/factionService.js';
 // SC-6.4c: addPromise / fulfillPromise / getPendingPromises /
 // adjustDisposition / adjustTrust no longer imported — PROMISE_MADE +
 // PROMISE_FULFILLED handlers in consequenceService.js own those calls.
 import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from '../services/npcRelationshipService.js';
-import { getDiscoveredLocations } from '../services/locationService.js';
-import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
-import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly } from '../services/merchantService.js';
-// SC-6.4b: merchantOrderService loaded for module-level
-// registerMarkerHandler('MERCHANT_COMMISSION', ...). Direct placeCommission
-// + addItemToMerchant + ensureItemAtMerchant imports no longer needed —
-// handlers in merchantService.js / merchantOrderService.js own the calls.
-import '../services/merchantOrderService.js';
-// SC-6.4b: lootDropService is new — registers the LOOT_DROP handler at
-// module load.
+// lootDropService + combatMarkerService register their marker handlers
+// (LOOT_DROP, COMBAT_START/END) at module load.
 import '../services/lootDropService.js';
-// SC-6.4d: recordPlayerDefenseOutcome no longer imported — BASE_DEFENSE_RESULT
-// handler in baseThreatService.js owns the call. Loading the module fires
-// the module-level registerMarkerHandler registration.
-import '../services/baseThreatService.js';
-// SC-6.4d: combatMarkerService is new — registers COMBAT_START + COMBAT_END
-// handlers at module load.
 import '../services/combatMarkerService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
@@ -59,9 +42,6 @@ import {
   extractAndTrackUsedNames,
   emitSessionEvents, emitSessionEndedEvent
 } from '../services/dmSessionService.js';
-import { lookupItemByName } from '../data/merchantLootTables.js';
-// SC-6.4b: getLootTableForLevel moved into lootDropService.js with the
-// LOOT_DROP handler. No remaining usage in this file.
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
 import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
@@ -75,43 +55,13 @@ import { resolveForNpcBatch as resolveNicknamesForNpcBatch } from '../services/n
 import { getCompanionProgression, ensureCompanionProgressionInitialized } from '../services/progressionCompanionService.js';
 import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
-import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
-import { getAwayCompanions } from '../services/companionActivityService.js';
 import { processAbsenceEffects } from '../services/npcAgingService.js';
 import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget } from '../utils/contextManager.js';
 import { handleServerError } from '../utils/errorHandler.js';
-import { getWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
-import { getSurvivalStatus, formatSurvivalForPrompt } from '../services/survivalService.js';
-import { formatCraftingForPrompt } from '../services/craftingService.js';
-// (Loading these services also fires their module-level
-// registerMarkerHandler() calls — survival/weather/crafting handlers
-// wire up at server boot regardless of import order.)
-import { formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK } from '../services/dmPromptBuilder.js';
-// SC-6.4d: recordTrial / useMythicPower / advanceTier / findLegendaryItemByName /
-// advanceItemState no longer imported — MYTHIC_TRIAL / ITEM_AWAKEN / MYTHIC_SURGE
-// handlers in mythicService.js own the calls.
-import { getMythicStatus } from '../services/mythicService.js';
-import { getAllCharacterPiety, formatPietyForPrompt } from '../services/pietyService.js';
-// (Loading pietyService here also fires its module-level
-// registerMarkerHandler('PIETY_CHANGE', ...) — SC-4 wired the dispatch
-// path through the marker pipeline; the old detect-function call site
-// in this file was removed.)
-// SC-6.4c: FULFILL_WEIGHTS / spreadReputationRipple / spreadFactionStanding
-// no longer imported here — PROMISE_FULFILLED handler in consequenceService.js
-// owns those calls. calculatePriceModifier is still used for the merchant
-// price-modifier path (~line 1969) so it stays.
-import { calculatePriceModifier } from '../services/consequenceService.js';
-import { getActiveQuests as getCharacterActiveQuests } from '../services/questService.js';
-import { calculateEconomyModifiers, getItemEconomyMultiplier, recordTransaction, getBulkDiscount } from '../services/economyService.js';
-import { getBaseForPrompt } from '../services/partyBaseService.js';
-// SC-6.4c: addNotoriety no longer imported — NOTORIETY_GAIN/LOSS handlers
-// in notorietyService.js own the calls (loading the module fires the
-// module-level registerMarkerHandler registrations).
-import { getNotorietyForPrompt } from '../services/notorietyService.js';
-import { getProjectsForPrompt } from '../services/longTermProjectService.js';
-// Old single-session "origin story" prelude builder removed in v1.0.44 —
-// replaced wholesale by the prelude-forward character creator (see
-// server/services/preludeArcService.js + client PreludeSetupWizard).
+import { applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK } from '../services/dmPromptBuilder.js';
+// merchantLootTables.js is kept as the item catalog — lootDropService and the
+// item-rarity-lookup endpoint both use lookupItemByName.
+import { lookupItemByName } from '../data/merchantLootTables.js';
 
 const router = express.Router();
 
@@ -650,15 +600,8 @@ router.post('/start', async (req, res) => {
       usedNames = [];
     }
 
-    // Get active story threads to include in session context
-    let storyThreadsContext = '';
-    try {
-      storyThreadsContext = await formatThreadsForAI(characterId, 5) || '';
-    } catch (e) {
-      console.error('Error fetching story threads:', e);
-    }
-
-    // Get narrative queue items (quest progress, companion reactions, etc.)
+    // Narrative queue (slimmed to empty in the MVP — between-session developments
+    // now flow through story chronicles + canon facts).
     let narrativeQueueContext = null;
     let narrativeQueueItemIds = [];
     try {
@@ -681,27 +624,16 @@ router.post('/start', async (req, res) => {
       }
     }
 
-    // Gather living world state for DM context (all queries in parallel)
+    // Gather world state for DM context. The faction / world-event / quest /
+    // location simulation was removed in the MVP — world memory now comes from
+    // NPC relationships + story chronicles + canon facts.
     let worldState = null;
     if (character.campaign_id) {
       try {
-        const [characterWorldView, npcRelationships, discoveredLocations, activeFactions, visibleEvents] = await Promise.all([
-          getCharacterWorldView(characterId),
-          getCharacterRelationshipsWithNpcs(characterId),
-          getDiscoveredLocations(character.campaign_id),
-          getActiveFactions(character.campaign_id),
-          getEventsVisibleToCharacter(characterId)
-        ]);
-
+        const npcRelationships = await getCharacterRelationshipsWithNpcs(characterId);
         worldState = {
-          factionStandings: characterWorldView?.faction_standings || [],
-          knownFactionGoals: characterWorldView?.known_faction_goals || [],
-          visibleEvents: visibleEvents || [],
           npcRelationships: npcRelationships || [],
-          discoveredLocations: discoveredLocations || [],
-          activeFactions: activeFactions || [],
-          currentGameDay: character.game_day || null,
-          activeQuests: []
+          currentGameDay: character.game_day || null
         };
       } catch (e) {
         console.error('Error gathering world state for session:', e);
@@ -760,51 +692,15 @@ router.post('/start', async (req, res) => {
     //             until the prompt is built, so this is a safety precaution.)
     //   Phase C — all remaining independent reads, parallel.
 
-    // Phase A — parallel reads that fill worldState
+    // Phase A — NPC conversation recall (fills worldState)
     const campaignId = character.campaign_id;
-    const worldStateFills = campaignId && worldState
-      ? [
-          getConversationsForCharacter(characterId).catch(e => {
-            console.error('Error fetching NPC conversations:', e); return null;
-          }),
-          getActiveNpcEffects(campaignId).catch(e => {
-            console.error('Error fetching NPC event effects:', e); return null;
-          }),
-          getCharacterActiveQuests(characterId).catch(e => {
-            console.error('Error fetching active quests:', e); return null;
-          })
-        ]
-      : [Promise.resolve(null), Promise.resolve(null), Promise.resolve(null)];
-
-    const awayCompanionsPromise = getAwayCompanions(characterId).catch(e => {
-      console.error('Error fetching away companions:', e); return [];
-    });
-
-    const [npcConversations, npcEventEffects, activeQuestsRaw, awayCompanions] = await Promise.all([
-      ...worldStateFills,
-      awayCompanionsPromise
-    ]);
-
-    if (worldState) {
-      if (npcConversations) worldState.npcConversations = npcConversations;
-      if (npcEventEffects) worldState.npcEventEffects = npcEventEffects;
-      if (activeQuestsRaw) {
-        // Enrich active quests with faction names using already-loaded worldState
-        for (const q of activeQuestsRaw) {
-          if (q.source_type === 'faction' && q.source_id) {
-            const faction = worldState.activeFactions?.find(f => f.id === q.source_id);
-            q.faction_name = faction?.name || null;
-          }
-          if (q.quest_type === 'faction_conflict' && q.rewards) {
-            const agg = worldState.activeFactions?.find(f => f.id === q.rewards.aggressor_faction_id);
-            const def = worldState.activeFactions?.find(f => f.id === q.rewards.defender_faction_id);
-            q.rewards.aggressor_faction_name = agg?.name || null;
-            q.rewards.defender_faction_name = def?.name || null;
-          }
-        }
-        worldState.activeQuests = activeQuestsRaw;
-      }
+    let npcConversations = null;
+    try {
+      npcConversations = await getConversationsForCharacter(characterId);
+    } catch (e) {
+      console.error('Error fetching NPC conversations:', e);
     }
+    if (worldState && npcConversations) worldState.npcConversations = npcConversations;
 
     // Phase B — mutations (decay companion moods + NPC dispositions). Parallel
     // since they touch different tables.
@@ -819,33 +715,13 @@ router.post('/start', async (req, res) => {
       ]);
     }
 
-    // Phase C — remaining independent reads. Also dedupes the weather fetch
-    // (previously fetched twice — once for weatherContext, once for
-    // survivalContext).
+    // Phase C — remaining independent reads (chronicle summaries, progression, nicknames).
     const [
-      weatherSnapshot,
-      craftingContextResult,
-      mythicStatusResult,
-      pietyRowsResult,
-      partyBaseContextResult,
-      notorietyContextResult,
-      projectsContextResult,
       chronicleSummariesResult,
       progression,
       secondaryProgression,
       nicknameResolutionsResult
     ] = await Promise.all([
-      campaignId
-        ? getWeather(campaignId).catch(e => { console.error('Error fetching weather:', e); return null; })
-        : Promise.resolve(null),
-      campaignId
-        ? formatCraftingForPrompt(characterId).catch(e => { console.error('Error formatting crafting:', e); return ''; })
-        : Promise.resolve(''),
-      getMythicStatus(characterId).catch(e => { console.error('Error fetching mythic:', e); return null; }),
-      getAllCharacterPiety(characterId).catch(e => { console.error('Error fetching piety:', e); return []; }),
-      getBaseForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error base:', e); return ''; }),
-      getNotorietyForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error notoriety:', e); return ''; }),
-      getProjectsForPrompt(characterId, campaignId).then(r => r || '').catch(e => { console.error('Error projects:', e); return ''; }),
       campaignId
         ? getSessionSummariesForPrompt(campaignId, characterId).catch(e => { console.error('Error chronicle summaries:', e); return []; })
         : Promise.resolve([]),
@@ -860,46 +736,22 @@ router.post('/start', async (req, res) => {
         : Promise.resolve(null)
     ]);
 
-    // Synchronous formatting from the fetched data
-    let weatherContext = '';
-    let survivalContext = '';
-    if (weatherSnapshot) {
-      try {
-        const timeOfDay = getTimeOfDay(character.game_hour || 8);
-        const effectiveTemp = getEffectiveTemperature(weatherSnapshot.temperature_f, weatherSnapshot.weather_type, timeOfDay);
-        const gearSummary = calculateGearWarmth(character.inventory, character.equipment);
-        const shelterType = checkHasShelter(character.current_location || '', character.inventory);
-        weatherContext = formatWeatherForPrompt(weatherSnapshot, effectiveTemp, timeOfDay, gearSummary, shelterType, character.current_location || '');
-      } catch (e) {
-        console.error('Error formatting weather context:', e);
-      }
-      try {
-        survivalContext = formatSurvivalForPrompt(character, weatherSnapshot, null);
-      } catch (e) {
-        console.error('Error formatting survival context:', e);
-      }
-    }
-
-    const craftingContext = craftingContextResult;
-    const partyBaseContext = partyBaseContextResult;
-    const notorietyContext = notorietyContextResult;
-    const projectsContext = projectsContextResult;
     const chronicleSummaries = chronicleSummariesResult;
     const nicknameResolutions = nicknameResolutionsResult;
 
-    let mythicContext = '';
-    if (mythicStatusResult && mythicStatusResult.tier > 0) {
-      mythicContext = formatMythicForPrompt(mythicStatusResult, character);
-    }
-    // Piety prompt injection (Phase 3 SC-4 gap fix). Surfaces every
-    // deity the character has piety with, regardless of mythic tier —
-    // characters can earn piety pre-mythic. The formatter returns
-    // empty string for an empty array; we wrap with the section
-    // header only when there's content to inject.
-    const pietyBody = formatPietyForPrompt(pietyRowsResult);
-    const pietyContext = pietyBody
-      ? `=== PIETY ===\n${pietyBody}\n\nReference unlocked piety abilities (3/10/25/50 thresholds) when relevant. The character's deity may answer prayers or send subtle signs at higher tiers.`
-      : '';
+    // Cut-system context strings (weather / survival / crafting / mythic / piety /
+    // base / notoriety / projects / threads) were removed in the MVP. Kept as
+    // empty values for prompt-builder + sessionConfig back-compat.
+    const weatherContext = '';
+    const survivalContext = '';
+    const craftingContext = '';
+    const partyBaseContext = '';
+    const notorietyContext = '';
+    const projectsContext = '';
+    const mythicContext = '';
+    const pietyContext = '';
+    const storyThreadsContext = '';
+    const awayCompanions = [];
     // ──────────── END PARALLEL CONTEXT ASSEMBLY ────────────
 
     // Build session config with campaign module or custom Forgotten Realms context
@@ -1894,397 +1746,6 @@ router.post('/item-rarity-lookup', async (req, res) => {
   }
 });
 
-// Get merchant inventory (DB lookup from persistent loot-table-generated stock)
-router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const { merchantName, merchantType, location, playerItems } = req.body;
-
-    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-
-    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [session.character_id]);
-    if (!character?.campaign_id) {
-      return res.status(404).json({ error: 'No campaign found for this character' });
-    }
-
-    let dbMerchant = await getMerchantInventory(character.campaign_id, merchantName);
-
-    // Auto-create merchant if not in DB (ad-hoc merchant discovered during gameplay)
-    if (!dbMerchant) {
-      const charData = await dbGet('SELECT level FROM characters WHERE id = ?', [session.character_id]);
-      dbMerchant = await createMerchantOnTheFly(
-        character.campaign_id,
-        merchantName,
-        merchantType || 'general',
-        location || null,
-        charData?.level || 1
-      );
-    }
-
-    const buybackItems = generateBuybackPrices(playerItems || []);
-
-    // Calculate reputation-based price modifier (disposition + faction standing).
-    // NPCs are campaign-global (no campaign_id column on npcs), so we do an
-    // exact-name match first for accuracy, falling back to prefix match if
-    // nothing hits. The campaign_id is still passed into calculatePriceModifier
-    // to scope faction lookups (factions ARE campaign-scoped).
-    let priceModifier = null;
-    try {
-      let merchantNpc = await dbGet(
-        'SELECT id FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
-        [merchantName]
-      );
-      if (!merchantNpc) {
-        merchantNpc = await dbGet(
-          'SELECT id FROM npcs WHERE LOWER(name) LIKE LOWER(?) LIMIT 1',
-          [`${merchantName}%`]
-        );
-      }
-      if (merchantNpc) {
-        priceModifier = await calculatePriceModifier(session.character_id, character.campaign_id, merchantNpc.id);
-      }
-    } catch (e) {
-      console.warn('Price modifier calculation failed:', e.message);
-    }
-
-    // Calculate economy modifiers (world events + region + merchant memory)
-    let economyModifiers = null;
-    try {
-      economyModifiers = await calculateEconomyModifiers(
-        character.campaign_id, dbMerchant.id, dbMerchant.location, session.character_id
-      );
-    } catch (e) {
-      console.warn('Economy modifier calculation failed:', e.message);
-    }
-
-    // Apply both modifiers per-item: reputation (uniform) × economy (per-category) × loyalty
-    const reputationMult = priceModifier?.multiplier || 1;
-    const loyaltyDiscount = economyModifiers?.loyaltyDiscount || 0;
-
-    const inventory = dbMerchant.inventory.map(item => {
-      const economyMult = economyModifiers
-        ? getItemEconomyMultiplier(item.category, economyModifiers)
-        : 1;
-      const combinedMult = Math.max(0.50, Math.min(2.00,
-        reputationMult * economyMult * (1 - loyaltyDiscount)
-      ));
-      const modified = Math.round(combinedMult * 100) !== 100;
-      return {
-        ...item,
-        ...(modified ? {
-          base_price_gp: item.price_gp,
-          price_gp: Math.round(item.price_gp * combinedMult * 100) / 100,
-          base_price_sp: item.price_sp,
-          price_sp: Math.round((item.price_sp || 0) * combinedMult),
-          base_price_cp: item.price_cp,
-          price_cp: Math.round((item.price_cp || 0) * combinedMult)
-        } : {})
-      };
-    });
-
-    res.json({
-      inventory,
-      buybackItems,
-      priceModifier: priceModifier || undefined,
-      economyModifiers: economyModifiers ? {
-        activeEffects: economyModifiers.eventEffects.activeEffects,
-        appliedRegions: economyModifiers.regionalModifiers.appliedRegions,
-        loyaltyDiscount: economyModifiers.loyaltyDiscount,
-        visitCount: economyModifiers.merchantMemory.visitCount
-      } : undefined,
-      merchantName: dbMerchant.merchant_name,
-      merchantType: dbMerchant.merchant_type,
-      merchantId: dbMerchant.id,
-      personality: dbMerchant.personality,
-      merchantGold: dbMerchant.gold_gp
-    });
-  } catch (error) {
-    handleServerError(res, error, 'load merchant inventory');
-  }
-});
-
-// List all merchants for the session's campaign
-router.get('/:sessionId/merchants', async (req, res) => {
-  try {
-    const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-
-    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [session.character_id]);
-    if (!character?.campaign_id) return res.json({ merchants: [] });
-
-    const merchants = await getMerchantsByCampaign(character.campaign_id);
-    res.json({ merchants });
-  } catch (error) {
-    handleServerError(res, error, 'list merchants');
-  }
-});
-
-// Restock a merchant's inventory from loot tables
-router.post('/:sessionId/restock-merchant', async (req, res) => {
-  try {
-    const { merchantId } = req.body;
-    const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-
-    const character = await dbGet('SELECT level FROM characters WHERE id = ?', [session.character_id]);
-    const result = await restockMerchant(merchantId, character?.level || 1);
-    res.json({ success: true, inventory: result.inventory, gold_gp: result.gold_gp });
-  } catch (error) {
-    handleServerError(res, error, 'restock merchant');
-  }
-});
-
-// Process merchant transaction (atomic — character + merchant updates succeed
-// or fail together via db.transaction('write')).
-router.post('/:sessionId/merchant-transaction', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const { merchantName, merchantId, bought, sold, haggleDiscountPercent } = req.body;
-
-    // ---- Input validation (prevents negative/NaN sneaking into totals) ----
-    const validateItems = (items, label) => {
-      if (!Array.isArray(items)) return null;
-      for (const item of items) {
-        if (!item || typeof item.name !== 'string' || !item.name.trim()) {
-          return `${label}: each item must have a string name`;
-        }
-        const q = Number(item.quantity);
-        if (!Number.isInteger(q) || q < 1) {
-          return `${label}: "${item.name}" quantity must be a positive integer (got ${item.quantity})`;
-        }
-        for (const k of ['price_gp', 'price_sp', 'price_cp']) {
-          const p = Number(item[k]);
-          if (item[k] !== undefined && (Number.isNaN(p) || p < 0)) {
-            return `${label}: "${item.name}" ${k} must be a non-negative number`;
-          }
-        }
-      }
-      return null;
-    };
-    const bErr = validateItems(bought, 'bought');
-    if (bErr) return res.status(400).json({ error: bErr });
-    const sErr = validateItems(sold, 'sold');
-    if (sErr) return res.status(400).json({ error: sErr });
-
-    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
-    if (!character) return res.status(404).json({ error: 'Character not found' });
-
-    let inventory = safeParse(character.inventory, []);
-    const changes = [];
-
-    // Calculate totals in copper
-    let totalSpentCp = 0;
-    let totalEarnedCp = 0;
-
-    // Process bought items
-    for (const item of (bought || [])) {
-      const costCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
-      totalSpentCp += costCp;
-
-      const existing = inventory.find(i => i.name.toLowerCase() === item.name.toLowerCase());
-      if (existing) {
-        existing.quantity = (existing.quantity || 1) + item.quantity;
-      } else {
-        inventory.push({ name: item.name, quantity: item.quantity });
-      }
-      changes.push(`Bought ${item.quantity}x ${item.name}`);
-    }
-
-    // Apply bulk discount for large purchases
-    const totalBuyQty = (bought || []).reduce((sum, i) => sum + (i.quantity || 1), 0);
-    const bulkDiscount = getBulkDiscount(totalBuyQty);
-    if (bulkDiscount > 0) {
-      totalSpentCp = Math.round(totalSpentCp * (1 - bulkDiscount));
-    }
-
-    // M3: Apply haggle discount. Clamped to [0, 20] server-side.
-    const haggleDiscount = Math.max(0, Math.min(20, Number(haggleDiscountPercent) || 0)) / 100;
-    if (haggleDiscount > 0 && totalSpentCp > 0) {
-      totalSpentCp = Math.round(totalSpentCp * (1 - haggleDiscount));
-    }
-
-    // Process sold items
-    for (const item of (sold || [])) {
-      const earnCp = ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
-      totalEarnedCp += earnCp;
-
-      const idx = inventory.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
-      if (idx !== -1) {
-        const invItem = inventory[idx];
-        if (invItem.quantity && invItem.quantity > item.quantity) {
-          invItem.quantity -= item.quantity;
-        } else {
-          inventory.splice(idx, 1);
-        }
-      }
-      changes.push(`Sold ${item.quantity}x ${item.name}`);
-    }
-
-    // Calculate net gold change
-    let playerCp = (character.gold_gp || 0) * 100 + (character.gold_sp || 0) * 10 + (character.gold_cp || 0);
-    const netCostCp = totalSpentCp - totalEarnedCp;
-
-    if (netCostCp > playerCp) {
-      return res.status(400).json({ error: 'Not enough gold for this transaction' });
-    }
-
-    playerCp -= netCostCp;
-    const newGp = Math.floor(playerCp / 100);
-    const remainCp = playerCp % 100;
-    const newSp = Math.floor(remainCp / 10);
-    const newCp = remainCp % 10;
-
-    // Precompute merchant-side mutations (no DB writes yet)
-    let merchantWrite = null;
-    if (merchantId) {
-      const merchant = await dbGet('SELECT * FROM merchant_inventories WHERE id = ?', [merchantId]);
-      if (merchant) {
-        let merchInv = safeParse(merchant.inventory, []);
-        for (const item of (bought || [])) {
-          const idx = merchInv.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
-          if (idx !== -1) {
-            merchInv[idx].quantity = (merchInv[idx].quantity || 1) - item.quantity;
-            if (merchInv[idx].quantity <= 0) merchInv.splice(idx, 1);
-          }
-        }
-        for (const item of (sold || [])) {
-          const existing = merchInv.find(i => i.name.toLowerCase() === item.name.toLowerCase());
-          if (existing) {
-            existing.quantity = (existing.quantity || 1) + item.quantity;
-          } else {
-            merchInv.push({
-              name: item.name,
-              price_gp: (item.price_gp || 0) * 2,
-              price_sp: (item.price_sp || 0) * 2,
-              price_cp: (item.price_cp || 0) * 2,
-              category: 'misc',
-              description: 'Acquired from adventurer',
-              quantity: item.quantity,
-              rarity: 'common'
-            });
-          }
-        }
-        const originalMerchGold = merchant.gold_gp || 0;
-        const newMerchGold = originalMerchGold - Math.floor(totalEarnedCp / 100) + Math.floor(totalSpentCp / 100);
-        merchantWrite = {
-          id: merchantId,
-          inventoryJson: JSON.stringify(merchInv),
-          newGold: newMerchGold,
-          expectedVersion: merchant.inventory_version || 0
-        };
-      }
-    }
-
-    // ---- Atomic write: character + merchant in one transaction ----
-    // Either both land or neither does. If the merchant's optimistic-lock
-    // version check fails inside the tx, the whole thing rolls back and the
-    // character's gold is NOT deducted.
-    const tx = await db.transaction('write');
-    try {
-      await tx.execute({
-        sql: `UPDATE characters
-              SET inventory = ?, gold_gp = ?, gold_sp = ?, gold_cp = ?, updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?`,
-        args: [JSON.stringify(inventory), newGp, newSp, newCp, character.id]
-      });
-
-      if (merchantWrite) {
-        const r = await tx.execute({
-          sql: `UPDATE merchant_inventories
-                SET inventory = ?, gold_gp = ?, inventory_version = inventory_version + 1,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND inventory_version = ?`,
-          args: [
-            merchantWrite.inventoryJson, merchantWrite.newGold,
-            merchantWrite.id, merchantWrite.expectedVersion
-          ]
-        });
-        if (r.rowsAffected === 0) {
-          throw new Error('Transaction conflict: merchant inventory changed concurrently');
-        }
-      }
-
-      await tx.commit();
-    } catch (txErr) {
-      try { await tx.rollback(); } catch (_) { /* ignore rollback failure */ }
-      if (String(txErr.message).includes('Transaction conflict')) {
-        return res.status(409).json({ error: txErr.message });
-      }
-      throw txErr;
-    }
-
-    // Reputation: prefer merchant's linked NPC id; fall back to scoped lookup
-    // by campaign_id + exact name (NOT the fuzzy LIKE that could match the
-    // wrong NPC when multiple similar names exist in one campaign).
-    let reputationChange = null;
-    try {
-      let merchantNpc = null;
-      if (merchantId) {
-        const m = await dbGet(
-          'SELECT campaign_id, merchant_name FROM merchant_inventories WHERE id = ?',
-          [merchantId]
-        );
-        if (m?.campaign_id) {
-          // Try exact match first (case-insensitive)
-          merchantNpc = await dbGet(
-            'SELECT id, name FROM npcs WHERE LOWER(name) = LOWER(?) LIMIT 1',
-            [m.merchant_name]
-          );
-          // Fall back to narrow prefix match scoped to the merchant's name
-          if (!merchantNpc) {
-            merchantNpc = await dbGet(
-              'SELECT id, name FROM npcs WHERE LOWER(name) LIKE LOWER(?) LIMIT 1',
-              [`${m.merchant_name}%`]
-            );
-          }
-        }
-      }
-      if (merchantNpc) {
-        const { adjustDisposition } = await import('../services/npcRelationshipService.js');
-        const change = Math.min(10, Math.max(2, Math.floor(totalSpentCp / 1000) + 2));
-        await adjustDisposition(session.character_id, merchantNpc.id, change, `Traded with ${merchantNpc.name}`);
-        reputationChange = { npcName: merchantNpc.name, change };
-      }
-    } catch (repErr) {
-      console.warn('Reputation update failed:', repErr.message);
-    }
-
-    // Record transaction in merchant memory for loyalty/economy tracking.
-    // M4: pass totals so the relationship panel can surface lifetime spent/earned.
-    if (merchantId) {
-      try {
-        await recordTransaction(
-          merchantId, session.character_id, bought, sold, character.game_day,
-          { total_spent_cp: totalSpentCp, total_earned_cp: totalEarnedCp }
-        );
-      } catch (e) {
-        console.warn('Recording transaction history failed:', e.message);
-      }
-    }
-
-    res.json({
-      success: true,
-      changes,
-      newInventory: inventory,
-      newGold: { gp: newGp, sp: newSp, cp: newCp },
-      totalSpent: { gp: Math.floor(totalSpentCp / 100), sp: Math.floor((totalSpentCp % 100) / 10), cp: totalSpentCp % 10 },
-      totalEarned: { gp: Math.floor(totalEarnedCp / 100), sp: Math.floor((totalEarnedCp % 100) / 10), cp: totalEarnedCp % 10 },
-      bulkDiscount: bulkDiscount > 0 ? Math.round(bulkDiscount * 100) : undefined,
-      reputationChange
-    });
-  } catch (error) {
-    if (error.message?.includes('Transaction conflict')) {
-      console.warn('Merchant transaction conflict:', error.message);
-      return res.status(409).json({ error: error.message });
-    }
-    handleServerError(res, error, 'process merchant transaction');
-  }
-});
-
 // Adjust the game date during a session
 router.post('/:sessionId/adjust-date', async (req, res) => {
   try {
@@ -2314,10 +1775,9 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
       WHERE id = ?
     `, [newDate.day, newDate.year, sessionId]);
 
-    // Also advance the character's game_day so downstream systems
-    // (weather, survival, companion moods, base threats) see the new
-    // date. Only advance forward — going backwards is a narrative
-    // flashback, not a real time skip.
+    // Also advance the character's game_day. Only advance forward — going
+    // backwards is a narrative flashback, not a real time skip. (The living-world
+    // tick was removed in the MVP, so this just keeps game_day in sync.)
     let tickResult = null;
     if (daysToAdd > 0 && session.character_id) {
       const character = await dbGet(
@@ -2330,16 +1790,6 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
           'UPDATE characters SET game_day = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [newGameDay, character.id]
         );
-        // Fire a living-world tick for the elapsed days so weather,
-        // moods, merchant orders, base threats, etc. advance too.
-        // Best-effort: a tick failure shouldn't block the date change.
-        if (character.campaign_id) {
-          try {
-            tickResult = await processLivingWorldTick(character.campaign_id, daysToAdd);
-          } catch (e) {
-            console.warn('adjust-date: living-world tick failed:', e.message);
-          }
-        }
       }
     }
 

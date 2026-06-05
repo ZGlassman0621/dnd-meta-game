@@ -501,7 +501,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
       regenerate_count = ?`,
     [
       characterId,
-      'claude-opus-4-7',
+      'claude-opus-4-8',
       null,                // tone_tags (legacy)
       null,                // tone_reflection (legacy)
       serializeField(parsed.home_world),
