@@ -45,7 +45,7 @@ const IMPORT_STEPS = [
   { key: 'done', label: 'Campaign imported!' }
 ];
 
-const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay, onBack }) => {
+const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay, onBack, onBeginCampaign }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
@@ -902,9 +902,10 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 <div style={{ marginTop: 36 }}>{renderDetail()}</div>
               )}
 
-              {/* begin-new entry point */}
+              {/* begin-new entry point → the conversational Begin Campaign
+                  atelier (falls back to the legacy inline flow if unwired) */}
               <div style={{ marginTop: 28 }}>
-                <button className="btn lg" onClick={() => { closePanels(); setShowNewCampaign(true); }}>
+                <button className="btn primary lg" onClick={() => { if (onBeginCampaign) { onBeginCampaign(); } else { closePanels(); setShowNewCampaign(true); } }}>
                   <Ic n="plus" />Begin a new campaign
                 </button>
               </div>

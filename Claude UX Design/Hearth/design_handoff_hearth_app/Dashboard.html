@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Character Home</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+
+    /* ── persistent dashboard header ─────────────────── */
+    .dash-hdr {
+      position: sticky; top: 0; z-index: 30;
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 28px; height: 58px;
+      background: color-mix(in oklab, var(--bg-2) 88%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--rule);
+    }
+    .dash-hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+    .back {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--sans); font-size: 13px; color: var(--ink-3);
+      text-decoration: none; transition: color .14s;
+    }
+    .back:hover { color: var(--ink); }
+    .back .ic { width: 15px; height: 15px; }
+    .hdr-link {
+      font-family: var(--sans); font-size: 13px; color: var(--ink-3);
+      text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+      transition: color .14s;
+    }
+    .hdr-link:hover { color: var(--ink-2); }
+    .hdr-link .ic { width: 14px; height: 14px; }
+
+    /* ── canvas ──────────────────────────────────────── */
+    .home { max-width: 1120px; margin: 0 auto; padding: 46px 28px 80px; }
+    .home-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    .home-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+
+    /* ── hero · continue your adventure ──────────────── */
+    .hero {
+      position: relative; overflow: hidden;
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 34px 38px 30px;
+      margin-bottom: 40px;
+    }
+    .hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 30%, transparent)); }
+    .hero-top { display: grid; grid-template-columns: auto 1fr auto; gap: 26px; align-items: center; }
+
+    .crest {
+      width: 92px; height: 92px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; position: relative;
+      background: linear-gradient(150deg, #3a3326, #211c14);
+      border: 1px solid var(--rule);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    .crest .mono { font-family: var(--serif); font-weight: 600; font-size: 46px; color: var(--accent); line-height: 1; }
+    .crest .lvl {
+      position: absolute; bottom: -8px; right: -8px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--bg-2); border: 1px solid var(--rule);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--sans); font-weight: 700; font-size: 13px; color: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .hero-id h1 { font-family: var(--serif); font-weight: 500; font-size: 44px; line-height: 1.05; letter-spacing: -.014em; margin: 0 0 7px; }
+    .hero-id .desc { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--ink-2); }
+    .hero-id .desc .sep { color: var(--ink-4); font-style: normal; padding: 0 7px; }
+    .hero-id .campaign { margin-top: 11px; display: inline-flex; align-items: center; gap: 9px; }
+    .hero-id .campaign .ct { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); }
+    .hero-id .campaign .cn { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--accent); white-space: nowrap; }
+
+    .hero-cta { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    .hero-cta .last { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); white-space: nowrap; }
+
+    .hero-recap { margin: 26px 0 22px; padding: 0 2px; }
+    .recap-label { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
+    .recap-prose { font-family: var(--serif); font-size: 19px; line-height: 1.62; color: var(--ink); max-width: 760px; text-wrap: pretty; }
+    .recap-prose em { font-style: italic; color: var(--ink-2); }
+
+    .hero-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding-top: 20px; border-top: 1px solid var(--rule-soft); }
+    .stat {
+      display: inline-flex; align-items: baseline; gap: 7px;
+      padding: 6px 13px; border-radius: 999px;
+      border: 1px solid var(--rule); background: var(--bg-2);
+    }
+    .stat .sl { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+    .stat .sv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); letter-spacing: -.01em; }
+    .stat .sv .mx { color: var(--ink-3); font-weight: 500; }
+    .stat.hp .sv { color: var(--good); }
+    .stat.gold .sv { color: var(--accent); }
+    .stat-pips { display: inline-flex; gap: 4px; align-items: center; }
+    .stat-pips .pip { width: 11px; height: 11px; }
+
+    /* ── navigation grid ─────────────────────────────── */
+    .nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .nav-card {
+      display: block; text-decoration: none;
+      background: var(--bg-2); border: 1px solid var(--rule);
+      border-radius: 11px; padding: 20px 20px 18px;
+      transition: border-color .15s, background .15s, transform .15s;
+      position: relative;
+    }
+    .nav-card:hover { border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); background: var(--bg-card); transform: translateY(-2px); }
+    .nav-card .nc-top { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+    .nav-card .nc-ic {
+      width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-card); border: 1px solid var(--rule); color: var(--accent);
+    }
+    .nav-card .nc-ic .ic { width: 18px; height: 18px; }
+    .nav-card .nc-meta { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--ink-4); text-transform: uppercase; }
+    .spoiler-flag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--warn); border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--rule)); background: color-mix(in oklab, var(--warn) 10%, transparent); padding: 3px 8px; border-radius: 999px; }
+    .spoiler-flag .ic { width: 11px; height: 11px; }
+    .nav-card h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0 0 5px; letter-spacing: -.005em; color: var(--ink); }
+    .nav-card p { font-family: var(--serif); font-size: 15px; line-height: 1.45; color: var(--ink-3); margin: 0; }
+    .nav-card .arrow { position: absolute; top: 20px; right: 20px; color: var(--ink-4); transition: color .15s, transform .15s; }
+    .nav-card:hover .arrow { color: var(--accent); transform: translateX(2px); }
+    .nav-card .arrow .ic { width: 16px; height: 16px; }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></symbol>
+    <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+  </defs></svg>
+
+  <!-- persistent header -->
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="#"><svg class="ic"><use href="#i-arrow-left"/></svg>Your characters</a>
+    <div class="spacer"></div>
+    <button class="hdr-link tour-replay" id="tour-replay" type="button"><svg class="ic"><use href="#i-compass"/></svg>Replay tour</button>
+    <div class="vr"></div>
+    <a class="hdr-link" href="Settings.html"><svg class="ic"><use href="#i-settings"/></svg>Settings</a>
+    <div class="vr"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="home">
+
+    <div class="home-eyebrow">
+      <span class="eyebrow">Character home</span>
+      <span class="ln"></span>
+    </div>
+
+    <!-- HERO · continue -->
+    <section class="hero">
+      <div class="hero-top">
+        <div class="crest"><span class="mono">D</span><span class="lvl">3</span></div>
+        <div class="hero-id">
+          <h1>Dravyr Wyrmrest</h1>
+          <div class="desc">Wood elf <span class="sep">·</span> Monk of the Open Hand <span class="sep">·</span> Hermit</div>
+          <div class="campaign"><span class="ct">Campaign</span><span class="cn">The Hollow Man</span></div>
+        </div>
+        <div class="hero-cta">
+          <button class="btn primary lg" id="tour-begin"><svg class="ic"><use href="#i-play"/></svg>Continue</button>
+          <span class="last">Last played · Day 22, dusk</span>
+        </div>
+      </div>
+
+      <div class="hero-recap">
+        <div class="recap-label">Where you left off</div>
+        <div class="recap-prose">You sit with the net-mender on the lip of a dry fountain, half a loaf shared between you, while she names the thing the poor quarter fears — <em>a man who takes the children quietly, and a Gate guard who calls it nothing at all.</em></div>
+      </div>
+
+      <div class="hero-stats">
+        <span class="stat hp"><span class="sl">HP</span><span class="sv">24<span class="mx"> / 27</span></span></span>
+        <span class="stat"><span class="sl">AC</span><span class="sv">15</span></span>
+        <span class="stat"><span class="sl">Speed</span><span class="sv">40 ft</span></span>
+        <span class="stat"><span class="sl">Ki</span><span class="stat-pips"><span class="pip magic full"></span><span class="pip magic full"></span><span class="pip magic full"></span></span></span>
+        <span class="stat gold"><span class="sl">Gold</span><span class="sv">112 gp</span></span>
+        <span class="spacer"></span>
+        <span class="stat"><span class="sl">Session</span><span class="sv">7</span></span>
+      </div>
+    </section>
+
+    <!-- NAVIGATION -->
+    <div class="home-eyebrow">
+      <span class="eyebrow">Manage Dravyr</span>
+      <span class="ln"></span>
+    </div>
+
+    <div class="nav-grid">
+      <a class="nav-card" id="tour-sheet" href="Character Sheet.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-scroll"/></svg></span>
+        </div>
+        <h3>Character Sheet</h3>
+        <p>Abilities, features, spells, equipment, and progression.</p>
+      </a>
+
+      <a class="nav-card" id="tour-companions" href="Companions.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-users"/></svg></span>
+        </div>
+        <h3>Companions</h3>
+        <p>The allies who travel at your side.</p>
+      </a>
+
+      <a class="nav-card" id="tour-campaigns" href="Campaigns.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-compass"/></svg></span>
+        </div>
+        <h3>Campaigns</h3>
+        <p>The adventures you've begun, and the ones waiting.</p>
+      </a>
+
+      <a class="nav-card" id="tour-plan" href="Campaign Plan.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-globe"/></svg></span>
+          <span class="spoiler-flag"><svg class="ic"><use href="#i-eye-off"/></svg>Spoilers</span>
+        </div>
+        <h3>Campaign Plan</h3>
+        <p>The world bible Opus wrote — locations, NPCs, lore.</p>
+      </a>
+
+      <a class="nav-card" href="Backstory.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-feather"/></svg></span>
+        </div>
+        <h3>Backstory</h3>
+        <p>Your origin, parsed into people, places, and hooks.</p>
+      </a>
+
+      <a class="nav-card" id="tour-settings" href="Settings.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-sliders"/></svg></span>
+        </div>
+        <h3>Settings</h3>
+        <p>Difficulty, tone, and how the Dungeon Master behaves.</p>
+      </a>
+    </div>
+
+  </main>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FIRST-TIME TUTORIAL · welcome card → guided spotlight tour
+       ════════════════════════════════════════════════════════════ -->
+  <style>
+    button.hdr-link { background: none; border: 0; padding: 0; cursor: pointer; font-family: var(--sans); }
+    .tour-replay { color: var(--accent); }
+    .tour-replay:hover { color: #d8b87a; }
+
+    .tour-root { position: fixed; inset: 0; z-index: 200; display: none; }
+    .tour-root.on { display: block; }
+
+    .tour-blocker { position: fixed; inset: 0; z-index: 201; pointer-events: auto; background: transparent; transition: background .3s; }
+    .tour-blocker.dim { background: rgba(11,9,6,.72); backdrop-filter: blur(2px); }
+
+    .tour-spot {
+      position: fixed; z-index: 202; pointer-events: none; border-radius: 12px;
+      box-shadow:
+        0 0 0 9999px rgba(11,9,6,.72),
+        0 0 0 1.5px var(--accent),
+        0 0 0 6px color-mix(in oklab, var(--accent) 16%, transparent),
+        0 0 28px 3px color-mix(in oklab, var(--accent) 40%, transparent);
+      transition: left .36s cubic-bezier(.4,0,.2,1), top .36s cubic-bezier(.4,0,.2,1),
+                  width .36s cubic-bezier(.4,0,.2,1), height .36s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* step tooltip */
+    .tour-tip {
+      position: fixed; z-index: 210; width: 322px;
+      background: var(--bg-card); border: 1px solid var(--rule);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow);
+      padding: 15px 18px 13px; display: none;
+    }
+    .tour-tip::before {
+      content: ""; position: absolute; left: var(--ax, 40px);
+      width: 12px; height: 12px; background: var(--bg-card);
+      border: 1px solid var(--rule); transform: translateX(-50%) rotate(45deg);
+    }
+    .tour-tip.place-bottom::before { top: -7px; border-right: 0; border-bottom: 0; }
+    .tour-tip.place-top::before    { bottom: -7px; border-left: 0; border-top: 0; }
+    .tip-count { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--accent); margin-bottom: 6px; }
+    .tour-tip .tip-title { font-family: var(--serif); font-weight: 500; font-size: 21px; line-height: 1.12; letter-spacing: -.008em; margin: 0 0 6px; color: var(--ink); }
+    .tour-tip .tip-body { font-family: var(--serif); font-size: 15.5px; line-height: 1.5; color: var(--ink-2); margin: 0 0 13px; text-wrap: pretty; }
+    .tour-tip .tip-body em { font-style: italic; color: var(--accent); }
+    .tip-foot { display: flex; align-items: center; gap: 8px; }
+    .tip-foot .spacer { flex: 1; }
+
+    /* centered card (welcome / end) */
+    .tour-card {
+      position: fixed; z-index: 210; left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: 452px; max-width: calc(100vw - 48px);
+      background: var(--bg-card); border: 1px solid var(--rule);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow);
+      padding: 28px 30px 22px; display: none; overflow: hidden;
+    }
+    .tour-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 22%, transparent)); }
+    .tc-opus { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 15px; }
+    .tc-opus .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 70%, transparent); }
+    .tc-title { font-family: var(--serif); font-weight: 500; font-size: 30px; line-height: 1.08; letter-spacing: -.014em; margin: 0 0 12px; color: var(--ink); }
+    .tc-body { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2); margin: 0 0 22px; text-wrap: pretty; }
+    .tc-body em { font-style: italic; color: var(--accent); }
+    .tc-foot { display: flex; gap: 10px; justify-content: flex-end; }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .tour-card.in { animation: tourPop .3s cubic-bezier(.2,.7,.3,1) both; }
+      .tour-tip.in  { animation: tipFade .26s ease both; }
+      @keyframes tourPop { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) scale(.98); } }
+      @keyframes tipFade { from { opacity: 0; } }
+    }
+  </style>
+
+  <div class="tour-root" aria-hidden="true">
+    <div class="tour-blocker" id="tour-blocker"></div>
+    <div class="tour-spot" id="tour-spot"></div>
+
+    <div class="tour-tip" id="tour-tip" role="dialog" aria-live="polite">
+      <div class="tip-count" id="tip-count"></div>
+      <h4 class="tip-title" id="tip-title"></h4>
+      <p class="tip-body" id="tip-body"></p>
+      <div class="tip-foot">
+        <button class="btn ghost sm" id="tip-skip" type="button">Skip</button>
+        <span class="spacer"></span>
+        <button class="btn sm" id="tip-back" type="button">Back</button>
+        <button class="btn primary sm" id="tip-next" type="button">Next</button>
+      </div>
+    </div>
+
+    <div class="tour-card" id="tour-card" role="dialog" aria-modal="true">
+      <div class="tc-opus"><span class="dot"></span><span id="tc-eyebrow">Opus</span></div>
+      <h3 class="tc-title" id="tc-title"></h3>
+      <p class="tc-body" id="tc-body"></p>
+      <div class="tc-foot" id="tc-foot"></div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var KEY = 'hearth.dash.tour.v1';
+    var root    = document.querySelector('.tour-root');
+    var blocker = document.getElementById('tour-blocker');
+    var spot    = document.getElementById('tour-spot');
+    var tip     = document.getElementById('tour-tip');
+    var tipCount= document.getElementById('tip-count');
+    var tipTitle= document.getElementById('tip-title');
+    var tipBody = document.getElementById('tip-body');
+    var tipSkip = document.getElementById('tip-skip');
+    var tipBack = document.getElementById('tip-back');
+    var tipNext = document.getElementById('tip-next');
+    var card    = document.getElementById('tour-card');
+    var tcTitle = document.getElementById('tc-title');
+    var tcBody  = document.getElementById('tc-body');
+    var tcFoot  = document.getElementById('tc-foot');
+
+    var steps = [
+      { sel: '#tour-begin', radius: 8, title: 'Your tale begins here.',
+        body: 'Press this and I draw back the curtain on your opening scene. From the next session on, this same door reads <em>Continue</em> — and returns you to the very breath you left.' },
+      { sel: '#tour-campaigns', radius: 11, title: 'Many roads, one wanderer.',
+        body: 'Here live your campaigns — the one I seeded from your backstory, any you\u2019ve paused, and the blank page where a new tale begins. Step through whenever you wish to start another.' },
+      { sel: '#tour-sheet', radius: 11, title: 'Who you are, in full.',
+        body: 'Your abilities, your spells, the weight of your coin, and the long road of your growing. Everything that makes you is kept here.' },
+      { sel: '#tour-companions', radius: 11, title: 'Those who walk beside you.',
+        body: 'Whoever joins your road gathers here — the allies who fight, heal, and travel at your side, so you never carry the tale alone.' },
+      { sel: '#tour-plan', radius: 11, title: 'The world I keep.',
+        body: 'This is the bible I wrote for your world \u2014 its places, its people, its buried truths. The amber <em>Spoilers</em> mark warns when a door holds what your character does not yet know. Open it only if you wish to.' },
+      { sel: '#tour-settings', radius: 11, title: 'Set the weather of your story.',
+        body: 'Tell me how hard the world should push back, how dark it may grow, and how I ought to speak as your Dungeon Master. Change it whenever the mood turns.' }
+    ];
+
+    /* ── first-time hero framing (start-a-campaign) ── */
+    var beginBtn   = document.getElementById('tour-begin');
+    var lastEl     = document.querySelector('.hero-cta .last');
+    var recapLabel = document.querySelector('.recap-label');
+    var orig = {};
+    function captureOrig() {
+      orig.begin = beginBtn ? beginBtn.innerHTML : null;
+      orig.last  = lastEl ? lastEl.textContent : '';
+      orig.recap = recapLabel ? recapLabel.textContent : '';
+    }
+    function setFirstTime(on) {
+      if (beginBtn) beginBtn.innerHTML = on
+        ? '<svg class="ic"><use href="#i-play"/></svg>Begin your first session'
+        : orig.begin;
+      if (lastEl) lastEl.textContent = on ? 'Your tale begins now' : orig.last;
+      if (recapLabel) recapLabel.textContent = on ? 'Your opening scene' : orig.recap;
+    }
+
+    var stage = 'welcome';  // 'welcome' | number | 'end'
+    var active = false;
+
+    function start() {
+      if (!active) captureOrig();
+      active = true; stage = 'welcome';
+      setFirstTime(true);
+      root.classList.add('on');
+      render();
+    }
+    function finish() {
+      active = false;
+      root.classList.remove('on');
+      setFirstTime(false);
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+    }
+
+    function render() {
+      if (stage === 'welcome' || stage === 'end') renderCard();
+      else renderStep();
+    }
+
+    function renderCard() {
+      spot.style.display = 'none';
+      tip.style.display = 'none';
+      blocker.classList.add('dim');
+      card.style.display = 'block';
+      card.classList.remove('in'); void card.offsetWidth; card.classList.add('in');
+      if (stage === 'welcome') {
+        tcTitle.textContent = 'Welcome to your hearth, Dravyr.';
+        tcBody.innerHTML = 'I am the hand behind your Dungeon Master. This is the still place between sessions \u2014 your home. Before your story begins, let me show you the few doors that matter.';
+        tcFoot.innerHTML = '<button class="btn ghost" data-act="skip">Skip for now</button><button class="btn primary" data-act="next">Show me around</button>';
+      } else {
+        tcTitle.textContent = 'The rest is yours to find.';
+        tcBody.innerHTML = 'When you\u2019re ready, press <em>Begin your first session</em> \u2014 I\u2019ll be waiting in the dark. You can wander back through this any time from <em>Replay tour</em>, above.';
+        tcFoot.innerHTML = '<button class="btn ghost" data-act="back">Back</button><button class="btn primary" data-act="done">Enter your home</button>';
+      }
+    }
+
+    function renderStep() {
+      card.style.display = 'none';
+      blocker.classList.remove('dim');
+      var wasHidden = getComputedStyle(spot).display === 'none';
+      spot.style.display = 'block';
+      tip.style.display = 'block';
+      tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+      var s = steps[stage];
+      tipCount.textContent = '\u2767  ' + (stage + 1) + ' of ' + steps.length;
+      tipTitle.textContent = s.title;
+      tipBody.innerHTML = s.body;
+      tipNext.textContent = (stage === steps.length - 1) ? 'Finish' : 'Next';
+      var el = document.querySelector(s.sel);
+      var needScroll = false;
+      if (el) {
+        var r = el.getBoundingClientRect();
+        var vh = window.innerHeight;
+        if (r.top < 90 || r.bottom > vh - 170) {
+          needScroll = true;
+          window.scrollTo({ top: window.scrollY + r.top - vh * 0.30, behavior: 'smooth' });
+        }
+      }
+      // Animate the slide only for in-view step-to-step moves; snap on reveal or scroll.
+      reposition(!wasHidden && !needScroll);
+      setTimeout(function () { reposition(false); }, 460);
+    }
+
+    function reposition(animate) {
+      if (!active || typeof stage !== 'number') return;
+      var s = steps[stage];
+      var el = document.querySelector(s.sel);
+      if (!el) return;
+      // Snap (no transition) for reveal/scroll/resize; only slide for in-view step moves.
+      spot.style.transition = animate ? '' : 'none';
+      var r = el.getBoundingClientRect();
+      var pad = 8;
+      spot.style.left = (r.left - pad) + 'px';
+      spot.style.top = (r.top - pad) + 'px';
+      spot.style.width = (r.width + pad * 2) + 'px';
+      spot.style.height = (r.height + pad * 2) + 'px';
+      spot.style.borderRadius = (s.radius || 12) + 'px';
+
+      var vw = window.innerWidth, vh = window.innerHeight, gap = 16;
+      var tipW = tip.offsetWidth || 322, tipH = tip.offsetHeight || 160;
+      var cx = r.left + r.width / 2;
+      var place;
+      if (r.bottom + gap + tipH < vh - 12) place = 'bottom';
+      else if (r.top - gap - tipH > 12) place = 'top';
+      else place = (vh - r.bottom) > r.top ? 'bottom' : 'top';
+
+      var left = Math.min(Math.max(12, cx - tipW / 2), vw - tipW - 12);
+      var top = place === 'bottom' ? r.bottom + gap : r.top - gap - tipH;
+      top = Math.min(Math.max(12, top), vh - tipH - 12);
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+      tip.className = 'tour-tip in place-' + place;
+      var ax = Math.min(Math.max(18, cx - left), tipW - 18);
+      tip.style.setProperty('--ax', ax + 'px');
+      if (!animate) { void spot.offsetWidth; spot.style.transition = ''; }
+    }
+
+    tipNext.onclick = function () { stage = (stage === steps.length - 1) ? 'end' : stage + 1; render(); };
+    tipBack.onclick = function () { stage = (stage === 0) ? 'welcome' : stage - 1; render(); };
+    tipSkip.onclick = finish;
+    tcFoot.onclick = function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      var a = b.dataset.act;
+      if (a === 'skip' || a === 'done') finish();
+      else if (a === 'next') { stage = 0; render(); }
+      else if (a === 'back') { stage = steps.length - 1; render(); }
+    };
+    document.getElementById('tour-replay').onclick = start;
+
+    window.addEventListener('resize', function () { reposition(false); });
+    window.addEventListener('scroll', function () { reposition(false); }, true);
+    window.addEventListener('keydown', function (e) {
+      if (!active) return;
+      if (e.key === 'Escape') { finish(); return; }
+      if (typeof stage !== 'number') return;
+      if (e.key === 'ArrowRight') tipNext.click();
+      else if (e.key === 'ArrowLeft') tipBack.click();
+    });
+
+    var seen = false;
+    try { seen = !!localStorage.getItem(KEY); } catch (e) {}
+    if (!seen) setTimeout(start, 500);
+  })();
+  </script>
+</body>
+</html>

@@ -10,6 +10,7 @@ import NavigationMenu from './components/NavigationMenu'
 
 // Lazy-loaded pages (loaded on demand to reduce initial bundle)
 const DMSession = lazy(() => import('./components/DMSession'))
+const BeginCampaign = lazy(() => import('./components/BeginCampaign'))
 const CampaignPlanPage = lazy(() => import('./components/CampaignPlanPage'))
 // Phase 4a SC-4a.4 — diagnostic surface for AI behavior. Lazy-loaded;
 // only opens when user navigates to it via the dashboard.
@@ -455,6 +456,20 @@ function App() {
           onCharacterUpdated={() => loadCharacters()}
           onBack={goHome}
           onNavigateToPlay={() => {
+            loadCharacters()
+            navigateTo('showDMSession')
+          }}
+          onBeginCampaign={() => navigateTo('showBeginCampaign')}
+        />
+      ) : activeView === 'showBeginCampaign' && selectedCharacter ? (
+        <BeginCampaign
+          character={selectedCharacter}
+          onBack={() => navigateTo('showCampaigns')}
+          onBegun={async () => {
+            try {
+              const r = await fetch(`/api/character/${selectedCharacter.id}`)
+              if (r.ok) handleCharacterUpdated(await r.json())
+            } catch { /* non-fatal */ }
             loadCharacters()
             navigateTo('showDMSession')
           }}

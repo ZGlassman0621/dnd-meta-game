@@ -275,6 +275,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/services/narrativeQueueService.js`
 - `server/services/consequenceService.js`
 - `server/services/campaignPlanService.js` — Opus campaign plan
+- `server/services/campaignDraftService.js` — Begin-Campaign atelier (v2.2.0): Opus drafts/refines a campaign from a prompt + dials; commit creates the campaign + plan + links the character (`POST /api/campaign/draft` + `/begin`)
 - `server/services/backstoryParserService.js` — Structured backstory extraction
 - `server/services/progressionService.js` — Character progression snapshot
 - `server/services/progressionSeedService.js` — Idempotent seed loader
@@ -303,6 +304,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 ### Frontend
 - `client/src/App.jsx` — SPA root, navigation, top-level state
 - `client/src/components/DMSession.jsx` — Main Player Mode session UI (~3000 lines, do not split further without plan)
+- `client/src/components/BeginCampaign.jsx` — conversational "Begin a new Campaign" atelier (v2.2.0): greeting + compose dialogue + rail dials + cinematic begin; reached from CampaignsPage, wired to campaignDraftService
 - `client/src/components/DMMode.jsx` — DM Mode UI
 - `client/src/components/CharacterCreationWizard.jsx` — 4-step wizard (~4300 lines)
 - `client/src/components/CharacterSheet.jsx` — Character view/edit (~3600 lines)

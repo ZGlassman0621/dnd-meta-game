@@ -2,6 +2,28 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.2.0] - 2026-06-06 — Begin a new Campaign (conversational atelier)
+
+A new screen where Opus authors your world while you set the mood, built from the
+Hearth `design_handoff_hearth_app/Begin Campaign.html` design.
+
+- **Frontend** `client/src/components/BeginCampaign.jsx` + scoped
+  `client/src/styles/hearth-begincampaign.css`: a two-state atelier — a Greeting
+  (who walks in / a backstory seed / "start from the world" + a free-text prompt)
+  and a Compose view (a manuscript-prose dialogue thread with Opus, a living
+  premise card + opening-scene preview with drop-cap, nudge chips, and a right
+  rail of dials — scope/tone/setting/party/difficulty/lines&veils — over a
+  "campaign plan · forming" mini-panel), ending in a cinematic "Begin the first
+  session" that plays while the opening scene generates and drops into the cockpit.
+- **Backend** `server/services/campaignDraftService.js` + `POST /api/campaign/draft`
+  and `POST /api/campaign/begin`: Opus authors a structured campaign draft from
+  the prompt + dials (and refines it on nudges — darker / more hopeful / raise the
+  stakes / keep it intimate / one-shot / regenerate); committing creates the real
+  campaign, stores the co-authored draft as its plan, and links the character so
+  the existing `/start` flow plays it.
+- Reached from the Campaigns screen ("Begin a new campaign"); the legacy inline
+  new-campaign flow remains as a fallback. `tests/beginCampaign-flow.test.js` — 8/8.
+
 ## [2.1.0] - 2026-06-06 — MVP hardening: creation fixes, the mechanical spine, full Hearth, cleanup
 
 A four-phase pass following a full system audit. Made the MVP correct, gave it a
