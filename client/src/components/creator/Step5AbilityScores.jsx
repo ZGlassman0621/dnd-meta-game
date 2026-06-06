@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Field, WizardHead } from './creatorPrimitives.jsx'
+import { WizardHead } from './creatorPrimitives.jsx'
 import BumpCelebrationCard, { defaultBumpAssignments, ABILITY_KEYS, ABILITY_LABELS } from './BumpCelebrationCard.jsx'
 import racesData from '../../data/races.json'
 import classesData from '../../data/classes.json'
@@ -23,6 +23,13 @@ import classesData from '../../data/classes.json'
  * Decision E (DECISION_LOG 2026-04-30): L1 cap is 18 — base + racial +
  * bumps clamped at 18 visibly (not silently). Manual-mode base range is
  * 3–20 per §5.5.7 (intentionally wide for roleplay-driven custom builds).
+ *
+ * Hearth render: the design's pane-5 ability allocator — a `.seg`
+ * method toggle, an `.alloc-status` strip, and an `.alloc` of `.arow`
+ * rows (.aname + .agov governance line + .actl control + .amod modifier).
+ * Standard-array rows use `.aselect`; manual rows reuse the array
+ * controls in numeric form. App-specific sections (racial choice, skills,
+ * Variant Human) ride below in `.block`/`.field` Hearth primitives.
  */
 export default function Step5AbilityScores({ state, set, mode, payload }) {
   const isHandoff = mode === 'handoff'
@@ -120,6 +127,12 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
     return { base, racialTotal, bumpTotal, raw, clamped, wouldOverflow: raw > 18 }
   }
 
+  // 5e ability modifier from a final score: floor((score - 10) / 2).
+  const modOf = (score) => {
+    const m = Math.floor((score - 10) / 2)
+    return (m >= 0 ? '+' : '−') + Math.abs(m)
+  }
+
   // --- Standard Array claim/release ---------------------------------------
   const usedArrayValues = useMemo(() => {
     const used = new Set()
@@ -140,6 +153,22 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
     set({ ...state, base_scores: { ...baseScores, [k]: null } })
   }
 
+  // Standard-array select: choosing a value already held by another
+  // ability swaps the two, so each array value stays assigned once —
+  // mirrors the design's "picking a taken value swaps it" behaviour.
+  const selectArrayValue = (k, raw) => {
+    if (raw === '') {
+      releaseSlot(k)
+      return
+    }
+    const val = parseInt(raw, 10)
+    const next = { ...baseScores }
+    const other = ABILITY_KEYS.find(x => x !== k && next[x] === val)
+    if (other != null) next[other] = baseScores[k] ?? null
+    next[k] = val
+    set({ ...state, base_scores: next })
+  }
+
   // --- Manual numeric input ------------------------------------------------
   const setManual = (k, v) => {
     const n = v === '' ? null : Math.max(3, Math.min(20, parseInt(v, 10) || 3))
@@ -153,8 +182,8 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
     <>
       <WizardHead
         stepNum={5}
-        title="Ability Scores"
-        subtitle="Six numbers — and the moments behind them, when there are any to honor."
+        title="Six numbers, and the moments behind them."
+        subtitle="A primary you'll lean on, ★, and one you can let lie, ✗. Place each number where it counts."
         mode={mode}
       />
 
@@ -170,301 +199,210 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
         />
       )}
 
-      <div className="card">
-        {/* --- Generation method ------------------------------------ */}
-        <Field
-          label="Generation method"
-          help="Standard Array gives you six fixed values to assign; Manual lets you enter custom scores within allowed ranges."
-        >
-          <div className="chips">
-            {[
-              { id: 'standard_array', label: 'Standard Array' },
-              { id: 'manual', label: 'Manual' }
-            ].map(opt => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`chip ${generationMethod === opt.id ? 'on' : ''}`}
-                onClick={() => set({
-                  ...state,
-                  generation_method: opt.id,
-                  // Reset assignments when switching methods to avoid carrying
-                  // stale array-claim state into manual-entry, or vice versa.
-                  base_scores: { str: null, dex: null, con: null, int: null, wis: null, cha: null }
-                })}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </Field>
+      {/* --- Generation method (segmented control) ------------------- */}
+      <div className="seg" data-grp="method">
+        {[
+          { id: 'standard_array', label: 'Standard array' },
+          { id: 'manual', label: 'Manual' }
+        ].map(opt => (
+          <button
+            key={opt.id}
+            type="button"
+            className={generationMethod === opt.id ? 'on' : ''}
+            onClick={() => set({
+              ...state,
+              generation_method: opt.id,
+              // Reset assignments when switching methods to avoid carrying
+              // stale array-claim state into manual-entry, or vice versa.
+              base_scores: { str: null, dex: null, con: null, int: null, wis: null, cha: null }
+            })}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
-        {/* --- Six ability score rows ------------------------------- */}
-        <div style={{ marginTop: 18 }}>
-          <div className="label" style={{ marginBottom: 4 }}>Ability scores</div>
-          {classData && (primaryAbilities.length > 0 || dumpStat) && (
-            <div style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 13,
-              color: 'var(--ink-3)',
-              marginBottom: 12,
-              lineHeight: 1.45
-            }}>
-              For {classData.name}
-              {primaryAbilities.length > 0 && (
-                <>
-                  , <strong style={{ fontStyle: 'normal', color: 'var(--accent)' }}>★</strong>
-                  {' marks the '}{primaryAbilities.length === 1 ? 'primary ability' : 'primary abilities'}
-                  {' ('}{primaryAbilities.map(a => ABILITY_LABELS[a]).join(' / ')}{')'}
-                </>
-              )}
-              {dumpStat && (
-                <>
-                  {primaryAbilities.length > 0 ? '; ' : ', '}
-                  <strong style={{ fontStyle: 'normal', color: 'var(--ink-3)' }}>✗</strong>
-                  {' marks the dump stat ('}{ABILITY_LABELS[dumpStat]}{')'}
-                </>
-              )}
-              .
-            </div>
+      {/* --- Status strip — array values, or manual range note ------- */}
+      <div className="alloc-status">
+        {generationMethod === 'standard_array' ? (
+          <>
+            <span className="sl">Standard array</span>
+            <span className="vals">{STANDARD_ARRAY.join(' · ')}</span>
+            <span className="sh">assign each value once — picking a taken value swaps it</span>
+          </>
+        ) : (
+          <span className="sh">enter your own scores — 3 to 20 each, capped at 18 after racial bonuses</span>
+        )}
+      </div>
+
+      {/* --- Class importance hint ----------------------------------- */}
+      {classData && (primaryAbilities.length > 0 || dumpStat) && (
+        <p className="subtitle" style={{ marginTop: 0, marginBottom: 18 }}>
+          For {classData.name}
+          {primaryAbilities.length > 0 && (
+            <>
+              , <span className="mk star" style={{ fontStyle: 'normal' }}>★</span>
+              {' marks the '}{primaryAbilities.length === 1 ? 'primary ability' : 'primary abilities'}
+              {' ('}{primaryAbilities.map(a => ABILITY_LABELS[a]).join(' / ')}{')'}
+            </>
           )}
-          <div style={{ display: 'grid', gap: 0 }}>
-            {/* Header row */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '90px 1fr 70px 70px 70px 80px',
-              gap: 16,
-              alignItems: 'center',
-              padding: '10px 0',
-              borderBottom: '1px solid var(--rule)',
-              fontFamily: 'var(--sans)',
-              fontSize: 10,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-              fontWeight: 500
-            }}>
-              <span>Ability</span>
-              <span>Base</span>
-              <span style={{ textAlign: 'center' }}>Racial</span>
-              <span style={{ textAlign: 'center' }}>Bumps</span>
-              <span style={{ textAlign: 'center' }}>=</span>
-              <span style={{ textAlign: 'center' }}>Total</span>
-            </div>
+          {dumpStat && (
+            <>
+              {primaryAbilities.length > 0 ? '; ' : ', '}
+              <span className="mk dump" style={{ fontStyle: 'normal' }}>✗</span>
+              {' marks the dump stat ('}{ABILITY_LABELS[dumpStat]}{')'}
+            </>
+          )}
+          .
+        </p>
+      )}
 
+      {/* --- Six ability rows ---------------------------------------- */}
+      <div className="alloc">
+        {ABILITY_KEYS.map(k => {
+          const { base, racialTotal, bumpTotal, clamped, wouldOverflow } = computeFinal(k)
+          const isPrimary = primaryAbilities.includes(k)
+          const isDump = dumpStat === k
+          const bonusTotal = racialTotal + bumpTotal
+          const assigned = base != null
+          return (
+            <div key={k} className={`arow ${bumpTotal > 0 ? 'bumped' : ''}`.trim()}>
+              <div className="aname">
+                <span className="an">{ABILITY_LABELS[k]}</span>
+                {isPrimary && (
+                  <span className="mk star" title={`Primary ability for ${classData?.name}`}>★</span>
+                )}
+                {isDump && (
+                  <span className="mk dump" title={`Dump stat for ${classData?.name}`}>✗</span>
+                )}
+              </div>
+
+              <div className="agov">{ABILITY_GOV[k]}</div>
+
+              <div className="actl">
+                {generationMethod === 'standard_array' ? (
+                  <select
+                    className="aselect"
+                    value={base == null ? '' : base}
+                    onChange={e => selectArrayValue(k, e.target.value)}
+                  >
+                    <option value="">—</option>
+                    {STANDARD_ARRAY.map(v => {
+                      const taken = usedArrayValues.has(v) && base !== v
+                      return (
+                        <option key={v} value={v}>
+                          {v}{taken ? ' (swap)' : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                ) : (
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      disabled={base != null && base <= 3}
+                      onClick={() => setManual(k, String((base ?? 10) - 1))}
+                    >
+                      −
+                    </button>
+                    <span className="sc">{base == null ? '—' : base}</span>
+                    <button
+                      type="button"
+                      disabled={base != null && base >= 20}
+                      onClick={() => setManual(k, String((base ?? 9) + 1))}
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+
+                <span
+                  className="amod"
+                  title={wouldOverflow ? `Raw clamped to L1 cap 18` : null}
+                >
+                  {assigned ? modOf(clamped) : '—'}
+                  {assigned && (
+                    <span className="bonus" style={{ display: 'block' }}>
+                      {clamped}
+                      {bonusTotal > 0 && ` (+${bonusTotal})`}
+                      {wouldOverflow && ' cap'}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* --- Racial choice picker (Variant Human, Half-Elf, etc.) -- */}
+      {racialChoiceCount > 0 && (
+        <div className="block" style={{ marginTop: 30 }}>
+          <div className="block-label">
+            <span className="l">
+              Choose {racialChoiceCount} ability score{racialChoiceCount === 1 ? '' : 's'} for your racial +1
+            </span>
+          </div>
+          <div className="pillrow">
             {ABILITY_KEYS.map(k => {
-              const { base, racialTotal, bumpTotal, raw, clamped, wouldOverflow } = computeFinal(k)
+              const isPicked = racialChoicePicks.includes(k)
+              const picksLeft = racialChoiceCount - racialChoicePicks.filter(Boolean).length
+              const canPick = isPicked || picksLeft > 0
               return (
-                <div
+                <button
                   key={k}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '90px 1fr 70px 70px 70px 80px',
-                    gap: 16,
-                    alignItems: 'center',
-                    padding: '14px 0',
-                    borderBottom: '1px solid var(--rule-soft)'
+                  type="button"
+                  className={`selpill ${isPicked ? 'on' : ''}`.trim()}
+                  disabled={!canPick}
+                  onClick={() => {
+                    if (isPicked) {
+                      set({ ...state, racial_choice_picks: racialChoicePicks.filter(p => p !== k) })
+                    } else if (picksLeft > 0) {
+                      set({ ...state, racial_choice_picks: [...racialChoicePicks, k] })
+                    }
                   }}
                 >
-                  <span className="label" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {ABILITY_LABELS[k]}
-                    {primaryAbilities.includes(k) && (
-                      <span style={{ color: 'var(--accent)', fontSize: 14 }} title={`Primary ability for ${classData?.name}`}>★</span>
-                    )}
-                    {dumpStat === k && (
-                      <span style={{ color: 'var(--ink-3)', fontSize: 14 }} title={`Dump stat for ${classData?.name}`}>✗</span>
-                    )}
-                  </span>
-
-                  {/* Base value cell — varies by generation method */}
-                  {generationMethod === 'standard_array' ? (
-                    base != null ? (
-                      <button
-                        type="button"
-                        onClick={() => releaseSlot(k)}
-                        style={{
-                          height: 44,
-                          border: '1px solid var(--ink)',
-                          background: 'var(--bg-card)',
-                          fontFamily: 'var(--mono)',
-                          fontSize: 22,
-                          color: 'var(--ink)',
-                          cursor: 'pointer',
-                          textAlign: 'center'
-                        }}
-                        title="Click to release"
-                      >
-                        {base}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setClaimingFor(k)}
-                        style={{
-                          height: 44,
-                          border: claimingFor === k ? '1px solid var(--accent)' : '1px dashed var(--rule)',
-                          background: claimingFor === k ? 'var(--bg-2)' : 'var(--bg)',
-                          fontFamily: 'var(--sans)',
-                          fontSize: 11,
-                          letterSpacing: '0.14em',
-                          textTransform: 'uppercase',
-                          color: claimingFor === k ? 'var(--accent)' : 'var(--ink-3)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {claimingFor === k ? 'Pick a value below' : 'Claim'}
-                      </button>
-                    )
-                  ) : (
-                    <input
-                      type="number"
-                      min={3}
-                      max={20}
-                      className="input"
-                      style={{ fontFamily: 'var(--mono)', textAlign: 'center', height: 44 }}
-                      value={base == null ? '' : base}
-                      onChange={e => setManual(k, e.target.value)}
-                      placeholder="—"
-                    />
-                  )}
-
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--accent-2)', textAlign: 'center' }}>
-                    {racialTotal > 0 ? `+${racialTotal}` : '—'}
-                  </span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--accent)', textAlign: 'center' }}>
-                    {bumpTotal > 0 ? `+${bumpTotal}` : '—'}
-                  </span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--ink-3)', textAlign: 'center' }}>=</span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--mono)',
-                      fontSize: 22,
-                      fontWeight: 500,
-                      color: wouldOverflow ? 'var(--accent)' : 'var(--ink)',
-                      textAlign: 'center'
-                    }}
-                    title={wouldOverflow ? `Raw ${raw} clamped to L1 cap 18` : null}
-                  >
-                    {base == null ? '—' : clamped}
-                    {wouldOverflow && (
-                      <span style={{ fontSize: 10, color: 'var(--accent)', display: 'block', letterSpacing: '0.1em' }}>
-                        (capped from {raw})
-                      </span>
-                    )}
-                  </span>
-                </div>
+                  {ABILITY_LABELS[k]}
+                </button>
               )
             })}
           </div>
+          <div className="fhelp">
+            {raceData?.name || 'Your race'} grants {racialChoiceCount} additional +1{racialChoiceCount === 1 ? '' : 's'} of your choice. Each ability can receive at most one of these bonuses.
+          </div>
         </div>
+      )}
 
-        {/* --- Standard Array pool (rendered AFTER the rows so the
-             "click a value below" instruction matches what the player
-             sees, and the pool stays visible after they click Claim). */}
-        {generationMethod === 'standard_array' && (
-          <div style={{ marginTop: 18 }}>
-            <Field
-              label="Available values"
-              help={
-                claimingFor
-                  ? `Click a value to assign it to ${ABILITY_LABELS[claimingFor]}.`
-                  : 'Click "Claim" on an ability row above, then pick a value here.'
-              }
-            >
-              <div style={{
-                display: 'flex',
-                gap: 10,
-                flexWrap: 'wrap',
-                padding: 16,
-                background: 'var(--bg-2)',
-                border: '1px dashed var(--rule)'
-              }}>
-                {STANDARD_ARRAY.map(v => {
-                  const used = usedArrayValues.has(v)
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => !used && claimValue(v)}
-                      disabled={used || claimingFor == null}
-                      style={{
-                        width: 56,
-                        height: 56,
-                        border: '1px solid var(--ink)',
-                        background: used ? 'var(--bg-2)' : 'var(--bg-card)',
-                        fontFamily: 'var(--mono)',
-                        fontSize: 22,
-                        fontWeight: 500,
-                        color: used ? 'var(--ink-3)' : 'var(--ink)',
-                        cursor: used || claimingFor == null ? 'not-allowed' : 'pointer',
-                        opacity: used ? 0.3 : 1,
-                        transition: 'all .12s'
-                      }}
-                    >
-                      {v}
-                    </button>
-                  )
-                })}
-              </div>
-            </Field>
+      {/* --- Skills picker --------------------------------------- */}
+      <SkillsPicker state={state} set={set} mode={mode} payload={payload} />
+
+      {/* --- Variant Human bonus general feat -------------------- */}
+      {isVariantHuman && (
+        <div className="block" style={{ marginTop: 30 }}>
+          <div className="block-label">
+            <span className="l">Variant Human bonus feat</span>
           </div>
-        )}
-
-        {/* --- Racial choice picker (Variant Human, Half-Elf, etc.) -- */}
-        {racialChoiceCount > 0 && (
-          <div style={{ marginTop: 28 }}>
-            <Field
-              label={`Choose ${racialChoiceCount} ability score${racialChoiceCount === 1 ? '' : 's'} for your racial +1`}
-              help={`${raceData?.name || 'Your race'} grants ${racialChoiceCount} additional +1${racialChoiceCount === 1 ? '' : 's'} of your choice. Each ability can receive at most one of these bonuses.`}
-            >
-              <div className="chips">
-                {ABILITY_KEYS.map(k => {
-                  const isPicked = racialChoicePicks.includes(k)
-                  const picksLeft = racialChoiceCount - racialChoicePicks.filter(Boolean).length
-                  const canPick = isPicked || picksLeft > 0
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className={`chip ${isPicked ? 'on' : ''}`}
-                      disabled={!canPick}
-                      onClick={() => {
-                        if (isPicked) {
-                          set({ ...state, racial_choice_picks: racialChoicePicks.filter(p => p !== k) })
-                        } else if (picksLeft > 0) {
-                          set({ ...state, racial_choice_picks: [...racialChoicePicks, k] })
-                        }
-                      }}
-                    >
-                      {ABILITY_LABELS[k]}
-                    </button>
-                  )
-                })}
-              </div>
-            </Field>
+          <div className="fhelp" style={{ marginTop: 0 }}>
+            Variant Humans choose a general feat at the start of their journey — a self-taught skill or talent that defines you apart from your lineage. The general feat picker (filtered to feats your current scores qualify you for) wires here.
           </div>
-        )}
-
-        {/* --- Skills picker --------------------------------------- */}
-        <SkillsPicker state={state} set={set} mode={mode} payload={payload} />
-
-        {/* --- Variant Human bonus general feat -------------------- */}
-        {isVariantHuman && (
-          <div style={{ marginTop: 28 }}>
-            <Field
-              label="Variant Human bonus feat"
-              help="Variant Humans choose a general feat at the start of their journey — a self-taught skill or talent that defines you apart from your lineage. Real picker (with prerequisite filtering) lands in batch 3 alongside Step 5's full feat-data wiring."
-            >
-              <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-                General feat picker (filtered to feats your current scores qualify you for) wires here.
-              </div>
-            </Field>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   )
+}
+
+/**
+ * Standard 5e governance lines for each ability — what the score does
+ * mechanically. These are game rules, not mockup sample data; they label
+ * the design's `.agov` description column.
+ */
+const ABILITY_GOV = {
+  str: 'Melee power — lifting, grappling, and shoving.',
+  dex: 'Your strikes and your AC, reflexes, and stealth.',
+  con: 'Hit points, and the grit to hold concentration.',
+  int: 'Lore, investigation, and arcane study.',
+  wis: 'Perception, insight, willpower — and your saves.',
+  cha: 'Presence — persuasion, deception, intimidation.'
 }
 
 /**
@@ -504,48 +442,51 @@ function SkillsPicker({ state, set, mode, payload }) {
 
   if (!cls) {
     return (
-      <div style={{ marginTop: 28 }}>
-        <Field label="Skills">
-          <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-            Pick a class on Step 4 to see your skill options.
-          </div>
-        </Field>
+      <div className="block" style={{ marginTop: 30 }}>
+        <div className="block-label"><span className="l">Skills</span></div>
+        <div className="fhelp" style={{ marginTop: 0 }}>
+          Pick a class on Step 4 to see your skill options.
+        </div>
       </div>
     )
   }
 
   return (
-    <div style={{ marginTop: 28 }}>
-      <Field
-        label={`Skills (pick ${remainingPicks} more${emergenceIds.length > 0 ? `; ${emergenceIds.length} emerged from your Prelude` : ''})`}
-        help="Skills you're proficient in. Each ties to one of your six abilities — pick the ones you've practiced or trained."
-      >
-        <div className="chips">
-          {allowedSkillIds.map(id => {
-            const isEmergence = emergenceIds.includes(id)
-            const isPicked = picked.includes(id)
-            const isOn = isEmergence || isPicked
-            const disabled = isEmergence || (!isPicked && remainingPicks === 0)
-            return (
-              <button
-                key={id}
-                type="button"
-                className={`chip ${isOn ? 'on' : ''}`}
-                disabled={disabled}
-                onClick={() => togglePick(id)}
-                title={isEmergence ? 'Emerged during your Prelude' : null}
-              >
-                {prettifySkillId(id)}
-                {isEmergence && (
-                  <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--accent)', fontStyle: 'italic' }}>
-                    (Prelude)
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </Field>
+    <div className="block" style={{ marginTop: 30 }}>
+      <div className="block-label">
+        <span className="l">Skills</span>
+        <span className="hint">
+          pick {remainingPicks} more{emergenceIds.length > 0 ? ` · ${emergenceIds.length} emerged from your Prelude` : ''}
+        </span>
+      </div>
+      <div className="pillrow">
+        {allowedSkillIds.map(id => {
+          const isEmergence = emergenceIds.includes(id)
+          const isPicked = picked.includes(id)
+          const isOn = isEmergence || isPicked
+          const disabled = isEmergence || (!isPicked && remainingPicks === 0)
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`selpill ${isOn ? 'on' : ''}`.trim()}
+              disabled={disabled}
+              onClick={() => togglePick(id)}
+              title={isEmergence ? 'Emerged during your Prelude' : null}
+            >
+              {prettifySkillId(id)}
+              {isEmergence && (
+                <span style={{ marginLeft: 6, fontSize: 9, fontStyle: 'italic' }}>
+                  (Prelude)
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <div className="fhelp">
+        Skills you're proficient in. Each ties to one of your six abilities — pick the ones you've practiced or trained.
+      </div>
     </div>
   )
 }

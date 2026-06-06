@@ -44,12 +44,12 @@ export default function RaceAwareDimensionPicker({ field, raceId, value, onChang
     if (known) setCustomMode(false)
   }, [raceId, value])
 
-  // No race picked yet — fall back to plain text input.
+  // No race picked yet — fall back to plain text input (Hearth .finput).
   if (!demographics) {
     return (
       <input
         type="text"
-        className="input"
+        className="finput"
         value={value || ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholderFor(field)}
@@ -62,7 +62,7 @@ export default function RaceAwareDimensionPicker({ field, raceId, value, onChang
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           type="text"
-          className="input"
+          className="finput"
           value={value || ''}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholderFor(field)}
@@ -91,7 +91,8 @@ export default function RaceAwareDimensionPicker({ field, raceId, value, onChang
 
   return (
     <select
-      className="select"
+      className="aselect"
+      style={{ width: '100%' }}
       value={value || ''}
       onChange={e => {
         const v = e.target.value

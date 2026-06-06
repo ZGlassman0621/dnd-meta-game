@@ -114,32 +114,33 @@ export default function Step7IdentityDetails({ state, set, mode, payload }) {
     <>
       <WizardHead
         stepNum={7}
-        title="Identity Details"
-        subtitle="The interior life and outward presence of the person you'll be playing — required anchors first, deeper texture if you want it."
+        title="The interior life, and the outward one."
+        subtitle="How they appear to a stranger across a room, and what actually moves them when no one is watching."
         mode={mode}
       />
 
       {/* ============================================================
        * Section 1 — Required identity (always visible)
        * ============================================================ */}
-      <div className="card">
-        <RequiredCoreSection
-          identity={identity}
-          setIdentity={setIdentity}
-          faithOptions={faithOptions}
-          raceId={raceId}
-        />
-      </div>
+      <RequiredCoreSection
+        identity={identity}
+        setIdentity={setIdentity}
+        faithOptions={faithOptions}
+        raceId={raceId}
+      />
 
       {/* ============================================================
        * Section 2 — Optional expansions
        * ============================================================ */}
-      <div style={{ marginTop: 28 }}>
-        <p className="help" style={{ marginBottom: 18 }}>
-          {isHandoff
-            ? 'The years behind you shaped these. Confirm what fits, edit what doesn\'t.'
-            : 'The deeper texture of who you are. Fill in what feels meaningful and skip what doesn\'t.'}
-        </p>
+      <div className="block" style={{ marginBottom: 0 }}>
+        <div className="block-label">
+          <span className="l">Personality &amp; conviction</span>
+          <span className="hint">
+            {isHandoff
+              ? 'the years behind you shaped these — confirm what fits'
+              : 'the deeper texture of who you are — fill in what feels meaningful'}
+          </span>
+        </div>
         <OptionalExpansions
           state={state}
           set={set}
@@ -157,281 +158,254 @@ export default function Step7IdentityDetails({ state, set, mode, payload }) {
  * 8 physical fields in a compact grid (per §5.7.7 design call).
  */
 function RequiredCoreSection({ identity, setIdentity, faithOptions, raceId }) {
+  const alignDesc = identity.alignment ? ALIGNMENT_DESCRIPTIONS[identity.alignment] : null
+  const faith = identity.faith && identity.faith !== '_none'
+    ? faithOptions.find(o => o.id === identity.faith)
+    : null
+  const lifestyle = identity.lifestyle
+    ? LIFESTYLES.find(x => x.id === identity.lifestyle)
+    : null
+
   return (
     <>
-      <Field
-        label="Alignment"
-        help="Your moral compass — how you tend to act when no one's watching."
-      >
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 8,
-          maxWidth: 460
-        }}>
-          {ALIGNMENT_GRID.flat().map(code => {
-            const picked = identity.alignment === code
-            return (
+      {/* ── Alignment — the design's .align-wrap (grid + side panel) ── */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Alignment</span>
+          <span className="hint">how you tend to act when no one's watching</span>
+        </div>
+        <div className="align-wrap">
+          <div className="align-grid">
+            {ALIGNMENT_GRID.flat().map(code => (
               <button
                 key={code}
                 type="button"
+                className={`ac${identity.alignment === code ? ' on' : ''}`}
+                title={ALIGNMENT_NAMES[code]}
                 onClick={() => setIdentity({ alignment: code })}
-                style={{
-                  padding: '12px 14px',
-                  background: picked ? 'var(--ink)' : 'var(--bg-card)',
-                  color: picked ? 'var(--bg-card)' : 'var(--ink-2)',
-                  border: `1px solid ${picked ? 'var(--ink)' : 'var(--rule)'}`,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontFamily: 'var(--serif)'
-                }}
               >
-                <div style={{
+                {code}
+              </button>
+            ))}
+          </div>
+          <div className="align-side">
+            {identity.alignment ? (
+              <>
+                <div className="al-name">{ALIGNMENT_NAMES[identity.alignment]}</div>
+                {alignDesc && <div className="al-desc">{alignDesc.summary}</div>}
+              </>
+            ) : (
+              <div className="al-desc">
+                Pick the square that fits — where your ideals point when no one
+                is watching.
+              </div>
+            )}
+          </div>
+        </div>
+        {alignDesc && (
+          <ul style={{
+            margin: '16px 0 0',
+            paddingLeft: 18,
+            fontFamily: 'var(--serif)',
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: 'var(--ink-3)'
+          }}>
+            {alignDesc.examples.map((ex, i) => (
+              <li key={i} style={{ marginBottom: 4 }}>{ex}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ── Faith — Hearth .field with a select + alignment chip ── */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Faith</span>
+          <span className="hint">your connection to the divine, if any</span>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <select
+            className="aselect"
+            style={{ width: '100%' }}
+            value={identity.faith || ''}
+            onChange={e => setIdentity({ faith: e.target.value })}
+          >
+            <option value="">Choose a faith…</option>
+            {faithOptions.map(f => (
+              <option key={f.id} value={f.id}>
+                {f.name}{f.pantheon ? ` (${f.pantheon})` : ''}
+              </option>
+            ))}
+          </select>
+          {faith && faith.description ? (
+            <div className="fhelp" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+              {faith.description}
+              {faith.alignment && (
+                <span style={{ marginLeft: 8 }}>
+                  <AlignmentChip alignment={faith.alignment} />
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="fhelp">Faith shapes ritual, oath, and the language you use under pressure.</div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Lifestyle — the design's .pillrow / .selpill selector ── */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Lifestyle</span>
+          <span className="hint">the standard you can sustain between adventures</span>
+        </div>
+        <div className="pillrow">
+          {LIFESTYLES.map(l => {
+            const on = identity.lifestyle === l.id
+            return (
+              <button
+                key={l.id}
+                type="button"
+                className={`selpill${on ? ' on' : ''}`}
+                onClick={() => setIdentity({ lifestyle: l.id })}
+              >
+                {l.id}
+                <span style={{
+                  marginLeft: 8,
                   fontFamily: 'var(--mono)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  marginBottom: 2
+                  fontSize: 10,
+                  color: on ? '#211d17' : 'var(--ink-4)'
                 }}>
-                  {code}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--sans)',
-                  fontSize: 11,
-                  letterSpacing: '0.06em',
-                  opacity: picked ? 0.85 : 0.7
-                }}>
-                  {ALIGNMENT_NAMES[code]}
-                </div>
+                  {l.cost}
+                </span>
               </button>
             )
           })}
         </div>
-        {identity.alignment && ALIGNMENT_DESCRIPTIONS[identity.alignment] && (
+        {lifestyle && (
           <div style={{
             marginTop: 14,
             padding: '14px 18px',
             background: 'var(--bg-2)',
             border: '1px solid var(--rule-soft)',
             borderLeft: '3px solid var(--accent)',
-            maxWidth: 720
+            borderRadius: 11,
+            fontFamily: 'var(--serif)',
+            fontStyle: 'italic',
+            fontSize: 16,
+            lineHeight: 1.5,
+            color: 'var(--ink-2)'
           }}>
-            <div style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 16,
-              lineHeight: 1.5,
-              color: 'var(--ink-2)',
-              marginBottom: 10
+            <span style={{
+              fontFamily: 'var(--mono)',
+              fontStyle: 'normal',
+              fontSize: 12,
+              color: 'var(--accent)',
+              marginRight: 12
             }}>
-              {ALIGNMENT_DESCRIPTIONS[identity.alignment].summary}
-            </div>
-            <ul style={{
-              margin: 0,
-              paddingLeft: 18,
-              fontFamily: 'var(--serif)',
-              fontSize: 14,
-              lineHeight: 1.45,
-              color: 'var(--ink-3)'
-            }}>
-              {ALIGNMENT_DESCRIPTIONS[identity.alignment].examples.map((ex, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>{ex}</li>
-              ))}
-            </ul>
+              {lifestyle.cost}
+            </span>
+            {lifestyle.meaning}
           </div>
         )}
-      </Field>
-
-      <Field
-        label="Faith"
-        help="Your connection to the divine, if any. Faith shapes ritual, oath, and the language you use under pressure."
-      >
-        <select
-          className="select"
-          value={identity.faith || ''}
-          onChange={e => setIdentity({ faith: e.target.value })}
-        >
-          <option value="">Choose a faith…</option>
-          {faithOptions.map(f => (
-            <option key={f.id} value={f.id}>
-              {f.name}{f.pantheon ? ` (${f.pantheon})` : ''}
-            </option>
-          ))}
-        </select>
-        {identity.faith && identity.faith !== '_none' && (() => {
-          const f = faithOptions.find(o => o.id === identity.faith)
-          if (!f || !f.description) return null
-          return (
-            <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
-              {f.description}
-              {f.alignment && (
-                <span style={{ marginLeft: 8 }}>
-                  <AlignmentChip alignment={f.alignment} />
-                </span>
-              )}
-            </div>
-          )
-        })()}
-      </Field>
-
-      <Field
-        label="Lifestyle"
-        help="How you live between adventures — the comfort you're accustomed to and the standard you can sustain."
-      >
-        <div className="chips">
-          {LIFESTYLES.map(l => (
-            <button
-              key={l.id}
-              type="button"
-              className={`chip ${identity.lifestyle === l.id ? 'on' : ''}`}
-              onClick={() => setIdentity({ lifestyle: l.id })}
-            >
-              {l.id}
-              <span style={{
-                marginLeft: 8,
-                fontFamily: 'var(--mono)',
-                fontSize: 10,
-                color: identity.lifestyle === l.id ? 'rgba(255,255,255,0.7)' : 'var(--ink-3)'
-              }}>
-                {l.cost}
-              </span>
-            </button>
-          ))}
-        </div>
-        {identity.lifestyle && (() => {
-          const l = LIFESTYLES.find(x => x.id === identity.lifestyle)
-          if (!l) return null
-          return (
-            <div style={{
-              marginTop: 14,
-              padding: '14px 18px',
-              background: 'var(--bg-2)',
-              border: '1px solid var(--rule-soft)',
-              borderLeft: '3px solid var(--accent)',
-              maxWidth: 720,
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 16,
-              lineHeight: 1.5,
-              color: 'var(--ink-2)'
-            }}>
-              <span style={{
-                fontFamily: 'var(--mono)',
-                fontStyle: 'normal',
-                fontSize: 12,
-                color: 'var(--accent)',
-                marginRight: 12
-              }}>
-                {l.cost}
-              </span>
-              {l.meaning}
-            </div>
-          )
-        })()}
-      </Field>
-
-      <div className="hr soft" />
-
-      <div className="label" style={{ marginBottom: 12 }}>Physical description</div>
-      <p className="help" style={{ marginBottom: 18 }}>
-        What you look like. This grounds how others first see you.
-      </p>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr 1fr',
-        gap: 18
-      }}>
-        <RaceAwarePhysicalField
-          label="Age"
-          field="age"
-          raceId={raceId}
-          value={identity.age}
-          onChange={v => setIdentity({ age: v })}
-        />
-        <RaceAwarePhysicalField
-          label="Height"
-          field="height"
-          raceId={raceId}
-          value={identity.height}
-          onChange={v => setIdentity({ height: v })}
-        />
-        <RaceAwarePhysicalField
-          label="Weight"
-          field="weight"
-          raceId={raceId}
-          value={identity.weight}
-          onChange={v => setIdentity({ weight: v })}
-        />
-        <RaceAwareColorField label="Eyes" field="eyes" raceId={raceId} value={identity.eye_color} onChange={v => setIdentity({ eye_color: v })} />
-        <RaceAwareColorField label="Hair" field="hair" raceId={raceId} value={identity.hair_color} onChange={v => setIdentity({ hair_color: v })} />
-        <RaceAwareColorField label="Skin" field="skin" raceId={raceId} value={identity.skin_color} onChange={v => setIdentity({ skin_color: v })} />
-        <RaceAwareColorField label="Build" field="build" raceId={raceId} value={identity.build} onChange={v => setIdentity({ build: v })} />
       </div>
 
-      <div style={{ marginTop: 18 }}>
-        <Field label="Distinguishing features (optional)" help="Scars, markings, the way you carry yourself — anything that makes you visibly you.">
-          <textarea
-            className="textarea"
-            value={identity.distinguishing_features || ''}
-            onChange={e => setIdentity({ distinguishing_features: e.target.value })}
-            maxLength={256}
-            placeholder="—"
-          />
-        </Field>
+      {/* ── Appearance — the design's .appear grid of compact fields ── */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Appearance</span>
+          <span className="hint">how others first see you</span>
+        </div>
+        <div className="appear">
+          <AppearanceField label="Age">
+            <RaceAwareDimensionPicker
+              field="age"
+              raceId={raceId}
+              value={identity.age || ''}
+              onChange={v => setIdentity({ age: v })}
+            />
+          </AppearanceField>
+          <AppearanceField label="Height">
+            <RaceAwareDimensionPicker
+              field="height"
+              raceId={raceId}
+              value={identity.height || ''}
+              onChange={v => setIdentity({ height: v })}
+            />
+          </AppearanceField>
+          <AppearanceField label="Weight">
+            <RaceAwareDimensionPicker
+              field="weight"
+              raceId={raceId}
+              value={identity.weight || ''}
+              onChange={v => setIdentity({ weight: v })}
+            />
+          </AppearanceField>
+          <AppearanceField label="Eyes">
+            <RaceAwareColorPicker
+              field="eyes"
+              raceId={raceId}
+              value={identity.eye_color || ''}
+              onChange={v => setIdentity({ eye_color: v })}
+            />
+          </AppearanceField>
+          <AppearanceField label="Hair">
+            <RaceAwareColorPicker
+              field="hair"
+              raceId={raceId}
+              value={identity.hair_color || ''}
+              onChange={v => setIdentity({ hair_color: v })}
+            />
+          </AppearanceField>
+          <AppearanceField label="Skin">
+            <RaceAwareColorPicker
+              field="skin"
+              raceId={raceId}
+              value={identity.skin_color || ''}
+              onChange={v => setIdentity({ skin_color: v })}
+            />
+          </AppearanceField>
+          <AppearanceField label="Build">
+            <RaceAwareColorPicker
+              field="build"
+              raceId={raceId}
+              value={identity.build || ''}
+              onChange={v => setIdentity({ build: v })}
+            />
+          </AppearanceField>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <Field label="Distinguishing features" help="Scars, markings, the way you carry yourself — anything that makes you visibly you. (optional)">
+            <textarea
+              value={identity.distinguishing_features || ''}
+              onChange={e => setIdentity({ distinguishing_features: e.target.value })}
+              maxLength={256}
+              placeholder="—"
+            />
+          </Field>
+        </div>
       </div>
     </>
   )
 }
 
-function PhysicalField({ label, value, onChange, max = 64, placeholder = '—' }) {
-  return (
-    <div className="field" style={{ marginBottom: 0 }}>
-      <div className="label">{label}</div>
-      <input
-        type="text"
-        className="input"
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        maxLength={max}
-        placeholder={placeholder}
-      />
-    </div>
-  )
-}
-
 /**
- * Race-aware physical field — wraps RaceAwareDimensionPicker in the
- * label-and-spacing shape the rest of the physical-fields grid uses.
+ * Compact appearance field — the design's `.appear > .af` cell: an
+ * uppercase `.afl` caption over the (race-aware) control. Mirrors the
+ * mockup's Eyes / Hair / Skin / Build cells, but holds the app's real
+ * race-aware pickers instead of the mockup's sample pills.
  */
-function RaceAwarePhysicalField({ label, field, raceId, value, onChange }) {
+function AppearanceField({ label, children }) {
+  // `.af` gives the design's compact appearance-cell layout; the extra
+  // `.field` class lets the shared `.hearth .field select / input` rules
+  // style the race-aware pickers' native controls (the color picker emits
+  // bare `.select` / `.input` elements). Margin is reset to 0 so the
+  // `.appear` grid gap controls vertical rhythm, not the field margin.
   return (
-    <div className="field" style={{ marginBottom: 0 }}>
-      <div className="label">{label}</div>
-      <RaceAwareDimensionPicker
-        field={field}
-        raceId={raceId}
-        value={value || ''}
-        onChange={onChange}
-      />
-    </div>
-  )
-}
-
-/**
- * Race-aware color/build field — wraps RaceAwareColorPicker in the
- * label-and-spacing shape the rest of the physical-fields grid uses.
- */
-function RaceAwareColorField({ label, field, raceId, value, onChange }) {
-  return (
-    <div className="field" style={{ marginBottom: 0 }}>
-      <div className="label">{label}</div>
-      <RaceAwareColorPicker
-        field={field}
-        raceId={raceId}
-        value={value || ''}
-        onChange={onChange}
-      />
+    <div className="af field" style={{ marginBottom: 0 }}>
+      <div className="afl">{label}</div>
+      {children}
     </div>
   )
 }
@@ -603,7 +577,8 @@ function BackstoryExpansion({ themeId, expansions, setExpansion, defaultOpen, bi
           padding: '20px 24px',
           background: 'var(--bg-2)',
           border: '1px solid var(--rule)',
-          borderLeft: '3px solid var(--accent)'
+          borderLeft: '3px solid var(--accent)',
+          borderRadius: 11
         }}>
           <div className="eyebrow" style={{ marginBottom: 12 }}>Biography seed (canonical)</div>
           {biographySeed.map((entry, i) => (
@@ -633,7 +608,7 @@ function BackstoryExpansion({ themeId, expansions, setExpansion, defaultOpen, bi
               </div>
             </div>
           ))}
-          <div className="help" style={{ marginTop: 6 }}>
+          <div className="fhelp" style={{ marginTop: 6 }}>
             What you see here is canonical to your campaign. To revise it later, you can edit your character's biography directly.
           </div>
         </div>

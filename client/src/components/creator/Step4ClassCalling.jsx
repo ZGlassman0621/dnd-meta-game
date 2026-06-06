@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Field, WizardHead } from './creatorPrimitives.jsx'
+import { WizardHead } from './creatorPrimitives.jsx'
 import classesData from '../../data/classes.json'
 import { THEME_NARRATIVE_CONTINUITY } from '../../data/themeNarrativeContinuity.js'
 
@@ -57,13 +57,19 @@ function detectSubclassPickLevel(subclasses) {
  *
  * Handoff mode: class is suggested-but-editable — pre-fills with
  * `payload.class_suggestion` from the [CLASS_HINT] tally. A
- * narrative-continuity card sits ABOVE the class dropdown, anchored
+ * narrative-continuity card sits ABOVE the class picker, anchored
  * to the locked theme. The card is dismissable per spec §5.4.6 —
  * local-session-scoped boolean.
  *
  * Subclass + L1 mechanical picks are fully editable in both modes
  * (no Prelude pre-fill — the Prelude tracks class affinity, not
  * subclass affinity, per spec §5.4.3).
+ *
+ * HEARTH render: step header via WizardHead (.step-eyebrow + h1 +
+ * .subtitle); class chooser as .block > .opt-grid.c3 > .opt; selected
+ * class detail as a .reveal .trait-card; subclass chooser as a
+ * .reveal.subrow > .opt-grid.c3 > .opt; the handoff continuity card as
+ * a dismissable .lock-cele. See "Create Character.html" §pane[4].
  */
 export default function Step4ClassCalling({ state, set, mode, payload }) {
   const isHandoff = mode === 'handoff'
@@ -102,142 +108,146 @@ export default function Step4ClassCalling({ state, set, mode, payload }) {
   }, [])
   const cls = classId ? classList.find(c => c.id === classId) : null
 
+  const hitDieLabel = (hd) => (hd == null ? null : (typeof hd === 'number' ? `d${hd}` : hd))
+
   return (
     <>
       <WizardHead
         stepNum={4}
-        title="Class & Calling"
-        subtitle="What you'll do when the situation calls for action."
+        title="What you'll do when it calls for action."
+        subtitle="Your class is the shape of your power. The calling within it — your subclass — is how you wield it."
         mode={mode}
       />
 
       {continuity && !dismissed && (
-        <div className="narrative-card">
-          <button
-            type="button"
-            className="dismiss"
-            onClick={() => setDismissed(true)}
-            title="This doesn't fit"
-            aria-label="Dismiss this card"
-          >
-            ✕
-          </button>
-          <div className="marker">A continuity from the years behind you</div>
-          <p className="body">{continuity}</p>
+        <div className="lock-cele" style={{ padding: '17px 19px 17px 21px' }}>
+          <div className="lc-top">
+            <span className="lc-fleuron" aria-hidden="true">❧</span>
+            <span className="lc-marker">A continuity from the years behind you</span>
+            <button
+              type="button"
+              className="rv-edit"
+              style={{ marginLeft: 'auto', padding: '3px 9px' }}
+              onClick={() => setDismissed(true)}
+              title="This doesn't fit"
+              aria-label="Dismiss this card"
+            >
+              Doesn't fit
+            </button>
+          </div>
+          <div className="lc-note">{continuity}</div>
         </div>
       )}
 
-      <div className="card">
-        <Field
-          label="Class"
-          help={
-            isHandoff
-              ? 'Suggested from the years that shaped you. The choice remains yours.'
-              : 'Your profession or training — what you do when the situation calls for action.'
-          }
-        >
-          <div className="picker">
-            {classList.map(c => (
+      {/* ── Class ─────────────────────────────────────────── */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Class</span>
+          <span className="hint">
+            {isHandoff
+              ? 'suggested from the years that shaped you — the choice remains yours'
+              : 'what you do when the situation calls for action'}
+          </span>
+        </div>
+        <div className="opt-grid c3">
+          {classList.map(c => {
+            const meta = [hitDieLabel(c.hitDie), c.primaryAbility].filter(Boolean).join(' · ')
+            return (
               <button
                 key={c.id}
                 type="button"
-                className={`pick ${classId === c.id ? 'on' : ''}`}
+                className={`opt ${classId === c.id ? 'sel' : ''}`.trim()}
                 onClick={() => set({ ...state, class_id: c.id, subclass_id: '', fighting_style: '' })}
               >
-                <div className="name">{c.name}</div>
-                <div className="sub">
-                  {[
-                    c.hitDie ? (typeof c.hitDie === 'number' ? `d${c.hitDie}` : c.hitDie) : null,
-                    c.primaryAbility
-                  ].filter(Boolean).join(' · ')}
-                </div>
+                <div className="ot">{c.name}</div>
+                {c.description && <div className="od">{c.description}</div>}
+                {meta && <div className="ometa">{meta}</div>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Selected-class detail reveal ──────────────────── */}
+      {cls && (
+        <div className="reveal">
+          <div className="trait-card">
+            <span className="ti">
+              <svg className="ic" aria-hidden="true"><use href="#i-sparkles" /></svg>
+            </span>
+            <div>
+              <div className="tt">{cls.name}</div>
+              {cls.description && <div className="td">{cls.description}</div>}
+              <div className="td" style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+                {hitDieLabel(cls.hitDie) && (
+                  <span>Hit die <strong style={{ color: 'var(--ink)' }}>{hitDieLabel(cls.hitDie)}</strong></span>
+                )}
+                {cls.primaryAbility && (
+                  <span>Primary <strong style={{ color: 'var(--ink)' }}>{cls.primaryAbility}</strong></span>
+                )}
+                {cls.savingThrows && (
+                  <span>
+                    Saves{' '}
+                    <strong style={{ color: 'var(--ink)' }}>
+                      {Array.isArray(cls.savingThrows) ? cls.savingThrows.join(', ') : cls.savingThrows}
+                    </strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Calling (subclass) ────────────────────────────── */}
+      {cls && cls.subclassPickLevel === 1 && (
+        <div className="reveal subrow">
+          <div className="block-label">
+            <span className="l">Calling · {cls.name}</span>
+            <span className="hint">a specialization, chosen at level 1</span>
+          </div>
+          <div className="opt-grid c3">
+            {cls.subclasses.map(s => (
+              <button
+                key={s.name}
+                type="button"
+                className={`opt ${state.subclass_id === s.name ? 'sel' : ''}`.trim()}
+                onClick={() => set({ ...state, subclass_id: s.name })}
+              >
+                <div className="ot">{s.name}</div>
+                {s.description && <div className="od"><em>{s.description}</em></div>}
               </button>
             ))}
           </div>
-        </Field>
+        </div>
+      )}
 
-        {cls && (
-          <div className="detail-card">
-            <div className="name">{cls.name}</div>
-            {cls.description && (
-              <p className="body">{cls.description}</p>
-            )}
-            <div className="stat-line">
-              {cls.hitDie && (
-                <span>
-                  Hit die <strong>{typeof cls.hitDie === 'number' ? `d${cls.hitDie}` : cls.hitDie}</strong>
-                </span>
-              )}
-              {cls.primaryAbility && (
-                <span>Primary <strong>{cls.primaryAbility}</strong></span>
-              )}
-              {cls.savingThrows && (
-                <span>
-                  Saves <strong>{Array.isArray(cls.savingThrows) ? cls.savingThrows.join(', ') : cls.savingThrows}</strong>
-                </span>
-              )}
-            </div>
+      {cls && cls.subclassPickLevel !== 1 && (
+        <div className="reveal subrow">
+          <div className="block-label">
+            <span className="l">Calling</span>
+            <span className="hint">chosen at level {cls.subclassPickLevel}</span>
           </div>
-        )}
+          <div className="fhelp" style={{ marginTop: 0 }}>
+            {cls.name} chooses a specialization at level {cls.subclassPickLevel}. You'll pick when
+            you reach that level in play.
+          </div>
+        </div>
+      )}
 
-        {/*
-          Subclass + L1 mechanical picks are step 4's secondary surface.
-          For batch 2 we render a lightweight placeholder; chunk 5 will
-          source these from class data files (subclass-pick level per
-          class, fighting style options, cantrip allotments, etc.). The
-          placeholder communicates "the work continues" without faking
-          data the player would interact with.
-        */}
-        {cls && (
-          <>
-            <div className="hr soft" />
-            {cls.subclassPickLevel === 1 ? (
-              <Field
-                label="Subclass"
-                help={`A specialization within ${cls.name} — picks at level 1.`}
-              >
-                <div className="picker two">
-                  {cls.subclasses.map(s => (
-                    <button
-                      key={s.name}
-                      type="button"
-                      className={`pick ${state.subclass_id === s.name ? 'on' : ''}`}
-                      onClick={() => set({ ...state, subclass_id: s.name })}
-                    >
-                      <div className="name" style={{ fontSize: 17 }}>{s.name}</div>
-                      {s.description && (
-                        <div className="sub" style={{
-                          marginTop: 4, fontFamily: 'var(--serif)', fontStyle: 'italic',
-                          fontSize: 14, color: 'var(--ink-2)',
-                          textTransform: 'none', letterSpacing: 0
-                        }}>
-                          {s.description}
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-            ) : (
-              <Field label="Subclass">
-                <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-                  {cls.name} chooses a specialization at level {cls.subclassPickLevel}. You'll
-                  pick when you reach that level in play.
-                </div>
-              </Field>
-            )}
-
-            <Field
-              label="Other L1 picks"
-              help="Cantrips, fighting style, expertise, and other class-specific choices that come at character creation. Wired in a follow-up sub-chunk; the picker below is a placeholder."
-            >
-              <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-                Class-specific L1 mechanical choices will surface here per the chosen class's schema.
-              </div>
-            </Field>
-          </>
-        )}
-      </div>
+      {/* ── Other level-1 picks (placeholder per spec) ────── */}
+      {cls && (
+        <div className="block subrow" style={{ marginBottom: 0, marginTop: 18 }}>
+          <div className="block-label">
+            <span className="l">Other level-1 picks</span>
+            <span className="hint">cantrips, fighting style, expertise</span>
+          </div>
+          <div className="fhelp" style={{ marginTop: 0 }}>
+            Class-specific level-1 mechanical choices will surface here per the chosen class's
+            schema. Wired in a follow-up sub-chunk.
+          </div>
+        </div>
+      )}
     </>
   )
 }

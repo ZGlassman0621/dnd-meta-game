@@ -19,8 +19,8 @@ export default function PromptList({ prompts, value, onPick }) {
       <div style={{
         fontFamily: 'var(--serif)',
         fontStyle: 'italic',
-        fontSize: 15,
-        color: 'var(--ink-3)',
+        fontSize: 14.5,
+        color: 'var(--ink-4)',
         padding: '8px 0'
       }}>
         No theme-flavored prompts available — fill the field freely.
@@ -28,46 +28,31 @@ export default function PromptList({ prompts, value, onPick }) {
     )
   }
 
+  // Hearth idiom: the Step-7 .prompt-list — a stacked list of click-to-fill
+  // .po buttons, the matching one carrying .on (gold-wash highlight). The
+  // alignment chip rides inline at the head of each prompt (Decision 3).
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-      margin: '12px 0 18px'
-    }}>
+    <div className="prompt-list" style={{ margin: '12px 0 18px', borderTop: 'none', paddingTop: 0 }}>
       {prompts.map((p, i) => {
         const picked = (value || '').trim() === p.text.trim()
         return (
           <button
             key={i}
             type="button"
+            className={`po${picked ? ' on' : ''}`}
             onClick={() => onPick(p)}
             style={{
-              display: 'grid',
-              gridTemplateColumns: '52px 1fr',
-              gap: 14,
-              alignItems: 'center',
-              padding: '10px 14px',
-              background: picked ? 'var(--bg-2)' : 'var(--bg)',
-              border: `1px solid ${picked ? 'var(--accent)' : 'var(--rule-soft)'}`,
-              cursor: 'pointer',
-              transition: 'all .12s',
-              textAlign: 'left',
-              fontFamily: 'var(--serif)'
+              display: 'flex',
+              gap: 10,
+              alignItems: 'baseline'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <AlignmentChip alignment={p.alignment} />
-            </div>
-            <div style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 15.5,
-              lineHeight: 1.45,
-              color: 'var(--ink-2)'
-            }}>
-              {p.text}
-            </div>
+            {p.alignment && (
+              <span style={{ flexShrink: 0 }}>
+                <AlignmentChip alignment={p.alignment} />
+              </span>
+            )}
+            <span>{p.text}</span>
           </button>
         )
       })}
