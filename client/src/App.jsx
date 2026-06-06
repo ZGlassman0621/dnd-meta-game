@@ -11,7 +11,6 @@ import NavigationMenu from './components/NavigationMenu'
 // Lazy-loaded pages (loaded on demand to reduce initial bundle)
 const DMSession = lazy(() => import('./components/DMSession'))
 const CampaignPlanPage = lazy(() => import('./components/CampaignPlanPage'))
-const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstoryPage'))
 // Phase 4a SC-4a.4 — diagnostic surface for AI behavior. Lazy-loaded;
 // only opens when user navigates to it via the dashboard.
 const AIBehaviorDebugPage = lazy(() => import('./components/AIBehaviorDebugPage'))
@@ -464,10 +463,6 @@ function App() {
         <CampaignPlanPage
           character={selectedCharacter}
           onBack={goHome}
-        />
-      ) : activeView === 'showBackstories' && selectedCharacter ? (
-        <CompanionBackstoryPage
-          characterId={selectedCharacter.id}
         />
       ) : activeView === 'showSettings' && selectedCharacter ? (
         <CharacterSettings

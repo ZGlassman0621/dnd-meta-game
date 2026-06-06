@@ -201,18 +201,9 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       />
     )
   }
-  if (route === 'wizard.resume.handoff') {
-    return (
-      <CharacterCreatorV2
-        preludePayload={resumePayload}
-        initialState={resumeState}
-        initialCharacterId={resumeCharacterId}
-        persistProgress={true}
-        onExit={handleExitWizard}
-        onSubmitSuccess={handleSubmitSuccess}
-      />
-    )
-  }
+  // (The 'wizard.resume.handoff' route was removed in Phase D — handoff/prelude
+  // mode is gone in the MVP, so handleOpenCharacter only ever routes in-progress
+  // drafts to 'wizard.resume.manual'. resumePayload stays null throughout.)
 
   // Home route (default). HomeScreenV2 is a full-screen `.hearth` surface, so
   // the old `.creator-v2` appbar that used to carry Settings / AI-Behavior was

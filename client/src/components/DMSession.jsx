@@ -97,7 +97,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Companions quick reference panel state
   const [showCompanionsRef, setShowCompanionsRef] = useState(false);
   const [companions, setCompanions] = useState([]);
-  const [awayCompanions, setAwayCompanions] = useState([]);
 
   // Game date and spell slots state
   const [gameDate, setGameDate] = useState(null);
@@ -150,10 +149,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id]);
 
-  // Weather & Survival state
-  const [weatherState, setWeatherState] = useState(null);
-  const [survivalState, setSurvivalState] = useState(null);
-
   const messagesEndRef = useRef(null);
 
   // Check LLM status on mount
@@ -164,7 +159,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     fetchAvailableNpcs();
     fetchCampaignContext();
     fetchCompanions();
-    fetchAwayCompanions();
   }, [character.id]);
 
   const fetchCompanions = async () => {
@@ -179,48 +173,9 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     }
   };
 
-  const fetchAwayCompanions = async () => {
-    try {
-      const response = await fetch(`/api/companion/character/${character.id}/away`);
-      if (response.ok) {
-        const data = await response.json();
-        setAwayCompanions(data);
-      }
-    } catch (error) {
-      console.error('Error fetching away companions:', error);
-    }
-  };
-
-  const handleSendOnActivity = async (companionId, formData) => {
-    try {
-      const response = await fetch(`/api/companion/${companionId}/send-activity`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      if (response.ok) {
-        fetchCompanions();
-        fetchAwayCompanions();
-      }
-    } catch (error) {
-      console.error('Error sending companion on activity:', error);
-    }
-  };
-
-  const handleRecallCompanion = async (activityId) => {
-    try {
-      const response = await fetch(`/api/companion/activity/${activityId}/recall`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (response.ok) {
-        fetchCompanions();
-        fetchAwayCompanions();
-      }
-    } catch (error) {
-      console.error('Error recalling companion:', error);
-    }
-  };
+  // Companion activities (away/send-activity/recall) + weather/survival were
+  // archived in the MVP — their routes are unmounted (the /away endpoint now
+  // hangs), so the client calls were removed. See Phase D cleanup.
 
   const fetchCampaignContext = async () => {
     try {
@@ -422,7 +377,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
-      fetchWeatherSurvival();
     } catch (err) {
       console.error('Error checking for active session:', err);
     }
@@ -437,20 +391,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
     } catch (err) {
       console.error('Error fetching spell slots:', err);
-    }
-  };
-
-  const fetchWeatherSurvival = async () => {
-    if (!character?.campaign_id) return;
-    try {
-      const [weatherRes, survivalRes] = await Promise.all([
-        fetch(`/api/weather/${character.campaign_id}/full/${character.id}`),
-        fetch(`/api/survival/${character.id}`)
-      ]);
-      if (weatherRes.ok) setWeatherState(await weatherRes.json());
-      if (survivalRes.ok) setSurvivalState(await survivalRes.json());
-    } catch (err) {
-      console.error('Error fetching weather/survival:', err);
     }
   };
 
@@ -715,7 +655,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
-      fetchWeatherSurvival();
 
     } catch (err) {
       setError(err.message);
@@ -869,11 +808,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         }
       }
 
-      // Refresh weather/survival on any weather or survival events
-      if (data.weatherChange || data.survivalEvents?.length > 0) {
-        fetchWeatherSurvival();
-      }
-
     } catch (err) {
       setError(err.message);
       // Remove the action on error
@@ -1025,6 +959,9 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
+      // Return to the roster/dashboard instead of stranding the player in DM
+      // setup (matches pauseSession). Phase D fix.
+      onBack && onBack();
 
     } catch (err) {
       setError(err.message);
@@ -1150,6 +1087,9 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setSpellSlots({ max: {}, used: {} });
       fetchSessionHistory();
       fetchCampaignContext(); // Refresh campaign context to show updated session recap
+      // Return to the roster/dashboard after claiming, instead of stranding the
+      // player in DM setup (matches pauseSession). Phase D fix.
+      onBack && onBack();
 
     } catch (err) {
       setError(err.message);
@@ -1375,7 +1315,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     return (
       <>
         <SessionCockpit
-          character={character} companions={companions} awayCompanions={awayCompanions} secondCharacter={secondCharacter} activeSession={activeSession} sessionNumber={(sessionHistory?.length || 0) + 1}
+          character={character} companions={companions} secondCharacter={secondCharacter} activeSession={activeSession} sessionNumber={(sessionHistory?.length || 0) + 1}
           messages={messages} isLoading={isLoading} error={error} sessionRecap={sessionRecap} onClearRecap={() => setSessionRecap(null)}
           inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
           combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}
@@ -1392,7 +1332,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           onPause={pauseSession} onComplete={endSession} onAbort={abortSession}
           pendingRecruitment={pendingRecruitment} recruitmentLoading={recruitmentLoading} onConfirmRecruit={confirmRecruitment} onDismissRecruit={dismissRecruitment}
           itemsGainedThisSession={itemsGainedThisSession} onDiscard={discardItem} onCharacterUpdated={onCharacterUpdated}
-          onSendActivity={handleSendOnActivity} onRecallCompanion={handleRecallCompanion}
         />
         {campaignNotesPanel}
       </>
