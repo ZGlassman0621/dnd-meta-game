@@ -215,8 +215,8 @@ export default function SessionCockpit(props) {
               <span className="ph-sub">{1 + companions.length}</span>
             </div>
             <div className="panel-body">
-              <div className={`pm you${combatState && combatState.turnOrder?.[combatState.currentTurn]?.type === 'player' ? ' active' : ''}`}>
-                <div className="mono-portrait d">{monogram(character?.name)}</div>
+              <div className={`pm you${combatState && combatState.turnOrder?.[combatState.currentTurn]?.type === 'player' ? ' acting' : ''}`}>
+                <div className="mono-portrait d">{monogram(character?.name)}{combatState && combatState.turnOrder?.[combatState.currentTurn]?.type === 'player' && <span className="turn-dot" />}</div>
                 <div>
                   <div className="pm-name"><span className="n">{shortName}</span><span className="r">you · L{level} {classKey}</span></div>
                   <div className="pm-meta">HP {curHp}/{maxHp} · AC {ac}</div>
@@ -230,8 +230,8 @@ export default function SessionCockpit(props) {
                 const cn = c.nickname || c.name
                 const active = combatState && combatState.turnOrder?.[combatState.currentTurn]?.name === c.name
                 return (
-                  <div key={i} className={`pm${active ? ' active' : ''}`}>
-                    <div className="mono-portrait v">{monogram(cn)}</div>
+                  <div key={i} className={`pm${active ? ' acting' : ''}`}>
+                    <div className="mono-portrait v">{monogram(cn)}{active && <span className="turn-dot" />}</div>
                     <div>
                       <div className="pm-name"><span className="n">{cn}</span><span className="r">L{c.level || level} {(c.class || '').toLowerCase()}</span></div>
                       <div className="pm-meta">HP {c.current_hp ?? '–'}/{c.max_hp ?? '–'}{c.armor_class ? ` · AC ${c.armor_class}` : ''}</div>
@@ -270,7 +270,8 @@ export default function SessionCockpit(props) {
         {/* CENTER · reading stage */}
         <section className="stage">
           <div className="context-strip">
-            {combatState && <><span className="cs-campaign" style={{ color: 'var(--combat)' }}>Combat · round {combatState.round || 1}</span><span className="cs-dot"></span></>}
+            {combatState && <span className="cs-combat"><span className="pulse"></span>Combat · round {combatState.round || 1}</span>}
+            {combatState && <span className="cs-dot"></span>}
             <span className="cs-campaign">{activeSession?.title || 'Adventure'}</span>
             {scenePlace && <><span className="cs-dot"></span><span className="cs-loc">{scenePlace}</span></>}
             {sceneWhen && <span className="cs-time"><svg className="ic" style={{ width: 12, height: 12 }}><use href="#i-clock" /></svg>{sceneWhen}</span>}
@@ -320,6 +321,40 @@ export default function SessionCockpit(props) {
 
         {/* RIGHT · mechanics */}
         <aside className="rail scroll">
+          {combatState?.turnOrder?.length > 0 && (
+            <section className="panel">
+              <div className="panel-head"><svg className="ph-ic"><use href="#i-bolt" /></svg><span className="ph-t">Initiative</span><span className="ph-sub">{combatState.turnOrder.length} in fray</span></div>
+              <div className="panel-body">
+                <div className="round-meta">
+                  <span className="rn">{combatState.round || 1}</span><span className="rl">Round</span>
+                  {combatState.turnOrder[combatState.currentTurn]?.type === 'player' && <span className="yt">your turn</span>}
+                </div>
+                {combatState.turnOrder.map((t, i) => {
+                  const st = i === combatState.currentTurn ? 'active' : i < combatState.currentTurn ? 'done' : ''
+                  let ihp = ''
+                  if (t.type === 'player') ihp = `${curHp}/${maxHp}`
+                  else if (t.type === 'companion') { const c = companions.find(x => (x.nickname || x.name) === t.name || x.name === t.name); if (c?.max_hp) ihp = `${c.current_hp}/${c.max_hp}` }
+                  return (
+                    <div key={i} className={`init-row ${st}${t.type === 'enemy' ? ' enemy' : ''}`}>
+                      <span className="init-marker">{t.initiative ?? t.initiative_roll ?? t.roll ?? (i + 1)}</span>
+                      <span className="nm">{t.name}</span>
+                      <span className="ihp">{ihp}</span>
+                      <span className="iroll"></span>
+                    </div>
+                  )
+                })}
+                <div className="turn-actions">
+                  <div className="ta"><div className="ta-l">Action</div><div className="ta-s">ready</div></div>
+                  <div className="ta"><div className="ta-l">Bonus</div><div className="ta-s">ready</div></div>
+                  <div className="ta"><div className="ta-l">Reaction</div><div className="ta-s">ready</div></div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 11 }}>
+                  <button className="btn sm" onClick={onAdvanceTurn}>Next turn</button>
+                  <button className="btn ghost sm" onClick={onEndCombat}>End combat</button>
+                </div>
+              </div>
+            </section>
+          )}
           <section className="panel">
             <div className="panel-head">
               <svg className="ph-ic"><use href="#i-shield" /></svg>
@@ -358,23 +393,6 @@ export default function SessionCockpit(props) {
                     <span className="et" style={{ cursor: 'pointer' }} title="Clear" onClick={() => onToggleCondition(playerConditions[i], 'player')}>clear</span>
                   </div>
                 ))}
-              </div>
-            </section>
-          )}
-
-          {combatState?.turnOrder?.length > 0 && (
-            <section className="panel">
-              <div className="panel-head"><svg className="ph-ic"><use href="#i-bolt" /></svg><span className="ph-t">Initiative</span><span className="ph-sub">round {combatState.round || 1}</span></div>
-              <div className="panel-body">
-                {combatState.turnOrder.map((t, i) => (
-                  <div key={i} className="abil-row" style={i === combatState.currentTurn ? { borderColor: 'color-mix(in oklab, var(--combat) 50%, var(--rule))' } : i < combatState.currentTurn ? { opacity: 0.5 } : undefined}>
-                    <span className="an" style={t.type === 'enemy' ? { color: 'var(--bad)' } : undefined}>{i + 1}. {t.name}</span><span className="ac">{t.type}</span>
-                  </div>
-                ))}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 9 }}>
-                  <button className="btn sm" onClick={onAdvanceTurn}>Next turn</button>
-                  <button className="btn ghost sm" onClick={onEndCombat}>End combat</button>
-                </div>
               </div>
             </section>
           )}
