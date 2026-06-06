@@ -1878,17 +1878,29 @@ function formatMechanicalMarkers(sessionContext) {
   blocks.push(`──────────── COMBAT ────────────
 Combat starts: [COMBAT_START: Enemies="Enemy 1, Boss Name"] — LAST sentence. System rolls initiative.
 Combat ends: [COMBAT_END] — LAST sentence.
+Each turn, name whose turn it is: [TURN: Combatant="<name>" Round=N] — INLINE. Keeps the initiative tracker truthful.
 
 Per-turn flow:
 • Player's turn → describe battlefield, ask "What do you do?" → STOP.
-• Player declares attack → "Make an attack roll." → STOP. Player reports the number.
+• Player declares attack → [ROLL_REQUEST: Kind=attack Ability=str Label="Longsword attack"] + "Make an attack roll." → STOP.
 • On hit → "Roll your [weapon] damage ([dice])." → STOP.
+• When the player IS damaged or healed → [HP_CHANGE: Target="Player" Delta=-8 Reason="orc greataxe"] — INLINE.
 • Spells with saves: you roll the target's save, announce pass/fail, then damage.
 • Enemy turns: you narrate + roll yourself + announce damage if hit.
 • HP milestones: "bloodied" (half), "barely standing" (near death).
 • Player at 0 HP → "You fall unconscious. At the start of your turn, make a death saving throw."
 
 Never roll for the player.`);
+
+  blocks.push(`──────────── STATE TRACKING (keep the sheet honest) ────────────
+These markers turn what you narrate into real game state the player's panels read. Emit them whenever the thing happens — in or out of combat.
+
+[HP_CHANGE: Target="Player" Delta=-6 Reason="fall"] — INLINE. The player loses/gains HP. Negative = damage, positive = healing. PLAYER ONLY (companions + enemies stay narrated). Emit it the moment damage/healing lands, every time.
+
+[ROLL_REQUEST: Kind=save Ability=dex DC=15 Label="Dodge the trap"] — INLINE. Use whenever you ask the player to roll a save or ability check; it gives them a one-click roller preloaded with their modifier. Kind = attack | save | check. Still say "Make a Dexterity save" in prose too.
+
+[EFFECT_START: Name="Bless" Concentration=true Duration="1 minute" Source="cleric"] — INLINE. A lasting spell/ability effect begins. Set Concentration=true for concentration spells; a new concentration effect automatically ends your previous one.
+[EFFECT_END: Name="Bless"] — INLINE. The effect ends (expires, is dismissed, or concentration breaks). Track these so the player's Active Effects panel stays accurate.`);
 
   blocks.push(`──────────── LOOT & CONDITIONS ────────────
 [LOOT_DROP: Item="Item Name" Source="where/how"] — INLINE. 1-2 items per significant combat or discovery. Never for merchant purchases.

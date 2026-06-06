@@ -15,6 +15,9 @@ import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from 
 // (LOOT_DROP, COMBAT_START/END) at module load.
 import '../services/lootDropService.js';
 import '../services/combatMarkerService.js';
+// gameStateMarkerService registers the Phase B mechanical-spine handlers
+// (HP_CHANGE, EFFECT_START/END, TURN, ROLL_REQUEST) at module load.
+import '../services/gameStateMarkerService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
   // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
@@ -1305,6 +1308,22 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
     }
 
+    // Phase B (2026-06-05) — mechanical-spine payloads from the new handlers
+    // (gameStateMarkerService). HP/effects/turn become real persisted state;
+    // the route surfaces the post-change values so the cockpit rehydrates
+    // without a full character refetch.
+    let hpChange = null;
+    let activeEffects = undefined;   // full list after any EFFECT change this turn
+    let turnUpdate = null;
+    let rollRequest = null;
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (hr.schemaKey === 'HP_CHANGE' && hr.result.applied) hpChange = hr.result;
+      else if (hr.schemaKey === 'EFFECT_START' || hr.schemaKey === 'EFFECT_END') activeEffects = hr.result.activeEffects;
+      else if (hr.schemaKey === 'TURN') turnUpdate = hr.result;
+      else if (hr.schemaKey === 'ROLL_REQUEST') rollRequest = hr.result;
+    }
+
     // Phase 4a SC-4a.1 — annotate the ai_call_log row created above with
     // marker-dispatch + correction-loop outcomes. Best-effort; row id is
     // null when this turn ran via Ollama or logger persistence failed.
@@ -1484,12 +1503,33 @@ router.post('/:sessionId/message', async (req, res) => {
     }
     cleanNarrative = cleanNarrative.replace(/\[SCENE:[^\]]+\]\s*/gi, '').trim();
 
+    // Phase B — persist the scene so the cockpit "This scene" panel rehydrates
+    // on resume (previously display-only, blank on every reload). Read-modify-
+    // write the latest session_config (handlers above may have touched it).
+    if (scene) {
+      try {
+        const scRow = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+        const scCfg = safeParse(scRow?.session_config, {});
+        scCfg.lastScene = scene;
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(scCfg), sessionId]);
+      } catch (e) {
+        console.error('[scene] persist failed (non-fatal):', e.message);
+      }
+    }
+
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_SHOP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
+    // Phase B mechanical-spine markers — side effects already dispatched; never
+    // let the bracketed marker reach the player.
+    cleanNarrative = cleanNarrative.replace(/\[HP_CHANGE:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[EFFECT_START:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[EFFECT_END:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[TURN:[^\]]+\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[ROLL_REQUEST:[^\]]+\]\s*/gi, '').trim();
     // Prelude-flow skill checks. The AI is instructed to emit these when a
     // check is required, but the marker itself must never reach the player.
     cleanNarrative = cleanNarrative.replace(/\[SKILL_CHECK:[^\]]+\]\s*/gi, '').trim();
@@ -1599,6 +1639,35 @@ router.post('/:sessionId/message', async (req, res) => {
     const conditionChanges = detectConditionChanges(result.narrative);
     const hasConditionChanges = conditionChanges.applied.length > 0 || conditionChanges.removed.length > 0;
 
+    // Phase B — persist the PLAYER's conditions to characters.debuffs so they
+    // survive reload/resume (they were ephemeral client-side React state). The
+    // authoritative list is returned so the cockpit renders persisted state.
+    let persistedConditions = undefined;
+    if (hasConditionChanges) {
+      try {
+        const condRow = await dbGet('SELECT name, nickname, debuffs FROM characters WHERE id = ?', [session.character_id]);
+        let debuffs = safeParse(condRow?.debuffs, []);
+        if (!Array.isArray(debuffs)) debuffs = [];
+        const isPlayer = (t) => {
+          const s = String(t || 'player').toLowerCase();
+          return s === 'player' || s === 'self' || s === 'pc' ||
+            s === String(condRow?.name || '').toLowerCase() ||
+            s === String(condRow?.nickname || '').toLowerCase();
+        };
+        for (const a of conditionChanges.applied) {
+          if (isPlayer(a.target) && !debuffs.includes(a.condition)) debuffs.push(a.condition);
+        }
+        for (const r of conditionChanges.removed) {
+          if (isPlayer(r.target)) debuffs = debuffs.filter(c => c !== r.condition);
+        }
+        await dbRun('UPDATE characters SET debuffs = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [JSON.stringify(debuffs), session.character_id]);
+        persistedConditions = debuffs;
+      } catch (e) {
+        console.error('[conditions] persist failed (non-fatal):', e.message);
+      }
+    }
+
     // Process weather/survival/crafting markers
     let weatherChangeResult = null;
     let survivalEvents = [];
@@ -1705,6 +1774,12 @@ router.post('/:sessionId/message', async (req, res) => {
       lootDrops: lootDropResults.length > 0 ? lootDropResults : undefined,
       combatStart: combatStart || undefined,
       combatEnd: combatEnd || undefined,
+      // Phase B mechanical-spine payloads
+      hpChange: hpChange || undefined,
+      conditions: persistedConditions,          // authoritative player condition list when it changed
+      activeEffects: activeEffects,             // full effect list when it changed this turn
+      turn: turnUpdate || undefined,
+      rollRequest: rollRequest || undefined,
       conditionChanges: hasConditionChanges ? conditionChanges : undefined,
       weatherChange: weatherChangeResult || undefined,
       survivalEvents: survivalEvents.length > 0 ? survivalEvents : undefined,

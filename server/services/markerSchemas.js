@@ -118,6 +118,75 @@ export const MARKER_SCHEMAS = {
       Personality: { type: 'string', required: true },
       Reason: { type: 'string', required: true }
     }
+  },
+
+  // ── Mechanical-spine markers (Phase B, 2026-06-05) ────────────────────────
+  // Handlers live in gameStateMarkerService.js. These turn narrated mechanics
+  // into real persisted state (HP, effects/concentration, combat turns, dice).
+
+  // Damage/healing applied to the player. Negative Delta = damage.
+  HP_CHANGE: {
+    position: 'inline',
+    fields: {
+      Target: { type: 'string', required: false }, // defaults to the player
+      Delta: { type: 'int', required: true },
+      Reason: { type: 'string', required: false }
+    }
+  },
+
+  // A spell/ability effect begins (e.g. Bless, Hunter's Mark, Rage).
+  EFFECT_START: {
+    position: 'inline',
+    fields: {
+      Name: { type: 'string', required: true },
+      Concentration: { type: 'bool', required: false },
+      Duration: { type: 'string', required: false },
+      Source: { type: 'string', required: false }
+    }
+  },
+
+  // A previously-started effect ends (expired, dismissed, concentration broken).
+  EFFECT_END: {
+    position: 'inline',
+    fields: {
+      Name: { type: 'string', required: true }
+    }
+  },
+
+  // Combat turn advancement — keeps the rolled initiative order truthful.
+  TURN: {
+    position: 'inline',
+    fields: {
+      Combatant: { type: 'string', required: true },
+      Round: { type: 'int', required: false, min: 1 }
+    }
+  },
+
+  // The DM wants the player to roll. The handler preloads the player's modifier
+  // so the UI can offer a one-click roll and feed the result back.
+  ROLL_REQUEST: {
+    position: 'inline',
+    fields: {
+      Kind: { type: 'enum', enum: ['attack', 'save', 'check'], required: false },
+      Ability: { type: 'string', required: false },
+      DC: { type: 'int', required: false },
+      Advantage: { type: 'enum', enum: ['advantage', 'disadvantage', 'normal'], required: false },
+      Label: { type: 'string', required: false }
+    }
+  },
+
+  // Scene snapshot for the cockpit "This scene" panel. Values are unquoted and
+  // semicolon-separated in practice, so the route parses them directly; this
+  // schema entry exists for marker-awareness + correction-loop coverage (all
+  // fields optional → never a false failure).
+  SCENE: {
+    position: 'last',
+    fields: {
+      place: { type: 'string', required: false },
+      light: { type: 'string', required: false },
+      weather: { type: 'string', required: false },
+      mood: { type: 'string', required: false }
+    }
   }
 };
 
