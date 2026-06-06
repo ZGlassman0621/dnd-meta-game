@@ -45,7 +45,9 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
     const charAbilities = typeof character.ability_scores === 'string'
       ? safeParse(character.ability_scores, {})
       : (character.ability_scores || {});
-    const playerDexMod = Math.floor(((charAbilities.dexterity || 10) - 10) / 2);
+    // Ability scores are stored under short keys (dex), not long (dexterity),
+    // so reading only `dexterity` meant DEX never affected initiative (Phase A fix).
+    const playerDexMod = Math.floor(((charAbilities.dex ?? charAbilities.dexterity ?? 10) - 10) / 2);
 
     const turnOrder = [];
 
@@ -74,7 +76,7 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
       const compAbilities = typeof comp.companion_ability_scores === 'string'
         ? safeParse(comp.companion_ability_scores, {})
         : (comp.companion_ability_scores || {});
-      const compDexMod = Math.floor(((compAbilities.dexterity || 10) - 10) / 2);
+      const compDexMod = Math.floor(((compAbilities.dex ?? compAbilities.dexterity ?? 10) - 10) / 2);
       const compRoll = rollD20();
       turnOrder.push({
         name: comp.name,

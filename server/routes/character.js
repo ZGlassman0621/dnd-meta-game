@@ -27,6 +27,38 @@ import {
 
 const router = express.Router();
 
+// ── Creation-time derived vitals (Phase A fix, 2026-06-05) ───────────────
+// The V2 creator historically POST/PUT-ed without computing HP or AC, so
+// every manually-created character shipped with max_hp 0/0 and AC 10. The
+// client now computes armored AC + worn equipment (it has equipment.json),
+// but these server-side helpers are the authoritative safety net for EVERY
+// path that flips a character to 'active' (creator, tests, seeds, the
+// one-off backfill of already-broken rows). Unarmored only — armored AC,
+// when present, arrives on the body and is preserved.
+function abilityMod(score) {
+  return Math.floor(((Number(score) || 10) - 10) / 2);
+}
+function parseAbilityScores(raw) {
+  if (raw && typeof raw === 'object') return raw;
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+}
+function deriveMaxHp(charClass, level, abilityScores) {
+  const hitDie = HIT_DICE[String(charClass || '').toLowerCase()] || 8;
+  const conMod = abilityMod(abilityScores?.con);
+  let hp = hitDie + conMod; // L1: full hit die + CON
+  for (let l = 2; l <= (Number(level) || 1); l++) {
+    hp += Math.floor(hitDie / 2) + 1 + conMod; // average per extra level
+  }
+  return Math.max(1, hp);
+}
+function deriveUnarmoredAc(charClass, abilityScores) {
+  const cls = String(charClass || '').toLowerCase();
+  let ac = 10 + abilityMod(abilityScores?.dex);
+  if (cls === 'monk') ac += abilityMod(abilityScores?.wis);       // Unarmored Defense
+  else if (cls === 'barbarian') ac += abilityMod(abilityScores?.con);
+  return ac;
+}
+
 // Get all characters
 router.get('/', async (req, res) => {
   try {
@@ -149,6 +181,22 @@ router.post('/', async (req, res) => {
       creation_phase = 'active'
     } = req.body;
 
+    // Phase A fix: a character entering 'active' must have real vitals. The
+    // client sends computed values; this fills any that are missing/unset so
+    // no path (tests, seeds, partial bodies) can create a 0-HP / AC-10
+    // character. A real armored AC from the body (>10) is always preserved.
+    let _curHp = current_hp, _maxHp = max_hp, _ac = armor_class;
+    if (creation_phase === 'active') {
+      const av = parseAbilityScores(ability_scores);
+      if (!(Number(_maxHp) > 0)) {
+        _maxHp = deriveMaxHp(charClass, level, av);
+        _curHp = _maxHp;
+      }
+      if (!(Number(_ac) > 10)) {
+        _ac = Math.max(Number(_ac) || 0, deriveUnarmoredAc(charClass, av));
+      }
+    }
+
     const sql = `
       INSERT INTO characters (
         name, first_name, last_name, nickname, gender,
@@ -171,10 +219,10 @@ router.post('/', async (req, res) => {
     const result = await dbRun(sql, [
       name, first_name, last_name, nickname, gender,
       charClass, subclass, race, subrace, background,
-      level, current_hp, max_hp, current_location, current_quest,
+      level, _curHp, _maxHp, current_location, current_quest,
       gold_cp, gold_sp, gold_gp, gold_cp, gold_sp, gold_gp, // Store starting gold same as initial gold
       experience, experience_to_next_level,
-      armor_class, speed, ability_scores, skills, advantages, inventory,
+      _ac, speed, ability_scores, skills, advantages, inventory,
       faction_standings, injuries, debuffs, equipment,
       avatar, alignment, faith, lifestyle,
       hair_color, skin_color, eye_color, height, weight, age,
@@ -263,6 +311,28 @@ async function persistAncestryFeatSelection(characterId, featId, tier, selectedA
 // Update character
 router.put('/:id', async (req, res) => {
   try {
+    // Phase A fix: flipping a draft → 'active' (the manual creator's submit,
+    // or the one-off backfill of already-broken rows) must guarantee derived
+    // vitals. Backfill req.body so the normal allowlist loop persists them —
+    // no duplicate SET, and a real armored AC (>10) on the body is preserved.
+    if (req.body.creation_phase === 'active') {
+      const existing = await dbGet(
+        'SELECT class, level, ability_scores, max_hp, armor_class FROM characters WHERE id = ?',
+        [req.params.id]
+      );
+      const pick = (k) => (req.body[k] !== undefined ? req.body[k] : existing?.[k]);
+      const cls = pick('class');
+      const lvl = pick('level') || 1;
+      const av = parseAbilityScores(pick('ability_scores'));
+      if (!(Number(pick('max_hp')) > 0)) {
+        req.body.max_hp = deriveMaxHp(cls, lvl, av);
+        req.body.current_hp = req.body.max_hp;
+      }
+      if (!(Number(pick('armor_class')) > 10)) {
+        req.body.armor_class = Math.max(Number(pick('armor_class')) || 0, deriveUnarmoredAc(cls, av));
+      }
+    }
+
     const updates = [];
     const values = [];
 
@@ -325,6 +395,19 @@ router.put('/:id', async (req, res) => {
     values.push(req.params.id);
 
     await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    // Phase A fix: persist progression selections on the manual creator's
+    // 'creating' → 'active' submit. POST persists theme/ancestry-feat into
+    // character_themes / character_ancestry_feats, but the PUT submit path
+    // (the one the V2 creator actually uses) previously dropped them.
+    if (req.body.creation_phase === 'active') {
+      if (req.body.theme_id) {
+        await persistThemeSelection(req.params.id, req.body.theme_id, req.body.theme_path_choice || null, req.body.level || 1);
+      }
+      if (req.body.ancestry_feat_id) {
+        await persistAncestryFeatSelection(req.params.id, req.body.ancestry_feat_id, 1, req.body.level || 1, req.body.ancestry_feat_choices || null);
+      }
+    }
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(character);

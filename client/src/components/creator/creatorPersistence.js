@@ -38,10 +38,71 @@
 
 import classesData from '../../data/classes.json'
 import racesData from '../../data/races.json'
+import equipmentData from '../../data/equipment.json'
 import { applyGoldModifier } from '../../data/themeGoldModifiers.js'
 import { THEME_BACKSTORY_MOMENTS } from '../../data/themeBackstoryMoments.js'
+import { resolveOptionLabel, ALL_ARMOR } from './equipmentResolver.js'
 
 const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+
+const abilityMod = (score) => Math.floor(((Number(score) ?? 10) - 10) / 2)
+
+/**
+ * Resolve the equipment-package picks into worn slots { armor, mainHand,
+ * offHand } — the shape the character sheet reads for AC, attacks, and the
+ * Equipment tab. Shields land in offHand; the first body armor in armor; the
+ * first weapon in mainHand (second weapon → offHand for dual-wield).
+ */
+function deriveWornEquipment(equipmentPicks, equipmentSubpicks) {
+  const worn = {}
+  const shieldNames = new Set((equipmentData.armor?.shields || []).map(s => String(s.name).toLowerCase()))
+  Object.entries(equipmentPicks || {}).forEach(([idxKey, label]) => {
+    if (!label) return
+    const finalLabel = (equipmentSubpicks || {})[idxKey] || label
+    const { items } = resolveOptionLabel(finalLabel)
+    for (const it of (items || [])) {
+      const nm = it.name
+      if (!nm) continue
+      if (shieldNames.has(String(nm).toLowerCase())) {
+        if (!worn.offHand) worn.offHand = { name: nm }
+      } else if (it.kind === 'armor') {
+        if (!worn.armor) worn.armor = { name: nm }
+      } else if (it.kind === 'weapon') {
+        if (!worn.mainHand) worn.mainHand = { name: nm }
+        else if (!worn.offHand) worn.offHand = { name: nm }
+      }
+    }
+  })
+  return worn
+}
+
+/**
+ * Starting AC from worn armor/shield + dexterity, with monk/barbarian
+ * Unarmored Defense. Mirrors CharacterSheet.calcEquipmentAC so the stored
+ * value matches what the sheet would compute.
+ */
+function computeStartingAC(worn, abilityScores, classId) {
+  const cls = String(classId || '').toLowerCase()
+  const dexMod = abilityMod(abilityScores.dex)
+  let ac = 10 + dexMod
+  if (worn.armor) {
+    const ad = ALL_ARMOR.find(a => a.name === worn.armor.name)
+    if (ad?.baseAC != null) {
+      if (ad.armorType === 'heavy') ac = ad.baseAC
+      else if (ad.armorType === 'medium') ac = ad.baseAC + Math.min(dexMod, ad.maxDexBonus ?? 2)
+      else ac = ad.baseAC + dexMod
+    }
+  } else if (cls === 'monk') {
+    ac = 10 + dexMod + abilityMod(abilityScores.wis)
+  } else if (cls === 'barbarian') {
+    ac = 10 + dexMod + abilityMod(abilityScores.con)
+  }
+  if (worn.offHand) {
+    const sd = (equipmentData.armor?.shields || []).find(s => s.name === worn.offHand.name)
+    if (sd?.acBonus) ac += sd.acBonus
+  }
+  return ac
+}
 
 /**
  * Submit the creator. Branches on `mode`:
@@ -54,8 +115,13 @@ const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
  *
  * Returns: { character_id, campaign_id (when generated), mode }
  */
-export async function submitCreator({ state, mode, preludePayload }) {
+export async function submitCreator({ state, mode, preludePayload, characterId = null }) {
   const body = buildSubmitBody(state, mode, preludePayload)
+
+  // The draft row's id. Manual mode threads it from CharacterCreatorV2's
+  // `characterId` state (set when Step 1 advance created the 'creating' row).
+  // Falling back to state.character_id keeps the preview/test shape working.
+  const draftId = characterId || state.character_id
 
   let url, method
   if (mode === 'handoff') {
@@ -64,8 +130,9 @@ export async function submitCreator({ state, mode, preludePayload }) {
     }
     url = `/api/character/${preludePayload.character_id}`
     method = 'PUT'
-  } else if (state.character_id) {
-    url = `/api/character/${state.character_id}`
+  } else if (draftId) {
+    // Flip the existing 'creating' draft in place → no duplicate orphan row.
+    url = `/api/character/${draftId}`
     method = 'PUT'
   } else {
     url = '/api/character'
@@ -141,6 +208,9 @@ export function buildSubmitBody(state, mode, preludePayload) {
     const subpick = equipmentSubpicks[idxKey]
     const finalLabel = subpick || label
     inventory.push({
+      // `name` mirrors `label` so server-side inventory/reward code (which
+      // keys off `name`) never crashes on package items (Phase A fix).
+      name: finalLabel,
       label: finalLabel,
       original_pick: label,
       source: 'class_package',
@@ -169,6 +239,14 @@ export function buildSubmitBody(state, mode, preludePayload) {
 
   const id = state.identity || {}
 
+  // Worn equipment + derived L1 vitals (Phase A fix). The server recomputes
+  // HP/unarmored-AC as a safety net, but sending real values here makes
+  // armored AC correct and populates the sheet immediately.
+  const worn = deriveWornEquipment(equipmentPicks, equipmentSubpicks)
+  const hitDie = cls?.hitDie || 8
+  const maxHp = Math.max(1, hitDie + abilityMod(abilityScores.con))
+  const armorClass = computeStartingAC(worn, abilityScores, state.class_id)
+
   return {
     // Core identity
     name: [state.first_name, state.last_name].filter(Boolean).join(' ').trim() || state.first_name,
@@ -191,6 +269,10 @@ export function buildSubmitBody(state, mode, preludePayload) {
     ability_scores: JSON.stringify(abilityScores),
     skills: JSON.stringify(skills),
     inventory: JSON.stringify(inventory),
+    equipment: JSON.stringify(worn),
+    max_hp: maxHp,
+    current_hp: maxHp,
+    armor_class: armorClass,
     gold_gp: goldGp,
     starting_gold_gp: goldGp,
 

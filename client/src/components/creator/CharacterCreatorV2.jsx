@@ -167,7 +167,7 @@ export default function CharacterCreatorV2({
               payload={preludePayload}
               onJump={(targetStep) => setStep(targetStep)}
               onSubmit={async () => {
-                const result = await submitCreator({ state, mode, preludePayload })
+                const result = await submitCreator({ state, mode, preludePayload, characterId })
                 if (onSubmitSuccess) onSubmitSuccess(result)
                 else alert(`Character ${result.character_id || ''} created.`)
               }}
