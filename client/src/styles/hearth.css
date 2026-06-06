@@ -760,3 +760,9 @@
 .hearth .ta.spent .ta-s { color: var(--ink-4); }
 .hearth .ta.spent .ta-l { color: var(--ink-4); }
 
+/* =================================================================
+   NO ITALICS (per user preference — italics read as hard to scan).
+   Definitive: upright type everywhere inside a .hearth surface.
+   ================================================================= */
+.hearth, .hearth *, .hearth *::before, .hearth *::after { font-style: normal !important; }
+

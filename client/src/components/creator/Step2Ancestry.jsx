@@ -1,19 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { WizardHead } from './creatorPrimitives.jsx'
-import CelebrationCard from './CelebrationCard.jsx'
 import racesData from '../../data/races.json'
-
-/**
- * Render a feat-id slug as a humanized fallback when the API lookup
- * fails (e.g., production [ANCESTRY_HINT] slug `human_t1_c1` doesn't
- * resolve against DB autoincrement IDs returned by the feats API).
- * Real handoff payloads should include `ancestry_feat_name` from the
- * transition service; this is the last-line fallback for raw IDs.
- */
-function prettifyFeatId(id) {
-  if (!id) return ''
-  return String(id).split(/[_-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-}
 
 /**
  * Map (race, subrace) → ancestry-feat list_id used by /api/progression/ancestry-feats.
@@ -54,35 +41,12 @@ function shortDesc(text) {
 /**
  * Step 2 — Ancestry. Per PHASE_2_CREATOR_SPEC.md §5.2.
  *
- * Manual mode: race + subrace + ancestry feat selectors. All three
- * required to advance.
- *
- * Handoff mode: race + subrace + ancestry feat are all locked-with-
- * celebration. The celebration card sits above the locked fields and
- * names the chapter beats from `[ANCESTRY_HINT].reason` markers (top
- * 2-3 weighted, ordered chronologically). Sub-choices within the feat
- * remain editable per Phase 1 Decision α.
+ * Race + subrace + ancestry feat selectors. All three required to advance.
  */
 export default function Step2Ancestry({ state, set, mode, payload }) {
-  const isHandoff = mode === 'handoff'
-
-  // In handoff mode, race / subrace / feat come from the payload and are
-  // not user-editable here. We still mirror them into state so Step 8 +
-  // submit-time persistence can read them from a single place.
-  useEffect(() => {
-    if (!isHandoff) return
-    const updates = {}
-    if (payload?.race && state.race !== payload.race) updates.race = payload.race
-    if (payload?.subrace && state.subrace !== payload.subrace) updates.subrace = payload.subrace
-    if (payload?.ancestry_feat_id && state.ancestry_feat_id !== payload.ancestry_feat_id) {
-      updates.ancestry_feat_id = payload.ancestry_feat_id
-    }
-    if (Object.keys(updates).length > 0) set({ ...state, ...updates })
-  }, [isHandoff, payload?.race, payload?.subrace, payload?.ancestry_feat_id])
-
-  const raceId = state.race || (isHandoff ? payload?.race : '')
-  const subrace = state.subrace || (isHandoff ? payload?.subrace : '')
-  const featId = state.ancestry_feat_id || (isHandoff ? payload?.ancestry_feat_id : '')
+  const raceId = state.race || ''
+  const subrace = state.subrace || ''
+  const featId = state.ancestry_feat_id || ''
 
   const raceList = useMemo(
     () => Object.entries(racesData).map(([id, r]) => ({
@@ -130,28 +94,6 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
 
   const featById = useMemo(() => Object.fromEntries(feats.map(f => [f.id, f])), [feats])
   const selectedFeat = featId ? featById[featId] : null
-  const currentSubrace = useMemo(
-    () => subraces.find(s => s.name === subrace),
-    [subraces, subrace]
-  )
-
-  const ancestryBeats = payload?.ancestry_chapter_beats || []
-  // Render the locked outcome: "Variant Human" / "Half-Elf (Drow Descent)" / "Dwarf"
-  const outcomeText = useMemo(() => {
-    const r = racesData[raceId]
-    if (!r) return ''
-    if (subrace) return `${subrace.includes(r.name) ? subrace : `${subrace} ${r.name}`}`.trim()
-    return r.name
-  }, [raceId, subrace])
-
-  // Resolved feat name/description for both locked + live renders.
-  const featName = selectedFeat?.feat_name
-    || payload?.ancestry_feat_name
-    || (featsLoading ? 'Loading…' : prettifyFeatId(featId) || '—')
-  const featDescription = selectedFeat?.description
-    || selectedFeat?.desc
-    || payload?.ancestry_feat_description
-    || ''
 
   const featListReady = !!computeAncestryListId(raceId, subrace)
 
@@ -174,99 +116,8 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
         mode={mode}
       />
 
-      {isHandoff && ancestryBeats.length > 0 && (
-        <CelebrationCard
-          opening="These moments named your heritage gift:"
-          beats={ancestryBeats}
-          outcomePrefix="Your heritage gift:"
-          outcomeBold={selectedFeat?.feat_name || payload?.ancestry_feat_name || prettifyFeatId(featId)}
-          outcomeSuffix={
-            (selectedFeat?.description || payload?.ancestry_feat_description)
-              ? ` — ${selectedFeat?.description || payload?.ancestry_feat_description}`
-              : '.'
-          }
-        >
-          {/* Race line lives BELOW the beats as a quiet confirmation,
-              since race was committed at setup-wizard time and the
-              beats actually justify the FEAT, not the race. */}
-          <div style={{
-            marginTop: 14,
-            paddingTop: 14,
-            borderTop: '1px dashed var(--rule)',
-            fontFamily: 'var(--serif)',
-            fontStyle: 'italic',
-            fontSize: 16,
-            color: 'var(--ink-3)'
-          }}>
-            You are <strong style={{ fontStyle: 'normal', color: 'var(--ink-2)', fontWeight: 600 }}>
-              {outcomeText || currentRace?.name || ''}
-            </strong> — committed when you set out.
-          </div>
-        </CelebrationCard>
-      )}
-
-      {isHandoff ? (
-        /* ── Locked render: race / subrace / feat came from the Prelude.
-           Shown as read-only Hearth cards rather than interactive grids. */
-        <>
-          <div className="block">
-            <div className="block-label">
-              <span className="l">Ancestry</span>
-              <span className="hint">committed when you set out</span>
-            </div>
-            <div className="trait-card">
-              <span className="ti"><svg className="ic"><use href="#i-sprout" /></svg></span>
-              <div>
-                <div className="tt">
-                  {currentRace?.name || prettifyFeatId(raceId) || '—'}
-                  <span className="src">From the setup wizard</span>
-                </div>
-                {currentRace?.description && (
-                  <div className="td">{shortDesc(currentRace.description)}</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {subrace && (
-            <div className="block">
-              <div className="block-label">
-                <span className="l">Lineage{currentRace?.name ? ` · ${currentRace.name}` : ''}</span>
-                <span className="hint">the branch of the family</span>
-              </div>
-              <div className="trait-card">
-                <span className="ti"><svg className="ic"><use href="#i-leaf" /></svg></span>
-                <div>
-                  <div className="tt">{currentSubrace?.name || subrace}</div>
-                  {currentSubrace?.description && (
-                    <div className="td">{shortDesc(currentSubrace.description)}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="block" style={{ marginBottom: 0 }}>
-            <div className="block-label">
-              <span className="l">Heritage gift</span>
-              <span className="hint">the Prelude committed this · sub-choices stay yours</span>
-            </div>
-            <div className="trait-card">
-              <span className="ti"><svg className="ic"><use href="#i-sparkles" /></svg></span>
-              <div>
-                <div className="tt">
-                  {featName}
-                  <span className="src">Ancestry feat</span>
-                </div>
-                {featDescription && <div className="td">{featDescription}</div>}
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        /* ── Live render: race + subrace + ancestry-feat choosers. */
-        <>
-          <div className="block">
+      {/* Live render: race + subrace + ancestry-feat choosers. */}
+      <div className="block">
             <div className="block-label">
               <span className="l">Ancestry</span>
               <span className="hint">your species and heritage</span>
@@ -376,8 +227,6 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
               </>
             )}
           </div>
-        </>
-      )}
     </>
   )
 }

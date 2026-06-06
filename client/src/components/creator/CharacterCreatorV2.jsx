@@ -15,18 +15,12 @@ import { submitCreator, saveProgress } from './creatorPersistence.js'
  * Character Creator V2 — chunk 5 rebuilt main creator.
  *
  * Per PHASE_2_CREATOR_SPEC.md §5: 8-step component tree replacing the
- * existing 4392-line CharacterCreationWizard.jsx. Manual / handoff
- * modes are payload-and-treatment differences in one component, not
- * two forks (§2.4 mode coherence guarantee).
+ * existing 4392-line CharacterCreationWizard.jsx.
  *
- * Batch 2 ships Steps 1–4 + the celebration card primitive + the
- * dismissable narrative-continuity card (Step 4). Steps 5–8 ship in
- * batch 3.
- *
- * Mode determination:
- *   - `mode='handoff'` when a Prelude payload is provided (handoff
- *     transition has run; character.creation_phase === 'ready_for_primary')
- *   - `mode='manual'` otherwise
+ * The Prelude system was removed in the MVP, so the creator only ever
+ * runs in manual / campaign mode — HomeFlow always enters with no
+ * prelude payload. Steps still accept a `mode` prop for back-compat,
+ * but it is always `'manual'` here.
  *
  * Until 5.K wires this into the home page, this component is reachable
  * via the `?creator=v2` query-param preview in App.jsx — a temporary
@@ -42,7 +36,8 @@ export default function CharacterCreatorV2({
   onExit,
   onSubmitSuccess = null
 }) {
-  const mode = preludePayload ? 'handoff' : 'manual'
+  // Prelude/handoff was removed in the MVP — the creator is campaign-only.
+  const mode = 'manual'
 
   // The wizard's own step + state. State shape mirrors what the old
   // CharacterCreationWizard's buildInitialFormData produces, with new
@@ -174,7 +169,7 @@ export default function CharacterCreatorV2({
               onSubmit={async () => {
                 const result = await submitCreator({ state, mode, preludePayload })
                 if (onSubmitSuccess) onSubmitSuccess(result)
-                else alert(`Character ${result.character_id || ''} ${mode === 'handoff' ? 'stepped into the world' : 'created'}.`)
+                else alert(`Character ${result.character_id || ''} created.`)
               }}
             />
           )}

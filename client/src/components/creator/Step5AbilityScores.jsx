@@ -1,28 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
 import { WizardHead } from './creatorPrimitives.jsx'
-import BumpCelebrationCard, { defaultBumpAssignments, ABILITY_KEYS, ABILITY_LABELS } from './BumpCelebrationCard.jsx'
+import { ABILITY_KEYS, ABILITY_LABELS } from './BumpCelebrationCard.jsx'
 import racesData from '../../data/races.json'
 import classesData from '../../data/classes.json'
 
 /**
  * Step 5 — Ability Scores. Per PHASE_2_CREATOR_SPEC.md §5.5.
  *
- * Manual mode subsections:
+ * Subsections:
  *   1. Generation method (Standard Array / Manual)
  *   2. Ability score assignment (six rows)
- *   3. Skills picker (within class allotment + emergence skills)
+ *   3. Skills picker (within class allotment)
  *   4. Variant Human bonus general feat — when race=human + subrace=Variant Human
  *
- * Handoff mode adds:
- *   - Bump celebration card at the top (when accepted_stat_bumps exist)
- *   - Per-bump dropdown to assign each +1 to a stat (default alphabetical
- *     first-fit per §5.5.7)
- *   - Emergence skills (from accepted_skill_bumps) pre-checked in the
- *     skills picker
- *
- * Decision E (DECISION_LOG 2026-04-30): L1 cap is 18 — base + racial +
- * bumps clamped at 18 visibly (not silently). Manual-mode base range is
- * 3–20 per §5.5.7 (intentionally wide for roleplay-driven custom builds).
+ * Decision E (DECISION_LOG 2026-04-30): L1 cap is 18 — base + racial
+ * clamped at 18 visibly (not silently). Base range is 3–20 per §5.5.7
+ * (intentionally wide for roleplay-driven custom builds).
  *
  * Hearth render: the design's pane-5 ability allocator — a `.seg`
  * method toggle, an `.alloc-status` strip, and an `.alloc` of `.arow`
@@ -32,8 +25,6 @@ import classesData from '../../data/classes.json'
  * Variant Human) ride below in `.block`/`.field` Hearth primitives.
  */
 export default function Step5AbilityScores({ state, set, mode, payload }) {
-  const isHandoff = mode === 'handoff'
-
   const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
   const generationMethod = state.generation_method || 'standard_array'
   const baseScores = state.base_scores || { str: null, dex: null, con: null, int: null, wis: null, cha: null }
@@ -90,27 +81,6 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
     return out
   }, [racialChoicePicks])
 
-  // --- Bump handling (handoff only) ---------------------------------------
-  const bumps = isHandoff ? (payload?.accepted_stat_bumps || []) : []
-  const bumpAssignments = state.bump_assignments || (bumps.length > 0 ? defaultBumpAssignments(bumps) : [])
-
-  // Seed default bump assignments on first handoff render with bumps.
-  useEffect(() => {
-    if (!isHandoff) return
-    if (bumps.length === 0) return
-    if (state.bump_assignments && state.bump_assignments.length === bumps.length) return
-    set({ ...state, bump_assignments: defaultBumpAssignments(bumps) })
-  }, [isHandoff, bumps.length])
-
-  const bumpBonuses = useMemo(() => {
-    const out = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 }
-    bumps.forEach((b, i) => {
-      const stat = bumpAssignments[i]
-      if (stat && stat in out) out[stat] += (b.magnitude || 1)
-    })
-    return out
-  }, [bumps, bumpAssignments])
-
   // --- Final score with L1 cap clamp at 18 ---------------------------------
   const computeFinal = (k) => {
     // Preserve null vs 0 distinction — null means "not yet assigned"
@@ -121,10 +91,9 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
     // set null, which the || coerced back to 0 — invisible no-op loop.
     const base = baseScores[k]
     const racialTotal = (racialStatic[k] || 0) + (racialChoiceBonuses[k] || 0)
-    const bumpTotal = bumpBonuses[k] || 0
-    const raw = (base ?? 0) + racialTotal + bumpTotal
+    const raw = (base ?? 0) + racialTotal
     const clamped = Math.min(18, raw)
-    return { base, racialTotal, bumpTotal, raw, clamped, wouldOverflow: raw > 18 }
+    return { base, racialTotal, bumpTotal: 0, raw, clamped, wouldOverflow: raw > 18 }
   }
 
   // 5e ability modifier from a final score: floor((score - 10) / 2).
@@ -186,18 +155,6 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
         subtitle="A primary you'll lean on, ★, and one you can let lie, ✗. Place each number where it counts."
         mode={mode}
       />
-
-      {isHandoff && bumps.length > 0 && (
-        <BumpCelebrationCard
-          bumps={bumps}
-          assignments={bumpAssignments}
-          onAssignmentChange={(i, val) => {
-            const next = [...bumpAssignments]
-            next[i] = val
-            set({ ...state, bump_assignments: next })
-          }}
-        />
-      )}
 
       {/* --- Generation method (segmented control) ------------------- */}
       <div className="seg" data-grp="method">
@@ -406,36 +363,24 @@ const ABILITY_GOV = {
 }
 
 /**
- * Skills picker. Manual mode: pick `class.skillChoices` skills from
- * `class.skillOptions`. Handoff mode: emergence skills from
- * `payload.accepted_skill_bumps` pre-check; if 2 emergence skills
- * pre-check, the player picks 0 from the class allotment (caps at 2 per
- * v4 §5e).
+ * Skills picker. Pick `class.skillChoices` skills from `class.skillOptions`.
  *
  * Class/theme/ancestry-granted skills not yet wired — those would
  * pre-check as "granted" (read-only). Listed in spec §5.5.7 as
  * engineering-confirm-against-data work; left for batch 3 follow-up.
  */
 function SkillsPicker({ state, set, mode, payload }) {
-  const isHandoff = mode === 'handoff'
   const cls = classesData[state.class_id]
   const allowedSkillIds = (cls?.skillOptions || []).map(s => normalizeSkillId(s))
   const choiceCount = cls?.skillChoices ?? 2
 
-  // Emergence skills from payload (handoff). Pre-check, count toward allotment.
-  const emergenceSkills = (isHandoff ? payload?.accepted_skill_bumps || [] : [])
-    .map(s => s.skill)
-    .filter(Boolean)
-  const emergenceIds = emergenceSkills.map(normalizeSkillId)
-
   const picked = state.selected_skills || []
-  const remainingPicks = Math.max(0, choiceCount - emergenceIds.length - picked.length)
+  const remainingPicks = Math.max(0, choiceCount - picked.length)
 
   const togglePick = (id) => {
-    if (emergenceIds.includes(id)) return
     if (picked.includes(id)) {
       set({ ...state, selected_skills: picked.filter(p => p !== id) })
-    } else if (picked.length + emergenceIds.length < choiceCount) {
+    } else if (picked.length < choiceCount) {
       set({ ...state, selected_skills: [...picked, id] })
     }
   }
@@ -455,31 +400,21 @@ function SkillsPicker({ state, set, mode, payload }) {
     <div className="block" style={{ marginTop: 30 }}>
       <div className="block-label">
         <span className="l">Skills</span>
-        <span className="hint">
-          pick {remainingPicks} more{emergenceIds.length > 0 ? ` · ${emergenceIds.length} emerged from your Prelude` : ''}
-        </span>
+        <span className="hint">pick {remainingPicks} more</span>
       </div>
       <div className="pillrow">
         {allowedSkillIds.map(id => {
-          const isEmergence = emergenceIds.includes(id)
           const isPicked = picked.includes(id)
-          const isOn = isEmergence || isPicked
-          const disabled = isEmergence || (!isPicked && remainingPicks === 0)
+          const disabled = !isPicked && remainingPicks === 0
           return (
             <button
               key={id}
               type="button"
-              className={`selpill ${isOn ? 'on' : ''}`.trim()}
+              className={`selpill ${isPicked ? 'on' : ''}`.trim()}
               disabled={disabled}
               onClick={() => togglePick(id)}
-              title={isEmergence ? 'Emerged during your Prelude' : null}
             >
               {prettifySkillId(id)}
-              {isEmergence && (
-                <span style={{ marginLeft: 6, fontSize: 9, fontStyle: 'italic' }}>
-                  (Prelude)
-                </span>
-              )}
             </button>
           )
         })}

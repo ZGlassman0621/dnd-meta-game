@@ -1,39 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
 import { WizardHead } from './creatorPrimitives.jsx'
-import CelebrationCard from './CelebrationCard.jsx'
 import { THEME_GOLD_MODIFIERS } from '../../data/themeGoldModifiers.js'
 
 /**
  * Step 3 — Theme. Per PHASE_2_CREATOR_SPEC.md §5.3.
  *
- * Manual mode: a Hearth .opt-grid of all 21 themes (Knight + Haunted One
- * INCLUDED; they're only excluded from Prelude emergence per Decision D,
- * not from manual-mode selection). Each .opt shows the theme name, its
- * identity blurb, and an .ometa line built from the theme's real signature
- * skills + starting-gold modifier. The chosen .opt gets .sel; its full
- * description (and the Knight path-explanation paragraph) renders below in
- * a .trait-card.
- *
- * Handoff mode: locked theme from `payload.committed_theme` with a
- * celebration card naming the chapter beats from `[THEME_HINT].reason`
- * markers, then the theme rendered as a read-only locked .trait-card.
- * Knight + Haunted One can never arrive via handoff.
+ * A Hearth .opt-grid of all 21 themes (Knight + Haunted One INCLUDED).
+ * Each .opt shows the theme name, its identity blurb, and an .ometa line
+ * built from the theme's real signature skills + starting-gold modifier.
+ * The chosen .opt gets .sel; its full description (and the Knight
+ * path-explanation paragraph) renders below in a .trait-card.
  *
  * HEARTH render: WizardHead (.step-eyebrow + h1 + subtitle) then the
  * .opt-grid.c2 / .opt (.ot/.od/.ometa) chooser and a .block + .trait-card
  * detail panel — design "Create Character.html" pane 3.
  */
 export default function Step3Theme({ state, set, mode, payload }) {
-  const isHandoff = mode === 'handoff'
-
-  useEffect(() => {
-    if (!isHandoff || !payload?.committed_theme) return
-    if (state.theme_id !== payload.committed_theme) {
-      set({ ...state, theme_id: payload.committed_theme })
-    }
-  }, [isHandoff, payload?.committed_theme])
-
-  const themeId = state.theme_id || (isHandoff ? payload?.committed_theme : '')
+  const themeId = state.theme_id || ''
 
   const [themes, setThemes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -49,7 +32,6 @@ export default function Step3Theme({ state, set, mode, payload }) {
 
   const themeById = useMemo(() => Object.fromEntries(themes.map(t => [t.id, t])), [themes])
   const theme = themeId ? themeById[themeId] : null
-  const themeBeats = payload?.theme_chapter_beats || []
 
   const formatModifier = (m) => {
     if (!m || m === 0) return '+0%'
@@ -75,19 +57,7 @@ export default function Step3Theme({ state, set, mode, payload }) {
         mode={mode}
       />
 
-      {isHandoff && themeBeats.length > 0 && (
-        <CelebrationCard
-          opening="These moments brought you to your theme:"
-          beats={themeBeats}
-          outcomePrefix="You take up your calling:"
-          outcomeBold={theme?.name || themeId}
-          outcomeSuffix="."
-        />
-      )}
-
-      {!isHandoff ? (
-        <>
-          <div className="opt-grid c2" data-grp="theme">
+      <div className="opt-grid c2" data-grp="theme">
             {loading && themes.length === 0 && (
               <div className="fhelp" style={{ gridColumn: '1 / -1' }}>Loading themes…</div>
             )}
@@ -141,27 +111,6 @@ export default function Step3Theme({ state, set, mode, payload }) {
               </div>
             </div>
           )}
-        </>
-      ) : (
-        <div className="block">
-          <div className="block-label">
-            <span className="l">Your theme</span>
-            <span className="hint">Locked from the Prelude</span>
-          </div>
-          <div className="trait-card">
-            <span className="ti"><svg className="ic"><use href="#i-lock" /></svg></span>
-            <div>
-              <div className="tt">{theme?.name || themeId}</div>
-              {theme?.identity && (
-                <div className="td" style={{ fontStyle: 'italic' }}>{theme.identity}</div>
-              )}
-              {theme?.description && (
-                <div className="td" style={{ marginTop: 9 }}>{theme.description}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

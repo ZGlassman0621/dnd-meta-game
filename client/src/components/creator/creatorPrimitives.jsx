@@ -109,11 +109,11 @@ export function Stepper({ step, setStep, mode, steps = STEPS }) {
  * `<h1>` question, and a `<p class="subtitle">` italic-serif lede.
  *
  * `totalSteps` defaults to 8 (primary creator). `eyebrowLabel` overrides
- * the default mode-derived label so the prelude wizard can render
+ * the default campaign label so the prelude wizard can render
  * "Prelude Setup" in place of "Campaign Character".
  */
 export function WizardHead({ stepNum, title, subtitle, mode, totalSteps = 8, eyebrowLabel }) {
-  const label = eyebrowLabel || (mode === 'handoff' ? 'Prelude Character' : 'Campaign Character')
+  const label = eyebrowLabel || 'Campaign Character'
   return (
     <>
       <div className="step-eyebrow">
