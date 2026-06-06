@@ -65,9 +65,7 @@ function footerText(c) {
 
 export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter, onSettings, onAIBehavior }) {
   const activeCount = characters.filter(c => c.state === 'active').length
-  const count = characters.length === 0
-    ? 'No lives yet'
-    : `${characters.length} ${characters.length === 1 ? 'life' : 'lives'}${activeCount ? ` · ${activeCount} active` : ''}`
+  const count = `${characters.length} ${characters.length === 1 ? 'life' : 'lives'}${activeCount ? ` · ${activeCount} active` : ''}`
 
   return (
     <div className="hearth roster app-bg">
@@ -97,7 +95,7 @@ export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter, 
         <header className="roster-head">
           <h1>Your Characters</h1>
           <p className="lede">Pick a character to get started.</p>
-          <div className="count">{count}</div>
+          {characters.length > 0 && <div className="count">{count}</div>}
         </header>
 
         {characters.length === 0 ? (
@@ -112,10 +110,6 @@ export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter, 
               <span className="eyebrow">A library of lives</span>
               <p>This is where your characters will live — each one a person you can return to, between sessions and across campaigns.</p>
               <p><em>Make your first.</em> Take it slowly, one decision at a time, and let someone become real.</p>
-              <div className="paths">
-                <div className="pth b"><span className="pic"><Ic n="sprout" /></span><div><div className="pt">Eight quiet steps</div><div className="pd">Name, ancestry, class, and the rest — one decision at a time.</div></div></div>
-                <div className="pth b"><span className="pic"><Ic n="feather" /></span><div><div className="pt">Nothing is final</div><div className="pd">Rename, re-spec, or rebuild any time — even mid-campaign.</div></div></div>
-              </div>
             </div>
           </section>
         ) : (

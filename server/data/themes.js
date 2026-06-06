@@ -318,7 +318,7 @@ export const THEMES = [
       { value: 'scholarly', label: 'Scholarly Order', description: 'A philosophical brotherhood — Harpers-like, lorekeepers, monks of reason. The order prizes knowledge, discretion, and careful action over pageantry; you were taught to think before you struck.' },
       { value: 'secret', label: 'Secret Order', description: 'A hidden fellowship with hidden aims — occult, political, or older than any kingdom knows. Your oath is known to few outside it; your methods, fewer still. The order\'s hand moves in shadow, and so do you.' }
     ],
-    identity: 'A sworn member of a chivalric, religious, or philosophical order. Power from oath and institutional backing. Supports six branching moral paths: True / Reformer / Martyr / Complicit / Fallen / Redemption.',
+    identity: 'A sworn member of a chivalric, religious, or philosophical order. Power from oath and institutional backing.',
     description: 'You swore an oath to an order — chivalric, religious, philosophical, or martial — and that oath still shapes the person you are now. The order\'s code and the order\'s people stand behind you, for good or ill, and your choices are always made in their shadow.',
     signature_skill_1: 'Persuasion',
     signature_skill_2: 'History',

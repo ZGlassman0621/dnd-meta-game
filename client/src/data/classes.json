@@ -3663,7 +3663,7 @@
   },
   "keeper": {
     "name": "Keeper",
-    "description": "A scholar who draws power from literature, language, and myth — manifesting weapons from the stories they've studied and invoking Passages of power through sheer force of personality",
+    "description": "A scholar who turns story into power — conjuring weapons from studied myths and invoking Passages through force of will",
     "hitDie": 8,
     "primaryAbility": [
       "cha"
@@ -7770,7 +7770,7 @@
   },
   "warlord": {
     "name": "Warlord",
-    "description": "A charismatic battlefield leader who inspires allies and commands the tide of battle through tactical brilliance",
+    "description": "A charismatic battlefield leader who inspires allies and turns the tide through tactical command",
     "hitDie": 8,
     "primaryAbility": [
       "cha"

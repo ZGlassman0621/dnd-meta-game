@@ -88,20 +88,20 @@ export default function Step7IdentityDetails({ state, set, mode, payload }) {
   const themeId = state.theme_id || (isHandoff ? payload?.committed_theme : '')
   const raceId = state.race || (isHandoff ? payload?.race : null)
 
-  // Faith options — 53 deities + "None / Unaligned" anchor.
+  // Faith options — "None / Unaligned" anchor, then the 53 deities sorted
+  // alphabetically by name for easy scanning in the dropdown.
   const faithOptions = useMemo(() => {
-    const list = [{ id: '_none', name: 'None / Unaligned' }]
-    Object.entries(deitiesData).forEach(([id, d]) => {
-      list.push({
+    const deities = Object.entries(deitiesData)
+      .map(([id, d]) => ({
         id,
         name: d.name || id,
         description: d.description,
         alignment: d.alignment,
         domain: d.domain,
         pantheon: d.pantheon
-      })
-    })
-    return list
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return [{ id: '_none', name: 'None / Unaligned' }, ...deities]
   }, [])
 
   // Helper: update a single key on state.identity (lazy-init).
@@ -207,9 +207,9 @@ function RequiredCoreSection({ identity, setIdentity, faithOptions, raceId }) {
             margin: '16px 0 0',
             paddingLeft: 18,
             fontFamily: 'var(--serif)',
-            fontSize: 14,
-            lineHeight: 1.45,
-            color: 'var(--ink-3)'
+            fontSize: 15.5,
+            lineHeight: 1.5,
+            color: 'var(--ink-2)'
           }}>
             {alignDesc.examples.map((ex, i) => (
               <li key={i} style={{ marginBottom: 4 }}>{ex}</li>

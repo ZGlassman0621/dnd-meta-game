@@ -10,6 +10,7 @@ import Step6Equipment from './Step6Equipment.jsx'
 import Step7IdentityDetails from './Step7IdentityDetails.jsx'
 import Step8Review from './Step8Review.jsx'
 import { submitCreator, saveProgress } from './creatorPersistence.js'
+import { HearthSprite } from '../hearthUI.jsx'
 
 /**
  * Character Creator V2 — chunk 5 rebuilt main creator.
@@ -220,10 +221,16 @@ export default function CharacterCreatorV2({
         </div>
       </footer>
 
-      {/* icon sprite for the chrome/footer arrows (copied from the design's <defs>) */}
+      {/* Shared Hearth icon set (sparkles/check/coin/feather/…) so step icons
+          like the chosen-class crest actually render — the creator only
+          defined arrows before, leaving #i-sparkles empty. */}
+      <HearthSprite />
+      {/* Symbols the steps use that HearthSprite doesn't define. */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
-        <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></symbol>
         <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
+        <symbol id="i-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M7 20h10" /><path d="M12 20c0-7 0-9 0-12" /><path d="M12 11C9 11 6 9 6 5c4 0 6 2 6 6z" /><path d="M12 9c0-3 2-5 6-5 0 4-3 5-6 5z" /></symbol>
       </defs></svg>
     </div>
   )

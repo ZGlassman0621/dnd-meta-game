@@ -3,10 +3,19 @@
    Roster - Empty.html. All selectors scoped under .hearth.
    ================================================================= */
 
-.hearth .roster-head { margin-bottom: 30px; }
-.hearth .roster-head h1 { font-family: var(--serif); font-weight: 500; font-size: 52px; line-height: 1.02; letter-spacing: -.016em; margin: 0 0 9px; }
-.hearth .roster-head .lede { font-family: var(--serif); font-style: italic; font-size: 20px; color: var(--ink-2); margin: 0; }
-.hearth .roster-head .count { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); margin-top: 14px; }
+/* Page container — the roster's <main className="page"> + .page-eyebrow were
+   never actually given CSS rules (the shared `.page` was only referenced in
+   comments), so content jammed against the left edge. Center it with
+   comfortable gutters so the header + grid breathe. */
+.hearth.roster .page { max-width: 1180px; margin: 0 auto; padding: 40px 48px 90px; }
+.hearth.roster .page-eyebrow { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+.hearth.roster .page-eyebrow .eyebrow { font-size: 12.5px; letter-spacing: .2em; color: var(--ink-2); }
+.hearth.roster .page-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+
+.hearth .roster-head { margin-bottom: 34px; }
+.hearth .roster-head h1 { font-family: var(--serif); font-weight: 500; font-size: 54px; line-height: 1.02; letter-spacing: -.016em; margin: 0 0 12px; }
+.hearth .roster-head .lede { font-family: var(--serif); font-size: 22px; color: var(--ink); margin: 0; }
+.hearth .roster-head .count { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin-top: 16px; }
 
 /* ── grid ── */
 .hearth .lib { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -88,3 +97,14 @@
 .hearth .invite-words .pth .pic .ic { width: 16px; height: 16px; }
 .hearth .invite-words .pth .pt { font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); margin-bottom: 1px; }
 .hearth .invite-words .pth .pd { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-3); line-height: 1.4; }
+
+/* ── Readability lifts (2026-06-06) ──────────────────────────────────────
+   The roster is single-user — favor large, bright text over subtle hierarchy.
+   Lift the dim small labels + warm the invitation prose. */
+.hearth.roster .eyebrow { color: var(--ink-2); }
+.hearth.roster .cc-time { color: var(--ink-3); font-size: 10.5px; }
+.hearth.roster .cc-sub { font-size: 16px; }
+.hearth.roster .cc-sub .lv { color: var(--ink-2); }
+.hearth.roster .create-card .spark { color: var(--ink-3); font-size: 11px; }
+.hearth.roster .invite-words p { color: var(--ink); font-size: 21px; }
+.hearth.roster .invite-create .sub, .hearth.roster .create-card .sub { color: var(--accent); }
