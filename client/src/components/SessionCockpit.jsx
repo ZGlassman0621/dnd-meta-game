@@ -45,6 +45,7 @@ export default function SessionCockpit(props) {
     inputAction, onInputChange, onSend, messagesEndRef,
     combatState, onAdvanceTurn, onEndCombat,
     playerConditions = [], companionConditions = {}, onToggleCondition,
+    spellEffects = [], rollRequest = null, onRoll,
     spellSlots, gameDate, onRest, scene,
     useSonnet, onToggleModel,
     showQuickRef, setShowQuickRef, showInventory, setShowInventory,
@@ -151,8 +152,24 @@ export default function SessionCockpit(props) {
     )
   }
 
-  // right-rail active effects from tracked conditions (no fake durations)
-  const activeEffects = playerConditions.map(c => ({ name: cap(c), desc: COND_DESC[String(c).toLowerCase().replace(/_\d+$/, '')] || 'Active condition.' }))
+  // right-rail active effects — real spell/ability effects (with concentration
+  // + duration) from the server, then tracked conditions. `kind` keeps the
+  // clear affordance correct (conditions clear manually; spell effects are
+  // DM-managed via [EFFECT_END]).
+  const spellEffectRows = (spellEffects || []).map(e => ({
+    name: e.name,
+    desc: [e.concentration ? 'Concentration' : null, e.duration].filter(Boolean).join(' · ') || 'Active effect.',
+    kind: 'spell'
+  }))
+  const conditionRows = playerConditions.map(c => ({
+    name: cap(c),
+    desc: COND_DESC[String(c).toLowerCase().replace(/_\d+$/, '')] || 'Active condition.',
+    kind: 'condition',
+    clearKey: c
+  }))
+  const activeEffects = [...spellEffectRows, ...conditionRows]
+
+  const fmtMod = (m) => (m >= 0 ? `+${m}` : `${m}`)
 
   // scene panel — from [SCENE] markers the DM emits, plus what we already have
   const scenePlace = scene?.place || activeSession?.startingLocation?.name || (typeof activeSession?.startingLocation === 'string' ? activeSession.startingLocation : null) || null
@@ -310,6 +327,18 @@ export default function SessionCockpit(props) {
                   style={{ width: '100%', resize: 'none', background: 'transparent', border: 0, outline: 0, fontFamily: 'var(--serif)', fontSize: 17, lineHeight: 1.55, color: 'var(--ink)', minHeight: 46 }}
                 />
               </div>
+              {rollRequest && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 10px', padding: '10px 12px', borderRadius: 9, background: 'color-mix(in oklab, var(--accent) 12%, var(--bg-card))', border: '1px solid color-mix(in oklab, var(--accent) 38%, var(--rule))' }}>
+                  <span style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--ink-2)' }}>
+                    The DM wants a <strong style={{ color: 'var(--ink)' }}>{rollRequest.label || (rollRequest.kind === 'save' ? `${(rollRequest.ability || '').toUpperCase()} save` : rollRequest.kind === 'attack' ? 'attack roll' : 'check')}</strong>
+                    {rollRequest.dc ? <span style={{ color: 'var(--ink-3)' }}> · DC {rollRequest.dc}</span> : null}
+                  </span>
+                  <span className="spacer" style={{ flex: 1 }}></span>
+                  <button className="btn sm" disabled={isLoading} onClick={() => onRoll && onRoll(rollRequest)} title="Roll and report the result to the DM">
+                    🎲 Roll d20 {fmtMod(rollRequest.modifier || 0)}
+                  </button>
+                </div>
+              )}
               <div className="composer-bar">
                 <span className="composer-hint">{isLoading ? 'The Dungeon Master is writing…' : 'Speak, act, or ask — the table is yours.'}</span>
                 <span className="spacer"></span>
@@ -390,7 +419,9 @@ export default function SessionCockpit(props) {
                   <div key={i} className="effect">
                     <svg className="ei"><use href="#i-flame" /></svg>
                     <div><div className="en">{e.name}</div><div className="es">{e.desc}</div></div>
-                    <span className="et" style={{ cursor: 'pointer' }} title="Clear" onClick={() => onToggleCondition(playerConditions[i], 'player')}>clear</span>
+                    {e.kind === 'condition'
+                      ? <span className="et" style={{ cursor: 'pointer' }} title="Clear" onClick={() => onToggleCondition(e.clearKey, 'player')}>clear</span>
+                      : <span className="et" title="Managed by the Dungeon Master">active</span>}
                   </div>
                 ))}
               </div>

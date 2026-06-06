@@ -130,6 +130,26 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [companionConditions, setCompanionConditions] = useState({});
   const [showConditionPanel, setShowConditionPanel] = useState(false);
 
+  // Phase B mechanical-spine state: persisted spell effects + concentration,
+  // and the DM's pending roll request (preloaded with the player's modifier).
+  const [spellEffects, setSpellEffects] = useState([]);
+  const [rollRequest, setRollRequest] = useState(null);
+
+  // Hydrate persisted mechanical state when a session loads/resumes so the
+  // cockpit reflects active effects, the last scene, and conditions across
+  // reloads (previously all ephemeral client state).
+  useEffect(() => {
+    if (!activeSession) return;
+    let cfg = {};
+    try { cfg = typeof activeSession.session_config === 'string' ? JSON.parse(activeSession.session_config) : (activeSession.session_config || {}); } catch { cfg = {}; }
+    if (Array.isArray(cfg.activeEffects)) setSpellEffects(cfg.activeEffects);
+    if (cfg.lastScene) setSceneState(prev => prev || cfg.lastScene);
+    let debuffs = [];
+    try { debuffs = typeof character?.debuffs === 'string' ? JSON.parse(character.debuffs) : (character?.debuffs || []); } catch { debuffs = []; }
+    if (Array.isArray(debuffs) && debuffs.length > 0) setPlayerConditions(prev => prev.length ? prev : debuffs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]);
+
   // Weather & Survival state
   const [weatherState, setWeatherState] = useState(null);
   const [survivalState, setSurvivalState] = useState(null);
@@ -709,12 +729,13 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // via PreludeSetupWizard + PreludeArcPreview and doesn't run inside a
   // DMSession at all.
 
-  const sendAction = async (e) => {
-    e.preventDefault();
-    if (!inputAction.trim() || isLoading) return;
+  const sendAction = async (e, overrideText = null) => {
+    e?.preventDefault?.();
+    const source = overrideText != null ? overrideText : inputAction;
+    if (!source.trim() || isLoading) return;
 
-    const action = inputAction.trim();
-    setInputAction('');
+    const action = source.trim();
+    if (overrideText == null) setInputAction('');
     setIsLoading(true);
     setError('');
 
@@ -750,6 +771,29 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       setMessages(prev => [...prev, { type: 'narrative', content: data.narrative }]);
       if (data.scene) setSceneState(data.scene);
+
+      // Phase B — mechanical-spine state from the turn response.
+      // HP changed on the server → refetch the character so HP shows everywhere.
+      if (data.hpChange?.applied && onCharacterUpdated) {
+        try {
+          const r = await fetch(`/api/character/${character.id}`);
+          if (r.ok) onCharacterUpdated(await r.json());
+        } catch (e) { /* non-fatal */ }
+      }
+      // Authoritative persisted player conditions (server wrote characters.debuffs).
+      if (Array.isArray(data.conditions)) setPlayerConditions(data.conditions);
+      // Active spell effects + concentration (full list after this turn's changes).
+      if (Array.isArray(data.activeEffects)) setSpellEffects(data.activeEffects);
+      // Advance the initiative tracker to the named combatant / round.
+      if (data.turn) {
+        setCombatState(prev => {
+          if (!prev?.turnOrder?.length) return prev;
+          const idx = prev.turnOrder.findIndex(t => String(t.name).toLowerCase() === String(data.turn.combatant).toLowerCase());
+          return { ...prev, currentTurn: idx >= 0 ? idx : prev.currentTurn, round: data.turn.round || prev.round };
+        });
+      }
+      // A roll the DM asked for, preloaded with the player's modifier.
+      setRollRequest(data.rollRequest || null);
 
       // Check for recruitment detection
       if (data.recruitment?.detected) {
@@ -849,6 +893,27 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   };
 
   const endCombat = () => setCombatState(null);
+
+  // Phase B — resolve a DM roll request: roll d20 (+ advantage/disadvantage),
+  // add the player's preloaded modifier, and report the number back so the DM
+  // adjudicates against the DC. The system finally knows the result.
+  const handleRoll = (rr) => {
+    if (!rr || isLoading) return;
+    const d1 = 1 + Math.floor(Math.random() * 20);
+    let roll = d1, detail = `d20 ${d1}`;
+    if (rr.advantage === 'advantage' || rr.advantage === 'disadvantage') {
+      const d2 = 1 + Math.floor(Math.random() * 20);
+      roll = rr.advantage === 'advantage' ? Math.max(d1, d2) : Math.min(d1, d2);
+      detail = `${rr.advantage} (${d1}, ${d2}) → ${roll}`;
+    }
+    const mod = rr.modifier || 0;
+    const total = roll + mod;
+    const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+    const kindLabel = rr.label || (rr.kind === 'save' ? 'saving throw' : rr.kind === 'attack' ? 'attack roll' : 'ability check');
+    const text = `I roll a ${total} for the ${kindLabel} (${detail}${mod !== 0 ? `, ${modStr}` : ''}).`;
+    setRollRequest(null);
+    sendAction(null, text);
+  };
 
   const discardItem = async (itemName) => {
     try {
@@ -1305,6 +1370,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
         combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}
         playerConditions={playerConditions} companionConditions={companionConditions} onToggleCondition={toggleCondition}
+        spellEffects={spellEffects} rollRequest={rollRequest} onRoll={handleRoll}
         spellSlots={spellSlots} gameDate={gameDate} onRest={takeRest} scene={sceneState}
         useSonnet={useSonnet} onToggleModel={() => updateUseSonnet(!useSonnet)}
         showQuickRef={showQuickRef} setShowQuickRef={setShowQuickRef}
