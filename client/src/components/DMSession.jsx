@@ -1315,28 +1315,36 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     );
   }
 
-  // Render campaign notes editor
-  if (showCampaignNotes) {
-    return (
-      <CampaignNotesPanel
-        campaignNotes={campaignNotes}
-        myNotes={myNotes}
-        characterMemories={characterMemories}
-        notesTab={notesTab}
-        sessionHistory={sessionHistory}
-        onClose={() => { setShowCampaignNotes(false); setNotesTab('history'); }}
-        onTabChange={(tab) => setNotesTab(tab)}
-        onSaveNotes={saveCampaignNotes}
-        onGenerateNotes={generateCampaignNotes}
-        onMyNotesChange={(newMyNotes, fullNotes) => {
-          setMyNotes(newMyNotes);
-          setCampaignNotes(fullNotes);
-        }}
-        notesSaving={notesSaving}
-        notesGenerating={notesGenerating}
-        notesLoading={notesLoading}
-      />
-    );
+  // Campaign reference / notes — a Hearth right-side slide-in panel. It is now a
+  // self-contained overlay (scrim + aside.pnl.open) rather than a full-screen
+  // takeover, so during an active session it slides in OVER the cockpit (rendered
+  // alongside SessionCockpit below) instead of unmounting it. Defined once here so
+  // the prop wiring is shared by both the in-session and standalone branches.
+  const campaignNotesPanel = showCampaignNotes ? (
+    <CampaignNotesPanel
+      campaignNotes={campaignNotes}
+      myNotes={myNotes}
+      characterMemories={characterMemories}
+      notesTab={notesTab}
+      sessionHistory={sessionHistory}
+      onClose={() => { setShowCampaignNotes(false); setNotesTab('history'); }}
+      onTabChange={(tab) => setNotesTab(tab)}
+      onSaveNotes={saveCampaignNotes}
+      onGenerateNotes={generateCampaignNotes}
+      onMyNotesChange={(newMyNotes, fullNotes) => {
+        setMyNotes(newMyNotes);
+        setCampaignNotes(fullNotes);
+      }}
+      notesSaving={notesSaving}
+      notesGenerating={notesGenerating}
+      notesLoading={notesLoading}
+    />
+  ) : null;
+
+  // When there is no active session (e.g. opened from setup), render the panel
+  // as a standalone self-contained slide-in over a dark scrim.
+  if (showCampaignNotes && !(activeSession && !sessionEnded)) {
+    return campaignNotesPanel;
   }
 
   // Render completed session with rewards to claim
@@ -1361,29 +1369,33 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     );
   }
 
-  // Render active session
+  // Render active session — the campaign-notes panel slides in OVER the cockpit
+  // (rendered as a sibling overlay) so opening notes never unmounts the session.
   if (activeSession && !sessionEnded) {
     return (
-      <SessionCockpit
-        character={character} companions={companions} awayCompanions={awayCompanions} secondCharacter={secondCharacter} activeSession={activeSession} sessionNumber={(sessionHistory?.length || 0) + 1}
-        messages={messages} isLoading={isLoading} error={error} sessionRecap={sessionRecap} onClearRecap={() => setSessionRecap(null)}
-        inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
-        combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}
-        playerConditions={playerConditions} companionConditions={companionConditions} onToggleCondition={toggleCondition}
-        spellEffects={spellEffects} rollRequest={rollRequest} onRoll={handleRoll}
-        spellSlots={spellSlots} gameDate={gameDate} onRest={takeRest} scene={sceneState}
-        useSonnet={useSonnet} onToggleModel={() => updateUseSonnet(!useSonnet)}
-        showQuickRef={showQuickRef} setShowQuickRef={setShowQuickRef}
-        showInventory={showInventory} setShowInventory={setShowInventory}
-        showConditionPanel={showConditionPanel} setShowConditionPanel={setShowConditionPanel}
-        showCompanionsRef={showCompanionsRef} setShowCompanionsRef={setShowCompanionsRef}
-        onOpenNotes={openCampaignNotes}
-        showEndOptions={showEndOptions} onShowEnd={() => setShowEndOptions(true)} onCancelEnd={() => setShowEndOptions(false)}
-        onPause={pauseSession} onComplete={endSession} onAbort={abortSession}
-        pendingRecruitment={pendingRecruitment} recruitmentLoading={recruitmentLoading} onConfirmRecruit={confirmRecruitment} onDismissRecruit={dismissRecruitment}
-        itemsGainedThisSession={itemsGainedThisSession} onDiscard={discardItem} onCharacterUpdated={onCharacterUpdated}
-        onSendActivity={handleSendOnActivity} onRecallCompanion={handleRecallCompanion}
-      />
+      <>
+        <SessionCockpit
+          character={character} companions={companions} awayCompanions={awayCompanions} secondCharacter={secondCharacter} activeSession={activeSession} sessionNumber={(sessionHistory?.length || 0) + 1}
+          messages={messages} isLoading={isLoading} error={error} sessionRecap={sessionRecap} onClearRecap={() => setSessionRecap(null)}
+          inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
+          combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}
+          playerConditions={playerConditions} companionConditions={companionConditions} onToggleCondition={toggleCondition}
+          spellEffects={spellEffects} rollRequest={rollRequest} onRoll={handleRoll}
+          spellSlots={spellSlots} gameDate={gameDate} onRest={takeRest} scene={sceneState}
+          useSonnet={useSonnet} onToggleModel={() => updateUseSonnet(!useSonnet)}
+          showQuickRef={showQuickRef} setShowQuickRef={setShowQuickRef}
+          showInventory={showInventory} setShowInventory={setShowInventory}
+          showConditionPanel={showConditionPanel} setShowConditionPanel={setShowConditionPanel}
+          showCompanionsRef={showCompanionsRef} setShowCompanionsRef={setShowCompanionsRef}
+          onOpenNotes={openCampaignNotes}
+          showEndOptions={showEndOptions} onShowEnd={() => setShowEndOptions(true)} onCancelEnd={() => setShowEndOptions(false)}
+          onPause={pauseSession} onComplete={endSession} onAbort={abortSession}
+          pendingRecruitment={pendingRecruitment} recruitmentLoading={recruitmentLoading} onConfirmRecruit={confirmRecruitment} onDismissRecruit={dismissRecruitment}
+          itemsGainedThisSession={itemsGainedThisSession} onDiscard={discardItem} onCharacterUpdated={onCharacterUpdated}
+          onSendActivity={handleSendOnActivity} onRecallCompanion={handleRecallCompanion}
+        />
+        {campaignNotesPanel}
+      </>
     );
   }
 

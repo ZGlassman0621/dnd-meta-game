@@ -1,4 +1,15 @@
 import React from 'react';
+import { HearthSprite, Ic } from './hearthUI.jsx';
+import '../styles/hearth.css';
+import '../styles/hearth-rewards.css';
+
+/* ─────────────────────── Hearth · End-of-session Rewards ───────────────────────
+   The screen shown after a session completes. Pure presentation — all of the
+   reward data, the claim handler, and the inventory apply/undo handlers come in
+   as props from DMSession.jsx. XP is the single headline (the only gold accent);
+   gold / health / loot and the supporting blocks read in muted parchment ink.
+   Styles live in styles/hearth-rewards.css (all selectors scoped under .hearth).
+   ───────────────────────────────────────────────────────────────────────────── */
 
 const formatGold = (gold) => {
   if (!gold) return '0';
@@ -26,284 +37,228 @@ function SessionRewards({
   messages,
   error
 }) {
+  const breakdown = sessionRewards?.breakdown;
+  const cats = breakdown?.categories;
+  const goldSpent = inventoryChanges?.goldSpent;
+  const hasGoldSpent = goldSpent && (goldSpent.gp > 0 || goldSpent.sp > 0 || goldSpent.cp > 0);
+  const hasInventoryChanges = inventoryChanges && (
+    inventoryChanges.consumed?.length > 0 ||
+    inventoryChanges.gained?.length > 0 ||
+    hasGoldSpent
+  );
+
   return (
-      <div className="dm-session-container">
-        <div className="dm-session-header">
-          <h2>Adventure Complete!</h2>
+    <div className="hearth rewards app-bg">
+      <HearthSprite />
+
+      {/* ───────── HEADER ───────── */}
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr"></div>
+        <span className="hdr-link" style={{ cursor: 'default' }}>{character?.name}</span>
+        <div className="spacer"></div>
+        <span className="opus"><span className="dot"></span>Opus</span>
+      </header>
+
+      <main className="rw-wrap">
+        {/* ───────── TITLE ───────── */}
+        <div className="rw-title">
+          <span className="eyebrow">Session complete</span>
+          <h1>Adventure Complete</h1>
         </div>
 
-        <div className="dm-messages" style={{ flex: 'none', maxHeight: '200px' }}>
+        {/* ───────── RECAP (last beats) ───────── */}
+        <div className="rw-recap">
           {messages.slice(-3).map((msg, idx) => (
-            <div key={idx} className={`dm-message ${msg.type}`}>
-              {msg.type === 'action' && <span className="action-label">{character.name}:</span>}
-              {msg.type === 'summary' && <span className="summary-label">Adventure Summary:</span>}
-              <p>{msg.content}</p>
+            <div
+              key={idx}
+              className={`narr-card${msg.type === 'action' ? ' rc-you' : ''}`}
+            >
+              <div className="marker">
+                {msg.type === 'action'
+                  ? character.name
+                  : msg.type === 'summary'
+                    ? 'Adventure summary'
+                    : 'The table'}
+              </div>
+              <div className="ncbody">{msg.content}</div>
             </div>
           ))}
         </div>
 
-        <div className="rewards-container">
-          <h3>Session Rewards</h3>
+        {/* ───────── REWARDS ───────── */}
+        <div className="rw-sec"><h2>Session rewards</h2><span className="fl"></span></div>
 
-          <div className="rewards-grid">
-            <div className="reward-item">
-              <span className="reward-label">Experience</span>
-              <span className="reward-value xp">+{sessionRewards?.xp || 0} XP</span>
-            </div>
+        {/* Headline — XP (the one gold accent) */}
+        <div className="rw-headline">
+          <Ic n="sparkles" className="ic hl-ic" />
+          <div className="hl-txt">
+            <span className="hl-l">Experience earned</span>
+            <span className="hl-v">+{sessionRewards?.xp || 0}<span className="un">XP</span></span>
+          </div>
+        </div>
 
-            <div className="reward-item">
-              <span className="reward-label">Gold</span>
-              <span className="reward-value gold">{formatGold(sessionRewards?.gold)}</span>
-            </div>
-
-            <div className="reward-item">
-              <span className="reward-label">Health</span>
-              <span className={`reward-value ${hpChange >= 0 ? 'heal' : 'damage'}`}>
-                {hpChange >= 0 ? '+' : ''}{hpChange} HP
-              </span>
-            </div>
-
-            {sessionRewards?.loot && (
-              <div className="reward-item loot">
-                <span className="reward-label">Loot Found</span>
-                <span className="reward-value">{sessionRewards.loot}</span>
-              </div>
-            )}
+        {/* Secondary reward tiles */}
+        <div className="rw-tiles">
+          <div className="rw-tile">
+            <div className="t-l">Gold</div>
+            <div className="t-v">{formatGold(sessionRewards?.gold)}</div>
           </div>
 
-          {/* XP Breakdown Section */}
-          {sessionRewards?.breakdown?.categories && (
-            <div className="xp-breakdown" style={{
-              marginTop: '1rem',
-              padding: '1rem',
-              background: 'rgba(59, 130, 246, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(59, 130, 246, 0.3)'
-            }}>
-              <h4 style={{ margin: '0 0 0.75rem 0', color: '#60a5fa' }}>
-                XP Breakdown
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', fontSize: '0.9rem' }}>
-                {sessionRewards.breakdown.categories.combat.xp > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#ef4444' }}>Combat</span>
-                    <span style={{ color: '#e0e0e0' }}>+{sessionRewards.breakdown.categories.combat.xp} XP</span>
-                  </div>
-                )}
-                {sessionRewards.breakdown.categories.exploration.xp > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#22c55e' }}>Exploration</span>
-                    <span style={{ color: '#e0e0e0' }}>+{sessionRewards.breakdown.categories.exploration.xp} XP</span>
-                  </div>
-                )}
-                {sessionRewards.breakdown.categories.quests.xp > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#f59e0b' }}>Quests</span>
-                    <span style={{ color: '#e0e0e0' }}>+{sessionRewards.breakdown.categories.quests.xp} XP</span>
-                  </div>
-                )}
-                {sessionRewards.breakdown.categories.discovery.xp > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#a78bfa' }}>Discovery</span>
-                    <span style={{ color: '#e0e0e0' }}>+{sessionRewards.breakdown.categories.discovery.xp} XP</span>
-                  </div>
-                )}
-                {sessionRewards.breakdown.categories.social.xp > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#ec4899' }}>Social</span>
-                    <span style={{ color: '#e0e0e0' }}>+{sessionRewards.breakdown.categories.social.xp} XP</span>
-                  </div>
-                )}
-                {sessionRewards.breakdown.dangerBonus?.xp > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gridColumn: 'span 2', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
-                    <span style={{ color: '#f97316' }}>Danger Bonus</span>
-                    <span style={{ color: '#e0e0e0' }}>+{sessionRewards.breakdown.dangerBonus.xp} XP</span>
-                  </div>
-                )}
-              </div>
+          <div className="rw-tile">
+            <div className="t-l">Health</div>
+            <div className={`t-v ${hpChange >= 0 ? 'heal' : 'damage'}`}>
+              {hpChange >= 0 ? '+' : ''}{hpChange} HP
+            </div>
+          </div>
+
+          {sessionRewards?.loot && (
+            <div className="rw-tile loot span">
+              <div className="t-l">Loot found</div>
+              <div className="t-v">{sessionRewards.loot}</div>
             </div>
           )}
+        </div>
 
-          {/* Inventory Changes Section */}
-          {inventoryChanges && (inventoryChanges.consumed?.length > 0 || inventoryChanges.gained?.length > 0 ||
-            (inventoryChanges.goldSpent && (inventoryChanges.goldSpent.gp > 0 || inventoryChanges.goldSpent.sp > 0 || inventoryChanges.goldSpent.cp > 0))) && (
-            <div className="inventory-changes" style={{
-              marginTop: '1rem',
-              padding: '1rem',
-              background: 'rgba(139, 92, 246, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(139, 92, 246, 0.3)'
-            }}>
-              <h4 style={{ margin: '0 0 0.75rem 0', color: '#a78bfa' }}>
-                📦 Inventory Changes {inventoryApplied && <span style={{ color: '#10b981' }}>✓ Auto-applied</span>}
-                {!inventoryApplied && !preInventorySnapshot && <span style={{ color: '#f59e0b' }}> ↩ Undone</span>}
-              </h4>
-
-              {inventoryChanges.consumed?.length > 0 && (
-                <div style={{ marginBottom: '0.5rem' }}>
-                  <span style={{ color: '#ef4444' }}>Used: </span>
-                  <span style={{ color: '#e0e0e0' }}>{inventoryChanges.consumed.join(', ')}</span>
-                </div>
+        {/* XP Breakdown */}
+        {cats && (
+          <div className="rw-block">
+            <h4 className="bh"><Ic n="bolt" className="ic" />XP breakdown</h4>
+            <div className="rw-xpgrid">
+              {cats.combat.xp > 0 && (
+                <div className="rw-xprow"><span className="xk">Combat</span><span className="xv">+{cats.combat.xp} XP</span></div>
               )}
-
-              {inventoryChanges.goldSpent && (inventoryChanges.goldSpent.gp > 0 || inventoryChanges.goldSpent.sp > 0 || inventoryChanges.goldSpent.cp > 0) && (
-                <div style={{ marginBottom: '0.5rem' }}>
-                  <span style={{ color: '#f59e0b' }}>Spent: </span>
-                  <span style={{ color: '#e0e0e0' }}>
-                    {[
-                      inventoryChanges.goldSpent.gp > 0 && `${inventoryChanges.goldSpent.gp} gp`,
-                      inventoryChanges.goldSpent.sp > 0 && `${inventoryChanges.goldSpent.sp} sp`,
-                      inventoryChanges.goldSpent.cp > 0 && `${inventoryChanges.goldSpent.cp} cp`
-                    ].filter(Boolean).join(', ')}
-                  </span>
-                </div>
+              {cats.exploration.xp > 0 && (
+                <div className="rw-xprow"><span className="xk">Exploration</span><span className="xv">+{cats.exploration.xp} XP</span></div>
               )}
-
-              {inventoryChanges.gained?.length > 0 && (
-                <div style={{ marginBottom: '0.5rem' }}>
-                  <span style={{ color: '#10b981' }}>Gained: </span>
-                  <span style={{ color: '#e0e0e0' }}>{inventoryChanges.gained.join(', ')}</span>
-                </div>
+              {cats.quests.xp > 0 && (
+                <div className="rw-xprow"><span className="xk">Quests</span><span className="xv">+{cats.quests.xp} XP</span></div>
               )}
-
-              {inventoryApplied ? (
-                <button
-                  onClick={onUndoInventory}
-                  style={{
-                    marginTop: '0.5rem',
-                    padding: '0.5rem 1rem',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    borderRadius: '4px',
-                    color: '#fca5a5',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem'
-                  }}
-                >
-                  Undo Changes
-                </button>
-              ) : !preInventorySnapshot ? (
-                <button
-                  onClick={onApplyInventory}
-                  style={{
-                    marginTop: '0.5rem',
-                    padding: '0.5rem 1rem',
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
-                    border: 'none',
-                    borderRadius: '4px',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  Apply Changes
-                </button>
-              ) : null}
+              {cats.discovery.xp > 0 && (
+                <div className="rw-xprow"><span className="xk">Discovery</span><span className="xv">+{cats.discovery.xp} XP</span></div>
+              )}
+              {cats.social.xp > 0 && (
+                <div className="rw-xprow"><span className="xk">Social</span><span className="xv">+{cats.social.xp} XP</span></div>
+              )}
+              {breakdown.dangerBonus?.xp > 0 && (
+                <div className="rw-xprow span"><span className="xk">Danger bonus</span><span className="xv">+{breakdown.dangerBonus.xp} XP</span></div>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Companion XP Note */}
-          {sessionRewards?.xp > 0 && (
-            <div style={{
-              marginTop: '1rem',
-              padding: '0.75rem 1rem',
-              background: 'rgba(139, 92, 246, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
-              fontSize: '0.9rem'
-            }}>
-              <span style={{ color: '#a78bfa' }}>👥 Party XP:</span>
-              <span style={{ color: '#e0e0e0', marginLeft: '0.5rem' }}>
-                All class-based companions will also receive +{sessionRewards.xp} XP
-              </span>
-            </div>
-          )}
+        {/* Inventory Changes */}
+        {hasInventoryChanges && (
+          <div className="rw-block">
+            <h4 className="bh">
+              <Ic n="pack" className="ic" />Inventory changes
+              {inventoryApplied && <span className="flag ok">Auto-applied</span>}
+              {!inventoryApplied && !preInventorySnapshot && <span className="flag undone">Undone</span>}
+            </h4>
 
-          {/* NPCs Discovered Section */}
-          {extractedNpcs && extractedNpcs.length > 0 && (
-            <div style={{
-              marginTop: '1rem',
-              padding: '1rem',
-              background: 'rgba(230, 126, 34, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(230, 126, 34, 0.3)'
-            }}>
-              <h4 style={{ margin: '0 0 0.75rem 0', color: '#e67e22' }}>
-                👤 NPCs Added to Database
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {extractedNpcs.map((npc, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.9rem'
-                  }}>
-                    <span style={{ color: '#f39c12', fontWeight: 'bold' }}>{npc.name}</span>
-                    {npc.race && <span style={{ color: '#888' }}>({npc.race})</span>}
-                    {npc.occupation && <span style={{ color: '#aaa' }}>- {npc.occupation}</span>}
-                  </div>
-                ))}
+            {inventoryChanges.consumed?.length > 0 && (
+              <div className="rw-change"><span className="ck used">Used</span><span className="cv">{inventoryChanges.consumed.join(', ')}</span></div>
+            )}
+
+            {hasGoldSpent && (
+              <div className="rw-change">
+                <span className="ck spent">Spent</span>
+                <span className="cv">
+                  {[
+                    goldSpent.gp > 0 && `${goldSpent.gp} gp`,
+                    goldSpent.sp > 0 && `${goldSpent.sp} sp`,
+                    goldSpent.cp > 0 && `${goldSpent.cp} cp`
+                  ].filter(Boolean).join(', ')}
+                </span>
               </div>
-              <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.8rem', color: '#888' }}>
-                These NPCs are now available on the NPCs page where you can view and edit their details.
-              </p>
-            </div>
-          )}
+            )}
 
-          {/* Achievements Earned Section */}
-          {sessionAchievements.length > 0 && (
-            <div style={{
-              marginTop: '1rem',
-              padding: '1rem',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%)',
-              borderRadius: '8px',
-              border: '1px solid rgba(245, 158, 11, 0.4)'
-            }}>
-              <h4 style={{ margin: '0 0 0.75rem 0', color: '#f59e0b' }}>
-                Achievements Unlocked!
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {sessionAchievements.map((ach, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                    padding: '0.5rem',
-                    background: 'rgba(245, 158, 11, 0.1)',
-                    borderRadius: '6px'
-                  }}>
-                    <span style={{ fontSize: '1.5rem', lineHeight: '1' }}>{ach.icon || '🏆'}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>{ach.title}</div>
-                      <div style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.15rem' }}>{ach.description}</div>
-                      {ach.rewards && (
-                        <div style={{ fontSize: '0.8rem', color: '#d4d4d4', marginTop: '0.35rem' }}>
-                          {[
-                            ach.rewards.xp && `+${ach.rewards.xp} XP`,
-                            ach.rewards.gold && `+${ach.rewards.gold} gp`,
-                            ...(ach.rewards.items || [])
-                          ].filter(Boolean).join(' · ')}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+            {inventoryChanges.gained?.length > 0 && (
+              <div className="rw-change"><span className="ck gained">Gained</span><span className="cv">{inventoryChanges.gained.join(', ')}</span></div>
+            )}
+
+            {inventoryApplied ? (
+              <div className="rw-block-actions">
+                <button className="btn danger sm" onClick={onUndoInventory}>Undo changes</button>
               </div>
+            ) : !preInventorySnapshot ? (
+              <div className="rw-block-actions">
+                <button className="btn primary sm" onClick={onApplyInventory}>Apply changes</button>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Companion / party XP note */}
+        {sessionRewards?.xp > 0 && (
+          <div className="rw-block">
+            <p className="rw-note">
+              <span className="nk">Party XP — </span>
+              All class-based companions will also receive +{sessionRewards.xp} XP.
+            </p>
+          </div>
+        )}
+
+        {/* NPCs discovered */}
+        {extractedNpcs && extractedNpcs.length > 0 && (
+          <div className="rw-block">
+            <h4 className="bh"><Ic n="users" className="ic" />NPCs added to database</h4>
+            <div className="rw-npcs">
+              {extractedNpcs.map((npc, idx) => (
+                <div key={idx} className="rw-npc">
+                  <span className="nn">{npc.name}</span>
+                  {npc.race && <span className="nr">{npc.race}</span>}
+                  {npc.occupation && <span className="no">{npc.occupation}</span>}
+                </div>
+              ))}
             </div>
-          )}
+            <p className="rw-npcs-foot">
+              These NPCs are now available on the NPCs page where you can view and edit their details.
+            </p>
+          </div>
+        )}
 
-          {error && <div className="dm-error">{error}</div>}
+        {/* Achievements */}
+        {sessionAchievements.length > 0 && (
+          <>
+            <div className="rw-sec"><h2>Achievements unlocked</h2><span className="fl"></span></div>
+            <div className="rw-achs">
+              {sessionAchievements.map((ach, idx) => (
+                <div key={idx} className="rw-ach">
+                  <span className="ai">{ach.icon || '🏆'}</span>
+                  <div>
+                    <div className="at">{ach.title}</div>
+                    <div className="ad">{ach.description}</div>
+                    {ach.rewards && (
+                      <div className="ar">
+                        {[
+                          ach.rewards.xp && `+${ach.rewards.xp} XP`,
+                          ach.rewards.gold && `+${ach.rewards.gold} gp`,
+                          ...(ach.rewards.items || [])
+                        ].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
+        {error && <div className="rw-error">{error}</div>}
+
+        {/* ───────── CLAIM ───────── */}
+        <div className="rw-foot">
           <button
-            className="claim-rewards-btn"
+            className="btn primary lg"
             onClick={onClaimRewards}
             disabled={isLoading}
           >
-            {isLoading ? 'Claiming...' : 'Claim Rewards'}
+            {isLoading ? 'Claiming…' : 'Claim rewards'}
           </button>
         </div>
-      </div>
+      </main>
+    </div>
   );
 }
 

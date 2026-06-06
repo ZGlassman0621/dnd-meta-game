@@ -1,0 +1,114 @@
+/* =================================================================
+   HEARTH · End-of-session Rewards screen
+   The screen shown after every session completes (XP headline,
+   gold / health / loot, XP breakdown, inventory changes, party-XP
+   note, NPCs discovered, achievements, claim button).
+   Every selector is scoped under ".hearth". Shared tokens and
+   components (.btn .chip .panel .card .dash-hdr .back .wordmark
+   .opus .eyebrow) come from hearth.css and are NOT redefined here.
+   Gold (--accent) is reserved for the single headline reward (XP).
+   ================================================================= */
+
+.hearth.rewards { min-height: 100vh; }
+
+.hearth .rw-wrap { max-width: 760px; margin: 0 auto; padding: 38px 28px 90px; }
+
+/* ---- title block ---- */
+.hearth .rw-title { text-align: center; margin-bottom: 26px; }
+.hearth .rw-title .eyebrow { display: block; margin-bottom: 9px; }
+.hearth .rw-title h1 { font-family: var(--serif); font-weight: 500; font-size: 38px; line-height: 1.05; letter-spacing: -.014em; margin: 0; color: var(--ink); }
+
+/* ---- recap of the last beats ---- */
+.hearth .rw-recap { display: flex; flex-direction: column; gap: 10px; margin-bottom: 26px; }
+.hearth .rw-recap .narr-card .marker { color: var(--ink-3); }
+.hearth .rw-recap .rc-you::before { background: var(--ink-4); }
+.hearth .rw-recap .rc-you .marker { color: var(--ink-3); }
+.hearth .rw-recap .rc-you .ncbody { color: var(--ink-2); font-size: 15px; }
+
+/* ---- section heading ---- */
+.hearth .rw-sec { display: flex; align-items: center; gap: 14px; margin: 28px 0 14px; }
+.hearth .rw-sec:first-child { margin-top: 0; }
+.hearth .rw-sec h2 { font-family: var(--serif); font-weight: 500; font-size: 21px; letter-spacing: -.008em; margin: 0; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
+.hearth .rw-sec .fl { flex: 1; height: 1px; background: var(--rule); }
+
+/* ---- headline XP reward (the one gold accent) ---- */
+.hearth .rw-headline { display: flex; align-items: center; gap: 18px; padding: 22px 24px; margin-bottom: 16px;
+      border-radius: var(--radius-lg);
+      background: color-mix(in oklab, var(--accent) 10%, var(--bg-card));
+      border: 1px solid color-mix(in oklab, var(--accent) 32%, var(--rule));
+      box-shadow: var(--shadow-sm); }
+.hearth .rw-headline .hl-ic { width: 30px; height: 30px; color: var(--accent); flex-shrink: 0; }
+.hearth .rw-headline .hl-txt { display: flex; flex-direction: column; }
+.hearth .rw-headline .hl-l { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+.hearth .rw-headline .hl-v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 34px; line-height: 1; color: var(--accent); letter-spacing: -.02em; margin-top: 4px; }
+.hearth .rw-headline .hl-v .un { font-size: 16px; color: color-mix(in oklab, var(--accent) 78%, var(--ink-3)); font-weight: 500; margin-left: 4px; }
+
+/* ---- secondary reward tiles (gold / health / loot — muted, not gold) ---- */
+.hearth .rw-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.hearth .rw-tile { padding: 14px 16px; border-radius: var(--radius);
+      background: var(--bg-2); border: 1px solid var(--rule-soft); }
+.hearth .rw-tile.span { grid-column: 1 / -1; }
+.hearth .rw-tile .t-l { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .rw-tile .t-v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 22px; line-height: 1.1; color: var(--ink); margin-top: 5px; }
+.hearth .rw-tile.loot .t-v { font-family: var(--serif); font-weight: 400; font-size: 16px; line-height: 1.5; color: var(--ink-2); }
+.hearth .rw-tile .t-v.heal { color: var(--good); }
+.hearth .rw-tile .t-v.damage { color: var(--bad); }
+
+/* ---- generic info block (breakdown / inventory / party / npcs) ---- */
+.hearth .rw-block { margin-top: 16px; padding: 16px 18px; border-radius: var(--radius-lg);
+      background: var(--bg-2); border: 1px solid var(--rule); }
+.hearth .rw-block .bh { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 13px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.hearth .rw-block .bh .ic { width: 13px; height: 13px; color: var(--ink-4); }
+.hearth .rw-block .bh .flag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; }
+.hearth .rw-block .bh .flag.ok { color: var(--good); }
+.hearth .rw-block .bh .flag.undone { color: var(--warn); }
+
+/* XP breakdown grid */
+.hearth .rw-xpgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px 18px; }
+.hearth .rw-xprow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hearth .rw-xprow.span { grid-column: 1 / -1; border-top: 1px solid var(--rule-soft); padding-top: 8px; margin-top: 3px; }
+.hearth .rw-xprow .xk { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+.hearth .rw-xprow .xv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink); }
+
+/* ledger-style change rows (inventory) */
+.hearth .rw-change { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; }
+.hearth .rw-change + .rw-change { margin-top: 7px; }
+.hearth .rw-change .ck { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; min-width: 64px; flex-shrink: 0; }
+.hearth .rw-change .ck.used { color: var(--bad); }
+.hearth .rw-change .ck.spent { color: var(--warn); }
+.hearth .rw-change .ck.gained { color: var(--good); }
+.hearth .rw-change .cv { font-family: var(--serif); font-size: 15px; color: var(--ink-2); line-height: 1.45; }
+.hearth .rw-block .rw-block-actions { margin-top: 13px; }
+
+/* party-XP note */
+.hearth .rw-note { font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink-2); }
+.hearth .rw-note .nk { color: var(--ink-3); }
+
+/* NPCs discovered */
+.hearth .rw-npcs { display: flex; flex-direction: column; gap: 7px; }
+.hearth .rw-npc { display: flex; align-items: baseline; gap: 8px; font-family: var(--serif); font-size: 15px; line-height: 1.4; flex-wrap: wrap; }
+.hearth .rw-npc .nn { color: var(--ink); font-weight: 500; }
+.hearth .rw-npc .nr { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .rw-npc .no { color: var(--ink-3); }
+.hearth .rw-npcs-foot { font-family: var(--serif); font-size: 13px; color: var(--ink-3); line-height: 1.5; margin: 12px 0 0; }
+
+/* ---- achievements ---- */
+.hearth .rw-achs { display: flex; flex-direction: column; gap: 11px; }
+.hearth .rw-ach { display: grid; grid-template-columns: auto 1fr; gap: 13px; align-items: start;
+      padding: 13px 15px; border-radius: var(--radius);
+      background: var(--bg-card); border: 1px solid var(--rule-soft); border-left: 3px solid var(--accent); }
+.hearth .rw-ach .ai { font-size: 24px; line-height: 1; }
+.hearth .rw-ach .at { font-family: var(--serif); font-size: 18px; color: var(--ink); }
+.hearth .rw-ach .ad { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; margin-top: 3px; }
+.hearth .rw-ach .ar { font-family: var(--mono); font-size: 11px; letter-spacing: .03em; color: var(--ink-2); margin-top: 7px; }
+
+/* ---- error ---- */
+.hearth .rw-error { margin-top: 18px; padding: 12px 15px; border-radius: var(--radius);
+      font-family: var(--sans); font-size: 13px; color: var(--bad);
+      background: color-mix(in oklab, var(--bad) 9%, var(--bg-card));
+      border: 1px solid color-mix(in oklab, var(--bad) 34%, var(--rule)); }
+
+/* ---- claim / continue footer ---- */
+.hearth .rw-foot { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rule-soft);
+      display: flex; justify-content: center; }
+.hearth .rw-foot .btn { min-width: 220px; }

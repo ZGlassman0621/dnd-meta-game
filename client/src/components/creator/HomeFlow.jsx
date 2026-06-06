@@ -214,63 +214,29 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
     )
   }
 
-  // Home route (default)
+  // Home route (default). HomeScreenV2 is a full-screen `.hearth` surface, so
+  // the old `.creator-v2` appbar that used to carry Settings / AI-Behavior was
+  // painted behind it and unreachable. Those affordances now live in the
+  // roster's own Hearth header (onSettings / onAIBehavior props). The loading /
+  // error states render on a matching Hearth backdrop so there's no light flash.
+  if (loading || error) {
+    return (
+      <div className="hearth app-bg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        {loading
+          ? <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink-3)' }}>Gathering your characters…</p>
+          : <div style={{ maxWidth: 640, padding: '16px 20px', borderRadius: 'var(--radius-lg)', background: 'color-mix(in oklab, var(--bad) 10%, var(--bg-card))', border: '1px solid color-mix(in oklab, var(--bad) 40%, var(--rule))', color: 'var(--bad)', fontFamily: 'var(--serif)' }}>{error}</div>}
+      </div>
+    )
+  }
   return (
-    <div className="creator-v2">
-      <div className="appbar">
-        <div className="brand">
-          D <span className="amp">&amp;</span> D
-          <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-        </div>
-        <div className="crumbs">The roster</div>
-        <div className="spacer" />
-        <button
-          type="button"
-          className="nav-settings"
-          onClick={() => setAiBehaviorOpen(true)}
-          aria-label="AI Behavior debug"
-          title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
-        >
-          <span className="glyph">◇</span>AI Behavior
-        </button>
-        {settingsCharacter && (
-          <button
-            type="button"
-            className="nav-settings"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-          >
-            <span className="glyph">✦</span>Settings
-          </button>
-        )}
-      </div>
-      <div className="stage">
-        {loading && (
-          <p className="lede" style={{ textAlign: 'center', padding: '60px 0' }}>
-            Gathering your characters…
-          </p>
-        )}
-        {error && (
-          <div style={{
-            maxWidth: 640,
-            margin: '40px auto',
-            padding: '16px 20px',
-            background: 'rgba(231, 76, 60, 0.08)',
-            border: '1px solid #e74c3c',
-            color: '#c0392b',
-            fontFamily: 'var(--serif)'
-          }}>
-            {error}
-          </div>
-        )}
-        {!loading && !error && (
-          <HomeScreenV2
-            characters={characters.map(mapCharacterForHome)}
-            onNew={handleNew}
-            onOpenCharacter={handleOpenCharacter}
-          />
-        )}
-      </div>
+    <>
+      <HomeScreenV2
+        characters={characters.map(mapCharacterForHome)}
+        onNew={handleNew}
+        onOpenCharacter={handleOpenCharacter}
+        onAIBehavior={() => setAiBehaviorOpen(true)}
+        onSettings={settingsCharacter ? () => setSettingsOpen(true) : null}
+      />
       {settingsOpen && settingsCharacter && (
         <SettingsOverlay
           character={settingsCharacter}
@@ -279,7 +245,7 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
           onSaved={handleSettingsSaved}
         />
       )}
-    </div>
+    </>
   )
 }
 

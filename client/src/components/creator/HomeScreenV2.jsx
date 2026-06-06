@@ -23,8 +23,17 @@ function RosterSprite() {
       <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" /></symbol>
       <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></symbol>
       <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></symbol>
     </defs></svg>
   )
+}
+
+const hdrLinkStyle = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  background: 'none', border: 0, cursor: 'pointer',
+  fontFamily: 'var(--sans)', fontSize: 12.5, color: 'var(--ink-3)',
+  padding: '4px 6px'
 }
 
 function cardClass(c) {
@@ -54,7 +63,7 @@ function footerText(c) {
   return ''
 }
 
-export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter }) {
+export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter, onSettings, onAIBehavior }) {
   const activeCount = characters.filter(c => c.state === 'active').length
   const count = characters.length === 0
     ? 'No lives yet'
@@ -69,6 +78,16 @@ export default function HomeScreenV2({ characters = [], onNew, onOpenCharacter }
         <div className="vr"></div>
         <span className="back" style={{ cursor: 'default' }}><Ic n="feather" />Your characters</span>
         <div className="spacer"></div>
+        {onAIBehavior && (
+          <button type="button" style={hdrLinkStyle} onClick={onAIBehavior} title="AI Behavior diagnostics" onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-3)'}>
+            <Ic n="activity" />AI Behavior
+          </button>
+        )}
+        {onSettings && (
+          <button type="button" style={hdrLinkStyle} onClick={onSettings} title="Settings" onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-3)'}>
+            <Ic n="settings" />Settings
+          </button>
+        )}
         <span className="opus"><span className="dot"></span>Opus</span>
       </header>
 

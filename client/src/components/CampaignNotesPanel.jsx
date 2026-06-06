@@ -1,4 +1,29 @@
-import { useState } from 'react';
+// Campaign reference / notes — Hearth right-side slide-in panel.
+// Restyled from the legacy full-screen `.dm-session-container` takeover to match
+// QuickReferencePanel's `.panel-scrim` + `aside.pnl.open` slide-in structure so it
+// layers over the cockpit instead of trapping the player on a separate screen.
+// Self-wrapped in `.hearth` so the scoped `.pnl` styles apply wherever it mounts.
+
+// Local inline sprite — symbol paths kept local so we never touch the shared HearthSprite.
+function CNSprite() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+      <defs>
+        <symbol id="cn-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </symbol>
+        <symbol id="cn-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </symbol>
+        <symbol id="cn-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
+        </symbol>
+      </defs>
+    </svg>
+  );
+}
 
 const CampaignNotesPanel = ({
   campaignNotes,
@@ -56,256 +81,183 @@ const CampaignNotesPanel = ({
     onMyNotesChange(newMyNotes, reconstructNotes(aiNotes, newMyNotes));
   };
 
+  const subLabel = notesTab === 'history' ? 'Session recaps'
+    : notesTab === 'memory' ? 'AI memory'
+    : 'My notes';
+
   return (
-    <div className="dm-session-container">
-      <div className="dm-session-header">
-        <button className="back-btn" onClick={() => { onClose(); onTabChange('history'); }}>&larr; Back</button>
-        <h2>Campaign Reference</h2>
-        {notesTab === 'mynotes' && (
+    <div className="hearth">
+      <CNSprite />
+      <div className="panel-scrim show" onClick={() => { onClose(); onTabChange('history'); }} />
+      <aside className="pnl open" data-panel="notes">
+        <div className="pnl-head">
+          <svg className="ph-ic2"><use href="#cn-pen" /></svg>
+          <h3>Campaign reference</h3>
+          <span className="ph-sub2">{subLabel}</span>
           <button
-            onClick={onSaveNotes}
-            disabled={notesSaving}
-            style={{
-              background: 'rgba(46, 204, 113, 0.2)',
-              border: '1px solid #2ecc71',
-              color: '#2ecc71',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: notesSaving ? 'wait' : 'pointer',
-              fontSize: '0.85rem'
-            }}
+            className="pnl-close"
+            onClick={() => { onClose(); onTabChange('history'); }}
+            aria-label="Close"
           >
-            {notesSaving ? 'Saving...' : 'Save Notes'}
+            <svg className="ic"><use href="#cn-x" /></svg>
           </button>
-        )}
-      </div>
+        </div>
 
-      {/* Tab Navigation */}
-      <div style={{
-        display: 'flex',
-        gap: '0',
-        borderBottom: '1px solid rgba(255,255,255,0.2)',
-        marginBottom: '1rem'
-      }}>
-        <button
-          onClick={() => onTabChange('history')}
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            background: notesTab === 'history' ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-            border: 'none',
-            borderBottom: notesTab === 'history' ? '2px solid #3b82f6' : '2px solid transparent',
-            color: notesTab === 'history' ? '#60a5fa' : '#888',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: notesTab === 'history' ? 'bold' : 'normal'
-          }}
-        >
-          Session Recaps
-        </button>
-        <button
-          onClick={() => onTabChange('memory')}
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            background: notesTab === 'memory' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-            border: 'none',
-            borderBottom: notesTab === 'memory' ? '2px solid #8b5cf6' : '2px solid transparent',
-            color: notesTab === 'memory' ? '#a78bfa' : '#888',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: notesTab === 'memory' ? 'bold' : 'normal'
-          }}
-        >
-          AI Memory
-        </button>
-        <button
-          onClick={() => { onTabChange('mynotes'); }}
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            background: notesTab === 'mynotes' ? 'rgba(46, 204, 113, 0.2)' : 'transparent',
-            border: 'none',
-            borderBottom: notesTab === 'mynotes' ? '2px solid #2ecc71' : '2px solid transparent',
-            color: notesTab === 'mynotes' ? '#2ecc71' : '#888',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: notesTab === 'mynotes' ? 'bold' : 'normal'
-          }}
-        >
-          My Notes
-        </button>
-      </div>
+        {/* Tabs — quiet Hearth segmented control */}
+        <div className="cn-seg" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={notesTab === 'history'}
+            className={`cn-seg-btn${notesTab === 'history' ? ' active' : ''}`}
+            onClick={() => onTabChange('history')}
+          >
+            Recaps
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={notesTab === 'memory'}
+            className={`cn-seg-btn${notesTab === 'memory' ? ' active' : ''}`}
+            onClick={() => onTabChange('memory')}
+          >
+            AI memory
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={notesTab === 'mynotes'}
+            className={`cn-seg-btn${notesTab === 'mynotes' ? ' active' : ''}`}
+            onClick={() => { onTabChange('mynotes'); }}
+          >
+            My notes
+          </button>
+        </div>
 
-      <div style={{ padding: '0 1rem 1rem 1rem', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+        <div className="pnl-body scroll">
 
-        {/* Session History Tab */}
-        {notesTab === 'history' && (
-          <>
-            <p style={{ marginBottom: '1rem', opacity: 0.8, fontSize: '0.9rem' }}>
-              Recaps from your previous sessions. Use these to remember what happened.
-            </p>
-            {sessionHistory.length === 0 ? (
-              <p style={{ opacity: 0.6, fontStyle: 'italic' }}>No completed sessions yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {sessionHistory.slice().reverse().map((session, idx) => (
-                  <div key={session.id} style={{
-                    padding: '1rem',
-                    background: 'rgba(59, 130, 246, 0.1)',
-                    border: '1px solid rgba(59, 130, 246, 0.3)',
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{ fontWeight: 'bold', color: '#60a5fa', marginBottom: '0.5rem' }}>
-                      Session {sessionHistory.length - idx}: {session.title}
+          {/* Session History Tab */}
+          {notesTab === 'history' && (
+            <>
+              <p className="cn-lede">
+                Recaps from your previous sessions. Use these to remember what happened.
+              </p>
+              {sessionHistory.length === 0 ? (
+                <p className="cn-empty">No completed sessions yet.</p>
+              ) : (
+                <div className="cn-recaps">
+                  {sessionHistory.slice().reverse().map((session, idx) => (
+                    <div className="cn-recap" key={session.id}>
+                      <div className="cn-recap-ttl">
+                        Session {sessionHistory.length - idx}: {session.title}
+                      </div>
+                      <div className="cn-recap-body">
+                        {session.summary || 'No summary available.'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.9rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
-                      {session.summary || 'No summary available.'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* AI Memory Tab (read-only) */}
-        {notesTab === 'memory' && (
-          <>
-            <p style={{ marginBottom: '1rem', opacity: 0.8, fontSize: '0.9rem' }}>
-              AI-generated campaign memory. This is included in every session to help the AI remember your story.
-              <span style={{ color: '#f59e0b' }}> (Read-only - use "My Notes" tab to add your own.)</span>
-            </p>
-
-            {/* Generate from history button */}
-            {sessionHistory.length > 0 && (
-              <button
-                onClick={onGenerateNotes}
-                disabled={notesGenerating || notesLoading}
-                style={{
-                  width: '100%',
-                  marginBottom: '1rem',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(139, 92, 246, 0.4)',
-                  background: notesGenerating
-                    ? 'rgba(139, 92, 246, 0.1)'
-                    : 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)',
-                  color: '#a78bfa',
-                  cursor: notesGenerating ? 'wait' : 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                {notesGenerating ? (
-                  <span className="loading-dots">Analyzing {sessionHistory.length} session(s)...</span>
-                ) : (
-                  <>
-                    <span>✨</span>
-                    <span>Regenerate from Past Adventures ({sessionHistory.length} sessions)</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {notesLoading ? (
-              <p>Loading notes...</p>
-            ) : (
-              <div style={{
-                padding: '1rem',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                lineHeight: '1.6',
-                whiteSpace: 'pre-wrap',
-                minHeight: '200px'
-              }}>
-                {aiNotes || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>No AI memory yet. Complete a session or click "Regenerate" above.</span>}
-              </div>
-            )}
-
-            {/* Character Personality Memories */}
-            {characterMemories && characterMemories.trim().length > 0 && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <h3 style={{
-                  color: '#f59e0b',
-                  fontSize: '0.95rem',
-                  marginBottom: '0.75rem',
-                  borderTop: '1px solid rgba(255,255,255,0.1)',
-                  paddingTop: '1rem'
-                }}>
-                  Character Personality
-                </h3>
-                <p style={{ marginBottom: '0.75rem', opacity: 0.7, fontSize: '0.85rem' }}>
-                  Personality traits the AI has observed during your adventures. These persist permanently and evolve as your character grows.
-                </p>
-                <div style={{
-                  padding: '1rem',
-                  background: 'rgba(245, 158, 11, 0.08)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  borderRadius: '8px',
-                  fontSize: '0.9rem',
-                  lineHeight: '1.6',
-                  whiteSpace: 'pre-wrap'
-                }}>
-                  {characterMemories}
+                  ))}
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
 
-        {/* My Notes Tab (editable) */}
-        {notesTab === 'mynotes' && (
-          <>
-            <p style={{ marginBottom: '1rem', opacity: 0.8, fontSize: '0.9rem' }}>
-              Your personal notes. Add corrections, reminders, or details the AI might have missed.
-              <span style={{ color: '#2ecc71' }}> These are preserved when you regenerate AI memory.</span>
-            </p>
+          {/* AI Memory Tab (read-only) */}
+          {notesTab === 'memory' && (
+            <>
+              <p className="cn-lede">
+                AI-generated campaign memory. This is included in every session to help the AI remember your story.
+                <span className="cn-note-warn"> Read-only — use the My notes tab to add your own.</span>
+              </p>
 
-            <textarea
-              value={currentMyNotes}
-              onChange={(e) => handleMyNotesChange(e.target.value)}
-              placeholder="Add your own notes here...
+              {/* Generate from history button */}
+              {sessionHistory.length > 0 && (
+                <button
+                  className="btn cn-regen"
+                  onClick={onGenerateNotes}
+                  disabled={notesGenerating || notesLoading}
+                >
+                  {notesGenerating ? (
+                    <span className="loading-dots">Analyzing {sessionHistory.length} session(s)...</span>
+                  ) : (
+                    <>
+                      <svg className="ic"><use href="#cn-sparkle" /></svg>
+                      <span>Regenerate from past adventures ({sessionHistory.length})</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {notesLoading ? (
+                <p className="cn-lede">Loading notes...</p>
+              ) : (
+                <div className="cn-memory">
+                  {aiNotes || <span className="cn-memory-empty">No AI memory yet. Complete a session or click Regenerate above.</span>}
+                </div>
+              )}
+
+              {/* Character Personality Memories */}
+              {characterMemories && characterMemories.trim().length > 0 && (
+                <>
+                  <div className="pnl-sec">Character personality<span className="ln"></span></div>
+                  <p className="cn-lede">
+                    Personality traits the AI has observed during your adventures. These persist permanently and evolve as your character grows.
+                  </p>
+                  <div className="cn-memory accent">
+                    {characterMemories}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* My Notes Tab (editable) */}
+          {notesTab === 'mynotes' && (
+            <>
+              <p className="cn-lede">
+                Your personal notes. Add corrections, reminders, or details the AI might have missed.
+                <span className="cn-note-good"> These are preserved when you regenerate AI memory.</span>
+              </p>
+
+              <textarea
+                className="notes-area"
+                value={currentMyNotes}
+                onChange={(e) => handleMyNotesChange(e.target.value)}
+                placeholder="Add your own notes here...
 
 Examples:
 - Captain Morris (not Tobias) sent scouts to check the settlements
 - We agreed to leave PRE-DAWN to scout the bandit camp
 - Jakob's motivation: proving himself to the church
 - Shanion seems interested in herbal remedies - could be a plot hook"
-              style={{
-                width: '100%',
-                minHeight: '300px',
-                padding: '1rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(46, 204, 113, 0.3)',
-                background: 'rgba(0,0,0,0.3)',
-                color: 'inherit',
-                fontFamily: 'inherit',
-                fontSize: '0.9rem',
-                lineHeight: '1.5',
-                resize: 'vertical'
-              }}
-            />
+              />
 
-            <div style={{ marginTop: '1rem', fontSize: '0.85rem', opacity: 0.7 }}>
-              <strong>Tips:</strong>
-              <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                <li>Correct AI mistakes: "Captain Morris sent the scouts, NOT Tobias"</li>
-                <li>Note specific plans: "We agreed to leave at pre-dawn"</li>
-                <li>Track NPC details: "Jakob is motivated by proving himself"</li>
-                <li>Record items given away: "Gave the merchant our spare rope"</li>
-              </ul>
-            </div>
-          </>
+              <div className="cn-tips">
+                <div className="cn-tips-ttl">Tips</div>
+                <ul>
+                  <li>Correct AI mistakes: "Captain Morris sent the scouts, NOT Tobias"</li>
+                  <li>Note specific plans: "We agreed to leave at pre-dawn"</li>
+                  <li>Track NPC details: "Jakob is motivated by proving himself"</li>
+                  <li>Record items given away: "Gave the merchant our spare rope"</li>
+                </ul>
+              </div>
+            </>
+          )}
+
+        </div>
+
+        {/* Save — Hearth primary button, only on the editable tab */}
+        {notesTab === 'mynotes' && (
+          <div className="pnl-foot">
+            <button
+              className="btn primary"
+              onClick={onSaveNotes}
+              disabled={notesSaving}
+            >
+              {notesSaving ? 'Saving…' : 'Save notes'}
+            </button>
+          </div>
         )}
-
-      </div>
+      </aside>
     </div>
   );
 };
