@@ -2,6 +2,54 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.1.0] - 2026-06-06 — MVP hardening: creation fixes, the mechanical spine, full Hearth, cleanup
+
+A four-phase pass following a full system audit. Made the MVP correct, gave it a
+real mechanical backbone, finished the Hearth visual conversion, and cut dead wiring.
+
+**Phase A — character-creation data fixes (critical).** The V2 creator shipped
+every new character with HP 0/0, AC 10, empty worn equipment, an orphaned duplicate
+draft row, and inventory keyed only by `label`; the manual submit also dropped
+theme/ancestry-feat selections.
+- `creatorPersistence`: compute worn equipment slots {armor, mainHand, offHand},
+  armored AC (mirrors the sheet's formula incl. monk/barbarian Unarmored Defense),
+  and L1 max_hp from hit die + CON; add `name` to package items.
+- `submitCreator` + `CharacterCreatorV2`: thread the draft `characterId` so submit
+  PUTs the 'creating' row in place — no duplicate orphan row.
+- `routes/character.js`: server-side derived-vitals safety net on every active
+  transition (POST + PUT) so no path can create a 0-HP / AC-10 character; persist
+  theme + ancestry-feat on the 'creating'→'active' flip. Backfilled the one broken
+  existing character.
+- `combatMarkerService`: read `ability_scores.dex` (short key), not `.dexterity`,
+  so DEX affects initiative.
+
+**Phase B — the mechanical spine (the "missing frameworks").** The DM narrated
+mechanics but the system never tracked them as state. New `gameStateMarkerService.js`
++ marker schemas + route wiring + prompt rules + cockpit UI:
+- `[HP_CHANGE]` writes `current_hp` immediately (clamped); the cockpit refetches HP.
+- `[EFFECT_START]`/`[EFFECT_END]` track active spell effects + the 5e single-
+  concentration rule on the session; injected back into the prompt and shown in the
+  Active Effects panel.
+- `[CONDITION_ADD/REMOVE]` now persist to `characters.debuffs` (were client-only).
+- `[SCENE]` persists to the session and rehydrates the cockpit panel on resume.
+- `[TURN]` advances the initiative round/turn (was rolled once, never advanced).
+- `[ROLL_REQUEST]` surfaces a one-click "Roll d20 +mod" button preloaded with the
+  player's modifier that reports the result back to the DM.
+- `tests/phaseB-spine.test.js` — 7/7.
+
+**Phase C — finished the Hearth conversion.** Converted the last legacy-blue
+screens on the core path to the Hearth dark-editorial system: Session Setup,
+Session Rewards, the Campaign Notes slide-in, and the Companions slide-in. Added
+defensive `.hearth` resets so legacy `index.css` form styles stop leaking. Fixed
+the roster Settings/AI-Behavior buttons that were painted behind the fixed Hearth
+layer (moved into the roster header; dropped the occluded appbar).
+
+**Phase D — cut dead wiring.** Removed the dead companion-activity fetches (the
+`/away` endpoint actually hangs) and weather/survival fetches (unmounted → 404 every
+turn). `abortSession` + `claimRewards` now return to the roster instead of stranding
+the player in DM setup. Removed the unreachable CompanionBackstory view and the dead
+PathChoiceScreen + handoff route.
+
 ## [2.0.0] - 2026-06-04 — MVP reduction: Player-Mode core with Opus 4.8 as DM
 
 Deliberate, large reduction of the v1.0.167 system down to a focused, reliably

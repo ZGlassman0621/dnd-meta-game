@@ -24,8 +24,10 @@
 > mythic-amplifications.
 >
 > **Other deltas:** all gameplay AI → `claude-opus-4-8`; **login removed**
-> (no-op `server/middleware/auth.js` resolves one local user); DM marker set
-> trimmed to 6 live markers; `npm`/`npx` bin shims break on this folder's `&` in
+> (no-op `server/middleware/auth.js` resolves one local user); DM marker set was
+> trimmed to 6 live markers, then v2.1.0 added the mechanical-spine markers
+> (`HP_CHANGE`, `EFFECT_START`/`EFFECT_END`, `TURN`, `ROLL_REQUEST`, `SCENE`) handled
+> by `gameStateMarkerService.js`; `npm`/`npx` bin shims break on this folder's `&` in
 > the path — invoke binaries via `node node_modules/<pkg>/bin/...` (e.g.
 > `node node_modules/vite/bin/vite.js build` from `client/`).
 
@@ -75,7 +77,9 @@ Prelude sessions have their own marker set (19 markers — see prelude section b
 
 **Marker pipeline (canonical path post-Phase-3.2):** `markerSchemas.js` (schema definitions) + `markerPipeline.js` (dispatch) own marker validation + side-effect dispatch. Every marker in `MARKER_SCHEMAS` flows through `validateDmMarkers` (schema validation + correction-loop feedback) and `processResponseMarkers` (handler dispatch to consumer services). Schemas double as future tool-use definitions — no rewrite needed when that migration lands.
 
-Handlers register via `registerHandler(schemaKey, fn)` at module-load time, co-located with the consumer service that owns the side effect: `pietyService` (PIETY_CHANGE), `dmModeBondShiftService` (BOND_SHIFT), `survivalService` (SHELTER_FOUND/EAT/DRINK/FORAGE), `weatherService` (WEATHER_CHANGE), `craftingService` (CRAFT_PROGRESS/RECIPE_FOUND/MATERIAL_FOUND/RECIPE_GIFT), `merchantService` (MERCHANT_SHOP/MERCHANT_REFER), `merchantOrderService` (MERCHANT_COMMISSION), `lootDropService` (LOOT_DROP), `consequenceService` (PROMISE_MADE/PROMISE_FULFILLED), `notorietyService` (NOTORIETY_GAIN/NOTORIETY_LOSS), `mythicService` (MYTHIC_TRIAL/ITEM_AWAKEN/MYTHIC_SURGE), `baseThreatService` (FORTRESS_THREAT/BASE_DEFENSE_RESULT), `combatMarkerService` (COMBAT_START/COMBAT_END). When a handler doesn't naturally co-locate with an existing service, the precedent is a single-purpose marker-handler module (`lootDropService.js`, `combatMarkerService.js`).
+Handlers register via `registerHandler(schemaKey, fn)` at module-load time, co-located with the consumer service that owns the side effect: `pietyService` (PIETY_CHANGE), `dmModeBondShiftService` (BOND_SHIFT), `survivalService` (SHELTER_FOUND/EAT/DRINK/FORAGE), `weatherService` (WEATHER_CHANGE), `craftingService` (CRAFT_PROGRESS/RECIPE_FOUND/MATERIAL_FOUND/RECIPE_GIFT), `merchantService` (MERCHANT_SHOP/MERCHANT_REFER), `merchantOrderService` (MERCHANT_COMMISSION), `lootDropService` (LOOT_DROP), `consequenceService` (PROMISE_MADE/PROMISE_FULFILLED), `notorietyService` (NOTORIETY_GAIN/NOTORIETY_LOSS), `mythicService` (MYTHIC_TRIAL/ITEM_AWAKEN/MYTHIC_SURGE), `baseThreatService` (FORTRESS_THREAT/BASE_DEFENSE_RESULT), `combatMarkerService` (COMBAT_START/COMBAT_END), `gameStateMarkerService` (HP_CHANGE/EFFECT_START/EFFECT_END/TURN/ROLL_REQUEST — the v2.1.0 mechanical spine). When a handler doesn't naturally co-locate with an existing service, the precedent is a single-purpose marker-handler module (`lootDropService.js`, `combatMarkerService.js`, `gameStateMarkerService.js`).
+
+**Mechanical-spine markers (v2.1.0):** `gameStateMarkerService.js` persists narrated mechanics so the cockpit + DM stop guessing. `[HP_CHANGE]` writes `characters.current_hp` (clamped); `[EFFECT_START]`/`[EFFECT_END]` maintain `session_config.activeEffects` with the 5e single-concentration rule (injected back into the prompt); `[TURN]` updates `session_config.combat`; `[ROLL_REQUEST]` returns the player's preloaded modifier for a one-click in-UI roll. `[CONDITION_ADD/REMOVE]` now persist to `characters.debuffs` and `[SCENE]` to `session_config.lastScene` — both handled at the route call site (they reuse the existing in-route detector/parser), not in the service. The `routes/dmSession.js` `/message` handler surfaces `hpChange`/`conditions`/`activeEffects`/`turn`/`rollRequest` on the turn response for the cockpit.
 
 **Fortress threat origination is marker-driven** (Phase 3.7 SC-3.7.1): the AI DM emits `[FORTRESS_THREAT]` when narrative context warrants a threat against a player-owned base; the handler in `baseThreatService.js` validates ownership/active-status, enforces the single-active-threat-per-base invariant, and creates the `base_threats` row. Source/Category fields fall back handler-side to `RAID_CAPABLE_EVENTS[EventType]` lookups when omitted on the marker. The legacy world-event-tick path (`generateThreatsForCampaign` reading raid-capable `event_type` rows from `world_events`) is **deprecated** and unused in production — kept in place per Phase 3.7 §1.2 (removing it would touch the living-world tick architecture).
 
@@ -248,6 +252,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/services/markerSchemas.js` — Marker schema definitions + validation (canonical dispatch surface, post Phase 3.2)
 - `server/services/markerPipeline.js` — `processResponseMarkers` dispatch + `registerHandler` API
 - `server/services/combatMarkerService.js` — COMBAT_START + COMBAT_END handlers (initiative orchestration)
+- `server/services/gameStateMarkerService.js` — v2.1.0 mechanical-spine handlers (HP_CHANGE, EFFECT_START/END, TURN, ROLL_REQUEST)
 - `server/services/lootDropService.js` — LOOT_DROP handler (character-inventory mutation for AI-driven drops)
 - `server/routes/dmSession.js` — DM session routes (main API surface)
 - `server/routes/dmMode.js` — DM Mode routes

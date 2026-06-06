@@ -1079,6 +1079,25 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
 
+    // Phase B — inject persisted active spell effects so the DM knows what's
+    // running (Bless bonuses, concentration, Hunter's Mark, Rage…) and can
+    // reason about ending/refreshing them via [EFFECT_END]/[EFFECT_START].
+    // Closes the loop: the AI emits effect markers AND sees the resulting state.
+    try {
+      const sessionCfg = safeParse(session.session_config, {});
+      const effects = Array.isArray(sessionCfg.activeEffects) ? sessionCfg.activeEffects : [];
+      if (effects.length > 0) {
+        const lines = effects.map(e => {
+          const tags = [e.concentration ? 'concentration' : null, e.duration].filter(Boolean).join(', ');
+          return `${e.name}${tags ? ` (${tags})` : ''}`;
+        });
+        messages.push({
+          role: 'user',
+          content: `[SYSTEM NOTE — Active effects]: ${lines.join('; ')}. Apply these mechanically (e.g. Bless adds 1d4 to attacks/saves; concentration breaks on a failed CON save after damage). When one ends, emit [EFFECT_END: Name="..."]. Do not announce this note.`
+        });
+      }
+    } catch { /* non-fatal */ }
+
     // Check which LLM provider is available (respects user preference)
     const { provider } = await getLLMProvider(providerPreference);
     if (!provider) {
