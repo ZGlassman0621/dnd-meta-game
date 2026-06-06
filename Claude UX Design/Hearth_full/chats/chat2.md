@@ -66,3 +66,34 @@ One thing worth deciding before you hand it off: whether to bundle the **sibling
 
 Want **screenshots** of each tab included in the bundle as well? (Left them out by default.)
 
+## User
+
+And how about the character creation wizard? Do you have any details on that, or do you need a prompt?
+
+## Assistant
+
+_[tool: list_files]_
+
+_[tool: grep]_
+
+Short answer: **there's no character creation wizard in the project** — so I don't have details on it, and yes, I'd want a prompt (or a quick conversation) before building one.
+
+Here's what *does* exist that's adjacent, so we're clear on the gap:
+
+- **`Level Up.html`** — a *level-up* wizard (advancing an existing character one level). Different flow: it assumes the character already exists, so it's stepping through new HP, features, ASI/feat choices, etc.
+- **`Character Sheet.html`** — the finished read view of a complete character.
+
+A **character creation wizard** (build from zero → ancestry → class → background/theme → ability scores → skills/proficiencies → equipment → identity/name → review) doesn't exist yet. It's a meatier flow than Level Up because it's choosing *everything* from scratch.
+
+The good news: I have plenty to work from. `tokens.css` gives me the full design system, `Level Up.html` gives me the established **wizard pattern** (step structure, choice cards, nav), and `Character Sheet.html` tells me the **exact end-state** every creation step must produce. So I can build it consistent with the rest of Hearth without much guesswork.
+
+But the *content and UX decisions* are where I'd want your input rather than inventing. A few things worth deciding:
+
+1. **Scope** — full SRD-style creation, or a streamlined/guided "quick build" with smart defaults?
+2. **Step order & granularity** — class-first or ancestry-first? One step per decision, or grouped?
+3. **Ability scores** — which methods? (Standard array / point-buy / manual / roll)
+4. **Guided vs. freeform** — hand-holding with recommendations, or power-user dense?
+5. **Where it lives** — entry point from Dashboard? And does it end on the Character Sheet?
+
+Want me to fire off a proper **questions form** to nail these down, then build it? Or if you already have a spec/prompt in mind, paste it and I'll work from that.
+
