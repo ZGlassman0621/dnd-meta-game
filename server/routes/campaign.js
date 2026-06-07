@@ -24,11 +24,11 @@ router.post('/draft', async (req, res) => {
 // co-authored draft as its plan, and link the character so /start plays it.
 router.post('/begin', async (req, res) => {
   try {
-    const { draft, characterId } = req.body;
+    const { draft, characterId, linesAndVeils } = req.body;
     if (!draft || !characterId) {
       return res.status(400).json({ error: 'draft and characterId are required' });
     }
-    const result = await beginCampaign({ draft, characterId, userId: req.user?.id });
+    const result = await beginCampaign({ draft, characterId, linesAndVeils, userId: req.user?.id });
     res.status(201).json(result);
   } catch (error) {
     handleServerError(res, error, 'begin campaign');

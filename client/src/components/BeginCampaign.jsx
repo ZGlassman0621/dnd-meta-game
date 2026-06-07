@@ -5,14 +5,20 @@ import '../styles/hearth-begincampaign.css'
 /**
  * Begin a new Campaign — the conversational atelier where Opus authors the
  * world while the player sets the mood (design_handoff_hearth_app/Begin
- * Campaign.html). Two states: a Greeting (who/seed/prompt) and a Compose
- * atelier (manuscript dialogue thread + premise/scene cards + a rail of dials),
- * ending in a cinematic "Begin the first session" that drops into the cockpit.
+ * Campaign.html). Two states: a Greeting (a free-text prompt + character-
+ * grounded seeds) and a Compose atelier (manuscript dialogue thread + a living
+ * premise/scene preview + a rail of dials), ending in a cinematic "Begin the
+ * first session" that drops into the cockpit.
+ *
+ * Campaign creation is ALWAYS scoped to the character you entered through
+ * (reached from that character's Campaigns screen) — there is no character/
+ * world choice. Seeds are grounded in the strongest thread on the character
+ * sheet (their background / calling) and name the thread they pulled from.
  *
  * Wired to the real backend: POST /api/campaign/draft (Opus authors/refines the
  * draft) and POST /api/campaign/begin (creates the campaign + plan, links the
- * character). On Begin, /api/dm-session/start runs under the cinematic so the
- * player lands directly in the live session.
+ * character, persists the table's lines & veils). On Begin, /api/dm-session/start
+ * runs under the cinematic so the player lands directly in the live session.
  *
  * Props: { character, onBack, onBegun }.
  */
@@ -26,7 +32,26 @@ const NUDGES = [
   { k: 'regen', label: 'Regenerate', regen: true }
 ]
 const NUDGE_LABEL = Object.fromEntries(NUDGES.map(n => [n.k, n.label]))
-const SCOPES = [{ v: 'one', t: 'One-shot' }, { v: 'arc', t: 'Short arc' }, { v: 'open', t: 'Open-ended' }]
+const SCOPES = [{ v: 'one', t: 'One-shot' }, { v: 'arc', t: 'Short arc' }, { v: 'open', t: 'Ongoing campaign' }]
+
+// Rail genre/tone palette (grouped, multi-select). The premise card still shows
+// Opus's own tone words; these dials let the player retune the leanings.
+const GENRE_OPTIONS = ['Mystery', 'Survival', 'Horror', 'Heroic', 'Intrigue', 'Exploration', 'Heist', 'Warfare']
+const TONE_OPTIONS = ['Quiet dread', 'Grim', 'Hopeful', 'Whimsical', 'Epic', 'Gritty', 'Bittersweet']
+
+// Lines & veils — the table's content boundaries (open = shown · veil = off the
+// page · line = never appears). Defaults mirror the design reference.
+const CB_DEFAULTS = [
+  { topic: 'Graphic violence & gore', state: 'veil' },
+  { topic: 'Character death', state: 'open' },
+  { topic: 'Harm to children', state: 'line' },
+  { topic: 'Torture', state: 'veil' },
+  { topic: 'Romance & intimacy', state: 'open' },
+  { topic: 'Substance & addiction', state: 'open' },
+  { topic: 'Body horror', state: 'open' },
+  { topic: 'Slurs & discrimination', state: 'open' }
+]
+const CB_STATES = ['open', 'veil', 'line']
 
 const Ic = ({ n }) => <svg className="ic"><use href={`#bc-${n}`} /></svg>
 
@@ -34,6 +59,26 @@ const Ic = ({ n }) => <svg className="ic"><use href={`#bc-${n}`} /></svg>
 function emph(text) {
   if (!text) return null
   return String(text).split(/\*([^*]+)\*/g).map((p, i) => (i % 2 === 1 ? <em key={i}>{p}</em> : p))
+}
+
+const lc = s => String(s ?? '').trim().toLowerCase()
+const titleCase = s => String(s ?? '').replace(/\b\w/g, c => c.toUpperCase())
+
+// Split Opus's flat tone list into the rail's Genre / Tone groups.
+function splitTones(list) {
+  const g = [], t = []
+  ;(list || []).forEach(x => {
+    const gi = GENRE_OPTIONS.findIndex(o => lc(o) === lc(x))
+    const ti = TONE_OPTIONS.findIndex(o => lc(o) === lc(x))
+    if (gi >= 0) g.push(GENRE_OPTIONS[gi])
+    else if (ti >= 0) t.push(TONE_OPTIONS[ti])
+    else if (String(x ?? '').trim()) g.push(String(x).trim())
+  })
+  return { g, t }
+}
+// Palette = the fixed options plus any selected value Opus invented.
+function unionOpts(base, selected) {
+  return [...base, ...selected.filter(s => !base.some(b => lc(b) === lc(s)))]
 }
 
 async function callDraft(payload) {
@@ -46,7 +91,6 @@ async function callDraft(payload) {
 
 export default function BeginCampaign({ character, onBack, onBegun }) {
   const [mode, setMode] = useState('greet')         // 'greet' | 'compose'
-  const [subject, setSubject] = useState(character?.id ?? 'world')
   const [prompt, setPrompt] = useState('')
   const [draft, setDraft] = useState(null)
   const [turns, setTurns] = useState([])             // { type:'opus'|'you', text, label? }
@@ -54,18 +98,43 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [compInput, setCompInput] = useState('')
-  // rail dials (seeded by Opus; scope is player-tunable)
+  // rail dials (seeded by Opus; player-tunable)
   const [scope, setScope] = useState('arc')
+  const [genres, setGenres] = useState([])
   const [tones, setTones] = useState([])
-  const [party, setParty] = useState([])             // added ally pills (stub)
+  const [toneOpen, setToneOpen] = useState(false)
+  const [settingOpen, setSettingOpen] = useState(false)
+  const [settingName, setSettingName] = useState('')
+  const [settingDesc, setSettingDesc] = useState('')
   const [inheritSettings, setInheritSettings] = useState(true)
+  const [boundaries, setBoundaries] = useState(() => CB_DEFAULTS.map(b => ({ ...b })))
+  const [cbOpen, setCbOpen] = useState(false)
   // cinematic
   const [cinema, setCinema] = useState(false)
   const [cinemaRun, setCinemaRun] = useState(false)
 
+  const subjectId = character?.id || null
   const charName = character ? (character.name || [character.first_name, character.last_name].filter(Boolean).join(' ') || 'your character') : null
+  const firstName = character?.first_name || (charName ? charName.split(' ')[0] : 'your hero')
   const glyph = (character?.glyph || character?.first_name || character?.name || '?').charAt(0).toUpperCase()
-  const hasBackstory = !!(character?.backstory || character?.parsed_backstory)
+
+  // The strongest narrative thread on the sheet the grounded seed pulls from.
+  const threadKind = character?.background ? 'background' : (character?.subclass ? 'path' : 'calling')
+  const threadLabel = titleCase(character?.background || character?.subclass || character?.class_label || character?.class || 'past')
+
+  const toneSummary = [...genres, ...tones]
+  const boundaryCount = boundaries.filter(b => b.state !== 'open').length
+
+  // Sync the rail dials from a freshly drafted/refined campaign (Opus is
+  // authoritative — the rail reads "Set by Opus" and updates live).
+  const applyDraft = (d) => {
+    setDraft(d)
+    setScope(d.scope || 'arc')
+    const { g, t } = splitTones(d.tones)
+    setGenres(g); setTones(t)
+    setSettingName(d.setting?.name || d.region || '')
+    setSettingDesc(d.setting?.sub || '')
+  }
 
   // ── draft generation ──────────────────────────────────────────────────────
   const beginWithOpus = async ({ promptOverride, seedOverride } = {}) => {
@@ -74,11 +143,11 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
     try {
       const d = await callDraft({
         prompt: promptOverride ?? prompt,
-        subject, seed: seedOverride || null,
-        characterId: character?.id || null,
-        dials: { scope, tones }
+        subject: subjectId, seed: seedOverride || null,
+        characterId: subjectId,
+        dials: { scope, tones: toneSummary }
       })
-      setDraft(d); setScope(d.scope || scope); setTones(d.tones || [])
+      applyDraft(d)
       setTurns([{ type: 'opus', text: d.opusMessage || '' }])
       setMode('compose')
     } catch (e) { setError(e.message) } finally { setLoading(false) }
@@ -90,25 +159,54 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
     if (!nudge) setCompInput('')
     setLoading(true); setThinking(true); setError(null)
     try {
-      const d = await callDraft({ priorDraft: draft, nudge: nudge || null, userNote: userNote || null, characterId: character?.id || null, subject })
-      setDraft(d); setScope(d.scope || scope); setTones(d.tones || [])
+      const d = await callDraft({ priorDraft: draft, nudge: nudge || null, userNote: userNote || null, characterId: subjectId, subject: subjectId })
+      applyDraft(d)
       setTurns(t => [...t, { type: 'opus', text: d.opusMessage || '' }])
     } catch (e) { setError(e.message) } finally { setThinking(false); setLoading(false) }
   }
 
   const sendComposer = () => { const v = compInput.trim(); if (v && !loading) refine({ userNote: v }) }
 
+  // ── rail editors ──────────────────────────────────────────────────────────
+  const toggleIn = (setFn) => (val) => setFn(prev => prev.some(x => lc(x) === lc(val)) ? prev.filter(x => lc(x) !== lc(val)) : [...prev, val])
+  const toggleGenre = toggleIn(setGenres)
+  const toggleTone = toggleIn(setTones)
+
+  const saveSetting = () => {
+    const n = settingName.trim() || 'Untitled region'
+    const d = settingDesc.trim()
+    setSettingName(n); setSettingDesc(d)
+    // Patch the draft so the setting tile, premise region chip, and the
+    // plan-forming Region row all update together.
+    setDraft(prev => prev ? { ...prev, region: n, setting: { ...(prev.setting || {}), name: n, sub: d } } : prev)
+    setSettingOpen(false)
+  }
+  const cancelSetting = () => {
+    setSettingName(draft?.setting?.name || draft?.region || '')
+    setSettingDesc(draft?.setting?.sub || '')
+    setSettingOpen(false)
+  }
+  const reimagineSetting = () => {
+    if (loading) return
+    setSettingOpen(false)
+    refine({ userNote: 'Reimagine the setting — give the campaign a different region and place name, keeping the premise and tone we have.' })
+  }
+
+  const setBoundary = (topic, state) => setBoundaries(prev => prev.map(b => b.topic === topic ? { ...b, state } : b))
+
   // ── commit ──────────────────────────────────────────────────────────────
   const begin = async () => {
-    if (loading || !draft || !character?.id) {
-      if (!character?.id) setError('Select a character before beginning a campaign.')
+    if (loading || !draft || !subjectId) {
+      if (!subjectId) setError('Select a character before beginning a campaign.')
       return
     }
+    // Honour the rail's player edits in the committed campaign.
+    const committed = { ...draft, scope, tones: toneSummary.length ? toneSummary : (draft.tones || []) }
     setLoading(true); setError(null)
     try {
       const res = await fetch('/api/campaign/begin', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draft, characterId: character.id })
+        body: JSON.stringify({ draft: committed, characterId: subjectId, linesAndVeils: boundaries })
       })
       if (!res.ok) { let m = ''; try { m = (await res.json()).error } catch {} throw new Error(m || 'Could not begin the campaign.') }
       // Cinematic plays while Opus sets the opening scene (the /start call).
@@ -116,7 +214,7 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
       requestAnimationFrame(() => setCinemaRun(true))
       const startReq = fetch('/api/dm-session/start', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId: character.id, providerPreference: 'auto' })
+        body: JSON.stringify({ characterId: subjectId, providerPreference: 'auto' })
       }).catch(() => {}) // if start fails, we still land on the (Hearth) session setup
       await Promise.all([startReq, new Promise(r => setTimeout(r, 3600))])
       onBegun && onBegun()
@@ -161,47 +259,37 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
           /* ─────────── GREETING ─────────── */
           <section className="greet" style={{ display: 'block' }}>
             <div className="greet-hero">
-              <div className="greet-op"><span className="orb">O</span><span className="lbl">Opus</span></div>
-              <h2>Every campaign begins as a single sentence. Tell me yours.</h2>
-              <p className="askp">I'll take whatever you give me — a mood, a place, a wound your character still carries — and build the world around it: its people, its map, the truth at its centre. <em>You set the weather. I'll write the storm.</em></p>
-
-              <p className="glabel">Who walks into this story?</p>
-              <div className="who-row">
+              <div className="greet-op">
+                <span className="orb">O</span><span className="lbl">Opus</span>
                 {character && (
-                  <button className={`whoc${subject === character.id ? ' sel' : ''}`} type="button" onClick={() => setSubject(character.id)}>
-                    <span className="crest"><span className="mono">{glyph}</span>{character.level ? <span className="lvl">{character.level}</span> : null}</span>
-                    <span className="wc-txt"><span className="wc-t">{charName}</span><br /><span className="wc-s">{[character.race_label || character.race, character.class_label || character.class, character.level ? `level ${character.level}` : null].filter(Boolean).join(' · ')}</span></span>
-                  </button>
+                  <span className="for-char"><span className="crestmini">{glyph}</span>Creating for <b>{charName}</b></span>
                 )}
-                <button className={`whoc${subject === 'world' ? ' sel' : ''}`} type="button" onClick={() => setSubject('world')}>
-                  <span className="wc-blank"><Ic n="globe" /></span>
-                  <span className="wc-txt"><span className="wc-t">Start from the world</span><br /><span className="wc-s">Build it first, choose a hero later</span></span>
-                </button>
               </div>
-
-              <p className="glabel">Or begin from a seed</p>
-              <div className="seed-row">
-                {hasBackstory && (
-                  <button className="seedc" type="button" disabled={loading}
-                    onClick={() => beginWithOpus({ promptOverride: "Build this campaign from my character's own history — their unfinished business and the people from their past." })}>
-                    <span className="stag"><span className="dot" />From your backstory</span>
-                    <h4>Your own history</h4>
-                    <p>Draw the campaign from the unfinished business and people your character carries.</p>
-                  </button>
-                )}
-                <button className="seedc" type="button" disabled={loading} onClick={() => beginWithOpus({ seedOverride: 'surprise' })}>
-                  <span className="stag"><span className="dot" />Opus's choice</span>
-                  <h4>Surprise me</h4>
-                  <p>Give me only your character, and I'll find the story that fits the shape of them.</p>
-                </button>
-              </div>
+              <h2>Every campaign begins as a single sentence. Tell me yours.</h2>
+              <p className="askp">I'll take whatever you give me — a mood, a place, a wound {firstName} still carries — and build the world around it: its people, its map, the truth at its centre. <em>You set the weather. I'll write the storm.</em></p>
 
               <p className="glabel">What do you want to play?</p>
               <div className="prompt-wrap">
                 <textarea className="prompt-box" value={prompt} onChange={e => setPrompt(e.target.value)} disabled={loading}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && prompt.trim()) beginWithOpus() }}
                   placeholder="A rain-soaked political mystery in a sinking canal city… a slow horror in a town that's forgotten how to grieve… or just a word: revenge, pilgrimage, heist." />
                 <button className="btn primary prompt-send" type="button" disabled={loading || !prompt.trim()} onClick={() => beginWithOpus()}>
                   <Ic n="send" />{loading ? 'Opus is writing…' : 'Begin with Opus'}
+                </button>
+              </div>
+
+              <p className="glabel">Not sure where to begin? Start from a thread I drew from {firstName}</p>
+              <div className="seed-row">
+                <button className="seedc" type="button" disabled={loading}
+                  onClick={() => beginWithOpus({ promptOverride: `Build this campaign from the strongest thread on ${firstName}'s sheet — their ${threadKind} as ${threadLabel} — and the unfinished business, the people, and the places it left behind.` })}>
+                  <span className="stag"><span className="dot" />From your {threadKind} · {threadLabel}</span>
+                  <h4>The thread you still carry</h4>
+                  <p>I'll draw a campaign from your {threadKind} as {threadLabel} — the debt, the person, or the place it left unfinished.</p>
+                </button>
+                <button className="seedc" type="button" disabled={loading} onClick={() => beginWithOpus({ seedOverride: 'surprise' })}>
+                  <span className="stag"><span className="dot" />Opus's choice</span>
+                  <h4>Surprise me</h4>
+                  <p>Not sure what you're after? I'll conjure an adventure from nothing, and we'll shape it together as we go.</p>
                 </button>
               </div>
             </div>
@@ -292,27 +380,58 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                     </div>
 
                     <div className="dial">
-                      <div className="dl"><span className="k">Genre &amp; tone</span></div>
+                      <div className="dl"><span className="k">Genre &amp; tone</span>
+                        <button className="edit" type="button" onClick={() => setToneOpen(o => !o)}>{toneOpen ? 'Done' : 'Change'}</button>
+                      </div>
                       <div className="chiprow">
-                        {(tones.length ? tones : ['—']).map((t, i) => <span className={`chip${i === 0 ? ' on' : ''}`} key={i}>{t}</span>)}
+                        {(toneSummary.length ? toneSummary : ['—']).map((t, i) => <span className="chip on" key={i}>{t}</span>)}
+                      </div>
+                      <div className={`dial-edit${toneOpen ? ' open' : ''}`}>
+                        <div className="de-group">
+                          <div className="de-glabel">Genre</div>
+                          <div className="chiprow">
+                            {unionOpts(GENRE_OPTIONS, genres).map(g => (
+                              <span className={`chip${genres.some(x => lc(x) === lc(g)) ? ' on' : ''}`} key={g} onClick={() => !loading && toggleGenre(g)}>{g}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="de-group">
+                          <div className="de-glabel">Tone</div>
+                          <div className="chiprow">
+                            {unionOpts(TONE_OPTIONS, tones).map(t => (
+                              <span className={`chip${tones.some(x => lc(x) === lc(t)) ? ' on' : ''}`} key={t} onClick={() => !loading && toggleTone(t)}>{t}</span>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     <div className="dial">
-                      <div className="dl"><span className="k">Setting</span></div>
+                      <div className="dl"><span className="k">Setting</span>
+                        <button className="edit" type="button" onClick={() => (settingOpen ? cancelSetting() : setSettingOpen(true))}>{settingOpen ? 'Close' : 'Edit'}</button>
+                      </div>
                       <div className="setting-val">
                         <span className="pin"><Ic n="pin" /></span>
                         <span><span className="sv-t">{draft?.setting?.name || draft?.region || '—'}</span><br /><span className="sv-s">{sceneSub || draft?.region || ''}</span></span>
                       </div>
+                      <div className={`dial-edit${settingOpen ? ' open' : ''}`}>
+                        <input className="set-input" value={settingName} onChange={e => setSettingName(e.target.value)} placeholder="Region name" />
+                        <input className="set-input" value={settingDesc} onChange={e => setSettingDesc(e.target.value)} placeholder="a short evocative descriptor" />
+                        <div className="de-actions">
+                          <button className="opus-redo" type="button" disabled={loading} onClick={reimagineSetting}><Ic n="refresh" />Let Opus reimagine</button>
+                          <span className="spacer" />
+                          <button className="btn sm" type="button" onClick={cancelSetting}>Cancel</button>
+                          <button className="btn primary sm" type="button" onClick={saveSetting}>Save</button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="dial">
-                      <div className="dl"><span className="k">Who starts beside you</span></div>
+                      <div className="dl"><span className="k">Your party</span></div>
                       <div className="party">
-                        <span className="pmem"><span className="av hero">{glyph}</span><span><span className="pn">{character?.first_name || charName || 'You'}</span> <span className="pr">you</span></span></span>
-                        {party.map((p, i) => <span className="pmem" key={i}><span className="av ally">{p.charAt(0)}</span><span><span className="pn">{p}</span> <span className="pr">ally</span></span></span>)}
-                        <button className="add-mem" type="button" onClick={() => setParty(p => [...p, 'Companion'])}><Ic n="plus" />Add a companion</button>
+                        <span className="pmem"><span className="av self">{glyph}</span><span><span className="pn">{firstName}</span> <span className="pr">you</span></span></span>
                       </div>
+                      <p className="party-note">You set out alone — companions join as the story finds them.</p>
                     </div>
 
                     <div className="dial">
@@ -325,9 +444,9 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                     </div>
 
                     <div className="dial">
-                      <div className="dl"><span className="k">Lines &amp; veils</span></div>
-                      <button className="veil-btn" type="button" title="Content boundaries — coming soon">
-                        <Ic n="eye-off" /><span className="vt">Content boundaries</span><span className="vc">default</span>
+                      <div className="dl"><span className="k">Content boundaries</span></div>
+                      <button className="veil-btn" type="button" onClick={() => setCbOpen(true)}>
+                        <Ic n="eye-off" /><span className="vt">Lines &amp; veils for the table</span><span className="vc">{boundaryCount} set</span>
                       </button>
                     </div>
                   </div>
@@ -356,6 +475,42 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
             <span className="spacer" />
             <span className="ttl"><span className="tl">Your campaign</span><span className="tn">{draft?.title}</span></span>
             <button className="btn primary begin" type="button" disabled={loading || !draft} onClick={begin}><Ic n="play" />Begin the first session</button>
+          </div>
+        </div>
+      )}
+
+      {/* content boundaries modal */}
+      {cbOpen && (
+        <div className="scrim" onClick={e => { if (e.target === e.currentTarget) setCbOpen(false) }}>
+          <div className="modal cb">
+            <div className="modal-head"><h3>Content boundaries</h3></div>
+            <div className="modal-body">
+              <p className="cb-sub">Tell Opus what your table will and won't put on the page. Change these any time during play.</p>
+              <div className="cb-legend">
+                <span className="lo"><b>Open</b> — shown in full</span>
+                <span className="lv"><b>Veil</b> — happens off the page</span>
+                <span className="ll"><b>Line</b> — never appears</span>
+              </div>
+              <div className="cb-list">
+                {boundaries.map(b => (
+                  <div className="cb-row" key={b.topic}>
+                    <span className="cb-t">{b.topic}</span>
+                    <div className="cb-seg">
+                      {CB_STATES.map(s => (
+                        <button type="button" key={s} data-s={s} className={b.state === s ? 'on' : ''} onClick={() => setBoundary(b.topic, s)}>
+                          {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-foot">
+              <span className="foot-note">{boundaryCount} {boundaryCount === 1 ? 'boundary' : 'boundaries'} set</span>
+              <button className="btn" type="button" onClick={() => setCbOpen(false)}>Cancel</button>
+              <button className="btn primary" type="button" onClick={() => setCbOpen(false)}>Done</button>
+            </div>
           </div>
         </div>
       )}

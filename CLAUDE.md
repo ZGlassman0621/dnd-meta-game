@@ -275,7 +275,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/services/narrativeQueueService.js`
 - `server/services/consequenceService.js`
 - `server/services/campaignPlanService.js` — Opus campaign plan
-- `server/services/campaignDraftService.js` — Begin-Campaign atelier (v2.2.0): Opus drafts/refines a campaign from a prompt + dials; commit creates the campaign + plan + links the character (`POST /api/campaign/draft` + `/begin`)
+- `server/services/campaignDraftService.js` — Begin-Campaign atelier (v2.2.0; v2.3.0 design refresh): Opus drafts/refines a campaign from a prompt + dials; commit creates the campaign + plan + links the character and persists the table's content boundaries (lines & veils, three-state open/veil/line) onto the plan as `lines_and_veils` (`POST /api/campaign/draft` + `/begin`). The whole atelier design reaches the live DM: `getPlanSummaryForSession` (campaignPlanService) carries the atelier fields through (premise/opening_scene/region/setting/hidden_truth/scope/locations/tone/lines_and_veils, `from_atelier` flag), and `dmPromptBuilder.formatCampaignPlan` renders them — including a **non-negotiable CONTENT BOUNDARIES block** (primacy) reinforced by a conditional 6th BEFORE-YOU-SEND self-check item (recency). Canonical/imported plans are unaffected (atelier sections render only when present).
 - `server/services/backstoryParserService.js` — Structured backstory extraction
 - `server/services/progressionService.js` — Character progression snapshot
 - `server/services/progressionSeedService.js` — Idempotent seed loader
@@ -304,7 +304,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 ### Frontend
 - `client/src/App.jsx` — SPA root, navigation, top-level state
 - `client/src/components/DMSession.jsx` — Main Player Mode session UI (~3000 lines, do not split further without plan)
-- `client/src/components/BeginCampaign.jsx` — conversational "Begin a new Campaign" atelier (v2.2.0): greeting + compose dialogue + rail dials + cinematic begin; reached from CampaignsPage, wired to campaignDraftService
+- `client/src/components/BeginCampaign.jsx` — conversational "Begin a new Campaign" atelier (v2.2.0; v2.3.0 design refresh): greeting (always character-scoped — prompt-first + character-grounded seeds that name the sheet thread they pulled from) + compose dialogue + rail dials (expandable Genre/Tone palette, inline Setting editor with "Let Opus reimagine", Content-boundaries Open/Veil/Line modal) + cinematic begin; reached from CampaignsPage, wired to campaignDraftService
 - `client/src/components/DMMode.jsx` — DM Mode UI
 - `client/src/components/CharacterCreationWizard.jsx` — 4-step wizard (~4300 lines)
 - `client/src/components/CharacterSheet.jsx` — Character view/edit (~3600 lines)

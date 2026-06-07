@@ -25,34 +25,20 @@
   box-shadow: var(--shadow); padding: 38px 40px 34px; position: relative; overflow: hidden;
 }
 .hearth .greet-hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 22%, transparent)); }
-.hearth .greet-op { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 18px; }
+.hearth .greet-op { display: flex; width: 100%; align-items: center; gap: 9px; margin-bottom: 18px; }
 .hearth .orb { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   background: radial-gradient(circle at 38% 32%, #e8cf94, var(--accent) 62%, var(--accent-d));
   box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.4);
   font-family: var(--serif); font-weight: 600; font-size: 15px; color: #2a2014; flex-shrink: 0; }
 .hearth .greet-op .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .for-char { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12px; color: var(--ink-3); }
+.hearth .for-char b { color: var(--ink-2); font-weight: 600; }
+.hearth .for-char .crestmini { width: 20px; height: 20px; border-radius: 5px; background: linear-gradient(150deg,#3a3326,#211c14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 11px; color: var(--accent); }
 .hearth .greet-hero h2 { font-family: var(--serif); font-weight: 500; font-size: 33px; line-height: 1.12; letter-spacing: -.014em; margin: 0 0 12px; color: var(--ink); max-width: 660px; }
 .hearth .greet-hero .askp { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 620px; margin: 0 0 26px; text-wrap: pretty; }
 .hearth .greet-hero .askp em { font-style: italic; color: var(--ink); }
 
 .hearth .glabel { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px; }
-
-.hearth .who-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 26px; }
-.hearth .whoc {
-  display: flex; align-items: center; gap: 13px; text-align: left; cursor: pointer;
-  background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 14px 16px;
-  transition: border-color .15s, background .15s, transform .15s;
-}
-.hearth .whoc:hover { border-color: color-mix(in oklab, var(--accent) 42%, var(--rule)); background: var(--bg-card); transform: translateY(-2px); }
-.hearth .whoc.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-card)); }
-.hearth .whoc .crest { width: 46px; height: 46px; }
-.hearth .whoc .crest .mono { font-size: 24px; }
-.hearth .whoc .crest .lvl { width: 22px; height: 22px; font-size: 11px; bottom: -6px; right: -6px; }
-.hearth .whoc .wc-blank { width: 46px; height: 46px; border-radius: 10px; border: 1px dashed var(--rule); display: flex; align-items: center; justify-content: center; color: var(--ink-4); flex-shrink: 0; }
-.hearth .whoc .wc-blank .ic { width: 20px; height: 20px; }
-.hearth .whoc .wc-txt { flex: 1; min-width: 0; }
-.hearth .whoc .wc-t { font-family: var(--serif); font-weight: 500; font-size: 18px; color: var(--ink); white-space: nowrap; }
-.hearth .whoc .wc-s { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-3); }
 
 .hearth .seed-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
 .hearth .seedc {
@@ -170,14 +156,32 @@
 .hearth .dial .dl .edit:hover { text-decoration: underline; }
 
 .hearth .seg { display: flex; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 3px; gap: 3px; }
-.hearth .seg button { flex: 1; background: none; border: 0; cursor: pointer; padding: 7px 4px; border-radius: 6px;
-  font-family: var(--sans); font-weight: 500; font-size: 11.5px; color: var(--ink-3); transition: background .14s, color .14s; white-space: nowrap; }
+.hearth .seg button { flex: 1; background: none; border: 0; cursor: pointer; padding: 7px 3px; border-radius: 6px;
+  font-family: var(--sans); font-weight: 500; font-size: 10.5px; letter-spacing: -.005em; color: var(--ink-3); transition: background .14s, color .14s; white-space: nowrap; }
 .hearth .seg button:hover { color: var(--ink-2); }
 .hearth .seg button.on { background: var(--accent); color: #211d17; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.2); }
 
 .hearth .chiprow { display: flex; flex-wrap: wrap; gap: 7px; }
 .hearth .chiprow .chip { cursor: pointer; transition: border-color .14s, background .14s, color .14s; }
 .hearth .chiprow .chip:hover { border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); }
+
+/* inline dial editors (genre/tone palette, setting) */
+.hearth .dial-edit { display: none; margin-top: 12px; padding-top: 13px; border-top: 1px solid var(--rule-soft); }
+.hearth .dial-edit.open { display: block; animation: bc-dialOpen .2s ease both; }
+@keyframes bc-dialOpen { from { opacity: 0; transform: translateY(-4px); } }
+.hearth .de-group { margin-bottom: 13px; }
+.hearth .de-group:last-child { margin-bottom: 0; }
+.hearth .de-glabel { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 9px; }
+.hearth .de-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.hearth .de-actions .spacer { flex: 1; }
+.hearth .set-input { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; color: var(--ink); font-family: var(--serif); font-size: 14.5px; }
+.hearth .set-input:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+.hearth .set-input + .set-input { margin-top: 8px; }
+.hearth .opus-redo { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer; font-family: var(--sans); font-size: 11px; color: var(--accent); padding: 0; }
+.hearth .opus-redo:hover { text-decoration: underline; }
+.hearth .opus-redo:disabled { opacity: .5; cursor: not-allowed; text-decoration: none; }
+.hearth .opus-redo .ic { width: 12px; height: 12px; }
+.hearth .party-note { font-family: var(--serif); font-style: italic; font-size: 13px; line-height: 1.45; color: var(--ink-3); margin: 11px 0 0; }
 
 .hearth .setting-val { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 9px; padding: 10px 12px; }
 .hearth .setting-val .pin { width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent-2); }
@@ -188,13 +192,10 @@
 .hearth .party { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .hearth .pmem { display: flex; align-items: center; gap: 9px; background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 13px 5px 5px; }
 .hearth .pmem .av { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 13px; flex-shrink: 0; }
-.hearth .pmem .av.hero { background: linear-gradient(150deg,#3a3326,#211c14); border: 1px solid var(--rule); color: var(--accent); }
+.hearth .pmem .av.self { background: linear-gradient(150deg,#3a3326,#211c14); border: 1px solid var(--rule); color: var(--accent); }
 .hearth .pmem .av.ally { background: color-mix(in oklab, var(--accent-2) 22%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent-2) 40%, var(--rule)); color: var(--accent-2); }
 .hearth .pmem .pn { font-family: var(--serif); font-size: 14px; color: var(--ink); }
 .hearth .pmem .pr { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
-.hearth .add-mem { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; background: none; border: 1px dashed var(--rule); border-radius: 999px; padding: 7px 14px; color: var(--ink-3); font-family: var(--sans); font-size: 12px; transition: border-color .14s, color .14s; }
-.hearth .add-mem:hover { border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); color: var(--ink-2); }
-.hearth .add-mem .ic { width: 13px; height: 13px; }
 
 .hearth .toggle-row { display: flex; align-items: center; gap: 10px; }
 .hearth .tg { width: 38px; height: 22px; border-radius: 999px; background: var(--accent); border: 1px solid var(--accent); position: relative; cursor: pointer; transition: background .15s, border-color .15s; flex-shrink: 0; }
@@ -261,3 +262,22 @@
   .hearth .fade-in { animation: bc-fadeUp .5s ease both; }
   @keyframes bc-fadeUp { from { opacity: 0; transform: translateY(8px); } }
 }
+
+/* ════════ CONTENT-BOUNDARIES MODAL (lines & veils) ════════ */
+.hearth .modal.cb { width: 560px; }
+.hearth .modal.cb .modal-body { max-height: 58vh; overflow-y: auto; }
+.hearth .cb-sub { font-family: var(--serif); font-style: italic; font-size: 15px; line-height: 1.5; color: var(--ink-3); margin: 0 0 16px; }
+.hearth .cb-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 6px; font-family: var(--sans); font-size: 11px; color: var(--ink-3); }
+.hearth .cb-legend b { font-weight: 600; }
+.hearth .cb-legend .lo b { color: var(--ink-2); }
+.hearth .cb-legend .lv b { color: var(--warn); }
+.hearth .cb-legend .ll b { color: var(--bad); }
+.hearth .cb-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .cb-row .cb-t { flex: 1; font-family: var(--serif); font-size: 16.5px; color: var(--ink); }
+.hearth .cb-seg { display: flex; background: var(--bg); border: 1px solid var(--rule); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
+.hearth .cb-seg button { background: none; border: 0; cursor: pointer; padding: 5px 12px; border-radius: 5px; font-family: var(--sans); font-weight: 500; font-size: 11px; color: var(--ink-4); transition: background .14s, color .14s; }
+.hearth .cb-seg button:hover { color: var(--ink-2); }
+.hearth .cb-seg button[data-s="open"].on { background: var(--raise); color: var(--ink); }
+.hearth .cb-seg button[data-s="veil"].on { background: color-mix(in oklab, var(--warn) 24%, var(--bg-card)); color: var(--warn); }
+.hearth .cb-seg button[data-s="line"].on { background: color-mix(in oklab, var(--bad) 24%, var(--bg-card)); color: var(--bad); }
+.hearth .modal.cb .modal-foot .foot-note { margin-right: auto; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); }

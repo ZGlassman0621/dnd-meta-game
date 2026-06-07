@@ -1236,7 +1236,7 @@ export function formatProgression(progression) {
   return parts.join('\n');
 }
 
-function formatCampaignPlan(planSummary) {
+export function formatCampaignPlan(planSummary) {
   if (!planSummary) return '';
 
   const isImported = !!planSummary.campaign_metadata || !!planSummary.dm_directives;
@@ -1308,6 +1308,27 @@ When inventing historical references, use dates 50-200 years BEFORE ${campaignYe
     }
   }
 
+  // Content boundaries — lines & veils (player-set safety tool, from the Begin
+  // Campaign atelier). NON-NEGOTIABLE and rendered near the top of the plan so
+  // it carries primacy; it is also reinforced at the recency self-check.
+  if (Array.isArray(planSummary.lines_and_veils) && planSummary.lines_and_veils.length > 0) {
+    const lvLines = planSummary.lines_and_veils.filter(b => b && b.state === 'line').map(b => b.topic);
+    const lvVeils = planSummary.lines_and_veils.filter(b => b && b.state === 'veil').map(b => b.topic);
+    if (lvLines.length > 0 || lvVeils.length > 0) {
+      let lv = `=== CONTENT BOUNDARIES — LINES & VEILS (NON-NEGOTIABLE) ===
+The player set these limits for the table. They OVERRIDE drama, realism, pacing, NPC behavior, and every other instruction in this prompt. Apply them on EVERY turn.`;
+      if (lvLines.length > 0) {
+        lv += `\n- LINES (these NEVER appear): do not depict, narrate, name, foreshadow, threaten, or imply them — on-screen OR off-screen. If the story trends toward one, steer away before it arrives: ${lvLines.join('; ')}.`;
+      }
+      if (lvVeils.length > 0) {
+        lv += `\n- VEILS (these happen "off the page"): they may exist in the world, but cut away before they occur — acknowledge aftermath or consequence without portraying the act itself: ${lvVeils.join('; ')}.`;
+      }
+      lv += `\nTopics not listed here may be portrayed as the story warrants.
+=== END CONTENT BOUNDARIES ===`;
+      sections.push(lv);
+    }
+  }
+
   // === CORE PLAN: Main quest, acts, world state ===
 
   if (planSummary.main_quest_title) {
@@ -1319,6 +1340,38 @@ When inventing historical references, use dates 50-200 years BEFORE ${campaignYe
       questSection += `\nSTAKES: ${planSummary.main_quest_stakes}`;
     }
     sections.push(questSection);
+  }
+
+  // Atelier-authored world detail — surface the full co-authored design so the
+  // DM narrates the world the player actually built.
+  if (planSummary.from_atelier) {
+    if (planSummary.setting || planSummary.region) {
+      const sd = planSummary.setting;
+      let setLine = `SETTING: ${sd?.name || planSummary.region}`;
+      if (sd?.sub) setLine += ` — ${sd.sub}`;
+      sections.push(setLine);
+    }
+    if (planSummary.locations && planSummary.locations.length > 0) {
+      sections.push(`KEY LOCATIONS (drafted for this world — use these exact names):\n${planSummary.locations.map(l => `- ${l}`).join('\n')}`);
+    }
+    if (planSummary.opening_scene) {
+      sections.push(`OPENING SCENE (how this campaign begins — anchor the first session in this moment; if play is already underway, treat it as the established origin):\n${planSummary.opening_scene}`);
+    }
+    if (planSummary.campaign_scope) {
+      const scopeGuide = {
+        one: 'ONE-SHOT — a single, self-contained story that resolves in one sitting. Keep hooks immediate and the arc tight.',
+        arc: 'SHORT ARC — a handful of sessions with a clear beginning, middle, and end building to one climax.',
+        open: 'ONGOING CAMPAIGN — no set endpoint. Plant long-term threads and let consequences develop over time.'
+      };
+      if (scopeGuide[planSummary.campaign_scope]) {
+        sections.push(`CAMPAIGN SCOPE: ${scopeGuide[planSummary.campaign_scope]}`);
+      }
+    }
+  }
+
+  // DM-only hidden truth — the secret at the campaign's centre (atelier-authored).
+  if (planSummary.hidden_truth) {
+    sections.push(`THE HIDDEN TRUTH (DM-ONLY — never state this to the player):\n${planSummary.hidden_truth}\nReveal it only gradually, through play, as the player earns it. NPCs guard it; the world only hints at it.`);
   }
 
   if (planSummary.current_act) {
@@ -2154,6 +2207,16 @@ This is a serious immersion-breaking issue if violated. The player chose this er
     ? `\n══════════════ MARKER CORRECTION NEEDED ══════════════\n${pendingCorrections}\n══════════════════════════════════════════════════════\n`
     : '';
 
+  // Content boundaries (lines & veils) — when the player set any, reinforce the
+  // rule at the recency self-check (primacy is in the CONTENT BOUNDARIES block
+  // inside the campaign plan above). Mirrors the top/bottom reinforcement pattern.
+  const _linesVeils = sessionContext.campaignPlanSummary?.lines_and_veils;
+  const hasContentBoundaries = Array.isArray(_linesVeils)
+    && _linesVeils.some(b => b && (b.state === 'line' || b.state === 'veil'));
+  const boundarySelfCheck = hasContentBoundaries
+    ? `\n6. DID I CROSS A CONTENT BOUNDARY? Any LINE depicted, named, foreshadowed, or implied? Any VEIL shown on the page instead of cut away? → Cut it. (See CONTENT BOUNDARIES in the campaign plan — they override everything.)`
+    : '';
+
   return `You are an expert Dungeon Master running a D&D 5th Edition text adventure for ${playerDescription}. Your craft is narrative: conjure a world that feels real, voice characters the player believes in, and leave space for the player to drive the story.
 ${correctionBlock}
 ═══════════════════════════════════════════════════════════════
@@ -2394,9 +2457,9 @@ Run this on every response. If any answer is YES, revise.
 2. DID I CONTINUE PAST AN NPC QUESTION OR A ROLL REQUEST? → End there.
 3. IS MY CONVERSATION MODE RIGHT? Length matched to the player's input energy?
 4. DID I REUSE DISTINCTIVE IMAGERY FROM EARLIER THIS SESSION? → Find a fresh image.
-5. DID I BREAK THE WORLD? (Meta-commentary, explained dice mechanics, out-of-era references, invented unnamed NPCs, contradictions with MEMORY HIERARCHY.) → Rewrite in-fiction.
+5. DID I BREAK THE WORLD? (Meta-commentary, explained dice mechanics, out-of-era references, invented unnamed NPCs, contradictions with MEMORY HIERARCHY.) → Rewrite in-fiction.${boundarySelfCheck}
 
-If all five clean, send.`;
+If every check is clean, send.`;
 }
 
 

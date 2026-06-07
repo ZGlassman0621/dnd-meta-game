@@ -234,9 +234,9 @@ const VARIANTS = [
     description: 'Strips "BEFORE YOU SEND — SELF-CHECK" and its 5 revision questions. Tests whether the revise-pressure produces defensive prose.',
     transform: (prompt) => {
       // The self-check is a fenced section starting with the heading line.
-      // Cut from the leading divider to the closing "If all five clean, send."
+      // Cut from the leading divider to the closing "If every check is clean, send."
       return prompt.replace(
-        /═══+\s*\nBEFORE YOU SEND — SELF-CHECK[\s\S]*?If all five clean, send\.\s*$/m,
+        /═══+\s*\nBEFORE YOU SEND — SELF-CHECK[\s\S]*?If every check is clean, send\.\s*$/m,
         ''
       ).trimEnd();
     }

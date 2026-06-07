@@ -133,9 +133,17 @@ export async function draftCampaign({ prompt, subject, seed, characterId, dials,
  * plan, and link the character so the existing /start flow plays it.
  * Returns { campaignId }.
  */
-export async function beginCampaign({ draft, characterId, userId }) {
+export async function beginCampaign({ draft, characterId, userId, linesAndVeils }) {
   if (!draft || !draft.title) throw new Error('A campaign draft is required');
   if (!characterId) throw new Error('A character is required to begin a campaign');
+
+  // Normalize the table's content boundaries (lines & veils) — each topic is
+  // open (shown in full) / veil (off the page) / line (never appears).
+  const boundaries = Array.isArray(linesAndVeils)
+    ? linesAndVeils
+        .filter(b => b && b.topic && ['open', 'veil', 'line'].includes(b.state))
+        .map(b => ({ topic: String(b.topic), state: b.state }))
+    : [];
 
   const campaign = await campaignService.createCampaign({
     name: draft.title,
@@ -161,7 +169,11 @@ export async function beginCampaign({ draft, characterId, userId }) {
     factions: [],
     side_quests: [],
     tone: (draft.tones || []).join(', '),
-    scope: draft.scope
+    scope: draft.scope,
+    // The table's content boundaries, co-authored on the Begin screen. Stored
+    // on the plan so the campaign carries them (off-open topics are the ones
+    // that matter); a future pass can surface these in the DM prompt.
+    lines_and_veils: boundaries
   };
   await dbRun(
     'UPDATE campaigns SET campaign_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',

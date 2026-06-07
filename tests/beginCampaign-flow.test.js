@@ -38,8 +38,14 @@ async function run() {
     const refined = (await nRes.json()).draft;
     ok('nudge re-drafted (still valid)', !!(refined && refined.title && refined.opusMessage));
 
-    // 4) begin — commit the draft
-    const bRes = await fetch(`${BASE}/campaign/begin`, { method: 'POST', headers: J, body: JSON.stringify({ characterId: charId, draft: refined }) });
+    // 4) begin — commit the draft (with the table's content boundaries)
+    const linesAndVeils = [
+      { topic: 'Harm to children', state: 'line' },
+      { topic: 'Torture', state: 'veil' },
+      { topic: 'Character death', state: 'open' },
+      { topic: 'bogus', state: 'invalid' } // dropped by the server-side filter
+    ];
+    const bRes = await fetch(`${BASE}/campaign/begin`, { method: 'POST', headers: J, body: JSON.stringify({ characterId: charId, draft: refined, linesAndVeils }) });
     const begun = await bRes.json();
     campId = begun.campaignId;
     ok('begin created a campaign', !!campId);
@@ -51,6 +57,18 @@ async function run() {
     ok('plan stored from the atelier draft', plan?.generated_from === 'begin_campaign_atelier');
     ok('plan carries opening scene + hidden truth + locations',
       !!(plan?.opening_scene && plan?.hidden_truth && (plan?.locations || []).length));
+    ok('plan persists the table lines & veils (invalid entries filtered)',
+      Array.isArray(plan?.lines_and_veils) && plan.lines_and_veils.length === 3
+      && plan.lines_and_veils.some(b => b.topic === 'Harm to children' && b.state === 'line'));
+
+    // 5b) verify the DM-facing plan summary carries the atelier design — this is
+    // the exact object that flows into the DM system prompt.
+    const summary = await (await fetch(`${BASE}/campaign/${campId}/plan/summary`)).json();
+    ok('plan summary flags the atelier origin', summary?.from_atelier === true);
+    ok('plan summary carries premise + opening scene + hidden truth (the DM reads these)',
+      !!(summary?.premise && summary?.opening_scene && summary?.hidden_truth));
+    ok('plan summary carries the table lines & veils (3; invalid filtered)',
+      Array.isArray(summary?.lines_and_veils) && summary.lines_and_veils.length === 3);
 
     // 6) verify character linked
     const character = await (await fetch(`${BASE}/character/${charId}`)).json();

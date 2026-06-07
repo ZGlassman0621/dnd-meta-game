@@ -2,6 +2,57 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.3.0] - 2026-06-07 — Begin a new Campaign: design refresh (character-scoped + lines & veils)
+
+Integrated the revised `design_handoff_hearth_app/Begin Campaign.html` design (the
+handoff was updated after v2.2.0 shipped) into the live atelier.
+
+- **Greeting is now always character-scoped.** Dropped the "Who walks into this
+  story?" character/world choice — campaign creation always belongs to the
+  character you entered through (it's reached from that character's Campaigns
+  screen). Added a "Creating for <name>" context line (mini-crest), personalized
+  Opus's copy with the character's name, and reordered so the free-text prompt is
+  the primary entry with the seeds beneath it.
+- **Seeds name the thread they pulled from.** The character-grounded seed is
+  labelled from the strongest thread on the sheet ("From your background · Hermit"
+  / "…your calling · Monk"), and choosing it asks Opus to build from that thread;
+  "Surprise me" generates from scratch. (Seeds no longer assume a rich freeform
+  backstory field exists.)
+- **Compose rail upgrades** (`BeginCampaign.jsx` + `hearth-begincampaign.css`):
+  - **Scope** "Open-ended" → **"Ongoing campaign"**.
+  - **Genre & tone** is now a live summary with a **Change** link that expands a
+    grouped Genre/Tone palette (multi-select); selections are carried into the
+    committed campaign.
+  - **Setting** gains an inline **Edit** editor (name + descriptor) with a **"Let
+    Opus reimagine"** action; saving updates the setting tile, the premise's
+    region chip, and the plan-forming Region row together.
+  - **Your party** shows the hero alone with the note "companions join as the
+    story finds them" (pre-picking companions stays out of scope for v1).
+  - **Content boundaries** opens a real **Open / Veil / Line** modal across eight
+    sensitive topics, with a legend and a live "N set" count.
+- **Persistence:** `POST /api/campaign/begin` + `beginCampaign()` now accept the
+  table's `linesAndVeils` and store them (validated to open/veil/line) on the
+  campaign plan as `lines_and_veils`; the committed draft also honours the rail's
+  scope/tone edits. `tests/beginCampaign-flow.test.js` covers the new persistence
+  (invalid entries filtered). Client `vite build` passes (127 modules).
+- **The DM now reads the whole atelier design.** Previously the co-authored plan
+  was stored in a shape `getPlanSummaryForSession()` mostly dropped, so the DM
+  barely saw the world the player built. Now the summary carries the atelier
+  fields through (`premise` → main-quest summary, `opening_scene`, `region`/
+  `setting`, `hidden_truth`, `scope`, `locations`, the `tone` leanings, and
+  `lines_and_veils`), and `formatCampaignPlan()` renders them into the DM system
+  prompt: a **SETTING** line, **KEY LOCATIONS**, the **OPENING SCENE**, a DM-only
+  **HIDDEN TRUTH**, and **CAMPAIGN SCOPE**.
+  - **Content boundaries are enforced, not just stored.** Lines & veils render as
+    a **non-negotiable CONTENT BOUNDARIES block** near the top of the plan
+    (primacy) — LINES never appear (on- or off-screen), VEILS happen off the page
+    — and are reinforced as a conditional 6th item in the BEFORE-YOU-SEND
+    self-check (recency), mirroring the prompt's existing top/bottom rule pattern.
+    Canonical/imported plans are unchanged (the atelier sections only render when
+    present). `formatCampaignPlan` is now exported; `tests/dmPrompt-linesAndVeils.test.js`
+    (20/20) asserts the boundaries, opening scene, and hidden truth reach the
+    prompt, with a control proving the self-check is absent when no boundary is set.
+
 ## [2.2.0] - 2026-06-06 — Begin a new Campaign (conversational atelier)
 
 A new screen where Opus authors your world while you set the mood, built from the

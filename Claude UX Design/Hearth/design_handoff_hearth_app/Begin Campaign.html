@@ -44,6 +44,9 @@
       box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.4);
       font-family: var(--serif); font-weight: 600; font-size: 15px; color: #2a2014; flex-shrink: 0; }
     .greet-op .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .for-char { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12px; color: var(--ink-3); }
+    .for-char b { color: var(--ink-2); font-weight: 600; }
+    .for-char .crestmini { width: 20px; height: 20px; border-radius: 5px; background: linear-gradient(150deg,#3a3326,#211c14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 11px; color: var(--accent); }
     .greet-hero h2 { font-family: var(--serif); font-weight: 500; font-size: 33px; line-height: 1.12; letter-spacing: -.014em; margin: 0 0 12px; color: var(--ink); max-width: 660px; }
     .greet-hero .askp { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 620px; margin: 0 0 26px; text-wrap: pretty; }
     .greet-hero .askp em { font-style: italic; color: var(--ink); }
@@ -183,8 +186,8 @@
     .dial .dl .edit:hover { text-decoration: underline; }
 
     .seg { display: flex; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 3px; gap: 3px; }
-    .seg button { flex: 1; background: none; border: 0; cursor: pointer; padding: 7px 4px; border-radius: 6px;
-      font-family: var(--sans); font-weight: 500; font-size: 11.5px; color: var(--ink-3); transition: background .14s, color .14s; white-space: nowrap; }
+    .seg button { flex: 1; background: none; border: 0; cursor: pointer; padding: 7px 3px; border-radius: 6px;
+      font-family: var(--sans); font-weight: 500; font-size: 10.5px; letter-spacing: -.005em; color: var(--ink-3); transition: background .14s, color .14s; white-space: nowrap; }
     .seg button:hover { color: var(--ink-2); }
     .seg button.on { background: var(--accent); color: #211d17; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.2); }
 
@@ -230,6 +233,42 @@
     .pmrow .v { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink); text-align: right; }
     .pmrow .v.accent { color: var(--accent); }
     .pmrow .v.veiled { color: var(--ink-4); }
+
+    /* ── inline dial editors (genre/tone, setting) ── */
+    .dial-edit { display: none; margin-top: 12px; padding-top: 13px; border-top: 1px solid var(--rule-soft); }
+    .dial-edit.open { display: block; animation: dialOpen .2s ease both; }
+    @keyframes dialOpen { from { opacity: 0; transform: translateY(-4px); } }
+    .de-group { margin-bottom: 13px; }
+    .de-group:last-child { margin-bottom: 0; }
+    .de-glabel { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 9px; }
+    .de-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .de-actions .spacer { flex: 1; }
+    .set-input { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; color: var(--ink); font-family: var(--serif); font-size: 14.5px; }
+    .set-input:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+    .set-input + .set-input { margin-top: 8px; }
+    .opus-redo { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer; font-family: var(--sans); font-size: 11px; color: var(--accent); padding: 0; }
+    .opus-redo:hover { text-decoration: underline; }
+    .opus-redo .ic { width: 12px; height: 12px; }
+    .party-note { font-family: var(--serif); font-style: italic; font-size: 13px; line-height: 1.45; color: var(--ink-3); margin: 11px 0 0; }
+
+    /* ── content-boundaries modal ── */
+    .modal.cb { width: 560px; }
+    .modal.cb .modal-body { max-height: 58vh; overflow-y: auto; }
+    .cb-sub { font-family: var(--serif); font-style: italic; font-size: 15px; line-height: 1.5; color: var(--ink-3); margin: 0 0 16px; }
+    .cb-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 6px; font-family: var(--sans); font-size: 11px; color: var(--ink-3); }
+    .cb-legend b { font-weight: 600; }
+    .cb-legend .lo b { color: var(--ink-2); }
+    .cb-legend .lv b { color: var(--warn); }
+    .cb-legend .ll b { color: var(--bad); }
+    .cb-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule-soft); }
+    .cb-row .cb-t { flex: 1; font-family: var(--serif); font-size: 16.5px; color: var(--ink); }
+    .cb-seg { display: flex; background: var(--bg); border: 1px solid var(--rule); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
+    .cb-seg button { background: none; border: 0; cursor: pointer; padding: 5px 12px; border-radius: 5px; font-family: var(--sans); font-weight: 500; font-size: 11px; color: var(--ink-4); transition: background .14s, color .14s; }
+    .cb-seg button:hover { color: var(--ink-2); }
+    .cb-seg button[data-s="open"].on { background: var(--raise); color: var(--ink); }
+    .cb-seg button[data-s="veil"].on { background: color-mix(in oklab, var(--warn) 24%, var(--bg-card)); color: var(--warn); }
+    .cb-seg button[data-s="line"].on { background: color-mix(in oklab, var(--bad) 24%, var(--bg-card)); color: var(--bad); }
+    .modal-foot .foot-note { margin-right: auto; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); }
 
     /* ════════ STICKY COMMIT FOOTER ════════ */
     .commit {
@@ -313,40 +352,28 @@
     <!-- ─────────── GREETING ─────────── -->
     <section class="greet">
       <div class="greet-hero">
-        <div class="greet-op"><span class="orb">O</span><span class="lbl">Opus</span></div>
+        <div class="greet-op"><span class="orb">O</span><span class="lbl">Opus</span><span class="for-char"><span class="crestmini">D</span>Creating for <b>Dravyr Wyrmrest</b></span></div>
         <h2>Every campaign begins as a single sentence. Tell me yours.</h2>
-        <p class="askp">I'll take whatever you give me — a mood, a place, a wound your character still carries — and build the world around it: its people, its map, the truth at its centre. <em>You set the weather. I'll write the storm.</em></p>
-
-        <p class="glabel">Who walks into this story?</p>
-        <div class="who-row">
-          <button class="whoc sel" type="button" data-who="dravyr">
-            <span class="crest"><span class="mono">D</span><span class="lvl">3</span></span>
-            <span class="wc-txt"><span class="wc-t">Dravyr Wyrmrest</span><br><span class="wc-s">Wood elf monk · level 3</span></span>
-          </button>
-          <button class="whoc" type="button" data-who="blank">
-            <span class="wc-blank"><svg class="ic"><use href="#i-globe"/></svg></span>
-            <span class="wc-txt"><span class="wc-t">Start from the world</span><br><span class="wc-s">Build it first, choose a hero later</span></span>
-          </button>
-        </div>
-
-        <p class="glabel">Or begin from a seed I've already drafted</p>
-        <div class="seed-row">
-          <button class="seedc" type="button" data-seed="passes">
-            <span class="stag"><span class="dot"></span>From your backstory</span>
-            <h4>The high passes</h4>
-            <p>A debt owed to a mountain monastery, left unpaid — and a winter that won't let it stay buried.</p>
-          </button>
-          <button class="seedc" type="button" data-seed="surprise">
-            <span class="stag"><span class="dot"></span>Opus's choice</span>
-            <h4>Surprise me</h4>
-            <p>Give me only your character, and I'll find the story that fits the shape of them.</p>
-          </button>
-        </div>
+        <p class="askp">I'll take whatever you give me — a mood, a place, a wound Dravyr still carries — and build the world around it: its people, its map, the truth at its centre. <em>You set the weather. I'll write the storm.</em></p>
 
         <p class="glabel">What do you want to play?</p>
         <div class="prompt-wrap">
           <textarea class="prompt-box" id="promptBox" placeholder="A rain-soaked political mystery in a sinking canal city… a slow horror in a town that's forgotten how to grieve… or just a word: revenge, pilgrimage, heist."></textarea>
           <button class="btn primary prompt-send" id="promptSend" type="button"><svg class="ic"><use href="#i-send"/></svg>Begin with Opus</button>
+        </div>
+
+        <p class="glabel">Not sure where to begin? Start from a thread I drew from Dravyr</p>
+        <div class="seed-row">
+          <button class="seedc" type="button" data-seed="passes">
+            <span class="stag"><span class="dot"></span>From your background · Hermit</span>
+            <h4>The high passes</h4>
+            <p>The years that made you a hermit left a debt to a mountain monastery unpaid — and the early snows won't let it stay buried.</p>
+          </button>
+          <button class="seedc" type="button" data-seed="surprise">
+            <span class="stag"><span class="dot"></span>Opus's choice</span>
+            <h4>Surprise me</h4>
+            <p>Not sure what you're after? I'll conjure an adventure from nothing, and we'll shape it together as we go.</p>
+          </button>
         </div>
       </div>
     </section>
@@ -390,33 +417,66 @@
                 <div class="seg" id="segScope">
                   <button type="button" data-v="one">One-shot</button>
                   <button type="button" class="on" data-v="arc">Short arc</button>
-                  <button type="button" data-v="open">Open-ended</button>
+                  <button type="button" data-v="open">Ongoing campaign</button>
                 </div>
               </div>
 
-              <div class="dial">
-                <div class="dl"><span class="k">Genre &amp; tone</span><button class="edit" type="button">Change</button></div>
-                <div class="chiprow" id="toneRow">
-                  <span class="chip on">Mystery</span>
-                  <span class="chip">Survival</span>
-                  <span class="chip">Quiet dread</span>
+              <div class="dial" id="toneDial">
+                <div class="dl"><span class="k">Genre &amp; tone</span><button class="edit" id="toneToggle" type="button">Change</button></div>
+                <div class="chiprow" id="toneSummary"></div>
+                <div class="dial-edit" id="toneEdit">
+                  <div class="de-group">
+                    <div class="de-glabel">Genre</div>
+                    <div class="chiprow" data-grp="genre">
+                      <span class="chip on">Mystery</span>
+                      <span class="chip on">Survival</span>
+                      <span class="chip">Horror</span>
+                      <span class="chip">Heroic</span>
+                      <span class="chip">Intrigue</span>
+                      <span class="chip">Exploration</span>
+                      <span class="chip">Heist</span>
+                      <span class="chip">Warfare</span>
+                    </div>
+                  </div>
+                  <div class="de-group">
+                    <div class="de-glabel">Tone</div>
+                    <div class="chiprow" data-grp="tone">
+                      <span class="chip on">Quiet dread</span>
+                      <span class="chip">Grim</span>
+                      <span class="chip">Hopeful</span>
+                      <span class="chip">Whimsical</span>
+                      <span class="chip">Epic</span>
+                      <span class="chip">Gritty</span>
+                      <span class="chip">Bittersweet</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div class="dial">
-                <div class="dl"><span class="k">Setting</span><button class="edit" type="button">Edit</button></div>
+              <div class="dial" id="setDial">
+                <div class="dl"><span class="k">Setting</span><button class="edit" id="setToggle" type="button">Edit</button></div>
                 <div class="setting-val">
                   <span class="pin"><svg class="ic"><use href="#i-pin"/></svg></span>
-                  <span><span class="sv-t">The Cinderpeak Reach</span><br><span class="sv-s">high passes · a snowbound monastery road</span></span>
+                  <span><span class="sv-t" id="setName">The Cinderpeak Reach</span><br><span class="sv-s" id="setDescTxt">high passes · a snowbound monastery road</span></span>
+                </div>
+                <div class="dial-edit" id="setEdit">
+                  <input class="set-input" id="setNameI" value="The Cinderpeak Reach" />
+                  <input class="set-input" id="setDescI" value="high passes · a snowbound monastery road" />
+                  <div class="de-actions">
+                    <button class="opus-redo" id="setRedo" type="button"><svg class="ic"><use href="#i-refresh"/></svg>Let Opus reimagine</button>
+                    <span class="spacer"></span>
+                    <button class="btn sm" id="setCancel" type="button">Cancel</button>
+                    <button class="btn primary sm" id="setSave" type="button">Save</button>
+                  </div>
                 </div>
               </div>
 
               <div class="dial">
-                <div class="dl"><span class="k">Who starts beside you</span></div>
+                <div class="dl"><span class="k">Your party</span></div>
                 <div class="party" id="party">
                   <span class="pmem"><span class="av hero">D</span><span><span class="pn">Dravyr</span> <span class="pr">you</span></span></span>
-                  <button class="add-mem" id="addMem" type="button"><svg class="ic"><use href="#i-plus"/></svg>Add a companion</button>
                 </div>
+                <p class="party-note">You set out alone &mdash; companions join as the story finds them.</p>
               </div>
 
               <div class="dial">
@@ -429,11 +489,11 @@
               </div>
 
               <div class="dial">
-                <div class="dl"><span class="k">Lines &amp; veils</span></div>
+                <div class="dl"><span class="k">Content boundaries</span></div>
                 <button class="veil-btn" id="veilBtn" type="button">
                   <svg class="ic"><use href="#i-eye-off"/></svg>
-                  <span class="vt">Content boundaries</span>
-                  <span class="vc">3 set</span>
+                  <span class="vt">Lines &amp; veils for the table</span>
+                  <span class="vc" id="cbCount">3 set</span>
                 </button>
               </div>
 
@@ -443,7 +503,7 @@
           <div class="dpanel plan-mini">
             <div class="dphead"><svg class="ic"><use href="#i-globe"/></svg><span class="t">Campaign plan · forming</span></div>
             <div class="dpbody">
-              <div class="pmrow"><span class="k">Region</span><span class="v">The Cinderpeak Reach</span></div>
+              <div class="pmrow"><span class="k">Region</span><span class="v" id="planRegion">The Cinderpeak Reach</span></div>
               <div class="pmrow"><span class="k">Locations</span><span class="v accent" id="locCount">4 drafted</span></div>
               <div class="pmrow"><span class="k">Named NPCs</span><span class="v accent" id="npcCount">3</span></div>
               <div class="pmrow"><span class="k">The truth</span><span class="v veiled">behind a veil</span></div>
@@ -461,6 +521,27 @@
       <span class="spacer"></span>
       <span class="ttl"><span class="tl">Your campaign</span><span class="tn" id="commitTitle">The Debt of Snows</span></span>
       <button class="btn primary begin" id="beginBtn" type="button"><svg class="ic"><use href="#i-play"/></svg>Begin the first session</button>
+    </div>
+  </div>
+
+  <!-- content boundaries modal -->
+  <div class="scrim" id="cbScrim" style="display:none">
+    <div class="modal cb">
+      <div class="modal-head"><h3>Content boundaries</h3></div>
+      <div class="modal-body scroll">
+        <p class="cb-sub">Tell Opus what your table will and won't put on the page. Change these any time during play.</p>
+        <div class="cb-legend">
+          <span class="lo"><b>Open</b> — shown in full</span>
+          <span class="lv"><b>Veil</b> — happens off the page</span>
+          <span class="ll"><b>Line</b> — never appears</span>
+        </div>
+        <div class="cb-list" id="cbList"></div>
+      </div>
+      <div class="modal-foot">
+        <span class="foot-note" id="cbFootNote">3 boundaries set</span>
+        <button class="btn" data-cb-close type="button">Cancel</button>
+        <button class="btn primary" data-cb-close type="button">Done</button>
+      </div>
     </div>
   </div>
 
@@ -496,7 +577,7 @@
         '<h3 class="pc-title" id="premiseTitle">The Debt of Snows</h3>' +
         '<p class="pc-prose">Years ago a mountain monastery saved Dravyr\u2019s life and named a price he never paid. Now the monks have gone silent through a winter that came too early, and the debt has been called in the only way the mountain knows: <em>the snow will not let you leave until it is settled.</em> Climb the Reach, learn what the brothers were keeping, and decide what a life is worth when the cold is doing the asking.</p>' +
         '<div class="pc-meta">' +
-          '<span class="chip"><svg class="ic" style="width:11px;height:11px"><use href="#i-pin"/></svg>The Cinderpeak Reach</span>' +
+          '<span class="chip"><svg class="ic" style="width:11px;height:11px"><use href="#i-pin"/></svg><span id="premRegion">The Cinderpeak Reach</span></span>' +
           '<span class="chip"><svg class="ic" style="width:11px;height:11px"><use href="#i-clock"/></svg>Short arc · ~5 sessions</span>' +
           '<span class="chip">Mystery · survival</span>' +
           '<span class="chip">Quiet dread</span>' +
@@ -612,29 +693,105 @@
     document.querySelectorAll('#segScope button').forEach(function (b) {
       b.addEventListener('click', function () { setSeg(b.dataset.v); });
     });
-    document.querySelectorAll('#toneRow .chip').forEach(function (c) {
-      c.addEventListener('click', function () { c.classList.toggle('on'); });
-    });
-    function ensureTone(name) {
-      var found = false;
-      document.querySelectorAll('#toneRow .chip').forEach(function (c) { if (c.textContent.trim() === name) { c.classList.add('on'); found = true; } });
+    /* genre & tone — summary + expandable palette */
+    var toneEdit = document.getElementById('toneEdit');
+    var toneToggle = document.getElementById('toneToggle');
+    var toneSummary = document.getElementById('toneSummary');
+    function renderToneSummary() {
+      var sel = [];
+      toneEdit.querySelectorAll('.chip.on').forEach(function (c) { sel.push(c.textContent.trim()); });
+      if (!sel.length) sel.push('\u2014');
+      toneSummary.innerHTML = sel.map(function (s) { return '<span class="chip on">' + s + '</span>'; }).join('');
     }
+    toneEdit.querySelectorAll('.chip').forEach(function (c) {
+      c.addEventListener('click', function () { c.classList.toggle('on'); renderToneSummary(); });
+    });
+    toneToggle.addEventListener('click', function () {
+      var open = toneEdit.classList.toggle('open');
+      toneToggle.textContent = open ? 'Done' : 'Change';
+    });
+    renderToneSummary();
+    function ensureTone(name) {
+      toneEdit.querySelectorAll('.chip').forEach(function (c) { if (c.textContent.trim() === name) c.classList.add('on'); });
+      renderToneSummary();
+    }
+
     var tg = document.getElementById('tgInherit');
     tg.addEventListener('click', function () { tg.classList.toggle('off'); });
 
-    var addMem = document.getElementById('addMem');
-    var added = false;
-    addMem.addEventListener('click', function () {
-      if (added) return; added = true;
-      var m = document.createElement('span');
-      m.className = 'pmem fade-in';
-      m.innerHTML = '<span class="av ally">H</span><span><span class="pn">Brother Hale</span> <span class="pr">guide</span></span>';
-      addMem.parentNode.insertBefore(m, addMem);
-      addMem.textContent = '';
-      var ic = document.createElement('svg'); // keep simple
-      addMem.innerHTML = '<svg class="ic"><use href="#i-plus"/></svg>Add another';
-      document.getElementById('npcCount').textContent = '4';
+    /* setting editor */
+    var setEdit = document.getElementById('setEdit');
+    var setToggle = document.getElementById('setToggle');
+    var setNameI = document.getElementById('setNameI');
+    var setDescI = document.getElementById('setDescI');
+    var redoPresets = [
+      { n: 'The Cinderpeak Reach', d: 'high passes \u00b7 a snowbound monastery road' },
+      { n: 'The Hollow Coast', d: 'a fog-drowned shore of wreck-towns and tideflats' },
+      { n: 'Vetch & Gallow', d: 'a peat-cut moor where the dead are owed rent' },
+      { n: 'The Ninefold Stair', d: 'a vertical city carved down a canyon wall' }
+    ];
+    var redoIdx = 0;
+    function openSet(open) {
+      setEdit.classList.toggle('open', open);
+      setToggle.textContent = open ? 'Close' : 'Edit';
+    }
+    setToggle.addEventListener('click', function () { openSet(!setEdit.classList.contains('open')); });
+    document.getElementById('setRedo').addEventListener('click', function () {
+      redoIdx = (redoIdx + 1) % redoPresets.length;
+      setNameI.value = redoPresets[redoIdx].n;
+      setDescI.value = redoPresets[redoIdx].d;
     });
+    document.getElementById('setCancel').addEventListener('click', function () { openSet(false); });
+    document.getElementById('setSave').addEventListener('click', function () {
+      var n = setNameI.value.trim() || 'Untitled region';
+      var d = setDescI.value.trim();
+      document.getElementById('setName').textContent = n;
+      document.getElementById('setDescTxt').textContent = d;
+      var pr = document.getElementById('planRegion'); if (pr) pr.textContent = n;
+      var prem = document.getElementById('premRegion'); if (prem) prem.textContent = n;
+      openSet(false);
+    });
+
+    /* content boundaries modal */
+    var cbScrim = document.getElementById('cbScrim');
+    var cbList = document.getElementById('cbList');
+    var cbCount = document.getElementById('cbCount');
+    var cbFootNote = document.getElementById('cbFootNote');
+    var cbTopics = [
+      { t: 'Graphic violence & gore', s: 'veil' },
+      { t: 'Character death', s: 'open' },
+      { t: 'Harm to children', s: 'line' },
+      { t: 'Torture', s: 'veil' },
+      { t: 'Romance & intimacy', s: 'open' },
+      { t: 'Substance & addiction', s: 'open' },
+      { t: 'Body horror', s: 'open' },
+      { t: 'Slurs & discrimination', s: 'open' }
+    ];
+    var cbStates = ['open', 'veil', 'line'];
+    function cbRender() {
+      cbList.innerHTML = cbTopics.map(function (topic, i) {
+        var segs = cbStates.map(function (s) {
+          return '<button type="button" data-i="' + i + '" data-s="' + s + '"' + (topic.s === s ? ' class="on"' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</button>';
+        }).join('');
+        return '<div class="cb-row"><span class="cb-t">' + topic.t + '</span><div class="cb-seg">' + segs + '</div></div>';
+      }).join('');
+      cbList.querySelectorAll('.cb-seg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          cbTopics[+b.dataset.i].s = b.dataset.s;
+          cbRender(); cbUpdateCount();
+        });
+      });
+    }
+    function cbUpdateCount() {
+      var n = cbTopics.filter(function (x) { return x.s !== 'open'; }).length;
+      cbCount.textContent = n + ' set';
+      cbFootNote.textContent = n + (n === 1 ? ' boundary set' : ' boundaries set');
+    }
+    document.getElementById('veilBtn').addEventListener('click', function () { cbScrim.style.display = 'flex'; });
+    cbScrim.addEventListener('click', function (e) {
+      if (e.target === cbScrim || e.target.hasAttribute('data-cb-close')) cbScrim.style.display = 'none';
+    });
+    cbRender(); cbUpdateCount();
 
     /* ── greeting → compose ── */
     document.querySelectorAll('.whoc').forEach(function (w) {
