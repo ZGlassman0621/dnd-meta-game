@@ -1,0 +1,16 @@
+Life Domain: "Master of healing and preservation of life"
+War Domain: "Warrior priest who excels in battle"
+Trickery Domain: "Master of illusion and deception"
+Knowledge Domain: (need to read)
+Light Domain: (need to read)
+Nature Domain: (need to read)
+Tempest Domain: (need to read)
+Forge Domain: (need to read)
+Grave Domain: (need to read)
+Order Domain: (need to read)
+Peace Domain: (need to read)
+Twilight Domain: (need to read)
+Death Domain: (need to read)
+Revelry Domain: "Clerics of the Revelry Domain serve deities of celebration, joy, wine, and festivity, spreading merriment and using the power of revelry to bolster allies and confound enemies"
+Wealth Domain: "Clerics of the Wealth Domain serve gods of commerce, treasure, and prosperity, using divine favor to enrich their allies and control the flow of fortune"
+Stone Domain: "Clerics of the Stone Domain draw power from the enduring earth, wielding the strength of mountains and the patience of stone to protect their allies"

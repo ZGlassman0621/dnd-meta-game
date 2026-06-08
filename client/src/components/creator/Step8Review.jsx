@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { WizardHead } from './creatorPrimitives.jsx'
 import racesData from '../../data/races.json'
 import classesData from '../../data/classes.json'
+import deitiesData from '../../data/deities.json'
+import { THEME_BACKSTORY_MOMENTS } from '../../data/themeBackstoryMoments.js'
+import { computeAncestryListId } from './Step2Ancestry.jsx'
 import { ALIGNMENT_NAMES } from './AlignmentChip.jsx'
 import { ABILITY_KEYS, ABILITY_LABELS } from './BumpCelebrationCard.jsx'
 
@@ -44,6 +47,27 @@ export default function Step8Review({ state, mode, payload, onJump, onSubmit, ch
   // shared by the Abilities review row.
   const sheet = useMemo(() => buildSheet(state, payload), [state, payload])
 
+  // Resolve the chosen ancestry feat's NAME for display. Creator state holds
+  // only the numeric feat id (e.g. "151"); Step 2 fetches the named feats per
+  // race/subrace, so we re-fetch the same list here to show the name rather
+  // than a bare id on the review.
+  const [ancestryFeatName, setAncestryFeatName] = useState(null)
+  useEffect(() => {
+    const featId = state.ancestry_feat_id
+    const listId = featId ? computeAncestryListId(state.race, state.subrace) : null
+    if (!listId) { setAncestryFeatName(null); return }
+    let cancelled = false
+    fetch(`/api/progression/ancestry-feats/${listId}?tier=1`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (cancelled) return
+        const f = (Array.isArray(data) ? data : []).find(x => String(x.id) === String(featId))
+        setAncestryFeatName(f?.name || null)
+      })
+      .catch(() => { if (!cancelled) setAncestryFeatName(null) })
+    return () => { cancelled = true }
+  }, [state.ancestry_feat_id, state.race, state.subrace])
+
   const submit = async () => {
     if (!validation.valid) return
     setSubmitting(true)
@@ -56,7 +80,7 @@ export default function Step8Review({ state, mode, payload, onJump, onSubmit, ch
     }
   }
 
-  const rows = buildReviewRows(state, payload, sheet)
+  const rows = buildReviewRows(state, payload, sheet, ancestryFeatName)
 
   return (
     <>
@@ -84,6 +108,7 @@ export default function Step8Review({ state, mode, payload, onJump, onSubmit, ch
             <div className="rvv">
               <div className="pri">{r.primary}</div>
               {r.secondary && <div className="sec">{r.secondary}</div>}
+              {r.body}
             </div>
             <button type="button" className="rv-edit" onClick={() => onJump(r.step - 1)}>
               Edit
@@ -196,7 +221,7 @@ function buildSheet(state, payload) {
  * the old SummaryList's section mapping; surfaces the real equivalent of
  * the mockup's sample secondary lines (never the mockup's hardcoded data).
  */
-function buildReviewRows(state, payload, sheet) {
+function buildReviewRows(state, payload, sheet, ancestryFeatName) {
   const cls = classesData[state.class_id]
   const raceData = racesData[state.race]
   const i = state.identity || {}
@@ -212,9 +237,9 @@ function buildReviewRows(state, payload, sheet) {
   const raceLabel = state.subrace
     ? `${state.subrace}${raceData?.name && !state.subrace.includes(raceData.name) ? ` ${raceData.name}` : ''}`.trim()
     : (raceData?.name || (state.race && prettifyId(state.race)))
-  const ancestrySec = joinDot([
-    state.ancestry_feat_id && prettifyId(state.ancestry_feat_id)
-  ])
+  const ancestrySec = state.ancestry_feat_id
+    ? (ancestryFeatName ? `Ancestry feat: ${ancestryFeatName}` : 'Ancestry feat selected')
+    : null
 
   // Theme
   const themePri = themeId ? prettifyId(themeId) : null
@@ -233,35 +258,72 @@ function buildReviewRows(state, payload, sheet) {
   const abilityPri = ABILITY_KEYS.every(k => sheet.finalScores[k] == null)
     ? <Quiet>Not yet assigned</Quiet>
     : <Sep parts={ABILITY_KEYS.map(k => `${ABILITY_LABELS[k]} ${sheet.finalScores[k] ?? '—'}`)} />
-  const skillCount = (state.selected_skills || []).length
-  const abilitySec = joinDot([
-    skillCount > 0 && `${skillCount} additional skill ${skillCount === 1 ? 'pick' : 'picks'}`
-  ])
+  const skills = state.selected_skills || []
+  const abilitySec = skills.length ? `Skills: ${skills.join(' · ')}` : null
 
   // Equipment — package choices + heirloom.
   const picks = state.equipment_picks || {}
-  const pickCount = Object.values(picks).filter(Boolean).length
+  const subpicks = state.equipment_subpicks || {}
+  const equipItems = Object.entries(picks)
+    .filter(([, label]) => label)
+    .map(([idx, label]) => subpicks[idx] || label)
   const heirloom = state.heirloom?.name
-  const equipPri = pickCount > 0 || heirloom
-    ? joinDot([
-        pickCount > 0 && `${pickCount} package ${pickCount === 1 ? 'choice' : 'choices'}`,
-        heirloom && `Heirloom: ${heirloom}`
-      ])
+  const equipPri = (equipItems.length || heirloom)
+    ? <Sep parts={[...equipItems, heirloom && `Heirloom: ${heirloom}`].filter(Boolean)} />
     : <Quiet>Not yet picked</Quiet>
 
-  // Details — alignment + a glance of appearance + an ideal + hook count.
+  // Details — the full Step-7 record: alignment, faith, lifestyle, every
+  // physical field, the four expansion prompts, and each backstory hook
+  // (resolved to its text). A review should show every choice so the player
+  // can catch anything that isn't true yet.
   const alignName = ALIGNMENT_NAMES[i.alignment] || null
-  const detailSegs = [
-    alignName,
+  const faithName = (!i.faith || i.faith === '_none')
+    ? (i.faith === '_none' ? 'None / Unaligned' : null)
+    : (deitiesData[i.faith]?.name || prettifyId(i.faith))
+  const appearance = [
+    i.age && `Age ${i.age}`,
+    i.height, i.weight,
     i.eye_color && `${i.eye_color} eyes`,
-    i.build
-  ].filter(Boolean)
+    i.hair_color && `${i.hair_color} hair`,
+    i.skin_color && `${i.skin_color} skin`,
+    i.build,
+    i.distinguishing_features
+  ].filter(Boolean).join(' · ')
+  const personality = (state.expansions?.personality?.value || '').trim()
   const idealValue = (state.expansions?.ideals?.value || '').trim()
-  const hookCount = (state.expansions?.backstory?.picked_keys || []).length
-  const detailSec = joinDot([
-    idealValue && `"${idealValue}"`,
-    hookCount > 0 && `${hookCount} backstory ${hookCount === 1 ? 'hook' : 'hooks'}`
-  ])
+  const bonds = (state.expansions?.bonds?.value || '').trim()
+  const flaws = (state.expansions?.flaws?.value || '').trim()
+  const momentList = themeId ? (THEME_BACKSTORY_MOMENTS[themeId] || []) : []
+  const customMoments = state.expansions?.backstory?.custom_moments || []
+  const hooks = (state.expansions?.backstory?.picked_keys || [])
+    .map(key => {
+      const [kind, idxStr] = String(key).split(':')
+      const idx = parseInt(idxStr, 10)
+      if (kind === 'curated') return momentList[idx]
+      if (kind === 'custom') return customMoments[idx]
+      return null
+    })
+    .filter(Boolean)
+  const hasDetail = faithName || i.lifestyle || appearance || personality || idealValue || bonds || flaws || hooks.length
+  const detailBody = hasDetail ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 8 }}>
+      {faithName && <ReviewField label="Faith" value={faithName} />}
+      {i.lifestyle && <ReviewField label="Lifestyle" value={prettifyId(i.lifestyle)} />}
+      {appearance && <ReviewField label="Appearance" value={appearance} />}
+      {personality && <ReviewField label="Personality" value={personality} />}
+      {idealValue && <ReviewField label="Ideals" value={idealValue} />}
+      {bonds && <ReviewField label="Bonds" value={bonds} />}
+      {flaws && <ReviewField label="Flaws" value={flaws} />}
+      {hooks.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-4)', flexShrink: 0, minWidth: 84 }}>Backstory</span>
+          <ul style={{ margin: 0, paddingLeft: 18, fontFamily: 'var(--serif)', fontSize: 14.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
+            {hooks.map((h, idx) => <li key={idx}>{h}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  ) : null
 
   return [
     {
@@ -303,8 +365,9 @@ function buildReviewRows(state, payload, sheet) {
     {
       step: 7,
       label: 'Details',
-      primary: detailSegs.length ? joinDot(detailSegs) : <Quiet>Not yet filled</Quiet>,
-      secondary: detailSec
+      primary: alignName || <Quiet>Not yet filled</Quiet>,
+      secondary: null,
+      body: detailBody
     }
   ]
 }
@@ -331,6 +394,16 @@ function joinDot(parts) {
 
 function Quiet({ children }) {
   return <span style={{ color: 'var(--ink-4)', fontStyle: 'italic' }}>{children}</span>
+}
+
+/** One labeled field in the expanded Details review (label · value). */
+function ReviewField({ label, value }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-4)', flexShrink: 0, minWidth: 84 }}>{label}</span>
+      <span style={{ fontFamily: 'var(--serif)', fontSize: 14.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>{value}</span>
+    </div>
+  )
 }
 
 /**

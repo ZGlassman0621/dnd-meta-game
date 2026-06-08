@@ -2,6 +2,33 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.4.2] - 2026-06-08 — Trim long cleric domains + make the creator review page show every choice
+
+- **Cleric domains trimmed.** Revelry, Wealth, and Stone had 27–30-word
+  descriptions (all opening with the redundant "Clerics of the [Domain] Domain…")
+  while every other domain is a terse 5–9-word archetype. Recast the three to
+  match: Revelry → "Bringer of joy, wine, and divine festivity"; Wealth →
+  "Master of commerce, treasure, and divine fortune"; Stone → "Guardian who
+  wields the enduring strength of stone".
+- **Creator review page (Step 8) now represents every choice.** Four gaps fixed
+  so the player can catch anything that isn't true before committing:
+  - *Ancestry* showed a bare numeric feat id (e.g. "151") because creator state
+    only holds the id and Step 2 fetches feat names from the API. Step 8 now
+    re-fetches the same per-race/subrace feat list and shows the feat **name**
+    (`computeAncestryListId` exported from Step 2 for reuse).
+  - *Abilities* listed "N additional skill picks" → now lists the actual skill
+    names (`state.selected_skills`).
+  - *Equipment* listed "N package choices" → now lists each chosen item, with
+    sub-picks resolved (the specific instrument/weapon, not the generic label).
+  - *Details* showed only alignment + eyes + build + one ideal + a hook count →
+    now lays out the full Step-7 record: alignment, faith (resolved to the deity
+    name), lifestyle, every physical field, personality / ideals / bonds / flaws,
+    and **each backstory hook resolved to its text** (curated moments via
+    `THEME_BACKSTORY_MOMENTS`, plus custom moments). Review rows gained an
+    optional rich `body` for this.
+
+Client build clean.
+
 ## [2.4.1] - 2026-06-08 — Playtest fixes: instrument picker, moment alignment, campaign scoping + delete, coined genre chips
 
 Four fixes from a play session.

@@ -12,7 +12,7 @@ import racesData from '../../data/races.json'
  * Returns '' when the player hasn't picked enough to disambiguate yet
  * (e.g., race='aasimar' with no subrace) — caller should skip the fetch.
  */
-function computeAncestryListId(race, subrace) {
+export function computeAncestryListId(race, subrace) {
   if (!race) return ''
   const lowerSub = (subrace || '').toLowerCase()
   if (race === 'elf' && (lowerSub.includes('drow') || lowerSub.includes('dark elf'))) return 'drow'
