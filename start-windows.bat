@@ -32,6 +32,9 @@ if not exist ".env" (
 REM Create uploads directory if missing
 if not exist "uploads" mkdir uploads
 
+REM Choose Node: the portable copy bundled in a packaged build, or your installed Node.
+if exist "node\node.exe" (set "NODE_CMD=node\node.exe") else (set "NODE_CMD=node")
+
 echo  Starting server...
 echo.
 echo  -----------------------------------------------
@@ -40,8 +43,8 @@ echo  Press Ctrl+C to stop the server.
 echo  -----------------------------------------------
 echo.
 
-REM Use portable Node.js bundled in the distribution
-node\node.exe server\index.js
+REM Launch the server (it serves the built game at http://localhost:3000)
+%NODE_CMD% server\index.js
 
 REM If server exits, keep window open so user sees errors
 echo.
