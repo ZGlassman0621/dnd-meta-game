@@ -175,13 +175,17 @@
 .hearth .appear { display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px 18px; }
 .hearth .appear .af .afl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
 .hearth .appear .af .pillrow .selpill { font-size: 12.5px; padding: 6px 12px; }
-.hearth .chipwrap { display: flex; flex-wrap: wrap; gap: 9px; }
-.hearth .mchip { display: inline-flex; align-items: center; gap: 7px;
-      font-family: var(--serif); font-size: 15px; color: var(--ink-2);
-      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 999px;
-      padding: 8px 15px; cursor: pointer; transition: all .14s; }
+/* Backstory moments are sentence-length, so they render as a full-width
+   left-aligned stacked list (matching the picked-chips rows above), NOT
+   wrapping pills. `.mchip` is a <button>, which defaults to text-align:center
+   — left-align it and top-align the radio so multi-line moments read cleanly. */
+.hearth .chipwrap { display: flex; flex-direction: column; gap: 9px; }
+.hearth .mchip { display: flex; width: 100%; align-items: flex-start; text-align: left; gap: 10px;
+      font-family: var(--serif); font-size: 15px; line-height: 1.45; color: var(--ink-2);
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 14px;
+      padding: 12px 17px; cursor: pointer; transition: all .14s; }
 .hearth .mchip:hover { border-color: #4a4032; color: var(--ink); }
-.hearth .mchip .tk { width: 14px; height: 14px; border-radius: 50%; border: 1.4px solid var(--rule); display: flex; align-items: center; justify-content: center; color: transparent; }
+.hearth .mchip .tk { width: 15px; height: 15px; margin-top: 2px; flex-shrink: 0; border-radius: 50%; border: 1.4px solid var(--rule); display: flex; align-items: center; justify-content: center; color: transparent; }
 .hearth .mchip .tk .ic { width: 10px; height: 10px; }
 .hearth .mchip.on { color: var(--ink); border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); background: color-mix(in oklab, var(--accent) 9%, var(--bg-2)); }
 .hearth .mchip.on .tk { background: var(--accent); border-color: var(--accent); color: #211d17; }

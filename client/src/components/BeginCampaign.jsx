@@ -102,6 +102,12 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
   const [scope, setScope] = useState('arc')
   const [genres, setGenres] = useState([])
   const [tones, setTones] = useState([])
+  // Opus-coined genre/tone words not in the fixed palette (e.g. "Melancholy").
+  // Tracked separately from the selection so a coined chip STAYS in the palette
+  // when toggled off — deselected means it won't shape the campaign, but it's
+  // still re-pickable, instead of vanishing irrecoverably.
+  const [inventedGenres, setInventedGenres] = useState([])
+  const [inventedTones, setInventedTones] = useState([])
   const [toneOpen, setToneOpen] = useState(false)
   const [settingOpen, setSettingOpen] = useState(false)
   const [settingName, setSettingName] = useState('')
@@ -132,6 +138,8 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
     setScope(d.scope || 'arc')
     const { g, t } = splitTones(d.tones)
     setGenres(g); setTones(t)
+    setInventedGenres(g.filter(x => !GENRE_OPTIONS.some(o => lc(o) === lc(x))))
+    setInventedTones(t.filter(x => !TONE_OPTIONS.some(o => lc(o) === lc(x))))
     setSettingName(d.setting?.name || d.region || '')
     setSettingDesc(d.setting?.sub || '')
   }
@@ -387,20 +395,37 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                         {(toneSummary.length ? toneSummary : ['—']).map((t, i) => <span className="chip on" key={i}>{t}</span>)}
                       </div>
                       <div className={`dial-edit${toneOpen ? ' open' : ''}`}>
+                        <div className="de-hint">Lit chips shape the campaign and are sent to Opus. <span className="coined-mark">✦</span> marks words Opus coined — they count the same; tap to dim, tap again to relight.</div>
                         <div className="de-group">
                           <div className="de-glabel">Genre</div>
                           <div className="chiprow">
-                            {unionOpts(GENRE_OPTIONS, genres).map(g => (
-                              <span className={`chip${genres.some(x => lc(x) === lc(g)) ? ' on' : ''}`} key={g} onClick={() => !loading && toggleGenre(g)}>{g}</span>
-                            ))}
+                            {unionOpts(GENRE_OPTIONS, [...inventedGenres, ...genres]).map(g => {
+                              const coined = !GENRE_OPTIONS.some(o => lc(o) === lc(g))
+                              return (
+                                <span
+                                  className={`chip${genres.some(x => lc(x) === lc(g)) ? ' on' : ''}${coined ? ' coined' : ''}`}
+                                  key={g}
+                                  title={coined ? `“${g}” is Opus's own word — it still shapes the campaign when lit` : undefined}
+                                  onClick={() => !loading && toggleGenre(g)}
+                                >{coined ? `✦ ${g}` : g}</span>
+                              )
+                            })}
                           </div>
                         </div>
                         <div className="de-group">
                           <div className="de-glabel">Tone</div>
                           <div className="chiprow">
-                            {unionOpts(TONE_OPTIONS, tones).map(t => (
-                              <span className={`chip${tones.some(x => lc(x) === lc(t)) ? ' on' : ''}`} key={t} onClick={() => !loading && toggleTone(t)}>{t}</span>
-                            ))}
+                            {unionOpts(TONE_OPTIONS, [...inventedTones, ...tones]).map(t => {
+                              const coined = !TONE_OPTIONS.some(o => lc(o) === lc(t))
+                              return (
+                                <span
+                                  className={`chip${tones.some(x => lc(x) === lc(t)) ? ' on' : ''}${coined ? ' coined' : ''}`}
+                                  key={t}
+                                  title={coined ? `“${t}” is Opus's own word — it still shapes the campaign when lit` : undefined}
+                                  onClick={() => !loading && toggleTone(t)}
+                                >{coined ? `✦ ${t}` : t}</span>
+                              )
+                            })}
                           </div>
                         </div>
                       </div>

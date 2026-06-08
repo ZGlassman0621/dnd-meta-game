@@ -73,6 +73,32 @@ export function getWeaponChoiceList(label) {
   return [...(data.melee || []), ...(data.ranged || [])]
 }
 
+/**
+ * Generic non-weapon "any X" tool / instrument choice. Class equipment
+ * options often offer a choice the player resolves to a specific item:
+ *   "Any Other Musical Instrument", "a musical instrument of your choice",
+ *   "an artisan's tools of your choice", "a gaming set", and the combined
+ *   "Choose one type of artisan's tools or one musical instrument".
+ * Returns an array of pickable item names (strings), or null when the
+ * label isn't one of these generic tool/instrument choices. The combined
+ * "artisan's tools OR musical instrument" form returns both pools.
+ */
+export function getToolChoiceList(label) {
+  const s = String(label || '').trim().toLowerCase()
+  const wantsInstrument = /musical instrument/.test(s)
+  const wantsArtisan = /artisan'?s?\s+tools?/.test(s)
+  const wantsGaming = /gaming set/.test(s)
+  if (!wantsInstrument && !wantsArtisan && !wantsGaming) return null
+  const norm = (x) => (typeof x === 'string' ? x : (x?.name || String(x)))
+  const tools = equipmentData.tools || {}
+  const out = []
+  if (wantsInstrument) (equipmentData.musicalInstruments || []).forEach(i => out.push(norm(i)))
+  if (wantsArtisan) (tools.artisansTools || []).forEach(t => out.push(norm(t)))
+  if (wantsGaming) (tools.gamingSets || []).forEach(t => out.push(norm(t)))
+  const uniq = [...new Set(out.filter(Boolean))]
+  return uniq.length ? uniq.sort((a, b) => a.localeCompare(b)) : null
+}
+
 const ALL_ARMOR = [
   ...((equipmentData.armor?.light) || []),
   ...((equipmentData.armor?.medium) || []),

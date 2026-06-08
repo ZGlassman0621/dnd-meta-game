@@ -390,16 +390,21 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
   ) || [];
 
   // ── derive presentation data from real campaign records ──
-  // Feature = the first active campaign (or first in the active filter).
-  const featured = filteredCampaigns[0] || null;
-  const others = featured ? filteredCampaigns.filter(c => c.id !== featured.id) : filteredCampaigns;
+  // Feature = THIS character's assigned campaign, NOT the first active
+  // campaign globally. The list is workspace-wide (every campaign the local
+  // user owns), so featuring filteredCampaigns[0] surfaced a *different*
+  // character's world on a fresh character's page — the cross-character
+  // "bleed" bug. Scoping the feature to character.campaign_id fixes it.
+  const featured = filteredCampaigns.find(c => c.id === character?.campaign_id) || null;
+  const others = filteredCampaigns.filter(c => c.id !== featured?.id);
 
-  // Level chip on the feature comes from a real assigned character, if any.
-  const featureLevel = (() => {
-    if (!featured) return null;
-    if (character?.campaign_id === featured.id) return character.level;
-    return null;
-  })();
+  // Level chip on the feature is this character's — it's their campaign.
+  const featureLevel = featured ? (character?.level ?? null) : null;
+
+  // Which character(s) a campaign is assigned to — labels the "other"
+  // campaigns so it's never ambiguous whose world each one is.
+  const ownersOf = (campaignId) =>
+    (allCharacters || []).filter(ch => ch.campaign_id === campaignId);
 
   const statusClass = (status) => status === 'active' ? '' : status === 'archived' ? 'archived' : 'paused';
   const toneLabel = (t) => cap(t || 'heroic fantasy');
@@ -837,7 +842,13 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 </div>
               ) : (
                 <>
-                  {/* FEATURED campaign */}
+                  {/* FEATURED campaign — THIS character's own campaign. */}
+                  {!featured && (
+                    <div className="camp-empty" style={{ marginBottom: 8 }}>
+                      {character?.name ? `${character.name} hasn't begun a campaign yet` : 'No campaign for this character yet'} — begin one below
+                      {others.length > 0 ? ', or open one of the campaigns below to assign this character.' : '.'}
+                    </div>
+                  )}
                   {featured && (
                     <section className="feature">
                       <div className="feat-main">
@@ -855,6 +866,7 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                             <button className="btn primary" onClick={() => onNavigateToPlay?.()}><Ic n="play" />Continue</button>
                           )}
                           <button className="btn" onClick={() => setSelectedCampaign(featured)}><Ic n="globe" />Details</button>
+                          <button className="btn danger" onClick={() => setConfirmDelete(featured)}><Ic n="trash" />Delete</button>
                         </div>
                       </div>
                       <div className="feat-side">
@@ -877,20 +889,37 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                     <>
                       <div className="sec-head"><h2>Other campaigns</h2><span className="glyph">❧</span><span className="fl" /><span className="sub">{others.length}</span></div>
                       <div className="camp-list">
-                        {others.map(c => (
-                          <button
-                            key={c.id}
-                            className={`camp${selectedCampaign?.id === c.id ? ' selected' : ''}`}
-                            onClick={() => setSelectedCampaign(c)}
-                          >
-                            <div className="ct"><span className={`status ${statusClass(c.status)}`}>{cap(c.status)}</span></div>
-                            <h3>{c.name}</h3>
-                            {c.description && <p>{c.description}</p>}
-                            <div className="meta">
-                              {[c.setting, c.starting_location].filter(Boolean).join(' · ') || timeLabel(c.time_ratio)}
+                        {others.map(c => {
+                          const owners = ownersOf(c.id);
+                          return (
+                            <div
+                              key={c.id}
+                              className={`camp${selectedCampaign?.id === c.id ? ' selected' : ''}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedCampaign(c)}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedCampaign(c); } }}
+                            >
+                              <div className="ct">
+                                <span className={`status ${statusClass(c.status)}`}>{cap(c.status)}</span>
+                                <span className="camp-owner">{owners.length ? owners.map(o => o.name).join(', ') : 'Unassigned'}</span>
+                              </div>
+                              <h3>{c.name}</h3>
+                              {c.description && <p>{c.description}</p>}
+                              <div className="meta">
+                                {[c.setting, c.starting_location].filter(Boolean).join(' · ') || timeLabel(c.time_ratio)}
+                              </div>
+                              <button
+                                type="button"
+                                className="camp-del"
+                                title="Delete campaign"
+                                onClick={e => { e.stopPropagation(); setConfirmDelete(c); }}
+                              >
+                                <Ic n="trash" />
+                              </button>
                             </div>
-                          </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   )}

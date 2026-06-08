@@ -2,6 +2,50 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.4.1] - 2026-06-08 — Playtest fixes: instrument picker, moment alignment, campaign scoping + delete, coined genre chips
+
+Four fixes from a play session.
+
+- **Equipment — "Any Other Musical Instrument" now opens a picker.** The
+  equipment-option resolver only recognized generic *weapon* choices ("Any
+  Simple Weapon"), so musical-instrument / artisan's-tools / gaming-set choices
+  fell through with no dropdown. Added `getToolChoiceList()` (equipmentResolver)
+  — recognizes "musical instrument", "artisan's tools", and "gaming set" labels
+  (including the combined "artisan's tools or one musical instrument" form) and
+  returns the pickable list from `equipment.json`. Step 6's option card renders
+  the same picker pattern as the weapon one; the chosen item persists through the
+  existing `equipment_subpicks` path (no backend change). Specific tools like
+  "Thieves' Tools" correctly don't trigger a picker.
+- **Creator — BACKSTORY MOMENTS now align properly.** The moment chips are
+  `<button>`s (which default to `text-align:center`) laid out with
+  `align-items:center`, so sentence-length moments rendered centered and ragged.
+  Converted the moments list to a full-width, left-aligned stacked list with the
+  radio top-aligned to the first line (matching the picked-chips rows above).
+  Scoped to `.chipwrap`/`.mchip`, which are used only by the moment list.
+- **Campaigns — fixed cross-character "bleed" + made delete discoverable.** The
+  campaign list is workspace-wide (every campaign the local user owns), and the
+  page featured `filteredCampaigns[0]` — the first active campaign *globally* —
+  so a brand-new character's page surfaced a *different* character's campaign as
+  if it were theirs. The feature is now scoped to the character's own
+  `campaign_id`; a character with no campaign sees a clear "hasn't begun a
+  campaign yet" state instead. "Other campaigns" cards now label which character
+  each belongs to (or "Unassigned"), and every card carries a visible delete
+  affordance (plus a Delete button on the featured campaign) so removing a
+  campaign no longer requires digging into the detail panel. `deleteCampaign`
+  already unassigns characters and cleans up related rows.
+- **Begin Campaign — Opus-coined genres/tones no longer vanish, and read as
+  real.** When Opus invents a genre/tone word (e.g. "Melancholy"), it lived in
+  the palette only while selected — toggling it off removed it irrecoverably, and
+  nothing signaled whether it actually mattered. Coined words are now tracked
+  separately from the selection so their chips persist in the palette (dim when
+  off, re-pickable), are marked with a ✦ and a tooltip, and a one-line hint makes
+  explicit that lit chips (coined ones included) are sent to Opus and shape the
+  campaign. They were always real — `toneSummary` already flowed coined words to
+  `dials.tones` (draft) and `committed.tones` (commit); the fix is visibility +
+  persistence, not wiring.
+
+Client build clean.
+
 ## [2.4.0] - 2026-06-08 — DM prompt overhaul: fix early-session "forgetting" + creative-but-constrained
 
 Following a deep multi-agent architecture audit of how the app drives the AI DM,

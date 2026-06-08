@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { WizardHead } from './creatorPrimitives.jsx'
 import classesData from '../../data/classes.json'
 import { THEME_GOLD_MODIFIERS, applyGoldModifier } from '../../data/themeGoldModifiers.js'
-import { resolveOptionLabel, isProficiencyGated, getFocusDescription, getWeaponChoiceList, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
+import { resolveOptionLabel, isProficiencyGated, getFocusDescription, getWeaponChoiceList, getToolChoiceList, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
 import equipmentData from '../../data/equipment.json'
 
 // Curated tool list from equipment.json + musical instruments. Both
@@ -624,6 +624,17 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
     () => (weaponChoiceList && subpick) ? weaponChoiceList.find(w => w.name === subpick) : null,
     [weaponChoiceList, subpick]
   )
+  // Generic non-weapon "any X" choice (musical instrument, artisan's
+  // tools, gaming set). Only one of weaponChoiceList / toolChoiceList is
+  // ever non-null for a given label, so they render mutually exclusively.
+  const toolChoiceList = useMemo(() => getToolChoiceList(label), [label])
+  const toolNoun = useMemo(() => {
+    const s = String(label || '').toLowerCase()
+    if (/musical instrument/.test(s) && !/artisan|gaming/.test(s)) return 'instrument'
+    if (/gaming set/.test(s) && !/artisan|musical/.test(s)) return 'gaming set'
+    if (/artisan/.test(s) && !/musical|gaming/.test(s)) return "artisan's tool"
+    return 'option'
+  }, [label])
   return (
     <div
       className={`opt ${picked ? 'sel' : ''}`}
@@ -736,6 +747,28 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
               {subPickedWeapon.properties?.length > 0 && ` · ${subPickedWeapon.properties.join(', ')}`}
             </div>
           )}
+        </div>
+      )}
+      {/* Generic tool / instrument choice ("Any Other Musical Instrument",
+          "an artisan's tools of your choice", "a gaming set"). Same
+          pattern as the weapon picker — dropdown appears once picked,
+          and clicks are stopped from re-toggling the parent option. */}
+      {toolChoiceList && picked && (
+        <div
+          style={{ marginTop: 12, width: '100%' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <select
+            className="aselect"
+            style={{ width: '100%' }}
+            value={subpick || ''}
+            onChange={e => onSubpick && onSubpick(e.target.value)}
+          >
+            <option value="">Pick a specific {toolNoun}…</option>
+            {toolChoiceList.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
       )}
     </div>

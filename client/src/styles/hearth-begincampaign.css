@@ -172,6 +172,13 @@
 .hearth .de-group { margin-bottom: 13px; }
 .hearth .de-group:last-child { margin-bottom: 0; }
 .hearth .de-glabel { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 9px; }
+/* Genre/tone palette clarity: the hint explains lit chips are real, and
+   coined chips (✦, words Opus invented) get an accent-tinted treatment so
+   they read as special — and persist in the palette even when dimmed. */
+.hearth .de-hint { font-family: var(--serif); font-style: italic; font-size: 12px; line-height: 1.45; color: var(--ink-4); margin-bottom: 12px; }
+.hearth .de-hint .coined-mark { font-style: normal; color: var(--accent); }
+.hearth .chiprow .chip.coined { border-color: color-mix(in oklab, var(--accent) 32%, var(--rule)); }
+.hearth .chiprow .chip.coined:not(.on) { color: color-mix(in oklab, var(--accent) 55%, var(--ink-3)); }
 .hearth .de-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .hearth .de-actions .spacer { flex: 1; }
 .hearth .set-input { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; color: var(--ink); font-family: var(--serif); font-size: 14.5px; }
