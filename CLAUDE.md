@@ -65,9 +65,10 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system (MVP — see ba
 - Structured JSON from LLMs goes through `server/utils/llmJson.js` — `extractLLMJson()` / `tryExtractLLMJson()`. Don't write new ad-hoc parsers; Opus occasionally emits multi-block responses that naive extractors splice into invalid JSON.
 
 ### Prompt structure
-- DM prompt uses **primacy/recency reinforcement**: critical rules appear at the top (ABSOLUTE RULES) AND bottom (FINAL REMINDER). Don't modify this structure without understanding the pattern — it's the main lever holding the AI to the rules.
+- DM prompt uses **primacy/recency reinforcement**: critical rules at the top (CARDINAL RULES) and a slim recency anchor at the bottom (BEFORE YOU SEND). As of v2.4.0 the bottom is a **1–2 item gut-check** (player sovereignty + the conditional content-boundary check), NOT a full restatement of the top — the prior redundant 5–6 item self-check doubled rule salience and crowded out the live thread. Keep the two anchors load-bearing; don't re-bloat the recency block.
+- **Render only what currently exists** (v2.4.0): the MEMORY HIERARCHY, the "past sessions are canonical" paragraph, and the quest-weaving paragraph are gated on real stored memory — a fresh campaign instead gets a one-line directive making the live transcript authoritative (ranking the recent transcript below an empty canon ledger was the main early-session "forgetting" cause). Mechanical per-turn state (active conditions/effects) goes in the **system-prompt tail** (sent, strip-before-persist), never as user-role turns in the transcript. `formatCampaignPlan`'s CONTENT BOUNDARIES block is the gating template.
 - DM Mode prompt uses a 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER).
-- Prompt caching via `claude.js` has three tiers (cache-break markers embedded in the prompt string): universal-static, per-character static, dynamic. Only blocks ≥1024 tokens are cached.
+- Prompt caching via `claude.js` has three tiers (cache-break markers embedded in the prompt string): universal-static, per-character static, dynamic. Only prefixes **≥4096 tokens** cache on Opus 4.x (`CACHE_MIN_TOKENS`); shorter tiers are merged (1024 is the Sonnet floor and silently won't cache on Opus).
 
 ### DM session markers + marker pipeline
 Markers the DM AI emits during Player Mode sessions:
@@ -342,7 +343,7 @@ Every new API endpoint gets integration tests in `tests/integration.test.js` (ha
 - Don't add a CSS framework.
 - Don't split `DMSession.jsx`, `CharacterSheet.jsx`, or `CharacterCreationWizard.jsx` unless explicitly asked or working a state-refactor plan.
 - Don't change AI model aliases or add date suffixes.
-- Don't modify the primacy/recency prompt structure without understanding the pattern.
+- Don't modify the primacy/recency prompt structure without understanding the pattern — and don't re-bloat the recency "BEFORE YOU SEND" block back into a full rule restatement (it's intentionally a 1–2 item gut-check as of v2.4.0; see Prompt structure).
 - Don't write new ad-hoc JSON extractors — use `server/utils/llmJson.js`.
 - Don't create new documentation files unless asked.
 - Don't forget to update CHANGELOG, CLAUDE.md, and package.json versions together at each phase boundary.

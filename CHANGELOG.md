@@ -2,6 +2,68 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.4.0] - 2026-06-08 — DM prompt overhaul: fix early-session "forgetting" + creative-but-constrained
+
+Following a deep multi-agent architecture audit of how the app drives the AI DM,
+a four-tier pass that fixes the DM losing the thread early in fresh sessions and
+relaxes the over-constraint that was stiffening prose — without touching the
+load-bearing guardrails (player sovereignty, no-spoiler, content boundaries,
+marker contract). The diagnosis: it was never history-trimming (compaction only
+fires at 70–85% of budget) — it was the *frozen system prompt* drowning a short
+early transcript and telling the model to rank the transcript below an empty
+memory ledger.
+
+**Tier 1 — memory hierarchy + bulk + stale state** (`dmPromptBuilder.js`):
+- The MEMORY HIERARCHY, the always-on "past sessions are canonical" paragraph,
+  and the quest-weaving paragraph are now **gated on real stored memory**. A
+  fresh campaign (empty chronicle/canon/NPC tables) instead gets one line making
+  the live transcript authoritative — it was previously ranked *below* an empty
+  canon ledger ("never overrides chronicle"), the most direct early-forgetting
+  mechanism. Populated sessions render the full hierarchy exactly as before.
+- Trimmed the Conversation-Handling example bank (the COUNCIL/CROSSTALK
+  transcripts featuring NPCs that don't exist in the player's game, plus the
+  AGE&REGISTER and SHOW-DON'T-TELL banks); kept the 4 MODE definitions + ladder
+  + a short SPOTLIGHT/WAIT exemplar.
+- Stopped asserting a frozen Current Location/Quest (built once at /start; goes
+  stale within a few exchanges and reads "Unknown/None" early, contradicting the
+  opening scene). The transcript + campaign-plan opening scene own them now.
+
+**Tier 2 — cut self-policing / stiffness** (`dmPromptBuilder.js`, `dmSession.js`):
+- BEFORE-YOU-SEND self-check shrunk from a 5–6 item QA pass (a near-verbatim
+  restatement of the Cardinal Rules in the recency slot) to a 1–2 item gut-check:
+  player sovereignty + the conditional content-boundary check.
+- CRAFT PRINCIPLES recast from a prohibition wall ("Don't pad / Never bury /…")
+  into positive directives, intent preserved.
+- `[SCENE]` marker made conditional (emit on change, not every turn) so the
+  closing line lands the narrative beat instead of a schema tag.
+- The per-turn correction loop now injects only **load-bearing** rule violations
+  (sovereignty/dice-UX) + marker-schema failures; the cosmetic prose-tic
+  ("X goes still", Rule 19a) is detected for logging but no longer nags the next
+  turn.
+
+**Tier 3 — keep the transcript clean** (`dmSession.js`):
+- Active conditions/effects are no longer pushed as fake user-role messages that
+  persisted and accreted between the DM's narration and the player's action.
+  They're built into a per-turn system-tail block (sent, not persisted).
+- `stripEphemeralStateNotes()` runs at every `result.messages` persist site,
+  removing legacy condition/effect notes + loot-drop receipts from the stored
+  transcript while preserving the COMBAT_START initiative note (the DM needs the
+  rolled order) and the durable /inject-context GM note.
+
+**Tier 4 — response cap + cache floor** (`claude.js`):
+- DM-turn `max_tokens` 4000 → 8000 (long opening scenes were truncating
+  mid-thought and dropping trailing markers). Streaming for even longer turns is
+  deferred (touches the client contract).
+- `CACHE_MIN_TOKENS` 1024 → 4096 to match Opus 4.x's real cacheable-prefix
+  minimum (1024 is the Sonnet floor; sub-4096 tiers carried a no-op cache marker).
+
+Each tier shipped as its own commit, with a verification checkpoint after Tier 1.
+Tests: dmPrompt-linesAndVeils 27/27 (new memory-gating assertions),
+dm-prompt-builder 30/30, moral-diversity 59/59, character-memory 56/56,
+progression-prompt 43/43, session-transcript 8/8, condition-tracking 56/56
+(two anchor assertions updated to the new self-check/craft wording). Pre-existing
+marker-schema failures (archived PROMISE/NOTORIETY schemas) are unrelated.
+
 ## [2.3.0] - 2026-06-07 — Begin a new Campaign: design refresh (character-scoped + lines & veils)
 
 Integrated the revised `design_handoff_hearth_app/Begin Campaign.html` design (the
