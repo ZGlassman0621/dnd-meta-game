@@ -31,11 +31,15 @@ const DEFAULT_MODEL = SONNET_MODEL;
 //   • No markers → plain string (legacy behavior).
 //   • Only AFTER_CORE marker → 2-block array (tier 1 cached, tier 2+3 together).
 //   • Both markers → 3-block array (tier 1 + tier 2 cached, tier 3 fresh).
-//   • Any tier below 1024 tokens → fall back to a single merged string so
-//     Anthropic accepts the request (the cache minimum would reject it).
+//   • Any tier below the cache minimum → fall back to a single merged string;
+//     Anthropic silently won't cache a sub-minimum prefix (cache_creation=0).
 const CACHE_BREAK_CORE = '<!-- CACHE_BREAK:AFTER_CORE -->';
 const CACHE_BREAK_CHARACTER = '<!-- CACHE_BREAK:AFTER_CHARACTER -->';
-const CACHE_MIN_TOKENS = 1024; // Anthropic's cacheable-block minimum
+// Anthropic's cacheable-prefix minimum is model-specific: 4096 tokens for
+// Opus 4.x (claude-opus-4-8 — our gameplay model). 1024 is the Sonnet-4.5 floor
+// and was too low here — a sub-4096 tier still got a cache_control marker that
+// Opus silently ignores (cache_creation_input_tokens: 0), so it never cached.
+const CACHE_MIN_TOKENS = 4096;
 const CACHE_MIN_CHARS = CACHE_MIN_TOKENS * 4; // rough char→token
 
 // Running cache telemetry — flushed to stdout once per turn via logCacheStats().
@@ -450,7 +454,9 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
  */
 export async function startSession(systemPrompt, openingPrompt, modelChoice = null, options = {}) {
   const messages = [{ role: 'user', content: openingPrompt }];
-  const response = await chat(systemPrompt, messages, 3, modelChoice, 4000, false, options);
+  // 8000-token cap (was 4000): a long opening scene + dialogue + trailing markers
+  // was occasionally truncating, dropping end-of-response content AND markers.
+  const response = await chat(systemPrompt, messages, 3, modelChoice, 8000, false, options);
 
   const selectedModel = getModelId(modelChoice);
   console.log(`Starting DM session with model: ${selectedModel}`);
@@ -481,7 +487,9 @@ export async function continueSession(systemPrompt, messages, playerAction, mode
     { role: 'user', content: playerAction }
   ];
 
-  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 4000, false, options);
+  // 8000-token cap (was 4000) — see startSession; stops long immersive turns
+  // from truncating mid-thought and dropping their trailing mechanical markers.
+  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 8000, false, options);
 
   return {
     response,
