@@ -73,8 +73,8 @@ console.log('\n=== Test 1: DM System Prompt — NPC Moral Diversity ===\n');
   assert(prompt.includes('Most NPCs are self-interested'), 'States most NPCs are self-interested');
   assert(prompt.includes('Merchants overcharge'), 'Includes merchant overcharging example');
   assert(prompt.includes('Guards take bribes') || prompt.includes('guards take bribes'), 'Includes guard bribe example');
-  assert(prompt.includes('Help from strangers should cost something') ||
-         prompt.includes('help from strangers should cost'), 'NPCs should want something in return');
+  assert(prompt.includes('Help from strangers costs something') ||
+         prompt.includes('help from strangers costs'), 'NPCs should want something in return');
   // v1.0.33: consolidated as "not saintly" in the Craft Principle.
   // Semantically: allies and NPCs in general can be imperfect / self-interested.
   assert(prompt.includes('not saintly') ||

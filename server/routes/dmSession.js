@@ -1281,10 +1281,21 @@ router.post('/:sessionId/message', async (req, res) => {
         if (msg) combinedNotes.push(msg);
         console.warn(`[marker-schema] ${failures.length} malformed marker(s) on session ${sessionId}:`, failures.map(f => `${f.schemaKey}(${f.errors.map(e => e.field).join(',')})`).join(', '));
       }
-      if (ruleViolations.length > 0) {
-        const msg = buildRuleCorrectionMessage(ruleViolations);
+      // Tier 2: only LOAD-BEARING rule violations earn a next-turn correction
+      // note — player sovereignty + dice UX (narrating past a roll request,
+      // narrating a check/roll outcome, leaking the d20, DM meta-asides). Purely
+      // cosmetic prose tics (the "X goes still" family, Rule 19a) are detected
+      // for logging but NOT injected: the back-pressure of "rewrite to strip
+      // phrase X" pulls the model backward and stiffens prose, worst exactly
+      // when it's being creative early in a session.
+      const COSMETIC_RULES = new Set(['still_freeze_tic']);
+      const correctableViolations = ruleViolations.filter(v => !COSMETIC_RULES.has(v.rule));
+      if (correctableViolations.length > 0) {
+        const msg = buildRuleCorrectionMessage(correctableViolations);
         if (msg) combinedNotes.push(msg);
-        console.warn(`[rule-verify] ${ruleViolations.length} rule violation(s) on session ${sessionId}:`, ruleViolations.map(v => v.rule).join(', '));
+      }
+      if (ruleViolations.length > 0) {
+        console.warn(`[rule-verify] ${ruleViolations.length} rule violation(s) on session ${sessionId} (${correctableViolations.length} injected):`, ruleViolations.map(v => v.rule).join(', '));
       }
       if (combinedNotes.length > 0) {
         nextCfg.pendingMarkerCorrections = combinedNotes.join('\n');
