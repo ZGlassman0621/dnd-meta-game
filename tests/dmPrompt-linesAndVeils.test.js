@@ -96,5 +96,21 @@ const promptNo = createDMSystemPrompt(makeCharacter(), makeCtx(noLv));
 ok('no boundary self-check when lines_and_veils is absent', !promptNo.includes('DID I CROSS A CONTENT BOUNDARY'));
 ok('atelier design still surfaces without boundaries (opening scene present)', promptNo.includes('OPENING SCENE'));
 
+// ── 4. Tier 1: memory hierarchy is gated on real stored memory ───────────────
+// A fresh campaign has no chronicle/canon/NPC history, so the live transcript
+// must be the authoritative memory — not ranked below an empty ledger.
+console.log('\n=== Tier 1: memory-hierarchy gating ===\n');
+const freshPrompt = createDMSystemPrompt(makeCharacter(), makeCtx(atelierSummary)); // makeCtx = empty memory
+ok('fresh session uses the transcript-is-memory directive', freshPrompt.includes('the conversation so far is your only memory'));
+ok('fresh session does NOT render the full MEMORY HIERARCHY', !freshPrompt.includes('MEMORY HIERARCHY'));
+ok('fresh session does NOT assert past sessions are canonical', !freshPrompt.includes('Past sessions (STORY CHRONICLE'));
+ok('fresh session does not assert a frozen Current Location/Quest', !freshPrompt.includes('Current Location:') && !freshPrompt.includes('Current Quest:'));
+ok('fresh session dropped the invented-NPC COUNCIL example (Tormund)', !freshPrompt.includes('Tormund'));
+
+const populatedCtx = { ...makeCtx(atelierSummary), chronicleContext: 'CANON FACTS:\n- Mayor Aldous is dead.', chronicleSummaries: [{ summary: 'Session 1 recap.' }] };
+const populatedPrompt = createDMSystemPrompt(makeCharacter(), populatedCtx);
+ok('populated session renders the full MEMORY HIERARCHY', populatedPrompt.includes('MEMORY HIERARCHY') && populatedPrompt.includes('higher tier wins'));
+ok('populated session asserts past sessions are canonical', populatedPrompt.includes('Past sessions (STORY CHRONICLE'));
+
 console.log(`\nAtelier → DM prompt: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

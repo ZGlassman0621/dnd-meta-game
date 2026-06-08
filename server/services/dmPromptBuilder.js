@@ -330,14 +330,17 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     character.backstory ? `- Backstory: ${character.backstory}` : null
   ].filter(Boolean);
 
+  // Current Location / Current Quest are deliberately NOT asserted here. This
+  // block is frozen at /start and never rebuilt, so a stated location/quest goes
+  // stale within a few exchanges — and on a fresh character it reads
+  // "Unknown"/"None", contradicting the campaign-plan opening scene. The live
+  // transcript and the opening scene own location/quest instead.
   const stateLines = [
     `${label} — CURRENT STATE (live values, may change during play):`,
     `- HP: ${character.current_hp}/${character.max_hp}`,
     `- Armor Class: ${ac}`,
     `- Weapon: ${weaponStr}`,
-    `- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}`,
-    `- Current Location: ${character.current_location || 'Unknown'}`,
-    `- Current Quest: ${character.current_quest || 'None'}`
+    `- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}`
   ];
 
   return {
@@ -1893,7 +1896,21 @@ ${sections.join('\n\n')}
 // MEMORY HIERARCHY — explicit precedence when memory sources disagree
 // ---------------------------------------------------------------------------
 
-function formatMemoryHierarchy() {
+function formatMemoryHierarchy(hasStoredMemory) {
+  // Fresh campaign: there is no chronicle/canon/NPC history yet, so the live
+  // conversation IS the memory. The full hierarchy below ranks the recent
+  // transcript BELOW the chronicle ("never overrides chronicle") — when the
+  // chronicle is empty that tells the model to distrust the only real recent
+  // facts it has, a direct cause of early-session "forgetting." Until real
+  // stored memory exists, make the transcript authoritative instead.
+  if (!hasStoredMemory) {
+    return `═══════════════════════════════════════════════════════════════
+MEMORY
+═══════════════════════════════════════════════════════════════
+This is the start of the story — the conversation so far is your only memory. Build on the names, places, and decisions you and the player have established this session, and keep them consistent. (A fuller memory hierarchy appears here once history accumulates across sessions.)
+
+`;
+  }
   return `═══════════════════════════════════════════════════════════════
 MEMORY HIERARCHY
 ═══════════════════════════════════════════════════════════════
@@ -2217,6 +2234,38 @@ This is a serious immersion-breaking issue if violated. The player chose this er
     ? `\n6. DID I CROSS A CONTENT BOUNDARY? Any LINE depicted, named, foreshadowed, or implied? Any VEIL shown on the page instead of cut away? → Cut it. (See CONTENT BOUNDARIES in the campaign plan — they override everything.)`
     : '';
 
+  // Memory presence — a fresh campaign has no chronicle / canon / NPC history
+  // yet, so the live transcript must be the authoritative memory (see
+  // formatMemoryHierarchy). Gate the memory scaffolding on real stored memory so
+  // session 1 doesn't assert a canonical past that doesn't exist.
+  const hasStoredMemory = !!(
+    (sessionContext.chronicleContext && String(sessionContext.chronicleContext).trim()) ||
+    (Array.isArray(sessionContext.chronicleSummaries) && sessionContext.chronicleSummaries.length) ||
+    (Array.isArray(sessionContext.previousSessionSummaries) && sessionContext.previousSessionSummaries.length) ||
+    (Array.isArray(sessionContext.characterMemories) && sessionContext.characterMemories.length)
+  );
+  const hasActiveQuests = !!(sessionContext.worldState?.activeQuests?.length);
+
+  // STORY MEMORY & QUEST WEAVING — only assert a canonical past / active quests
+  // when they actually exist. On a fresh campaign these collapse to nothing so
+  // the prompt stops telling the model to reference history that isn't there.
+  let storyMemorySection = '';
+  if (hasStoredMemory) {
+    storyMemorySection += `\n──────────── STORY MEMORY & QUEST WEAVING ────────────
+Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
+`;
+  }
+  if (hasActiveQuests) {
+    storyMemorySection += `\nWhen ACTIVE QUESTS are listed, weave them organically — NPC dialogue, environmental clues, overheard rumors. Never tell the player "your quest requires X." Faction NPCs mention progress/setbacks in conversation; conflict quests show both sides through different NPCs. When actions align with objectives, acknowledge narratively.
+`;
+  }
+
+  // Self-check #5's memory reference must point at whichever memory block we
+  // actually rendered above (full hierarchy vs. the fresh-session one-liner).
+  const memoryContradictionRef = hasStoredMemory
+    ? 'contradictions with MEMORY HIERARCHY'
+    : 'contradictions with what you and the player have established this session';
+
   return `You are an expert Dungeon Master running a D&D 5th Edition text adventure for ${playerDescription}. Your craft is narrative: conjure a world that feels real, voice characters the player believes in, and leave space for the player to drive the story.
 ${correctionBlock}
 ═══════════════════════════════════════════════════════════════
@@ -2351,78 +2400,14 @@ WRONG (over-delivers, wrong age register, buries the answer):
 RIGHT (answer first, one beat, child-register voice):
 > "No." Corvin's eyes flick to the alley mouth and back. "I'm good at running, though."
 
-COUNCIL — fortress planning meeting (three experts, one seated PC):
-
-Player: "Alright, walk me through what this actually costs."
-
-> Tormund rolls his shoulder. "Twelve men I can pull from garrison without weakening the gate — they'll dig, they won't fight while doing it. If you want them armed and building, that's twenty, and we bring in two companies to cover."
->
-> Lyra has her ledger open. "Twelve unarmed for six weeks: nine hundred gold in food and hazard pay. Twenty armed, double that. Double either figure if you want them to *want* the work."
->
-> Jarrick taps the plans without looking up. "Stone's the cheapest part. Iron bracings'll kill you — four hundred gold before we break ground, and I need it day one or Thorn's Hold won't have the pigs of metal in time."
-
-Three distinct voices, each in their lane. ~140 words total.
-
-CROSSTALK — tactical recon approaching an enemy camp:
-
-Lyra drops into a crouch beside you, breath fogging. "Caster. Back row, bald."
-Tormund doesn't turn his head. "Ranged or touch?"
-"Staff. Maybe a wand."
-"Shit." He glances at you. "We go for him first or we're cooked in two rounds."
-
-Four cuts. ~50 words. Nobody monologues.
-
 WAIT — after the player says "I sit by the fire and say nothing":
 
 > The fire pops. Jarrick watches it with you, stew untouched in his bowl.
 
 That's the whole response. 14 words. Silence is a valid beat.
 
-─────────────────────────────────────────────
-AGE & REGISTER EXAMPLES
-─────────────────────────────────────────────
-
-A 9-YEAR-OLD STREET CHILD (same scene, different takes):
-
-WRONG (sounds like a 30-year-old narrator):
-> "She's going to come back with more," Corvin adds, matter-of-factly, nodding toward the alley mouth. "Greta. She always does. Probably tomorrow. Maybe tonight."
-
-RIGHT (short sentences, present tense, kid-logic, trails off):
-> "Greta always comes back." Corvin scratches his arm. "She gets more kids. Usually at night. I dunno. Soon."
-
-SAME QUESTION, TWO DIFFERENT VOICES:
-
-Elderly temple priest (long clauses, measured, slight archaism):
-> "I wonder, child, if the shape of a thing is not revealed by the shadow it casts as much as by its substance?"
-
-Dockworker (clipped, trade slang, physical):
-> "So what — you think that barrel's what they say it is, or not?"
-
-Same underlying question. Entirely different registers.
-
-─────────────────────────────────────────────
-SHOW-DON'T-TELL EXAMPLES
-─────────────────────────────────────────────
-
-WRONG (vague, tells emotion):
-> The merchant seems nervous and reluctant to answer your question.
-
-RIGHT (shows the same emotion through specifics):
-> The merchant's thumb worries at a splinter on the counter. "I'm not sure I'm the right person to ask about that."
-
-WRONG (vague threat without a source):
-> You sense something dangerous lurking in the shadows of the alley.
-
-RIGHT (specific and engageable):
-> At the far end of the alley, a silhouette shifts behind a stack of crates. A boot scrapes wet stone.
-
-${formatMemoryHierarchy()}${formatMechanicalMarkers(sessionContext)}
-
-──────────── STORY MEMORY & QUEST WEAVING ────────────
-Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
-
-When ACTIVE QUESTS are listed, weave them organically — NPC dialogue, environmental clues, overheard rumors. Never tell the player "your quest requires X." Faction NPCs mention progress/setbacks in conversation; conflict quests show both sides through different NPCs. When actions align with objectives, acknowledge narratively.
-
+${formatMemoryHierarchy(hasStoredMemory)}${formatMechanicalMarkers(sessionContext)}
+${storyMemorySection}
 ──────────── CHARACTER-DEFINING MOMENTS ────────────
 When the player reveals preferences, values, fears, or emotional responses through actions or dialogue, remember them. NPCs react to who the player has shown them to be, not a generic adventurer.${isTwoPlayer ? `
 
@@ -2457,7 +2442,7 @@ Run this on every response. If any answer is YES, revise.
 2. DID I CONTINUE PAST AN NPC QUESTION OR A ROLL REQUEST? → End there.
 3. IS MY CONVERSATION MODE RIGHT? Length matched to the player's input energy?
 4. DID I REUSE DISTINCTIVE IMAGERY FROM EARLIER THIS SESSION? → Find a fresh image.
-5. DID I BREAK THE WORLD? (Meta-commentary, explained dice mechanics, out-of-era references, invented unnamed NPCs, contradictions with MEMORY HIERARCHY.) → Rewrite in-fiction.${boundarySelfCheck}
+5. DID I BREAK THE WORLD? (Meta-commentary, explained dice mechanics, out-of-era references, invented unnamed NPCs, ${memoryContradictionRef}.) → Rewrite in-fiction.${boundarySelfCheck}
 
 If every check is clean, send.`;
 }
