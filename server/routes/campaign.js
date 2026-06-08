@@ -1,7 +1,7 @@
 import express from 'express';
 import * as campaignService from '../services/campaignService.js';
 import * as campaignPlanService from '../services/campaignPlanService.js';
-import { draftCampaign, beginCampaign } from '../services/campaignDraftService.js';
+import { draftCampaign, converseCampaign, beginCampaign } from '../services/campaignDraftService.js';
 import { validateImportPayload, importCampaign, normalizePlan } from '../services/campaignImportService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
@@ -12,11 +12,25 @@ const router = express.Router();
 // Stateless — nothing is persisted until /begin.
 router.post('/draft', async (req, res) => {
   try {
-    const { prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote } = req.body;
-    const draft = await draftCampaign({ prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote });
+    const { prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote, conversation } = req.body;
+    const draft = await draftCampaign({ prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote, conversation });
     res.json({ draft });
   } catch (error) {
     handleServerError(res, error, 'draft campaign');
+  }
+});
+
+// POST /api/campaign/converse — Begin-Campaign "Build it together" mode: Opus
+// discusses the campaign and asks clarifying questions WITHOUT drafting. The
+// client passes the running conversation each turn. Returns { opusMessage }.
+// The player drafts from the conversation via /draft with `conversation`.
+router.post('/converse', async (req, res) => {
+  try {
+    const { prompt, conversation, subject, characterId, seed } = req.body;
+    const result = await converseCampaign({ prompt, conversation, subject, characterId, seed });
+    res.json(result);
+  } catch (error) {
+    handleServerError(res, error, 'converse campaign');
   }
 });
 

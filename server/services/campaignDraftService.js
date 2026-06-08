@@ -45,7 +45,22 @@ You always return a single JSON object and NOTHING else (no markdown fences, no 
   "opusMessage": "2-4 sentences of warm manuscript prose addressed to the player, presenting this draft as a living thing you are shaping together. Use *asterisks* around a few words for gentle emphasis."
 }`;
 
-function buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft, nudge, userNote }) {
+// Collaborative mode: Opus talks WITH the player to shape the campaign before
+// drafting anything. Prose only — no JSON, no premise/title/scene yet.
+const CONVERSE_SYSTEM_PROMPT = `You are Opus, an AI Dungeon Master collaborating with a player to shape a Dungeons & Dragons 5e campaign BEFORE you draft it. Right now your job is conversation, not authorship: take what the player offers, reflect it back with genuine interest, and ask a few sharp, generative questions that will make the campaign theirs — about tone, stakes, the kind of trouble they want, the people or places that should matter, what they hope to feel at the table.
+
+Your VOICE is literary, warm, and concise — manuscript prose, never chat-bot filler. Address the player directly.
+
+RULES:
+- Do NOT write the campaign yet. No title, no premise, no opening scene, no location lists — that comes later, when the player is ready and clicks "Draft it".
+- Each turn: react briefly to what the player just said, then ask 1-3 focused questions (fewer is often better). Build on their earlier answers; never repeat a question they've answered.
+- Keep it short — a paragraph, occasionally two. Use *asterisks* around a word or two for gentle emphasis.
+- It is a collaboration: offer a possibility or two of your own when it helps spark them, but leave the choices to the player.
+- When the player signals they're ready (or you sense you have enough to build something good), tell them you can draft it whenever they like.
+
+Return ONLY your prose reply — no JSON, no markdown fences, no field lists.`;
+
+function buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft, nudge, userNote, conversation }) {
   const lines = [];
   if (priorDraft) {
     lines.push('You have already drafted this campaign. Here is the current draft (JSON):');
@@ -67,7 +82,15 @@ function buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft
     lines.push(subjectLine);
     if (seedLine) lines.push(seedLine);
     lines.push('');
-    lines.push('What the player wants to play: "' + (prompt || 'Surprise me — find a story that fits.') + '"');
+    const history = Array.isArray(conversation) ? conversation.filter(t => t && t.text) : [];
+    if (history.length) {
+      lines.push('You and the player have been shaping this campaign together. Your conversation:');
+      history.forEach(t => lines.push(`${t.role === 'opus' ? 'You (Opus)' : 'Player'}: ${t.text}`));
+      lines.push('');
+      lines.push("Now author the first draft, weaving in everything you discussed — the player's answers are your brief.");
+    } else {
+      lines.push('What the player wants to play: "' + (prompt || 'Surprise me — find a story that fits.') + '"');
+    }
     if (dials?.scope) lines.push('Scope: ' + (SCOPE_LABEL[dials.scope] || dials.scope) + '.');
     if (dials?.tones?.length) lines.push('Tone leanings: ' + dials.tones.join(', ') + '.');
     lines.push('');
@@ -79,12 +102,11 @@ function buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft
 /**
  * Generate (or refine) a campaign draft. Stateless — no DB write.
  */
-export async function draftCampaign({ prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote }) {
-  if (!isClaudeAvailable()) {
-    throw new Error('Claude API is required to author a campaign');
-  }
-
-  // Subject context — the character who walks into the story, or world-first.
+/**
+ * Resolve the subject context line — the character who walks into the story,
+ * or world-first. Shared by draftCampaign and converseCampaign.
+ */
+async function resolveSubject(subject, characterId) {
   let subjectLine = 'The player is building the world first; a hero will be chosen later.';
   let resolvedCharacterId = null;
   if (subject && subject !== 'world' && characterId) {
@@ -99,11 +121,21 @@ export async function draftCampaign({ prompt, subject, seed, characterId, dials,
       if (c.backstory) subjectLine += ` Their backstory: ${String(c.backstory).slice(0, 600)}`;
     }
   }
+  return { subjectLine, resolvedCharacterId };
+}
+
+export async function draftCampaign({ prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote, conversation }) {
+  if (!isClaudeAvailable()) {
+    throw new Error('Claude API is required to author a campaign');
+  }
+
+  // Subject context — the character who walks into the story, or world-first.
+  const { subjectLine, resolvedCharacterId } = await resolveSubject(subject, characterId);
   const seedLine = seed === 'surprise'
     ? "The player has asked you to surprise them — choose a story that fits the shape of their character."
     : (seed ? `The player is starting from a drafted seed: "${seed}".` : null);
 
-  const userPrompt = buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft, nudge, userNote });
+  const userPrompt = buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft, nudge, userNote, conversation });
 
   const response = await loggedChat(
     { call_purpose: 'campaign_draft', prompt_builder: 'campaignDraftService', character_id: resolvedCharacterId },
@@ -126,6 +158,51 @@ export async function draftCampaign({ prompt, subject, seed, characterId, dials,
   if (!['one', 'arc', 'open'].includes(draft.scope)) draft.scope = dials?.scope || 'arc';
   if (!draft.setting || typeof draft.setting !== 'object') draft.setting = { name: draft.region || 'Unknown', sub: '' };
   return draft;
+}
+
+/**
+ * Collaborative conversation turn (Begin Campaign, "Build it together" mode).
+ * Opus discusses the campaign and asks questions — it does NOT draft yet.
+ * Stateless: the client passes the running conversation each turn. Returns
+ * { opusMessage } (prose). The player drafts from the conversation when ready
+ * via draftCampaign({ conversation }).
+ */
+export async function converseCampaign({ prompt, conversation, subject, characterId, seed }) {
+  if (!isClaudeAvailable()) {
+    throw new Error('Claude API is required to author a campaign');
+  }
+  const { subjectLine, resolvedCharacterId } = await resolveSubject(subject, characterId);
+  const seedLine = seed === 'surprise'
+    ? 'The player asked you to surprise them — lead with your own questions to find a story that fits their character.'
+    : null;
+
+  const lines = [subjectLine];
+  if (seedLine) lines.push(seedLine);
+  lines.push('');
+  const history = Array.isArray(conversation) ? conversation.filter(t => t && t.text) : [];
+  if (history.length) {
+    lines.push('Your collaboration so far:');
+    history.forEach(t => lines.push(`${t.role === 'opus' ? 'You (Opus)' : 'Player'}: ${t.text}`));
+    lines.push('');
+    lines.push("React to the player's latest message and ask your next question or two — or, if they've signalled they're ready, tell them you can draft it whenever they like.");
+  } else {
+    lines.push(`The player's opening idea: "${prompt || "they haven't said yet"}"`);
+    lines.push('');
+    lines.push('Open the collaboration: welcome the idea warmly and ask your first question or two.');
+  }
+
+  const response = await loggedChat(
+    { call_purpose: 'campaign_converse', prompt_builder: 'campaignDraftService', character_id: resolvedCharacterId },
+    CONVERSE_SYSTEM_PROMPT,
+    [{ role: 'user', content: lines.join('\n') }],
+    3,
+    'opus',
+    1200,
+    true // raw — we use the prose reply directly (no JSON)
+  );
+  const opusMessage = String(response || '').trim();
+  if (!opusMessage) throw new Error('Opus could not reply — try again.');
+  return { opusMessage };
 }
 
 /**

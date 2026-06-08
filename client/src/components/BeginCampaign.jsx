@@ -229,6 +229,71 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
     } catch (e) { setError(e.message); setLoading(false); setCinema(false); setCinemaRun(false) }
   }
 
+  // ── collaborative conversation ("Build it together") ──────────────────────
+  // Opus talks WITH the player, asking questions, until they choose to draft.
+  const startCollaboration = async ({ promptOverride } = {}) => {
+    const seedText = (promptOverride ?? prompt).trim()
+    if (!seedText || loading) return
+    setMode('converse'); setError(null)
+    setTurns([{ type: 'you', label: 'You', text: seedText }])
+    setLoading(true)
+    try {
+      const res = await fetch('/api/campaign/converse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: seedText, conversation: [], characterId: subjectId, subject: subjectId })
+      })
+      if (!res.ok) { let m = ''; try { m = (await res.json()).error } catch {} throw new Error(m || 'Opus could not reply.') }
+      const { opusMessage } = await res.json()
+      setTurns(t => [...t, { type: 'opus', text: opusMessage || '' }])
+    } catch (e) { setError(e.message) } finally { setLoading(false) }
+  }
+
+  const converseSend = async () => {
+    const v = compInput.trim()
+    if (!v || loading) return
+    setCompInput('')
+    const next = [...turns, { type: 'you', label: 'You', text: v }]
+    setTurns(next)
+    setLoading(true); setThinking(true); setError(null)
+    try {
+      const conversation = next.map(t => ({ role: t.type === 'opus' ? 'opus' : 'player', text: t.text }))
+      const res = await fetch('/api/campaign/converse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation, characterId: subjectId, subject: subjectId })
+      })
+      if (!res.ok) { let m = ''; try { m = (await res.json()).error } catch {} throw new Error(m || 'Opus could not reply.') }
+      const { opusMessage } = await res.json()
+      setTurns(t => [...t, { type: 'opus', text: opusMessage || '' }])
+    } catch (e) { setError(e.message) } finally { setLoading(false); setThinking(false) }
+  }
+
+  const draftFromConversation = async () => {
+    if (loading || !turns.length) return
+    setLoading(true); setThinking(true); setError(null)
+    try {
+      const conversation = turns.map(t => ({ role: t.type === 'opus' ? 'opus' : 'player', text: t.text }))
+      const d = await callDraft({ conversation, characterId: subjectId, subject: subjectId, dials: { scope, tones: toneSummary } })
+      applyDraft(d)
+      setTurns(t => [...t, { type: 'opus', text: d.opusMessage || '' }])
+      setMode('compose')
+    } catch (e) { setError(e.message) } finally { setLoading(false); setThinking(false) }
+  }
+
+  // ── quick start (surprise me — minimal dials, no premise box) ──────────────
+  const startQuickstart = () => { setError(null); setMode('quickstart') }
+  const generateQuickstart = async () => {
+    if (loading) return
+    setLoading(true); setError(null)
+    try {
+      const d = await callDraft({ prompt: null, seed: 'surprise', characterId: subjectId, subject: subjectId, dials: { scope, tones: toneSummary } })
+      applyDraft(d)
+      setTurns([{ type: 'opus', text: d.opusMessage || '' }])
+      setMode('compose')
+    } catch (e) { setError(e.message) } finally { setLoading(false) }
+  }
+
+  const resetToGreet = () => { setMode('greet'); setDraft(null); setTurns([]); setError(null) }
+
   // ── derived display ───────────────────────────────────────────────────────
   const sceneSub = draft?.setting?.sub || ''
   const openingFirstLine = (draft?.openingScene || '').trim()
@@ -250,8 +315,8 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
         <div className="at-eyebrow">
           <span className="eyebrow">New campaign</span>
           <span className="ln" />
-          {mode === 'compose' && (
-            <button className="restart" type="button" onClick={() => { setMode('greet'); setDraft(null); setTurns([]); setError(null) }}>
+          {mode !== 'greet' && (
+            <button className="restart" type="button" onClick={resetToGreet}>
               <Ic n="refresh" />Start over
             </button>
           )}
@@ -274,30 +339,116 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                 )}
               </div>
               <h2>Every campaign begins as a single sentence. Tell me yours.</h2>
-              <p className="askp">I'll take whatever you give me — a mood, a place, a wound {firstName} still carries — and build the world around it: its people, its map, the truth at its centre. <em>You set the weather. I'll write the storm.</em></p>
+              <p className="askp">Give me a mood, a place, a wound {firstName} still carries — and I'll ask a few questions so we can shape it together before I write a word. <em>You set the weather. We'll find the storm.</em></p>
 
               <p className="glabel">What do you want to play?</p>
               <div className="prompt-wrap">
                 <textarea className="prompt-box" value={prompt} onChange={e => setPrompt(e.target.value)} disabled={loading}
-                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && prompt.trim()) beginWithOpus() }}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && prompt.trim()) startCollaboration() }}
                   placeholder="A rain-soaked political mystery in a sinking canal city… a slow horror in a town that's forgotten how to grieve… or just a word: revenge, pilgrimage, heist." />
-                <button className="btn primary prompt-send" type="button" disabled={loading || !prompt.trim()} onClick={() => beginWithOpus()}>
-                  <Ic n="send" />{loading ? 'Opus is writing…' : 'Begin with Opus'}
+                <button className="btn primary prompt-send" type="button" disabled={loading || !prompt.trim()} onClick={() => startCollaboration()}>
+                  <Ic n="send" />{loading ? 'Opus is writing…' : 'Build it together'}
                 </button>
               </div>
 
-              <p className="glabel">Not sure where to begin? Start from a thread I drew from {firstName}</p>
+              <p className="glabel">Or start another way</p>
               <div className="seed-row">
                 <button className="seedc" type="button" disabled={loading}
-                  onClick={() => beginWithOpus({ promptOverride: `Build this campaign from the strongest thread on ${firstName}'s sheet — their ${threadKind} as ${threadLabel} — and the unfinished business, the people, and the places it left behind.` })}>
+                  onClick={() => startCollaboration({ promptOverride: `Build this campaign from the strongest thread on ${firstName}'s sheet — their ${threadKind} as ${threadLabel} — and the unfinished business, the people, and the places it left behind.` })}>
                   <span className="stag"><span className="dot" />From your {threadKind} · {threadLabel}</span>
                   <h4>The thread you still carry</h4>
-                  <p>I'll draw a campaign from your {threadKind} as {threadLabel} — the debt, the person, or the place it left unfinished.</p>
+                  <p>We'll build a campaign together from your {threadKind} as {threadLabel} — the debt, the person, or the place it left unfinished.</p>
                 </button>
-                <button className="seedc" type="button" disabled={loading} onClick={() => beginWithOpus({ seedOverride: 'surprise' })}>
-                  <span className="stag"><span className="dot" />Opus's choice</span>
+                <button className="seedc" type="button" disabled={loading} onClick={startQuickstart}>
+                  <span className="stag"><span className="dot" />Quick start</span>
                   <h4>Surprise me</h4>
-                  <p>Not sure what you're after? I'll conjure an adventure from nothing, and we'll shape it together as we go.</p>
+                  <p>Skip the conversation. Just pick the length, the genre &amp; tone, and the table's boundaries — I'll conjure the rest.</p>
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : mode === 'converse' ? (
+          /* ─────────── COLLABORATE (open conversation) ─────────── */
+          <section className="greet" style={{ display: 'block' }}>
+            <div className="greet-hero" style={{ maxWidth: 760 }}>
+              <div className="greet-op">
+                <span className="orb">O</span><span className="lbl">Opus</span>
+                {character && (<span className="for-char"><span className="crestmini">{glyph}</span>Building with <b>{charName}</b></span>)}
+              </div>
+              <h2>Let's build it together.</h2>
+              <p className="askp">Answer as much or as little as you like — I'll ask a few things to find the shape of it. When it feels right, <em>draft it</em> and we'll watch the world take form.</p>
+
+              <div className="thread" style={{ marginTop: 10 }}>
+                {turns.map((t, i) => t.type === 'opus' ? (
+                  <div className="turn op" key={i}>
+                    <div className="who"><span className="orb">O</span></div>
+                    <div className="body"><div className="speaker">Opus</div><div className="prose">{emph(t.text)}</div></div>
+                  </div>
+                ) : (
+                  <div className="turn you" key={i}>
+                    <div className="you-note"><span className="yl">{t.label || 'You'}</span>{t.text}</div>
+                  </div>
+                ))}
+                {thinking && <div className="turn op"><div className="who"><span className="orb">O</span></div><div className="body"><div className="thinking"><span className="d" /><span className="d" /><span className="d" /></div></div></div>}
+              </div>
+
+              <div className="composer">
+                <div className="comp-field">
+                  <textarea value={compInput} onChange={e => setCompInput(e.target.value)} disabled={loading}
+                    onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') converseSend() }}
+                    placeholder="Answer Opus, or add a thought…" />
+                  <button className="btn primary comp-send" type="button" disabled={loading || !compInput.trim()} onClick={converseSend}><Ic n="send" /></button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                  <button className="btn primary" type="button" disabled={loading || !turns.length} onClick={draftFromConversation}>
+                    <Ic n="check" />{loading ? 'Opus is writing…' : 'Draft it from our conversation'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : mode === 'quickstart' ? (
+          /* ─────────── QUICK START (surprise me) ─────────── */
+          <section className="greet" style={{ display: 'block' }}>
+            <div className="greet-hero" style={{ maxWidth: 720 }}>
+              <div className="greet-op">
+                <span className="orb">O</span><span className="lbl">Opus</span>
+                {character && (<span className="for-char"><span className="crestmini">{glyph}</span>Creating for <b>{charName}</b></span>)}
+              </div>
+              <h2>Quick start. Set the dials — I'll conjure the rest.</h2>
+              <p className="askp">No premise needed. Choose the length, the leanings, and the table's boundaries; I'll surprise you with a world that fits, and you can shape it from there.</p>
+
+              <p className="glabel">Campaign length</p>
+              <div className="seg" style={{ maxWidth: 440 }}>
+                {SCOPES.map(s => <button type="button" key={s.v} className={scope === s.v ? 'on' : ''} onClick={() => setScope(s.v)}>{s.t}</button>)}
+              </div>
+
+              <p className="glabel" style={{ marginTop: 22 }}>Genre &amp; tone</p>
+              <div className="de-group">
+                <div className="de-glabel">Genre</div>
+                <div className="chiprow">
+                  {GENRE_OPTIONS.map(g => (
+                    <span className={`chip${genres.some(x => lc(x) === lc(g)) ? ' on' : ''}`} key={g} onClick={() => !loading && toggleGenre(g)}>{g}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="de-group" style={{ marginTop: 12 }}>
+                <div className="de-glabel">Tone</div>
+                <div className="chiprow">
+                  {TONE_OPTIONS.map(t => (
+                    <span className={`chip${tones.some(x => lc(x) === lc(t)) ? ' on' : ''}`} key={t} onClick={() => !loading && toggleTone(t)}>{t}</span>
+                  ))}
+                </div>
+              </div>
+
+              <p className="glabel" style={{ marginTop: 22 }}>Content boundaries</p>
+              <button className="veil-btn" type="button" onClick={() => setCbOpen(true)} style={{ maxWidth: 440 }}>
+                <Ic n="eye-off" /><span className="vt">Lines &amp; veils for the table</span><span className="vc">{boundaryCount} set</span>
+              </button>
+
+              <div style={{ marginTop: 26 }}>
+                <button className="btn primary prompt-send" type="button" disabled={loading} onClick={generateQuickstart}>
+                  <Ic n="send" />{loading ? 'Opus is writing…' : 'Generate my campaign'}
                 </button>
               </div>
             </div>

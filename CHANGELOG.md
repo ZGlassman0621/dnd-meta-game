@@ -2,6 +2,36 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.5.0] - 2026-06-08 — Begin a Campaign: collaborative "Build it together" + Quick Start
+
+The "Begin a new Campaign" flow no longer jumps straight from your sentence to a
+finished campaign. It now offers two deliberate paths:
+
+- **Build it together (collaborative, the new default).** Instead of drafting
+  immediately, Opus *converses* — it reacts to your idea and asks a few sharp,
+  generative questions (tone, stakes, who betrays whom, what you want to feel),
+  building on each answer, in the existing chat thread. It will not write a
+  title/premise/scene until you click **"Draft it from our conversation"**, which
+  then authors the full draft from everything you discussed and drops you into the
+  usual compose view (nudge / rail / begin). Reached from the prompt box's
+  "Build it together" button and the character-thread seed card.
+  - Backend: new `CONVERSE_SYSTEM_PROMPT` + `converseCampaign()` +
+    `POST /api/campaign/converse` (prose, asks questions, never drafts); the
+    client passes the running conversation each turn. `draftCampaign()` /
+    `/api/campaign/draft` gained a `conversation` field that becomes the brief
+    when drafting from a conversation. Subject resolution refactored into a shared
+    `resolveSubject()`.
+- **Quick Start ("Surprise me").** A dedicated screen with *only* campaign length,
+  genre/tone, and lines & veils — no premise box, no details. Opus conjures a full
+  draft from those dials (`seed: 'surprise'`) and drops you into compose. Reached
+  from the greeting's "Surprise me" card.
+- The greeting presents both paths; "Start over" now resets from any mode
+  (greet / converse / quickstart / compose).
+
+Verified end-to-end against the live server (real Opus calls): the converse turns
+ask questions without leaking a draft, draft-from-conversation reflects the talk,
+and quick-start authors from dials alone. Client build clean.
+
 ## [2.4.3] - 2026-06-08 — Lifestyle wired into the DM prompt as flavor (no gold mechanics)
 
 Lifestyle was 100% inert — the player picks one of 7 tiers in the creator, it's
