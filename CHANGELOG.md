@@ -2,6 +2,20 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.5.1] - 2026-06-08 — Collaborative campaign builder: plain, conversational voice
+
+The "Build it together" conversation was too wordy and hard to collaborate with —
+because `CONVERSE_SYSTEM_PROMPT` told Opus to use "literary, warm, manuscript
+prose" with `*asterisk*` emphasis, producing overwrought replies ("I can already
+smell the brine and the old money"). Rewrote it for **plain, conversational
+English**: talk like a friend planning a game at the table, keep replies short
+(aim under 50 words), and ask **one concrete question at a time** ("Who's the
+villain?" / "Happy ending or a bleak one?") rather than paragraphs of questions.
+Per-turn instructions and the on-screen intro copy were plained-up to match. The
+separate literary draft prompt (`SYSTEM_PROMPT`) is untouched, so the *final*
+campaign prose stays evocative — only the back-and-forth changed. Verified live:
+turns now run ~35–50 words, plain voice, one question each.
+
 ## [2.5.0] - 2026-06-08 — Begin a Campaign: collaborative "Build it together" + Quick Start
 
 The "Begin a new Campaign" flow no longer jumps straight from your sentence to a

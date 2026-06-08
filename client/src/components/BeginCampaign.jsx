@@ -376,7 +376,7 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                 {character && (<span className="for-char"><span className="crestmini">{glyph}</span>Building with <b>{charName}</b></span>)}
               </div>
               <h2>Let's build it together.</h2>
-              <p className="askp">Answer as much or as little as you like — I'll ask a few things to find the shape of it. When it feels right, <em>draft it</em> and we'll watch the world take form.</p>
+              <p className="askp">Tell me what you're thinking and I'll ask a few questions to figure out the campaign you want. When you're ready, hit <em>Draft it</em> and I'll write it up.</p>
 
               <div className="thread" style={{ marginTop: 10 }}>
                 {turns.map((t, i) => t.type === 'opus' ? (
