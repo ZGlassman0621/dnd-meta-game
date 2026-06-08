@@ -537,7 +537,7 @@ function App() {
               { key: 'showCampaigns', icon: 'compass', title: 'Campaigns', desc: "The adventures you've begun, and the ones waiting." },
               { key: 'showCampaignPlan', icon: 'globe', title: 'Campaign Plan', desc: 'The world bible Opus wrote — locations, NPCs, lore.', spoiler: true },
               { key: 'showParsedBackstory', icon: 'feather', title: 'Backstory', desc: 'Your origin, parsed into people, places, and hooks.' },
-              { key: 'showSettings', icon: 'sliders', title: 'Settings', desc: 'Difficulty, tone, and how the Dungeon Master behaves.' }
+              { key: 'showSettings', icon: 'sliders', title: 'Settings', desc: 'Clear adventure history, reset, or delete this character.' }
             ]
 
             return (

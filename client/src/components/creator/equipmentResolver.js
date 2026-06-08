@@ -53,16 +53,24 @@ export function getFocusDescription(label) {
 }
 
 /**
- * "Any X Weapon" predicate — class equipment options often offer
- * "Any Simple Weapon" or "Any Martial Weapon" as a generic choice
- * that the player resolves to a specific weapon. Returns the matching
- * weapon list when applicable, or null.
+ * "Any X Weapon" predicate — class equipment options often offer a generic
+ * weapon choice the player resolves to a specific weapon. Recognizes the
+ * simple/martial tier plus an optional melee/ranged qualifier, e.g.:
+ *   "Any Simple Weapon", "A Martial Weapon", "Any Simple Melee Weapon",
+ *   "Any Martial Ranged Weapon".
+ * Returns the matching weapon list, or null when the label isn't a weapon choice.
  */
 export function getWeaponChoiceList(label) {
   const s = String(label || '').trim().toLowerCase()
-  if (s === 'any simple weapon' || s === 'a simple weapon') return SIMPLE_WEAPONS
-  if (s === 'any martial weapon' || s === 'a martial weapon') return MARTIAL_WEAPONS
-  return null
+  if (!/\bweapons?\b/.test(s)) return null
+  const tier = /\bsimple\b/.test(s) ? 'simple' : /\bmartial\b/.test(s) ? 'martial' : null
+  if (!tier) return null
+  const data = (tier === 'simple' ? equipmentData.simpleWeapons : equipmentData.martialWeapons) || {}
+  const melee = /\bmelee\b/.test(s)
+  const ranged = /\branged\b/.test(s)
+  if (melee && !ranged) return data.melee || []
+  if (ranged && !melee) return data.ranged || []
+  return [...(data.melee || []), ...(data.ranged || [])]
 }
 
 const ALL_ARMOR = [

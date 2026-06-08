@@ -26,16 +26,20 @@ function computeAncestryListId(race, subrace) {
 }
 
 /**
- * Trim a long lore description down to a single editorial line for the
- * `.opt .od` slot in the Hearth option grid. The design shows a short
- * one-liner per card; our race/subrace copy can run several sentences,
- * so we keep the first sentence (or a soft length cap).
+ * Condense a lore description for the `.opt .od` slot in the Hearth option
+ * grid without ever cutting mid-word. Short copy is shown in full (the card
+ * grows — the slot has no height cap); longer copy falls back to its complete
+ * first sentence, and only a pathologically long single sentence is clipped at
+ * a word boundary. (Selected feats also show their full text in the detail
+ * callout below the grid.)
  */
 function shortDesc(text) {
   if (!text) return ''
-  const firstSentence = String(text).split(/(?<=[.!?])\s/)[0]
-  if (firstSentence.length <= 96) return firstSentence
-  return firstSentence.slice(0, 93).trimEnd() + '…'
+  const s = String(text).trim()
+  if (s.length <= 200) return s
+  const firstSentence = s.split(/(?<=[.!?])\s/)[0]
+  if (firstSentence.length <= 240) return firstSentence
+  return firstSentence.slice(0, 200).replace(/\s+\S*$/, '').trimEnd() + '…'
 }
 
 /**
