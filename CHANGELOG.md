@@ -2,6 +2,19 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.4.3] - 2026-06-08 — Lifestyle wired into the DM prompt as flavor (no gold mechanics)
+
+Lifestyle was 100% inert — the player picks one of 7 tiers in the creator, it's
+stored and shown to the DM as a bare cosmetic line, but nothing used it (the
+downtime/survival/upkeep systems that would were archived in the v2.0.0 cut).
+Per the chosen direction, it's now **wired into the DM prompt as social/economic
+texture** rather than a stat: the identity-block line for each tier (Wretched →
+Aristocratic) now carries a concise directive about where the character sleeps,
+what they can afford, and how NPCs first read their station ("Let this colour
+lodging, prices, and how NPCs first read the character"). No gold deduction, no
+character-sheet change, no new systems — `dmPromptBuilder.js` only. Honors the
+player's choice now; a real upkeep mechanic remains deferred with downtime.
+
 ## [2.4.2] - 2026-06-08 — Trim long cleric domains + make the creator review page show every choice
 
 - **Cleric domains trimmed.** Revelry, Wealth, and Stone had 27–30-word

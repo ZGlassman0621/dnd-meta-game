@@ -294,6 +294,27 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     ? JSON.parse(character.tool_proficiencies || '[]')
     : (character.tool_proficiencies || []);
 
+  // Lifestyle as social/economic texture for the DM (no gold mechanics) — how
+  // the character lives, where they sleep, and how NPCs read their station.
+  // The player picks this in the creator; honor it narratively.
+  const LIFESTYLE_FLAVOR = {
+    wretched: 'destitute — sleeps rough or in flophouses on scraps; commoners pity or shun them, the watch moves them along, and fine establishments turn them away',
+    squalid: 'barely scraping by — crowded tenements and cheap gruel; read as the desperate poor, easy to overlook or take advantage of',
+    poor: 'humble means — common rooms and plain fare; unremarkable to most, neither courted nor disdained',
+    modest: 'respectable — clean inns and honest meals; treated as a reliable working person, coin watched but not scarce',
+    comfortable: 'well-off — good lodging and warm welcomes; merchants and innkeepers court the custom, and doors open a little wider',
+    wealthy: 'affluent — fine rooms and fine company; met with deference and granted access the common folk are not',
+    aristocratic: 'high station — the best of everything, with servants and society; nobles receive them as a peer, commoners with awe or resentment'
+  }
+  const formatLifestyle = (val) => {
+    const key = String(val || '').trim().toLowerCase()
+    const flavor = LIFESTYLE_FLAVOR[key]
+    const display = key ? key.charAt(0).toUpperCase() + key.slice(1) : (val || '')
+    return flavor
+      ? `${display} — ${flavor}. Let this colour lodging, prices, and how NPCs first read the character`
+      : display
+  }
+
   const identityLines = [
     `${label}:`,
     `- Full Name: ${fullName}`,
@@ -307,7 +328,7 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     `- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}${keeperSection}`,
     character.alignment ? `- Alignment: ${character.alignment}` : null,
     character.faith ? `- Faith: ${character.faith}` : null,
-    character.lifestyle ? `- Lifestyle: ${character.lifestyle}` : null,
+    character.lifestyle ? `- Lifestyle: ${formatLifestyle(character.lifestyle)}` : null,
     character.age ? `- Age: ${character.age}` : null,
     [character.height, character.weight].filter(Boolean).length > 0
       ? `- Build: ${[character.height, character.weight].filter(Boolean).join(', ')}` : null,
