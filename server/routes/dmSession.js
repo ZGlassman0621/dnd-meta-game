@@ -1049,6 +1049,27 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
 // Detection helpers imported from dmSessionService.js
 
 // Send a message/action in the session
+// Transient mechanical [SYSTEM NOTE] echoes that some marker handlers push into
+// the conversation (legacy active-condition/effect notes, loot-drop receipts).
+// The side effect already happened in the handler; persisting the prose echo
+// just accretes machine-chatter into the transcript the model re-reads every
+// turn — a transcript-pollution cause of early-session "forgetting." Strip them
+// before persisting, matched by distinctive content so the things the DM still
+// needs survive: the durable /inject-context GM note and the COMBAT_START
+// initiative note (which carries the rolled turn order).
+const EPHEMERAL_NOTE_SIGNATURES = [
+  '[SYSTEM NOTE — Active conditions]',
+  '[SYSTEM NOTE — Active effects]',
+  'The following items have been added to the player'
+];
+function stripEphemeralStateNotes(msgs) {
+  if (!Array.isArray(msgs)) return msgs;
+  return msgs.filter(m =>
+    !(m && m.role === 'user' && typeof m.content === 'string'
+      && EPHEMERAL_NOTE_SIGNATURES.some(sig => m.content.includes(sig)))
+  );
+}
+
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -1071,32 +1092,37 @@ router.post('/:sessionId/message', async (req, res) => {
 
     const messages = safeParse(session.messages, []);
 
-    // Inject active conditions as context if any are present
-    if (activeConditions) {
-      const conditionNote = formatConditionsForAI(activeConditions.player, activeConditions.companions);
-      if (conditionNote) {
-        messages.push({ role: 'user', content: conditionNote });
+    // Per-turn mechanical state (active conditions + active spell effects) used
+    // to be pushed as fake role:'user' messages into the transcript — which
+    // persisted and accreted between the DM's last narration and the player's
+    // action, demoting the live thread (an early-session "forgetting" cause).
+    // Now we build it as a string and inject it into the SYSTEM-PROMPT tail at
+    // the API call below (uncached, regenerated each turn). It is sent every
+    // turn but NOT persisted: the messages[0] restore after the call keeps the
+    // system tail out of the stored transcript, so it never accretes.
+    let mechStateInjection = '';
+    {
+      const stateBits = [];
+      if (activeConditions) {
+        const conditionNote = formatConditionsForAI(activeConditions.player, activeConditions.companions);
+        if (conditionNote) stateBits.push(conditionNote);
+      }
+      try {
+        const sessionCfg = safeParse(session.session_config, {});
+        const effects = Array.isArray(sessionCfg.activeEffects) ? sessionCfg.activeEffects : [];
+        if (effects.length > 0) {
+          const lines = effects.map(e => {
+            const tags = [e.concentration ? 'concentration' : null, e.duration].filter(Boolean).join(', ');
+            return `${e.name}${tags ? ` (${tags})` : ''}`;
+          });
+          // Drop the embedded 5e tutorial — Opus knows the rules; carry state only.
+          stateBits.push(`Active effects: ${lines.join('; ')}. Apply them mechanically; when one ends, emit [EFFECT_END: Name="..."].`);
+        }
+      } catch { /* non-fatal */ }
+      if (stateBits.length > 0) {
+        mechStateInjection = `\n\n[CURRENT MECHANICAL STATE — applies this turn; do not announce]\n${stateBits.join('\n')}\n`;
       }
     }
-
-    // Phase B — inject persisted active spell effects so the DM knows what's
-    // running (Bless bonuses, concentration, Hunter's Mark, Rage…) and can
-    // reason about ending/refreshing them via [EFFECT_END]/[EFFECT_START].
-    // Closes the loop: the AI emits effect markers AND sees the resulting state.
-    try {
-      const sessionCfg = safeParse(session.session_config, {});
-      const effects = Array.isArray(sessionCfg.activeEffects) ? sessionCfg.activeEffects : [];
-      if (effects.length > 0) {
-        const lines = effects.map(e => {
-          const tags = [e.concentration ? 'concentration' : null, e.duration].filter(Boolean).join(', ');
-          return `${e.name}${tags ? ` (${tags})` : ''}`;
-        });
-        messages.push({
-          role: 'user',
-          content: `[SYSTEM NOTE — Active effects]: ${lines.join('; ')}. Apply these mechanically (e.g. Bless adds 1d4 to attacks/saves; concentration breaks on a failed CON save after damage). When one ends, emit [EFFECT_END: Name="..."]. Do not announce this note.`
-        });
-      }
-    } catch { /* non-fatal */ }
 
     // Check which LLM provider is available (respects user preference)
     const { provider } = await getLLMProvider(providerPreference);
@@ -1205,7 +1231,7 @@ router.post('/:sessionId/message', async (req, res) => {
       const systemPrompt = systemMessage?.content || '';
       const apiSystemPromptBase = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
       const observationVerbInjection = detectObservationVerbs(action) ? OBSERVATION_AS_CHECK_BLOCK : '';
-      const apiSystemPrompt = apiSystemPromptBase + observationVerbInjection;
+      const apiSystemPrompt = apiSystemPromptBase + mechStateInjection + observationVerbInjection;
       const turnModel = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
       // Phase 4a SC-4a.1 — wrap with the call logger. wrapClaudeCallWithId
       // returns { result: <continueSession return>, logId } so the marker
@@ -1244,7 +1270,7 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     // Update the session in the database (LLM-facing, may be compacted)
-    await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+    await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(stripEphemeralStateNotes(result.messages)), sessionId]);
 
     // Append this turn's user + assistant pair to the full transcript.
     // Best-effort — never breaks the session for a persistence issue.
@@ -1614,7 +1640,7 @@ router.post('/:sessionId/message', async (req, res) => {
       // MERCHANT_REFER: no AI-context message push (silent side effect).
     }
     if (merchantMessagesAdded) {
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(stripEphemeralStateNotes(result.messages)), sessionId]);
     }
 
     // SC-6.4d — BASE_DEFENSE_RESULT handler in baseThreatService.js
@@ -1626,7 +1652,7 @@ router.post('/:sessionId/message', async (req, res) => {
       for (const hr of defenseHandlerResults) {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
       }
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(stripEphemeralStateNotes(result.messages)), sessionId]);
     }
 
     // SC-6.4b — LOOT_DROP handler in lootDropService.js owns the
@@ -1642,7 +1668,7 @@ router.post('/:sessionId/message', async (req, res) => {
         role: 'user',
         content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The following items have been added to the player's inventory: ${itemNames}. The player's character sheet now reflects these items.`
       });
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(stripEphemeralStateNotes(result.messages)), sessionId]);
     }
 
     // SC-6.4d — COMBAT_START + COMBAT_END handlers in combatMarkerService.js
@@ -1662,7 +1688,7 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
     if (combatSystemNoteAdded) {
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(stripEphemeralStateNotes(result.messages)), sessionId]);
     }
 
     // Detect condition changes from AI response
