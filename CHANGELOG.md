@@ -2,6 +2,25 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.6.3] - 2026-06-09 — Expand equipment pack contents into inventory
+
+Equipment packs (Explorer's Pack, Dungeoneer's Pack, etc.) were stored as a
+single inventory line, so neither the player nor the DM (which reads the
+inventory) could see or use the contents — bedroll, rations, rope, torches were
+invisible. Now:
+- **Creator (new characters):** `creatorPersistence.js` expands a picked pack
+  into its individual items at commit, tagged with `pack_source` for provenance.
+- **Existing characters:** migration **055** backfills stored inventories,
+  replacing any pack line with its contents (idempotent; PHB pack contents kept
+  in sync with `equipment.json`). Applied to the live Turso DB and verified — the
+  in-progress character's Explorer's Pack expanded into its 8 items.
+
+Dice note (no change): investigated the d20 RNG on a report of low rolls — it's a
+fair uniform 1–20 (`Math.floor(Math.random()*sides)+1`), and the difficulty
+setting is never passed to the roll or the DM. The roll isn't biased; hard-mode
+difficulty raises DCs (and a level-1 character's modifiers are modest), which is
+what makes fair rolls fail more often.
+
 ## [2.6.2] - 2026-06-09 — Silence the harmless punycode (DEP0040) deprecation warning
 
 A transitive dependency — `whatwg-url` (pulled in by the libsql/HTTP client

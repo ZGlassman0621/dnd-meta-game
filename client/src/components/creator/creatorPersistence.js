@@ -198,6 +198,7 @@ export function buildSubmitBody(state, mode, preludePayload) {
   const inventory = []
   const equipmentPicks = state.equipment_picks || {}
   const equipmentSubpicks = state.equipment_subpicks || {}
+  const PACKS = equipmentData.packs || {}
   Object.entries(equipmentPicks).forEach(([idxKey, label]) => {
     if (!label) return
     const i = Number(idxKey)
@@ -207,15 +208,33 @@ export function buildSubmitBody(state, mode, preludePayload) {
     // a defensive default.
     const subpick = equipmentSubpicks[idxKey]
     const finalLabel = subpick || label
-    inventory.push({
-      // `name` mirrors `label` so server-side inventory/reward code (which
-      // keys off `name`) never crashes on package items (Phase A fix).
-      name: finalLabel,
-      label: finalLabel,
-      original_pick: label,
-      source: 'class_package',
-      pick_index: i
-    })
+    const pack = PACKS[finalLabel]
+    if (pack && Array.isArray(pack.contents) && pack.contents.length) {
+      // Expand a pack into its individual items so the player (and the DM,
+      // who reads the inventory) can see and use the contents — bedroll,
+      // rations, rope, torches — not an opaque "Explorer's Pack" line.
+      // `pack_source` keeps the provenance for a future grouped display.
+      pack.contents.forEach(itemName => {
+        inventory.push({
+          name: itemName,
+          label: itemName,
+          original_pick: label,
+          source: 'class_package',
+          pack_source: finalLabel,
+          pick_index: i
+        })
+      })
+    } else {
+      inventory.push({
+        // `name` mirrors `label` so server-side inventory/reward code (which
+        // keys off `name`) never crashes on package items (Phase A fix).
+        name: finalLabel,
+        label: finalLabel,
+        original_pick: label,
+        source: 'class_package',
+        pick_index: i
+      })
+    }
   })
   if (state.heirloom && state.heirloom.name) {
     inventory.push({
