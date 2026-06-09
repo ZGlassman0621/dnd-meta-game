@@ -2,6 +2,40 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.6.0] - 2026-06-08 — Collaborative campaign builder: contextual, finite, partner-like
+
+The "Build it together" conversation worked but read like an interrogation — it
+praised every answer, only ever extracted (never pitched), kept drilling things
+the player wanted left open, and never offered to stop (the player had to ask
+"how many more questions?"). Overhauled it into a real creative partner:
+
+- **A "why" on every question.** Each question now carries a one-clause purpose
+  ("this is the campaign's spine"), shown as a sub-line, so you know what it
+  shapes and why it's asking.
+- **A finite, visible budget.** A "Question N of ~8" counter — roughly 6–10
+  questions mapped to the things a campaign actually needs (tone, the hero's
+  drive/wound, opening, setting, central threat, allies, ending, scope) — not an
+  open-ended interview.
+- **Offers to draft early + hands you the wheel.** The moment it has the
+  essentials (often ~6–7), it flips a `readyToDraft` flag, shows a "Ready to
+  draft" cue + hint, and plainly offers to write it up. The budget is a ceiling,
+  not a quota; you can draft anytime.
+- **Pitches ideas when you defer.** Say "you tell me" and it proposes a concrete
+  option or two instead of asking again.
+- **Honors what you leave open.** Say "leave it a mystery" and it acknowledges it
+  as a deliberate hook and moves on, instead of re-drilling it.
+- **No praise-padding.** Substantive reactions (observations, "yes-and",
+  consequences), never "that's great" every turn.
+
+Technically: `/api/campaign/converse` now returns structured
+`{reply, why, readyToDraft}`; `converseCampaign` accepts `questionNumber` (for
+pacing + the counter) and parses the JSON via `extractLLMJson` with a raw-text
+fallback. The client renders the counter, the "why" sub-line, and the draft-ready
+emphasis. The new conversation prompt was synthesized via a judge-panel of
+candidate prompts. Verified live on the user's real survival scenario: it honored
+two "leave it open" signals, pitched the alpine setting when the player deferred,
+offered to draft at question 7, and praised nothing across the whole run.
+
 ## [2.5.1] - 2026-06-08 — Collaborative campaign builder: plain, conversational voice
 
 The "Build it together" conversation was too wordy and hard to collaborate with —

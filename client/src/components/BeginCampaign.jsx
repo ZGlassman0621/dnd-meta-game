@@ -240,11 +240,11 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
     try {
       const res = await fetch('/api/campaign/converse', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: seedText, conversation: [], characterId: subjectId, subject: subjectId })
+        body: JSON.stringify({ prompt: seedText, conversation: [], characterId: subjectId, subject: subjectId, questionNumber: 1 })
       })
       if (!res.ok) { let m = ''; try { m = (await res.json()).error } catch {} throw new Error(m || 'Opus could not reply.') }
-      const { opusMessage } = await res.json()
-      setTurns(t => [...t, { type: 'opus', text: opusMessage || '' }])
+      const d = await res.json()
+      setTurns(t => [...t, { type: 'opus', text: d.reply || d.opusMessage || '', why: d.why || '', ready: !!d.readyToDraft, qnum: 1 }])
     } catch (e) { setError(e.message) } finally { setLoading(false) }
   }
 
@@ -257,13 +257,14 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
     setLoading(true); setThinking(true); setError(null)
     try {
       const conversation = next.map(t => ({ role: t.type === 'opus' ? 'opus' : 'player', text: t.text }))
+      const qnum = conversation.filter(t => t.role === 'opus').length + 1
       const res = await fetch('/api/campaign/converse', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversation, characterId: subjectId, subject: subjectId })
+        body: JSON.stringify({ conversation, characterId: subjectId, subject: subjectId, questionNumber: qnum })
       })
       if (!res.ok) { let m = ''; try { m = (await res.json()).error } catch {} throw new Error(m || 'Opus could not reply.') }
-      const { opusMessage } = await res.json()
-      setTurns(t => [...t, { type: 'opus', text: opusMessage || '' }])
+      const d = await res.json()
+      setTurns(t => [...t, { type: 'opus', text: d.reply || d.opusMessage || '', why: d.why || '', ready: !!d.readyToDraft, qnum }])
     } catch (e) { setError(e.message) } finally { setLoading(false); setThinking(false) }
   }
 
@@ -296,6 +297,8 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
 
   // ── derived display ───────────────────────────────────────────────────────
   const sceneSub = draft?.setting?.sub || ''
+  // The latest Opus turn told us it has enough to draft — surface the off-ramp.
+  const conversationReady = turns.length > 0 && turns[turns.length - 1].type === 'opus' && !!turns[turns.length - 1].ready
   const openingFirstLine = (draft?.openingScene || '').trim()
   const cinemaLine = openingFirstLine.split(/(?<=[.!?])\s+/)[0] || openingFirstLine
 
@@ -376,13 +379,22 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                 {character && (<span className="for-char"><span className="crestmini">{glyph}</span>Building with <b>{charName}</b></span>)}
               </div>
               <h2>Let's build it together.</h2>
-              <p className="askp">Tell me what you're thinking and I'll ask a few questions to figure out the campaign you want. When you're ready, hit <em>Draft it</em> and I'll write it up.</p>
+              <p className="askp">I'll ask a handful of questions — usually six to ten — to shape the campaign, and tell you what each one's for. Hit <em>Draft it</em> whenever you want; you decide when we're done.</p>
 
               <div className="thread" style={{ marginTop: 10 }}>
                 {turns.map((t, i) => t.type === 'opus' ? (
                   <div className="turn op" key={i}>
                     <div className="who"><span className="orb">O</span></div>
-                    <div className="body"><div className="speaker">Opus</div><div className="prose">{emph(t.text)}</div></div>
+                    <div className="body">
+                      <div className="speaker">
+                        Opus
+                        {t.ready
+                          ? <span className="qchip ready">Ready to draft</span>
+                          : (t.qnum ? <span className="qchip">Question {t.qnum} of ~8</span> : null)}
+                      </div>
+                      <div className="prose">{emph(t.text)}</div>
+                      {t.why && <div className="qwhy"><span className="qwl">Why I'm asking</span>{t.why}</div>}
+                    </div>
                   </div>
                 ) : (
                   <div className="turn you" key={i}>
@@ -399,8 +411,9 @@ export default function BeginCampaign({ character, onBack, onBegun }) {
                     placeholder="Answer Opus, or add a thought…" />
                   <button className="btn primary comp-send" type="button" disabled={loading || !compInput.trim()} onClick={converseSend}><Ic n="send" /></button>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                  <button className="btn primary" type="button" disabled={loading || !turns.length} onClick={draftFromConversation}>
+                <div style={{ display: 'flex', justifyContent: conversationReady ? 'space-between' : 'flex-end', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                  {conversationReady && <span className="draft-ready-hint">Opus has enough to build something — draft whenever you like.</span>}
+                  <button className={`btn primary${conversationReady ? ' draft-ready' : ''}`} type="button" disabled={loading || !turns.length} onClick={draftFromConversation}>
                     <Ic n="check" />{loading ? 'Opus is writing…' : 'Draft it from our conversation'}
                   </button>
                 </div>

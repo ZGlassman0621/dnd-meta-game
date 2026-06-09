@@ -26,8 +26,8 @@ router.post('/draft', async (req, res) => {
 // The player drafts from the conversation via /draft with `conversation`.
 router.post('/converse', async (req, res) => {
   try {
-    const { prompt, conversation, subject, characterId, seed } = req.body;
-    const result = await converseCampaign({ prompt, conversation, subject, characterId, seed });
+    const { prompt, conversation, subject, characterId, seed, questionNumber } = req.body;
+    const result = await converseCampaign({ prompt, conversation, subject, characterId, seed, questionNumber });
     res.json(result);
   } catch (error) {
     handleServerError(res, error, 'converse campaign');

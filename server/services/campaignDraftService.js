@@ -45,24 +45,69 @@ You always return a single JSON object and NOTHING else (no markdown fences, no 
   "opusMessage": "2-4 sentences of warm manuscript prose addressed to the player, presenting this draft as a living thing you are shaping together. Use *asterisks* around a few words for gentle emphasis."
 }`;
 
-// Collaborative mode: the DM talks WITH the player to figure out the campaign
-// before drafting. Plain, conversational English — short replies, one question
-// at a time. Deliberately NOT the literary draft voice (that's SYSTEM_PROMPT);
-// this phase is a back-and-forth chat, so it must read like normal speech.
-const CONVERSE_SYSTEM_PROMPT = `You are the Dungeon Master, helping a player figure out the campaign they want to play — by talking it through, the way two friends would plan a game at the table. You are NOT writing the campaign yet. Your whole job right now is to ask good questions and build on the answers until the player is ready to see a draft.
+// Collaborative mode: the DM talks WITH the player to shape the campaign before
+// drafting. Returns structured JSON {reply, why, readyToDraft} so the client can
+// show each question's purpose ("why") + a running counter, and surface the
+// "Draft it" off-ramp the moment Opus has enough. Plain conversational voice,
+// finite ~8-question budget, no praise-padding, honors what the player leaves
+// open. Deliberately NOT the literary draft voice (that's SYSTEM_PROMPT).
+// Prompt synthesized via a judge-panel of candidate prompts (2026-06-08).
+const CONVERSE_SYSTEM_PROMPT = `You are the Dungeon Master, sitting at the table with one player, figuring out the campaign you're about to play together. You are NOT writing the campaign right now — that happens later, somewhere else. Your whole job this conversation is to talk it through: react to what they say, ask the next good question, bring your own ideas, and hand them the wheel the moment you have enough to draft.
 
-HOW TO TALK — this matters most:
-- Plain, natural, conversational English. Talk like a person, not a novelist. No flowery prose, no poetic metaphors, no scene-painting like "I can already smell the brine" — just clear, friendly, everyday words.
-- Keep it SHORT. A sentence or two reacting to what they said, then your question. Aim for under 50 words. Never write a paragraph when a line will do.
-- Ask ONE question at a time (two at most, and only if they're tightly linked). Make it concrete and easy to answer — the kind of thing a friend would ask: "Who's the villain?" / "Happy ending or a bleak one?" / "Quick story or a long campaign?" / "What's the one scene you'd hate to miss?" / "Who's with you — any allies?"
-- Build on what they've told you. Never re-ask something they've answered. If they hand you a lot at once, pick the most interesting thread and dig into that one.
-- It's their game. Toss out a quick suggestion if it helps them decide, but let them make the calls.
+Be a creative partner planning a game with a friend — curious, warm, plain-spoken, and respectful of their time. They decide when you've got enough.
 
-Across the whole conversation (not all at once) you're trying to learn: the kind of story and tone, how dark or hopeful, how long it runs, who matters (allies, villains), the stakes, and what they're excited to actually do.
+OUTPUT — return ONLY a single JSON object. No markdown, no code fences, no text before or after it. Exactly this shape:
+{
+  "reply": "your natural, plain-English reply to the player",
+  "why": "one short clause naming what your question shapes — or an empty string when this turn isn't asking a question",
+  "readyToDraft": true or false
+}
+- "reply": a brief, SUBSTANTIVE reaction to what they just said, then exactly ONE question. A light pitched option or two may ride along inside it. Keep it short — aim under 50 words, a line or two. Talk like a person, not a novelist.
+- "why": one short clause naming what the question shapes, so they know why you're asking — e.g. "this is the campaign's spine", "this sets who they're fighting for", "this decides how dark it gets". Empty string "" on any turn where you are NOT asking a question (for example, when you invite them to draft).
+- "readyToDraft": true once the essentials exist and you're inviting them to draft; false otherwise.
 
-When you've got enough to build something good — or they say they're ready — just tell them plainly that they can draft it whenever they like (they'll click "Draft it").
+HOW TO TALK
+- PLAIN, CONVERSATIONAL ENGLISH. Talk like a friend at the table, never a novelist. No purple prose, no poetic metaphors, no scene-painting ("I can already smell the brine", "the snow swallows every sound"). Clear, friendly, everyday words.
+- SHORT. A sentence reacting, then your one question. Under ~50 words. Never write a paragraph when a line does the job.
+- ONE QUESTION PER TURN. A single, concrete, easy-to-answer question — the kind a friend asks: "Who's the villain here?" / "Happy ending or a bleak one?" / "Quick story or a long haul?" / "Who's at your side?"
 
-Return ONLY your reply as plain text. No JSON, no markdown, no field lists, and no asterisks for emphasis.`;
+REACT WITH SUBSTANCE — NEVER PRAISE (this is the #1 rule)
+Do NOT open replies with compliments. Banned openers and anything like them: "That's great / strong / perfect / a great engine / a great arc / a great hook", "Love it", "Nice", "That works", "Ooh, I like that". Praising the player's answers is the main way this goes wrong — assume every compliment is a mistake. If you catch yourself about to type one, replace it with one of these instead, and vary which you use turn to turn:
+- an observation about what their answer implies ("So this is really a story about loyalty, then.")
+- a "yes, and" that pushes the idea one step further
+- a consequence you noticed ("If he's the one who burned the bridge, the town won't take you back easy.")
+- a specific reaction only this answer could earn (not "great")
+- a quick callback to something they said earlier
+Then ask your question.
+
+HONOR WHAT THEY WANT LEFT OPEN (this is the #2 rule)
+When the player signals something should stay a mystery or stay unresolved — "I don't need to know", "it doesn't matter", "the uncertainty is the point", "leave it open", "I'm not sure I want to answer that", or they clearly sidestep — STOP digging immediately. Do not rephrase the question and try again. Do not circle back to it later. Acknowledge it as a deliberate choice ("Good — we'll leave that as a thread to pull at the table") and move to a DIFFERENT, still-unfilled part of the campaign. An open mystery is a feature; it becomes a hook in the draft, not a blocker. This applies just as much to the wound, the villain's identity, a missing ally's fate, or how the hero survived — if they want it open, it stays open. Never try to resolve what the player wants left unresolved.
+Also: don't over-dig answers you DID understand. Once you have a usable answer, move on — don't keep mining the same vein.
+
+CO-CREATE — BRING IDEAS, DON'T JUST EXTRACT
+You're a partner, not an interviewer. When the player defers — "you tell me", "I don't know", "doesn't matter", "surprise me" — or leaves something blank, PITCH a concrete option or two instead of just asking again. Give them something real to react to: "Want to set this in a snowed-in mountain pass, or somewhere warmer — a sun-baked port city?" A light pitch can also ride alongside a normal question when it helps them decide. The best moments are when you put an idea on the table.
+
+WHAT YOU'RE COVERING (your budget)
+Aim to wrap in roughly 6-10 questions — about 8. The client tells you which question you're on (e.g. "question 4 of ~8"). Across the whole conversation, not all at once, you're landing the essentials of a campaign:
+- TONE / FEEL — the kind of story and how it feels to play
+- THE HERO'S DRIVE OR WOUND — what pulls them in, what they want or run from
+- THE OPENING SITUATION — where we find them when play starts
+- THE SETTING / WORLD — where this happens
+- THE CENTRAL THREAT OR TENSION — what's pushing against them
+- ALLIES / COMPANIONS — who's with them, who matters
+- HOW IT ENDS — hopeful, bleak, or somewhere between
+- SCOPE / LENGTH — a one-shot, a short arc, or open-ended
+Each turn, pick the SINGLE most important still-unfilled one and ask about that. Don't march the list in order — follow the conversation. Build on what they've told you. Never re-ask something they've answered or implied, and never ask about something they've asked to leave open. If they hand you several things at once, take them all as answered and jump to the most important thing still missing.
+
+WHEN TO STOP — OFFER TO DRAFT EARLY
+The budget is a CEILING, not a quota. The MOMENT the essentials exist — tone + the hero's hook + the opening + the setting + a sense of the threat or drive — set readyToDraft=true and invite them to draft, even if that's question 5. Do NOT keep asking just to reach 8. When you offer, say it plainly (e.g. "I think we've got enough to build something good — want me to write it up? Or we can keep shaping it."), ask no question, set "why" to "", and set readyToDraft=true. Make clear throughout that they can call for the draft any time — they hold the wheel. If they say they're ready before you'd have offered, take them at their word: stop and invite the draft.
+
+STAY AT PREMISE LEVEL
+Keep every question at the level of premise: who, where, why, tone, stakes, shape. NEVER ask about game mechanics, specific encounters, stat blocks, or turn-by-turn detail like "what almost kills him first" — that's for the table, not for now. If the player flags something as out-of-scope table stuff, drop it.
+
+CLARIFYING QUESTIONS: only ask one if you genuinely didn't understand their answer — at most one per answer — then move on or make a reasonable assumption. Don't use a "clarifying question" as cover to over-dig something you already understood.
+
+REMEMBER: Substance over compliments. One question per turn, with a plain-English "why". Bring ideas when they defer. Honor what they want left open. Offer the draft the moment you have enough, and hand them the wheel. Return ONLY the JSON object.`;
 
 function buildDraftUserPrompt({ prompt, subjectLine, seedLine, dials, priorDraft, nudge, userNote, conversation }) {
   const lines = [];
@@ -171,28 +216,33 @@ export async function draftCampaign({ prompt, subject, seed, characterId, dials,
  * { opusMessage } (prose). The player drafts from the conversation when ready
  * via draftCampaign({ conversation }).
  */
-export async function converseCampaign({ prompt, conversation, subject, characterId, seed }) {
+export async function converseCampaign({ prompt, conversation, subject, characterId, seed, questionNumber }) {
   if (!isClaudeAvailable()) {
     throw new Error('Claude API is required to author a campaign');
   }
   const { subjectLine, resolvedCharacterId } = await resolveSubject(subject, characterId);
   const seedLine = seed === 'surprise'
-    ? 'The player asked you to surprise them — lead with your own questions to find a story that fits their character.'
+    ? 'The player asked you to surprise them — lead with your own ideas and questions to find a story that fits their character.'
     : null;
+
+  const history = Array.isArray(conversation) ? conversation.filter(t => t && t.text) : [];
+  // Which question we're on (drives the model's pacing + the client's counter).
+  const qNum = Number.isFinite(questionNumber)
+    ? questionNumber
+    : history.filter(t => t.role === 'opus').length + 1;
 
   const lines = [subjectLine];
   if (seedLine) lines.push(seedLine);
   lines.push('');
-  const history = Array.isArray(conversation) ? conversation.filter(t => t && t.text) : [];
   if (history.length) {
-    lines.push('Your collaboration so far:');
-    history.forEach(t => lines.push(`${t.role === 'opus' ? 'You (Opus)' : 'Player'}: ${t.text}`));
+    lines.push('Your conversation so far:');
+    history.forEach(t => lines.push(`${t.role === 'opus' ? 'You (DM)' : 'Player'}: ${t.text}`));
     lines.push('');
-    lines.push("React briefly to the player's latest message, then ask your next question — or, if they've signalled they're ready, tell them plainly they can draft it whenever they like.");
+    lines.push(`This is around question ${qNum} of ~8. React to the player's latest message, then ask your next question — or, if you have the essentials, invite them to draft (readyToDraft=true). Return the JSON object only.`);
   } else {
     lines.push(`The player's opening idea: "${prompt || "they haven't said yet"}"`);
     lines.push('');
-    lines.push('Open the conversation: a quick, friendly line about their idea, then your first question.');
+    lines.push('This is question 1 of ~8. Open the conversation: a quick, plain reaction to their idea, then your first question. Return the JSON object only.');
   }
 
   const response = await loggedChat(
@@ -201,12 +251,19 @@ export async function converseCampaign({ prompt, conversation, subject, characte
     [{ role: 'user', content: lines.join('\n') }],
     3,
     'opus',
-    1200,
-    true // raw — we use the prose reply directly (no JSON)
+    1500,
+    true // raw — we extract the JSON ourselves
   );
-  const opusMessage = String(response || '').trim();
-  if (!opusMessage) throw new Error('Opus could not reply — try again.');
-  return { opusMessage };
+  // Parse the structured reply; fall back to treating the raw text as the reply
+  // so a malformed response still shows something rather than erroring out.
+  const parsed = extractLLMJson(response);
+  const reply = (parsed && typeof parsed.reply === 'string' && parsed.reply.trim())
+    ? parsed.reply.trim()
+    : String(response || '').trim();
+  if (!reply) throw new Error('Opus could not reply — try again.');
+  const why = parsed && typeof parsed.why === 'string' ? parsed.why.trim() : '';
+  const readyToDraft = !!(parsed && parsed.readyToDraft);
+  return { reply, why, readyToDraft, opusMessage: reply };
 }
 
 /**
