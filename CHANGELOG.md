@@ -2,6 +2,21 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.6.1] - 2026-06-08 — Fix missing npcs.distinguishing_features column + stop stale-bundle caching
+
+- **Bug: `SQL_INPUT_ERROR: no such column: n.distinguishing_features`.** The NPC
+  enrichment pipeline (`storyChronicleService` / `dmSessionService`) and
+  `npcRelationshipService.getCharacterRelationshipsWithNpcs` both read and write
+  `npcs.distinguishing_features`, but no migration ever added the column — so
+  gathering world state for a DM session threw and the NPC-relationship context
+  silently dropped out of the prompt. Migration **054** adds the column
+  idempotently (applied to the live Turso DB; verified present).
+- **Stale client bundle after a rebuild.** `index.html` is now served with
+  `Cache-Control: no-cache`, so a normal browser reload always picks up the latest
+  hashed bundle instead of the browser holding an old shell that fetches dead chunk
+  hashes (the "Failed to fetch dynamically imported module …" error). Content-hashed
+  JS/CSS assets keep their immutable caching.
+
 ## [2.6.0] - 2026-06-08 — Collaborative campaign builder: contextual, finite, partner-like
 
 The "Build it together" conversation worked but read like an interrogation — it

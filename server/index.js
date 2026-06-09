@@ -37,7 +37,14 @@ app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
 // Serve built client files in production
 const clientDistPath = join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDistPath));
+app.use(express.static(clientDistPath, {
+  setHeaders: (res, filePath) => {
+    // Hashed JS/CSS assets are immutable, but index.html must always revalidate
+    // so a rebuild's new bundle is picked up on a normal reload — otherwise the
+    // browser keeps serving a stale shell that fetches dead chunk hashes.
+    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 
 // Initialize database (async for Turso cloud)
 await initDatabase();
@@ -73,6 +80,7 @@ app.use('/api/ai-behavior', aiBehaviorRoutes);
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(join(clientDistPath, 'index.html'));
   }
 });
