@@ -2,6 +2,18 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.6.2] - 2026-06-09 — Silence the harmless punycode (DEP0040) deprecation warning
+
+A transitive dependency — `whatwg-url` (pulled in by the libsql/HTTP client
+stack) — still does `require('punycode')` on Node's deprecated built-in module,
+printing `(node:NNNN) [DEP0040] DeprecationWarning: The punycode module is
+deprecated` on every server start. It's harmless (punycode still works) but
+clutters the console. Added `server/suppressDeprecation.js` (imported first in
+`server/index.js`, before any dep loads) that patches `process.emitWarning` to
+swallow **only** DEP0040 / punycode and pass every other warning through — so
+genuine deprecation notices still surface. No dependency changes; remove the file
+if `whatwg-url` upstream ever switches to the userland `punycode` package.
+
 ## [2.6.1] - 2026-06-08 — Fix missing npcs.distinguishing_features column + stop stale-bundle caching
 
 - **Bug: `SQL_INPUT_ERROR: no such column: n.distinguishing_features`.** The NPC

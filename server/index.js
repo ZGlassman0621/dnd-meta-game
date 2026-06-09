@@ -1,3 +1,4 @@
+import './suppressDeprecation.js'; // must be first — patches process.emitWarning before deps load
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
