@@ -2,6 +2,27 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.7.0] - 2026-06-09 — Narration clarity guardrail + roll-your-own dice
+
+Two playtest fixes:
+
+- **Narration clarity (clear-but-atmospheric).** The DM prompt rewarded
+  SHOW-DON'T-TELL and FRESH IMAGERY with no counterbalance, so narration drifted
+  into opaque poetry (e.g. "the light came up out of the middle of you boys" —
+  meant as a gut-punch, read as gibberish). Added a **CLARITY OVER CLEVERNESS**
+  craft principle (right after ANSWER FIRST) and a clarity item to the
+  BEFORE-YOU-SEND gut-check: keep mood and sensory detail, but the player must
+  understand it on the first read; metaphor only when the plain meaning is
+  obvious. Atmosphere stays; obliqueness goes. Prompt suites green (dm-prompt
+  30/30, character-memory 56/56, moral-diversity 59/59, lines-and-veils 27/27).
+- **Roll your own dice.** Pending roll cards (the DM's requested checks/attacks)
+  now have an "or your roll:" field beside the in-app button — type your physical
+  d20 (1–20) and "Use my roll." It produces the same rolled state as the animated
+  roller, so the DC/Resolve flow that reports back to the DM is identical. The
+  in-app roller stays. (Investigated the "low rolls" report first: the RNG is a
+  fair uniform 1–20 and difficulty never touches the roll — this is purely for
+  players who prefer physical dice.)
+
 ## [2.6.3] - 2026-06-09 — Expand equipment pack contents into inventory
 
 Equipment packs (Explorer's Pack, Dungeoneer's Pack, etc.) were stored as a

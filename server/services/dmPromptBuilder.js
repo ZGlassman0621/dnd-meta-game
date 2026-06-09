@@ -2253,7 +2253,7 @@ This is a serious immersion-breaking issue if violated. The player chose this er
   const hasContentBoundaries = Array.isArray(_linesVeils)
     && _linesVeils.some(b => b && (b.state === 'line' || b.state === 'veil'));
   const boundarySelfCheck = hasContentBoundaries
-    ? `\n2. DID I CROSS A CONTENT BOUNDARY? Any LINE depicted, named, foreshadowed, or implied? Any VEIL shown on the page instead of cut away? → Cut it. (See CONTENT BOUNDARIES in the campaign plan — they override everything.)`
+    ? `\n3. DID I CROSS A CONTENT BOUNDARY? Any LINE depicted, named, foreshadowed, or implied? Any VEIL shown on the page instead of cut away? → Cut it. (See CONTENT BOUNDARIES in the campaign plan — they override everything.)`
     : '';
 
   // Memory presence — a fresh campaign has no chronicle / canon / NPC history
@@ -2362,6 +2362,7 @@ How to write well within the rules. Apply continuously — these tell you how to
 
 • MATCH ENERGY. Short player question → short NPC reply. Long roleplay invitation → matched response. Let length follow the moment.
 • ANSWER FIRST. Lead with the answer, then elaborate if it's natural. A yes/no question gets a yes or a no.
+• CLARITY OVER CLEVERNESS. Mood and sensory detail are good — but the player must understand what's happening on the FIRST read. Keep imagery concrete and legible: "her jaw tightens; she looks away" lands instantly; "the light came up out of the middle of you boys" does not — the player has to stop and decode it. Reach for metaphor or poetic phrasing only when the plain meaning underneath is obvious. If a line would make the player re-read to grasp what you mean, say it plainly instead. Never sacrifice comprehension for style.
 • SHOW, DON'T TELL. Specific sensory detail beats abstract labels. "Her jaw tightens; she glances away" — not "she seems uncomfortable." Show what's there; when nothing is, move on — not every crate is heavy with portent.
 • FRESH IMAGERY. Reach for a new image each time; if you wrote "skinny as a pulled thread" once, find another angle.
 • SILENCE IS FINE. Not every exchange advances the plot. Mundane banter, shared meals, quiet observation build world and relationship. Let moments breathe.
@@ -2454,7 +2455,8 @@ BEFORE YOU SEND
 ═══════════════════════════════════════════════════════════════
 A quick gut-check — not a QA pass. The rules above are the source of truth.
 
-1. Did I speak, think, feel, decide, or roll for the player — or keep narrating past a roll request or an NPC's direct question? → Cut it, or stop there.${boundarySelfCheck}
+1. Did I speak, think, feel, decide, or roll for the player — or keep narrating past a roll request or an NPC's direct question? → Cut it, or stop there.
+2. Would the player understand this on the first read? Any clever or poetic line they'd have to decode → rewrite it plainly. Clarity first.${boundarySelfCheck}
 
 If clean, send.`;
 }
