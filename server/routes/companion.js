@@ -680,7 +680,7 @@ router.get('/:id/progression', async (req, res) => {
         level: companion.companion_level
       },
       theme: themeRow
-        ? { ...themeRow, tags: themeRow.tags ? JSON.parse(themeRow.tags) : [] }
+        ? { ...themeRow, tags: themeRow.tags ? safeParse(themeRow.tags, []) : [] }
         : null,
       theme_all_tiers: themeAllTiers,
       theme_unlocks: unlocks,

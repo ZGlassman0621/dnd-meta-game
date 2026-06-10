@@ -13,6 +13,7 @@
 import express from 'express';
 import { dbAll, dbGet } from '../database.js';
 import { handleServerError } from '../utils/errorHandler.js';
+import { safeParse } from '../utils/safeParse.js';
 
 const router = express.Router();
 
@@ -41,8 +42,8 @@ router.get('/themes', async (req, res) => {
 
     const enriched = themes.map(t => ({
       ...t,
-      tags: t.tags ? JSON.parse(t.tags) : [],
-      creation_choice_options: t.creation_choice_options ? JSON.parse(t.creation_choice_options) : null,
+      tags: t.tags ? safeParse(t.tags, []) : [],
+      creation_choice_options: t.creation_choice_options ? safeParse(t.creation_choice_options, null) : null,
       l1_ability: l1ByTheme[t.id] || null
     }));
 
@@ -78,8 +79,8 @@ router.get('/themes/:id', async (req, res) => {
 
     res.json({
       ...theme,
-      tags: theme.tags ? JSON.parse(theme.tags) : [],
-      creation_choice_options: theme.creation_choice_options ? JSON.parse(theme.creation_choice_options) : null,
+      tags: theme.tags ? safeParse(theme.tags, []) : [],
+      creation_choice_options: theme.creation_choice_options ? safeParse(theme.creation_choice_options, null) : null,
       abilities
     });
   } catch (err) {
@@ -117,7 +118,7 @@ router.get('/ancestry-feats/:listId', async (req, res) => {
     // Parse choices JSON for each feat so the UI doesn't have to
     const parsed = feats.map(f => ({
       ...f,
-      choices: f.choices ? JSON.parse(f.choices) : null
+      choices: f.choices ? safeParse(f.choices, null) : null
     }));
 
     res.json(parsed);

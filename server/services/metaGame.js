@@ -9,6 +9,7 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { safeParse } from '../utils/safeParse.js';
 
 // Time ratio presets (real hours : in-game hours)
 export const TIME_RATIOS = {
@@ -242,19 +243,19 @@ export async function aggregateCampaignContext(characterId) {
 
   // Parse character data
   const abilityScores = typeof character.ability_scores === 'string'
-    ? JSON.parse(character.ability_scores || '{}')
+    ? safeParse(character.ability_scores, {})
     : (character.ability_scores || {});
 
   const inventory = typeof character.inventory === 'string'
-    ? JSON.parse(character.inventory || '[]')
+    ? safeParse(character.inventory, [])
     : (character.inventory || []);
 
   const skills = typeof character.skills === 'string'
-    ? JSON.parse(character.skills || '[]')
+    ? safeParse(character.skills, [])
     : (character.skills || []);
 
   const equipment = typeof character.equipment === 'string'
-    ? JSON.parse(character.equipment || '{}')
+    ? safeParse(character.equipment, {})
     : (character.equipment || {});
 
   // Build current game date and time
@@ -340,7 +341,7 @@ export async function aggregateCampaignContext(characterId) {
       id: s.id,
       title: s.title,
       summary: s.summary,
-      rewards: s.rewards ? JSON.parse(s.rewards) : null,
+      rewards: s.rewards ? safeParse(s.rewards, null) : null,
       startTime: s.start_time,
       endTime: s.end_time,
       gameDays: {
