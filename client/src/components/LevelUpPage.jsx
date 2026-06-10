@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { abilityModifier } from '../utils/dndMath.js'
 import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
@@ -127,7 +128,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   const currentAbilityScores = JSON.parse(character.ability_scores || '{}')
 
   const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2)
+    const mod = abilityModifier(score)
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { abilityModifier } from '../utils/dndMath.js'
 import CompanionSheet from './CompanionSheet'
 import PartyBuilder from './PartyBuilder'
 
@@ -575,7 +576,7 @@ function NpcCard({ npc, isRecruited, onSelect }) {
 // NPC Detail View modal
 function NpcDetailView({ npc, isRecruited, onClose, onRecruit }) {
   const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2)
+    const mod = abilityModifier(score)
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 

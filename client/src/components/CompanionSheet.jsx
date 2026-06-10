@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { abilityModifier } from '../utils/dndMath.js'
 import classesData from '../data/classes.json'
 import CompanionEditor from './CompanionEditor'
 import { CONDITIONS } from '../data/conditions.js'
@@ -252,7 +253,7 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
       : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
 
   const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2)
+    const mod = abilityModifier(score)
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 
@@ -1085,7 +1086,7 @@ function CompanionLevelUpModal({ companion, levelUpInfo, onClose, onLevelUp }) {
     : { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
 
   const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2)
+    const mod = abilityModifier(score)
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 

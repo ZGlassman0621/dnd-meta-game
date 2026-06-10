@@ -1,5 +1,6 @@
 import express from 'express';
 import db, { dbAll, dbGet, dbRun, withTransaction } from '../database.js';
+import { abilityModifier as abilityMod } from '../utils/dndMath.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
@@ -35,9 +36,7 @@ const router = express.Router();
 // path that flips a character to 'active' (creator, tests, seeds, the
 // one-off backfill of already-broken rows). Unarmored only — armored AC,
 // when present, arrives on the body and is preserved.
-function abilityMod(score) {
-  return Math.floor(((Number(score) || 10) - 10) / 2);
-}
+// abilityMod is imported from utils/dndMath.js (single source of truth).
 function parseAbilityScores(raw) {
   if (raw && typeof raw === 'object') return raw;
   try { return JSON.parse(raw || '{}'); } catch { return {}; }

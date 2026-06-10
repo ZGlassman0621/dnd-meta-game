@@ -23,13 +23,14 @@
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler } from './markerPipeline.js';
+import { abilityModifier as abilityMod } from '../utils/dndMath.js';
 
 const ABILITY_ALIASES = {
   str: 'str', strength: 'str', dex: 'dex', dexterity: 'dex',
   con: 'con', constitution: 'con', int: 'int', intelligence: 'int',
   wis: 'wis', wisdom: 'wis', cha: 'cha', charisma: 'cha'
 };
-function abilityMod(score) { return Math.floor(((Number(score) || 10) - 10) / 2); }
+// abilityMod is imported from utils/dndMath.js (single source of truth).
 
 async function loadCfg(sessionId) {
   const s = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
