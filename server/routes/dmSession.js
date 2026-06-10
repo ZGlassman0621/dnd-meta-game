@@ -494,8 +494,12 @@ router.post('/start', async (req, res) => {
     // the DM prompt can surface their theme abilities + ancestry feats.
     // Lazy-backfill + silent failure — a progression hiccup must not block a
     // session start.
-    for (const c of companions) {
-      if (c.progression_type !== 'class_based') continue;
+    // Enrich each class-based companion concurrently (was a sequential N+1
+    // loop: per-companion init + progression fetch ran one after another). Each
+    // task mutates only its own companion object, so there is no shared state;
+    // per-companion error handling and the silent-failure contract are preserved.
+    await Promise.all(companions.map(async (c) => {
+      if (c.progression_type !== 'class_based') return;
       try {
         await ensureCompanionProgressionInitialized(c.id);
         c.progression = await getCompanionProgression(c.id);
@@ -514,7 +518,7 @@ router.post('/start', async (req, res) => {
       } catch (e) {
         console.error(`Error computing companion spell slots for ${c.id}:`, e);
       }
-    }
+    }));
 
     // Get second character if specified
     let secondCharacter = null;
