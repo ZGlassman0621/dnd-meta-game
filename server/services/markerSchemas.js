@@ -375,3 +375,49 @@ export function validateDmMarkers(text) {
   }
   return { validByKey, failures };
 }
+
+// ---------------------------------------------------------------------------
+// Player-facing narrative scrubbing
+// ---------------------------------------------------------------------------
+
+// The EXACT set of markers the per-turn route removes from narrative before it
+// reaches the player. This is intentionally a SUPERSET of the live
+// MARKER_SCHEMAS keys: it also defensively strips prelude (SKILL_CHECK) and
+// archived markers (MERCHANT_*, survival/crafting/mythic/piety/promise) in case
+// the DM ever emits a stray one. COMBAT_END is the only bodyless marker; every
+// other marker carries a `: body`. This list reproduces the prior 31-call
+// inline .replace() chain verbatim — keep it in sync when a new
+// player-invisible marker is introduced.
+const STRIP_BODYLESS_MARKERS = ['COMBAT_END'];
+const STRIP_BODIED_MARKERS = [
+  'SCENE', 'MERCHANT_SHOP', 'MERCHANT_REFER', 'ADD_ITEM', 'LOOT_DROP', 'COMBAT_START',
+  'HP_CHANGE', 'EFFECT_START', 'EFFECT_END', 'TURN', 'ROLL_REQUEST', 'SKILL_CHECK',
+  'CONDITION_ADD', 'CONDITION_REMOVE', 'WEATHER_CHANGE', 'SHELTER_FOUND', 'SWIM',
+  'EAT', 'DRINK', 'FORAGE', 'RECIPE_FOUND', 'MATERIAL_FOUND', 'CRAFT_PROGRESS',
+  'RECIPE_GIFT', 'MYTHIC_TRIAL', 'PIETY_CHANGE', 'ITEM_AWAKEN', 'MYTHIC_SURGE',
+  'PROMISE_MADE', 'PROMISE_FULFILLED'
+];
+
+/** Every marker key stripped from player-facing narrative (for tests/awareness). */
+export const STRIP_MARKER_KEYS = [...STRIP_BODIED_MARKERS, ...STRIP_BODYLESS_MARKERS];
+
+// One compiled regex: `[KEY: body]` for bodied markers, `[KEY]` for the bodyless
+// COMBAT_END, each plus trailing whitespace — semantically identical to the old
+// per-marker `\[KEY:[^\]]+\]\s*` / `\[COMBAT_END\]\s*` chain. The colon-body
+// requirement on bodied markers is preserved so a bodyless `[TURN]` is left
+// untouched exactly as before.
+const STRIP_MARKER_RE = new RegExp(
+  `\\[(?:(?:${STRIP_BODIED_MARKERS.join('|')}):[^\\]]+|${STRIP_BODYLESS_MARKERS.join('|')})\\]\\s*`,
+  'gi'
+);
+
+/**
+ * Remove every known DM marker from a narrative string before display.
+ * Behavior-preserving replacement for the per-turn route's 31-call strip chain.
+ * @param {string} narrative
+ * @returns {string}
+ */
+export function stripKnownMarkers(narrative) {
+  if (!narrative || typeof narrative !== 'string') return narrative;
+  return narrative.replace(STRIP_MARKER_RE, '').trim();
+}

@@ -47,7 +47,7 @@ import {
 } from '../services/dmSessionService.js';
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
-import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
+import { validateDmMarkers, buildCorrectionMessage, stripKnownMarkers } from '../services/markerSchemas.js';
 import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVerifiers.js';
 import { processResponseMarkers } from '../services/markerPipeline.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
@@ -1573,40 +1573,13 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     }
 
-    cleanNarrative = cleanNarrative.replace(/\[MERCHANT_SHOP:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
-    // Phase B mechanical-spine markers — side effects already dispatched; never
-    // let the bracketed marker reach the player.
-    cleanNarrative = cleanNarrative.replace(/\[HP_CHANGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[EFFECT_START:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[EFFECT_END:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[TURN:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[ROLL_REQUEST:[^\]]+\]\s*/gi, '').trim();
-    // Prelude-flow skill checks. The AI is instructed to emit these when a
-    // check is required, but the marker itself must never reach the player.
-    cleanNarrative = cleanNarrative.replace(/\[SKILL_CHECK:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[CONDITION_ADD:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[CONDITION_REMOVE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[WEATHER_CHANGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[SHELTER_FOUND:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[SWIM:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[EAT:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[DRINK:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[FORAGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[RECIPE_FOUND:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MATERIAL_FOUND:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[CRAFT_PROGRESS:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[RECIPE_GIFT:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MYTHIC_TRIAL:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[PIETY_CHANGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[ITEM_AWAKEN:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MYTHIC_SURGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[PROMISE_MADE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[PROMISE_FULFILLED:[^\]]+\]\s*/gi, '').trim();
+    // Scrub every known DM marker from the player-facing narrative in one pass.
+    // stripKnownMarkers (markerSchemas.js) removes the exact same set the prior
+    // 31-call inline .replace() chain did — live markers plus the prelude
+    // (SKILL_CHECK) and archived (MERCHANT_*/survival/crafting/mythic/promise)
+    // markers the DM may still emit defensively. Equivalence is locked down by
+    // tests/strip-known-markers.test.js. SCENE was already stripped above.
+    cleanNarrative = stripKnownMarkers(cleanNarrative);
 
     // SC-6.4b — merchant cluster handlers run inside the marker pipeline
     // (merchantService.js: MERCHANT_SHOP, MERCHANT_REFER; merchantOrderService.js:
