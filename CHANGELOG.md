@@ -2,6 +2,68 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.8.1] - 2026-06-09 — Data-integrity fixes from second-pass code review (turn persistence + reward claim)
+
+Two correctness fixes for silent state-corruption paths surfaced by an adversarial
+second-pass code review, plus the mock-Anthropic integration harness that unblocks
+testing the god handlers. Unlike the behavior-preserving 2.8.0 pass, these DO
+change behavior on purpose — they stop data loss and double-application.
+
+- **Rolling-summary index desync — long campaigns no longer forget their middle
+  (review finding #1).** `dm_sessions.messages` was both the durable history AND
+  the per-turn API buffer; once the rolling summary fired, the COMPACTED
+  send-buffer was persisted back, permanently dropping the summarized-away
+  verbatim messages and freezing `rolling_summary_through_index` (an absolute
+  index that was never translated to the new array coordinates). Over a long
+  campaign the model structurally forgot the conversation's middle, and a safety
+  guard could silently stop injecting the summary entirely. Fix
+  (`routes/dmSession.js` `/message`): persist the FULL, uncompacted history —
+  prior turns verbatim plus this turn's new pair — instead of the compacted
+  buffer. The model still receives the compacted prompt (rolling summary +
+  reactive compressor are unchanged on the send path), so the prompt stays small
+  while the durable array only ever grows by appending, keeping the through-index
+  valid and advancing turn over turn. Sessions already compacted by the old code
+  can't be un-corrupted (the append-only `transcript` retains their raw history)
+  but stop losing data immediately.
+- **`/claim` is now atomic and idempotent (review finding #3).** Claiming session
+  rewards was a check-then-act race: read `rewards_claimed`, ~90 lines of work,
+  then set the flag LAST via a bare `dbRun` — so a double-click / retry could pass
+  the guard twice and double-award XP, gold, loot, and companion XP, and a crash
+  mid-sequence left the character credited with the flag still unset (re-applied
+  on the next claim). Fix: the whole claim runs in one `withTransaction` guarded
+  by a CONDITIONAL flag flip (`UPDATE … SET rewards_claimed = 1 WHERE id = ? AND
+  rewards_claimed = 0`); only the first claimer (`changes === 1`) applies rewards,
+  and any throw rolls the flag back with the rest. Response shape unchanged.
+- **Mock-Anthropic integration harness (new).** `tests/helpers/mockAnthropic.js`
+  intercepts `api.anthropic.com` at the `fetch` layer (passing every other URL —
+  including libsql/Turso traffic — straight through) so integration tests drive
+  the real `/message` and `/claim` handlers with deterministic AI output, no
+  network, and no token spend. `tests/helpers/dmTestApp.js` mounts the real router
+  on an ephemeral port with TEST_-prefixed, self-cleaning seed data.
+- **New regression suites.** `tests/dm-turn-lifecycle.test.js` drives several
+  turns through the real handler and asserts no verbatim message is ever dropped
+  and the through-index advances monotonically — confirmed to FAIL on the pre-fix
+  code (durable history compacted 33→26, `PRIOR_0` lost, index frozen at 8) and
+  PASS on the fix. `tests/claim-idempotency.test.js` fires two concurrent claims
+  and asserts the reward lands exactly once (XP 100 not 200, one loot copy, the
+  loser gets a clean 400). 7 adjacent suites stay green (rolling-summary,
+  with-transaction, session-transcript, marker-pipeline, phaseB-spine). The
+  lifecycle test's index-advance assertions are SOFT (the through-index is written
+  by a fire-and-forget background roll) so a slow Turso write can't flake the
+  build red; the race-free durable-history guards stay hard. Missing-env runs
+  print a loud `HARNESS SKIPPED — DID NOT RUN` banner so a green exit is never
+  mistaken for a real pass.
+- **Known follow-up (deferred to the history-bounding pass).** Because
+  `dm_sessions.messages` is now the full uncompacted history, the session-BOUNDARY
+  LLM calls that read it directly (end-session analysis/notes/NPC/memory
+  extraction, `/resume` recap, retroactive `/extract-npcs`) now send the full
+  history with no compression — a token-cost/latency increase on long sessions at
+  session end (NOT the hot per-turn path; the per-turn prompt is still compacted).
+  No correctness impact and within the 200K context window. To be bounded
+  alongside the other LLM-input-bounding work (reactive-compressor middle-truncation
+  and the unbounded chronicle load) — these calls need their own size guard
+  mirroring `storyChronicleService`'s 40000-char cap.
+
 ## [2.8.0] - 2026-06-09 — Code-quality & data-integrity refactor (no functionality change)
 
 A focused, behavior-preserving hardening pass driven by an architecture audit.

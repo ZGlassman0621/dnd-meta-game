@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { dbAll, dbGet, dbRun } from '../database.js';
+import db, { dbAll, dbGet, dbRun, withTransaction } from '../database.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
 import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat } from '../services/aiCallLogger.js';
@@ -1273,7 +1273,39 @@ router.post('/:sessionId/message', async (req, res) => {
       result = await ollama.continueSession(messagesToSend, action, session.model);
     }
 
-    // Update the session in the database (LLM-facing, may be compacted)
+    // ── Fix (rolling-summary index desync — code-review finding #1) ──────────
+    // dm_sessions.messages is BOTH the durable conversation history AND the
+    // per-turn API buffer. `messagesToSend` above may have been compacted by the
+    // rolling summary / reactive compressor FOR THE API CALL ONLY. The old code
+    // persisted that compacted buffer back — which silently dropped the
+    // summarized-away middle of the conversation and desynced
+    // `rolling_summary_through_index` (an absolute index that is never
+    // translated), so long campaigns structurally forgot their middle. Fix:
+    // persist the FULL, uncompacted history — the prior turns verbatim plus this
+    // turn's new user+assistant pair — rather than whatever compacted shape
+    // continueSession handed back. The model still SAW the compacted buffer; only
+    // what we STORE changes. Because the stored array now only ever grows by
+    // appending, the absolute through-index stays valid turn over turn and the
+    // rolling summary keeps advancing. (Sessions whose `messages` were already
+    // compacted by the old code can't be un-corrupted here — the append-only
+    // `transcript` retains their raw history — but they stop losing data now.)
+    {
+      const restoredSystem = result.messages?.[0]?.role === 'system'
+        ? result.messages[0]
+        : (messages[0]?.role === 'system' ? messages[0] : null);
+      const priorTurns = (messages[0]?.role === 'system' ? messages.slice(1) : messages)
+        .filter(m => m && m.role !== 'system');
+      const fullHistory = restoredSystem ? [restoredSystem] : [];
+      fullHistory.push(
+        ...priorTurns,
+        { role: 'user', content: action },
+        { role: 'assistant', content: result.narrative || '' }
+      );
+      result.messages = fullHistory;
+    }
+
+    // Persist the full LLM-facing history (ephemeral per-turn state notes
+    // stripped — see stripEphemeralStateNotes).
     await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(stripEphemeralStateNotes(result.messages)), sessionId]);
 
     // Append this turn's user + assistant pair to the full transcript.
@@ -2645,84 +2677,112 @@ router.post('/:sessionId/claim', async (req, res) => {
       return res.status(400).json({ error: 'Rewards already claimed' });
     }
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
     const rewards = safeParse(session.rewards, {});
-
-    // Apply rewards to character
-    const updates = {
-      experience: character.experience + (rewards.xp || 0),
-      gold_cp: character.gold_cp + (rewards.gold?.cp || 0),
-      gold_sp: character.gold_sp + (rewards.gold?.sp || 0),
-      gold_gp: character.gold_gp + (rewards.gold?.gp || 0),
-      current_hp: Math.max(1, Math.min(character.max_hp, character.current_hp + (session.hp_change || 0)))
-    };
-
-    // Add loot to inventory
-    let inventory = safeParse(character.inventory, []);
-    if (rewards.loot) {
-      inventory.push({ name: rewards.loot, quantity: 1 });
-    }
-
-    // Update location if specified
-    const newLocation = session.new_location || character.current_location;
-    const newQuest = session.new_quest || character.current_quest;
-
-    // Update character
-    await dbRun(`
-      UPDATE characters
-      SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
-          current_hp = ?, inventory = ?, current_location = ?, current_quest = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [
-      updates.experience,
-      updates.gold_cp,
-      updates.gold_sp,
-      updates.gold_gp,
-      updates.current_hp,
-      JSON.stringify(inventory),
-      newLocation,
-      newQuest,
-      session.character_id
-    ]);
-
-    // Award XP to active companions (full XP - party shares equally, not split)
     const companionXP = rewards.xp || 0;
-    const companionXPResults = [];
-    if (companionXP > 0) {
-      const companions = await dbAll(`
-        SELECT c.id, c.companion_level, c.companion_experience, c.companion_class, n.name
-        FROM companions c
-        JOIN npcs n ON c.npc_id = n.id
-        WHERE c.recruited_by_character_id = ? AND c.status = 'active' AND c.progression_type = 'class_based'
-      `, [session.character_id]);
 
-      for (const companion of companions) {
-        const oldXP = companion.companion_experience || 0;
-        const newXP = oldXP + companionXP;
-        const currentLevel = companion.companion_level;
-        const nextLevelXP = currentLevel < 20 ? XP_THRESHOLDS[currentLevel + 1] : null;
-        const canLevelUp = nextLevelXP !== null && newXP >= nextLevelXP;
-
-        await dbRun(`
-          UPDATE companions SET companion_experience = ? WHERE id = ?
-        `, [newXP, companion.id]);
-
-        companionXPResults.push({
-          id: companion.id,
-          name: companion.name,
-          class: companion.companion_class,
-          level: currentLevel,
-          xpGained: companionXP,
-          totalXP: newXP,
-          canLevelUp,
-          xpToNextLevel: nextLevelXP ? nextLevelXP - newXP : null
-        });
+    // Atomic, idempotent claim (code-review finding #3). The whole reward
+    // application — flipping rewards_claimed, crediting the character, and
+    // awarding companion XP — runs inside ONE withTransaction (libsql 'write'
+    // lock). Two properties:
+    //   • Idempotency: the flag flip is a CONDITIONAL write
+    //     (WHERE rewards_claimed = 0). Only the first claimer sees changes===1
+    //     and applies rewards; a double-click / retry that serializes behind it
+    //     sees changes===0 and no-ops — no double XP/gold/loot/companion-XP.
+    //   • Atomicity: a throw anywhere rolls the flag back too, so a crash
+    //     mid-sequence never leaves the character credited with the flag still
+    //     unset (which previously let a later claim re-apply on top).
+    // Pre-fix this was a check-then-act race: bare dbRun writes with the flag set
+    // LAST, so two concurrent calls both passed the guard and double-awarded.
+    const claimOutcome = await withTransaction(async (tx) => {
+      const flag = await tx.run(
+        'UPDATE dm_sessions SET rewards_claimed = 1 WHERE id = ? AND rewards_claimed = 0',
+        [sessionId]
+      );
+      if (flag.changes !== 1) {
+        // Someone else claimed between our early check and here. Commit the
+        // no-op; the caller maps this to a 400.
+        return { claimed: false };
       }
-    }
 
-    // Mark rewards as claimed
-    await dbRun('UPDATE dm_sessions SET rewards_claimed = 1 WHERE id = ?', [sessionId]);
+      const character = await tx.get('SELECT * FROM characters WHERE id = ?', [session.character_id]);
+
+      // Apply rewards to character
+      const updates = {
+        experience: character.experience + (rewards.xp || 0),
+        gold_cp: character.gold_cp + (rewards.gold?.cp || 0),
+        gold_sp: character.gold_sp + (rewards.gold?.sp || 0),
+        gold_gp: character.gold_gp + (rewards.gold?.gp || 0),
+        current_hp: Math.max(1, Math.min(character.max_hp, character.current_hp + (session.hp_change || 0)))
+      };
+
+      // Add loot to inventory
+      let inventory = safeParse(character.inventory, []);
+      if (rewards.loot) {
+        inventory.push({ name: rewards.loot, quantity: 1 });
+      }
+
+      // Update location if specified
+      const newLocation = session.new_location || character.current_location;
+      const newQuest = session.new_quest || character.current_quest;
+
+      await tx.run(`
+        UPDATE characters
+        SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
+            current_hp = ?, inventory = ?, current_location = ?, current_quest = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [
+        updates.experience,
+        updates.gold_cp,
+        updates.gold_sp,
+        updates.gold_gp,
+        updates.current_hp,
+        JSON.stringify(inventory),
+        newLocation,
+        newQuest,
+        session.character_id
+      ]);
+
+      // Award XP to active companions (full XP - party shares equally, not split)
+      const companionXPResults = [];
+      if (companionXP > 0) {
+        const companions = await tx.all(`
+          SELECT c.id, c.companion_level, c.companion_experience, c.companion_class, n.name
+          FROM companions c
+          JOIN npcs n ON c.npc_id = n.id
+          WHERE c.recruited_by_character_id = ? AND c.status = 'active' AND c.progression_type = 'class_based'
+        `, [session.character_id]);
+
+        for (const companion of companions) {
+          const oldXP = companion.companion_experience || 0;
+          const newXP = oldXP + companionXP;
+          const currentLevel = companion.companion_level;
+          const nextLevelXP = currentLevel < 20 ? XP_THRESHOLDS[currentLevel + 1] : null;
+          const canLevelUp = nextLevelXP !== null && newXP >= nextLevelXP;
+
+          await tx.run(`
+            UPDATE companions SET companion_experience = ? WHERE id = ?
+          `, [newXP, companion.id]);
+
+          companionXPResults.push({
+            id: companion.id,
+            name: companion.name,
+            class: companion.companion_class,
+            level: currentLevel,
+            xpGained: companionXP,
+            totalXP: newXP,
+            canLevelUp,
+            xpToNextLevel: nextLevelXP ? nextLevelXP - newXP : null
+          });
+        }
+      }
+
+      return { claimed: true, companionXPResults };
+    });
+
+    if (!claimOutcome.claimed) {
+      return res.status(400).json({ error: 'Rewards already claimed' });
+    }
 
     const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
 
@@ -2731,7 +2791,7 @@ router.post('/:sessionId/claim', async (req, res) => {
       character: updatedCharacter,
       rewards,
       companionXP: companionXP > 0 ? companionXP : undefined,
-      companionXPResults: companionXPResults.length > 0 ? companionXPResults : undefined,
+      companionXPResults: claimOutcome.companionXPResults.length > 0 ? claimOutcome.companionXPResults : undefined,
       hpChange: session.hp_change
     });
   } catch (error) {
