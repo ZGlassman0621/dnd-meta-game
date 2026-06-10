@@ -2,6 +2,60 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.8.0] - 2026-06-09 — Code-quality & data-integrity refactor (no functionality change)
+
+A focused, behavior-preserving hardening pass driven by an architecture audit.
+Every change keeps runtime behavior identical on the normal/valid path; the only
+intentional differences are graceful fallbacks on *corrupt* data, atomicity on
+*failure*, and serialization of *concurrent* writes. An adversarial multi-agent
+review of the full diff (6 reviewers) found **zero behavior changes on valid
+paths**. 17 existing test suites stay green; 5 new suites were added.
+
+- **Crash-proof DB JSON reads.** Replaced 18 raw `JSON.parse()` calls on
+  database-sourced columns with the existing `safeParse()` helper, so one
+  corrupted row degrades gracefully instead of 500-ing the whole endpoint
+  (`chronicle.js` ×8, `progression.js`, `companion.js`, `services/metaGame.js`,
+  `backstoryParserService.js`, `companionBackstoryService.js`). `metaGame` keeps
+  its `typeof` object-passthrough guard; backstory mutation paths keep their
+  throw-on-corrupt (same 500), so corrupt data is never silently mutated.
+- **Atomic writes (`database.withTransaction`).** New libsql write-transaction
+  wrapper whose `get/all/run` mirror `dbGet/dbAll/dbRun`. Multi-row sequences are
+  now all-or-nothing (companion **level-up**, **equip**/**unequip**, **dismiss** —
+  a mid-sequence failure no longer leaves an item vanished or a companion leveled
+  without its unlocks). Single-column read-modify-write endpoints (character +
+  companion **spell-slots use/restore**, **conditions add/remove**,
+  **discard-item**) are wrapped so the write-lock serializes concurrent
+  mutations, closing last-write-wins races. Statuses and response bodies are
+  byte-identical. Verified empirically: 12 concurrent increments commit with zero
+  lost updates.
+- **One marker-strip pass (`stripKnownMarkers`).** The per-turn route scrubbed
+  DM markers from player-facing narrative via 31 inline `.replace()` calls;
+  consolidated into a single compiled-regex helper in `markerSchemas.js`.
+  `tests/strip-known-markers.test.js` proves byte-identical output to the legacy
+  chain across 50 inputs (every marker, bodyless forms, adjacency, multiline).
+- **Single source of truth for ability math (`dndMath`).** The ability-modifier
+  formula was copy-pasted 15+ times. Added a canonical module on the server
+  (`server/utils/dndMath.js`, re-exporting the authoritative proficiency/hit-dice
+  tables) and the client (`client/src/utils/dndMath.js`), and migrated the
+  byte-identical sites (`character.js`, `gameStateMarkerService.js`,
+  `LevelUpPage`, `CompanionEditor`, `CompanionSheet`, `CompanionManager`).
+  `tests/dnd-math.test.js` proves equivalence to the legacy formulas across the
+  full valid domain.
+- **Perf.** Companion progression enrichment at session start now runs
+  concurrently (`Promise.all`) instead of a sequential per-companion N+1.
+- **Test hygiene.** Three suites failed at baseline because they exercised
+  `PROMISE_MADE`/`NOTORIETY_GAIN`, which were deliberately removed from
+  `MARKER_SCHEMAS` in the v2.0 MVP reduction (consumer services live in
+  `/archive`, no handlers registered). Rather than resurrect archived schemas,
+  the assertions were retargeted to the same parser capabilities on live markers
+  (`marker-schemas` 40/9→48/0; `marker-pipeline` crash→44/0), and the
+  archived-import suite was relocated to `archive/tests/`.
+- **New tests:** `with-transaction`, `dnd-math`, `strip-known-markers` (+ the two
+  retargeted marker suites). Deferred (documented) follow-ups: thinning the
+  `/message` handler, deeper character/companion mirror-logic extraction,
+  transactions for debt/recruit paths that delegate to shared services, and a
+  centralized client API client.
+
 ## [2.7.0] - 2026-06-09 — Narration clarity guardrail + roll-your-own dice
 
 Two playtest fixes:
