@@ -45,13 +45,13 @@ console.log('\n=== registerHandler: validates arguments ===\n')
   assert(threw, 'rejects null schemaKey')
 
   threw = false
-  try { registerHandler('PROMISE_MADE', 'not-a-function') } catch { threw = true }
+  try { registerHandler('CONDITION_ADD', 'not-a-function') } catch { threw = true }
   assert(threw, 'rejects non-function handler')
 
   // Valid registration succeeds
-  registerHandler('PROMISE_MADE', () => {})
+  registerHandler('CONDITION_ADD', () => {})
   assert(_getHandlerCount() === 1, 'registers handler')
-  assert(_hasHandler('PROMISE_MADE'), 'registry reports handler present')
+  assert(_hasHandler('CONDITION_ADD'), 'registry reports handler present')
 }
 
 console.log('\n=== registerHandler: replacement logs warning but succeeds ===\n')
@@ -137,10 +137,10 @@ console.log('\n=== processResponseMarkers: dispatches multiple different schemas
   _resetHandlerRegistry()
   const fired = []
   registerHandler('LOOT_DROP', async (parsed) => { fired.push(['LOOT_DROP', parsed.Item]) })
-  registerHandler('PROMISE_MADE', async (parsed) => { fired.push(['PROMISE_MADE', parsed.NPC]) })
+  registerHandler('CONDITION_ADD', async (parsed) => { fired.push(['CONDITION_ADD', parsed.Target]) })
   const text = `
     Some prose. [LOOT_DROP: Item="Coin"]
-    More prose. [PROMISE_MADE: NPC="Elara" Promise="Find the relic" Weight="major"]
+    More prose. [CONDITION_ADD: Target="Elara" Condition="poisoned"]
   `
   const result = await processResponseMarkers(text, {})
   assert(fired.length === 2, 'both schemas dispatched')
@@ -156,10 +156,10 @@ console.log('\n=== processResponseMarkers: handler error contained, doesnt block
   _resetHandlerRegistry()
   let secondFired = false
   registerHandler('LOOT_DROP', async () => { throw new Error('intentional handler failure') })
-  registerHandler('PROMISE_MADE', async () => { secondFired = true })
+  registerHandler('CONDITION_ADD', async () => { secondFired = true })
   const text = `
     [LOOT_DROP: Item="Boom"]
-    [PROMISE_MADE: NPC="Mara" Promise="Return tomorrow" Weight="minor"]
+    [CONDITION_ADD: Target="Mara" Condition="charmed"]
   `
   const origError = console.error
   console.error = () => {}
@@ -175,7 +175,7 @@ console.log('\n=== processResponseMarkers: handler error contained, doesnt block
   const succeeded = result.handlerResults.find(r => r.ok)
   assert(failed && failed.schemaKey === 'LOOT_DROP', 'failed handlerResult has schemaKey')
   assert(failed.error === 'intentional handler failure', 'failed handlerResult carries error message')
-  assert(succeeded && succeeded.schemaKey === 'PROMISE_MADE', 'successful handlerResult also present')
+  assert(succeeded && succeeded.schemaKey === 'CONDITION_ADD', 'successful handlerResult also present')
 }
 
 // ---------------------------------------------------------------------------
@@ -186,14 +186,14 @@ console.log('\n=== processResponseMarkers: malformed markers surface in failures
 {
   _resetHandlerRegistry()
   let fired = false
-  registerHandler('PROMISE_MADE', async () => { fired = true })
-  // PROMISE_MADE requires Weight as enum (trivial|minor|moderate|major|critical)
-  // "huge" is invalid → validation fails → handler should NOT fire
-  const text = '[PROMISE_MADE: NPC="Elara" Promise="something" Weight="huge"]'
+  registerHandler('CONDITION_ADD', async () => { fired = true })
+  // CONDITION_ADD.Condition is an enum; "huge" is invalid → validation fails →
+  // handler should NOT fire and the failure must surface.
+  const text = '[CONDITION_ADD: Target="Player" Condition="huge"]'
   const result = await processResponseMarkers(text, {})
   assert(!fired, 'malformed marker does NOT trigger handler')
   assert(result.failures.length > 0, 'failure surfaced')
-  assert(result.failures[0].schemaKey === 'PROMISE_MADE', 'failure carries schemaKey')
+  assert(result.failures[0].schemaKey === 'CONDITION_ADD', 'failure carries schemaKey')
 }
 
 // ---------------------------------------------------------------------------
@@ -211,13 +211,13 @@ console.log('\n=== buildPendingCorrectionsNote: composes marker-only failures ==
 {
   const note = buildPendingCorrectionsNote({
     markerFailures: [
-      { schemaKey: 'PROMISE_MADE', errors: [{ field: 'Weight', reason: 'expected one of {trivial|minor|moderate|major|critical}, got "huge"' }] }
+      { schemaKey: 'CONDITION_ADD', errors: [{ field: 'Condition', reason: 'expected one of {blinded|charmed|...}, got "huge"' }] }
     ],
     ruleViolations: []
   })
   assert(typeof note === 'string' && note.length > 0, 'returns non-empty string')
-  assert(note.includes('PROMISE_MADE'), 'note mentions schema key')
-  assert(note.includes('Weight'), 'note mentions field')
+  assert(note.includes('CONDITION_ADD'), 'note mentions schema key')
+  assert(note.includes('Condition'), 'note mentions field')
 }
 
 console.log('\n=== buildPendingCorrectionsNote: composes rule-violation only ===\n')
@@ -236,13 +236,13 @@ console.log('\n=== buildPendingCorrectionsNote: combines both inputs ===\n')
 {
   const note = buildPendingCorrectionsNote({
     markerFailures: [
-      { schemaKey: 'NOTORIETY_GAIN', errors: [{ field: 'amount', reason: 'expected integer, got "lots"' }] }
+      { schemaKey: 'HP_CHANGE', errors: [{ field: 'Delta', reason: 'expected integer, got "lots"' }] }
     ],
     ruleViolations: [
       { rule: 'meta_parenthetical', description: 'parenthetical DM commentary', snippet: '(Note: this sets up Act 2)' }
     ]
   })
-  assert(note.includes('NOTORIETY_GAIN'), 'note covers marker failure')
+  assert(note.includes('HP_CHANGE'), 'note covers marker failure')
   assert(note.includes('parenthetical') || note.includes('STAY IN THE WORLD'), 'note covers rule violation')
 }
 
