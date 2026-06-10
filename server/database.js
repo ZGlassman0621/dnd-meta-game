@@ -35,4 +35,49 @@ export async function dbRun(sql, params = []) {
   return { lastInsertRowid: result.lastInsertRowid, changes: result.rowsAffected };
 }
 
+/**
+ * Run a set of writes atomically inside a libsql write-transaction.
+ *
+ * The callback receives a small `tx` api whose get/all/run mirror the module's
+ * dbGet/dbAll/dbRun signatures `(sql, params)` and return shapes, so migrating
+ * an existing sequence of dbGet/dbRun calls is a mechanical swap. Throwing from
+ * the callback (or any failing statement) rolls the whole transaction back;
+ * returning resolves after commit.
+ *
+ * Because a 'write' transaction takes the write lock at BEGIN, wrapping a
+ * read-modify-write sequence here also serializes concurrent writers — closing
+ * the last-write-wins races on JSON TEXT columns (spell slots, conditions,
+ * inventory) in addition to making multi-row writes all-or-nothing.
+ *
+ * @template T
+ * @param {(tx: { get: Function, all: Function, run: Function, raw: object }) => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+export async function withTransaction(fn) {
+  const tx = await db.transaction('write');
+  try {
+    const api = {
+      raw: tx,
+      get: async (sql, params = []) => {
+        const r = await tx.execute({ sql, args: params });
+        return r.rows[0] || null;
+      },
+      all: async (sql, params = []) => {
+        const r = await tx.execute({ sql, args: params });
+        return r.rows;
+      },
+      run: async (sql, params = []) => {
+        const r = await tx.execute({ sql, args: params });
+        return { lastInsertRowid: r.lastInsertRowid, changes: r.rowsAffected };
+      }
+    };
+    const result = await fn(api);
+    await tx.commit();
+    return result;
+  } catch (err) {
+    try { await tx.rollback(); } catch { /* transaction already closed */ }
+    throw err;
+  }
+}
+
 export default db;

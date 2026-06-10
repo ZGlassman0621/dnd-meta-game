@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { dbAll, dbGet, dbRun } from '../database.js';
+import db, { dbAll, dbGet, dbRun, withTransaction } from '../database.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
@@ -502,22 +502,28 @@ router.post('/:id/discard-item', async (req, res) => {
     const { itemName } = req.body;
     if (!itemName) return res.status(400).json({ error: 'itemName is required' });
 
-    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) return res.status(404).json({ error: 'Character not found' });
+    // Atomic read-modify-write (serialized) so concurrent discards/pickups
+    // can't lose each other's inventory edits (last-write-wins).
+    const outcome = await withTransaction(async (tx) => {
+      const character = await tx.get('SELECT id, inventory FROM characters WHERE id = ?', [req.params.id]);
+      if (!character) return { status: 404, body: { error: 'Character not found' } };
 
-    let inventory = safeParse(character.inventory, []);
-    const idx = inventory.findIndex(i => (i.name || i).toLowerCase() === itemName.toLowerCase());
+      let inventory = safeParse(character.inventory, []);
+      const idx = inventory.findIndex(i => (i.name || i).toLowerCase() === itemName.toLowerCase());
 
-    if (idx === -1) return res.status(404).json({ error: 'Item not found in inventory' });
+      if (idx === -1) return { status: 404, body: { error: 'Item not found in inventory' } };
 
-    if (inventory[idx].quantity > 1) {
-      inventory[idx].quantity -= 1;
-    } else {
-      inventory.splice(idx, 1);
-    }
+      if (inventory[idx].quantity > 1) {
+        inventory[idx].quantity -= 1;
+      } else {
+        inventory.splice(idx, 1);
+      }
 
-    await dbRun('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(inventory), req.params.id]);
+      await tx.run('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [JSON.stringify(inventory), req.params.id]);
+      return { status: 200 };
+    });
+    if (outcome.status !== 200) return res.status(outcome.status).json(outcome.body);
 
     const updated = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(updated);
@@ -618,35 +624,39 @@ router.post('/spell-slots/:id/use', async (req, res) => {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
+    // Atomic read-modify-write: the write-transaction serializes concurrent
+    // slot mutations so two rapid casts can't both read the same state and lose
+    // a decrement (last-write-wins). Statuses/bodies are otherwise identical.
+    const outcome = await withTransaction(async (tx) => {
+      const character = await tx.get('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+      if (!character) {
+        return { status: 404, body: { error: 'Character not found' } };
+      }
 
-    const maxSlots = getSpellSlots(character.class, character.level);
-    const usedSlots = safeParse(character.spell_slots_used, {});
+      const maxSlots = getSpellSlots(character.class, character.level);
+      const usedSlots = safeParse(character.spell_slots_used, {});
 
-    const maxForLevel = maxSlots[level] || 0;
-    const usedForLevel = usedSlots[level] || 0;
+      const maxForLevel = maxSlots[level] || 0;
+      const usedForLevel = usedSlots[level] || 0;
 
-    if (maxForLevel === 0) {
-      return res.status(400).json({ error: `You don't have level ${level} spell slots` });
-    }
+      if (maxForLevel === 0) {
+        return { status: 400, body: { error: `You don't have level ${level} spell slots` } };
+      }
 
-    if (usedForLevel >= maxForLevel) {
-      return res.status(400).json({ error: `No level ${level} spell slots remaining` });
-    }
+      if (usedForLevel >= maxForLevel) {
+        return { status: 400, body: { error: `No level ${level} spell slots remaining` } };
+      }
 
-    usedSlots[level] = usedForLevel + 1;
+      usedSlots[level] = usedForLevel + 1;
 
-    await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
+      await tx.run('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
 
-    res.json({
-      success: true,
-      level,
-      remaining: maxForLevel - usedSlots[level],
-      max: maxForLevel
+      return {
+        status: 200,
+        body: { success: true, level, remaining: maxForLevel - usedSlots[level], max: maxForLevel }
+      };
     });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'use spell slot');
   }
@@ -660,31 +670,33 @@ router.post('/spell-slots/:id/restore', async (req, res) => {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
+    // Atomic read-modify-write (serialized) — see /spell-slots/:id/use above.
+    const outcome = await withTransaction(async (tx) => {
+      const character = await tx.get('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+      if (!character) {
+        return { status: 404, body: { error: 'Character not found' } };
+      }
 
-    const maxSlots = getSpellSlots(character.class, character.level);
-    const usedSlots = safeParse(character.spell_slots_used, {});
+      const maxSlots = getSpellSlots(character.class, character.level);
+      const usedSlots = safeParse(character.spell_slots_used, {});
 
-    const maxForLevel = maxSlots[level] || 0;
-    const usedForLevel = usedSlots[level] || 0;
+      const maxForLevel = maxSlots[level] || 0;
+      const usedForLevel = usedSlots[level] || 0;
 
-    if (usedForLevel <= 0) {
-      return res.status(400).json({ error: `No used level ${level} slots to restore` });
-    }
+      if (usedForLevel <= 0) {
+        return { status: 400, body: { error: `No used level ${level} slots to restore` } };
+      }
 
-    usedSlots[level] = usedForLevel - 1;
+      usedSlots[level] = usedForLevel - 1;
 
-    await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
+      await tx.run('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
 
-    res.json({
-      success: true,
-      level,
-      remaining: maxForLevel - usedSlots[level],
-      max: maxForLevel
+      return {
+        status: 200,
+        body: { success: true, level, remaining: maxForLevel - usedSlots[level], max: maxForLevel }
+      };
     });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'restore spell slot');
   }
