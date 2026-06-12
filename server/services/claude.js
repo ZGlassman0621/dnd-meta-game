@@ -6,6 +6,16 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+// Per-request fetch timeouts. Without these a hung-open socket (TCP alive, no
+// response bytes) blocks a turn indefinitely — the UND_ERR_SOCKET retry only
+// fires on a socket FAULT, never on a silent hang. AbortSignal.timeout() bounds
+// the whole request (incl. body read); a fired timeout surfaces as a
+// TimeoutError/AbortError that the catch below treats as a retryable network
+// error. The gameplay cap is generous (Opus can take a while to emit 8000
+// tokens of immersive prose) so it never aborts a legitimately slow generation.
+const CLAUDE_FETCH_TIMEOUT_MS = Number(process.env.CLAUDE_FETCH_TIMEOUT_MS) || 120000; // main messages call
+const CLAUDE_PROBE_TIMEOUT_MS = Number(process.env.CLAUDE_PROBE_TIMEOUT_MS) || 20000;  // count_tokens status probe
 // Model aliases (no date suffix) auto-resolve to the latest *build* of a
 // given major.minor version, but the major.minor itself is pinned — bump these
 // manually when a new Claude release ships (e.g. 4-6 → 4-7).
@@ -216,7 +226,9 @@ export async function checkClaudeStatus() {
       body: JSON.stringify({
         model: SONNET_MODEL,
         messages: [{ role: 'user', content: 'ping' }]
-      })
+      }),
+      // Bound the probe too — a hung status check shouldn't stall the caller.
+      signal: AbortSignal.timeout(CLAUDE_PROBE_TIMEOUT_MS)
     });
 
     if (response.ok) {
@@ -324,7 +336,9 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
           max_tokens: maxTokens,
           system: systemParam,
           messages: claudeMessages
-        })
+        }),
+        // Abort a hung request so a stalled socket can't wedge the turn forever.
+        signal: AbortSignal.timeout(CLAUDE_FETCH_TIMEOUT_MS)
       });
 
       if (!response.ok) {
@@ -423,8 +437,13 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
     } catch (error) {
       lastError = error;
 
-      // Check if it's a retryable network error
-      const isNetworkError = error.cause?.code === 'UND_ERR_SOCKET' ||
+      // Check if it's a retryable network error. AbortSignal.timeout() fires as
+      // a TimeoutError (or AbortError on some runtimes) — treat a fetch timeout
+      // like any other transient socket failure and retry with backoff.
+      const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError' ||
+                        error.cause?.name === 'TimeoutError' || error.cause?.name === 'AbortError';
+      const isNetworkError = isTimeout ||
+                             error.cause?.code === 'UND_ERR_SOCKET' ||
                              error.message?.includes('fetch failed') ||
                              error.message?.includes('socket') ||
                              error.message?.includes('ECONNRESET');
@@ -432,11 +451,18 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       if (isNetworkError && attempt < maxRetries) {
         // Exponential backoff: 1s, 2s, 4s
         const delay = Math.pow(2, attempt - 1) * 1000;
-        console.log(`Claude API network error (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+        console.log(`Claude API ${isTimeout ? `timeout (>${CLAUDE_FETCH_TIMEOUT_MS}ms)` : 'network error'} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
 
+      // Exhausted retries (or a non-retryable throw). Tag a timeout so the route
+      // layer can return a friendly, retryable response that PRESERVES the
+      // player's turn, instead of the raw DOMException falling through to a bare
+      // 500 (which the client treats as fatal and discards the typed input).
+      if (isTimeout) {
+        throw new Error(`TIMEOUT: Claude API request timed out after ${attempt} attempt(s) (>${CLAUDE_FETCH_TIMEOUT_MS}ms each).`);
+      }
       throw error;
     }
   }

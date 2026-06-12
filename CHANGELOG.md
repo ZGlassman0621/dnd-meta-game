@@ -2,6 +2,48 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.8.2] - 2026-06-09 — History-bounding pass: non-turn LLM input + fetch timeout
+
+Follow-up to 2.8.1, clearing the remaining second-pass-review items plus the
+cost regression 2.8.1 surfaced. Theme: bound the input to the LLM calls that are
+NOT the hot per-turn path, and stop a hung socket from wedging a turn.
+
+- **Reactive compressor no longer deletes the middle of a long session (#2).**
+  `contextManager.generateMessageSummary` used to splice head (first 14k chars) +
+  tail (last 14k) and discard everything between before summarizing — silently
+  losing any death/promise/item that lived only mid-session. It now MAP-REDUCEs:
+  chunk the transcript on message boundaries, summarize each chunk, fold the
+  partials into one recap. Nothing is dropped. New pure helper
+  `chunkMessagesByChars()` + `tests/context-chunking.test.js` (proves no message
+  is dropped or reordered; the concatenation of chunks equals the input).
+- **claude.js fetch timeout (#6).** Both Anthropic fetches (the gameplay
+  `/v1/messages` call and the `count_tokens` status probe) now pass
+  `AbortSignal.timeout(...)` — 120s for gameplay (generous; never aborts a
+  legitimately slow Opus generation), 20s for the probe. A fired timeout is
+  classified as a retryable network error (alongside `UND_ERR_SOCKET`), so a
+  hung-open socket retries with backoff instead of blocking the turn forever.
+  Both bounds are env-overridable (`CLAUDE_FETCH_TIMEOUT_MS` /
+  `CLAUDE_PROBE_TIMEOUT_MS`). When retries are exhausted the error is tagged
+  `TIMEOUT:` so the `/message` route returns a retryable 503 with a clear
+  message (instead of a bare 500 that reads as fatal), and the DM-session client
+  now restores the player's typed turn on any send failure — which also makes the
+  existing "your input has been preserved" promise on the overloaded/rate-limit
+  branches actually true.
+- **Chronicle load capped (#8).** `getSessionSummariesForPrompt` loaded EVERY
+  chronicle with no LIMIT, growing the "FULL CAMPAIGN HISTORY" prompt block
+  linearly until a 100+ session campaign blew the budget. Now capped to the most
+  recent `CHRONICLE_PROMPT_LIMIT` (20) sessions, returned chronologically; older
+  sessions' ground truth still reaches the prompt via the `canon_facts` path
+  (loaded in full, separately budgeted). `tests/chronicle-prompt-cap.test.js`.
+- **Session-boundary LLM calls bounded (2.8.1 follow-up "C").** Now that
+  `dm_sessions.messages` is the full append-only history (2.8.1 fix #1), the
+  end-session extraction calls (analysis / notes / NPC / memory), the `/resume`
+  recap, and the retroactive `/extract-npcs` read it directly. A new
+  `boundedHistoryForExtraction()` helper reapplies the rolling-summary compaction
+  the live turn uses + a hard tail cap (60 msgs) before these 7 calls, returning
+  their token cost to roughly pre-2.8.1 levels. The hot per-turn path is
+  unchanged.
+
 ## [2.8.1] - 2026-06-09 — Data-integrity fixes from second-pass code review (turn persistence + reward claim)
 
 Two correctness fixes for silent state-corruption paths surfaced by an adversarial

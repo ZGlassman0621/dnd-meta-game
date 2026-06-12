@@ -18,6 +18,7 @@ import '../services/combatMarkerService.js';
 // gameStateMarkerService registers the Phase B mechanical-spine handlers
 // (HP_CHANGE, EFFECT_START/END, TURN, ROLL_REQUEST) at module load.
 import '../services/gameStateMarkerService.js';
+import { applyToMessages } from '../services/rollingSummaryService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
   // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
@@ -1074,6 +1075,29 @@ function stripEphemeralStateNotes(msgs) {
   );
 }
 
+// Bound the conversation history fed to SESSION-BOUNDARY LLM calls (end-session
+// analysis/notes/NPC/memory extraction, /resume recap, retroactive NPC extract).
+// Since the v2.8.1 fix #1, dm_sessions.messages is the full, append-only history
+// — great for the durable record, but these boundary calls used to receive the
+// (buggily) compacted store and have no input-bounding of their own. Reapply the
+// rolling-summary compaction the live turn uses, then hard-cap the verbatim tail,
+// so a long session's recap/extraction cost stays near pre-fix levels. The
+// per-turn path is unaffected (it bounds its own send buffer). Returns a
+// non-system message array ready to spread into a boundary prompt.
+const BOUNDARY_HISTORY_MSG_CAP = 60;
+function boundedHistoryForExtraction(sessionRow, msgs) {
+  if (!Array.isArray(msgs)) return [];
+  let arr = msgs;
+  try {
+    const rolled = applyToMessages(sessionRow, msgs);
+    if (rolled.summaryInjected) arr = rolled.messages;
+  } catch { /* fall back to the raw array */ }
+  const nonSystem = arr.filter(m => m && m.role !== 'system');
+  return nonSystem.length > BOUNDARY_HISTORY_MSG_CAP
+    ? nonSystem.slice(nonSystem.length - BOUNDARY_HISTORY_MSG_CAP)
+    : nonSystem;
+}
+
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -1871,6 +1895,13 @@ router.post('/:sessionId/message', async (req, res) => {
         retryable: true
       });
     }
+    if (error?.message?.startsWith('TIMEOUT:')) {
+      return res.status(503).json({
+        error: 'AI request timed out',
+        message: 'The AI took too long to respond and the request timed out. Your input has been preserved — please send again in a moment.',
+        retryable: true
+      });
+    }
     if (error?.message?.startsWith('AUTH_FAILURE:')) {
       // 503 (not 401) on the route — the failure is between us and Anthropic,
       // not between the user and us. Authenticated user, broken upstream auth.
@@ -2124,7 +2155,7 @@ router.post('/:sessionId/end', async (req, res) => {
         const systemMessage = messages.find(m => m.role === 'system');
         const systemPrompt = systemMessage?.content || '';
         const analysisMessages = [
-          ...messages.filter(m => m.role !== 'system'),
+          ...boundedHistoryForExtraction(session, messages),
           { role: 'user', content: analysisPrompt }
         ];
         analysisResponse = await loggedChat(
@@ -2182,7 +2213,7 @@ router.post('/:sessionId/end', async (req, res) => {
               session_id: parseInt(req.params.sessionId) },
             systemPrompt,
             [
-              ...messages.filter(m => m.role !== 'system'),
+              ...boundedHistoryForExtraction(session, messages),
               { role: 'user', content: extractionPrompt }
             ]
           );
@@ -2221,7 +2252,7 @@ router.post('/:sessionId/end', async (req, res) => {
               session_id: parseInt(req.params.sessionId) },
             systemPrompt,
             [
-              ...messages.filter(m => m.role !== 'system'),
+              ...boundedHistoryForExtraction(session, messages),
               { role: 'user', content: npcExtractionPrompt }
             ]
           );
@@ -2253,7 +2284,7 @@ router.post('/:sessionId/end', async (req, res) => {
               character_id: character?.id },
             systemPrompt,
             [
-              ...messages.filter(m => m.role !== 'system'),
+              ...boundedHistoryForExtraction(session, messages),
               { role: 'user', content: memoryPrompt }
             ]
           );
@@ -2560,7 +2591,7 @@ router.post('/:sessionId/resume', async (req, res) => {
             const systemMessage = messages.find(m => m.role === 'system');
             const systemPrompt = systemMessage?.content || '';
             const recapMessages = [
-              ...messages.filter(m => m.role !== 'system'),
+              ...boundedHistoryForExtraction(session, messages),
               { role: 'user', content: recapPrompt }
             ];
             recap = await loggedChat(
@@ -2872,7 +2903,7 @@ If no named NPCs appeared, respond with: NO_NPCS`;
       const systemMessage = messages.find(m => m.role === 'system');
       const systemPrompt = systemMessage?.content || '';
       const npcMessages = [
-        ...messages.filter(m => m.role !== 'system'),
+        ...boundedHistoryForExtraction(session, messages),
         { role: 'user', content: npcExtractionPrompt }
       ];
       npcResponse = await loggedChat(
@@ -3006,7 +3037,7 @@ If no named NPCs appeared, respond with: NO_NPCS`;
           const systemMessage = messages.find(m => m.role === 'system');
           const systemPrompt = systemMessage?.content || '';
           const npcMessages = [
-            ...messages.filter(m => m.role !== 'system'),
+            ...boundedHistoryForExtraction(fullSession, messages),
             { role: 'user', content: npcExtractionPrompt }
           ];
           npcResponse = await loggedChat(

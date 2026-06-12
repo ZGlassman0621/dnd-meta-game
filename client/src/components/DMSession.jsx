@@ -810,8 +810,13 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
     } catch (err) {
       setError(err.message);
-      // Remove the action on error
+      // Remove the optimistic action bubble on error.
       setMessages(prev => prev.slice(0, -1));
+      // Restore the player's typed turn so it isn't silently lost (the server's
+      // retryable errors — timeout / overloaded / rate-limit — promise the input
+      // is preserved). Only for a normal send (not a quick-action override), and
+      // only if the box is still empty so we never clobber fresh typing.
+      if (overrideText == null) setInputAction(prev => (prev ? prev : action));
     } finally {
       setIsLoading(false);
     }

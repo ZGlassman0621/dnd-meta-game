@@ -606,18 +606,31 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
 // ============================================================
 
 /**
- * Get ALL session chronicle summaries for injection into DM prompt.
- * These are richer (300-500 word AI-generated recaps) than dm_sessions.summary.
+ * Get the most recent session chronicle summaries for injection into the DM
+ * prompt. These are richer (300-500 word AI-generated recaps) than
+ * dm_sessions.summary.
+ *
+ * Capped to a recent window (CHRONICLE_PROMPT_LIMIT): the prose-chronicle path
+ * used to load EVERY session with no cap, growing the system prompt linearly
+ * until a 100+ session campaign crowded out everything else / blew the context
+ * budget. Older sessions' ground truth still reaches the prompt via the
+ * canon_facts path (loaded in full, separately budgeted).
  */
-export async function getSessionSummariesForPrompt(campaignId, characterId) {
-  return await dbAll(
+export const CHRONICLE_PROMPT_LIMIT = 20;
+
+export async function getSessionSummariesForPrompt(campaignId, characterId, limit = CHRONICLE_PROMPT_LIMIT) {
+  // Take the most recent `limit` sessions (DESC + LIMIT), then return them
+  // ascending so the prompt still reads chronologically oldest → newest.
+  const rows = await dbAll(
     `SELECT session_number, summary, mood, cliffhanger, key_decisions,
             game_day_start, game_day_end
      FROM story_chronicles
      WHERE campaign_id = ? AND character_id = ?
-     ORDER BY session_number ASC`,
-    [campaignId, characterId]
+     ORDER BY session_number DESC
+     LIMIT ?`,
+    [campaignId, characterId, limit]
   );
+  return rows.reverse();
 }
 
 /**
