@@ -160,6 +160,8 @@ router.post('/', async (req, res) => {
       other_notes = null,
       known_cantrips = '[]',
       known_spells = '[]',
+      fighting_style = null,
+      expertise = '[]',
       feats = '[]',
       languages = '[]',
       tool_proficiencies = '[]',
@@ -211,8 +213,9 @@ router.post('/', async (req, res) => {
         organizations, allies, enemies, backstory, other_notes,
         known_cantrips, known_spells, feats, languages, tool_proficiencies,
         keeper_texts, keeper_recitations, keeper_genre_domain,
+        fighting_style, expertise,
         creation_phase
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await dbRun(sql, [
@@ -229,6 +232,7 @@ router.post('/', async (req, res) => {
       organizations, allies, enemies, backstory, other_notes,
       known_cantrips, known_spells, feats, languages, tool_proficiencies,
       keeper_texts, keeper_recitations, keeper_genre_domain,
+      fighting_style, expertise,
       creation_phase
     ]);
 
@@ -348,6 +352,7 @@ router.put('/:id', async (req, res) => {
       'personality_traits', 'ideals', 'bonds', 'flaws',
       'organizations', 'allies', 'enemies', 'backstory', 'other_notes',
       'known_cantrips', 'known_spells', 'prepared_spells', 'feats',
+      'fighting_style', 'expertise',
       'class_levels', 'hit_dice',
       'campaign_config', 'languages', 'tool_proficiencies',
       'keeper_texts', 'keeper_recitations', 'keeper_genre_domain',

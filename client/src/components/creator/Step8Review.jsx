@@ -211,6 +211,15 @@ function buildSheet(state, payload) {
     }, 0)
     finalScores[k] = Math.min(18, base + racialStatic + racialChoice + bumpTotal)
   }
+  // Half-feats (e.g. Variant Human's Actor → +1 CHA) bump a chosen ability after
+  // the racial 18-cap, capped at 20 — mirrors buildSubmitBody so the review's
+  // numbers match the character that actually gets stored.
+  const isVH = state.race === 'human' && state.subrace === 'Variant Human'
+  for (const feat of (state.feats || [])) {
+    if (feat.source === 'variant_human' && !isVH) continue
+    const ab = feat?.abilityChoice
+    if (ab && finalScores[ab] != null) finalScores[ab] = Math.min(20, finalScores[ab] + 1)
+  }
   return { finalScores }
 }
 
@@ -251,7 +260,9 @@ function buildReviewRows(state, payload, sheet, ancestryFeatName) {
     'Level 1'
   ].filter(Boolean)
   const classSec = joinDot([
-    state.fighting_style && `Fighting style: ${prettifyId(state.fighting_style)}`
+    state.fighting_style && `Fighting style: ${prettifyId(state.fighting_style)}`,
+    state.known_cantrips?.length && `Cantrips: ${state.known_cantrips.join(', ')}`,
+    state.known_spells?.length && `Spells: ${state.known_spells.join(', ')}`
   ])
 
   // Abilities — final scores with star / dump markers, plus skills.
@@ -259,7 +270,12 @@ function buildReviewRows(state, payload, sheet, ancestryFeatName) {
     ? <Quiet>Not yet assigned</Quiet>
     : <Sep parts={ABILITY_KEYS.map(k => `${ABILITY_LABELS[k]} ${sheet.finalScores[k] ?? '—'}`)} />
   const skills = state.selected_skills || []
-  const abilitySec = skills.length ? `Skills: ${skills.join(' · ')}` : null
+  const vhFeat = (state.feats || []).find(f => f.source === 'variant_human')
+  const abilitySec = joinDot([
+    skills.length ? `Skills: ${skills.join(' · ')}` : null,
+    state.expertise?.length ? `Expertise: ${state.expertise.map(prettifyId).join(', ')}` : null,
+    vhFeat ? `Bonus feat: ${vhFeat.name}${vhFeat.abilityChoice ? ` (+1 ${ABILITY_LABELS[vhFeat.abilityChoice] || vhFeat.abilityChoice.toUpperCase()})` : ''}` : null
+  ])
 
   // Equipment — package choices + heirloom.
   const picks = state.equipment_picks || {}

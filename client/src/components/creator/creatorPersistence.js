@@ -47,6 +47,14 @@ const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 const abilityMod = (score) => Math.floor(((Number(score) ?? 10) - 10) / 2)
 
+// Parse a JSON-array TEXT column (e.g. characters.feats) into a real array,
+// tolerating null / already-parsed / malformed values.
+function parseJsonArray(v) {
+  if (Array.isArray(v)) return v
+  if (typeof v !== 'string' || !v.trim()) return []
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : [] } catch { return [] }
+}
+
 /**
  * Resolve the equipment-package picks into worn slots { armor, mainHand,
  * offHand } — the shape the character sheet reads for AC, attacks, and the
@@ -186,6 +194,22 @@ export function buildSubmitBody(state, mode, preludePayload) {
     abilityScores[k] = Math.min(18, base + racialStatic + racialChoice + bumpTotal)
   }
 
+  // Creator-granted feats (currently only the Variant Human bonus feat). Keep a
+  // Variant Human feat only if the character is actually a Variant Human, so a
+  // race change after picking can't leave a stale feat behind.
+  const isVariantHuman = state.race === 'human' && state.subrace === 'Variant Human'
+  const creatorFeats = (state.feats || []).filter(
+    f => f.source !== 'variant_human' || isVariantHuman
+  )
+  // Half-feats grant +1 to a chosen ability (e.g. Actor → CHA). Apply after the
+  // racial 18-cap, capped at the L1 maximum of 20.
+  for (const feat of creatorFeats) {
+    const ab = feat?.abilityChoice
+    if (ab && abilityScores[ab] != null) {
+      abilityScores[ab] = Math.min(20, abilityScores[ab] + 1)
+    }
+  }
+
   // Starting gold: class baseline × theme modifier (rounded half-up).
   const baselineGp = cls?.startingGold?.average || 0
   const goldGp = state.theme_id ? applyGoldModifier(baselineGp, state.theme_id) : baselineGp
@@ -280,8 +304,16 @@ export function buildSubmitBody(state, mode, preludePayload) {
     theme_id: state.theme_id || null,
     ancestry_feat_id: state.ancestry_feat_id || null,
     ancestry_feat_choices: state.ancestry_feat_choices || null,
+    feats: JSON.stringify(creatorFeats),
     class: state.class_id || null,
     subclass: state.subclass_id || null,
+
+    // Level-1 class picks (Step 4 / Step 5). Spells stored as name arrays;
+    // fighting style / expertise gated to the classes that grant them.
+    known_cantrips: JSON.stringify(state.known_cantrips || []),
+    known_spells: JSON.stringify(state.known_spells || []),
+    fighting_style: state.class_id === 'fighter' ? (state.fighting_style || null) : null,
+    expertise: JSON.stringify(state.class_id === 'rogue' ? (state.expertise || []) : []),
 
     // L1
     level: 1,
@@ -450,6 +482,11 @@ export function buildProgressBody(state) {
   if (state.ancestry_feat_choices && Object.keys(state.ancestry_feat_choices).length > 0) {
     body.ancestry_feat_choices = state.ancestry_feat_choices
   }
+  if (state.feats && state.feats.length > 0) body.feats = JSON.stringify(state.feats)
+  if (state.known_cantrips && state.known_cantrips.length > 0) body.known_cantrips = JSON.stringify(state.known_cantrips)
+  if (state.known_spells && state.known_spells.length > 0) body.known_spells = JSON.stringify(state.known_spells)
+  if (state.fighting_style) body.fighting_style = state.fighting_style
+  if (state.expertise && state.expertise.length > 0) body.expertise = JSON.stringify(state.expertise)
 
   // --- Step 3 ---
   if (state.theme_id) body.theme_id = state.theme_id
@@ -513,6 +550,11 @@ export function rehydrateManualCreatorState(character) {
     subrace: character.subrace || '',
     ancestry_feat_id: character.ancestry_feat_id || null,
     ancestry_feat_choices: character.ancestry_feat_choices || {},
+    feats: parseJsonArray(character.feats),
+    known_cantrips: parseJsonArray(character.known_cantrips),
+    known_spells: parseJsonArray(character.known_spells),
+    fighting_style: character.fighting_style || '',
+    expertise: parseJsonArray(character.expertise),
     theme_id: character.theme_id || '',
     class_id: character.class || '',
     subclass_id: character.subclass || '',
@@ -569,6 +611,11 @@ export function rehydrateHandoffCreatorState(character, payload) {
     subrace: character.subrace || payload?.subrace || '',
     ancestry_feat_id: character.ancestry_feat_id || payload?.ancestry_feat_id || null,
     ancestry_feat_choices: character.ancestry_feat_choices || {},
+    feats: parseJsonArray(character.feats),
+    known_cantrips: parseJsonArray(character.known_cantrips),
+    known_spells: parseJsonArray(character.known_spells),
+    fighting_style: character.fighting_style || '',
+    expertise: parseJsonArray(character.expertise),
     theme_id: character.theme_id || payload?.committed_theme || '',
     class_id: character.class || payload?.class_suggestion || '',
     subclass_id: character.subclass || '',

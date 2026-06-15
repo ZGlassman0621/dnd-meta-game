@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { WizardHead } from './creatorPrimitives.jsx'
 import classesData from '../../data/classes.json'
 import { THEME_NARRATIVE_CONTINUITY } from '../../data/themeNarrativeContinuity.js'
+import Step4LevelOnePicks from './Step4LevelOnePicks.jsx'
 
 /**
  * Render a class's primaryAbility / savingThrows field as a readable
@@ -157,7 +158,7 @@ export default function Step4ClassCalling({ state, set, mode, payload }) {
                 key={c.id}
                 type="button"
                 className={`opt ${classId === c.id ? 'sel' : ''}`.trim()}
-                onClick={() => set({ ...state, class_id: c.id, subclass_id: '', fighting_style: '' })}
+                onClick={() => set({ ...state, class_id: c.id, subclass_id: '', fighting_style: '', known_cantrips: [], known_spells: [], expertise: [] })}
               >
                 <div className="ot">{c.name}</div>
                 {c.description && <div className="od">{c.description}</div>}
@@ -235,19 +236,8 @@ export default function Step4ClassCalling({ state, set, mode, payload }) {
         </div>
       )}
 
-      {/* ── Other level-1 picks (placeholder per spec) ────── */}
-      {cls && (
-        <div className="block subrow" style={{ marginBottom: 0, marginTop: 18 }}>
-          <div className="block-label">
-            <span className="l">Other level-1 picks</span>
-            <span className="hint">cantrips, fighting style, expertise</span>
-          </div>
-          <div className="fhelp" style={{ marginTop: 0 }}>
-            Class-specific level-1 mechanical choices will surface here per the chosen class's
-            schema. Wired in a follow-up sub-chunk.
-          </div>
-        </div>
-      )}
+      {/* ── Other level-1 picks (cantrips / spells / fighting style) ── */}
+      {cls && <Step4LevelOnePicks state={state} set={set} />}
     </>
   )
 }

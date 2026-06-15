@@ -3,6 +3,35 @@ import { WizardHead } from './creatorPrimitives.jsx'
 import { ABILITY_KEYS, ABILITY_LABELS } from './BumpCelebrationCard.jsx'
 import racesData from '../../data/races.json'
 import classesData from '../../data/classes.json'
+import featsData from '../../data/feats.json'
+
+const VH_FEAT_SOURCE = 'variant_human'
+const ABILITY_NAME_TO_KEY = {
+  strength: 'str', dexterity: 'dex', constitution: 'con',
+  intelligence: 'int', wisdom: 'wis', charisma: 'cha'
+}
+
+/**
+ * Evaluate a free-text feat prerequisite against the character's current scores.
+ * Only ability-score prereqs ("Dexterity 13 or higher", "Intelligence or Wisdom
+ * 13 or higher") are auto-checked; proficiency / spellcasting prereqs can't be
+ * reliably verified at creation, so they surface as a caption but don't block.
+ */
+function evalFeatPrereq(prereq, scoreFor) {
+  if (!prereq) return { met: true, kind: 'none' }
+  const text = String(prereq)
+  const m = text.match(/(\d+)\s*or higher/i)
+  if (m) {
+    const threshold = parseInt(m[1], 10)
+    const names = (text.match(/strength|dexterity|constitution|intelligence|wisdom|charisma/gi) || [])
+      .map(s => s.toLowerCase())
+    if (names.length) {
+      const met = names.some(n => (scoreFor(ABILITY_NAME_TO_KEY[n]) ?? 0) >= threshold)
+      return { met, kind: 'ability' }
+    }
+  }
+  return { met: true, kind: 'other' }
+}
 
 /**
  * Step 5 — Ability Scores. Per PHASE_2_CREATOR_SPEC.md §5.5.
@@ -146,6 +175,39 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
 
   // --- Race-derived state (gates Variant Human feat picker etc.) ---------
   const isVariantHuman = state.race === 'human' && state.subrace === 'Variant Human'
+
+  // --- Variant Human bonus general feat -----------------------------------
+  const featList = useMemo(
+    () => Object.entries(featsData)
+      .map(([key, f]) => ({ key, ...f }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    []
+  )
+  const selectedVhFeat = (state.feats || []).find(f => f.source === VH_FEAT_SOURCE) || null
+  // Effective score for prereq checks: base + racial (the same clamped value the
+  // allocator shows). computeFinal is defined above.
+  const scoreFor = (k) => computeFinal(k).clamped
+  const setVhFeat = (next) => {
+    const others = (state.feats || []).filter(f => f.source !== VH_FEAT_SOURCE)
+    set({ ...state, feats: next ? [...others, next] : others })
+  }
+  const pickVhFeat = (key) => {
+    const f = featsData[key]
+    if (!f) return
+    let abilityChoice = null
+    if (f.abilityIncrease) {
+      if (f.abilityIncrease.ability) abilityChoice = f.abilityIncrease.ability
+      else if (Array.isArray(f.abilityIncrease.choice)) abilityChoice = f.abilityIncrease.choice[0]
+    }
+    setVhFeat({ key, name: f.name, abilityChoice, choices: null, acquiredAtLevel: 1, source: VH_FEAT_SOURCE })
+  }
+  // Drop a stale Variant-Human feat if the character is no longer a Variant Human
+  // (e.g. they changed race/subrace after picking one).
+  useEffect(() => {
+    if (!isVariantHuman && (state.feats || []).some(f => f.source === VH_FEAT_SOURCE)) {
+      set({ ...state, feats: (state.feats || []).filter(f => f.source !== VH_FEAT_SOURCE) })
+    }
+  }, [isVariantHuman]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -333,15 +395,84 @@ export default function Step5AbilityScores({ state, set, mode, payload }) {
       {/* --- Skills picker --------------------------------------- */}
       <SkillsPicker state={state} set={set} mode={mode} payload={payload} />
 
+      {/* --- Rogue Expertise (picks from the skills chosen above) --- */}
+      <ExpertisePicker state={state} set={set} />
+
       {/* --- Variant Human bonus general feat -------------------- */}
       {isVariantHuman && (
         <div className="block" style={{ marginTop: 30 }}>
           <div className="block-label">
             <span className="l">Variant Human bonus feat</span>
+            <span className="hint">a self-taught talent that sets you apart</span>
           </div>
-          <div className="fhelp" style={{ marginTop: 0 }}>
-            Variant Humans choose a general feat at the start of their journey — a self-taught skill or talent that defines you apart from your lineage. The general feat picker (filtered to feats your current scores qualify you for) wires here.
+          <div className="fhelp" style={{ marginTop: 0, marginBottom: 10 }}>
+            Variant Humans begin with one general feat. Feats your current scores don't qualify for are dimmed.
           </div>
+          <div className="opt-grid c2" role="radiogroup" aria-label="Bonus feat">
+            {featList.map(f => {
+              const pr = evalFeatPrereq(f.prerequisites, scoreFor)
+              const sel = selectedVhFeat?.key === f.key
+              const disabled = !sel && !pr.met
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  className={`opt ${sel ? 'sel' : ''}`.trim()}
+                  role="radio"
+                  aria-checked={sel}
+                  disabled={disabled}
+                  onClick={() => (sel ? setVhFeat(null) : pickVhFeat(f.key))}
+                >
+                  <div className="ot">{f.name}</div>
+                  {f.prerequisites ? (
+                    <div className="od" style={{ color: pr.met ? undefined : '#b4543a' }}>
+                      Requires: {f.prerequisites}
+                    </div>
+                  ) : (
+                    Array.isArray(f.benefits) && f.benefits[0] && <div className="od">{f.benefits[0]}</div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {selectedVhFeat && (() => {
+            const f = featsData[selectedVhFeat.key]
+            const choiceAbilities = (f?.abilityIncrease && Array.isArray(f.abilityIncrease.choice))
+              ? f.abilityIncrease.choice
+              : null
+            return (
+              <div className="reveal" style={{ marginTop: 12 }}>
+                <div className="trait-card">
+                  <div>
+                    <div className="tt">{f?.name}<span className="src">Bonus feat</span></div>
+                    {Array.isArray(f?.benefits) && (
+                      <ul className="td" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                        {f.benefits.map((b, i) => <li key={i}>{b}</li>)}
+                      </ul>
+                    )}
+                    {choiceAbilities && (
+                      <div style={{ marginTop: 10 }}>
+                        <div className="fhelp" style={{ marginTop: 0 }}>This feat grants +1 to one ability — choose:</div>
+                        <div className="pillrow">
+                          {choiceAbilities.map(ab => (
+                            <button
+                              key={ab}
+                              type="button"
+                              className={`selpill ${selectedVhFeat.abilityChoice === ab ? 'on' : ''}`.trim()}
+                              onClick={() => setVhFeat({ ...selectedVhFeat, abilityChoice: ab })}
+                            >
+                              {ABILITY_LABELS[ab] || ab.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
     </>
@@ -422,6 +553,70 @@ function SkillsPicker({ state, set, mode, payload }) {
       <div className="fhelp">
         Skills you're proficient in. Each ties to one of your six abilities — pick the ones you've practiced or trained.
       </div>
+    </div>
+  )
+}
+
+/**
+ * Rogue Expertise — pick 2 of the skills chosen in the skills picker above to
+ * double the proficiency bonus on. Rogue is the only L1 Expertise class (Bard's
+ * is at L3). Picks persist as normalized skill ids in state.expertise.
+ */
+function ExpertisePicker({ state, set }) {
+  const isRogue = state.class_id === 'rogue'
+  const EXPERTISE_COUNT = 2
+  const proficientSkills = state.selected_skills || []
+  const expertise = state.expertise || []
+
+  // Prune expertise picks that are no longer among the chosen skills.
+  useEffect(() => {
+    if (!isRogue) return
+    const valid = (state.expertise || []).filter(s => (state.selected_skills || []).includes(s))
+    if (valid.length !== (state.expertise || []).length) set({ ...state, expertise: valid })
+  }, [state.selected_skills, isRogue]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isRogue) return null
+
+  const remaining = Math.max(0, EXPERTISE_COUNT - expertise.length)
+  const toggle = (id) => {
+    if (expertise.includes(id)) set({ ...state, expertise: expertise.filter(e => e !== id) })
+    else if (expertise.length < EXPERTISE_COUNT) set({ ...state, expertise: [...expertise, id] })
+  }
+
+  return (
+    <div className="block" style={{ marginTop: 30 }}>
+      <div className="block-label">
+        <span className="l">Expertise</span>
+        <span className="hint">
+          {proficientSkills.length === 0 ? 'pick your skills first' : (remaining > 0 ? `choose ${remaining} more` : '2 chosen')}
+        </span>
+      </div>
+      {proficientSkills.length === 0 ? (
+        <div className="fhelp" style={{ marginTop: 0 }}>
+          Rogues double their proficiency on two skills. Pick your skills above first, then choose two for Expertise.
+        </div>
+      ) : (
+        <>
+          <div className="pillrow">
+            {proficientSkills.map(id => {
+              const on = expertise.includes(id)
+              const disabled = !on && remaining === 0
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`selpill ${on ? 'on' : ''}`.trim()}
+                  disabled={disabled}
+                  onClick={() => toggle(id)}
+                >
+                  {prettifySkillId(id)}
+                </button>
+              )
+            })}
+          </div>
+          <div className="fhelp">Your proficiency bonus is doubled for ability checks with these two skills.</div>
+        </>
+      )}
     </div>
   )
 }

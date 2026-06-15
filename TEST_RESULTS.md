@@ -7,6 +7,26 @@ from `client/` (the `&` in the folder path breaks the npm shim).
 
 ---
 
+## 2026-06-15 — v2.10.0 (character creator level-1 picks: feat / spells / fighting style / expertise)
+
+Wired the creator's placeholder L1 choices. New components are client-side
+(JSX → verified by the client build, which is the compile gate); the server
+INSERT/PUT + migration are covered by a real round-trip test.
+
+| Suite | Result |
+|---|---|
+| creator-l1-picks (NEW — mounts real character router, POST+PUT round-trip) | 14 passed, 0 failed |
+| creator-server-persistence (regression) | 12 passed, 0 failed |
+
+- INSERT alignment confirmed after adding 2 columns: 63 columns = 63 placeholders
+  = 63 values (and a real character was created through the route in the test).
+- Migration 058 applied against live Turso; `characters.fighting_style` +
+  `characters.expertise` columns confirmed present.
+- `node --check` on character.js + migration 058 + creatorPersistence.js: OK.
+- Client build (`node node_modules/vite/bin/vite.js build`): ✓ exit 0 (all new
+  creator JSX — Step4LevelOnePicks, Step 5 ExpertisePicker, Step 8 edits — compiles).
+- Not committed (awaiting the usual go-ahead).
+
 ## 2026-06-14 — v2.9.0 (memory as variables, Phases 1–3 + critical chronicle bug fix)
 
 Built via a gated multi-agent pipeline (impl → build+test+adversarial gate per

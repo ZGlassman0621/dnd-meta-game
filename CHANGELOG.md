@@ -2,6 +2,37 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.10.0] - 2026-06-15 — Character creator: wire up the missing level-1 picks (feat / spells / fighting style / expertise)
+
+The V2 creator collected ancestry feats but left several level-1 mechanical
+choices as placeholders. This fills them in, reusing existing data
+(`feats.json`, `spells.json`, `classes.json`) and the level-up picker patterns.
+
+- **Variant Human bonus feat (Step 5).** Humans who pick the "Variant Human"
+  lineage now choose a general feat from `feats.json`. Feats whose ability-score
+  prerequisites aren't met are dimmed; half-feats (Actor, Athlete, …) prompt for
+  the +1 ability, which is applied to the final scores (after the racial 18-cap,
+  capped at 20). Persists to `characters.feats` in the canonical
+  `{key,name,abilityChoice,…}` shape; clears if you leave Variant Human; shows on
+  the Step 8 review.
+- **Step 4 cantrips & spells (fixes casters starting empty).** Spellcasting
+  classes now pick their level-1 cantrips and spells: cantrips for cleric / druid
+  / wizard / sorcerer / bard / warlock; known spells for sorcerer / bard /
+  warlock; the wizard's 6-spell spellbook. Cleric/druid (prepared) pick cantrips
+  only; ranger/paladin have nothing at L1. Counts from `classes.json`; spell lists
+  filtered from `spells.json` by each spell's `classes`. Persists to
+  `known_cantrips` / `known_spells`. New `client/.../creator/Step4LevelOnePicks.jsx`.
+- **Step 4 fighting style (Fighter).** Fighters pick one of the six 2014 styles.
+- **Step 5 expertise (Rogue).** Rogues choose 2 of their selected skills for
+  Expertise (placed after the skills picker, since it reads those choices).
+- **Schema + server.** Migration **058** adds `characters.fighting_style` and
+  `characters.expertise`; the `POST /api/character` INSERT and the PUT allowlist
+  now carry both (cantrips/spells/feats columns already existed). Save-and-resume
+  round-trips all four via the creator's progress/rehydrate helpers.
+- **Tests.** New `tests/creator-l1-picks.test.js` mounts the real character
+  router and proves POST + PUT persist cantrips/spells/feats/fighting-style/
+  expertise (14/0), confirming migration 058 and the INSERT column alignment.
+
 ## [2.9.0] - 2026-06-14 — Memory as variables (Phases 1–3): canon supersede + [SET_FACT] flag marker + continuous persistence
 
 Phases 1–3 of the memory-as-variables plan — evolving long-term memory from
