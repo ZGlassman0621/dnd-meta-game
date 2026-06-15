@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Level Up</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+    .wiz { max-width: 940px; margin: 0 auto; padding: 34px 28px 70px; }
+
+    .wiz-hero { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
+    .wiz-hero .crest { width: 64px; height: 64px; }
+    .wiz-hero .crest .mono { font-size: 30px; }
+    .wiz-hero .wh-txt .eyebrow { display: block; margin-bottom: 5px; }
+    .wiz-hero .wh-txt h1 { font-family: var(--serif); font-weight: 500; font-size: 32px; margin: 0; letter-spacing: -.012em; white-space: nowrap; }
+    .wiz-hero .lvlchip { margin-left: auto; display: inline-flex; align-items: center; gap: 12px; font-family: var(--sans); font-weight: 600; padding: 9px 16px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule)); background: color-mix(in oklab, var(--accent) 9%, transparent); }
+    .wiz-hero .lvlchip .n { font-variant-numeric: tabular-nums; font-size: 22px; color: var(--ink-3); }
+    .wiz-hero .lvlchip .n.to { color: var(--accent); }
+    .wiz-hero .lvlchip .ar { color: var(--ink-4); }
+
+    .wiz-grid { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
+
+    /* step rail */
+    .steprail { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 24px; }
+    .step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: center; padding: 12px 12px; border-radius: var(--radius); cursor: pointer; border: 1px solid transparent; transition: background .14s; }
+    .step:hover { background: var(--bg-card); }
+    .step.active { background: var(--bg-card); border-color: var(--rule); }
+    .step .sn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+    .step.active .sn { background: var(--accent); border-color: var(--accent); color: #211d17; font-weight: 600; }
+    .step.done .sn { border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); color: var(--accent); }
+    .step .st { font-family: var(--serif); font-size: 16px; color: var(--ink-3); }
+    .step.active .st { color: var(--ink); }
+    .step .sub { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+
+    /* step content */
+    .stage { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px; box-shadow: var(--shadow); min-height: 440px; display: flex; flex-direction: column; }
+    .stage-body { flex: 1; padding: 30px 32px; }
+    .pane { display: none; }
+    .pane.show { display: block; }
+    .pane h2 { font-family: var(--serif); font-weight: 500; font-size: 27px; margin: 0 0 6px; letter-spacing: -.01em; }
+    .pane .lede { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); margin-bottom: 24px; line-height: 1.5; }
+
+    /* choice cards */
+    .choices { display: grid; gap: 12px; }
+    .choices.two { grid-template-columns: 1fr 1fr; }
+    .choice { text-align: left; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 18px 19px; cursor: pointer; transition: border-color .14s, background .14s; position: relative; }
+    .choice:hover { border-color: #4a4032; }
+    .choice.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); }
+    .choice.sel::after { content: ""; position: absolute; top: 15px; right: 15px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); }
+    .choice .ct { font-family: var(--serif); font-size: 19px; color: var(--ink); margin-bottom: 4px; }
+    .choice .cn { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; color: var(--accent); letter-spacing: -.02em; line-height: 1; margin-bottom: 6px; }
+    .choice .cd { font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); line-height: 1.45; }
+    .choice .cd em { font-style: italic; color: var(--ink-2); }
+
+    .seg { display: inline-flex; gap: 5px; padding: 4px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 9px; margin-bottom: 20px; }
+    .seg button { font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); background: none; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+    .seg button.on { color: #211d17; background: var(--accent); }
+
+    .feat-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* new-feature cards */
+    .nf { display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 16px 18px; border-radius: 11px; border: 1px solid var(--rule); background: var(--bg-2); }
+    .nf + .nf { margin-top: 12px; }
+    .nf .nfi { width: 38px; height: 38px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent); }
+    .nf .nfi .ic { width: 19px; height: 19px; }
+    .nf .nft { font-family: var(--serif); font-size: 19px; color: var(--ink); display: flex; align-items: baseline; gap: 10px; }
+    .nf .nft .src { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); }
+    .nf .nfd { font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); line-height: 1.45; margin-top: 3px; }
+
+    /* review */
+    .review { display: flex; flex-direction: column; }
+    .rv { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: baseline; padding: 13px 0; border-top: 1px solid var(--rule-soft); }
+    .rv:first-child { border-top: 0; }
+    .rv .rk { font-family: var(--serif); font-size: 17px; color: var(--ink-2); }
+    .rv .rvv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 16px; color: var(--ink); }
+    .rv .rvv .from { color: var(--ink-4); font-weight: 500; }
+    .rv .rvv .ar { color: var(--ink-4); padding: 0 6px; }
+    .rv .rvv .to { color: var(--accent); }
+
+    .stage-foot { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--rule-soft); }
+    .stage-foot .prog { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); }
+    .stage-foot .spacer { flex: 1; }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></symbol>
+    <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Character Sheet.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Character sheet</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="wiz">
+    <div class="wiz-hero">
+      <div class="crest"><span class="mono">D</span></div>
+      <div class="wh-txt">
+        <span class="eyebrow">Level up</span>
+        <h1>Dravyr Wyrmrest</h1>
+      </div>
+      <div class="lvlchip"><span class="n">3</span><svg class="ic ar" style="width:16px;height:16px"><use href="#i-arrow-right"/></svg><span class="n to">4</span></div>
+    </div>
+
+    <div class="wiz-grid">
+      <!-- step rail -->
+      <nav class="steprail">
+        <div class="step active" data-step="0"><span class="sn">1</span><div><div class="st">Hit points</div><div class="sub">+CON each level</div></div></div>
+        <div class="step" data-step="1"><span class="sn">2</span><div><div class="st">Ability or feat</div><div class="sub">level 4 reward</div></div></div>
+        <div class="step" data-step="2"><span class="sn">3</span><div><div class="st">New features</div><div class="sub">monk · level 4</div></div></div>
+        <div class="step" data-step="3"><span class="sn">4</span><div><div class="st">Review</div><div class="sub">confirm</div></div></div>
+      </nav>
+
+      <!-- stage -->
+      <div class="stage">
+        <div class="stage-body">
+
+          <!-- STEP 1 -->
+          <div class="pane show" data-pane="0">
+            <h2>Roll your hit points</h2>
+            <div class="lede">A monk gains a d8 each level, plus your Constitution modifier (+2). Take the safe average, or trust the dice.</div>
+            <div class="choices two">
+              <button class="choice sel" data-grp="hp" data-hp="34"><div class="ct">Take the average</div><div class="cn">+7</div><div class="cd">A flat <em>5 (½d8+1)</em> + 2 CON. Reliable. HP 27 → <em>34</em>.</div></button>
+              <button class="choice" data-grp="hp" data-roll="1" data-hp="34"><div class="ct">Roll the d8</div><div class="cn">+3 … +10</div><div class="cd">1d8 + 2 CON. Could be a triumph or a regret — no take-backs.</div></button>
+            </div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div class="pane" data-pane="1">
+            <h2>Sharpen yourself</h2>
+            <div class="lede">At level 4 you may raise your ability scores, or take a feat instead. The Open Hand rewards a keen body.</div>
+            <div class="seg" id="asi-seg">
+              <button class="on" data-mode="asi">Improve abilities</button>
+              <button data-mode="feat">Take a feat</button>
+            </div>
+            <div id="asi-pane">
+              <div class="choices">
+                <button class="choice sel" data-grp="asi" data-rv='[["Dexterity","17","18"],["Wisdom","16","17"],["Armor Class","15","16"]]'><div class="ct">+1 Dexterity · +1 Wisdom</div><div class="cd">DEX 17 → 18 <em>(+4)</em> and WIS 16 → 17. Sharper strikes and a stronger unarmored AC — the balanced path.</div></button>
+                <button class="choice" data-grp="asi" data-rv='[["Dexterity","17","19"],["Armor Class","15","16"]]'><div class="ct">+2 Dexterity</div><div class="cd">DEX 17 → 19 <em>(+4)</em>. Maximises attack and AC now; rounds out at 20 next time.</div></button>
+                <button class="choice" data-grp="asi" data-rv='[["Constitution","14","15"],["Wisdom","16","17"]]'><div class="ct">+1 Constitution · +1 Wisdom</div><div class="cd">CON 14 → 15 and WIS 16 → 17. More hit points and a tougher concentration.</div></button>
+              </div>
+            </div>
+            <div id="feat-pane" style="display:none">
+              <div class="feat-list">
+                <button class="choice" data-grp="feat" data-rv='[["Feat","","Mobile"],["Speed","40 ft","50 ft"]]'><div class="ct">Mobile</div><div class="cd">+10 ft speed; dashing through difficult terrain costs nothing. Pure monk.</div></button>
+                <button class="choice" data-grp="feat" data-rv='[["Feat","","Alert"],["Initiative","+3","+8"]]'><div class="ct">Alert</div><div class="cd">+5 initiative and you can't be surprised — always first to move.</div></button>
+                <button class="choice" data-grp="feat" data-rv='[["Feat","","Resilient (Wis)"],["Wisdom","16","17"],["Wisdom saves","","proficient"]]'><div class="ct">Resilient · Wisdom</div><div class="cd">+1 WIS and proficiency in Wisdom saves. Hard to charm or break.</div></button>
+                <button class="choice" data-grp="feat" data-rv='[["Feat","","Tough"]]' data-toughhp="8"><div class="ct">Tough</div><div class="cd">+2 HP per level — 8 now, and more every level after.</div></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 3 -->
+          <div class="pane" data-pane="2">
+            <h2>What level 4 grants</h2>
+            <div class="lede">These come automatically with the level — no choices, just new ground beneath you.</div>
+            <div class="nf"><span class="nfi"><svg class="ic"><use href="#i-wind"/></svg></span><div><div class="nft">Slow Fall <span class="src">Monk 4</span></div><div class="nfd">As a reaction when you fall, reduce the damage by 5 × your monk level (20 right now).</div></div></div>
+            <div class="nf"><span class="nfi"><svg class="ic"><use href="#i-bolt"/></svg></span><div><div class="nft">Ki point <span class="src">Monk 4</span></div><div class="nfd">Your ki deepens — 3 → 4 points per short rest.</div></div></div>
+            <div class="nf"><span class="nfi"><svg class="ic"><use href="#i-feather"/></svg></span><div><div class="nft">Martial Arts <span class="src">unchanged</span></div><div class="nfd">Your unarmed die stays 1d6 — it grows to 1d8 at level 5.</div></div></div>
+          </div>
+
+          <!-- STEP 4 -->
+          <div class="pane" data-pane="3">
+            <h2>Confirm your ascent</h2>
+            <div class="lede">One last look before it's written into Dravyr's story.</div>
+            <div class="review" id="review"></div>
+          </div>
+
+        </div>
+        <div class="stage-foot">
+          <span class="prog" id="prog">Step 1 of 4</span>
+          <span class="spacer"></span>
+          <button class="btn" id="back" style="visibility:hidden"><svg class="ic"><use href="#i-arrow-left"/></svg>Back</button>
+          <button class="btn primary" id="next">Continue<svg class="ic"><use href="#i-arrow-right"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let step = 0; const total = 4;
+    const steps = document.querySelectorAll('.step');
+    const panes = document.querySelectorAll('.pane');
+    const back = document.getElementById('back'), next = document.getElementById('next'), prog = document.getElementById('prog');
+    function render() {
+      steps.forEach((s,i) => { s.classList.toggle('active', i===step); s.classList.toggle('done', i<step); });
+      panes.forEach((p,i) => p.classList.toggle('show', i===step));
+      back.style.visibility = step===0 ? 'hidden' : 'visible';
+      prog.textContent = 'Step ' + (step+1) + ' of ' + total;
+      next.innerHTML = step===total-1 ? 'Confirm level up<svg class="ic"><use href="#i-check"/></svg>' : 'Continue<svg class="ic"><use href="#i-arrow-right"/></svg>';
+      next.classList.toggle('primary', true);
+      buildReview();
+    }
+    function reviewRow(k, from, to) {
+      return '<div class="rv"><span class="rk">' + k + '</span><span class="rvv">' +
+        (from ? '<span class="from">' + from + '</span><span class="ar">→</span>' : '') +
+        '<span class="to">' + to + '</span></span></div>';
+    }
+    function buildReview() {
+      const rv = document.getElementById('review');
+      if (!rv) return;
+      const hpChoice = document.querySelector('.choice[data-grp="hp"].sel');
+      let hp = hpChoice ? parseInt(hpChoice.dataset.hp, 10) : 34;
+      const mode = document.querySelector('#asi-seg button.on').dataset.mode;
+      const sel = document.querySelector('#' + (mode === 'asi' ? 'asi-pane' : 'feat-pane') + ' .choice.sel');
+      const extra = sel && sel.dataset.rv ? JSON.parse(sel.dataset.rv) : [];
+      if (sel && sel.dataset.toughhp) hp += parseInt(sel.dataset.toughhp, 10);
+      let rows = reviewRow('Level', '3', '4') + reviewRow('Hit points', '27', String(hp)) + reviewRow('Ki points', '3', '4');
+      extra.forEach(r => { rows += reviewRow(r[0], r[1], r[2]); });
+      if (!sel) rows += '<div class="rv"><span class="rk" style="color:var(--ink-3);font-style:italic">Pick an ability or feat on step 2</span><span class="rvv"></span></div>';
+      rows += reviewRow('New feature', '', 'Slow Fall');
+      rv.innerHTML = rows;
+    }
+    function go(n){ step = Math.max(0, Math.min(total-1, n)); render(); window.scrollTo({top:0, behavior:'smooth'}); }
+    next.addEventListener('click', () => { if (step < total-1) go(step+1); else next.textContent = 'Leveled up ✓'; });
+    back.addEventListener('click', () => go(step-1));
+    steps.forEach((s,i) => s.addEventListener('click', () => go(i)));
+    // choice selection within a group
+    document.querySelectorAll('.choice').forEach(c => c.addEventListener('click', () => {
+      document.querySelectorAll('.choice[data-grp="'+c.dataset.grp+'"]').forEach(x => x.classList.remove('sel'));
+      c.classList.add('sel');
+      if (c.dataset.roll) {
+        const roll = Math.floor(Math.random() * 8) + 1;
+        const gain = roll + 2;
+        c.dataset.hp = String(27 + gain);
+        c.querySelector('.cn').textContent = '+' + gain;
+        c.querySelector('.cd').innerHTML = 'Rolled a <em>' + roll + '</em> on the d8, + 2 CON. HP 27 → <em>' + (27 + gain) + '</em>.';
+      }
+      buildReview();
+    }));
+    // asi / feat toggle
+    document.querySelectorAll('#asi-seg button').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('#asi-seg button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      document.getElementById('asi-pane').style.display = b.dataset.mode==='asi' ? '' : 'none';
+      document.getElementById('feat-pane').style.display = b.dataset.mode==='feat' ? '' : 'none';
+      buildReview();
+    }));
+    render();
+  </script>
+</body>
+</html>

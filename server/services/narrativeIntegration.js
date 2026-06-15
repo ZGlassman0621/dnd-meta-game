@@ -10,13 +10,8 @@
  */
 
 import { emit, GAME_EVENTS } from './eventEmitter.js';
-import * as narrativeQueueService from './narrativeQueueService.js';
 import * as companionBackstoryGenerator from './companionBackstoryGenerator.js';
 import * as companionBackstoryService from './companionBackstoryService.js';
-import * as questGenerator from './questGenerator.js';
-import * as questService from './questService.js';
-import * as locationService from './locationService.js';
-import { dbGet } from '../database.js';
 
 // ============================================================
 // ADVENTURE INTEGRATION
@@ -31,44 +26,15 @@ import { dbGet } from '../database.js';
  * @param {object} character - The character who completed the adventure
  */
 export async function onAdventureComplete(adventure, results, character) {
-  const eventData = {
-    character_id: character.id,
-    adventure_id: adventure.id,
-    title: adventure.title,
-    description: adventure.description,
-    location: adventure.location,
-    location_id: adventure.location_id,
-    risk_level: adventure.risk_level,
-    activity_type: adventure.activity_type,
-    tags: parseTags(adventure.tags),
-    success: results.success,
-    rewards: results.rewards,
-    consequences: results.consequences
-  };
-
-  // Emit adventure complete event
-  // This will trigger quest progress checker and companion trigger checker
-  await emit(GAME_EVENTS.ADVENTURE_COMPLETE, eventData);
-
-  // If adventure was successful and has location, emit location visited
-  if (results.success && adventure.location) {
-    await emitLocationVisited(character.id, adventure.location, adventure.location_id);
-  }
-
-  return eventData;
+  // Adventure system archived in MVP reduction — no-op (export retained).
+  return null;
 }
 
 /**
  * Emit adventure started event
  */
 export async function onAdventureStarted(adventure, character) {
-  await emit(GAME_EVENTS.ADVENTURE_STARTED, {
-    character_id: character.id,
-    adventure_id: adventure.id,
-    title: adventure.title,
-    location: adventure.location,
-    risk_level: adventure.risk_level
-  });
+  // Adventure system archived in MVP reduction — no-op (export retained).
 }
 
 // ============================================================
@@ -80,17 +46,7 @@ export async function onAdventureStarted(adventure, character) {
  * Call this after creating a story thread
  */
 export async function onStoryThreadCreated(thread, characterId) {
-  await emit(GAME_EVENTS.STORY_THREAD_CREATED, {
-    character_id: characterId,
-    thread_id: thread.id,
-    title: thread.title,
-    description: thread.description,
-    type: thread.thread_type || thread.type,
-    quest_relevance: thread.quest_relevance,
-    consequence_category: thread.consequence_category,
-    related_npcs: thread.relatedNpcs || thread.related_npcs,
-    related_locations: thread.relatedLocations || thread.related_locations
-  });
+  // Story threads cluster archived in MVP reduction — no-op (export retained).
 }
 
 /**
@@ -98,17 +54,7 @@ export async function onStoryThreadCreated(thread, characterId) {
  * Call this after resolving a story thread
  */
 export async function onStoryThreadResolved(thread, characterId, resolution) {
-  await emit(GAME_EVENTS.STORY_THREAD_RESOLVED, {
-    character_id: characterId,
-    thread_id: thread.id,
-    thread: {
-      title: thread.title,
-      description: thread.description,
-      type: thread.thread_type || thread.type,
-      consequence_category: thread.consequence_category
-    },
-    resolution
-  });
+  // Story threads cluster archived in MVP reduction — no-op (export retained).
 }
 
 // ============================================================
@@ -124,20 +70,11 @@ export async function onStoryThreadResolved(thread, characterId, resolution) {
  * @returns {object} Narrative context to include in session
  */
 export async function getNarrativeContextForSession(characterId, campaignId = null) {
-  // Get pending items from narrative queue
-  const pendingItems = await narrativeQueueService.getPendingItems(
-    campaignId,
-    characterId,
-    { limit: 10 }
-  );
-
-  // Format for AI context
-  const narrativeContext = narrativeQueueService.formatForAIContext(pendingItems);
-
+  // Narrative queue system removed in MVP reduction — return empty context.
   return {
-    narrativeQueueItems: pendingItems,
-    formattedContext: narrativeContext,
-    itemCount: pendingItems.length
+    narrativeQueueItems: [],
+    formattedContext: '',
+    itemCount: 0
   };
 }
 
@@ -148,9 +85,7 @@ export async function getNarrativeContextForSession(characterId, campaignId = nu
  * @param {number} sessionId - The DM session ID
  */
 export async function markNarrativeItemsDelivered(itemIds, sessionId) {
-  for (const itemId of itemIds) {
-    await narrativeQueueService.markDelivered(itemId, sessionId);
-  }
+  // Narrative queue system removed in MVP reduction — no-op.
 }
 
 /**
@@ -218,17 +153,6 @@ export async function onCompanionRecruited(companion, character, campaign = null
       ...backstoryData
     });
 
-    // Add to narrative queue to inform player in next DM session
-    await narrativeQueueService.addCompanionReaction(
-      character.id,
-      { id: companion.id, name: companion.name },
-      {
-        type: 'recruitment',
-        description: `${companion.name} has joined your party with their own history and goals.`
-      },
-      { recruitment: true }
-    );
-
     return backstory;
   } catch (error) {
     console.error('Failed to generate companion backstory:', error);
@@ -280,86 +204,20 @@ export async function onLocationDiscovered(characterId, location) {
 
   await emit(GAME_EVENTS.LOCATION_DISCOVERED, eventData);
 
-  // Check if we should generate a one-time quest for this location
-  if (location.danger_level >= 3 && location.location_type !== 'city') {
-    try {
-      await generateLocationQuest(characterId, location);
-    } catch (error) {
-      console.error('Failed to generate location quest:', error);
-    }
-  }
+  // Location-driven quest generation removed in MVP reduction (quest/location
+  // services archived). Event emission retained for kept consumers.
 }
 
 /**
  * Emit location visited event
  */
 export async function emitLocationVisited(characterId, locationName, locationId = null) {
-  let locationData = { location_name: locationName };
-
-  if (locationId) {
-    const location = await locationService.getLocationById(locationId);
-    if (location) {
-      locationData = {
-        location_id: location.id,
-        location_name: location.name,
-        location_type: location.location_type,
-        location_tags: parseTags(location.tags),
-        region: location.region
-      };
-
-      // Update visit count
-      await locationService.updateLocation(locationId, {
-        times_visited: (location.times_visited || 0) + 1
-      });
-    }
-  }
-
+  // Location persistence service archived in MVP reduction — emit with the
+  // location name only (no DB lookup / visit-count update).
   await emit(GAME_EVENTS.LOCATION_VISITED, {
     character_id: characterId,
-    ...locationData
+    location_name: locationName
   });
-}
-
-/**
- * Generate a one-time quest for a discovered location
- */
-async function generateLocationQuest(characterId, location) {
-  const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
-  if (!character) return;
-
-  // Determine quest type based on location
-  let questType = 'exploration';
-  if (location.danger_level >= 6) questType = 'bounty';
-  else if (location.location_type === 'ruins' || location.location_type === 'dungeon') questType = 'retrieval';
-
-  const questData = await questGenerator.generateOneTimeQuest({
-    character,
-    location,
-    questType
-  });
-
-  // Create the quest
-  const quest = await questService.createQuest(questData.quest);
-
-  // Add requirements
-  for (const req of questData.requirements) {
-    await questService.addRequirement(quest.id, req);
-  }
-
-  // Add to narrative queue
-  await narrativeQueueService.addItem({
-    campaign_id: character.campaign_id,
-    character_id: characterId,
-    event_type: 'quest_available',
-    priority: 'low',
-    title: `New Opportunity: ${quest.title}`,
-    description: quest.premise,
-    context: { quest_id: quest.id, location_id: location.id },
-    related_quest_id: quest.id,
-    related_location_id: location.id
-  });
-
-  return quest;
 }
 
 // ============================================================

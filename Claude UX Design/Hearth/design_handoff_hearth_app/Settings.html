@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Settings</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+    .settings { max-width: 720px; margin: 0 auto; padding: 46px 28px 90px; }
+    .set-title { font-family: var(--serif); font-weight: 500; font-size: 38px; letter-spacing: -.014em; margin: 0 0 6px; }
+    .set-sub { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink-2); margin-bottom: 30px; }
+
+    .set-card { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 13px; box-shadow: var(--shadow-sm); overflow: hidden; }
+    .set-row { padding: 20px 24px; border-top: 1px solid var(--rule-soft); }
+    .set-row:first-child { border-top: 0; }
+    .set-row .sr-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    .set-row .sr-name { font-family: var(--serif); font-size: 20px; color: var(--ink); white-space: nowrap; }
+    .set-row .sr-val { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+    .set-row .sr-desc { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-3); margin-top: 5px; line-height: 1.5; }
+
+    /* segmented dial */
+    .dial { display: flex; gap: 5px; }
+    .dial button { flex: 1; font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 8px; cursor: pointer; transition: all .14s; }
+    .dial button:hover { color: var(--ink); border-color: #4a4032; }
+    .dial button.on { color: #211d17; background: var(--accent); border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.22); }
+
+    /* slider dial */
+    .slider { padding: 6px 0 2px; }
+    .slider-poles { display: flex; justify-content: space-between; margin-bottom: 11px; }
+    .slider-poles span { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); }
+    .slider-track { position: relative; height: 6px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--rule-soft); }
+    .slider-track .fillp { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: color-mix(in oklab, var(--accent) 55%, var(--bg-2)); }
+    .slider-track .knob { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-card); transform: translate(-50%,-50%); box-shadow: 0 1px 6px rgba(0,0,0,.4), 0 0 10px color-mix(in oklab, var(--accent) 50%, transparent); cursor: grab; }
+    .slider-ticks { display: flex; justify-content: space-between; margin-top: 9px; }
+    .slider-ticks button { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); background: none; border: 0; padding: 2px 4px; cursor: pointer; transition: color .14s; }
+    .slider-ticks button:hover { color: var(--ink); }
+    .slider-ticks button.cur { color: var(--accent); font-weight: 600; }
+
+    /* toggle */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 24px; border-top: 1px solid var(--rule-soft); }
+    .toggle-row .tn { font-family: var(--serif); font-size: 17px; color: var(--ink); }
+    .toggle-row .td { font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.4; }
+    .switch { width: 42px; height: 24px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--rule); position: relative; cursor: pointer; flex-shrink: 0; transition: background .16s, border-color .16s; }
+    .switch .dot { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink-3); transition: transform .16s, background .16s; }
+    .switch.on { background: color-mix(in oklab, var(--accent) 30%, var(--bg-2)); border-color: var(--accent); }
+    .switch.on .dot { transform: translateX(18px); background: var(--accent); }
+
+    /* select */
+    .sset { font-family: var(--serif); font-size: 16px; color: var(--ink); background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 13px; outline: none; min-width: 180px; }
+    .sset:focus { border-color: color-mix(in oklab, var(--accent) 55%, var(--rule)); }
+
+    .set-foot { display: flex; align-items: center; gap: 14px; margin-top: 22px; }
+    .saved { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--good); opacity: 0; transform: translateX(-6px); transition: opacity .25s, transform .25s; }
+    .saved.show { opacity: 1; transform: none; }
+    .saved .ic { width: 15px; height: 15px; }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Dashboard.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Dravyr's home</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="settings">
+    <h1 class="set-title">Settings</h1>
+    <div class="set-sub">How the Dungeon Master tells your story. Changes apply to <em>The Hollow Man</em> from your next message.</div>
+
+    <div class="set-card">
+      <div class="set-row">
+        <div class="sr-top"><span class="sr-name">Difficulty</span><span class="sr-val" id="diff-val">Balanced</span></div>
+        <div class="dial" data-desc="diff-desc" data-val="diff-val">
+          <button data-val="Storyteller" data-desc="The story bends to keep you standing. Setbacks happen, but death is rare and always meaningful.">Storyteller</button>
+          <button class="on" data-val="Balanced" data-desc="A fair table. The dice matter and the world pushes back, but survival is well within reach.">Balanced</button>
+          <button data-val="Gritty" data-desc="Resources are scarce and wounds linger. Every fight is a real risk and rest is hard-won.">Gritty</button>
+          <button data-val="Deadly" data-desc="The dice fall where they may. A single bad turn can end a character — play carefully.">Deadly</button>
+        </div>
+        <div class="sr-desc" id="diff-desc">A fair table. The dice matter and the world pushes back, but survival is well within reach.</div>
+      </div>
+
+      <div class="set-row">
+        <div class="sr-top"><span class="sr-name">Narrative intensity</span><span class="sr-val" id="int-val">Measured</span></div>
+        <div class="slider">
+          <div class="slider-poles"><span>Gentle</span><span>Unflinching</span></div>
+          <div class="slider-track"><div class="fillp" id="int-fill" style="width:38%"></div><div class="knob" id="int-knob" style="left:38%"></div></div>
+          <div class="slider-ticks">
+            <button data-pos="8" data-val="Cozy" data-desc="Warm and low-stakes. Danger stays off the page; the focus is people, places, and small wonders.">Cozy</button>
+            <button class="cur" data-pos="38" data-val="Measured" data-desc="Real peril, handled with restraint. Dread is implied more than shown.">Measured</button>
+            <button data-pos="66" data-val="Tense" data-desc="The prose leans into fear and consequence. Threats feel close and personal.">Tense</button>
+            <button data-pos="92" data-val="Harrowing" data-desc="Unflinching. Horror, loss, and the full weight of what the dark costs.">Harrowing</button>
+          </div>
+        </div>
+        <div class="sr-desc" id="int-desc">Real peril, handled with restraint. Dread is implied more than shown.</div>
+      </div>
+
+      <div class="set-row">
+        <div class="sr-top"><span class="sr-name">Combat lethality</span><span class="sr-val" id="leth-val">Standard</span></div>
+        <div class="dial" data-desc="leth-desc" data-val="leth-val">
+          <button data-val="Forgiving" data-desc="Enemies pull their punches; a downed ally usually stabilizes on their own.">Forgiving</button>
+          <button class="on" data-val="Standard" data-desc="Damage and death follow the rules as written — dangerous, but not cruel.">Standard</button>
+          <button data-val="Lethal" data-desc="Enemies fight to win and exploit every opening. Going down often means going out.">Lethal</button>
+        </div>
+        <div class="sr-desc" id="leth-desc">Damage and death follow the rules as written — dangerous, but not cruel.</div>
+      </div>
+
+      <div class="set-row">
+        <div class="sr-top"><span class="sr-name">The DM's voice</span><span class="sr-val" id="voice-val">Lyrical</span></div>
+        <select class="sset" id="voice-sel" style="width:100%">
+          <option data-val="Lyrical" data-desc="Rich, image-led prose with a measured, bookish cadence — the default Hearth voice.">Lyrical &amp; literary</option>
+          <option data-val="Plain" data-desc="Direct and unadorned. Fast to read, easy to act on, light on flourish.">Plain &amp; clear</option>
+          <option data-val="Wry" data-desc="A touch of humor and warmth; the world doesn't take itself too seriously.">Wry &amp; warm</option>
+          <option data-val="Grim" data-desc="Short, cold sentences. Bleak, restrained, and heavy with what's left unsaid.">Grim &amp; spare</option>
+        </select>
+        <div class="sr-desc" id="voice-desc">Rich, image-led prose with a measured, bookish cadence — the default Hearth voice.</div>
+      </div>
+    </div>
+
+    <div class="sec-head" style="margin:30px 0 14px"><h2>Table rules</h2><span class="glyph">❧</span><span class="fl"></span></div>
+    <div class="set-card">
+      <div class="toggle-row">
+        <div><div class="tn">Death saves in the open</div><div class="td">Show your death-save rolls instead of hiding them.</div></div>
+        <div class="switch on" role="switch"><span class="dot"></span></div>
+      </div>
+      <div class="toggle-row">
+        <div><div class="tn">Allow a single retcon</div><div class="td">Let me take back my last action once per scene.</div></div>
+        <div class="switch on" role="switch"><span class="dot"></span></div>
+      </div>
+      <div class="toggle-row">
+        <div><div class="tn">Describe wounds vividly</div><div class="td">Graphic injury detail in combat narration.</div></div>
+        <div class="switch" role="switch"><span class="dot"></span></div>
+      </div>
+    </div>
+
+    <div class="set-foot">
+      <button class="btn primary lg" id="apply">Apply changes</button>
+      <span class="saved" id="saved"><svg class="ic"><use href="#i-check"/></svg>Saved</span>
+    </div>
+  </main>
+
+  <script>
+    // Dials (difficulty, lethality): update value + description
+    document.querySelectorAll('.dial').forEach(dial => {
+      const valEl = document.getElementById(dial.dataset.val);
+      const descEl = document.getElementById(dial.dataset.desc);
+      dial.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        dial.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        if (valEl) valEl.textContent = b.dataset.val;
+        if (descEl) descEl.textContent = b.dataset.desc;
+      }));
+    });
+
+    // Narrative intensity ticks: move knob + update
+    const intFill = document.getElementById('int-fill');
+    const intKnob = document.getElementById('int-knob');
+    const intVal = document.getElementById('int-val');
+    const intDesc = document.getElementById('int-desc');
+    document.querySelectorAll('.slider-ticks button').forEach(t => t.addEventListener('click', () => {
+      document.querySelectorAll('.slider-ticks button').forEach(x => x.classList.remove('cur'));
+      t.classList.add('cur');
+      const pos = t.dataset.pos + '%';
+      intFill.style.width = pos;
+      intKnob.style.left = pos;
+      intVal.textContent = t.dataset.val;
+      intDesc.textContent = t.dataset.desc;
+    }));
+
+    // DM voice select
+    const voiceSel = document.getElementById('voice-sel');
+    voiceSel.addEventListener('change', () => {
+      const opt = voiceSel.options[voiceSel.selectedIndex];
+      document.getElementById('voice-val').textContent = opt.dataset.val;
+      document.getElementById('voice-desc').textContent = opt.dataset.desc;
+    });
+
+    document.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
+    const apply = document.getElementById('apply'), saved = document.getElementById('saved');
+    apply.addEventListener('click', () => { saved.classList.add('show'); setTimeout(() => saved.classList.remove('show'), 2200); });
+  </script>
+</body>
+</html>

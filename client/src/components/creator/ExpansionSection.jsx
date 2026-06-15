@@ -20,78 +20,84 @@ export default function ExpansionSection({
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
+  // Hearth idiom: the design's `details.more` collapsible — a rule-topped
+  // summary row (chevron that rotates 90° when open + uppercase label +
+  // italic count/hint) over a `.more-body`. We keep it as a controlled
+  // button/div pair (rather than native <details>) so the caller's
+  // defaultOpen + local toggle behaviour is preserved exactly.
   return (
-    <div
-      style={{
-        border: '1px solid var(--rule)',
-        background: 'var(--bg-card)',
-        marginBottom: 14
-      }}
-    >
+    <div className="more" style={{ marginTop: 0, marginBottom: 14 }}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
         style={{
-          display: 'flex',
           width: '100%',
+          listStyle: 'none',
+          cursor: 'pointer',
+          display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '18px 24px',
+          gap: 9,
+          padding: '15px 2px 4px',
           background: 'transparent',
           border: 0,
-          borderBottom: open ? '1px solid var(--rule-soft)' : 'none',
           textAlign: 'left',
-          cursor: 'pointer',
-          fontFamily: 'var(--serif)'
+          fontFamily: 'var(--sans)',
+          fontWeight: 600,
+          fontSize: 11,
+          letterSpacing: '.14em',
+          textTransform: 'uppercase',
+          color: 'var(--ink-3)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
-          {/* Chevron marker — rotates 90° when open. Visual cue that the
-              section is expandable (per PM review feedback). */}
-          <span
-            aria-hidden="true"
-            style={{
-              display: 'inline-block',
-              fontFamily: 'var(--mono)',
-              fontSize: 14,
-              color: 'var(--accent)',
-              transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-              transition: 'transform 0.15s ease',
-              width: 12,
-              textAlign: 'center'
-            }}
-          >
-            ▸
+        {/* Chevron marker — rotates 90° when open. Visual cue that the
+            section is expandable (per PM review feedback). */}
+        <svg
+          className="ic chev"
+          aria-hidden="true"
+          style={{
+            width: 14,
+            height: 14,
+            color: 'var(--ink-4)',
+            transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform .18s'
+          }}
+        >
+          <use href="#i-chevron-right" />
+        </svg>
+        <span>{label}</span>
+        {description && (
+          <span className="ct" style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 10,
+            letterSpacing: '.04em',
+            color: 'var(--ink-4)',
+            textTransform: 'none'
+          }}>
+            {description}
           </span>
-          <span style={{ fontSize: 22, color: 'var(--ink)', letterSpacing: '-0.005em' }}>
-            {label}
-          </span>
-          {description && (
-            <span style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 15,
-              color: 'var(--ink-3)'
-            }}>
-              {description}
-            </span>
-          )}
-        </div>
+        )}
         {!open && hasContent && (
           <span style={{
+            marginLeft: 'auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
             fontFamily: 'var(--sans)',
-            fontSize: 10,
-            letterSpacing: '0.18em',
+            fontSize: 9,
+            letterSpacing: '.18em',
             textTransform: 'uppercase',
             color: 'var(--accent)'
           }}>
-            ✓ filled
+            <svg className="ic" aria-hidden="true" style={{ width: 11, height: 11 }}>
+              <use href="#i-check" />
+            </svg>
+            Filled
           </span>
         )}
       </button>
       {open && (
-        <div style={{ padding: 24 }}>
+        <div className="more-body" style={{ paddingTop: 14 }}>
           {children}
         </div>
       )}

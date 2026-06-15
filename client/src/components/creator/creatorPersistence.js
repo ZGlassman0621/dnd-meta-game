@@ -38,10 +38,79 @@
 
 import classesData from '../../data/classes.json'
 import racesData from '../../data/races.json'
+import equipmentData from '../../data/equipment.json'
 import { applyGoldModifier } from '../../data/themeGoldModifiers.js'
 import { THEME_BACKSTORY_MOMENTS } from '../../data/themeBackstoryMoments.js'
+import { resolveOptionLabel, ALL_ARMOR } from './equipmentResolver.js'
 
 const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+
+const abilityMod = (score) => Math.floor(((Number(score) ?? 10) - 10) / 2)
+
+// Parse a JSON-array TEXT column (e.g. characters.feats) into a real array,
+// tolerating null / already-parsed / malformed values.
+function parseJsonArray(v) {
+  if (Array.isArray(v)) return v
+  if (typeof v !== 'string' || !v.trim()) return []
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : [] } catch { return [] }
+}
+
+/**
+ * Resolve the equipment-package picks into worn slots { armor, mainHand,
+ * offHand } — the shape the character sheet reads for AC, attacks, and the
+ * Equipment tab. Shields land in offHand; the first body armor in armor; the
+ * first weapon in mainHand (second weapon → offHand for dual-wield).
+ */
+function deriveWornEquipment(equipmentPicks, equipmentSubpicks) {
+  const worn = {}
+  const shieldNames = new Set((equipmentData.armor?.shields || []).map(s => String(s.name).toLowerCase()))
+  Object.entries(equipmentPicks || {}).forEach(([idxKey, label]) => {
+    if (!label) return
+    const finalLabel = (equipmentSubpicks || {})[idxKey] || label
+    const { items } = resolveOptionLabel(finalLabel)
+    for (const it of (items || [])) {
+      const nm = it.name
+      if (!nm) continue
+      if (shieldNames.has(String(nm).toLowerCase())) {
+        if (!worn.offHand) worn.offHand = { name: nm }
+      } else if (it.kind === 'armor') {
+        if (!worn.armor) worn.armor = { name: nm }
+      } else if (it.kind === 'weapon') {
+        if (!worn.mainHand) worn.mainHand = { name: nm }
+        else if (!worn.offHand) worn.offHand = { name: nm }
+      }
+    }
+  })
+  return worn
+}
+
+/**
+ * Starting AC from worn armor/shield + dexterity, with monk/barbarian
+ * Unarmored Defense. Mirrors CharacterSheet.calcEquipmentAC so the stored
+ * value matches what the sheet would compute.
+ */
+function computeStartingAC(worn, abilityScores, classId) {
+  const cls = String(classId || '').toLowerCase()
+  const dexMod = abilityMod(abilityScores.dex)
+  let ac = 10 + dexMod
+  if (worn.armor) {
+    const ad = ALL_ARMOR.find(a => a.name === worn.armor.name)
+    if (ad?.baseAC != null) {
+      if (ad.armorType === 'heavy') ac = ad.baseAC
+      else if (ad.armorType === 'medium') ac = ad.baseAC + Math.min(dexMod, ad.maxDexBonus ?? 2)
+      else ac = ad.baseAC + dexMod
+    }
+  } else if (cls === 'monk') {
+    ac = 10 + dexMod + abilityMod(abilityScores.wis)
+  } else if (cls === 'barbarian') {
+    ac = 10 + dexMod + abilityMod(abilityScores.con)
+  }
+  if (worn.offHand) {
+    const sd = (equipmentData.armor?.shields || []).find(s => s.name === worn.offHand.name)
+    if (sd?.acBonus) ac += sd.acBonus
+  }
+  return ac
+}
 
 /**
  * Submit the creator. Branches on `mode`:
@@ -54,8 +123,13 @@ const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
  *
  * Returns: { character_id, campaign_id (when generated), mode }
  */
-export async function submitCreator({ state, mode, preludePayload }) {
+export async function submitCreator({ state, mode, preludePayload, characterId = null }) {
   const body = buildSubmitBody(state, mode, preludePayload)
+
+  // The draft row's id. Manual mode threads it from CharacterCreatorV2's
+  // `characterId` state (set when Step 1 advance created the 'creating' row).
+  // Falling back to state.character_id keeps the preview/test shape working.
+  const draftId = characterId || state.character_id
 
   let url, method
   if (mode === 'handoff') {
@@ -64,8 +138,9 @@ export async function submitCreator({ state, mode, preludePayload }) {
     }
     url = `/api/character/${preludePayload.character_id}`
     method = 'PUT'
-  } else if (state.character_id) {
-    url = `/api/character/${state.character_id}`
+  } else if (draftId) {
+    // Flip the existing 'creating' draft in place → no duplicate orphan row.
+    url = `/api/character/${draftId}`
     method = 'PUT'
   } else {
     url = '/api/character'
@@ -119,6 +194,22 @@ export function buildSubmitBody(state, mode, preludePayload) {
     abilityScores[k] = Math.min(18, base + racialStatic + racialChoice + bumpTotal)
   }
 
+  // Creator-granted feats (currently only the Variant Human bonus feat). Keep a
+  // Variant Human feat only if the character is actually a Variant Human, so a
+  // race change after picking can't leave a stale feat behind.
+  const isVariantHuman = state.race === 'human' && state.subrace === 'Variant Human'
+  const creatorFeats = (state.feats || []).filter(
+    f => f.source !== 'variant_human' || isVariantHuman
+  )
+  // Half-feats grant +1 to a chosen ability (e.g. Actor → CHA). Apply after the
+  // racial 18-cap, capped at the L1 maximum of 20.
+  for (const feat of creatorFeats) {
+    const ab = feat?.abilityChoice
+    if (ab && abilityScores[ab] != null) {
+      abilityScores[ab] = Math.min(20, abilityScores[ab] + 1)
+    }
+  }
+
   // Starting gold: class baseline × theme modifier (rounded half-up).
   const baselineGp = cls?.startingGold?.average || 0
   const goldGp = state.theme_id ? applyGoldModifier(baselineGp, state.theme_id) : baselineGp
@@ -131,6 +222,7 @@ export function buildSubmitBody(state, mode, preludePayload) {
   const inventory = []
   const equipmentPicks = state.equipment_picks || {}
   const equipmentSubpicks = state.equipment_subpicks || {}
+  const PACKS = equipmentData.packs || {}
   Object.entries(equipmentPicks).forEach(([idxKey, label]) => {
     if (!label) return
     const i = Number(idxKey)
@@ -140,12 +232,33 @@ export function buildSubmitBody(state, mode, preludePayload) {
     // a defensive default.
     const subpick = equipmentSubpicks[idxKey]
     const finalLabel = subpick || label
-    inventory.push({
-      label: finalLabel,
-      original_pick: label,
-      source: 'class_package',
-      pick_index: i
-    })
+    const pack = PACKS[finalLabel]
+    if (pack && Array.isArray(pack.contents) && pack.contents.length) {
+      // Expand a pack into its individual items so the player (and the DM,
+      // who reads the inventory) can see and use the contents — bedroll,
+      // rations, rope, torches — not an opaque "Explorer's Pack" line.
+      // `pack_source` keeps the provenance for a future grouped display.
+      pack.contents.forEach(itemName => {
+        inventory.push({
+          name: itemName,
+          label: itemName,
+          original_pick: label,
+          source: 'class_package',
+          pack_source: finalLabel,
+          pick_index: i
+        })
+      })
+    } else {
+      inventory.push({
+        // `name` mirrors `label` so server-side inventory/reward code (which
+        // keys off `name`) never crashes on package items (Phase A fix).
+        name: finalLabel,
+        label: finalLabel,
+        original_pick: label,
+        source: 'class_package',
+        pick_index: i
+      })
+    }
   })
   if (state.heirloom && state.heirloom.name) {
     inventory.push({
@@ -169,6 +282,14 @@ export function buildSubmitBody(state, mode, preludePayload) {
 
   const id = state.identity || {}
 
+  // Worn equipment + derived L1 vitals (Phase A fix). The server recomputes
+  // HP/unarmored-AC as a safety net, but sending real values here makes
+  // armored AC correct and populates the sheet immediately.
+  const worn = deriveWornEquipment(equipmentPicks, equipmentSubpicks)
+  const hitDie = cls?.hitDie || 8
+  const maxHp = Math.max(1, hitDie + abilityMod(abilityScores.con))
+  const armorClass = computeStartingAC(worn, abilityScores, state.class_id)
+
   return {
     // Core identity
     name: [state.first_name, state.last_name].filter(Boolean).join(' ').trim() || state.first_name,
@@ -183,14 +304,26 @@ export function buildSubmitBody(state, mode, preludePayload) {
     theme_id: state.theme_id || null,
     ancestry_feat_id: state.ancestry_feat_id || null,
     ancestry_feat_choices: state.ancestry_feat_choices || null,
+    feats: JSON.stringify(creatorFeats),
     class: state.class_id || null,
     subclass: state.subclass_id || null,
+
+    // Level-1 class picks (Step 4 / Step 5). Spells stored as name arrays;
+    // fighting style / expertise gated to the classes that grant them.
+    known_cantrips: JSON.stringify(state.known_cantrips || []),
+    known_spells: JSON.stringify(state.known_spells || []),
+    fighting_style: state.class_id === 'fighter' ? (state.fighting_style || null) : null,
+    expertise: JSON.stringify(state.class_id === 'rogue' ? (state.expertise || []) : []),
 
     // L1
     level: 1,
     ability_scores: JSON.stringify(abilityScores),
     skills: JSON.stringify(skills),
     inventory: JSON.stringify(inventory),
+    equipment: JSON.stringify(worn),
+    max_hp: maxHp,
+    current_hp: maxHp,
+    armor_class: armorClass,
     gold_gp: goldGp,
     starting_gold_gp: goldGp,
 
@@ -349,6 +482,11 @@ export function buildProgressBody(state) {
   if (state.ancestry_feat_choices && Object.keys(state.ancestry_feat_choices).length > 0) {
     body.ancestry_feat_choices = state.ancestry_feat_choices
   }
+  if (state.feats && state.feats.length > 0) body.feats = JSON.stringify(state.feats)
+  if (state.known_cantrips && state.known_cantrips.length > 0) body.known_cantrips = JSON.stringify(state.known_cantrips)
+  if (state.known_spells && state.known_spells.length > 0) body.known_spells = JSON.stringify(state.known_spells)
+  if (state.fighting_style) body.fighting_style = state.fighting_style
+  if (state.expertise && state.expertise.length > 0) body.expertise = JSON.stringify(state.expertise)
 
   // --- Step 3 ---
   if (state.theme_id) body.theme_id = state.theme_id
@@ -412,6 +550,11 @@ export function rehydrateManualCreatorState(character) {
     subrace: character.subrace || '',
     ancestry_feat_id: character.ancestry_feat_id || null,
     ancestry_feat_choices: character.ancestry_feat_choices || {},
+    feats: parseJsonArray(character.feats),
+    known_cantrips: parseJsonArray(character.known_cantrips),
+    known_spells: parseJsonArray(character.known_spells),
+    fighting_style: character.fighting_style || '',
+    expertise: parseJsonArray(character.expertise),
     theme_id: character.theme_id || '',
     class_id: character.class || '',
     subclass_id: character.subclass || '',
@@ -468,6 +611,11 @@ export function rehydrateHandoffCreatorState(character, payload) {
     subrace: character.subrace || payload?.subrace || '',
     ancestry_feat_id: character.ancestry_feat_id || payload?.ancestry_feat_id || null,
     ancestry_feat_choices: character.ancestry_feat_choices || {},
+    feats: parseJsonArray(character.feats),
+    known_cantrips: parseJsonArray(character.known_cantrips),
+    known_spells: parseJsonArray(character.known_spells),
+    fighting_style: character.fighting_style || '',
+    expertise: parseJsonArray(character.expertise),
     theme_id: character.theme_id || payload?.committed_theme || '',
     class_id: character.class || payload?.class_suggestion || '',
     subclass_id: character.subclass || '',

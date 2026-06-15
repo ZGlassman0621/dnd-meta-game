@@ -7,6 +7,7 @@
 
 import { Router } from 'express';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
+import { safeParse } from '../utils/safeParse.js';
 import {
   getChroniclesForCampaign,
   getTimelineForCharacter,
@@ -27,14 +28,14 @@ router.get('/campaign/:campaignId', async (req, res) => {
     // Parse JSON fields for each chronicle
     const parsed = chronicles.map(c => ({
       ...c,
-      key_decisions: JSON.parse(c.key_decisions || '[]'),
-      npcs_involved: JSON.parse(c.npcs_involved || '[]'),
-      locations_visited: JSON.parse(c.locations_visited || '[]'),
-      quests_progressed: JSON.parse(c.quests_progressed || '[]'),
-      combat_encounters: JSON.parse(c.combat_encounters || '[]'),
-      items_gained: JSON.parse(c.items_gained || '[]'),
-      items_lost: JSON.parse(c.items_lost || '[]'),
-      companion_deaths: JSON.parse(c.companion_deaths || '[]')
+      key_decisions: safeParse(c.key_decisions, []),
+      npcs_involved: safeParse(c.npcs_involved, []),
+      locations_visited: safeParse(c.locations_visited, []),
+      quests_progressed: safeParse(c.quests_progressed, []),
+      combat_encounters: safeParse(c.combat_encounters, []),
+      items_gained: safeParse(c.items_gained, []),
+      items_lost: safeParse(c.items_lost, []),
+      companion_deaths: safeParse(c.companion_deaths, [])
     }));
 
     res.json(parsed);

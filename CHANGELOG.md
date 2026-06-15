@@ -2,6 +2,757 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.10.0] - 2026-06-15 — Character creator: wire up the missing level-1 picks (feat / spells / fighting style / expertise)
+
+The V2 creator collected ancestry feats but left several level-1 mechanical
+choices as placeholders. This fills them in, reusing existing data
+(`feats.json`, `spells.json`, `classes.json`) and the level-up picker patterns.
+
+- **Variant Human bonus feat (Step 5).** Humans who pick the "Variant Human"
+  lineage now choose a general feat from `feats.json`. Feats whose ability-score
+  prerequisites aren't met are dimmed; half-feats (Actor, Athlete, …) prompt for
+  the +1 ability, which is applied to the final scores (after the racial 18-cap,
+  capped at 20). Persists to `characters.feats` in the canonical
+  `{key,name,abilityChoice,…}` shape; clears if you leave Variant Human; shows on
+  the Step 8 review.
+- **Step 4 cantrips & spells (fixes casters starting empty).** Spellcasting
+  classes now pick their level-1 cantrips and spells: cantrips for cleric / druid
+  / wizard / sorcerer / bard / warlock; known spells for sorcerer / bard /
+  warlock; the wizard's 6-spell spellbook. Cleric/druid (prepared) pick cantrips
+  only; ranger/paladin have nothing at L1. Counts from `classes.json`; spell lists
+  filtered from `spells.json` by each spell's `classes`. Persists to
+  `known_cantrips` / `known_spells`. New `client/.../creator/Step4LevelOnePicks.jsx`.
+- **Step 4 fighting style (Fighter).** Fighters pick one of the six 2014 styles.
+- **Step 5 expertise (Rogue).** Rogues choose 2 of their selected skills for
+  Expertise (placed after the skills picker, since it reads those choices).
+- **Schema + server.** Migration **058** adds `characters.fighting_style` and
+  `characters.expertise`; the `POST /api/character` INSERT and the PUT allowlist
+  now carry both (cantrips/spells/feats columns already existed). Save-and-resume
+  round-trips all four via the creator's progress/rehydrate helpers.
+- **Tests.** New `tests/creator-l1-picks.test.js` mounts the real character
+  router and proves POST + PUT persist cantrips/spells/feats/fighting-style/
+  expertise (14/0), confirming migration 058 and the INSERT column alignment.
+
+## [2.9.0] - 2026-06-14 — Memory as variables (Phases 1–3): canon supersede + [SET_FACT] flag marker + continuous persistence
+
+Phases 1–3 of the memory-as-variables plan — evolving long-term memory from
+accumulating prose-recall toward game-style overwritable variables. Built as a
+gated, dependency-ordered multi-agent pipeline; every phase passed a build + test
++ adversarial-review gate, then an independent backstop run. Phase 4 (flag-aware,
+scene-scoped retrieval) is the deliberate follow-up. NOTE: CLAUDE.md architecture
+snapshot update is deferred to the next session (storm-prep commit).
+
+- **Phase 1 — canon facts behave like overwritable variables.** Added a nullable
+  `field` column to `canon_facts` (migration 057) + a partial unique index on
+  `(campaign_id, character_id, subject, category, field) WHERE is_active=1 AND
+  field IS NOT NULL`. `recordCanonFact` gained a trailing `field` param and a
+  category policy: TERMINAL (`death`/`npc_death` — never superseded, protects
+  deaths-don't-resurrect), APPEND_ONLY (`event`/`lore`/`player_choice`), and
+  OVERWRITABLE (npc/location/quest/item/secret/promise/world_flag). A field-bearing
+  overwritable fact now retires the prior same-key value (newest wins) and links it
+  via `superseded_by`; field-null free-form facts keep their prior behavior.
+  `propagateNpcDeath`'s raw INSERT was routed through `recordCanonFact` so no path
+  bypasses the invariant. `tests/canon-variables.test.js`.
+- **Phase 2 — `[SET_FACT]` dynamic flag marker.** The DM can now record emergent
+  state at runtime (`[SET_FACT Subject="player" Field="hates_boats" Value="true"]`),
+  persisted per turn through Phase 1's overwrite-by-key. New `markerSchemas` entry +
+  strip coverage, new `factFlagService.js` handler, an always-on prompt block, and
+  dispatch wiring in `dmSession.js`. `tests/set-fact-marker.test.js`.
+- **Phase 3 — continuous persistence.** New `sessionRecoveryService.js` +
+  boot-time `recoverAbandonedSessions()` sweep (deferred, unref'd, fully defensive)
+  so a session abandoned before `/end-session` still gets chronicled on next boot.
+  The lossy >40k-char head+tail transcript truncation in `generateSessionChronicle`
+  is replaced with the non-lossy map-reduce summarizer (promoted to an exported
+  `summarizeMessagesMapReduce`). `tests/session-recovery.test.js`.
+- **CRITICAL pre-existing bug fixed (found during Phase 3).** `generateSessionChronicle`
+  selected `campaign_id` and `game_day` from `dm_sessions` — columns that **do not
+  exist** there (they live on `characters`). The query threw "no such column" on its
+  first statement, so end-of-session chronicles, recap-extracted canon facts, and
+  NPC conversation summaries were **never being written** (which is why `canon_facts`
+  was empty). Fixed via a LEFT JOIN to `characters` (alias `campaign_id` + COALESCE
+  game day) with a defensive null-campaign skip. Verified live generating a real chronicle.
+
+## [2.8.4] - 2026-06-14 — Durability: real, automatic backups for the cloud save
+
+The campaign's cloud (Turso) database had **no working backup** — `npm run backup`
+only knew how to copy a local `local.db` file, so in cloud mode it found nothing
+and exited with an error, and nothing ran it automatically. A save meant to be
+nurtured for years was one provider incident away from gone. This makes backups
+real and automatic, audit item #2.
+
+- **New `server/services/backupService.js`.** Cloud mode (TURSO_DATABASE_URL set)
+  now writes a portable, restorable `.sql` dump (CREATE TABLE + INSERTs +
+  indexes/triggers/views, wrapped in a transaction with FKs off) to `backups/`.
+  Local mode keeps the byte-faithful file copy. The cloud path uses only
+  `@libsql/client` and the same query path the app runs on — no Turso CLI, no
+  embedded-replica native bindings — so a backup works on any machine that can run
+  the game. Restore with `sqlite3 restored.db < backups/turso-<stamp>.sql` (header
+  in every dump). Values are serialized safely (apostrophes, NULLs, unicode,
+  embedded newlines, BLOBs as `X'hex'`); the dump streams to disk with backpressure
+  handling so large saves don't buffer in memory; old backups auto-prune to the
+  newest `BACKUP_RETAIN` (default 30).
+- **Automatic scheduling.** `startBackupScheduler()` runs from server boot: first
+  backup ~30s after start, then every `BACKUP_INTERVAL_HOURS` (default 24).
+  Defensive by construction — a backup failure can never crash the server, the
+  timers are `unref`'d, and it's opt-out via `BACKUP_DISABLE=1`. Env knobs:
+  `BACKUP_INTERVAL_HOURS`, `BACKUP_FIRST_DELAY_MS`, `BACKUP_RETAIN`.
+- **`server/scripts/backup.js`** is now a thin CLI wrapper over the service, so
+  `npm run backup` and the scheduler share one code path. Exit code preserved
+  (1 when there's nothing to back up).
+- **Tests.** New `tests/backup-dump.test.js` (24 assertions) unit-tests the value
+  serializer and does a full dump→restore round-trip through two independent
+  in-memory libsql databases, asserting every tricky value survives and indexes
+  are recreated. Verified end-to-end against the live Turso DB: a real dump (95
+  tables, 687 rows, 4.49 MB) restored cleanly into a fresh database.
+
+## [2.8.3] - 2026-06-14 — Durability fix: dead NPCs stay dead (death canon-category mismatch)
+
+A single data-integrity bug that struck directly at the project's #1 promise —
+play one character for years without the AI forgetting canon — surfaced by a
+full-codebase audit. Fixed plus a self-healing migration for existing saves.
+
+- **Dead NPCs could quietly come back to life.** Every propagated NPC death was
+  written to `canon_facts` under category `'npc_death'`
+  (`npcLifecycleService.propagateNpcDeath`), but the always-included
+  "DEATHS (DO NOT RESURRECT)" block fed to the DM every session — and
+  `getChronicleStats` — only queried category `'death'`
+  (`storyChronicleService.getRelevantContext`). The two labels never matched, so
+  a propagated death never reached the *guaranteed* deaths section; it could only
+  leak in via the budget-limited, recency-biased "recent/major facts" blocks, and
+  over a long campaign would silently drop out, freeing the DM to resurrect the
+  NPC.
+- **Fix.** Standardized new writes on the canonical `'death'` label, and made
+  every death read accept `category IN ('death','npc_death')` as belt-and-
+  suspenders so existing saves heal at read time without waiting on the
+  migration. Death facts are now also excluded from the generic budget blocks
+  (`NOT IN ('death','npc_death','promise')`) so they no longer double-count
+  against the context budget now that they sit in the guaranteed block. The
+  death→supersede-"alive"-fact path now recognizes both labels too.
+- **Migration 056** (`056_unify_death_canon_category.js`) relabels any legacy
+  `'npc_death'` canon facts to `'death'` so the stored data is uniform going
+  forward. Idempotent; `down()` is a deliberate no-op (post-migration, genuine
+  `'death'` facts and relabeled ones are indistinguishable).
+- **Tests.** New `tests/npc-death-canon.test.js` (9 assertions) proves a
+  propagated death lands under `'death'` and reaches the DEATHS block, a legacy
+  `'npc_death'` row still surfaces via the read guards, and the migration
+  relabels. Both the canonical-label and legacy-surfacing assertions fail on the
+  pre-fix code, so it is a real regression guard. Updated the
+  `npc-lifecycle.test.js` death-cascade assertion to the canonical label.
+
+## [2.8.2] - 2026-06-09 — History-bounding pass: non-turn LLM input + fetch timeout
+
+Follow-up to 2.8.1, clearing the remaining second-pass-review items plus the
+cost regression 2.8.1 surfaced. Theme: bound the input to the LLM calls that are
+NOT the hot per-turn path, and stop a hung socket from wedging a turn.
+
+- **Reactive compressor no longer deletes the middle of a long session (#2).**
+  `contextManager.generateMessageSummary` used to splice head (first 14k chars) +
+  tail (last 14k) and discard everything between before summarizing — silently
+  losing any death/promise/item that lived only mid-session. It now MAP-REDUCEs:
+  chunk the transcript on message boundaries, summarize each chunk, fold the
+  partials into one recap. Nothing is dropped. New pure helper
+  `chunkMessagesByChars()` + `tests/context-chunking.test.js` (proves no message
+  is dropped or reordered; the concatenation of chunks equals the input).
+- **claude.js fetch timeout (#6).** Both Anthropic fetches (the gameplay
+  `/v1/messages` call and the `count_tokens` status probe) now pass
+  `AbortSignal.timeout(...)` — 120s for gameplay (generous; never aborts a
+  legitimately slow Opus generation), 20s for the probe. A fired timeout is
+  classified as a retryable network error (alongside `UND_ERR_SOCKET`), so a
+  hung-open socket retries with backoff instead of blocking the turn forever.
+  Both bounds are env-overridable (`CLAUDE_FETCH_TIMEOUT_MS` /
+  `CLAUDE_PROBE_TIMEOUT_MS`). When retries are exhausted the error is tagged
+  `TIMEOUT:` so the `/message` route returns a retryable 503 with a clear
+  message (instead of a bare 500 that reads as fatal), and the DM-session client
+  now restores the player's typed turn on any send failure — which also makes the
+  existing "your input has been preserved" promise on the overloaded/rate-limit
+  branches actually true.
+- **Chronicle load capped (#8).** `getSessionSummariesForPrompt` loaded EVERY
+  chronicle with no LIMIT, growing the "FULL CAMPAIGN HISTORY" prompt block
+  linearly until a 100+ session campaign blew the budget. Now capped to the most
+  recent `CHRONICLE_PROMPT_LIMIT` (20) sessions, returned chronologically; older
+  sessions' ground truth still reaches the prompt via the `canon_facts` path
+  (loaded in full, separately budgeted). `tests/chronicle-prompt-cap.test.js`.
+- **Session-boundary LLM calls bounded (2.8.1 follow-up "C").** Now that
+  `dm_sessions.messages` is the full append-only history (2.8.1 fix #1), the
+  end-session extraction calls (analysis / notes / NPC / memory), the `/resume`
+  recap, and the retroactive `/extract-npcs` read it directly. A new
+  `boundedHistoryForExtraction()` helper reapplies the rolling-summary compaction
+  the live turn uses + a hard tail cap (60 msgs) before these 7 calls, returning
+  their token cost to roughly pre-2.8.1 levels. The hot per-turn path is
+  unchanged.
+
+## [2.8.1] - 2026-06-09 — Data-integrity fixes from second-pass code review (turn persistence + reward claim)
+
+Two correctness fixes for silent state-corruption paths surfaced by an adversarial
+second-pass code review, plus the mock-Anthropic integration harness that unblocks
+testing the god handlers. Unlike the behavior-preserving 2.8.0 pass, these DO
+change behavior on purpose — they stop data loss and double-application.
+
+- **Rolling-summary index desync — long campaigns no longer forget their middle
+  (review finding #1).** `dm_sessions.messages` was both the durable history AND
+  the per-turn API buffer; once the rolling summary fired, the COMPACTED
+  send-buffer was persisted back, permanently dropping the summarized-away
+  verbatim messages and freezing `rolling_summary_through_index` (an absolute
+  index that was never translated to the new array coordinates). Over a long
+  campaign the model structurally forgot the conversation's middle, and a safety
+  guard could silently stop injecting the summary entirely. Fix
+  (`routes/dmSession.js` `/message`): persist the FULL, uncompacted history —
+  prior turns verbatim plus this turn's new pair — instead of the compacted
+  buffer. The model still receives the compacted prompt (rolling summary +
+  reactive compressor are unchanged on the send path), so the prompt stays small
+  while the durable array only ever grows by appending, keeping the through-index
+  valid and advancing turn over turn. Sessions already compacted by the old code
+  can't be un-corrupted (the append-only `transcript` retains their raw history)
+  but stop losing data immediately.
+- **`/claim` is now atomic and idempotent (review finding #3).** Claiming session
+  rewards was a check-then-act race: read `rewards_claimed`, ~90 lines of work,
+  then set the flag LAST via a bare `dbRun` — so a double-click / retry could pass
+  the guard twice and double-award XP, gold, loot, and companion XP, and a crash
+  mid-sequence left the character credited with the flag still unset (re-applied
+  on the next claim). Fix: the whole claim runs in one `withTransaction` guarded
+  by a CONDITIONAL flag flip (`UPDATE … SET rewards_claimed = 1 WHERE id = ? AND
+  rewards_claimed = 0`); only the first claimer (`changes === 1`) applies rewards,
+  and any throw rolls the flag back with the rest. Response shape unchanged.
+- **Mock-Anthropic integration harness (new).** `tests/helpers/mockAnthropic.js`
+  intercepts `api.anthropic.com` at the `fetch` layer (passing every other URL —
+  including libsql/Turso traffic — straight through) so integration tests drive
+  the real `/message` and `/claim` handlers with deterministic AI output, no
+  network, and no token spend. `tests/helpers/dmTestApp.js` mounts the real router
+  on an ephemeral port with TEST_-prefixed, self-cleaning seed data.
+- **New regression suites.** `tests/dm-turn-lifecycle.test.js` drives several
+  turns through the real handler and asserts no verbatim message is ever dropped
+  and the through-index advances monotonically — confirmed to FAIL on the pre-fix
+  code (durable history compacted 33→26, `PRIOR_0` lost, index frozen at 8) and
+  PASS on the fix. `tests/claim-idempotency.test.js` fires two concurrent claims
+  and asserts the reward lands exactly once (XP 100 not 200, one loot copy, the
+  loser gets a clean 400). 7 adjacent suites stay green (rolling-summary,
+  with-transaction, session-transcript, marker-pipeline, phaseB-spine). The
+  lifecycle test's index-advance assertions are SOFT (the through-index is written
+  by a fire-and-forget background roll) so a slow Turso write can't flake the
+  build red; the race-free durable-history guards stay hard. Missing-env runs
+  print a loud `HARNESS SKIPPED — DID NOT RUN` banner so a green exit is never
+  mistaken for a real pass.
+- **Known follow-up (deferred to the history-bounding pass).** Because
+  `dm_sessions.messages` is now the full uncompacted history, the session-BOUNDARY
+  LLM calls that read it directly (end-session analysis/notes/NPC/memory
+  extraction, `/resume` recap, retroactive `/extract-npcs`) now send the full
+  history with no compression — a token-cost/latency increase on long sessions at
+  session end (NOT the hot per-turn path; the per-turn prompt is still compacted).
+  No correctness impact and within the 200K context window. To be bounded
+  alongside the other LLM-input-bounding work (reactive-compressor middle-truncation
+  and the unbounded chronicle load) — these calls need their own size guard
+  mirroring `storyChronicleService`'s 40000-char cap.
+
+## [2.8.0] - 2026-06-09 — Code-quality & data-integrity refactor (no functionality change)
+
+A focused, behavior-preserving hardening pass driven by an architecture audit.
+Every change keeps runtime behavior identical on the normal/valid path; the only
+intentional differences are graceful fallbacks on *corrupt* data, atomicity on
+*failure*, and serialization of *concurrent* writes. An adversarial multi-agent
+review of the full diff (6 reviewers) found **zero behavior changes on valid
+paths**. 17 existing test suites stay green; 5 new suites were added.
+
+- **Crash-proof DB JSON reads.** Replaced 18 raw `JSON.parse()` calls on
+  database-sourced columns with the existing `safeParse()` helper, so one
+  corrupted row degrades gracefully instead of 500-ing the whole endpoint
+  (`chronicle.js` ×8, `progression.js`, `companion.js`, `services/metaGame.js`,
+  `backstoryParserService.js`, `companionBackstoryService.js`). `metaGame` keeps
+  its `typeof` object-passthrough guard; backstory mutation paths keep their
+  throw-on-corrupt (same 500), so corrupt data is never silently mutated.
+- **Atomic writes (`database.withTransaction`).** New libsql write-transaction
+  wrapper whose `get/all/run` mirror `dbGet/dbAll/dbRun`. Multi-row sequences are
+  now all-or-nothing (companion **level-up**, **equip**/**unequip**, **dismiss** —
+  a mid-sequence failure no longer leaves an item vanished or a companion leveled
+  without its unlocks). Single-column read-modify-write endpoints (character +
+  companion **spell-slots use/restore**, **conditions add/remove**,
+  **discard-item**) are wrapped so the write-lock serializes concurrent
+  mutations, closing last-write-wins races. Statuses and response bodies are
+  byte-identical. Verified empirically: 12 concurrent increments commit with zero
+  lost updates.
+- **One marker-strip pass (`stripKnownMarkers`).** The per-turn route scrubbed
+  DM markers from player-facing narrative via 31 inline `.replace()` calls;
+  consolidated into a single compiled-regex helper in `markerSchemas.js`.
+  `tests/strip-known-markers.test.js` proves byte-identical output to the legacy
+  chain across 50 inputs (every marker, bodyless forms, adjacency, multiline).
+- **Single source of truth for ability math (`dndMath`).** The ability-modifier
+  formula was copy-pasted 15+ times. Added a canonical module on the server
+  (`server/utils/dndMath.js`, re-exporting the authoritative proficiency/hit-dice
+  tables) and the client (`client/src/utils/dndMath.js`), and migrated the
+  byte-identical sites (`character.js`, `gameStateMarkerService.js`,
+  `LevelUpPage`, `CompanionEditor`, `CompanionSheet`, `CompanionManager`).
+  `tests/dnd-math.test.js` proves equivalence to the legacy formulas across the
+  full valid domain.
+- **Perf.** Companion progression enrichment at session start now runs
+  concurrently (`Promise.all`) instead of a sequential per-companion N+1.
+- **Test hygiene.** Three suites failed at baseline because they exercised
+  `PROMISE_MADE`/`NOTORIETY_GAIN`, which were deliberately removed from
+  `MARKER_SCHEMAS` in the v2.0 MVP reduction (consumer services live in
+  `/archive`, no handlers registered). Rather than resurrect archived schemas,
+  the assertions were retargeted to the same parser capabilities on live markers
+  (`marker-schemas` 40/9→48/0; `marker-pipeline` crash→44/0), and the
+  archived-import suite was relocated to `archive/tests/`.
+- **New tests:** `with-transaction`, `dnd-math`, `strip-known-markers` (+ the two
+  retargeted marker suites). Deferred (documented) follow-ups: thinning the
+  `/message` handler, deeper character/companion mirror-logic extraction,
+  transactions for debt/recruit paths that delegate to shared services, and a
+  centralized client API client.
+
+## [2.7.0] - 2026-06-09 — Narration clarity guardrail + roll-your-own dice
+
+Two playtest fixes:
+
+- **Narration clarity (clear-but-atmospheric).** The DM prompt rewarded
+  SHOW-DON'T-TELL and FRESH IMAGERY with no counterbalance, so narration drifted
+  into opaque poetry (e.g. "the light came up out of the middle of you boys" —
+  meant as a gut-punch, read as gibberish). Added a **CLARITY OVER CLEVERNESS**
+  craft principle (right after ANSWER FIRST) and a clarity item to the
+  BEFORE-YOU-SEND gut-check: keep mood and sensory detail, but the player must
+  understand it on the first read; metaphor only when the plain meaning is
+  obvious. Atmosphere stays; obliqueness goes. Prompt suites green (dm-prompt
+  30/30, character-memory 56/56, moral-diversity 59/59, lines-and-veils 27/27).
+- **Roll your own dice.** Pending roll cards (the DM's requested checks/attacks)
+  now have an "or your roll:" field beside the in-app button — type your physical
+  d20 (1–20) and "Use my roll." It produces the same rolled state as the animated
+  roller, so the DC/Resolve flow that reports back to the DM is identical. The
+  in-app roller stays. (Investigated the "low rolls" report first: the RNG is a
+  fair uniform 1–20 and difficulty never touches the roll — this is purely for
+  players who prefer physical dice.)
+
+## [2.6.3] - 2026-06-09 — Expand equipment pack contents into inventory
+
+Equipment packs (Explorer's Pack, Dungeoneer's Pack, etc.) were stored as a
+single inventory line, so neither the player nor the DM (which reads the
+inventory) could see or use the contents — bedroll, rations, rope, torches were
+invisible. Now:
+- **Creator (new characters):** `creatorPersistence.js` expands a picked pack
+  into its individual items at commit, tagged with `pack_source` for provenance.
+- **Existing characters:** migration **055** backfills stored inventories,
+  replacing any pack line with its contents (idempotent; PHB pack contents kept
+  in sync with `equipment.json`). Applied to the live Turso DB and verified — the
+  in-progress character's Explorer's Pack expanded into its 8 items.
+
+Dice note (no change): investigated the d20 RNG on a report of low rolls — it's a
+fair uniform 1–20 (`Math.floor(Math.random()*sides)+1`), and the difficulty
+setting is never passed to the roll or the DM. The roll isn't biased; hard-mode
+difficulty raises DCs (and a level-1 character's modifiers are modest), which is
+what makes fair rolls fail more often.
+
+## [2.6.2] - 2026-06-09 — Silence the harmless punycode (DEP0040) deprecation warning
+
+A transitive dependency — `whatwg-url` (pulled in by the libsql/HTTP client
+stack) — still does `require('punycode')` on Node's deprecated built-in module,
+printing `(node:NNNN) [DEP0040] DeprecationWarning: The punycode module is
+deprecated` on every server start. It's harmless (punycode still works) but
+clutters the console. Added `server/suppressDeprecation.js` (imported first in
+`server/index.js`, before any dep loads) that patches `process.emitWarning` to
+swallow **only** DEP0040 / punycode and pass every other warning through — so
+genuine deprecation notices still surface. No dependency changes; remove the file
+if `whatwg-url` upstream ever switches to the userland `punycode` package.
+
+## [2.6.1] - 2026-06-08 — Fix missing npcs.distinguishing_features column + stop stale-bundle caching
+
+- **Bug: `SQL_INPUT_ERROR: no such column: n.distinguishing_features`.** The NPC
+  enrichment pipeline (`storyChronicleService` / `dmSessionService`) and
+  `npcRelationshipService.getCharacterRelationshipsWithNpcs` both read and write
+  `npcs.distinguishing_features`, but no migration ever added the column — so
+  gathering world state for a DM session threw and the NPC-relationship context
+  silently dropped out of the prompt. Migration **054** adds the column
+  idempotently (applied to the live Turso DB; verified present).
+- **Stale client bundle after a rebuild.** `index.html` is now served with
+  `Cache-Control: no-cache`, so a normal browser reload always picks up the latest
+  hashed bundle instead of the browser holding an old shell that fetches dead chunk
+  hashes (the "Failed to fetch dynamically imported module …" error). Content-hashed
+  JS/CSS assets keep their immutable caching.
+
+## [2.6.0] - 2026-06-08 — Collaborative campaign builder: contextual, finite, partner-like
+
+The "Build it together" conversation worked but read like an interrogation — it
+praised every answer, only ever extracted (never pitched), kept drilling things
+the player wanted left open, and never offered to stop (the player had to ask
+"how many more questions?"). Overhauled it into a real creative partner:
+
+- **A "why" on every question.** Each question now carries a one-clause purpose
+  ("this is the campaign's spine"), shown as a sub-line, so you know what it
+  shapes and why it's asking.
+- **A finite, visible budget.** A "Question N of ~8" counter — roughly 6–10
+  questions mapped to the things a campaign actually needs (tone, the hero's
+  drive/wound, opening, setting, central threat, allies, ending, scope) — not an
+  open-ended interview.
+- **Offers to draft early + hands you the wheel.** The moment it has the
+  essentials (often ~6–7), it flips a `readyToDraft` flag, shows a "Ready to
+  draft" cue + hint, and plainly offers to write it up. The budget is a ceiling,
+  not a quota; you can draft anytime.
+- **Pitches ideas when you defer.** Say "you tell me" and it proposes a concrete
+  option or two instead of asking again.
+- **Honors what you leave open.** Say "leave it a mystery" and it acknowledges it
+  as a deliberate hook and moves on, instead of re-drilling it.
+- **No praise-padding.** Substantive reactions (observations, "yes-and",
+  consequences), never "that's great" every turn.
+
+Technically: `/api/campaign/converse` now returns structured
+`{reply, why, readyToDraft}`; `converseCampaign` accepts `questionNumber` (for
+pacing + the counter) and parses the JSON via `extractLLMJson` with a raw-text
+fallback. The client renders the counter, the "why" sub-line, and the draft-ready
+emphasis. The new conversation prompt was synthesized via a judge-panel of
+candidate prompts. Verified live on the user's real survival scenario: it honored
+two "leave it open" signals, pitched the alpine setting when the player deferred,
+offered to draft at question 7, and praised nothing across the whole run.
+
+## [2.5.1] - 2026-06-08 — Collaborative campaign builder: plain, conversational voice
+
+The "Build it together" conversation was too wordy and hard to collaborate with —
+because `CONVERSE_SYSTEM_PROMPT` told Opus to use "literary, warm, manuscript
+prose" with `*asterisk*` emphasis, producing overwrought replies ("I can already
+smell the brine and the old money"). Rewrote it for **plain, conversational
+English**: talk like a friend planning a game at the table, keep replies short
+(aim under 50 words), and ask **one concrete question at a time** ("Who's the
+villain?" / "Happy ending or a bleak one?") rather than paragraphs of questions.
+Per-turn instructions and the on-screen intro copy were plained-up to match. The
+separate literary draft prompt (`SYSTEM_PROMPT`) is untouched, so the *final*
+campaign prose stays evocative — only the back-and-forth changed. Verified live:
+turns now run ~35–50 words, plain voice, one question each.
+
+## [2.5.0] - 2026-06-08 — Begin a Campaign: collaborative "Build it together" + Quick Start
+
+The "Begin a new Campaign" flow no longer jumps straight from your sentence to a
+finished campaign. It now offers two deliberate paths:
+
+- **Build it together (collaborative, the new default).** Instead of drafting
+  immediately, Opus *converses* — it reacts to your idea and asks a few sharp,
+  generative questions (tone, stakes, who betrays whom, what you want to feel),
+  building on each answer, in the existing chat thread. It will not write a
+  title/premise/scene until you click **"Draft it from our conversation"**, which
+  then authors the full draft from everything you discussed and drops you into the
+  usual compose view (nudge / rail / begin). Reached from the prompt box's
+  "Build it together" button and the character-thread seed card.
+  - Backend: new `CONVERSE_SYSTEM_PROMPT` + `converseCampaign()` +
+    `POST /api/campaign/converse` (prose, asks questions, never drafts); the
+    client passes the running conversation each turn. `draftCampaign()` /
+    `/api/campaign/draft` gained a `conversation` field that becomes the brief
+    when drafting from a conversation. Subject resolution refactored into a shared
+    `resolveSubject()`.
+- **Quick Start ("Surprise me").** A dedicated screen with *only* campaign length,
+  genre/tone, and lines & veils — no premise box, no details. Opus conjures a full
+  draft from those dials (`seed: 'surprise'`) and drops you into compose. Reached
+  from the greeting's "Surprise me" card.
+- The greeting presents both paths; "Start over" now resets from any mode
+  (greet / converse / quickstart / compose).
+
+Verified end-to-end against the live server (real Opus calls): the converse turns
+ask questions without leaking a draft, draft-from-conversation reflects the talk,
+and quick-start authors from dials alone. Client build clean.
+
+## [2.4.3] - 2026-06-08 — Lifestyle wired into the DM prompt as flavor (no gold mechanics)
+
+Lifestyle was 100% inert — the player picks one of 7 tiers in the creator, it's
+stored and shown to the DM as a bare cosmetic line, but nothing used it (the
+downtime/survival/upkeep systems that would were archived in the v2.0.0 cut).
+Per the chosen direction, it's now **wired into the DM prompt as social/economic
+texture** rather than a stat: the identity-block line for each tier (Wretched →
+Aristocratic) now carries a concise directive about where the character sleeps,
+what they can afford, and how NPCs first read their station ("Let this colour
+lodging, prices, and how NPCs first read the character"). No gold deduction, no
+character-sheet change, no new systems — `dmPromptBuilder.js` only. Honors the
+player's choice now; a real upkeep mechanic remains deferred with downtime.
+
+## [2.4.2] - 2026-06-08 — Trim long cleric domains + make the creator review page show every choice
+
+- **Cleric domains trimmed.** Revelry, Wealth, and Stone had 27–30-word
+  descriptions (all opening with the redundant "Clerics of the [Domain] Domain…")
+  while every other domain is a terse 5–9-word archetype. Recast the three to
+  match: Revelry → "Bringer of joy, wine, and divine festivity"; Wealth →
+  "Master of commerce, treasure, and divine fortune"; Stone → "Guardian who
+  wields the enduring strength of stone".
+- **Creator review page (Step 8) now represents every choice.** Four gaps fixed
+  so the player can catch anything that isn't true before committing:
+  - *Ancestry* showed a bare numeric feat id (e.g. "151") because creator state
+    only holds the id and Step 2 fetches feat names from the API. Step 8 now
+    re-fetches the same per-race/subrace feat list and shows the feat **name**
+    (`computeAncestryListId` exported from Step 2 for reuse).
+  - *Abilities* listed "N additional skill picks" → now lists the actual skill
+    names (`state.selected_skills`).
+  - *Equipment* listed "N package choices" → now lists each chosen item, with
+    sub-picks resolved (the specific instrument/weapon, not the generic label).
+  - *Details* showed only alignment + eyes + build + one ideal + a hook count →
+    now lays out the full Step-7 record: alignment, faith (resolved to the deity
+    name), lifestyle, every physical field, personality / ideals / bonds / flaws,
+    and **each backstory hook resolved to its text** (curated moments via
+    `THEME_BACKSTORY_MOMENTS`, plus custom moments). Review rows gained an
+    optional rich `body` for this.
+
+Client build clean.
+
+## [2.4.1] - 2026-06-08 — Playtest fixes: instrument picker, moment alignment, campaign scoping + delete, coined genre chips
+
+Four fixes from a play session.
+
+- **Equipment — "Any Other Musical Instrument" now opens a picker.** The
+  equipment-option resolver only recognized generic *weapon* choices ("Any
+  Simple Weapon"), so musical-instrument / artisan's-tools / gaming-set choices
+  fell through with no dropdown. Added `getToolChoiceList()` (equipmentResolver)
+  — recognizes "musical instrument", "artisan's tools", and "gaming set" labels
+  (including the combined "artisan's tools or one musical instrument" form) and
+  returns the pickable list from `equipment.json`. Step 6's option card renders
+  the same picker pattern as the weapon one; the chosen item persists through the
+  existing `equipment_subpicks` path (no backend change). Specific tools like
+  "Thieves' Tools" correctly don't trigger a picker.
+- **Creator — BACKSTORY MOMENTS now align properly.** The moment chips are
+  `<button>`s (which default to `text-align:center`) laid out with
+  `align-items:center`, so sentence-length moments rendered centered and ragged.
+  Converted the moments list to a full-width, left-aligned stacked list with the
+  radio top-aligned to the first line (matching the picked-chips rows above).
+  Scoped to `.chipwrap`/`.mchip`, which are used only by the moment list.
+- **Campaigns — fixed cross-character "bleed" + made delete discoverable.** The
+  campaign list is workspace-wide (every campaign the local user owns), and the
+  page featured `filteredCampaigns[0]` — the first active campaign *globally* —
+  so a brand-new character's page surfaced a *different* character's campaign as
+  if it were theirs. The feature is now scoped to the character's own
+  `campaign_id`; a character with no campaign sees a clear "hasn't begun a
+  campaign yet" state instead. "Other campaigns" cards now label which character
+  each belongs to (or "Unassigned"), and every card carries a visible delete
+  affordance (plus a Delete button on the featured campaign) so removing a
+  campaign no longer requires digging into the detail panel. `deleteCampaign`
+  already unassigns characters and cleans up related rows.
+- **Begin Campaign — Opus-coined genres/tones no longer vanish, and read as
+  real.** When Opus invents a genre/tone word (e.g. "Melancholy"), it lived in
+  the palette only while selected — toggling it off removed it irrecoverably, and
+  nothing signaled whether it actually mattered. Coined words are now tracked
+  separately from the selection so their chips persist in the palette (dim when
+  off, re-pickable), are marked with a ✦ and a tooltip, and a one-line hint makes
+  explicit that lit chips (coined ones included) are sent to Opus and shape the
+  campaign. They were always real — `toneSummary` already flowed coined words to
+  `dials.tones` (draft) and `committed.tones` (commit); the fix is visibility +
+  persistence, not wiring.
+
+Client build clean.
+
+## [2.4.0] - 2026-06-08 — DM prompt overhaul: fix early-session "forgetting" + creative-but-constrained
+
+Following a deep multi-agent architecture audit of how the app drives the AI DM,
+a four-tier pass that fixes the DM losing the thread early in fresh sessions and
+relaxes the over-constraint that was stiffening prose — without touching the
+load-bearing guardrails (player sovereignty, no-spoiler, content boundaries,
+marker contract). The diagnosis: it was never history-trimming (compaction only
+fires at 70–85% of budget) — it was the *frozen system prompt* drowning a short
+early transcript and telling the model to rank the transcript below an empty
+memory ledger.
+
+**Tier 1 — memory hierarchy + bulk + stale state** (`dmPromptBuilder.js`):
+- The MEMORY HIERARCHY, the always-on "past sessions are canonical" paragraph,
+  and the quest-weaving paragraph are now **gated on real stored memory**. A
+  fresh campaign (empty chronicle/canon/NPC tables) instead gets one line making
+  the live transcript authoritative — it was previously ranked *below* an empty
+  canon ledger ("never overrides chronicle"), the most direct early-forgetting
+  mechanism. Populated sessions render the full hierarchy exactly as before.
+- Trimmed the Conversation-Handling example bank (the COUNCIL/CROSSTALK
+  transcripts featuring NPCs that don't exist in the player's game, plus the
+  AGE&REGISTER and SHOW-DON'T-TELL banks); kept the 4 MODE definitions + ladder
+  + a short SPOTLIGHT/WAIT exemplar.
+- Stopped asserting a frozen Current Location/Quest (built once at /start; goes
+  stale within a few exchanges and reads "Unknown/None" early, contradicting the
+  opening scene). The transcript + campaign-plan opening scene own them now.
+
+**Tier 2 — cut self-policing / stiffness** (`dmPromptBuilder.js`, `dmSession.js`):
+- BEFORE-YOU-SEND self-check shrunk from a 5–6 item QA pass (a near-verbatim
+  restatement of the Cardinal Rules in the recency slot) to a 1–2 item gut-check:
+  player sovereignty + the conditional content-boundary check.
+- CRAFT PRINCIPLES recast from a prohibition wall ("Don't pad / Never bury /…")
+  into positive directives, intent preserved.
+- `[SCENE]` marker made conditional (emit on change, not every turn) so the
+  closing line lands the narrative beat instead of a schema tag.
+- The per-turn correction loop now injects only **load-bearing** rule violations
+  (sovereignty/dice-UX) + marker-schema failures; the cosmetic prose-tic
+  ("X goes still", Rule 19a) is detected for logging but no longer nags the next
+  turn.
+
+**Tier 3 — keep the transcript clean** (`dmSession.js`):
+- Active conditions/effects are no longer pushed as fake user-role messages that
+  persisted and accreted between the DM's narration and the player's action.
+  They're built into a per-turn system-tail block (sent, not persisted).
+- `stripEphemeralStateNotes()` runs at every `result.messages` persist site,
+  removing legacy condition/effect notes + loot-drop receipts from the stored
+  transcript while preserving the COMBAT_START initiative note (the DM needs the
+  rolled order) and the durable /inject-context GM note.
+
+**Tier 4 — response cap + cache floor** (`claude.js`):
+- DM-turn `max_tokens` 4000 → 8000 (long opening scenes were truncating
+  mid-thought and dropping trailing markers). Streaming for even longer turns is
+  deferred (touches the client contract).
+- `CACHE_MIN_TOKENS` 1024 → 4096 to match Opus 4.x's real cacheable-prefix
+  minimum (1024 is the Sonnet floor; sub-4096 tiers carried a no-op cache marker).
+
+Each tier shipped as its own commit, with a verification checkpoint after Tier 1.
+Tests: dmPrompt-linesAndVeils 27/27 (new memory-gating assertions),
+dm-prompt-builder 30/30, moral-diversity 59/59, character-memory 56/56,
+progression-prompt 43/43, session-transcript 8/8, condition-tracking 56/56
+(two anchor assertions updated to the new self-check/craft wording). Pre-existing
+marker-schema failures (archived PROMISE/NOTORIETY schemas) are unrelated.
+
+## [2.3.0] - 2026-06-07 — Begin a new Campaign: design refresh (character-scoped + lines & veils)
+
+Integrated the revised `design_handoff_hearth_app/Begin Campaign.html` design (the
+handoff was updated after v2.2.0 shipped) into the live atelier.
+
+- **Greeting is now always character-scoped.** Dropped the "Who walks into this
+  story?" character/world choice — campaign creation always belongs to the
+  character you entered through (it's reached from that character's Campaigns
+  screen). Added a "Creating for <name>" context line (mini-crest), personalized
+  Opus's copy with the character's name, and reordered so the free-text prompt is
+  the primary entry with the seeds beneath it.
+- **Seeds name the thread they pulled from.** The character-grounded seed is
+  labelled from the strongest thread on the sheet ("From your background · Hermit"
+  / "…your calling · Monk"), and choosing it asks Opus to build from that thread;
+  "Surprise me" generates from scratch. (Seeds no longer assume a rich freeform
+  backstory field exists.)
+- **Compose rail upgrades** (`BeginCampaign.jsx` + `hearth-begincampaign.css`):
+  - **Scope** "Open-ended" → **"Ongoing campaign"**.
+  - **Genre & tone** is now a live summary with a **Change** link that expands a
+    grouped Genre/Tone palette (multi-select); selections are carried into the
+    committed campaign.
+  - **Setting** gains an inline **Edit** editor (name + descriptor) with a **"Let
+    Opus reimagine"** action; saving updates the setting tile, the premise's
+    region chip, and the plan-forming Region row together.
+  - **Your party** shows the hero alone with the note "companions join as the
+    story finds them" (pre-picking companions stays out of scope for v1).
+  - **Content boundaries** opens a real **Open / Veil / Line** modal across eight
+    sensitive topics, with a legend and a live "N set" count.
+- **Persistence:** `POST /api/campaign/begin` + `beginCampaign()` now accept the
+  table's `linesAndVeils` and store them (validated to open/veil/line) on the
+  campaign plan as `lines_and_veils`; the committed draft also honours the rail's
+  scope/tone edits. `tests/beginCampaign-flow.test.js` covers the new persistence
+  (invalid entries filtered). Client `vite build` passes (127 modules).
+- **The DM now reads the whole atelier design.** Previously the co-authored plan
+  was stored in a shape `getPlanSummaryForSession()` mostly dropped, so the DM
+  barely saw the world the player built. Now the summary carries the atelier
+  fields through (`premise` → main-quest summary, `opening_scene`, `region`/
+  `setting`, `hidden_truth`, `scope`, `locations`, the `tone` leanings, and
+  `lines_and_veils`), and `formatCampaignPlan()` renders them into the DM system
+  prompt: a **SETTING** line, **KEY LOCATIONS**, the **OPENING SCENE**, a DM-only
+  **HIDDEN TRUTH**, and **CAMPAIGN SCOPE**.
+  - **Content boundaries are enforced, not just stored.** Lines & veils render as
+    a **non-negotiable CONTENT BOUNDARIES block** near the top of the plan
+    (primacy) — LINES never appear (on- or off-screen), VEILS happen off the page
+    — and are reinforced as a conditional 6th item in the BEFORE-YOU-SEND
+    self-check (recency), mirroring the prompt's existing top/bottom rule pattern.
+    Canonical/imported plans are unchanged (the atelier sections only render when
+    present). `formatCampaignPlan` is now exported; `tests/dmPrompt-linesAndVeils.test.js`
+    (20/20) asserts the boundaries, opening scene, and hidden truth reach the
+    prompt, with a control proving the self-check is absent when no boundary is set.
+
+## [2.2.0] - 2026-06-06 — Begin a new Campaign (conversational atelier)
+
+A new screen where Opus authors your world while you set the mood, built from the
+Hearth `design_handoff_hearth_app/Begin Campaign.html` design.
+
+- **Frontend** `client/src/components/BeginCampaign.jsx` + scoped
+  `client/src/styles/hearth-begincampaign.css`: a two-state atelier — a Greeting
+  (who walks in / a backstory seed / "start from the world" + a free-text prompt)
+  and a Compose view (a manuscript-prose dialogue thread with Opus, a living
+  premise card + opening-scene preview with drop-cap, nudge chips, and a right
+  rail of dials — scope/tone/setting/party/difficulty/lines&veils — over a
+  "campaign plan · forming" mini-panel), ending in a cinematic "Begin the first
+  session" that plays while the opening scene generates and drops into the cockpit.
+- **Backend** `server/services/campaignDraftService.js` + `POST /api/campaign/draft`
+  and `POST /api/campaign/begin`: Opus authors a structured campaign draft from
+  the prompt + dials (and refines it on nudges — darker / more hopeful / raise the
+  stakes / keep it intimate / one-shot / regenerate); committing creates the real
+  campaign, stores the co-authored draft as its plan, and links the character so
+  the existing `/start` flow plays it.
+- Reached from the Campaigns screen ("Begin a new campaign"); the legacy inline
+  new-campaign flow remains as a fallback. `tests/beginCampaign-flow.test.js` — 8/8.
+
+## [2.1.0] - 2026-06-06 — MVP hardening: creation fixes, the mechanical spine, full Hearth, cleanup
+
+A four-phase pass following a full system audit. Made the MVP correct, gave it a
+real mechanical backbone, finished the Hearth visual conversion, and cut dead wiring.
+
+**Phase A — character-creation data fixes (critical).** The V2 creator shipped
+every new character with HP 0/0, AC 10, empty worn equipment, an orphaned duplicate
+draft row, and inventory keyed only by `label`; the manual submit also dropped
+theme/ancestry-feat selections.
+- `creatorPersistence`: compute worn equipment slots {armor, mainHand, offHand},
+  armored AC (mirrors the sheet's formula incl. monk/barbarian Unarmored Defense),
+  and L1 max_hp from hit die + CON; add `name` to package items.
+- `submitCreator` + `CharacterCreatorV2`: thread the draft `characterId` so submit
+  PUTs the 'creating' row in place — no duplicate orphan row.
+- `routes/character.js`: server-side derived-vitals safety net on every active
+  transition (POST + PUT) so no path can create a 0-HP / AC-10 character; persist
+  theme + ancestry-feat on the 'creating'→'active' flip. Backfilled the one broken
+  existing character.
+- `combatMarkerService`: read `ability_scores.dex` (short key), not `.dexterity`,
+  so DEX affects initiative.
+
+**Phase B — the mechanical spine (the "missing frameworks").** The DM narrated
+mechanics but the system never tracked them as state. New `gameStateMarkerService.js`
++ marker schemas + route wiring + prompt rules + cockpit UI:
+- `[HP_CHANGE]` writes `current_hp` immediately (clamped); the cockpit refetches HP.
+- `[EFFECT_START]`/`[EFFECT_END]` track active spell effects + the 5e single-
+  concentration rule on the session; injected back into the prompt and shown in the
+  Active Effects panel.
+- `[CONDITION_ADD/REMOVE]` now persist to `characters.debuffs` (were client-only).
+- `[SCENE]` persists to the session and rehydrates the cockpit panel on resume.
+- `[TURN]` advances the initiative round/turn (was rolled once, never advanced).
+- `[ROLL_REQUEST]` surfaces a one-click "Roll d20 +mod" button preloaded with the
+  player's modifier that reports the result back to the DM.
+- `tests/phaseB-spine.test.js` — 7/7.
+
+**Phase C — finished the Hearth conversion.** Converted the last legacy-blue
+screens on the core path to the Hearth dark-editorial system: Session Setup,
+Session Rewards, the Campaign Notes slide-in, and the Companions slide-in. Added
+defensive `.hearth` resets so legacy `index.css` form styles stop leaking. Fixed
+the roster Settings/AI-Behavior buttons that were painted behind the fixed Hearth
+layer (moved into the roster header; dropped the occluded appbar).
+
+**Phase D — cut dead wiring.** Removed the dead companion-activity fetches (the
+`/away` endpoint actually hangs) and weather/survival fetches (unmounted → 404 every
+turn). `abortSession` + `claimRewards` now return to the roster instead of stranding
+the player in DM setup. Removed the unreachable CompanionBackstory view and the dead
+PathChoiceScreen + handoff route.
+
+## [2.0.0] - 2026-06-04 — MVP reduction: Player-Mode core with Opus 4.8 as DM
+
+Deliberate, large reduction of the v1.0.167 system down to a focused, reliably
+playable MVP: **play one character with Claude Opus 4.8 as your AI Dungeon
+Master.** Nothing was deleted — every removed system was **moved to `/archive/`**
+(mirrored paths) and remains recoverable; migrations were left in place (orphaned
+tables are harmless).
+
+**Kept (the MVP):** the existing 8-step character creator (CharacterCreatorV2);
+character sheet / inventory / spells / **leveling**; the full **progression**
+system (themes + theme tier abilities + ancestry feats + knight moral paths);
+**companions** (recruit / sheet / level-up / backstory); the Player-Mode DM chat
+session; **session memory** (story chronicles + canon facts + NPC conversation /
+relationship recall + NPC lifecycle / aging); campaign creation + Opus campaign
+plan + JSON import + backstory parser; dice / combat / conditions; session
+rewards; the AI-behavior debug page; edit-in-wizard (legacy creator, edit-only).
+
+**Archived → `/archive/`:** prelude character-creator; DM Mode (user-as-DM);
+mythic + piety + epic boons + legendary items; crafting; party bases / fortresses
+/ raids; downtime activity system + long-term projects; merchant economy +
+bargaining + commissions + merchant relationships + economy sim; notoriety; the
+living-world tick (weather, survival, factions, world-events, NPC mail, narrative
+queue, consequence/promise automation); the factions / world-events / travel /
+locations / quests simulation cluster; achievements; the odds-based "adventure"
+meta-loop; subclass×theme synergies / team tactics / mythic×theme amplifications.
+
+**Other changes.**
+- All gameplay AI repointed to **`claude-opus-4-8`** (was `claude-opus-4-7`).
+- **Login removed** — a no-op auth middleware resolves a single local user; no
+  sign-in screen. (Revert `server/middleware/auth.js` + the App.jsx gate to
+  restore JWT auth.)
+- DM marker set reduced to the 6 live markers (COMBAT_START/END, LOOT_DROP,
+  CONDITION_ADD/REMOVE, NPC_WANTS_TO_JOIN); the DM prompt no longer documents
+  cut-system markers.
+- Cut-system tests moved to `/archive/tests/`; cut-system `server/tests/`
+  scripts archived.
+
+**Verification.** Server boots clean; client `vite build` passes (114 modules,
+down from 200+); ESLint shows no undefined-reference errors; a live Opus 4.8 DM
+turn was exercised end-to-end (start → message → prompt assembly → Opus →
+narrative → save).
+
+---
+
 ## [1.0.0.167] - 2026-05-06 — Phase 4a review fix part 2: home-route appbar missed the AI Behavior link
 
 PM 2026-05-06 review caught that v1.0.166's "fix" only landed on one of HomeFlow's two appbars. The path-route appbar (`route === 'path'`, the choice-of-beginnings screen) got the AI Behavior link; the home-route appbar (`route === 'home'`, the default — the user's primary surface) did not.

@@ -1,0 +1,231 @@
+/* =================================================================
+   HEARTH · Campaigns screen
+   Per-screen styles. All selectors scoped under `.hearth` so they
+   only apply inside the Campaigns takeover surface. Shared tokens
+   and component classes live in hearth.css — do not redefine here.
+   ================================================================= */
+
+/* ---- featured (active) campaign ---- */
+.hearth .feature {
+  position: relative; overflow: hidden; display: grid;
+  grid-template-columns: 1.5fr 1fr; gap: 0;
+  background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px;
+  box-shadow: var(--shadow); margin-bottom: 36px;
+}
+.hearth .feature::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+.hearth .feat-main { padding: 30px 32px; }
+.hearth .feat-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--sans); font-weight: 600; font-size: 10px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--combat);
+  margin-bottom: 14px;
+}
+.hearth .feat-tag .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--combat); }
+.hearth .feat-main h2 {
+  font-family: var(--serif); font-weight: 500; font-size: 38px;
+  letter-spacing: -.014em; margin: 0 0 14px; color: var(--ink);
+}
+.hearth .premise {
+  font-family: var(--serif); font-size: 18px; line-height: 1.62; color: var(--ink);
+  max-width: 560px; text-wrap: pretty; margin-bottom: 24px;
+}
+.hearth .premise em { font-style: italic; color: var(--ink-2); }
+.hearth .feat-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.hearth .feat-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.hearth .feat-side {
+  border-left: 1px solid var(--rule); background: var(--bg-2); padding: 26px 26px;
+}
+.hearth .feat-side h3 {
+  font-family: var(--sans); font-weight: 600; font-size: 10px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+}
+.hearth .plan-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-top: 1px solid var(--rule-soft);
+}
+.hearth .plan-row:first-of-type { border-top: 0; }
+.hearth .plan-row .k {
+  font-family: var(--serif); font-size: 15px; color: var(--ink-2); white-space: nowrap;
+}
+.hearth .plan-row .v {
+  font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink);
+  text-align: right; white-space: nowrap;
+}
+.hearth .plan-row .v.accent { color: var(--accent); }
+
+/* ---- other campaigns grid ---- */
+.hearth .camp-list { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hearth .camp {
+  display: block; text-decoration: none; position: relative; width: 100%; text-align: left;
+  background: var(--bg-2); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 22px 24px; cursor: pointer;
+  transition: border-color .15s, transform .15s, background .15s;
+}
+.hearth .camp:hover {
+  border-color: color-mix(in oklab, var(--accent) 38%, var(--rule));
+  transform: translateY(-2px); background: var(--bg-card);
+}
+.hearth .camp.selected { border-color: color-mix(in oklab, var(--accent) 55%, var(--rule)); background: var(--bg-card); }
+.hearth .camp .ct { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.hearth .camp .status {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-3);
+}
+.hearth .camp .status.paused { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 38%, var(--rule)); }
+.hearth .camp .status.archived { color: var(--ink-4); border-color: var(--rule); }
+.hearth .camp h3 {
+  font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0 0 8px;
+  letter-spacing: -.006em; color: var(--ink);
+}
+.hearth .camp p {
+  font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink-3); margin: 0;
+}
+.hearth .camp .meta {
+  margin-top: 13px; font-family: var(--mono); font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+/* "Other campaigns" owner label — names which character a campaign belongs
+   to, so a fresh character's page never reads another character's world as
+   its own. */
+.hearth .camp .camp-owner {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+/* Card-level delete affordance — visible (not hover-only) so deleting a
+   campaign is discoverable without digging into the detail panel. */
+.hearth .camp .camp-del {
+  position: absolute; top: 14px; right: 14px; width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--bg-2);
+  color: var(--ink-4); cursor: pointer; opacity: .5;
+  transition: opacity .15s, color .15s, border-color .15s;
+}
+.hearth .camp:hover .camp-del, .hearth .camp .camp-del:hover { opacity: 1; }
+.hearth .camp .camp-del:hover { color: #c0563f; border-color: color-mix(in oklab, #c0563f 45%, var(--rule)); }
+.hearth .camp .camp-del .ic { width: 15px; height: 15px; }
+
+.hearth .camp-empty {
+  font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-3);
+  padding: 26px 4px;
+}
+
+/* ---- detail panel (selected campaign) ---- */
+.hearth .detail-panel { margin-bottom: 36px; }
+.hearth .detail-panel .panel-body { padding: 18px 22px 22px; }
+.hearth .detail-head {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.hearth .detail-head h2 {
+  font-family: var(--serif); font-weight: 500; font-size: 30px; margin: 0;
+  letter-spacing: -.01em; color: var(--ink);
+}
+.hearth .detail-desc {
+  font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2);
+  font-style: italic; margin: 0 0 20px; max-width: 640px; text-wrap: pretty;
+}
+.hearth .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.hearth .info-item {
+  background: var(--bg-card); border: 1px solid var(--rule-soft); border-radius: 9px; padding: 12px 14px;
+}
+.hearth .info-label {
+  font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-4); margin-bottom: 6px;
+}
+.hearth .info-value { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+
+.hearth .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+.hearth .stat-box {
+  background: var(--bg-card); border: 1px solid var(--rule-soft); border-radius: 9px;
+  padding: 14px; text-align: center;
+}
+.hearth .stat-value { font-family: var(--mono); font-size: 24px; color: var(--accent); line-height: 1; }
+.hearth .stat-label {
+  font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-4); margin-top: 7px;
+}
+
+/* ---- characters in a campaign ---- */
+.hearth .char-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--bg-card); border: 1px solid var(--rule-soft); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 8px;
+}
+.hearth .char-row .cn { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+.hearth .char-row .cm { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; color: var(--ink-3); margin-top: 2px; }
+
+.hearth .assign-row { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+
+/* ---- forms (create / import) ---- */
+.hearth .form-panel { margin-bottom: 36px; }
+.hearth .form-panel .panel-body { padding: 20px 22px 24px; }
+.hearth .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.hearth .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hearth .field .label .hint { color: var(--accent); text-transform: none; letter-spacing: .02em; font-size: 10px; margin-left: 8px; }
+.hearth .hinp,
+.hearth .hsel,
+.hearth .htxt {
+  font-family: var(--serif); font-size: 16px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 7px;
+  padding: 9px 12px; width: 100%; outline: none; transition: border-color .14s;
+}
+.hearth .hinp:focus, .hearth .hsel:focus, .hearth .htxt:focus {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--rule));
+}
+.hearth .htxt { min-height: 90px; resize: vertical; line-height: 1.5; }
+.hearth .htxt.mono { font-family: var(--mono); font-size: 12px; min-height: 280px; }
+.hearth .hsel { appearance: none; cursor: pointer; }
+.hearth .field-help { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); margin: 0 0 10px; }
+
+/* ---- pipeline / import progress ---- */
+.hearth .pipe {
+  background: color-mix(in oklab, var(--accent) 5%, var(--bg-2));
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--rule));
+  border-radius: var(--radius-lg); padding: 22px 24px; margin-bottom: 36px;
+}
+.hearth .pipe-title { font-family: var(--serif); font-weight: 500; font-size: 22px; color: var(--ink); margin-bottom: 14px; }
+.hearth .pipe-step { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+.hearth .pipe-step .mark {
+  font-family: var(--mono); font-size: 14px; width: 20px; text-align: center; color: var(--ink-4);
+}
+.hearth .pipe-step.done .mark { color: var(--good); }
+.hearth .pipe-step.current .mark { color: var(--accent); }
+.hearth .pipe-step .txt { font-family: var(--serif); font-size: 16px; color: var(--ink-3); }
+.hearth .pipe-step.done .txt { color: var(--good); }
+.hearth .pipe-step.current .txt { color: var(--ink); }
+.hearth .pipe-progress {
+  flex: 1; height: 4px; background: var(--rule-soft); border-radius: 999px; overflow: hidden; margin-left: 8px;
+}
+.hearth .pipe-progress .bar {
+  height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-d));
+  border-radius: 999px; width: 0%; animation: hearthPipe 60s ease-out forwards;
+}
+@keyframes hearthPipe {
+  0% { width: 0%; } 10% { width: 15%; } 30% { width: 35%; }
+  50% { width: 55%; } 70% { width: 70%; } 90% { width: 85%; } 100% { width: 95%; }
+}
+.hearth .pipe-error {
+  margin-top: 14px; padding: 11px 14px; border-radius: 8px;
+  background: color-mix(in oklab, var(--bad) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--bad) 34%, var(--rule));
+  color: var(--bad); font-family: var(--sans); font-size: 13px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.hearth .pipe-foot { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.hearth .pipe-note { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); margin: 12px 0; }
+
+.hearth .file-loaded { font-family: var(--mono); font-size: 11px; color: var(--good); align-self: center; }
+
+/* toolbar above the page */
+.hearth .camp-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 22px; flex-wrap: wrap; }
+.hearth .filter-tabs { display: inline-flex; gap: 6px; }
+.hearth .filter-tab {
+  font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-3); background: transparent; border: 1px solid var(--rule); border-radius: 999px;
+  padding: 5px 12px; cursor: pointer; transition: all .14s;
+}
+.hearth .filter-tab:hover { color: var(--ink-2); border-color: #4a4032; }
+.hearth .filter-tab.on { color: #211d17; background: var(--accent); border-color: var(--accent); }

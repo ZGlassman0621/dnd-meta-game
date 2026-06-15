@@ -53,70 +53,62 @@ test('extractMarkerBodies all=true returns every instance', () => {
   assert.deepEqual(bodies, ['Item="A"', 'Item="B"']);
 });
 
-console.log('\n=== PROMISE_MADE schema validation ===\n');
+// NOTE: these sections previously exercised PROMISE_MADE / NOTORIETY_GAIN,
+// which were removed from MARKER_SCHEMAS in the v2.0 MVP reduction (their
+// consumer services live in /archive). The parser CAPABILITIES they checked
+// (required-field, enum + reason, integer, range, optional-absent) are now
+// asserted against LIVE markers so coverage is preserved without resurrecting
+// archived schemas. See tests/archive for the original promise/notoriety suite.
+console.log('\n=== required + enum + optional field validation (live markers) ===\n');
 
-test('valid PROMISE_MADE parses cleanly', () => {
-  const body = 'NPC="Elara" Promise="Return the amulet" Deadline=10 Weight="major"';
-  const result = parseMarkerBody(body, 'PROMISE_MADE');
+test('valid ROLL_REQUEST parses cleanly with all fields', () => {
+  const body = 'Kind="check" Ability="Perception" DC=15 Advantage="advantage" Label="Spot the wire"';
+  const result = parseMarkerBody(body, 'ROLL_REQUEST');
   assert.equal(result.ok, true);
   assert.deepEqual(result.data, {
-    NPC: 'Elara',
-    Promise: 'Return the amulet',
-    Deadline: 10,
-    Weight: 'major'
+    Kind: 'check', Ability: 'Perception', DC: 15, Advantage: 'advantage', Label: 'Spot the wire'
   });
 });
 
-test('PROMISE_MADE without Weight fails with useful error', () => {
-  const body = 'NPC="Elara" Promise="Return the amulet"';
-  const result = parseMarkerBody(body, 'PROMISE_MADE');
+test('CONDITION_ADD without required Target fails with useful error', () => {
+  const result = parseMarkerBody('Condition="poisoned"', 'CONDITION_ADD');
   assert.equal(result.ok, false);
-  assert.equal(result.errors[0].field, 'Weight');
+  assert.equal(result.errors[0].field, 'Target');
   assert.match(result.errors[0].reason, /required/);
 });
 
-test('PROMISE_MADE with invalid Weight enum is flagged', () => {
-  const body = 'NPC="Elara" Promise="Return X" Weight="huge"';
-  const result = parseMarkerBody(body, 'PROMISE_MADE');
+test('CONDITION_ADD with invalid Condition enum lists the allowed values', () => {
+  const result = parseMarkerBody('Target="Player" Condition="confused"', 'CONDITION_ADD');
   assert.equal(result.ok, false);
-  assert.equal(result.errors[0].field, 'Weight');
-  assert.match(result.errors[0].reason, /trivial.*minor.*moderate.*major.*critical/);
+  assert.equal(result.errors[0].field, 'Condition');
+  assert.match(result.errors[0].reason, /poisoned/); // enum list quoted in the reason
 });
 
-test('PROMISE_MADE Deadline is optional', () => {
-  const body = 'NPC="Elara" Promise="Help my son" Weight="moderate"';
-  const result = parseMarkerBody(body, 'PROMISE_MADE');
+test('ROLL_REQUEST optional fields may be omitted', () => {
+  const result = parseMarkerBody('Kind="save"', 'ROLL_REQUEST');
   assert.equal(result.ok, true);
-  assert.equal(result.data.Deadline, undefined);
+  assert.equal(result.data.DC, undefined);
+  assert.equal(result.data.Ability, undefined);
 });
 
-console.log('\n=== NOTORIETY_GAIN schema validation ===\n');
+console.log('\n=== integer field + range validation (live markers) ===\n');
 
-test('valid NOTORIETY_GAIN parses', () => {
-  const body = 'source="City Watch" amount=15 category="criminal"';
-  const result = parseMarkerBody(body, 'NOTORIETY_GAIN');
+test('valid HP_CHANGE with negative integer Delta parses', () => {
+  const result = parseMarkerBody('Target="Player" Delta=-8 Reason="ogre club"', 'HP_CHANGE');
   assert.equal(result.ok, true);
-  assert.deepEqual(result.data, { source: 'City Watch', amount: 15, category: 'criminal' });
+  assert.equal(result.data.Delta, -8);
 });
 
-test('NOTORIETY_GAIN with invalid category fails', () => {
-  const body = 'source="Watch" amount=15 category="bad-guys"';
-  const result = parseMarkerBody(body, 'NOTORIETY_GAIN');
+test('HP_CHANGE with non-integer Delta fails', () => {
+  const result = parseMarkerBody('Target="Player" Delta="a lot"', 'HP_CHANGE');
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some(e => e.field === 'category'));
+  assert.ok(result.errors.some(e => e.field === 'Delta'));
 });
 
-test('NOTORIETY_GAIN with non-integer amount fails', () => {
-  const body = 'source="Watch" amount="a lot" category="criminal"';
-  const result = parseMarkerBody(body, 'NOTORIETY_GAIN');
+test('TURN with Round below the minimum (1) is flagged', () => {
+  const result = parseMarkerBody('Combatant="Goblin" Round=0', 'TURN');
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some(e => e.field === 'amount'));
-});
-
-test('NOTORIETY_GAIN amount over 50 fails', () => {
-  const body = 'source="Watch" amount=999 category="criminal"';
-  const result = parseMarkerBody(body, 'NOTORIETY_GAIN');
-  assert.equal(result.ok, false);
+  assert.ok(result.errors.some(e => e.field === 'Round'));
 });
 
 console.log('\n=== CONDITION_ADD schema validation ===\n');
@@ -147,28 +139,28 @@ test('Valid response: no failures', () => {
 });
 
 test('Malformed marker flagged as failure', () => {
-  const txt = `Elara nods. [PROMISE_MADE: NPC="Elara" Promise="Find the sword"]`;  // missing Weight
+  const txt = `The toxin takes hold. [CONDITION_ADD: Target="Player"]`;  // missing required Condition
   const { failures } = validateDmMarkers(txt);
   assert.equal(failures.length, 1);
-  assert.equal(failures[0].schemaKey, 'PROMISE_MADE');
+  assert.equal(failures[0].schemaKey, 'CONDITION_ADD');
 });
 
 test('Multiple markers in one response — mix of valid and invalid', () => {
-  const txt = `[LOOT_DROP: Item="Dagger"] prose [NOTORIETY_GAIN: source="Watch" amount=10 category="bogus"]`;
+  const txt = `[LOOT_DROP: Item="Dagger"] prose [CONDITION_ADD: Target="Player" Condition="bogus"]`;
   const { failures, validByKey } = validateDmMarkers(txt);
   assert.equal(failures.length, 1);
-  assert.equal(failures[0].schemaKey, 'NOTORIETY_GAIN');
+  assert.equal(failures[0].schemaKey, 'CONDITION_ADD');
   assert.ok(validByKey.LOOT_DROP);
 });
 
 test('buildCorrectionMessage produces one line per failure', () => {
   const failures = [
-    { schemaKey: 'PROMISE_MADE', errors: [{ field: 'Weight', reason: 'required field missing' }] },
-    { schemaKey: 'NOTORIETY_GAIN', errors: [{ field: 'category', reason: 'invalid enum value' }] }
+    { schemaKey: 'CONDITION_ADD', errors: [{ field: 'Condition', reason: 'required field missing' }] },
+    { schemaKey: 'HP_CHANGE', errors: [{ field: 'Delta', reason: 'expected integer' }] }
   ];
   const msg = buildCorrectionMessage(failures);
-  assert.ok(msg.includes('PROMISE_MADE'));
-  assert.ok(msg.includes('NOTORIETY_GAIN'));
+  assert.ok(msg.includes('CONDITION_ADD'));
+  assert.ok(msg.includes('HP_CHANGE'));
   assert.equal(msg.split('\n').length, 2);
 });
 

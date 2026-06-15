@@ -31,6 +31,8 @@ export default function DiceRoller({ pendingRolls = [], onRollResult, onClose, c
   const [history, setHistory] = useState([]);
   // Animation state for pending rolls
   const [animatingPending, setAnimatingPending] = useState(null); // key of the pending roll being animated
+  // Per-pending-roll: the player's typed physical-die value ("roll your own")
+  const [manualEntry, setManualEntry] = useState({});
 
   const historyRef = useRef(null);
   const animationRef = useRef(null);
@@ -107,6 +109,31 @@ export default function DiceRoller({ pendingRolls = [], onRollResult, onClose, c
       }
     });
   }, [animateRoll, addToHistory, pendingRollKey]);
+
+  // Apply a player-entered physical die result (the "roll your own dice" path).
+  // Produces the same rolled state the animated roller does, so the DC + Resolve
+  // flow (which feeds the DM) is identical — the only difference is the raw value
+  // comes from the player's real d20 instead of the in-app RNG.
+  const applyManualRoll = useCallback((roll, idx) => {
+    const key = pendingRollKey(roll, idx);
+    const raw = parseInt(manualEntry[key], 10);
+    if (isNaN(raw) || raw < 1 || raw > 20) return;
+    const modifier = roll.modifier || roll.attackBonus || 0;
+    const total = raw + modifier;
+    setPendingState(prev => ({
+      ...prev,
+      [key]: { raw, modifier, total, dc: '', resolved: false, manual: true }
+    }));
+    setManualEntry(prev => { const next = { ...prev }; delete next[key]; return next; });
+    addToHistory({
+      sides: 20,
+      raw,
+      modifier,
+      total,
+      label: `${describePendingRoll(roll)} (your roll)`,
+      timestamp: Date.now()
+    });
+  }, [manualEntry, addToHistory, pendingRollKey]);
 
   // Resolve a pending roll (skill check with DC)
   const handleResolve = useCallback((roll, idx) => {
@@ -277,25 +304,70 @@ export default function DiceRoller({ pendingRolls = [], onRollResult, onClose, c
 
                     {/* Roll / Result area */}
                     {!hasRolled && !isAnimating && !isResolved && (
-                      <button
-                        onClick={() => handlePendingRoll(roll, idx)}
-                        style={{
-                          background: `linear-gradient(135deg, ${ACCENT} 0%, #7c3aed 100%)`,
-                          border: 'none',
-                          color: '#fff',
-                          padding: '0.4rem 1rem',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontWeight: 'bold',
-                          fontSize: '0.8rem',
-                          width: '100%',
-                          transition: 'box-shadow 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.target.style.boxShadow = `0 0 12px ${ACCENT_GLOW}`}
-                        onMouseLeave={(e) => e.target.style.boxShadow = 'none'}
-                      >
-                        Roll d20
-                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <button
+                          onClick={() => handlePendingRoll(roll, idx)}
+                          style={{
+                            background: `linear-gradient(135deg, ${ACCENT} 0%, #7c3aed 100%)`,
+                            border: 'none',
+                            color: '#fff',
+                            padding: '0.4rem 1rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontSize: '0.8rem',
+                            width: '100%',
+                            transition: 'box-shadow 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.boxShadow = `0 0 12px ${ACCENT_GLOW}`}
+                          onMouseLeave={(e) => e.target.style.boxShadow = 'none'}
+                        >
+                          Roll d20
+                        </button>
+                        {/* "Roll your own" — type a physical d20 result (1-20) */}
+                        <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                          <span style={{ color: '#888', fontSize: '0.7rem', flexShrink: 0 }}>or your roll:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={manualEntry[key] ?? ''}
+                            onChange={(e) => setManualEntry(prev => ({ ...prev, [key]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') applyManualRoll(roll, idx); }}
+                            placeholder="d20"
+                            style={{
+                              width: '52px',
+                              padding: '0.3rem 0.4rem',
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              borderRadius: '3px',
+                              color: '#fff',
+                              fontSize: '0.85rem',
+                              textAlign: 'center',
+                              outline: 'none'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = ACCENT}
+                            onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
+                          />
+                          <button
+                            onClick={() => applyManualRoll(roll, idx)}
+                            disabled={(() => { const v = parseInt(manualEntry[key], 10); return isNaN(v) || v < 1 || v > 20; })()}
+                            style={{
+                              flex: 1,
+                              padding: '0.3rem 0.5rem',
+                              background: 'rgba(255,255,255,0.06)',
+                              border: `1px solid ${ACCENT_DIM}`,
+                              borderRadius: '3px',
+                              color: '#ddd',
+                              fontSize: '0.78rem',
+                              cursor: 'pointer',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            Use my roll
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                     {/* Animating state */}

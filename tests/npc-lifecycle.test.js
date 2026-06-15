@@ -274,10 +274,12 @@ async function testDeathPropagation() {
   const companionAfter = await dbGet('SELECT status FROM companions WHERE id = ?', [companion.id]);
   assertEqual(companionAfter.status, 'deceased', 'Companion status changed to deceased after NPC death');
 
-  // Verify canon_fact was created for the death
+  // Verify canon_fact was created for the death under the canonical 'death'
+  // category (the always-included "DEATHS (DO NOT RESURRECT)" prompt block
+  // queries 'death'; the cascade previously wrote the orphaned 'npc_death').
   const deathFact = await dbGet(`
     SELECT * FROM canon_facts
-    WHERE campaign_id = ? AND category = 'npc_death' AND subject = 'TEST_NPC_Death_Propagation'
+    WHERE campaign_id = ? AND category = 'death' AND subject = 'TEST_NPC_Death_Propagation'
   `, [testCampaignId]);
   assert(deathFact !== null && deathFact !== undefined, 'Canon fact created recording the NPC death');
 

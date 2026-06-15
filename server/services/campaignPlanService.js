@@ -9,7 +9,6 @@
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { randomUUID } from 'crypto';
-import { createMerchantsFromPlan } from './merchantService.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
 
@@ -80,13 +79,6 @@ export async function generateCampaignPlan(campaignId, characterId) {
     'UPDATE campaigns SET campaign_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [JSON.stringify(plan), campaignId]
   );
-
-  // Create persistent merchant inventory entries from the plan
-  try {
-    await createMerchantsFromPlan(campaignId, plan);
-  } catch (e) {
-    console.error('Error creating merchants from plan:', e.message);
-  }
 
   return plan;
 }
@@ -598,7 +590,7 @@ export async function getPlanSummaryForSession(campaignId) {
 
   return {
     main_quest_title: plan.main_quest?.title,
-    main_quest_summary: plan.main_quest?.summary,
+    main_quest_summary: plan.main_quest?.summary || plan.premise,
     main_quest_hook: plan.main_quest?.hook,
     main_quest_stakes: plan.main_quest?.stakes,
     current_act: plan.main_quest?.acts?.[0],
@@ -626,10 +618,11 @@ export async function getPlanSummaryForSession(campaignId) {
       personality: m.personality
     })),
     themes: plan.themes,
-    dm_notes: plan.dm_notes ? {
-      tone: plan.dm_notes.tone_guidance,
-      twists: plan.dm_notes.potential_twists?.slice(0, 3),
-      backup_hooks: plan.dm_notes.backup_hooks?.slice(0, 3)
+    dm_notes: (plan.dm_notes || plan.tone) ? {
+      // Atelier plans carry a flat `tone` string; canonical plans use dm_notes.tone_guidance.
+      tone: plan.dm_notes?.tone_guidance || plan.tone || null,
+      twists: plan.dm_notes?.potential_twists?.slice(0, 3),
+      backup_hooks: plan.dm_notes?.backup_hooks?.slice(0, 3)
     } : null,
     side_quests: plan.side_quests?.slice(0, 3).map(q => ({
       title: q.title,
@@ -652,7 +645,23 @@ export async function getPlanSummaryForSession(campaignId) {
       location: n.location,
       relationship_to_player: n.relationship_to_player,
       voice_guide: n.voice_guide || null
-    }))
+    })),
+
+    // Atelier-authored campaign fields (Begin Campaign screen). These surface
+    // the full co-authored design to the DM — premise, opening scene, the
+    // DM-only hidden truth, region/setting, scope, locations, and the table's
+    // content boundaries (lines & veils). Null for canonical/imported plans.
+    from_atelier: plan.generated_from === 'begin_campaign_atelier',
+    premise: plan.premise || null,
+    opening_scene: plan.opening_scene || null,
+    region: plan.region || plan.setting?.name || null,
+    setting: plan.setting || null,
+    hidden_truth: plan.hidden_truth || plan.main_quest?.hidden_truth || null,
+    campaign_scope: plan.scope || null,
+    locations: Array.isArray(plan.locations)
+      ? plan.locations.map(l => (typeof l === 'string' ? l : l?.name)).filter(Boolean)
+      : null,
+    lines_and_veils: Array.isArray(plan.lines_and_veils) ? plan.lines_and_veils : null
   };
 }
 

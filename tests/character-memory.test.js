@@ -185,9 +185,9 @@ console.log('\n=== Test 4: Player Autonomy Enforcement (Strengthened) ===\n');
   const selfCheckPos = prompt.indexOf('BEFORE YOU SEND');
   assert(selfCheckPos > 0, 'Self-check rubric section exists');
   const afterSelfCheck = prompt.substring(selfCheckPos);
-  assert(afterSelfCheck.includes('DID I SPEAK FOR THE PLAYER'), 'Self-check: player sovereignty check');
-  assert(afterSelfCheck.includes('any player-side dice outcome'), 'Self-check: mentions dice outcomes');
-  assert(afterSelfCheck.includes('DID I CONTINUE PAST AN NPC QUESTION OR A ROLL REQUEST'), 'Self-check: hard stop check');
+  assert(afterSelfCheck.includes('speak, think, feel, decide, or roll for the player'), 'Self-check: player sovereignty check');
+  assert(afterSelfCheck.includes('roll for the player'), 'Self-check: mentions rolling for the player');
+  assert(afterSelfCheck.includes('past a roll request or an NPC'), 'Self-check: hard stop (roll request / NPC question)');
 }
 
 // ===== 5. DM GUIDELINE - CHARACTER OBSERVATION =====

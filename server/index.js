@@ -1,3 +1,4 @@
+import './suppressDeprecation.js'; // must be first — patches process.emitWarning before deps load
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -6,38 +7,21 @@ import { dirname, join } from 'path';
 import { initDatabase } from './database.js';
 import characterRoutes from './routes/character.js';
 import nicknameRoutes from './routes/nickname.js';
-import adventureRoutes from './routes/adventure.js';
 import uploadRoutes from './routes/upload.js';
 import dmSessionRoutes from './routes/dmSession.js';
 import npcRoutes from './routes/npc.js';
-import downtimeRoutes from './routes/downtime.js';
 import companionRoutes from './routes/companion.js';
 import metaGameRoutes from './routes/metaGame.js';
-import storyThreadRoutes from './routes/storyThreads.js';
 import campaignRoutes from './routes/campaign.js';
-import locationRoutes from './routes/location.js';
-import questRoutes from './routes/quest.js';
-import narrativeQueueRoutes from './routes/narrativeQueue.js';
-import factionRoutes from './routes/faction.js';
-import worldEventRoutes from './routes/worldEvent.js';
-import travelRoutes from './routes/travel.js';
 import npcRelationshipRoutes from './routes/npcRelationship.js';
-import livingWorldRoutes from './routes/livingWorld.js';
-import dmModeRoutes from './routes/dmMode.js';
-import achievementRoutes from './routes/achievement.js';
 import chronicleRoutes from './routes/chronicle.js';
-import weatherRoutes from './routes/weather.js';
-import survivalRoutes from './routes/survival.js';
-import craftingRoutes from './routes/crafting.js';
-import mythicRoutes from './routes/mythic.js';
-import partyBaseRoutes from './routes/partyBase.js';
 import progressionRoutes from './routes/progression.js';
-import merchantRoutes from './routes/merchant.js';
-import preludeRoutes from './routes/prelude.js';
 import aiBehaviorRoutes from './routes/aiBehavior.js';
 import authRoutes from './routes/auth.js';
 import authMiddleware from './middleware/auth.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
+import { startBackupScheduler } from './services/backupService.js';
+import { recoverAbandonedSessions } from './services/sessionRecoveryService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -56,60 +40,50 @@ app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
 // Serve built client files in production
 const clientDistPath = join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDistPath));
+app.use(express.static(clientDistPath, {
+  setHeaders: (res, filePath) => {
+    // Hashed JS/CSS assets are immutable, but index.html must always revalidate
+    // so a rebuild's new bundle is picked up on a normal reload — otherwise the
+    // browser keeps serving a stale shell that fetches dead chunk hashes.
+    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 
 // Initialize database (async for Turso cloud)
 await initDatabase();
 
-// Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
+// Initialize narrative systems (event handlers for chronicles, companions, etc.)
 await initNarrativeSystems();
 
-// Public routes (no authentication required)
+// Public routes (no authentication required). Login is disabled in the MVP, but
+// the auth routes stay mounted as harmless no-ops for back-compat.
 app.use('/api/auth', authRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
 });
 
-// Auth middleware for all other /api routes
+// Auth middleware resolves the single local user (login disabled in the MVP).
 app.use('/api', authMiddleware);
 
 // Protected routes
 app.use('/api/character', characterRoutes);
 app.use('/api/character', nicknameRoutes);
-app.use('/api/adventure', adventureRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/dm-session', dmSessionRoutes);
 app.use('/api/npc', npcRoutes);
-app.use('/api/downtime', downtimeRoutes);
 app.use('/api/companion', companionRoutes);
 app.use('/api/meta-game', metaGameRoutes);
-app.use('/api/story-threads', storyThreadRoutes);
 app.use('/api/campaign', campaignRoutes);
-app.use('/api/location', locationRoutes);
-app.use('/api/quest', questRoutes);
-app.use('/api/narrative-queue', narrativeQueueRoutes);
-app.use('/api/faction', factionRoutes);
-app.use('/api/world-event', worldEventRoutes);
-app.use('/api/travel', travelRoutes);
 app.use('/api/npc-relationship', npcRelationshipRoutes);
-app.use('/api/living-world', livingWorldRoutes);
-app.use('/api/dm-mode', dmModeRoutes);
-app.use('/api/achievement', achievementRoutes);
 app.use('/api/chronicle', chronicleRoutes);
-app.use('/api/weather', weatherRoutes);
-app.use('/api/survival', survivalRoutes);
-app.use('/api/crafting', craftingRoutes);
-app.use('/api/mythic', mythicRoutes);
-app.use('/api', partyBaseRoutes);
 app.use('/api/progression', progressionRoutes);
-app.use('/api/merchant', merchantRoutes);
-app.use('/api/prelude', preludeRoutes);
 app.use('/api/ai-behavior', aiBehaviorRoutes);
 
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(join(clientDistPath, 'index.html'));
   }
 });
@@ -117,3 +91,18 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// Automatic campaign backups (the cloud Turso save is otherwise un-backed-up).
+// Defensive: never throws into boot; opt out with BACKUP_DISABLE=1.
+startBackupScheduler();
+
+// Continuous persistence (Phase 3): on boot, chronicle any sessions that were
+// abandoned (browser closed / crash / sleep) before /end-session ran, so their
+// memory isn't lost. Deferred slightly (like the backup scheduler) so it never
+// competes with boot, and fully defensive — a failure here must not crash the
+// server. The sweep is idempotent (skips sessions that already have a chronicle).
+setTimeout(() => {
+  recoverAbandonedSessions().catch(e =>
+    console.error('[Recovery] Abandoned-session sweep failed:', e?.message || e)
+  );
+}, Number(process.env.RECOVERY_FIRST_DELAY_MS) || 15_000).unref?.();

@@ -155,25 +155,15 @@ export async function compressMessageHistory(messages, sessionId, model) {
   return compressed;
 }
 
-/**
- * Generate a compressed summary of older messages
- * @param {Array} messages - Messages to summarize
- * @param {string} model - Model to use for summarization
- * @returns {string} Compressed summary
- */
-async function generateMessageSummary(messages, model) {
-  const transcript = messages
-    .map(m => `${m.role === 'user' ? 'PLAYER' : 'DM'}: ${m.content}`)
-    .join('\n\n');
+// Above this many chars we MAP-REDUCE instead of single-shotting — and we never
+// delete the middle. The prior implementation spliced head (first 14k) + tail
+// (last 14k) and dropped everything between, silently losing any death, promise,
+// or item that lived only in the middle of a long session.
+export const SUMMARY_SINGLE_SHOT_CHARS = 30000;
+const SUMMARY_CHUNK_CHARS = 24000;   // target transcript chars per map chunk
+const SUMMARY_MAX_CHUNKS = 8;        // cap LLM map calls; grow chunk size past this
 
-  // Truncate if extremely long (focus on beginning and end)
-  let input = transcript;
-  if (input.length > 30000) {
-    const half = 14000;
-    input = input.substring(0, half) + '\n\n[...middle portion omitted for brevity...]\n\n' + input.substring(input.length - half);
-  }
-
-  const summaryPrompt = `Summarize this D&D session conversation into a concise recap (300-500 words). Include:
+const MESSAGE_SUMMARY_PROMPT = `Summarize this D&D session conversation into a concise recap (300-500 words). Include:
 - Key events and decisions the player made
 - Important NPCs encountered and what happened with them
 - Combat outcomes
@@ -184,23 +174,108 @@ async function generateMessageSummary(messages, model) {
 
 Write as a factual recap, not as narrative. Focus on information the DM needs to maintain continuity.`;
 
-  const response = await loggedChat(
-    { call_purpose: 'context_compression', prompt_builder: 'contextManager' },
-    summaryPrompt,
-    [{ role: 'user', content: input }],
-    2, // fewer retries for background task
-    model === 'opus' ? 'sonnet' : 'sonnet', // Always use Sonnet for compression
-    1500,
-    true // raw response
-  );
-
-  return response;
+/**
+ * Split messages into contiguous chunks whose joined transcript stays under
+ * maxChars, breaking ONLY on message boundaries. Pure + deterministic — exported
+ * for unit testing. A single message longer than maxChars becomes its own chunk.
+ *
+ * @param {Array} messages
+ * @param {number} maxChars
+ * @returns {Array<Array>} array of message-array chunks
+ */
+export function chunkMessagesByChars(messages, maxChars) {
+  const chunks = [];
+  let cur = [];
+  let curLen = 0;
+  for (const m of (messages || [])) {
+    const lineLen = String(m?.content ?? '').length + 8; // + role label + separators
+    if (cur.length > 0 && curLen + lineLen > maxChars) {
+      chunks.push(cur);
+      cur = [];
+      curLen = 0;
+    }
+    cur.push(m);
+    curLen += lineLen;
+  }
+  if (cur.length > 0) chunks.push(cur);
+  return chunks;
 }
+
+function messagesToTranscript(messages) {
+  return messages
+    .map(m => `${m.role === 'user' ? 'PLAYER' : 'DM'}: ${m.content}`)
+    .join('\n\n');
+}
+
+async function summarizeText(input) {
+  return loggedChat(
+    { call_purpose: 'context_compression', prompt_builder: 'contextManager' },
+    MESSAGE_SUMMARY_PROMPT,
+    [{ role: 'user', content: input }],
+    2,         // fewer retries for background task
+    'sonnet',  // always Sonnet for compression
+    1500,
+    true       // raw response
+  );
+}
+
+/**
+ * Generate a compressed summary of older messages (MAP-REDUCE, never drops the
+ * middle). Exported as `summarizeMessagesMapReduce` so other extractors (e.g. the
+ * story chronicle) can fold an over-long transcript down to a complete recap
+ * instead of head+tail splicing it.
+ *
+ * Short transcript → one summarization call. Long transcript → MAP-REDUCE: chunk
+ * the messages on their boundaries, summarize each chunk, then fold the partial
+ * recaps into one. This preserves the MIDDLE of a long session rather than
+ * splicing it out (the old head+tail truncation dropped load-bearing canon).
+ *
+ * @param {Array} messages - Messages to summarize
+ * @param {string} [model] - retained for signature compatibility (compression is always Sonnet)
+ * @returns {Promise<string>} Compressed summary
+ */
+export async function summarizeMessagesMapReduce(messages, model) {
+  const full = messagesToTranscript(messages || []);
+  if (full.length <= SUMMARY_SINGLE_SHOT_CHARS) {
+    return summarizeText(full);
+  }
+
+  // Map: chunk on message boundaries (nothing deleted). Cap the number of map
+  // calls by growing the chunk size if the session is enormous.
+  let chunkChars = SUMMARY_CHUNK_CHARS;
+  let chunks = chunkMessagesByChars(messages, chunkChars);
+  while (chunks.length > SUMMARY_MAX_CHUNKS) {
+    chunkChars = Math.ceil(chunkChars * 1.5);
+    chunks = chunkMessagesByChars(messages, chunkChars);
+  }
+
+  const partials = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const part = await summarizeText(messagesToTranscript(chunks[i]));
+    if (part && part.trim()) partials.push(`Part ${i + 1} of ${chunks.length}:\n${part.trim()}`);
+  }
+  if (partials.length === 0) return '';
+  if (partials.length === 1) return partials[0].replace(/^Part \d+ of \d+:\n/, '');
+
+  // Reduce: fold the partial recaps into one cohesive recap. If the partials are
+  // somehow still huge, return them concatenated rather than dropping anything —
+  // completeness beats brevity for a continuity recap.
+  const combined = partials.join('\n\n');
+  if (combined.length <= SUMMARY_SINGLE_SHOT_CHARS) {
+    return summarizeText(combined);
+  }
+  return combined;
+}
+
+// Back-compat alias for the prior private name used by compressMessageHistory.
+const generateMessageSummary = summarizeMessagesMapReduce;
 
 export default {
   estimateTokens,
   getModelLimits,
   calculateChronicleBudget,
   shouldCompress,
-  compressMessageHistory
+  compressMessageHistory,
+  chunkMessagesByChars,
+  summarizeMessagesMapReduce
 };

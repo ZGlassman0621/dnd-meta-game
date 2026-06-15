@@ -1,14 +1,9 @@
 import express from 'express';
-import db, { dbAll, dbGet, dbRun } from '../database.js';
-import * as questService from '../services/questService.js';
+import db, { dbAll, dbGet, dbRun, withTransaction } from '../database.js';
+import { abilityModifier as abilityMod } from '../utils/dndMath.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
-import { getCampaignLocations } from '../services/locationService.js';
-import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
-import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
-import { resetMythicPower } from '../services/mythicService.js';
-import { transferCanonToCampaign } from '../services/campaignCanonTransferService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import { safeParse } from '../utils/safeParse.js';
 import {
@@ -32,6 +27,36 @@ import {
 } from '../config/levelProgression.js';
 
 const router = express.Router();
+
+// ── Creation-time derived vitals (Phase A fix, 2026-06-05) ───────────────
+// The V2 creator historically POST/PUT-ed without computing HP or AC, so
+// every manually-created character shipped with max_hp 0/0 and AC 10. The
+// client now computes armored AC + worn equipment (it has equipment.json),
+// but these server-side helpers are the authoritative safety net for EVERY
+// path that flips a character to 'active' (creator, tests, seeds, the
+// one-off backfill of already-broken rows). Unarmored only — armored AC,
+// when present, arrives on the body and is preserved.
+// abilityMod is imported from utils/dndMath.js (single source of truth).
+function parseAbilityScores(raw) {
+  if (raw && typeof raw === 'object') return raw;
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+}
+function deriveMaxHp(charClass, level, abilityScores) {
+  const hitDie = HIT_DICE[String(charClass || '').toLowerCase()] || 8;
+  const conMod = abilityMod(abilityScores?.con);
+  let hp = hitDie + conMod; // L1: full hit die + CON
+  for (let l = 2; l <= (Number(level) || 1); l++) {
+    hp += Math.floor(hitDie / 2) + 1 + conMod; // average per extra level
+  }
+  return Math.max(1, hp);
+}
+function deriveUnarmoredAc(charClass, abilityScores) {
+  const cls = String(charClass || '').toLowerCase();
+  let ac = 10 + abilityMod(abilityScores?.dex);
+  if (cls === 'monk') ac += abilityMod(abilityScores?.wis);       // Unarmored Defense
+  else if (cls === 'barbarian') ac += abilityMod(abilityScores?.con);
+  return ac;
+}
 
 // Get all characters
 router.get('/', async (req, res) => {
@@ -135,6 +160,8 @@ router.post('/', async (req, res) => {
       other_notes = null,
       known_cantrips = '[]',
       known_spells = '[]',
+      fighting_style = null,
+      expertise = '[]',
       feats = '[]',
       languages = '[]',
       tool_proficiencies = '[]',
@@ -155,6 +182,22 @@ router.post('/', async (req, res) => {
       creation_phase = 'active'
     } = req.body;
 
+    // Phase A fix: a character entering 'active' must have real vitals. The
+    // client sends computed values; this fills any that are missing/unset so
+    // no path (tests, seeds, partial bodies) can create a 0-HP / AC-10
+    // character. A real armored AC from the body (>10) is always preserved.
+    let _curHp = current_hp, _maxHp = max_hp, _ac = armor_class;
+    if (creation_phase === 'active') {
+      const av = parseAbilityScores(ability_scores);
+      if (!(Number(_maxHp) > 0)) {
+        _maxHp = deriveMaxHp(charClass, level, av);
+        _curHp = _maxHp;
+      }
+      if (!(Number(_ac) > 10)) {
+        _ac = Math.max(Number(_ac) || 0, deriveUnarmoredAc(charClass, av));
+      }
+    }
+
     const sql = `
       INSERT INTO characters (
         name, first_name, last_name, nickname, gender,
@@ -170,17 +213,18 @@ router.post('/', async (req, res) => {
         organizations, allies, enemies, backstory, other_notes,
         known_cantrips, known_spells, feats, languages, tool_proficiencies,
         keeper_texts, keeper_recitations, keeper_genre_domain,
+        fighting_style, expertise,
         creation_phase
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await dbRun(sql, [
       name, first_name, last_name, nickname, gender,
       charClass, subclass, race, subrace, background,
-      level, current_hp, max_hp, current_location, current_quest,
+      level, _curHp, _maxHp, current_location, current_quest,
       gold_cp, gold_sp, gold_gp, gold_cp, gold_sp, gold_gp, // Store starting gold same as initial gold
       experience, experience_to_next_level,
-      armor_class, speed, ability_scores, skills, advantages, inventory,
+      _ac, speed, ability_scores, skills, advantages, inventory,
       faction_standings, injuries, debuffs, equipment,
       avatar, alignment, faith, lifestyle,
       hair_color, skin_color, eye_color, height, weight, age,
@@ -188,6 +232,7 @@ router.post('/', async (req, res) => {
       organizations, allies, enemies, backstory, other_notes,
       known_cantrips, known_spells, feats, languages, tool_proficiencies,
       keeper_texts, keeper_recitations, keeper_genre_domain,
+      fighting_style, expertise,
       creation_phase
     ]);
 
@@ -269,17 +314,26 @@ async function persistAncestryFeatSelection(characterId, featId, tier, selectedA
 // Update character
 router.put('/:id', async (req, res) => {
   try {
-    // --- Phase 2 chunk 5 batch 3 checkpoint 2 — phase-transition side
-    // effects (heirloom flip on handoff submit). Detected before the
-    // generic UPDATE so we can read the prior phase to gate the work.
-    let priorPhase = null
-    if (
-      req.body.creation_phase === 'active' &&
-      (req.body.chosen_heirloom_candidate_id !== undefined ||
-       /* defensive: any field-update to 'active' on a handoff row */ true)
-    ) {
-      const row = await dbGet('SELECT creation_phase FROM characters WHERE id = ?', [req.params.id])
-      priorPhase = row?.creation_phase || null
+    // Phase A fix: flipping a draft → 'active' (the manual creator's submit,
+    // or the one-off backfill of already-broken rows) must guarantee derived
+    // vitals. Backfill req.body so the normal allowlist loop persists them —
+    // no duplicate SET, and a real armored AC (>10) on the body is preserved.
+    if (req.body.creation_phase === 'active') {
+      const existing = await dbGet(
+        'SELECT class, level, ability_scores, max_hp, armor_class FROM characters WHERE id = ?',
+        [req.params.id]
+      );
+      const pick = (k) => (req.body[k] !== undefined ? req.body[k] : existing?.[k]);
+      const cls = pick('class');
+      const lvl = pick('level') || 1;
+      const av = parseAbilityScores(pick('ability_scores'));
+      if (!(Number(pick('max_hp')) > 0)) {
+        req.body.max_hp = deriveMaxHp(cls, lvl, av);
+        req.body.current_hp = req.body.max_hp;
+      }
+      if (!(Number(pick('armor_class')) > 10)) {
+        req.body.armor_class = Math.max(Number(pick('armor_class')) || 0, deriveUnarmoredAc(cls, av));
+      }
     }
 
     const updates = [];
@@ -298,6 +352,7 @@ router.put('/:id', async (req, res) => {
       'personality_traits', 'ideals', 'bonds', 'flaws',
       'organizations', 'allies', 'enemies', 'backstory', 'other_notes',
       'known_cantrips', 'known_spells', 'prepared_spells', 'feats',
+      'fighting_style', 'expertise',
       'class_levels', 'hit_dice',
       'campaign_config', 'languages', 'tool_proficiencies',
       'keeper_texts', 'keeper_recitations', 'keeper_genre_domain',
@@ -345,23 +400,16 @@ router.put('/:id', async (req, res) => {
 
     await dbRun(`UPDATE characters SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    // --- Phase 2 chunk 5 batch 3 sub-checkpoint 2 — handoff submit ---
-    // When the PUT flips creation_phase to 'active' and the prior phase
-    // was 'ready_for_primary', this is the handoff submit. Run side
-    // effects: heirloom candidate flip + canon transfer to campaign tables.
-    if (priorPhase === 'ready_for_primary' && req.body.creation_phase === 'active') {
-      const chosenId = req.body.chosen_heirloom_candidate_id ?? null
-      await applyHeirloomChoiceOnSubmit(req.params.id, chosenId)
-      try {
-        const transferResult = await transferCanonToCampaign(req.params.id)
-        console.log(`[handoff submit] character ${req.params.id} canon transfer:`, transferResult)
-      } catch (transferErr) {
-        // Canon transfer failure is non-blocking — character still
-        // flips to 'active' and player can play; the prelude_canon_*
-        // data persists and a follow-up retry can re-run the transfer
-        // (it's idempotent). Surface the error in logs but don't fail
-        // the submit (the character is in a valid state either way).
-        console.error(`[handoff submit] canon transfer failed for character ${req.params.id}:`, transferErr)
+    // Phase A fix: persist progression selections on the manual creator's
+    // 'creating' → 'active' submit. POST persists theme/ancestry-feat into
+    // character_themes / character_ancestry_feats, but the PUT submit path
+    // (the one the V2 creator actually uses) previously dropped them.
+    if (req.body.creation_phase === 'active') {
+      if (req.body.theme_id) {
+        await persistThemeSelection(req.params.id, req.body.theme_id, req.body.theme_path_choice || null, req.body.level || 1);
+      }
+      if (req.body.ancestry_feat_id) {
+        await persistAncestryFeatSelection(req.params.id, req.body.ancestry_feat_id, 1, req.body.level || 1, req.body.ancestry_feat_choices || null);
       }
     }
 
@@ -371,44 +419,6 @@ router.put('/:id', async (req, res) => {
     handleServerError(res, error, 'update character');
   }
 });
-
-/**
- * Phase 2 chunk 5 batch 3 checkpoint 2 — apply the player's heirloom
- * candidate choice at handoff submit. The chosen candidate flips to
- * 'carried_forward'; all other candidates for this character flip to
- * 'left_behind'. The chosen candidate's content is also reflected on
- * the character's inventory blob (already shaped client-side at
- * submit time per creatorPersistence.js).
- *
- * Per spec §8.1.2 status semantics: unpicked candidates are kept in the
- * table for narrative reference; the AI may surface "remember the
- * [object] you didn't take" in late-campaign play. No MVP mechanism
- * wires this surfacing today.
- *
- * Currently a no-op for every existing handoff character because the
- * heirloom producer is deferred per Option A — `prelude_canon_heirlooms`
- * has no rows. The function exists wired so it lights up automatically
- * when producer-side work lands.
- */
-async function applyHeirloomChoiceOnSubmit(characterId, chosenCandidateId) {
-  // Get all candidates for this character
-  const candidates = await dbAll(
-    `SELECT id FROM prelude_canon_heirlooms
-     WHERE character_id = ? AND status = 'candidate'`,
-    [characterId]
-  )
-  if (candidates.length === 0) return // No-op, no candidates to apply
-
-  for (const c of candidates) {
-    const newStatus = (chosenCandidateId != null && Number(c.id) === Number(chosenCandidateId))
-      ? 'carried_forward'
-      : 'left_behind'
-    await dbRun(
-      `UPDATE prelude_canon_heirlooms SET status = ? WHERE id = ?`,
-      [newStatus, c.id]
-    )
-  }
-}
 
 // Delete character and all related data.
 //
@@ -496,22 +506,28 @@ router.post('/:id/discard-item', async (req, res) => {
     const { itemName } = req.body;
     if (!itemName) return res.status(400).json({ error: 'itemName is required' });
 
-    const character = await dbGet('SELECT id, inventory FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) return res.status(404).json({ error: 'Character not found' });
+    // Atomic read-modify-write (serialized) so concurrent discards/pickups
+    // can't lose each other's inventory edits (last-write-wins).
+    const outcome = await withTransaction(async (tx) => {
+      const character = await tx.get('SELECT id, inventory FROM characters WHERE id = ?', [req.params.id]);
+      if (!character) return { status: 404, body: { error: 'Character not found' } };
 
-    let inventory = safeParse(character.inventory, []);
-    const idx = inventory.findIndex(i => (i.name || i).toLowerCase() === itemName.toLowerCase());
+      let inventory = safeParse(character.inventory, []);
+      const idx = inventory.findIndex(i => (i.name || i).toLowerCase() === itemName.toLowerCase());
 
-    if (idx === -1) return res.status(404).json({ error: 'Item not found in inventory' });
+      if (idx === -1) return { status: 404, body: { error: 'Item not found in inventory' } };
 
-    if (inventory[idx].quantity > 1) {
-      inventory[idx].quantity -= 1;
-    } else {
-      inventory.splice(idx, 1);
-    }
+      if (inventory[idx].quantity > 1) {
+        inventory[idx].quantity -= 1;
+      } else {
+        inventory.splice(idx, 1);
+      }
 
-    await dbRun('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(inventory), req.params.id]);
+      await tx.run('UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [JSON.stringify(inventory), req.params.id]);
+      return { status: 200 };
+    });
+    if (outcome.status !== 200) return res.status(outcome.status).json(outcome.body);
 
     const updated = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(updated);
@@ -545,9 +561,6 @@ router.post('/rest/:id', async (req, res) => {
         WHERE id = ?
       `, [newHp, req.params.id]);
       spellSlotsRestored = true;
-
-      // Reset mythic power on long rest
-      try { await resetMythicPower(parseInt(req.params.id)); } catch (_) { /* no mythic record is fine */ }
     } else {
       // Short rest: restore 50% of missing HP, partial spell slot recovery for some classes
       const missingHp = character.max_hp - character.current_hp;
@@ -615,35 +628,39 @@ router.post('/spell-slots/:id/use', async (req, res) => {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
+    // Atomic read-modify-write: the write-transaction serializes concurrent
+    // slot mutations so two rapid casts can't both read the same state and lose
+    // a decrement (last-write-wins). Statuses/bodies are otherwise identical.
+    const outcome = await withTransaction(async (tx) => {
+      const character = await tx.get('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+      if (!character) {
+        return { status: 404, body: { error: 'Character not found' } };
+      }
 
-    const maxSlots = getSpellSlots(character.class, character.level);
-    const usedSlots = safeParse(character.spell_slots_used, {});
+      const maxSlots = getSpellSlots(character.class, character.level);
+      const usedSlots = safeParse(character.spell_slots_used, {});
 
-    const maxForLevel = maxSlots[level] || 0;
-    const usedForLevel = usedSlots[level] || 0;
+      const maxForLevel = maxSlots[level] || 0;
+      const usedForLevel = usedSlots[level] || 0;
 
-    if (maxForLevel === 0) {
-      return res.status(400).json({ error: `You don't have level ${level} spell slots` });
-    }
+      if (maxForLevel === 0) {
+        return { status: 400, body: { error: `You don't have level ${level} spell slots` } };
+      }
 
-    if (usedForLevel >= maxForLevel) {
-      return res.status(400).json({ error: `No level ${level} spell slots remaining` });
-    }
+      if (usedForLevel >= maxForLevel) {
+        return { status: 400, body: { error: `No level ${level} spell slots remaining` } };
+      }
 
-    usedSlots[level] = usedForLevel + 1;
+      usedSlots[level] = usedForLevel + 1;
 
-    await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
+      await tx.run('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
 
-    res.json({
-      success: true,
-      level,
-      remaining: maxForLevel - usedSlots[level],
-      max: maxForLevel
+      return {
+        status: 200,
+        body: { success: true, level, remaining: maxForLevel - usedSlots[level], max: maxForLevel }
+      };
     });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'use spell slot');
   }
@@ -657,31 +674,33 @@ router.post('/spell-slots/:id/restore', async (req, res) => {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
+    // Atomic read-modify-write (serialized) — see /spell-slots/:id/use above.
+    const outcome = await withTransaction(async (tx) => {
+      const character = await tx.get('SELECT * FROM characters WHERE id = ?', [req.params.id]);
+      if (!character) {
+        return { status: 404, body: { error: 'Character not found' } };
+      }
 
-    const maxSlots = getSpellSlots(character.class, character.level);
-    const usedSlots = safeParse(character.spell_slots_used, {});
+      const maxSlots = getSpellSlots(character.class, character.level);
+      const usedSlots = safeParse(character.spell_slots_used, {});
 
-    const maxForLevel = maxSlots[level] || 0;
-    const usedForLevel = usedSlots[level] || 0;
+      const maxForLevel = maxSlots[level] || 0;
+      const usedForLevel = usedSlots[level] || 0;
 
-    if (usedForLevel <= 0) {
-      return res.status(400).json({ error: `No used level ${level} slots to restore` });
-    }
+      if (usedForLevel <= 0) {
+        return { status: 400, body: { error: `No used level ${level} slots to restore` } };
+      }
 
-    usedSlots[level] = usedForLevel - 1;
+      usedSlots[level] = usedForLevel - 1;
 
-    await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
+      await tx.run('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
 
-    res.json({
-      success: true,
-      level,
-      remaining: maxForLevel - usedSlots[level],
-      max: maxForLevel
+      return {
+        status: 200,
+        body: { success: true, level, remaining: maxForLevel - usedSlots[level], max: maxForLevel }
+      };
     });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'restore spell slot');
   }
@@ -1542,98 +1561,6 @@ router.delete('/:id/campaign', async (req, res) => {
   }
 });
 
-// ============================================================
-// CHARACTER QUEST TRACKING
-// ============================================================
-
-// Get all quests for a character
-router.get('/:id/quests', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const { type, status } = req.query;
-    let quests;
-
-    if (type) {
-      quests = await questService.getQuestsByType(req.params.id, type);
-    } else if (status === 'active') {
-      quests = await questService.getActiveQuests(req.params.id);
-    } else {
-      quests = await questService.getCharacterQuests(req.params.id);
-    }
-
-    res.json(quests);
-  } catch (error) {
-    handleServerError(res, error, 'fetch quests');
-  }
-});
-
-// Get only active quests for a character
-router.get('/:id/quests/active', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const quests = await questService.getActiveQuests(req.params.id);
-    res.json(quests);
-  } catch (error) {
-    handleServerError(res, error, 'fetch active quests');
-  }
-});
-
-// Get the character's main quest
-router.get('/:id/quests/main', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const quest = await questService.getMainQuest(req.params.id);
-    res.json(quest);
-  } catch (error) {
-    handleServerError(res, error, 'fetch main quest');
-  }
-});
-
-// Get quest summary for a character (counts by type and status)
-router.get('/:id/quests/summary', async (req, res) => {
-  try {
-    const character = await dbGet('SELECT id FROM characters WHERE id = ?', [req.params.id]);
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const allQuests = await questService.getCharacterQuests(req.params.id);
-
-    const summary = {
-      total: allQuests.length,
-      byStatus: {
-        active: allQuests.filter(q => q.status === 'active').length,
-        completed: allQuests.filter(q => q.status === 'completed').length,
-        failed: allQuests.filter(q => q.status === 'failed').length,
-        abandoned: allQuests.filter(q => q.status === 'abandoned').length
-      },
-      byType: {
-        main: allQuests.filter(q => q.quest_type === 'main').length,
-        side: allQuests.filter(q => q.quest_type === 'side').length,
-        companion: allQuests.filter(q => q.quest_type === 'companion').length,
-        one_time: allQuests.filter(q => q.quest_type === 'one_time').length
-      },
-      hasMainQuest: allQuests.some(q => q.quest_type === 'main' && q.status === 'active')
-    };
-
-    res.json(summary);
-  } catch (error) {
-    handleServerError(res, error, 'fetch quest summary');
-  }
-});
-
 // Get campaign notes for a character
 router.get('/:id/campaign-notes', async (req, res) => {
   try {
@@ -1944,15 +1871,16 @@ router.get('/:id/journal', async (req, res) => {
 
     const campaignId = character.campaign_id;
 
-    // Fetch all data sources in parallel
-    const [relationships, allLocations, standings, visibleGoals, quests, visibleEvents] = await Promise.all([
-      getCharacterRelationshipsWithNpcs(character.id).catch(() => []),
-      campaignId ? getCampaignLocations(campaignId).catch(() => []) : [],
-      getCharacterStandings(character.id).catch(() => []),
-      getGoalsVisibleToCharacter(character.id).catch(() => []),
-      questService.getCharacterQuests(character.id).catch(() => []),
-      getEventsVisibleToCharacter(character.id).catch(() => [])
-    ]);
+    // KEPT: NPC relationships (session memory). The faction-standings,
+    // visible-goals, quests, campaign-locations, and world-event data
+    // sources were part of the cut world-simulation cluster — they now
+    // resolve to empty arrays so the endpoint still returns valid JSON.
+    const relationships = await getCharacterRelationshipsWithNpcs(character.id).catch(() => []);
+    const allLocations = [];
+    const standings = [];
+    const visibleGoals = [];
+    const quests = [];
+    const visibleEvents = [];
 
     // Get campaign plan for unknown counts
     let campaignPlan = null;

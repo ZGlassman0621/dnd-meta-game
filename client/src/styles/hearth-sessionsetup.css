@@ -1,0 +1,239 @@
+/* =================================================================
+   HEARTH · Session Setup surface
+   The full-screen pre-session screen (pick up campaign, see party,
+   Begin/Continue). Scoped entirely under `.hearth` so it covers the
+   legacy chrome and reads first-class alongside the Cockpit. Reuses
+   the shared tokens + .dash-hdr / .btn / .chip families from
+   hearth.css; the selectors below add only the setup-specific layout.
+   ================================================================= */
+
+/* ---- page canvas ------------------------------------------------ */
+.hearth .ss-canvas { max-width: 760px; margin: 0 auto; padding: 30px 24px 96px; }
+.hearth .ss-checking { font-family: var(--serif); font-size: 17px; color: var(--ink-3); text-align: center; padding: 60px 20px; }
+
+/* section heading with fleuron rule (mirrors .sec-head) */
+.hearth .ss-sec { display: flex; align-items: center; gap: 12px; margin: 30px 0 14px; }
+.hearth .ss-sec:first-of-type { margin-top: 4px; }
+.hearth .ss-sec .ss-sec-t { font-family: var(--sans); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .18em; color: var(--ink-3); white-space: nowrap; flex-shrink: 0; }
+.hearth .ss-sec .ss-fl { flex: 1; height: 1px; background: var(--rule); }
+
+/* ---- party preview --------------------------------------------- */
+.hearth .ss-party { display: flex; flex-direction: column; gap: 10px; }
+.hearth .ss-pc {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  padding: 16px 18px; border-radius: var(--radius-lg);
+  background: var(--bg-card); border: 1px solid var(--rule); box-shadow: var(--shadow-sm);
+}
+.hearth .ss-pc.lead {
+  background: color-mix(in oklab, var(--accent) 7%, var(--bg-card));
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--rule));
+}
+.hearth .ss-pc .ss-crest {
+  width: 52px; height: 52px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--serif); font-weight: 600; font-size: 24px; color: var(--accent);
+  background: linear-gradient(150deg, #3a3326, #211c14);
+  border: 1px solid var(--rule); box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+}
+.hearth .ss-pc.companion .ss-crest {
+  color: var(--accent-2); background: linear-gradient(150deg, #2e3340, #1d2128);
+}
+.hearth .ss-pc .ss-pc-name { font-family: var(--serif); font-weight: 500; font-size: 21px; color: var(--ink); line-height: 1.1; margin: 0 0 4px; }
+.hearth .ss-pc .ss-pc-sub { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+.hearth .ss-pc .ss-pc-sub .ss-sep { color: var(--ink-4); padding: 0 7px; }
+.hearth .ss-pc .ss-pc-hp { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--good); margin-top: 5px; letter-spacing: .02em; }
+
+/* ---- provider / model status bar ------------------------------- */
+.hearth .ss-provider {
+  display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+  padding: 12px 15px; border-radius: var(--radius);
+  background: var(--bg-2); border: 1px solid var(--rule);
+}
+.hearth .ss-provider .ss-prov-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--good); box-shadow: 0 0 7px color-mix(in oklab, var(--good) 70%, transparent);
+}
+.hearth .ss-provider.claude .ss-prov-dot {
+  background: var(--accent-2); box-shadow: 0 0 7px color-mix(in oklab, var(--accent-2) 70%, transparent);
+}
+.hearth .ss-provider .ss-prov-text { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); }
+.hearth .ss-provider .ss-prov-text strong { color: var(--ink); font-weight: 600; }
+.hearth .ss-provider .ss-prov-model { font-family: var(--mono); font-size: 11px; color: var(--ink-4); letter-spacing: .02em; }
+.hearth .ss-provider .ss-model-grp { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+
+/* segmented model toggle (Sonnet / Opus) */
+.hearth .ss-seg {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  color: var(--ink-3); background: var(--bg-card); border: 1px solid var(--rule);
+  transition: background .14s, border-color .14s, color .14s;
+}
+.hearth .ss-seg:hover { color: var(--ink-2); border-color: #4a4032; }
+.hearth .ss-seg.on { color: #211d17; background: var(--accent); border-color: var(--accent); }
+.hearth .ss-prov-recheck {
+  width: 28px; height: 28px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; cursor: pointer;
+  color: var(--ink-3); background: var(--bg-card); border: 1px solid var(--rule);
+  transition: background .14s, color .14s, border-color .14s;
+}
+.hearth .ss-prov-recheck:hover { color: var(--ink); border-color: #4a4032; }
+
+/* ---- accent callout cards (continuity / plan / summary) -------- */
+.hearth .ss-card {
+  padding: 16px 18px; border-radius: var(--radius-lg);
+  background: var(--bg-card); border: 1px solid var(--rule); box-shadow: var(--shadow-sm);
+}
+.hearth .ss-card.accent {
+  position: relative; overflow: hidden;
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--rule));
+}
+.hearth .ss-card.accent::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent);
+}
+.hearth .ss-card-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.hearth .ss-card-glyph { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.hearth .ss-card-head h4 { font-family: var(--serif); font-weight: 500; font-size: 20px; margin: 0; color: var(--ink); }
+.hearth .ss-card-head .ss-card-sub { font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); margin: 3px 0 0; }
+.hearth .ss-quote {
+  font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2);
+  padding: 11px 14px; margin: 10px 0; border-radius: var(--radius);
+  background: var(--bg-2); border-left: 2px solid color-mix(in oklab, var(--accent) 45%, var(--rule));
+}
+
+/* dual choice (Continue Campaign / New Adventure) */
+.hearth .ss-choice-row { display: flex; gap: 10px; margin-top: 14px; }
+.hearth .ss-choice {
+  flex: 1; text-align: left; cursor: pointer;
+  padding: 13px 15px; border-radius: var(--radius);
+  background: var(--bg-2); border: 1px solid var(--rule);
+  transition: border-color .14s, background .14s;
+}
+.hearth .ss-choice:hover { border-color: #4a4032; background: var(--raise); }
+.hearth .ss-choice.on {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--rule));
+  background: color-mix(in oklab, var(--accent) 9%, var(--bg-2));
+}
+.hearth .ss-choice .ss-choice-t { font-family: var(--serif); font-size: 17px; color: var(--ink); display: block; }
+.hearth .ss-choice.on .ss-choice-t { color: var(--accent); }
+.hearth .ss-choice .ss-choice-d { font-family: var(--sans); font-size: 11.5px; color: var(--ink-3); margin-top: 3px; display: block; line-height: 1.4; }
+
+/* summary key/value rows */
+.hearth .ss-kv { margin-top: 12px; }
+.hearth .ss-kv:first-of-type { margin-top: 4px; }
+.hearth .ss-kv .ss-k { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.hearth .ss-kv .ss-v { font-family: var(--serif); font-size: 15.5px; color: var(--ink); margin-top: 3px; }
+.hearth .ss-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* ---- form groups ----------------------------------------------- */
+.hearth .ss-group { margin-bottom: 20px; }
+.hearth .ss-label { display: block; font-family: var(--sans); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
+.hearth .ss-hint { display: block; font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.45; margin-top: 7px; }
+.hearth .ss-hint.top { margin-top: 0; margin-bottom: 9px; }
+
+/* native selects + textareas restyled to Hearth */
+.hearth .ss-select,
+.hearth .ss-textarea {
+  width: 100%; font-family: var(--sans); font-size: 14px; color: var(--ink);
+  background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 10px 12px; outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.hearth .ss-textarea { font-family: var(--serif); font-size: 15.5px; line-height: 1.55; resize: vertical; min-height: 70px; }
+.hearth .ss-select:focus,
+.hearth .ss-textarea:focus {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--rule));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 13%, transparent);
+}
+.hearth .ss-select { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 17px) center, calc(100% - 12px) center;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.hearth .ss-select option,
+.hearth .ss-select optgroup { background: var(--bg-card); color: var(--ink); }
+.hearth .ss-select::-webkit-scrollbar { width: 11px; }
+.hearth .ss-textarea + .ss-textarea { margin-top: 8px; }
+
+/* read-only "set" value chips inside the campaign summary */
+.hearth .ss-readval { font-family: var(--serif); font-size: 15.5px; color: var(--ink); margin-top: 4px; }
+
+/* ---- campaign module grid -------------------------------------- */
+.hearth .ss-modules { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.hearth .ss-module {
+  display: grid; grid-template-columns: auto 1fr; gap: 13px; align-items: center;
+  padding: 14px 15px; border-radius: var(--radius-lg); cursor: pointer;
+  background: var(--bg-2); border: 1px solid var(--rule);
+  transition: border-color .14s, background .14s;
+}
+.hearth .ss-module:hover { border-color: #4a4032; background: var(--raise); }
+.hearth .ss-module.on {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--rule));
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-2));
+}
+.hearth .ss-module .ss-mod-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.hearth .ss-module .ss-mod-name { font-family: var(--serif); font-size: 17px; color: var(--ink); line-height: 1.15; }
+.hearth .ss-module.on .ss-mod-name { color: var(--accent); }
+.hearth .ss-module .ss-mod-lvl { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); margin-top: 3px; }
+.hearth .ss-module .ss-mod-year { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .04em; color: var(--ink-4); margin-top: 2px; }
+
+.hearth .ss-mod-desc {
+  margin-top: 12px; padding: 14px 16px; border-radius: var(--radius);
+  background: var(--bg-2); border: 1px solid var(--rule);
+}
+.hearth .ss-mod-desc .ss-synopsis { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2); margin: 0; }
+.hearth .ss-mod-details { margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--rule-soft); }
+.hearth .ss-mod-details p { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); margin: 0 0 5px; line-height: 1.5; }
+.hearth .ss-mod-details p:last-child { margin-bottom: 0; }
+.hearth .ss-mod-details strong { color: var(--ink-2); font-weight: 600; }
+
+/* ---- campaign-length radio cards ------------------------------- */
+.hearth .ss-length { display: flex; flex-direction: column; gap: 8px; }
+.hearth .ss-length-opt {
+  display: block; cursor: pointer; padding: 12px 15px; border-radius: var(--radius);
+  background: var(--bg-2); border: 1px solid var(--rule);
+  transition: border-color .14s, background .14s;
+}
+.hearth .ss-length-opt:hover { border-color: #4a4032; background: var(--raise); }
+.hearth .ss-length-opt.on {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--rule));
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-2));
+}
+.hearth .ss-length-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.hearth .ss-length-opt .ss-opt-name { font-family: var(--serif); font-size: 16px; color: var(--ink); display: block; }
+.hearth .ss-length-opt.on .ss-opt-name { color: var(--accent); }
+.hearth .ss-length-opt .ss-opt-desc { font-family: var(--sans); font-size: 12px; color: var(--ink-3); margin-top: 3px; display: block; line-height: 1.4; }
+
+/* ---- NPC selection grid ---------------------------------------- */
+.hearth .ss-npcs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.hearth .ss-npc {
+  display: flex; flex-direction: column; cursor: pointer;
+  padding: 11px 13px; border-radius: var(--radius);
+  background: var(--bg-2); border: 1px solid var(--rule);
+  transition: border-color .14s, background .14s;
+}
+.hearth .ss-npc:hover { border-color: #4a4032; background: var(--raise); }
+.hearth .ss-npc.on {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--rule));
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-2));
+}
+.hearth .ss-npc input { position: absolute; opacity: 0; pointer-events: none; }
+.hearth .ss-npc .ss-npc-name { font-family: var(--serif); font-size: 15.5px; color: var(--ink); }
+.hearth .ss-npc.on .ss-npc-name { color: var(--accent); }
+.hearth .ss-npc .ss-npc-det { font-family: var(--mono); font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-4); margin-top: 3px; }
+
+/* ---- error + primary begin button ------------------------------ */
+.hearth .ss-error {
+  font-family: var(--sans); font-size: 13px; color: var(--bad);
+  padding: 11px 14px; border-radius: var(--radius); margin: 18px 0 0;
+  background: color-mix(in oklab, var(--bad) 10%, var(--bg-card));
+  border: 1px solid color-mix(in oklab, var(--bad) 38%, var(--rule));
+}
+.hearth .ss-begin { width: 100%; margin-top: 22px; }
+.hearth .ss-begin.btn.lg { padding: 15px 22px; font-size: 13px; letter-spacing: .16em; }
+
+/* ---- responsive ------------------------------------------------ */
+@media (max-width: 620px) {
+  .hearth .ss-modules,
+  .hearth .ss-npcs { grid-template-columns: 1fr; }
+  .hearth .ss-choice-row { flex-direction: column; }
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Stepper, WizardFoot } from './creatorPrimitives.jsx'
+import '../../styles/hearth.css'
+import '../../styles/hearth-creator.css'
 import Step1Identity from './Step1Identity.jsx'
 import Step2Ancestry from './Step2Ancestry.jsx'
 import Step3Theme from './Step3Theme.jsx'
@@ -9,23 +10,18 @@ import Step6Equipment from './Step6Equipment.jsx'
 import Step7IdentityDetails from './Step7IdentityDetails.jsx'
 import Step8Review from './Step8Review.jsx'
 import { submitCreator, saveProgress } from './creatorPersistence.js'
+import { HearthSprite } from '../hearthUI.jsx'
 
 /**
  * Character Creator V2 — chunk 5 rebuilt main creator.
  *
  * Per PHASE_2_CREATOR_SPEC.md §5: 8-step component tree replacing the
- * existing 4392-line CharacterCreationWizard.jsx. Manual / handoff
- * modes are payload-and-treatment differences in one component, not
- * two forks (§2.4 mode coherence guarantee).
+ * existing 4392-line CharacterCreationWizard.jsx.
  *
- * Batch 2 ships Steps 1–4 + the celebration card primitive + the
- * dismissable narrative-continuity card (Step 4). Steps 5–8 ship in
- * batch 3.
- *
- * Mode determination:
- *   - `mode='handoff'` when a Prelude payload is provided (handoff
- *     transition has run; character.creation_phase === 'ready_for_primary')
- *   - `mode='manual'` otherwise
+ * The Prelude system was removed in the MVP, so the creator only ever
+ * runs in manual / campaign mode — HomeFlow always enters with no
+ * prelude payload. Steps still accept a `mode` prop for back-compat,
+ * but it is always `'manual'` here.
  *
  * Until 5.K wires this into the home page, this component is reachable
  * via the `?creator=v2` query-param preview in App.jsx — a temporary
@@ -41,7 +37,8 @@ export default function CharacterCreatorV2({
   onExit,
   onSubmitSuccess = null
 }) {
-  const mode = preludePayload ? 'handoff' : 'manual'
+  // Prelude/handoff was removed in the MVP — the creator is campaign-only.
+  const mode = 'manual'
 
   // The wizard's own step + state. State shape mirrors what the old
   // CharacterCreationWizard's buildInitialFormData produces, with new
@@ -108,27 +105,55 @@ export default function CharacterCreatorV2({
 
   const stepProps = { state, set: setState, mode, payload: preludePayload }
 
+  // The design's persistent chrome. STEP_LABELS feeds the ribbon nodes;
+  // STEP_NAMES is the longer label the stepline ("Step N of 8 · Name")
+  // shows under the ribbon. Indices are 0-based to match `step`.
+  const STEP_LABELS = ['Identity', 'Ancestry', 'Theme', 'Class', 'Abilities', 'Equipment', 'Details', 'Review']
+  const STEP_NAMES = ['Identity', 'Ancestry', 'Theme', 'Class & Calling', 'Ability Scores', 'Equipment', 'Identity Details', 'Review']
+  const isLast = step === totalSteps - 1
+
   return (
-    <div className="creator-v2">
-      <div className="appbar">
-        <div className="brand">
-          D <span className="amp">&amp;</span> D
-          <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-        </div>
-        <div className="crumbs">
-          {mode === 'handoff' ? 'Prelude character · resuming' : 'Campaign character · in progress'}
-        </div>
-        <div className="spacer" />
-        {onExit && (
-          <button type="button" className="btn ghost" onClick={onExit}>Exit preview</button>
+    <div className="hearth creator-shell">
+      {/* persistent header — gives the sticky .wiz-chrome (top:58px) its 58px gutter */}
+      <header className="dash-hdr">
+        <div className="wordmark">D<span className="amp">&amp;</span>D</div>
+        <div className="vr" />
+        {onExit ? (
+          <button type="button" className="back" onClick={onExit}>
+            <svg className="ic"><use href="#i-arrow-left" /></svg>
+            Your characters
+          </button>
+        ) : (
+          <span className="back" style={{ cursor: 'default' }}>Character Creator</span>
         )}
+        <div className="spacer" />
+        <span className="opus"><span className="dot" />Opus</span>
+      </header>
+
+      {/* step ribbon */}
+      <div className="wiz-chrome">
+        <div className="ribbon">
+          {STEP_LABELS.map((label, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`rnode ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}
+              onClick={() => setStep(i)}
+            >
+              <span className="rdot">{i + 1}</span>
+              <span className="rlbl">{label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="stepline">
+          <span className="sn">Step {step + 1} of {totalSteps}</span>
+          <span className="gl">·</span>
+          <span className="snm">{STEP_NAMES[step]}</span>
+        </div>
       </div>
 
-      <div className="stage">
-        <div className="frame">
-          <Stepper step={step} setStep={setStep} mode={mode} />
-          <div style={{ height: 36 }} />
-
+      <main className="reading">
+        <section className="pane show">
           {step === 0 && <Step1Identity {...stepProps} />}
           {step === 1 && <Step2Ancestry {...stepProps} />}
           {step === 2 && <Step3Theme {...stepProps} />}
@@ -143,71 +168,70 @@ export default function CharacterCreatorV2({
               payload={preludePayload}
               onJump={(targetStep) => setStep(targetStep)}
               onSubmit={async () => {
-                const result = await submitCreator({ state, mode, preludePayload })
+                const result = await submitCreator({ state, mode, preludePayload, characterId })
                 if (onSubmitSuccess) onSubmitSuccess(result)
-                else alert(`Character ${result.character_id || ''} ${mode === 'handoff' ? 'stepped into the world' : 'created'}.`)
+                else alert(`Character ${result.character_id || ''} created.`)
               }}
             />
           )}
 
-          {step < 7 && (
-            <>
-              {saveError && (
-                <div style={{
-                  marginTop: 16,
-                  padding: '12px 16px',
-                  background: 'rgba(231, 76, 60, 0.08)',
-                  border: '1px solid #e74c3c',
-                  color: '#c0392b',
-                  fontFamily: 'var(--serif)',
-                  fontSize: 15
-                }}>
-                  Couldn't save: {saveError} (Your input is preserved — try Continue again, or Save and exit.)
-                </div>
-              )}
-              <WizardFoot
-                onBack={back}
-                onNext={next}
-                canBack={step > 0 && !saving}
-                canNext={!saving}
-                onSave={onExit}
-                nextLabel={saving ? 'Saving…' : 'Continue'}
-                isLast={false}
-              />
-            </>
+          {saveError && (
+            <div style={{
+              marginTop: 16,
+              padding: '12px 16px',
+              background: 'color-mix(in oklab, var(--bad) 12%, var(--bg-card))',
+              border: '1px solid color-mix(in oklab, var(--bad) 40%, var(--rule))',
+              borderRadius: 11,
+              color: 'var(--bad)',
+              fontFamily: 'var(--serif)',
+              fontSize: 15
+            }}>
+              Couldn't save: {saveError} (Your input is preserved — try Continue again, or Save and exit.)
+            </div>
           )}
-          {step === 7 && (
-            // Step 8 has its own primary Submit button at the bottom of
-            // the page; the footer here only needs Back + Save-and-exit.
-            <WizardFoot
-              onBack={back}
-              onNext={() => {}}
-              canBack
-              canNext={false}
-              onSave={onExit}
-              nextLabel=""
-              isLast
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
+        </section>
+      </main>
 
-function PlaceholderStep({ stepNum }) {
-  const labels = { 5: 'Ability Scores', 6: 'Equipment', 7: 'Identity Details', 8: 'Review' }
-  return (
-    <div>
-      <div className="wizard-head">
-        <div className="step-title">
-          <div className="eyebrow">Step {String(stepNum).padStart(2, '0')} of 08</div>
-          <h1 className="h-step">{labels[stepNum] || `Step ${stepNum}`}</h1>
-          <p className="lede" style={{ marginTop: 12 }}>
-            This step lands in checkpoint 2 of batch 3. Use Back to return.
-          </p>
+      {/* sticky footer */}
+      <footer className="wiz-foot">
+        <div className="inner">
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={back}
+            disabled={saving}
+            style={{ visibility: step > 0 ? 'visible' : 'hidden' }}
+          >
+            <svg className="ic"><use href="#i-arrow-left" /></svg>
+            Back
+          </button>
+          <span className="fprog">Step {step + 1} of {totalSteps}</span>
+          <span className="spacer" />
+          {onExit && (
+            <button type="button" className="save btn ghost" onClick={onExit}>Save and exit</button>
+          )}
+          {/* Step 8 carries its own "Bring them to life" primary at the bottom
+              of the review pane; the footer there is Back + Save only. */}
+          {!isLast && (
+            <button type="button" className="btn primary" onClick={next} disabled={saving}>
+              {saving ? 'Saving…' : 'Continue'}
+              <svg className="ic"><use href="#i-arrow-right" /></svg>
+            </button>
+          )}
         </div>
-      </div>
+      </footer>
+
+      {/* Shared Hearth icon set (sparkles/check/coin/feather/…) so step icons
+          like the chosen-class crest actually render — the creator only
+          defined arrows before, leaving #i-sparkles empty. */}
+      <HearthSprite />
+      {/* Symbols the steps use that HearthSprite doesn't define. */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
+        <symbol id="i-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M7 20h10" /><path d="M12 20c0-7 0-9 0-12" /><path d="M12 11C9 11 6 9 6 5c4 0 6 2 6 6z" /><path d="M12 9c0-3 2-5 6-5 0 4-3 5-6 5z" /></symbol>
+      </defs></svg>
     </div>
   )
 }

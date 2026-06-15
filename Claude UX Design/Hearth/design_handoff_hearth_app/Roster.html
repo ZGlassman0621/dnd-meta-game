@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Your Characters</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+
+    /* ── masthead ─────────────────────────────────────── */
+    .roster-head { margin-bottom: 30px; }
+    .roster-head h1 { font-family: var(--serif); font-weight: 500; font-size: 52px; line-height: 1.02; letter-spacing: -.016em; margin: 0 0 9px; }
+    .roster-head .lede { font-family: var(--serif); font-style: italic; font-size: 20px; color: var(--ink-2); margin: 0; }
+    .roster-head .count { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); margin-top: 14px; }
+
+    /* ── grid ─────────────────────────────────────────── */
+    .lib { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+
+    /* the start-a-new-life card */
+    .create-card {
+      display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+      text-decoration: none; min-height: 232px;
+      background:
+        radial-gradient(520px 300px at 22% -10%, color-mix(in oklab, var(--accent) 11%, transparent), transparent 70%),
+        var(--bg-2);
+      border: 1px dashed color-mix(in oklab, var(--accent) 46%, var(--rule));
+      border-radius: 13px; padding: 26px 26px 24px;
+      transition: border-color .15s, background .15s, transform .15s;
+    }
+    .create-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .create-card .seal {
+      width: 56px; height: 56px; border-radius: 13px; margin-bottom: 20px;
+      display: flex; align-items: center; justify-content: center;
+      background: color-mix(in oklab, var(--accent) 15%, var(--bg-card));
+      border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule));
+      color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .create-card .seal .ic { width: 24px; height: 24px; }
+    .create-card h2 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0 0 5px; color: var(--ink); letter-spacing: -.008em; }
+    .create-card .sub { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--accent); margin: 0; }
+    .create-card .spark { margin-top: auto; padding-top: 18px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); display: inline-flex; align-items: center; gap: 7px; }
+    .create-card .spark .ic { width: 12px; height: 12px; color: var(--ink-3); }
+
+    /* a life */
+    .char-card {
+      position: relative; display: flex; flex-direction: column; min-height: 232px;
+      text-decoration: none; overflow: hidden;
+      background: var(--bg-card); border: 1px solid var(--rule);
+      border-radius: 13px; padding: 22px 22px 0;
+      box-shadow: var(--shadow-sm);
+      transition: border-color .15s, transform .15s, background .15s;
+    }
+    .char-card:hover { border-color: #4a4032; transform: translateY(-2px); }
+
+    .cc-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+    .cc-head .crest { width: 56px; height: 56px; border-radius: 12px; }
+    .cc-head .crest .mono { font-size: 28px; }
+    .cc-head .crest .lvl { width: 24px; height: 24px; bottom: -7px; right: -7px; font-size: 11px; }
+
+    /* state badge — sits top-right */
+    .badge {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+      font-family: var(--sans); font-weight: 600; font-size: 9.5px;
+      letter-spacing: .13em; text-transform: uppercase;
+      border: 1px solid var(--rule); color: var(--ink-3); background: var(--bg-2);
+    }
+    .badge .ic { width: 11px; height: 11px; }
+    .badge.ready { color: var(--ink-2); border-color: var(--rule); background: var(--bg-2); }
+
+    .cc-body { flex: 1; }
+    .cc-name { font-family: var(--serif); font-weight: 500; font-size: 25px; line-height: 1.1; letter-spacing: -.01em; color: var(--ink); margin: 0 0 5px; }
+    .cc-name.unnamed { color: var(--ink-3); font-style: italic; }
+    .cc-sub { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); margin: 0; }
+    .cc-sub .sep { color: var(--ink-4); font-style: normal; padding: 0 5px; }
+    .cc-sub .lv { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .02em; }
+
+    /* footer status + timestamp */
+    .cc-foot {
+      margin-top: 16px; display: flex; align-items: center; gap: 12px;
+      padding: 13px 0 15px; border-top: 1px solid var(--rule-soft);
+    }
+    .cc-status { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); min-width: 0; }
+    .cc-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-4); flex-shrink: 0; }
+    .cc-status .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cc-time { margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-4); white-space: nowrap; flex-shrink: 0; }
+
+    /* ── ACTIVE — the one the gold is reserved for ── */
+    .char-card.active { border-color: color-mix(in oklab, var(--accent) 34%, var(--rule)); }
+    .char-card.active::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 28%, transparent)); }
+    .char-card.active:hover { border-color: var(--accent); }
+    .char-card.active .crest { background: linear-gradient(150deg, #4a3f29, #251f15); border-color: color-mix(in oklab, var(--accent) 35%, var(--rule)); }
+    .char-card.active .crest .lvl { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); }
+    .char-card.active .cc-status { color: var(--ink); }
+    .char-card.active .cc-status .dot { background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 65%, transparent); }
+    .char-card.active .cc-status .camp { color: var(--accent); font-style: italic; font-family: var(--serif); font-size: 15px; }
+
+    /* ── DRAFT — quiet, unfinished ── */
+    .char-card.draft { background: var(--bg-2); }
+    .char-card.draft .crest { background: linear-gradient(150deg, #2c281f, #221d16); }
+    .char-card.draft .crest .mono { color: var(--ink-3); }
+    .char-card.draft .cc-status { color: var(--ink-3); }
+
+    /* awaiting a campaign: quiet neutral dot, no gold */
+    .char-card.awaiting .cc-status .dot { background: var(--ink-3); }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></symbol>
+    <symbol id="i-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M12 20c0-7 0-9 0-12"/><path d="M12 11C9 11 6 9 6 5c4 0 6 2 6 6z"/><path d="M12 9c0-3 2-5 6-5 0 4-3 5-6 5z"/></symbol>
+    <symbol id="i-arrow-up-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+  </defs></svg>
+
+  <!-- persistent header -->
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <span class="back" style="cursor:default"><svg class="ic"><use href="#i-feather"/></svg>Your characters</span>
+    <div class="spacer"></div>
+    <a class="hdr-link" href="Settings.html"><svg class="ic"><use href="#i-settings"/></svg>Settings</a>
+    <div class="vr"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="page">
+
+    <div class="page-eyebrow">
+      <span class="eyebrow">Character home</span>
+      <span class="ln"></span>
+    </div>
+
+    <header class="roster-head">
+      <h1>Your Characters</h1>
+      <p class="lede">Pick a character to get started.</p>
+      <div class="count">5 lives · 2 active</div>
+    </header>
+
+    <div class="lib">
+
+      <!-- ALWAYS FIRST · begin a new life -->
+      <a class="create-card" href="Create Character.html">
+        <span class="seal"><svg class="ic"><use href="#i-plus"/></svg></span>
+        <h2>Create New Character</h2>
+        <p class="sub">Begin a new life.</p>
+        <span class="spark"><svg class="ic"><use href="#i-sprout"/></svg>From a blank page</span>
+      </a>
+
+      <!-- ACTIVE · gold is reserved for this one -->
+      <a class="char-card active" href="Dashboard.html">
+        <div class="cc-head">
+          <div class="crest"><span class="mono">D</span><span class="lvl">3</span></div>
+        </div>
+        <div class="cc-body">
+          <h3 class="cc-name">Dravyr Wyrmrest</h3>
+          <p class="cc-sub">Wood Elf <span class="sep">·</span> Monk <span class="sep">·</span> <span class="lv">L3</span></p>
+        </div>
+        <div class="cc-foot">
+          <span class="cc-status"><span class="dot"></span><span class="camp nm">The Hollow Man</span></span>
+          <span class="cc-time">Day 22 · dusk</span>
+        </div>
+      </a>
+
+      <!-- ACTIVE · a second life, another campaign -->
+      <a class="char-card active" href="Dashboard.html">
+        <div class="cc-head">
+          <div class="crest"><span class="mono">S</span><span class="lvl">5</span></div>
+        </div>
+        <div class="cc-body">
+          <h3 class="cc-name">Saela Duskwhisper</h3>
+          <p class="cc-sub">Half-Elf <span class="sep">·</span> Rogue <span class="sep">·</span> <span class="lv">L5</span></p>
+        </div>
+        <div class="cc-foot">
+          <span class="cc-status"><span class="dot"></span><span class="camp nm">Salt &amp; Iron</span></span>
+          <span class="cc-time">5 days ago</span>
+        </div>
+      </a>
+
+      <!-- READY · built, awaiting a campaign -->
+      <a class="char-card awaiting" href="Character Sheet.html">
+        <div class="cc-head">
+          <div class="crest"><span class="mono">K</span><span class="lvl">3</span></div>
+          <span class="badge ready"><svg class="ic"><use href="#i-check"/></svg>Ready</span>
+        </div>
+        <div class="cc-body">
+          <h3 class="cc-name">Kessa Brightwater</h3>
+          <p class="cc-sub">Human <span class="sep">·</span> Cleric <span class="sep">·</span> <span class="lv">L3</span></p>
+        </div>
+        <div class="cc-foot">
+          <span class="cc-status"><span class="dot"></span><span class="nm">Awaiting a campaign</span></span>
+          <span class="cc-time">Last week</span>
+        </div>
+      </a>
+
+      <!-- DRAFT · barely begun -->
+      <a class="char-card draft" href="Create Character.html">
+        <div class="cc-head">
+          <div class="crest"><span class="mono">?</span></div>
+          <span class="badge"><svg class="ic"><use href="#i-edit"/></svg>Draft</span>
+        </div>
+        <div class="cc-body">
+          <h3 class="cc-name unnamed">(unnamed)</h3>
+          <p class="cc-sub">Tiefling <span class="sep">·</span> <span style="font-style:normal;color:var(--ink-4)">class not set</span></p>
+        </div>
+        <div class="cc-foot">
+          <span class="cc-status"><span class="dot"></span><span class="nm">Manual draft · step 3 of 8</span></span>
+          <span class="cc-time">Yesterday</span>
+        </div>
+      </a>
+
+      <!-- MANUAL DRAFT -->
+      <a class="char-card draft" href="Create Character.html">
+        <div class="cc-head">
+          <div class="crest"><span class="mono">T</span></div>
+          <span class="badge"><svg class="ic"><use href="#i-edit"/></svg>Draft</span>
+        </div>
+        <div class="cc-body">
+          <h3 class="cc-name">Torvald Stonebrook</h3>
+          <p class="cc-sub">Mountain Dwarf <span class="sep">·</span> Fighter <span class="sep">·</span> <span class="lv">L1</span></p>
+        </div>
+        <div class="cc-foot">
+          <span class="cc-status"><span class="dot"></span><span class="nm">Manual draft</span></span>
+          <span class="cc-time">3 weeks ago</span>
+        </div>
+      </a>
+
+    </div>
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,110 @@
+/* =================================================================
+   HEARTH · Roster ("Your Characters") — ported from Roster.html +
+   Roster - Empty.html. All selectors scoped under .hearth.
+   ================================================================= */
+
+/* Page container — the roster's <main className="page"> + .page-eyebrow were
+   never actually given CSS rules (the shared `.page` was only referenced in
+   comments), so content jammed against the left edge. Center it with
+   comfortable gutters so the header + grid breathe. */
+.hearth.roster .page { max-width: 1180px; margin: 0 auto; padding: 40px 48px 90px; }
+.hearth.roster .page-eyebrow { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+.hearth.roster .page-eyebrow .eyebrow { font-size: 12.5px; letter-spacing: .2em; color: var(--ink-2); }
+.hearth.roster .page-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+
+.hearth .roster-head { margin-bottom: 34px; }
+.hearth .roster-head h1 { font-family: var(--serif); font-weight: 500; font-size: 54px; line-height: 1.02; letter-spacing: -.016em; margin: 0 0 12px; }
+.hearth .roster-head .lede { font-family: var(--serif); font-size: 22px; color: var(--ink); margin: 0; }
+.hearth .roster-head .count { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin-top: 16px; }
+
+/* ── grid ── */
+.hearth .lib { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+
+/* card buttons (the design used <a>; we render <button>) */
+.hearth .create-card, .hearth .char-card, .hearth .invite-create { font-family: inherit; text-align: left; cursor: pointer; width: 100%; appearance: none; }
+
+.hearth .create-card { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-decoration: none; min-height: 232px; background: radial-gradient(520px 300px at 22% -10%, color-mix(in oklab, var(--accent) 11%, transparent), transparent 70%), var(--bg-2); border: 1px dashed color-mix(in oklab, var(--accent) 46%, var(--rule)); border-radius: 13px; padding: 26px 26px 24px; transition: border-color .15s, background .15s, transform .15s; }
+.hearth .create-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.hearth .create-card .seal { width: 56px; height: 56px; border-radius: 13px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; background: color-mix(in oklab, var(--accent) 15%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule)); color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+.hearth .create-card .seal .ic { width: 24px; height: 24px; }
+.hearth .create-card h2 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0 0 5px; color: var(--ink); letter-spacing: -.008em; }
+.hearth .create-card .sub { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--accent); margin: 0; }
+.hearth .create-card .spark { margin-top: auto; padding-top: 18px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); display: inline-flex; align-items: center; gap: 7px; }
+.hearth .create-card .spark .ic { width: 12px; height: 12px; color: var(--ink-3); }
+
+/* a life */
+.hearth .char-card { position: relative; display: flex; flex-direction: column; min-height: 232px; text-decoration: none; overflow: hidden; background: var(--bg-card); border: 1px solid var(--rule); border-radius: 13px; padding: 22px 22px 0; box-shadow: var(--shadow-sm); transition: border-color .15s, transform .15s, background .15s; }
+.hearth .char-card:hover { border-color: #4a4032; transform: translateY(-2px); }
+.hearth .cc-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+.hearth .cc-head .crest { width: 56px; height: 56px; border-radius: 12px; }
+.hearth .cc-head .crest .mono { font-size: 28px; }
+.hearth .cc-head .crest .lvl { width: 24px; height: 24px; bottom: -7px; right: -7px; font-size: 11px; }
+
+.hearth .badge { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; white-space: nowrap; font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase; border: 1px solid var(--rule); color: var(--ink-3); background: var(--bg-2); }
+.hearth .badge .ic { width: 11px; height: 11px; }
+.hearth .badge.ready { color: var(--ink-2); border-color: var(--rule); background: var(--bg-2); }
+
+.hearth .cc-body { flex: 1; }
+.hearth .cc-name { font-family: var(--serif); font-weight: 500; font-size: 25px; line-height: 1.1; letter-spacing: -.01em; color: var(--ink); margin: 0 0 5px; }
+.hearth .cc-name.unnamed { color: var(--ink-3); font-style: italic; }
+.hearth .cc-sub { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); margin: 0; }
+.hearth .cc-sub .sep { color: var(--ink-4); font-style: normal; padding: 0 5px; }
+.hearth .cc-sub .lv { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .02em; }
+.hearth .cc-sub .na { font-style: normal; color: var(--ink-4); }
+
+.hearth .cc-foot { margin-top: 16px; display: flex; align-items: center; gap: 12px; padding: 13px 0 15px; border-top: 1px solid var(--rule-soft); }
+.hearth .cc-status { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-2); min-width: 0; }
+.hearth .cc-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-4); flex-shrink: 0; }
+.hearth .cc-status .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hearth .cc-time { margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-4); white-space: nowrap; flex-shrink: 0; }
+
+/* ACTIVE — the one the gold is reserved for */
+.hearth .char-card.active { border-color: color-mix(in oklab, var(--accent) 34%, var(--rule)); }
+.hearth .char-card.active::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 28%, transparent)); }
+.hearth .char-card.active:hover { border-color: var(--accent); }
+.hearth .char-card.active .crest { background: linear-gradient(150deg, #4a3f29, #251f15); border-color: color-mix(in oklab, var(--accent) 35%, var(--rule)); }
+.hearth .char-card.active .crest .lvl { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); }
+.hearth .char-card.active .cc-status { color: var(--ink); }
+.hearth .char-card.active .cc-status .dot { background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 65%, transparent); }
+.hearth .char-card.active .cc-status .camp { color: var(--accent); font-style: italic; font-family: var(--serif); font-size: 15px; }
+
+/* DRAFT — quiet, unfinished */
+.hearth .char-card.draft { background: var(--bg-2); }
+.hearth .char-card.draft .crest { background: linear-gradient(150deg, #2c281f, #221d16); }
+.hearth .char-card.draft .crest .mono { color: var(--ink-3); }
+.hearth .char-card.draft .cc-status { color: var(--ink-3); }
+.hearth .char-card.awaiting .cc-status .dot { background: var(--ink-3); }
+
+/* ── empty invitation ── */
+.hearth .invite { display: grid; grid-template-columns: 1.05fr 1fr; gap: 0; border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; background: var(--bg-2); box-shadow: var(--shadow); min-height: 380px; }
+.hearth .invite-create { position: relative; text-decoration: none; display: flex; flex-direction: column; justify-content: center; padding: 52px 50px; background: radial-gradient(640px 380px at 24% 8%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 68%), var(--bg-card); border-right: 1px dashed color-mix(in oklab, var(--accent) 44%, var(--rule)); transition: background .18s; }
+.hearth .invite-create::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 26%, transparent)); }
+.hearth .invite-create:hover { background: radial-gradient(640px 380px at 24% 8%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 68%), var(--raise); }
+.hearth .invite-create .seal { width: 64px; height: 64px; border-radius: 15px; margin-bottom: 26px; display: flex; align-items: center; justify-content: center; background: color-mix(in oklab, var(--accent) 16%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--rule)); color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.09); }
+.hearth .invite-create .seal .ic { width: 28px; height: 28px; }
+.hearth .invite-create h2 { font-family: var(--serif); font-weight: 500; font-size: 34px; letter-spacing: -.012em; margin: 0 0 8px; color: var(--ink); }
+.hearth .invite-create .sub { font-family: var(--serif); font-style: italic; font-size: 19px; color: var(--accent); margin: 0; }
+.hearth .invite-create .cta { margin-top: 30px; }
+.hearth .invite-words { padding: 52px 50px; display: flex; flex-direction: column; justify-content: center; }
+.hearth .invite-words .eyebrow { margin-bottom: 16px; }
+.hearth .invite-words p { font-family: var(--serif); font-size: 20px; line-height: 1.62; color: var(--ink); margin: 0 0 18px; text-wrap: pretty; max-width: 40ch; }
+.hearth .invite-words p:last-of-type { margin-bottom: 0; }
+.hearth .invite-words p em { font-style: italic; color: var(--ink-2); }
+.hearth .invite-words .paths { margin-top: 28px; display: flex; flex-direction: column; gap: 14px; padding-top: 24px; border-top: 1px solid var(--rule-soft); }
+.hearth .invite-words .pth { display: grid; grid-template-columns: auto 1fr; gap: 13px; align-items: start; }
+.hearth .invite-words .pth .pic { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border: 1px solid var(--rule); color: var(--accent-2); }
+.hearth .invite-words .pth.b .pic { color: var(--accent); }
+.hearth .invite-words .pth .pic .ic { width: 16px; height: 16px; }
+.hearth .invite-words .pth .pt { font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); margin-bottom: 1px; }
+.hearth .invite-words .pth .pd { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-3); line-height: 1.4; }
+
+/* ── Readability lifts (2026-06-06) ──────────────────────────────────────
+   The roster is single-user — favor large, bright text over subtle hierarchy.
+   Lift the dim small labels + warm the invitation prose. */
+.hearth.roster .eyebrow { color: var(--ink-2); }
+.hearth.roster .cc-time { color: var(--ink-3); font-size: 10.5px; }
+.hearth.roster .cc-sub { font-size: 16px; }
+.hearth.roster .cc-sub .lv { color: var(--ink-2); }
+.hearth.roster .create-card .spark { color: var(--ink-3); font-size: 11px; }
+.hearth.roster .invite-words p { color: var(--ink); font-size: 21px; }
+.hearth.roster .invite-create .sub, .hearth.roster .create-card .sub { color: var(--accent); }

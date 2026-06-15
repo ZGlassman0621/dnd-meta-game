@@ -1,16 +1,17 @@
 /**
  * Narrative Systems Initialization
  *
- * This module initializes all the narrative system event handlers
- * when the server starts. It should be called once after database
- * initialization.
+ * Initializes narrative system event handlers when the server starts. Called
+ * once after database initialization.
+ *
+ * MVP note: the quest-progress, companion-trigger, achievement, and
+ * narrative-queue checkers were removed in the MVP reduction (their systems are
+ * archived). Session memory now flows entirely through story chronicles + canon
+ * facts + NPC conversation recall, which are wired directly in the DM session
+ * route — they don't need an event-handler registration here.
  */
 
-import { initQuestProgressChecker } from './questProgressChecker.js';
-import { initCompanionTriggerChecker } from './companionTriggerChecker.js';
-import { initAchievementChecker } from './achievementChecker.js';
-import { seedAchievements } from './achievementService.js';
-import { on, GAME_EVENTS } from './eventEmitter.js';
+import { on } from './eventEmitter.js';
 
 let initialized = false;
 
@@ -24,22 +25,7 @@ export async function initNarrativeSystems() {
   }
 
   console.log('Initializing narrative systems...');
-
-  // Initialize quest progress checker
-  initQuestProgressChecker();
-
-  // Initialize companion trigger checker
-  initCompanionTriggerChecker();
-
-  // Initialize achievement checker
-  initAchievementChecker();
-
-  // Seed achievement definitions into database
-  await seedAchievements();
-
-  // Register any additional global handlers here
   registerGlobalHandlers();
-
   initialized = true;
   console.log('Narrative systems initialized successfully');
 }
@@ -54,17 +40,6 @@ function registerGlobalHandlers() {
       console.log(`[EVENT] ${event.type}:`, JSON.stringify(event.data, null, 2).slice(0, 200));
     });
   }
-
-  // Handle narrative queue cleanup periodically
-  // This could be expanded to run on a schedule
-  on(GAME_EVENTS.DM_SESSION_STARTED, async (event) => {
-    try {
-      const { expireOldItems } = await import('./narrativeQueueService.js');
-      await expireOldItems();
-    } catch (error) {
-      console.error('Error expiring old narrative queue items:', error);
-    }
-  });
 }
 
 /**

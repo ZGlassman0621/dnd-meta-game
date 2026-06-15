@@ -2,6 +2,19 @@
 
 Feature ideas for future implementation.
 
+> **Post-v2.0 MVP status (2026-06-04).** Some entries below describe systems that
+> were **archived** in the v2.0 MVP reduction. Building them now means **restoring
+> the archived system first** (see `/archive/` + `archive/README.md`). Archived-system
+> entries: **Drow Lolth Standing Tracker**, **Downtime system activation**, **Deeper
+> work — surfaced during Prelude play-testing**, **Prelude → Primary Campaign Handoff
+> (Phase 5)**, and the prelude half of **Unify Opus + Lean Prompt toggles**.
+>
+> Entries that are **directly actionable for the current MVP** (no restore needed):
+> **Session Hi-Fi implementation (the in-session cockpit)** — now briefed for Claude
+> Design at `Claude UX Design/MVP_DESIGN_BRIEF.md`; **Legacy System** (the
+> character-lineages north-star); **Self-hostability roadmap**; **Character Image
+> Generation**; **Visual World Map**; **Character creator deferred polish**.
+
 ---
 
 # Entry to Add to FUTURE_FEATURES.md

@@ -2,21 +2,18 @@
 
 A comprehensive AI-powered solo D&D 5e campaign management system. Create characters, generate living world campaign plans, and play through adventures with an AI Dungeon Master powered by Claude.
 
-## Two Ways to Play
+## How to Play (v2.0 — MVP)
 
-### Player Mode
-```
-Create Character → Write Backstory → Create Campaign → Auto-Pipeline → Play!
-```
-You are the player. The AI runs the world, NPCs, combat, and story. Your character sheet, inventory, companions, and world state persist across sessions.
+> **v2.0.0 reduced this to a focused MVP**: play one character with **Claude Opus 4.8** as your AI Dungeon Master. Other modes and deep systems (DM Mode, the prelude creator, mythic progression, crafting, party bases, merchant economy, the living-world simulation, factions/quests, etc.) were moved to [`/archive/`](archive/README.md) and can be restored later.
 
-### DM Mode
 ```
-Generate Party → Campaign Prep → Run Session → AI Plays the Party
+Create Character → (optional) Write Backstory → Create Campaign → Play!
 ```
-You are the Dungeon Master. The AI controls a party of 4 characters with distinct personalities, relationships, and tensions. You narrate the world and the party responds in character.
+You are the player; the AI is the DM. It runs the world, NPCs, combat, and story. Your character sheet, inventory, companions, spells, leveling, and **world memory** (story chronicles + canon facts + remembered NPCs) persist across sessions.
 
 ## Features
+
+> _Note: some features listed below (DM Mode, Living World, Crafting, Mythic Progression, etc.) were **archived in the v2.0 MVP reduction** and are not currently live. The live MVP feature set is: character creation + sheet/inventory/spells/leveling, the progression system, companions, the Player-Mode Opus 4.8 DM session, session memory, and campaign creation/plan. See [`CHANGELOG.md`](CHANGELOG.md) and [`archive/README.md`](archive/README.md)._
 
 ### Character Management
 - **Character Sheet** — Full D&D 5e characters with race, class, background, stats, equipment, and leveling
@@ -53,7 +50,7 @@ You are the Dungeon Master. The AI controls a party of 4 characters with distinc
 - **Frontend:** React 18 + Vite
 - **Backend:** Node.js + Express (ES modules)
 - **Database:** SQLite (local file, with optional Turso cloud sync)
-- **AI:** Claude API (Opus for generation, Sonnet for sessions) with Ollama fallback for offline play
+- **AI:** Claude **Opus 4.8** (`claude-opus-4-8`) as the AI Dungeon Master and for all generation; Sonnet (`claude-sonnet-4-6`) for session-recap extraction. (Ollama fallback retained but dormant.)
 
 ## Setup
 

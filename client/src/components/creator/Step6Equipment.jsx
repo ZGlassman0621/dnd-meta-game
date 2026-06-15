@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import { Field, WizardHead } from './creatorPrimitives.jsx'
+import { WizardHead } from './creatorPrimitives.jsx'
 import classesData from '../../data/classes.json'
 import { THEME_GOLD_MODIFIERS, applyGoldModifier } from '../../data/themeGoldModifiers.js'
-import { resolveOptionLabel, isProficiencyGated, getFocusDescription, getWeaponChoiceList, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
+import { resolveOptionLabel, isProficiencyGated, getFocusDescription, getWeaponChoiceList, getToolChoiceList, ALL_WEAPONS, ALL_ARMOR } from './equipmentResolver.js'
 import equipmentData from '../../data/equipment.json'
 
 // Curated tool list from equipment.json + musical instruments. Both
@@ -29,17 +29,25 @@ const ALL_TOOLS = (() => {
 /**
  * Step 6 — Equipment. Per PHASE_2_CREATOR_SPEC.md §5.6.
  *
- * Three subsections in order:
- *   1. Class equipment package — per-class `startingEquipment.choices`
- *      from classes.json. Each choice is "choose 1 of N options".
- *   2. Starting gold — read-only display. `class baseline × (1 + theme
- *      modifier)`, three display variants per §7.1.4 (positive / zero /
- *      negative; negative uses U+2212 minus glyph).
- *   3. Heirloom flow — opt-in authoring (manual mode); handoff-mode
- *      candidate picker when payload.heirloom_candidates non-empty,
- *      else falls back to manual opt-in (graceful degradation per
- *      §5.6.3). Note: producer is deferred per Option A — handoff
- *      candidates are always empty until later work.
+ * HEARTH-converted render (mockup pane data-pane="6"): the step header is
+ * the WizardHead primitive (.step-eyebrow + h1 + subtitle); content is
+ * organized into design `.block` sections (.block-label caption + body):
+ *
+ *   1. "Granted by your class" — per-class `startingEquipment.choices`
+ *      from classes.json, each "choose 1 of N" rendered as an .opt-grid
+ *      of selectable .opt cards (the design's pack-chooser pattern). Each
+ *      class has its own choice rows (weapons, packs, foci, armor), so
+ *      this subsumes the mockup's separate "Choose a pack" block.
+ *   2. "Your purse" — starting gold rendered in the design's accent
+ *      .trait-card (i-coin). `class baseline × (1 + theme modifier)`,
+ *      three display variants per §7.1.4 (positive / zero / negative;
+ *      negative uses U+2212 minus glyph).
+ *   3. "One thing of weight" — heirloom flow rendered in the design's
+ *      .prompt-card. Opt-in authoring (manual mode); handoff-mode
+ *      candidate picker when payload.heirloom_candidates non-empty, else
+ *      falls back to manual opt-in (graceful degradation per §5.6.3).
+ *      Note: producer is deferred per Option A — handoff candidates are
+ *      always empty until later work.
  */
 export default function Step6Equipment({ state, set, mode, payload }) {
   const isHandoff = mode === 'handoff'
@@ -70,19 +78,24 @@ export default function Step6Equipment({ state, set, mode, payload }) {
   const themeName = useMemo(() => prettifyId(themeId), [themeId])
   const className = cls?.name || prettifyId(state.class_id)
 
-  const goldLine = useMemo(() => {
-    if (!cls) return null
+  // The accent purse card splits the headline number from the supporting
+  // prose. `goldValue` is the headline ("12 gp"); `goldNote` is the
+  // italic explanation underneath (baseline + theme adjustment), with the
+  // three §7.1.4 variants (positive / zero / negative U+2212 glyph).
+  const goldValue = useMemo(() => (cls && themeId ? `${finalGp} gp` : null), [cls, themeId, finalGp])
+  const goldNote = useMemo(() => {
+    if (!cls || !themeId) return null
     if (modifier === 0) {
-      return `Starting gold: ${finalGp} gp (${className} baseline)`
+      return `${className} baseline.`
     }
     if (modifier > 0) {
       const pct = Math.round(modifier * 100)
-      return `Starting gold: ${finalGp} gp (${className} baseline ${baselineGp} gp + ${themeName} theme adjustment +${pct}%)`
+      return `${className} baseline ${baselineGp} gp + ${themeName} theme adjustment +${pct}%.`
     }
     // Negative — uses U+2212 minus glyph per §7.1.4, NOT a hyphen.
     const pct = Math.round(Math.abs(modifier) * 100)
-    return `Starting gold: ${finalGp} gp (${className} baseline ${baselineGp} gp + ${themeName} theme adjustment −${pct}%)`
-  }, [cls, modifier, finalGp, baselineGp, themeName, className])
+    return `${className} baseline ${baselineGp} gp + ${themeName} theme adjustment −${pct}%.`
+  }, [cls, themeId, modifier, baselineGp, themeName, className])
 
   // --- Heirloom flow ------------------------------------------------------
   const heirloomCandidates = isHandoff ? (payload?.heirloom_candidates || []) : []
@@ -94,102 +107,115 @@ export default function Step6Equipment({ state, set, mode, payload }) {
     <>
       <WizardHead
         stepNum={6}
-        title="Equipment"
+        title="The gear of your calling."
         subtitle="What you carry into the road ahead — the gear of your calling, the coin in your purse, and one thing of weight if you have it."
         mode={mode}
       />
 
-      <div className="card">
-        {/* --- Class equipment package -------------------------- */}
+      {/* --- Class equipment package ----------------------------------- */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Granted by your class</span>
+          {cls && <span className="hint">choose the kit that fits how you'll engage the world</span>}
+        </div>
+
         {!cls ? (
-          <Field label="Class equipment">
-            <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-              Pick a class on Step 4 to see your equipment package options.
+          <div className="trait-card">
+            <div>
+              <div className="td" style={{ fontStyle: 'italic' }}>
+                Pick a class on Step 4 to see your equipment package options.
+              </div>
             </div>
-          </Field>
+          </div>
         ) : (
-          <Field
-            label={`${className} starting equipment`}
-            help="Choose your starting equipment. Most callings offer two equipment packages — pick the one that fits how you'll engage the world."
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {equipmentChoices.map((choice, idx) => {
-                // Filter "(if proficient)" gates per PM ruling. Once
-                // subclass-aware proficiency tracking lands, this filter
-                // can flip to include-when-proficient. Hide for now to
-                // avoid surfacing a confusing tag.
-                const visibleOptions = (choice.from || []).filter(opt => !isProficiencyGated(opt))
-                return (
-                  <div key={idx}>
-                    <div style={{
-                      fontFamily: 'var(--sans)',
-                      fontSize: 11,
-                      letterSpacing: '0.14em',
-                      textTransform: 'uppercase',
-                      color: 'var(--ink-3)',
-                      marginBottom: 8
-                    }}>
-                      Pick one
-                    </div>
-                    <div className="picker two">
-                      {visibleOptions.map((opt, i) => (
-                        <EquipmentOptionCard
-                          key={i}
-                          label={opt}
-                          picked={equipmentPicks[idx] === opt}
-                          subpick={equipmentSubpicks[idx]}
-                          onPick={() => setPick(idx, opt)}
-                          onSubpick={(weaponName) => setSubpick(idx, weaponName)}
-                        />
-                      ))}
-                    </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {equipmentChoices.map((choice, idx) => {
+              // Filter "(if proficient)" gates per PM ruling. Once
+              // subclass-aware proficiency tracking lands, this filter
+              // can flip to include-when-proficient. Hide for now to
+              // avoid surfacing a confusing tag.
+              const visibleOptions = (choice.from || []).filter(opt => !isProficiencyGated(opt))
+              return (
+                <div key={idx}>
+                  <div className="block-label" style={{ marginBottom: 11 }}>
+                    <span className="l">Pick one</span>
                   </div>
-                )
-              })}
-            </div>
-          </Field>
+                  <div className="opt-grid c2" role="radiogroup" aria-label="Equipment choice">
+                    {visibleOptions.map((opt, i) => (
+                      <EquipmentOptionCard
+                        key={i}
+                        label={opt}
+                        picked={equipmentPicks[idx] === opt}
+                        subpick={equipmentSubpicks[idx]}
+                        onPick={() => setPick(idx, opt)}
+                        onSubpick={(weaponName) => setSubpick(idx, weaponName)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
-
-        <div className="hr soft" />
-
-        {/* --- Starting gold display ------------------------------ */}
-        <Field
-          label="Starting gold"
-          help="What you're bringing in coin from your previous life into the road ahead."
-        >
-          {!cls || !themeId ? (
-            <div className="help" style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>
-              Pick a class (Step 4) and a theme (Step 3) to see your starting gold.
-            </div>
-          ) : (
-            <div style={{
-              fontFamily: 'var(--serif)',
-              fontSize: 19,
-              color: 'var(--ink)',
-              padding: '12px 0'
-            }}>
-              {goldLine}
-            </div>
-          )}
-        </Field>
-
-        <div className="hr soft" />
-
-        {/* --- Heirloom flow ------------------------------------- */}
-        <HeirloomFlow
-          state={state}
-          set={set}
-          isHandoff={isHandoff}
-          candidates={heirloomCandidates}
-          useOptInPath={useOptInPath}
-        />
       </div>
+
+      {/* --- Starting gold ("Your purse") ------------------------------ */}
+      <div className="block">
+        <div className="block-label">
+          <span className="l">Your purse</span>
+          <span className="hint">what you're bringing in coin into the road ahead</span>
+        </div>
+        {!cls || !themeId ? (
+          <div className="trait-card">
+            <div>
+              <div className="td" style={{ fontStyle: 'italic' }}>
+                Pick a class (Step 4) and a theme (Step 3) to see your starting gold.
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="trait-card"
+            style={{
+              borderColor: 'color-mix(in oklab, var(--accent) 28%, var(--rule))',
+              background: 'color-mix(in oklab, var(--accent) 7%, var(--bg-2))'
+            }}
+          >
+            <span className="ti" style={{ color: 'var(--accent)' }}>
+              <svg className="ic"><use href="#i-coin" /></svg>
+            </span>
+            <div>
+              <div className="tt" style={{ color: 'var(--accent)' }}>
+                {goldValue}
+                <span className="src" style={{ color: 'var(--ink-3)' }}>starting coin</span>
+              </div>
+              <div className="td">{goldNote}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* --- Heirloom flow ("One thing of weight") --------------------- */}
+      <HeirloomFlow
+        state={state}
+        set={set}
+        isHandoff={isHandoff}
+        candidates={heirloomCandidates}
+        useOptInPath={useOptInPath}
+      />
+
+      {/* icon sprite for this step's trait-card glyphs (copied from the
+          design's <defs>; the shell only injects the chrome arrows). */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true"><defs>
+        <symbol id="i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4" /></symbol>
+        <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" /><line x1="16" y1="8" x2="2" y2="22" /><line x1="17.5" y1="15" x2="9" y2="15" /></symbol>
+      </defs></svg>
     </>
   )
 }
 
 /**
- * Heirloom subsection. Two paths:
+ * Heirloom subsection ("One thing of weight"). Two paths:
  *
  * Handoff with candidates: render the candidate picker (pick one or
  * none). NOT REACHED today since the producer is deferred per Option A.
@@ -225,67 +251,58 @@ function HeirloomFlow({ state, set, isHandoff, candidates, useOptInPath }) {
 
   // --- Handoff candidate picker (not reached until producer lands) ---
   if (!useOptInPath) {
-    return <HandoffCandidatePicker state={state} set={set} candidates={candidates} />
+    return (
+      <div className="block" style={{ marginBottom: 0 }}>
+        <div className="block-label">
+          <span className="l">One thing of weight</span>
+          <span className="hint">it does nothing in combat. it means everything.</span>
+        </div>
+        <HandoffCandidatePicker state={state} set={set} candidates={candidates} />
+      </div>
+    )
   }
 
   // --- Opt-in path -------------------------------------------------------
   return (
-    <Field label="Heirloom (optional)">
+    <div className="block" style={{ marginBottom: 0 }}>
+      <div className="block-label">
+        <span className="l">One thing of weight</span>
+        <span className="hint">it does nothing in combat. it means everything.</span>
+      </div>
+
       {skipped && (
-        <div style={{
-          padding: '14px 18px',
-          background: 'var(--bg-2)',
-          border: '1px dashed var(--rule)',
-          fontFamily: 'var(--serif)',
-          fontStyle: 'italic',
-          color: 'var(--ink-3)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12
-        }}>
-          <span>No heirloom — you set out unburdened.</span>
-          <button type="button" className="btn ghost" onClick={reopenPrompt}>Change my mind</button>
+        <div className="prompt-card" style={{ borderStyle: 'dashed' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div className="chosen empty" style={{ minHeight: 0 }}>
+              No heirloom — you set out unburdened.
+            </div>
+            <button type="button" className="btn ghost" onClick={reopenPrompt}>Change my mind</button>
+          </div>
         </div>
       )}
 
       {!optedIn && !skipped && (
-        <div style={{
-          padding: 32,
-          background: 'var(--bg-2)',
-          border: '1px dashed var(--rule)',
-          textAlign: 'center'
-        }}>
+        <div className="prompt-card">
+          <div className="pch">
+            <span className="pl">What you carry</span>
+            <span className="edge" style={{ background: 'var(--accent)' }} />
+          </div>
           {isHandoff ? (
             // Handoff-no-candidates path. Prelude didn't surface any
             // heirloom-eligible objects (graceful degradation per §5.6.3).
-            <p style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 18,
-              lineHeight: 1.55,
-              color: 'var(--ink-2)',
-              maxWidth: 580,
-              margin: '0 auto 22px'
-            }}>
-              Your Prelude didn't surface a particular object as a marked
-              keepsake — but if there's something you carry forward in
-              spirit, you can author it here.
-            </p>
+            <div className="chosen empty">
+              Your Prelude didn't surface a particular object as a marked keepsake —
+              but if there's something you carry forward in spirit, you can author it here.
+            </div>
           ) : (
-            <p style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 18,
-              lineHeight: 1.55,
-              color: 'var(--ink-2)',
-              maxWidth: 580,
-              margin: '0 auto 22px'
-            }}>
-              Some travelers carry an heirloom — a sword from their grandfather, a book stolen from the library they grew up in, a piece of jewelry their mother wore. An heirloom is real gear in your hands now, and may reveal greater meaning over time as your story unfolds. Add an heirloom?
-            </p>
+            <div className="chosen empty">
+              Some travelers carry an heirloom — a sword from their grandfather, a book
+              stolen from the library they grew up in, a piece of jewelry their mother
+              wore. An heirloom is real gear in your hands now, and may reveal greater
+              meaning over time as your story unfolds.
+            </div>
           )}
-          <div style={{ display: 'flex', gap: 14, justifyContent: 'center' }}>
+          <div className="prompt-list" style={{ flexDirection: 'row', gap: 14, paddingTop: 13 }}>
             <button type="button" className="btn primary" onClick={startAuthoring}>Add an heirloom</button>
             <button type="button" className="btn ghost" onClick={skipHeirloom}>Skip</button>
           </div>
@@ -299,7 +316,7 @@ function HeirloomFlow({ state, set, isHandoff, candidates, useOptInPath }) {
           onCancel={cancelAuthoring}
         />
       )}
-    </Field>
+    </div>
   )
 }
 
@@ -336,71 +353,81 @@ function HeirloomAuthoringForm({ heirloom, onChange, onCancel }) {
   }
 
   return (
-    <div style={{ marginTop: 18 }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        marginBottom: 18
-      }}>
-        <span className="label" style={{ fontSize: 11 }}>Authoring an heirloom</span>
-        <button type="button" className="btn ghost danger" onClick={onCancel}>Cancel heirloom</button>
+    <div className="prompt-card" style={{ marginTop: 12 }}>
+      <div className="pch" style={{ marginBottom: 16 }}>
+        <span className="pl">Authoring an heirloom</span>
+        <button type="button" className="btn ghost danger" onClick={onCancel} style={{ marginLeft: 'auto' }}>
+          Cancel heirloom
+        </button>
       </div>
 
-      <Field label="Name" help="What you call it.">
+      <div className="field">
+        <span className="fl">Name</span>
         <input
           type="text"
-          className="input"
+          className="finput"
           value={heirloom.name || ''}
           onChange={e => onChange({ name: e.target.value })}
           maxLength={64}
-          placeholder="—"
+          placeholder="What you call it"
         />
-      </Field>
+        <div className="fhelp">What you call it.</div>
+      </div>
 
-      <Field label="Type">
+      <div className="field">
+        <span className="fl">Type</span>
         <select
-          className="select"
+          className="aselect"
+          style={{ width: '100%' }}
           value={heirloom.type || ''}
           onChange={e => onChange({ type: e.target.value, specific_item: '' })}
         >
           <option value="">Choose a type…</option>
           {types.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-      </Field>
+      </div>
 
       {heirloom.type && (
-        <Field label="Specific item" help={specificItemHelp[heirloom.type]}>
+        <div className="field">
+          <span className="fl">Specific item</span>
           <SpecificItemPicker
             type={heirloom.type}
             value={heirloom.specific_item || ''}
             onChange={v => onChange({ specific_item: v })}
           />
-        </Field>
+          <div className="fhelp">{specificItemHelp[heirloom.type]}</div>
+        </div>
       )}
 
-      <Field label="Description" help="What it is and why it matters to you. A few sentences.">
+      <div className="field">
+        <span className="fl">Description</span>
         <textarea
-          className="textarea"
+          className="finput"
+          style={{ minHeight: 96, resize: 'vertical', lineHeight: 1.5 }}
           value={heirloom.description || ''}
           onChange={e => onChange({ description: e.target.value })}
           maxLength={1000}
-          placeholder="—"
+          placeholder="What it is and why it matters to you"
         />
-      </Field>
+        <div className="fhelp">What it is and why it matters to you. A few sentences.</div>
+      </div>
 
-      <Field
-        label="Awakening hook (optional)"
-        help="Optional. If you have a sense of what could draw out this object's deeper meaning — a place, a person, a moment — describe it here. Leave blank if you'd rather let the object find its own time."
-      >
+      <div className="field" style={{ marginBottom: 0 }}>
+        <span className="fl">Awakening hook (optional)</span>
         <textarea
-          className="textarea"
+          className="finput"
+          style={{ minHeight: 96, resize: 'vertical', lineHeight: 1.5 }}
           value={heirloom.awakening_hook || ''}
           onChange={e => onChange({ awakening_hook: e.target.value })}
           maxLength={1000}
-          placeholder="—"
+          placeholder="Leave blank to let the object find its own time"
         />
-      </Field>
+        <div className="fhelp">
+          Optional. If you have a sense of what could draw out this object's deeper
+          meaning — a place, a person, a moment — describe it here. Leave blank if you'd
+          rather let the object find its own time.
+        </div>
+      </div>
     </div>
   )
 }
@@ -415,68 +442,42 @@ function HandoffCandidatePicker({ state, set, candidates }) {
   const pickedId = state.heirloom_candidate_id || null
 
   return (
-    <Field
-      label={`In the years behind you, ${candidates.length} ${candidates.length === 1 ? 'object' : 'objects'} came into your hands`}
-      help="Carry one of them forward — or leave them all behind, if you'd rather travel light."
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <>
+      <p className="fhelp" style={{ marginTop: 0, marginBottom: 14 }}>
+        In the years behind you, {candidates.length} {candidates.length === 1 ? 'object' : 'objects'}{' '}
+        came into your hands. Carry one of them forward — or leave them all behind, if
+        you'd rather travel light.
+      </p>
+      <div className="opt-grid" role="radiogroup" aria-label="Heirloom candidates">
         {candidates.map(c => (
           <button
             key={c.id}
             type="button"
+            className={`opt ${pickedId === c.id ? 'sel' : ''}`}
+            role="radio"
+            aria-checked={pickedId === c.id}
             onClick={() => set({ ...state, heirloom_candidate_id: c.id })}
-            style={{
-              border: pickedId === c.id ? '1px solid var(--accent)' : '1px solid var(--rule)',
-              borderLeft: pickedId === c.id ? '3px solid var(--accent)' : '1px solid var(--rule)',
-              background: pickedId === c.id ? 'var(--bg-2)' : 'var(--bg-card)',
-              padding: '22px 26px',
-              textAlign: 'left',
-              cursor: 'pointer',
-              transition: 'all .12s'
-            }}
           >
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', letterSpacing: '-0.005em' }}>
-              {c.name}
-            </div>
-            {c.type && (
-              <div style={{
-                fontFamily: 'var(--sans)',
-                fontSize: 11,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: 'var(--ink-3)',
-                marginTop: 2
-              }}>
-                {c.type}
-              </div>
-            )}
+            <div className="ot">{c.name}</div>
+            {c.type && <div className="ometa">{c.type}</div>}
             {c.description && (
-              <div style={{
-                fontFamily: 'var(--serif)',
-                fontStyle: 'italic',
-                fontSize: 16,
-                lineHeight: 1.5,
-                color: 'var(--ink-2)',
-                marginTop: 12
-              }}>
-                {c.description}
-              </div>
+              <div className="od" style={{ fontStyle: 'italic', marginTop: 8 }}>{c.description}</div>
             )}
             {c.awakening_hook && (
-              <div style={{
-                marginTop: 14,
-                paddingTop: 12,
-                borderTop: '1px dashed var(--rule)',
-                fontFamily: 'var(--serif)',
-                fontSize: 15,
-                fontStyle: 'italic',
-                color: 'var(--ink-3)'
-              }}>
+              <div
+                className="od"
+                style={{
+                  marginTop: 12,
+                  paddingTop: 11,
+                  borderTop: '1px dashed var(--rule-soft)',
+                  fontStyle: 'italic'
+                }}
+              >
                 <span style={{
-                  fontFamily: 'var(--sans)',
+                  fontFamily: 'var(--mono)',
                   fontStyle: 'normal',
-                  fontSize: 10,
-                  letterSpacing: '0.18em',
+                  fontSize: 9.5,
+                  letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   color: 'var(--accent)'
                 }}>
@@ -487,16 +488,16 @@ function HandoffCandidatePicker({ state, set, candidates }) {
             )}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => set({ ...state, heirloom_candidate_id: null })}
-          className={`btn ghost ${pickedId == null ? 'primary' : ''}`}
-          style={{ alignSelf: 'flex-start', marginTop: 8 }}
-        >
-          Carry none of them forward
-        </button>
       </div>
-    </Field>
+      <button
+        type="button"
+        onClick={() => set({ ...state, heirloom_candidate_id: null })}
+        className={`btn ghost ${pickedId == null ? 'primary' : ''}`}
+        style={{ alignSelf: 'flex-start', marginTop: 12 }}
+      >
+        Carry none of them forward
+      </button>
+    </>
   )
 }
 
@@ -519,7 +520,7 @@ function SpecificItemPicker({ type, value, onChange }) {
   if (type === 'Weapon') {
     return (
       <>
-        <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+        <select className="aselect" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
           <option value="">Choose a weapon…</option>
           <optgroup label="Simple — melee">
             {(equipmentData.simpleWeapons?.melee || []).map(w => (
@@ -546,7 +547,7 @@ function SpecificItemPicker({ type, value, onChange }) {
           const w = ALL_WEAPONS.find(it => it.name === value)
           if (!w) return null
           return (
-            <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+            <div className="fhelp" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
               {w.damage} {w.damageType}
               {w.properties?.length > 0 && ` · ${w.properties.join(', ')}`}
               {w.weaponType && ` · ${w.weaponType}`}
@@ -560,7 +561,7 @@ function SpecificItemPicker({ type, value, onChange }) {
   if (type === 'Armor') {
     return (
       <>
-        <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+        <select className="aselect" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
           <option value="">Choose armor…</option>
           {['light', 'medium', 'heavy', 'shields'].map(group => (
             <optgroup key={group} label={group.charAt(0).toUpperCase() + group.slice(1)}>
@@ -574,7 +575,7 @@ function SpecificItemPicker({ type, value, onChange }) {
           const a = ALL_ARMOR.find(it => it.name === value)
           if (!a) return null
           return (
-            <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+            <div className="fhelp" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
               AC {a.baseAC}
               {a.maxDexBonus > 0 && ` + DEX (max ${a.maxDexBonus})`}
               {a.armorType && ` · ${a.armorType}`}
@@ -588,7 +589,7 @@ function SpecificItemPicker({ type, value, onChange }) {
   }
   if (type === 'Tool') {
     return (
-      <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+      <select className="aselect" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
         <option value="">Choose a tool…</option>
         {ALL_TOOLS.map(t => (
           <option key={t.name} value={t.name}>{t.name}</option>
@@ -600,10 +601,10 @@ function SpecificItemPicker({ type, value, onChange }) {
   return (
     <input
       type="text"
-      className="input"
+      className="finput"
       value={value}
       onChange={e => onChange(e.target.value)}
-      placeholder="—"
+      placeholder="Name it"
     />
   )
 }
@@ -612,7 +613,8 @@ function SpecificItemPicker({ type, value, onChange }) {
  * Equipment option card with inline weapon/armor stats + pack contents.
  * Resolves the option label against equipment.json so the player sees
  * what they're picking — damage/properties for weapons, AC/strength
- * requirement for armor, contents list for packs.
+ * requirement for armor, contents list for packs. Rendered as a Hearth
+ * `.opt` card (selected → `.sel`).
  */
 function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
   const resolved = useMemo(() => resolveOptionLabel(label), [label])
@@ -622,35 +624,40 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
     () => (weaponChoiceList && subpick) ? weaponChoiceList.find(w => w.name === subpick) : null,
     [weaponChoiceList, subpick]
   )
+  // Generic non-weapon "any X" choice (musical instrument, artisan's
+  // tools, gaming set). Only one of weaponChoiceList / toolChoiceList is
+  // ever non-null for a given label, so they render mutually exclusively.
+  const toolChoiceList = useMemo(() => getToolChoiceList(label), [label])
+  const toolNoun = useMemo(() => {
+    const s = String(label || '').toLowerCase()
+    if (/musical instrument/.test(s) && !/artisan|gaming/.test(s)) return 'instrument'
+    if (/gaming set/.test(s) && !/artisan|musical/.test(s)) return 'gaming set'
+    if (/artisan/.test(s) && !/musical|gaming/.test(s)) return "artisan's tool"
+    return 'option'
+  }, [label])
   return (
     <div
-      className={`pick ${picked ? 'on' : ''}`}
+      className={`opt ${picked ? 'sel' : ''}`}
       onClick={onPick}
-      style={{ alignItems: 'flex-start', cursor: 'pointer' }}
-      role="button"
+      role="radio"
+      aria-checked={picked}
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }}
     >
-      <div className="name" style={{ fontSize: 17 }}>{label}</div>
+      <div className="ot">{label}</div>
       {/* Item-level details (weapons + armor stats) */}
       {resolved.items.map((item, i) => (
         <div
           key={i}
-          style={{
-            marginTop: i === 0 ? 8 : 4,
-            fontFamily: 'var(--serif)',
-            fontStyle: 'italic',
-            fontSize: 13,
-            color: 'var(--ink-3)',
-            lineHeight: 1.4
-          }}
+          className="od"
+          style={{ fontStyle: 'italic', marginTop: i === 0 ? 6 : 3, lineHeight: 1.4 }}
         >
           {item.kind === 'weapon' && (
             <span>
               {item.qty > 1 ? `${item.qty}× ` : ''}<strong style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>{item.name}</strong>
               {' — '}{item.stats.damage} {item.stats.damageType}
               {item.stats.properties?.length > 0 && (
-                <span style={{ color: 'var(--ink-3)' }}>
+                <span style={{ color: 'var(--ink-4)' }}>
                   {' · '}{item.stats.properties.join(', ')}
                 </span>
               )}
@@ -666,10 +673,8 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
               {item.stats.stealthDisadvantage && ' · stealth disadvantage'}
             </span>
           )}
-          {item.kind === 'pack' && (
-            <span>
-              {item.cost && <span style={{ color: 'var(--ink-3)' }}>{item.cost} value</span>}
-            </span>
+          {item.kind === 'pack' && item.cost && (
+            <span style={{ color: 'var(--ink-4)' }}>{item.cost} value</span>
           )}
           {item.kind === 'other' && item.qty > 1 && (
             <span>
@@ -680,30 +685,14 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
       ))}
       {/* Pack contents — bulleted list inside the card */}
       {resolved.packContents && resolved.packContents.length > 0 && (
-        <div
-          style={{
-            marginTop: 10,
-            paddingTop: 10,
-            borderTop: '1px dashed var(--rule-soft)',
-            width: '100%'
-          }}
-        >
-          <div style={{
-            fontFamily: 'var(--sans)',
-            fontSize: 10,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: 'var(--ink-3)',
-            marginBottom: 6
-          }}>
-            Contains
-          </div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--rule-soft)', width: '100%' }}>
+          <div className="ometa" style={{ marginTop: 0, marginBottom: 6 }}>Contains</div>
           <ul style={{
             margin: 0,
             paddingLeft: 16,
             fontFamily: 'var(--serif)',
             fontSize: 13,
-            color: 'var(--ink-2)',
+            color: 'var(--ink-3)',
             lineHeight: 1.45,
             columns: resolved.packContents.length > 6 ? 2 : 1,
             columnGap: 18
@@ -716,16 +705,16 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
           Focus, Holy Symbol, Druidic Focus all surface a short
           description so the player knows what they're choosing. */}
       {focusDescription && (
-        <div style={{
-          marginTop: 10,
-          paddingTop: 10,
-          borderTop: '1px dashed var(--rule-soft)',
-          fontFamily: 'var(--serif)',
-          fontStyle: 'italic',
-          fontSize: 13,
-          color: 'var(--ink-3)',
-          lineHeight: 1.45
-        }}>
+        <div
+          className="od"
+          style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: '1px dashed var(--rule-soft)',
+            fontStyle: 'italic',
+            lineHeight: 1.45
+          }}
+        >
           {focusDescription}
         </div>
       )}
@@ -739,7 +728,8 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
           onClick={e => e.stopPropagation()}
         >
           <select
-            className="select"
+            className="aselect"
+            style={{ width: '100%' }}
             value={subpick || ''}
             onChange={e => onSubpick && onSubpick(e.target.value)}
           >
@@ -751,19 +741,34 @@ function EquipmentOptionCard({ label, picked, subpick, onPick, onSubpick }) {
             ))}
           </select>
           {subPickedWeapon && (
-            <div style={{
-              marginTop: 8,
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 13,
-              color: 'var(--ink-3)',
-              lineHeight: 1.4
-            }}>
+            <div className="od" style={{ marginTop: 8, fontStyle: 'italic', lineHeight: 1.4 }}>
               <strong style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>{subPickedWeapon.name}</strong>
               {' — '}{subPickedWeapon.damage} {subPickedWeapon.damageType}
               {subPickedWeapon.properties?.length > 0 && ` · ${subPickedWeapon.properties.join(', ')}`}
             </div>
           )}
+        </div>
+      )}
+      {/* Generic tool / instrument choice ("Any Other Musical Instrument",
+          "an artisan's tools of your choice", "a gaming set"). Same
+          pattern as the weapon picker — dropdown appears once picked,
+          and clicks are stopped from re-toggling the parent option. */}
+      {toolChoiceList && picked && (
+        <div
+          style={{ marginTop: 12, width: '100%' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <select
+            className="aselect"
+            style={{ width: '100%' }}
+            value={subpick || ''}
+            onChange={e => onSubpick && onSubpick(e.target.value)}
+          >
+            <option value="">Pick a specific {toolNoun}…</option>
+            {toolChoiceList.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
       )}
     </div>

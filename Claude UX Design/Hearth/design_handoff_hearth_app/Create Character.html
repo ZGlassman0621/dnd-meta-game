@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Create a Character</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+    body { padding-bottom: 84px; } /* clear the sticky footer */
+
+    /* ── step-ribbon chrome (under header) ───────────── */
+    .wiz-chrome {
+      position: sticky; top: 58px; z-index: 20;
+      background: color-mix(in oklab, var(--bg) 90%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--rule);
+      padding: 18px 28px 14px;
+    }
+    .wiz-chrome.hide { display: none; }
+    .ribbon { position: relative; display: flex; max-width: 940px; margin: 0 auto; }
+    .rnode { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; background: none; border: 0; cursor: pointer; padding: 0; }
+    .rnode::before { content: ""; position: absolute; top: 13px; right: 50%; width: 100%; height: 2px; background: var(--rule); z-index: 0; }
+    .rnode:first-child::before { display: none; }
+    .rnode.done::before, .rnode.active::before { background: color-mix(in oklab, var(--accent) 60%, var(--rule)); }
+    .rnode .rdot {
+      position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 11px; color: var(--ink-4);
+      background: var(--bg); border: 1.5px solid var(--rule); transition: all .15s;
+    }
+    .rnode .rdot .ic { width: 13px; height: 13px; }
+    .rnode.done .rdot { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 55%, var(--rule)); background: color-mix(in oklab, var(--accent) 10%, var(--bg)); }
+    .rnode.active .rdot { color: #211d17; background: var(--accent); border-color: var(--accent); font-weight: 600; box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 16%, transparent); }
+    .rnode .rlbl { font-family: var(--sans); font-weight: 500; font-size: 11px; letter-spacing: .01em; color: var(--ink-4); white-space: nowrap; transition: color .15s; }
+    .rnode.active .rlbl { color: var(--ink); font-weight: 600; }
+    .rnode.done .rlbl { color: var(--ink-3); }
+    .rnode:hover .rlbl { color: var(--ink-2); }
+    .stepline { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 14px; }
+    .stepline .sn { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
+    .stepline .gl { color: var(--ink-4); }
+    .stepline .snm { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--accent); }
+
+    /* ── reading column ──────────────────────────────── */
+    .reading { max-width: 720px; margin: 0 auto; padding: 46px 28px 40px; }
+    .reading.wide { max-width: 900px; }
+    .pane { display: none; }
+    .pane.show { display: block; }
+    @media (prefers-reduced-motion: no-preference) {
+      .pane.show { animation: rise .4s ease; }
+    }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+    .step-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .step-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+    .pane h1 { font-family: var(--serif); font-weight: 500; font-size: 42px; line-height: 1.06; letter-spacing: -.014em; margin: 0 0 12px; }
+    .pane .subtitle { font-family: var(--serif); font-style: italic; font-size: 20px; line-height: 1.5; color: var(--ink-2); margin: 0 0 34px; max-width: 30em; }
+
+    .block { margin-bottom: 30px; }
+    .block-label { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+    .block-label .l { font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .block-label .hint { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); }
+
+    /* ── PATH CHOICE ─────────────────────────────────── */
+    .paths { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 8px; }
+    .pathcard {
+      position: relative; text-align: left; cursor: pointer; overflow: hidden;
+      background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px;
+      padding: 28px 26px 24px; box-shadow: var(--shadow-sm);
+      transition: border-color .15s, background .15s, transform .15s;
+    }
+    .pathcard:hover { border-color: #4a4032; transform: translateY(-2px); }
+    .pathcard.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 7%, var(--bg-card)); }
+    .pathcard.sel::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 30%, transparent)); }
+    .pathcard .pc-seal { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; background: var(--bg-2); border: 1px solid var(--rule); color: var(--accent-2); }
+    .pathcard.b .pc-seal { color: var(--accent); }
+    .pathcard .pc-seal .ic { width: 24px; height: 24px; }
+    .pathcard h2 { font-family: var(--serif); font-weight: 500; font-size: 28px; margin: 0 0 4px; letter-spacing: -.01em; }
+    .pathcard .pc-tag { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 14px; }
+    .pathcard .pc-pitch { font-family: var(--serif); font-size: 16.5px; line-height: 1.55; color: var(--ink-2); text-wrap: pretty; }
+    .pathcard .pc-pitch em { font-style: italic; color: var(--ink); }
+    .pathcard .pc-check { position: absolute; top: 22px; right: 22px; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--rule); display: flex; align-items: center; justify-content: center; color: transparent; transition: all .15s; }
+    .pathcard .pc-check .ic { width: 13px; height: 13px; }
+    .pathcard.sel .pc-check { background: var(--accent); border-color: var(--accent); color: #211d17; }
+
+    /* ── generic selectable option grid ──────────────── */
+    .opt-grid { display: grid; gap: 11px; }
+    .opt-grid.c2 { grid-template-columns: 1fr 1fr; }
+    .opt-grid.c3 { grid-template-columns: repeat(3, 1fr); }
+    .opt {
+      position: relative; text-align: left; cursor: pointer;
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px;
+      padding: 15px 16px; transition: border-color .14s, background .14s;
+    }
+    .opt:hover { border-color: #4a4032; }
+    .opt.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); }
+    .opt.sel::after { content: ""; position: absolute; top: 13px; right: 13px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+    .opt .ot { font-family: var(--serif); font-size: 19px; color: var(--ink); margin-bottom: 3px; padding-right: 16px; }
+    .opt .od { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.42; }
+    .opt .od em { font-style: italic; color: var(--ink-2); }
+    .opt .ometa { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); margin-top: 8px; }
+
+    /* ── text fields ─────────────────────────────────── */
+    .field { margin-bottom: 22px; }
+    .field > .fl { display: block; font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
+    .field .finput {
+      width: 100%; font-family: var(--serif); font-size: 22px; color: var(--ink);
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 9px;
+      padding: 13px 16px; outline: none; transition: border-color .14s;
+    }
+    .field .finput::placeholder { color: var(--ink-4); font-style: italic; }
+    .field .finput:focus { border-color: var(--accent); }
+    .field .fhelp { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); margin-top: 8px; }
+    .pillrow { display: flex; flex-wrap: wrap; gap: 8px; }
+    .selpill {
+      font-family: var(--sans); font-weight: 500; font-size: 13.5px; color: var(--ink-2);
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 999px;
+      padding: 9px 16px; cursor: pointer; transition: all .14s;
+    }
+    .selpill:hover { border-color: #4a4032; color: var(--ink); }
+    .selpill.on { color: #211d17; background: var(--accent); border-color: var(--accent); }
+
+    /* ── locked-with-celebration card ────────────────── */
+    .lock-cele {
+      position: relative; overflow: hidden;
+      background:
+        radial-gradient(420px 160px at 88% -30%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 70%),
+        color-mix(in oklab, var(--accent) 7%, var(--bg-card));
+      border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--rule));
+      border-radius: 12px; padding: 17px 19px 17px 21px; margin-bottom: 14px;
+    }
+    .lock-cele::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 999px; background: var(--accent); }
+    .lc-top { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+    .lc-fleuron { font-family: var(--serif); font-size: 16px; color: var(--accent); line-height: 1; }
+    .lc-marker { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+    .lc-lock { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); }
+    .lc-lock .ic { width: 11px; height: 11px; }
+    .lc-value { font-family: var(--serif); font-size: 21px; color: var(--ink); margin-bottom: 4px; letter-spacing: -.005em; }
+    .lc-note { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-2); line-height: 1.45; }
+
+    /* ── racial / subclass trait reveal ──────────────── */
+    .reveal { margin-top: 14px; border-top: 1px solid var(--rule-soft); padding-top: 18px; }
+    .trait-card { display: grid; grid-template-columns: auto 1fr; gap: 13px; padding: 15px 17px; border-radius: 11px; border: 1px solid var(--rule); background: var(--bg-2); }
+    .trait-card .ti { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border: 1px solid var(--rule); color: var(--accent-2); }
+    .trait-card .ti .ic { width: 17px; height: 17px; }
+    .trait-card .tt { font-family: var(--serif); font-size: 17px; color: var(--ink); display: flex; align-items: baseline; gap: 9px; margin-bottom: 2px; }
+    .trait-card .tt .src { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+    .trait-card .td { font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); line-height: 1.45; }
+    .subrow { margin-top: 18px; }
+
+    /* ── more-options collapsible ────────────────────── */
+    details.more { margin-top: 16px; border-top: 1px solid var(--rule-soft); }
+    details.more > summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px;
+      padding: 15px 2px 4px; font-family: var(--sans); font-weight: 600; font-size: 11px;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); transition: color .14s;
+    }
+    details.more > summary::-webkit-details-marker { display: none; }
+    details.more > summary:hover { color: var(--ink); }
+    details.more > summary .chev { width: 14px; height: 14px; transition: transform .18s; color: var(--ink-4); }
+    details.more[open] > summary .chev { transform: rotate(90deg); }
+    details.more > summary .ct { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); text-transform: none; }
+    details.more .more-body { padding-top: 14px; }
+
+    /* ── ability allocator ───────────────────────────── */
+    .seg { display: inline-flex; gap: 5px; padding: 4px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 9px; margin-bottom: 8px; }
+    .seg button { font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); background: none; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+    .seg button.on { color: #211d17; background: var(--accent); }
+    .pool { display: flex; align-items: center; gap: 10px; margin: 18px 0 14px; }
+    .pool .pn { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 26px; color: var(--accent); }
+    .pool .pl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+    .pool .pbar { flex: 1; height: 6px; border-radius: 999px; background: var(--bg); border: 1px solid var(--rule-soft); overflow: hidden; }
+    .pool .pbar .fill { height: 100%; background: var(--accent); transition: width .18s; }
+    .alloc { display: flex; flex-direction: column; }
+    .arow { display: grid; grid-template-columns: 150px 1fr auto; gap: 16px; align-items: center; padding: 13px 4px; border-top: 1px solid var(--rule-soft); }
+    .arow:first-child { border-top: 0; }
+    .arow .aname { display: flex; align-items: center; gap: 9px; }
+    .arow .aname .an { font-family: var(--serif); font-size: 18px; color: var(--ink); }
+    .arow .aname .mk { font-size: 13px; line-height: 1; }
+    .arow .aname .mk.star { color: var(--accent); }
+    .arow .aname .mk.dump { color: var(--bad); }
+    .arow .agov { font-family: var(--serif); font-size: 15.5px; color: var(--ink-2); line-height: 1.4; }
+    .arow .actl { display: flex; align-items: center; gap: 13px; }
+    .stepper { display: inline-flex; align-items: center; gap: 2px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; padding: 3px; }
+    .stepper button { width: 26px; height: 26px; border: 0; background: none; border-radius: 6px; color: var(--ink-3); cursor: pointer; font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s; }
+    .stepper button:hover:not(:disabled) { background: var(--raise); color: var(--ink); }
+    .stepper button:disabled { opacity: .3; cursor: not-allowed; }
+    .stepper .sc { width: 34px; text-align: center; font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 18px; color: var(--ink); }
+    .arow .amod { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 16px; color: var(--accent); width: 56px; text-align: right; }
+    .arow .amod .bonus { color: var(--good); font-size: 12px; }
+    .arow.bumped { background: color-mix(in oklab, var(--accent) 6%, transparent); border-radius: 8px; }
+    .alloc-status { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 14px; margin: 18px 0 6px; }
+    .alloc-status .sl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+    .alloc-status .vals { font-family: var(--mono); font-size: 13px; letter-spacing: .1em; color: var(--ink); }
+    .alloc-status .sh { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); }
+    .aselect { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 17px; color: var(--ink); background-color: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; padding: 7px 30px 7px 12px; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23988e77' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+    .aselect:focus { border-color: var(--accent); }
+
+    /* ── prompt-list + alignment (Identity Details) ──── */
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .prompt-card { background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 16px 17px; }
+    .prompt-card .pch { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
+    .prompt-card .pch .pl { font-family: var(--sans); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .prompt-card .pch .edge { margin-left: auto; width: 26px; height: 3px; border-radius: 999px; }
+    .prompt-card.trait .pch .edge { background: var(--good); }
+    .prompt-card.ideal .pch .edge { background: var(--accent); }
+    .prompt-card.bond  .pch .edge { background: var(--accent-2); }
+    .prompt-card.flaw  .pch .edge { background: var(--bad); }
+    .prompt-card .chosen { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink); line-height: 1.5; min-height: 48px; }
+    .prompt-card .chosen.empty { color: var(--ink-4); }
+    .prompt-list { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--rule-soft); display: flex; flex-direction: column; gap: 2px; }
+    .prompt-list .po { text-align: left; background: none; border: 0; border-radius: 6px; padding: 7px 9px; cursor: pointer; font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); line-height: 1.4; transition: background .12s, color .12s; }
+    .prompt-list .po:hover { background: var(--bg-card); color: var(--ink); }
+    .prompt-list .po.on { background: color-mix(in oklab, var(--accent) 12%, var(--bg-card)); color: var(--ink); }
+
+    .align-wrap { display: flex; align-items: center; gap: 22px; }
+    .align-grid { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 5px; flex-shrink: 0; }
+    .align-grid .ac { border: 1px solid var(--rule); border-radius: 7px; background: var(--bg-2); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; color: var(--ink-4); cursor: pointer; transition: all .14s; }
+    .align-grid .ac:hover { border-color: #4a4032; color: var(--ink-2); }
+    .align-grid .ac.on { background: var(--accent); border-color: var(--accent); color: #211d17; font-weight: 600; box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 16%, transparent); }
+    .align-side .al-name { font-family: var(--serif); font-size: 22px; color: var(--ink); margin-bottom: 5px; }
+    .align-side .al-desc { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-3); line-height: 1.5; max-width: 32ch; }
+
+    /* appearance compact selects */
+    .appear { display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px 18px; }
+    .appear .af { }
+    .appear .af .afl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+    .appear .af .pillrow .selpill { font-size: 12.5px; padding: 6px 12px; }
+
+    .chipwrap { display: flex; flex-wrap: wrap; gap: 9px; }
+    .mchip {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-family: var(--serif); font-size: 15px; color: var(--ink-2);
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 999px;
+      padding: 8px 15px; cursor: pointer; transition: all .14s;
+    }
+    .mchip:hover { border-color: #4a4032; color: var(--ink); }
+    .mchip .tk { width: 14px; height: 14px; border-radius: 50%; border: 1.4px solid var(--rule); display: flex; align-items: center; justify-content: center; color: transparent; }
+    .mchip .tk .ic { width: 10px; height: 10px; }
+    .mchip.on { color: var(--ink); border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); background: color-mix(in oklab, var(--accent) 9%, var(--bg-2)); }
+    .mchip.on .tk { background: var(--accent); border-color: var(--accent); color: #211d17; }
+
+    /* ── review ──────────────────────────────────────── */
+    .rv-list { border: 1px solid var(--rule); border-radius: 13px; overflow: hidden; background: var(--bg-card); }
+    .rv-row { display: grid; grid-template-columns: 132px 1fr auto; gap: 18px; align-items: start; padding: 18px 20px; border-top: 1px solid var(--rule-soft); }
+    .rv-row:first-child { border-top: 0; }
+    .rv-row .rvk { font-family: var(--sans); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); padding-top: 3px; }
+    .rv-row .rvv { min-width: 0; }
+    .rv-row .rvv .pri { font-family: var(--serif); font-size: 18px; color: var(--ink); line-height: 1.35; }
+    .rv-row .rvv .pri .sep { color: var(--ink-4); padding: 0 6px; }
+    .rv-row .rvv .sec { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.45; }
+    .rv-row .rvv .earned { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+    .rv-row .rvv .earned .ic { width: 11px; height: 11px; }
+    .rv-edit { font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .04em; color: var(--ink-3); background: none; border: 1px solid var(--rule); border-radius: 7px; padding: 6px 13px; cursor: pointer; transition: all .14s; white-space: nowrap; }
+    .rv-edit:hover { color: var(--ink); border-color: #4a4032; background: var(--bg-2); }
+
+    .commit {
+      margin-top: 22px; text-align: center;
+      background:
+        radial-gradient(520px 220px at 50% -40%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%),
+        var(--bg-2);
+      border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--rule));
+      border-radius: 14px; padding: 30px 28px;
+    }
+    .commit .ce { font-family: var(--serif); font-size: 17px; line-height: 1.5; color: var(--ink-2); font-style: italic; margin: 0 auto 18px; max-width: 44ch; }
+
+    /* ── sticky footer ───────────────────────────────── */
+    .wiz-foot {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 28px;
+      background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+      backdrop-filter: blur(10px); border-top: 1px solid var(--rule);
+    }
+    .wiz-foot .inner { width: 100%; max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+    .wiz-foot .fprog { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); }
+    .wiz-foot .spacer { flex: 1; }
+    .wiz-foot .save { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-4); }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M12 20c0-7 0-9 0-12"/><path d="M12 11C9 11 6 9 6 5c4 0 6 2 6 6z"/><path d="M12 9c0-3 2-5 6-5 0 4-3 5-6 5z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z"/></symbol>
+    <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z"/></symbol>
+    <symbol id="i-pack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></symbol>
+    <symbol id="i-dice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  </defs></svg>
+
+  <!-- persistent header -->
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Roster.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Your characters</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <!-- step ribbon -->
+  <div class="wiz-chrome" id="chrome">
+    <div class="ribbon" id="ribbon">
+      <button class="rnode" data-go="1"><span class="rdot">1</span><span class="rlbl">Identity</span></button>
+      <button class="rnode" data-go="2"><span class="rdot">2</span><span class="rlbl">Ancestry</span></button>
+      <button class="rnode" data-go="3"><span class="rdot">3</span><span class="rlbl">Theme</span></button>
+      <button class="rnode" data-go="4"><span class="rdot">4</span><span class="rlbl">Class</span></button>
+      <button class="rnode" data-go="5"><span class="rdot">5</span><span class="rlbl">Abilities</span></button>
+      <button class="rnode" data-go="6"><span class="rdot">6</span><span class="rlbl">Equipment</span></button>
+      <button class="rnode" data-go="7"><span class="rdot">7</span><span class="rlbl">Details</span></button>
+      <button class="rnode" data-go="8"><span class="rdot">8</span><span class="rlbl">Review</span></button>
+    </div>
+    <div class="stepline"><span class="sn" id="stepNum">Step 1 of 8</span><span class="gl">·</span><span class="snm" id="stepName">Identity</span></div>
+  </div>
+
+  <main class="reading" id="reading">
+
+    <!-- ════ STEP 1 · IDENTITY ════ -->
+    <section class="pane show" data-pane="1">
+      <div class="step-eyebrow"><span class="eyebrow">Step 1 · Identity</span><span class="ln"></span></div>
+      <h1>Who are they?</h1>
+      <p class="subtitle">A name and a gender — the two anchors the rest of the creator will return to.</p>
+
+      <div class="field">
+        <label class="fl" for="cname">Name</label>
+        <input class="finput" id="cname" type="text" value="Dravyr Wyrmrest" placeholder="What are they called?" />
+        <div class="fhelp">You can rename them at any time — even mid-campaign, if a name is earned.</div>
+      </div>
+
+      <div class="field">
+        <span class="fl">Gender</span>
+        <div class="pillrow" data-pillgroup="gender">
+          <button class="selpill" data-v="Woman">Woman</button>
+          <button class="selpill on" data-v="Man">Man</button>
+          <button class="selpill" data-v="Nonbinary">Nonbinary</button>
+          <button class="selpill" data-v="Self-describe">Self-describe…</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ STEP 2 · ANCESTRY ════ -->
+    <section class="pane" data-pane="2">
+      <div class="step-eyebrow"><span class="eyebrow">Step 2 · Ancestry</span><span class="ln"></span></div>
+      <h1>The lineage you carry.</h1>
+      <p class="subtitle">The people you came from — and the gift their blood gave you.</p>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Ancestry</span></div>
+        <div class="opt-grid c3" data-grp="race">
+          <button class="opt" data-race="Human"><div class="ot">Human</div><div class="od">Versatile, ambitious, everywhere.</div></button>
+          <button class="opt sel" data-race="Elf"><div class="ot">Elf</div><div class="od">Long-lived, fey-touched, watchful.</div></button>
+          <button class="opt" data-race="Dwarf"><div class="ot">Dwarf</div><div class="od">Enduring, rooted, hewn from stone.</div></button>
+          <button class="opt" data-race="Halfling"><div class="ot">Halfling</div><div class="od">Small, lucky, quietly brave.</div></button>
+          <button class="opt" data-race="Dragonborn"><div class="ot">Dragonborn</div><div class="od">Draconic pride, and breath.</div></button>
+          <button class="opt" data-race="Gnome"><div class="ot">Gnome</div><div class="od">Curious, clever, irrepressible.</div></button>
+          <button class="opt" data-race="Half-Elf"><div class="ot">Half-Elf</div><div class="od">Two worlds, at home in neither.</div></button>
+          <button class="opt" data-race="Half-Orc"><div class="ot">Half-Orc</div><div class="od">Strong, scarred, relentless.</div></button>
+          <button class="opt" data-race="Tiefling"><div class="ot">Tiefling</div><div class="od">Infernal blood, an old bargain.</div></button>
+        </div>
+      </div>
+
+      <div class="reveal subrow" id="subraceRow">
+        <div class="block-label"><span class="l">Lineage · Elf</span><span class="hint">the branch of the family</span></div>
+        <div class="opt-grid c3" data-grp="subrace">
+          <button class="opt" data-sub="High Elf"><div class="ot">High Elf</div><div class="od">Arcane, ancestral, precise.</div></button>
+          <button class="opt sel" data-sub="Wood Elf"><div class="ot">Wood Elf</div><div class="od">Fleet, hidden, at home in wild places.</div></button>
+          <button class="opt" data-sub="Drow"><div class="ot">Drow</div><div class="od">Of the underdark, sun-shy.</div></button>
+        </div>
+        <div class="reveal">
+          <div class="trait-card">
+            <span class="ti"><svg class="ic"><use href="#i-leaf"/></svg></span>
+            <div>
+              <div class="tt">Mask of the Wild <span class="src">Wood Elf trait</span></div>
+              <div class="td">You can attempt to hide even when only lightly obscured by foliage, heavy rain, falling snow, mist, or other natural phenomena. With it comes Fleet of Foot, Keen Senses, and Trance.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ STEP 3 · THEME (rich) ════ -->
+    <section class="pane" data-pane="3">
+      <div class="step-eyebrow"><span class="eyebrow">Step 3 · Theme</span><span class="ln"></span></div>
+      <h1>What shaped you, before a class.</h1>
+      <p class="subtitle">A theme is the lived experience that made you — where the old idea of a "background" used to go. It carries skills, a tool or a tongue, and a single defining feature.</p>
+
+      <div class="opt-grid c2" data-grp="theme">
+        <button class="opt sel" data-theme="The Hermit"><div class="ot">The Hermit</div><div class="od">A life withdrawn, in study or penance, that left you with <em>a discovery the world hasn't caught up to.</em></div><div class="ometa">Insight · Religion · Herbalism kit</div></button>
+        <button class="opt" data-theme="The Outcast"><div class="ot">The Outcast</div><div class="od">Cast out young — by blood, by law, by suspicion. You learned to need <em>no one's leave to survive.</em></div><div class="ometa">Survival · Deception · Disguise kit</div></button>
+        <button class="opt" data-theme="The Apprentice"><div class="ot">The Apprentice</div><div class="od">Bound to a master and a craft, until the day you <em>surpassed or fled them.</em></div><div class="ometa">Arcana · History · Tool of the trade</div></button>
+        <button class="opt" data-theme="The Soldier's Child"><div class="ot">The Soldier's Child</div><div class="od">Raised in the wake of a war you were too young to fight — but <em>old enough to remember.</em></div><div class="ometa">Athletics · Intimidation · Gaming set</div></button>
+        <button class="opt" data-theme="The Street"><div class="ot">The Street</div><div class="od">The city raised you, and it kept <em>nothing soft.</em></div><div class="ometa">Sleight of Hand · Stealth · Thieves' tools</div></button>
+        <button class="opt" data-theme="The Devout"><div class="ot">The Devout</div><div class="od">A faith took you in, young, and <em>asked for everything.</em></div><div class="ometa">Insight · Religion · Holy symbol</div></button>
+        <button class="opt" data-theme="The Heir"><div class="ot">The Heir</div><div class="od">Born to a name and its weight — which you <em>fled, or still carry.</em></div><div class="ometa">History · Persuasion · Signet &amp; finery</div></button>
+        <button class="opt" data-theme="The Wanderer"><div class="ot">The Wanderer</div><div class="od">No road was home for long; <em>the horizon raised you.</em></div><div class="ometa">Survival · Animal Handling · Maps</div></button>
+      </div>
+    </section>
+
+    <!-- ════ STEP 4 · CLASS & CALLING ════ -->
+    <section class="pane" data-pane="4">
+      <div class="step-eyebrow"><span class="eyebrow">Step 4 · Class &amp; Calling</span><span class="ln"></span></div>
+      <h1>What you'll do when it calls for action.</h1>
+      <p class="subtitle">Your class is the shape of your power. The calling within it — your subclass — is how you wield it.</p>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Class</span></div>
+        <div class="opt-grid c3" data-grp="class">
+          <button class="opt" data-class="Barbarian"><div class="ot">Barbarian</div><div class="od">Fury, made into armor.</div></button>
+          <button class="opt" data-class="Bard"><div class="ot">Bard</div><div class="od">Magic carried on a song.</div></button>
+          <button class="opt" data-class="Cleric"><div class="ot">Cleric</div><div class="od">A god's will, made manifest.</div></button>
+          <button class="opt" data-class="Druid"><div class="ot">Druid</div><div class="od">The old wild, given voice.</div></button>
+          <button class="opt" data-class="Fighter"><div class="ot">Fighter</div><div class="od">Master of arms and tactics.</div></button>
+          <button class="opt sel" data-class="Monk"><div class="ot">Monk</div><div class="od">Body as weapon; the disciplined ki.</div></button>
+          <button class="opt" data-class="Paladin"><div class="ot">Paladin</div><div class="od">An oath, and the power to keep it.</div></button>
+          <button class="opt" data-class="Ranger"><div class="ot">Ranger</div><div class="od">The hunter at the world's edge.</div></button>
+          <button class="opt" data-class="Rogue"><div class="ot">Rogue</div><div class="od">Precision, guile, the opened lock.</div></button>
+          <button class="opt" data-class="Sorcerer"><div class="ot">Sorcerer</div><div class="od">Magic in the blood, barely leashed.</div></button>
+          <button class="opt" data-class="Warlock"><div class="ot">Warlock</div><div class="od">A pact, and a patron who collects.</div></button>
+          <button class="opt" data-class="Wizard"><div class="ot">Wizard</div><div class="od">The studied, written word of magic.</div></button>
+        </div>
+      </div>
+
+      <div class="reveal subrow">
+        <div class="block-label"><span class="l">Calling · Monastic Tradition</span><span class="hint">chosen at level 3</span></div>
+        <div class="opt-grid c3" data-grp="subclass">
+          <button class="opt sel" data-sub="Way of the Open Hand"><div class="ot">Open Hand</div><div class="od">The art of the perfect strike — knock prone, push, or still a foe.</div></button>
+          <button class="opt" data-sub="Way of Shadow"><div class="ot">Shadow</div><div class="od">Ki spent on darkness, silence, and the unseen step.</div></button>
+          <button class="opt" data-sub="Four Elements"><div class="ot">Four Elements</div><div class="od">Ki shaped into flame, wind, and stone.</div></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ STEP 5 · ABILITY SCORES ════ -->
+    <section class="pane" data-pane="5">
+      <div class="step-eyebrow"><span class="eyebrow">Step 5 · Ability Scores</span><span class="ln"></span></div>
+      <h1>Six numbers, and the moments behind them.</h1>
+      <p class="subtitle">The Monk's body is its instrument — a primary you'll lean on, ★, and one you can let lie, ✗. Place each number where it counts.</p>
+
+      <div class="seg" data-grp="method">
+        <button class="on" data-method="array">Standard array</button>
+        <button data-method="dice">Roll the dice</button>
+      </div>
+
+      <div class="alloc-status" id="allocStatus"></div>
+
+      <div class="alloc" id="alloc">
+        <!-- rows injected by JS -->
+      </div>
+    </section>
+
+    <!-- ════ STEP 6 · EQUIPMENT ════ -->
+    <section class="pane" data-pane="6">
+      <div class="step-eyebrow"><span class="eyebrow">Step 6 · Equipment</span><span class="ln"></span></div>
+      <h1>The gear of your calling.</h1>
+      <p class="subtitle">What the Monk's training gives you, the coin in your purse, and one thing you carry that has nothing to do with fighting.</p>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Granted by your class</span></div>
+        <div class="trait-card" style="margin-bottom:10px">
+          <span class="ti"><svg class="ic"><use href="#i-feather"/></svg></span>
+          <div>
+            <div class="tt">A Monk's kit</div>
+            <div class="td">A quarterstaff or shortsword · 10 darts · an explorer's pack or a scholar's pack · the simple robes you trained in.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Choose a pack</span></div>
+        <div class="opt-grid c2" data-grp="pack">
+          <button class="opt sel" data-pack="Explorer's"><div class="ot">Explorer's pack</div><div class="od">Bedroll, rations, rope, tinderbox — the kit for the open road.</div></button>
+          <button class="opt" data-pack="Scholar's"><div class="ot">Scholar's pack</div><div class="od">Ink, parchment, a book of lore — for a mind that still studies.</div></button>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Your purse</span></div>
+        <div class="trait-card" style="border-color: color-mix(in oklab, var(--accent) 28%, var(--rule)); background: color-mix(in oklab, var(--accent) 7%, var(--bg-2));">
+          <span class="ti" style="color:var(--accent)"><svg class="ic"><use href="#i-coin"/></svg></span>
+          <div>
+            <div class="tt" style="color:var(--accent)">12 gp <span class="src" style="color:var(--ink-3)">starting coin</span></div>
+            <div class="td">Little, but enough for a night indoors and a hot meal. The Hermit keeps nothing they don't need.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block" style="margin-bottom:0">
+        <div class="block-label"><span class="l">One thing of weight</span><span class="hint">it does nothing in combat. it means everything.</span></div>
+        <div class="prompt-card">
+          <div class="pch"><span class="pl">What you carry</span><span class="edge" style="background:var(--accent)"></span></div>
+          <div class="chosen" data-slot>A river stone, worn smooth — pressed into your hand by someone you won't name.</div>
+          <div class="prompt-list" data-promptgroup="weight">
+            <button class="po on">A river stone, worn smooth — pressed into your hand by someone you won't name.</button>
+            <button class="po">A folded letter you have never had the courage to open.</button>
+            <button class="po">A child's wooden toy — not yours, but kept all these years.</button>
+            <button class="po">A holy symbol from a faith you no longer hold.</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ STEP 7 · IDENTITY DETAILS (rich) ════ -->
+    <section class="pane" data-pane="7">
+      <div class="step-eyebrow"><span class="eyebrow">Step 7 · Identity Details</span><span class="ln"></span></div>
+      <h1>The interior life, and the outward one.</h1>
+      <p class="subtitle">How they appear to a stranger across a room, and what actually moves them when no one is watching.</p>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Appearance</span></div>
+        <div class="appear">
+          <div class="af"><div class="afl">Eyes</div><div class="pillrow" data-pillgroup="eyes"><button class="selpill on" data-v="Pale grey">Pale grey</button><button class="selpill" data-v="Amber">Amber</button><button class="selpill" data-v="Green">Green</button></div></div>
+          <div class="af"><div class="afl">Hair</div><div class="pillrow" data-pillgroup="hair"><button class="selpill" data-v="Black">Black</button><button class="selpill on" data-v="Ash-blond">Ash-blond</button><button class="selpill" data-v="Shaved">Shaved</button></div></div>
+          <div class="af"><div class="afl">Skin</div><div class="pillrow" data-pillgroup="skin"><button class="selpill on" data-v="Olive">Olive</button><button class="selpill" data-v="Fair">Fair</button><button class="selpill" data-v="Brown">Brown</button></div></div>
+          <div class="af"><div class="afl">Build</div><div class="pillrow" data-pillgroup="build"><button class="selpill on" data-v="Lean">Lean</button><button class="selpill" data-v="Wiry">Wiry</button><button class="selpill" data-v="Broad">Broad</button></div></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Personality &amp; conviction</span><span class="hint">click a prompt to make it yours</span></div>
+        <div class="grid-2col">
+          <div class="prompt-card trait">
+            <div class="pch"><span class="pl">Trait</span><span class="edge"></span></div>
+            <div class="chosen" data-slot>I notice everything and say almost none of it.</div>
+            <div class="prompt-list" data-promptgroup="trait">
+              <button class="po on">I notice everything and say almost none of it.</button>
+              <button class="po">Silence is my first language; words cost me.</button>
+              <button class="po">I am gentle with strangers and ruthless with myself.</button>
+            </div>
+          </div>
+          <div class="prompt-card ideal">
+            <div class="pch"><span class="pl">Ideal</span><span class="edge"></span></div>
+            <div class="chosen" data-slot>Knowledge withheld is a kind of violence.</div>
+            <div class="prompt-list" data-promptgroup="ideal">
+              <button class="po on">Knowledge withheld is a kind of violence.</button>
+              <button class="po">The quiet ones are owed protection.</button>
+              <button class="po">Mastery of the self is the only true mastery.</button>
+            </div>
+          </div>
+          <div class="prompt-card bond">
+            <div class="pch"><span class="pl">Bond</span><span class="edge"></span></div>
+            <div class="chosen" data-slot>The one who left the stone — I will find out who they were.</div>
+            <div class="prompt-list" data-promptgroup="bond">
+              <button class="po on">The one who left the stone — I will find out who they were.</button>
+              <button class="po">The order that raised and then forgot me.</button>
+              <button class="po">A discovery too dangerous to hand to anyone.</button>
+            </div>
+          </div>
+          <div class="prompt-card flaw">
+            <div class="pch"><span class="pl">Flaw</span><span class="edge"></span></div>
+            <div class="chosen" data-slot>I trust solitude more than any person.</div>
+            <div class="prompt-list" data-promptgroup="flaw">
+              <button class="po on">I trust solitude more than any person.</button>
+              <button class="po">I cannot let a secret stay buried, even a kind one.</button>
+              <button class="po">I mistake stubbornness for discipline.</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-label"><span class="l">Alignment</span><span class="hint">where your ideal points — adjust if it's wrong</span></div>
+        <div class="align-wrap">
+          <div class="align-grid" data-grp="align">
+            <button class="ac" data-a="LG">LG</button><button class="ac" data-a="NG">NG</button><button class="ac" data-a="CG">CG</button>
+            <button class="ac on" data-a="LN">LN</button><button class="ac" data-a="TN">N</button><button class="ac" data-a="CN">CN</button>
+            <button class="ac" data-a="LE">LE</button><button class="ac" data-a="NE">NE</button><button class="ac" data-a="CE">CE</button>
+          </div>
+          <div class="align-side">
+            <div class="al-name" id="alignName">Lawful Neutral</div>
+            <div class="al-desc" id="alignDesc">You keep to a code of your own making. Order, study, and self-discipline matter more to you than the shifting needs of good and evil.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block" style="margin-bottom:0">
+        <div class="block-label"><span class="l">Backstory moments</span><span class="hint">choose the few that are true — they become hooks</span></div>
+        <div class="chipwrap" data-grp="moments">
+          <button class="mchip on"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>Raised in isolation</button>
+          <button class="mchip on"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>Made a forbidden discovery</button>
+          <button class="mchip"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>Lost a parent young</button>
+          <button class="mchip on"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>A stranger's single kindness</button>
+          <button class="mchip"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>Betrayed by a mentor</button>
+          <button class="mchip"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>Survived something no one believes</button>
+          <button class="mchip"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span>Owe a debt you can't repay</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ STEP 8 · REVIEW ════ -->
+    <section class="pane" data-pane="8">
+      <div class="step-eyebrow"><span class="eyebrow">Step 8 · Review</span><span class="ln"></span></div>
+      <h1>Everything you've chosen.</h1>
+      <p class="subtitle">Read it back. Change anything that isn't true yet. Commit when it is.</p>
+
+      <div class="rv-list">
+        <div class="rv-row">
+          <span class="rvk">Identity</span>
+          <div class="rvv"><div class="pri">Dravyr Wyrmrest</div><div class="sec">Man · he/him</div></div>
+          <button class="rv-edit" data-go="1">Edit</button>
+        </div>
+        <div class="rv-row">
+          <span class="rvk">Ancestry</span>
+          <div class="rvv"><div class="pri">Wood Elf</div><div class="sec">Mask of the Wild · Fleet of Foot · Trance · Darkvision 60 ft</div></div>
+          <button class="rv-edit" data-go="2">Edit</button>
+        </div>
+        <div class="rv-row">
+          <span class="rvk">Theme</span>
+          <div class="rvv"><div class="pri">The Hermit</div><div class="sec">Insight · Religion · Herbalism kit · The Discovery</div></div>
+          <button class="rv-edit" data-go="3">Edit</button>
+        </div>
+        <div class="rv-row">
+          <span class="rvk">Class</span>
+          <div class="rvv"><div class="pri">Monk <span class="sep">·</span> Way of the Open Hand <span class="sep">·</span> Level 3</div><div class="sec">Martial Arts 1d6 · Ki 3 · Unarmored Defense</div></div>
+          <button class="rv-edit" data-go="4">Edit</button>
+        </div>
+        <div class="rv-row">
+          <span class="rvk">Abilities</span>
+          <div class="rvv"><div class="pri">STR 12 <span class="sep">·</span> DEX 15★ <span class="sep">·</span> CON 13 <span class="sep">·</span> INT 10 <span class="sep">·</span> WIS 14 <span class="sep">·</span> CHA 8✗</div><div class="sec">Standard array · Wood Elf +2 DEX, +1 WIS applied on your sheet</div></div>
+          <button class="rv-edit" data-go="5">Edit</button>
+        </div>
+        <div class="rv-row">
+          <span class="rvk">Equipment</span>
+          <div class="rvv"><div class="pri">Quarterstaff <span class="sep">·</span> Explorer's pack <span class="sep">·</span> 12 gp</div><div class="sec">Carries: a river stone, worn smooth</div></div>
+          <button class="rv-edit" data-go="6">Edit</button>
+        </div>
+        <div class="rv-row">
+          <span class="rvk">Details</span>
+          <div class="rvv"><div class="pri">Lawful Neutral <span class="sep">·</span> Pale grey eyes <span class="sep">·</span> Lean</div><div class="sec">"Knowledge withheld is a kind of violence." · 3 backstory hooks</div></div>
+          <button class="rv-edit" data-go="7">Edit</button>
+        </div>
+      </div>
+
+      <div class="commit">
+        <p class="ce">Dravyr Wyrmrest — a wood elf who learned silence in the high cells, and carries a river stone he won't explain. Ready to step into the world.</p>
+        <button class="btn primary lg" id="commitBtn"><svg class="ic"><use href="#i-feather"/></svg>Bring them to life</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- sticky footer -->
+  <footer class="wiz-foot">
+    <div class="inner">
+      <button class="btn ghost" id="back" style="visibility:hidden"><svg class="ic"><use href="#i-arrow-left"/></svg>Back</button>
+      <span class="fprog" id="fprog">Choose a path to begin</span>
+      <span class="spacer"></span>
+      <span class="save">Saved · draft</span>
+      <button class="btn primary" id="next" disabled>Continue<svg class="ic"><use href="#i-arrow-right"/></svg></button>
+    </div>
+  </footer>
+
+  <script>
+    /* the eight creation steps */
+    const KEYS = ['', 'identity','ancestry','theme','class','abilities','equipment','details','review'];
+    const NAMES = ['', 'Identity','Ancestry','Theme','Class & Calling','Ability Scores','Equipment','Identity Details','Review'];
+    const TOTAL = 8;
+    let cur = 1;
+
+    const reading = document.getElementById('reading');
+    const wizChrome = document.getElementById('chrome');
+    const panes   = [...document.querySelectorAll('.pane')];
+    const rnodes  = [...document.querySelectorAll('.rnode')];
+    const back = document.getElementById('back'), next = document.getElementById('next');
+    const fprog = document.getElementById('fprog');
+    const stepNum = document.getElementById('stepNum'), stepName = document.getElementById('stepName');
+
+    function render() {
+      panes.forEach(p => p.classList.toggle('show', +p.dataset.pane===cur));
+      reading.classList.toggle('wide', cur===7 || cur===8);
+      rnodes.forEach(n => {
+        const s = +n.dataset.go;
+        n.classList.toggle('active', s===cur);
+        n.classList.toggle('done',   s<cur);
+        n.querySelector('.rdot').innerHTML = s<cur ? '<svg class="ic"><use href="#i-check"/></svg>' : String(s);
+      });
+      stepNum.textContent = 'Step ' + cur + ' of ' + TOTAL;
+      stepName.textContent = NAMES[cur];
+      back.style.visibility = cur===1 ? 'hidden' : 'visible';
+      next.disabled = false;
+      fprog.textContent = 'Step ' + cur + ' of ' + TOTAL;
+      next.innerHTML = cur===TOTAL
+        ? 'Bring them to life<svg class="ic"><use href="#i-check"/></svg>'
+        : 'Continue<svg class="ic"><use href="#i-arrow-right"/></svg>';
+      history.replaceState(null,'', '#'+KEYS[cur]);
+    }
+    function go(n){ cur = Math.max(1, Math.min(TOTAL, n)); render(); window.scrollTo({top:0, behavior:'smooth'}); }
+
+    next.addEventListener('click', () => { if (cur<TOTAL) go(cur+1); else { next.innerHTML='Brought to life ✓'; next.disabled=true; } });
+    back.addEventListener('click', () => go(cur-1));
+    rnodes.forEach(n => n.addEventListener('click', () => go(+n.dataset.go)));
+    document.querySelectorAll('.rv-edit').forEach(b => b.addEventListener('click', () => go(+b.dataset.go)));
+
+    /* ── single-select option groups ── */
+    document.querySelectorAll('.opt').forEach(o => o.addEventListener('click', () => {
+      const c = o.closest('[data-grp]'); if (!c) return;
+      const grp = c.dataset.grp;
+      document.querySelectorAll('[data-grp="'+grp+'"]').forEach(cc => cc.querySelectorAll('.opt').forEach(x => x.classList.remove('sel')));
+      o.classList.add('sel');
+    }));
+
+    /* ── pill groups (single select) ── */
+    document.querySelectorAll('[data-pillgroup]').forEach(g => {
+      g.querySelectorAll('.selpill').forEach(p => p.addEventListener('click', () => {
+        g.querySelectorAll('.selpill').forEach(x => x.classList.remove('on'));
+        p.classList.add('on');
+      }));
+    });
+
+    /* ── segmented (method) ── */
+    document.querySelectorAll('.seg').forEach(s => {
+      s.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        s.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        if (b.dataset.method) renderAlloc(b.dataset.method);
+      }));
+    });
+
+    /* ── prompt-list → chosen ── */
+    document.querySelectorAll('[data-promptgroup]').forEach(g => {
+      const card = g.closest('.prompt-card');
+      const slot = card.querySelector('[data-slot]');
+      g.querySelectorAll('.po').forEach(p => p.addEventListener('click', () => {
+        g.querySelectorAll('.po').forEach(x => x.classList.remove('on'));
+        p.classList.add('on');
+        slot.textContent = p.textContent;
+        slot.classList.remove('empty');
+      }));
+    });
+
+    /* ── alignment grid ── */
+    const ALIGN = {
+      LG:['Lawful Good','You serve a code and a conscience both, and lose sleep when they disagree.'],
+      NG:['Neutral Good','You do the most good you can, unbound by law or chaos.'],
+      CG:['Chaotic Good','Kindness on your own terms; no rule outranks a person in need.'],
+      LN:['Lawful Neutral','You keep to a code of your own making. Order and self-discipline matter more than the shifting needs of good and evil.'],
+      TN:['True Neutral','You hold the balance, or simply keep your own counsel.'],
+      CN:['Chaotic Neutral','Your freedom is the one law; you answer to no one.'],
+      LE:['Lawful Evil','You take what you want, but always within a system you can hide behind.'],
+      NE:['Neutral Evil','You serve only yourself, by whatever means is cleanest.'],
+      CE:['Chaotic Evil','Destruction and appetite, unchained.']
+    };
+    document.querySelectorAll('[data-grp="align"] .ac').forEach(c => c.addEventListener('click', () => {
+      document.querySelectorAll('[data-grp="align"] .ac').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+      const a = ALIGN[c.dataset.a];
+      document.getElementById('alignName').textContent = a[0];
+      document.getElementById('alignDesc').textContent = a[1];
+    }));
+
+    /* ── multi-select moments ── */
+    document.querySelectorAll('[data-grp="moments"] .mchip').forEach(m => m.addEventListener('click', () => m.classList.toggle('on')));
+
+    /* ── ability allocator · standard array + physical dice (4–20) ── */
+    const ARRAY = [15,14,13,12,10,8];
+    const ABLS = [
+      {k:'STR', n:'Strength',     gov:'Melee power — lifting, grappling, and shoving.'},
+      {k:'DEX', n:'Dexterity',    gov:'Your strikes and your AC, reflexes, and stealth.', mark:'star'},
+      {k:'CON', n:'Constitution', gov:'Hit points, and the grit to hold concentration.'},
+      {k:'INT', n:'Intelligence', gov:'Lore, investigation, and arcane study.'},
+      {k:'WIS', n:'Wisdom',       gov:'Perception, insight, willpower — and your ki.'},
+      {k:'CHA', n:'Charisma',     gov:'Presence — persuasion, deception, intimidation.', mark:'dump'}
+    ];
+    let scores = {STR:12, DEX:15, CON:13, INT:10, WIS:14, CHA:8};
+    let method = 'array';
+    function mod(score){ const m = Math.floor((score-10)/2); return (m>=0?'+':'−')+Math.abs(m); }
+    function renderAlloc(m){
+      if (m) method = m;
+      const alloc = document.getElementById('alloc');
+      alloc.innerHTML = '';
+      ABLS.forEach(a => {
+        const sc = scores[a.k];
+        const markHTML = a.mark==='star' ? '<span class="mk star" title="primary">★</span>'
+                        : a.mark==='dump' ? '<span class="mk dump" title="safe to lower">✗</span>' : '';
+        let control;
+        if (method==='array') {
+          const opts = ARRAY.map(v => '<option value="'+v+'"'+(v===sc?' selected':'')+'>'+v+'</option>').join('');
+          control = '<select class="aselect" data-set="'+a.k+'">'+opts+'</select>';
+        } else {
+          control = '<div class="stepper">'+
+              '<button '+(sc<=4?'disabled':'')+' data-dec="'+a.k+'">−</button>'+
+              '<span class="sc">'+sc+'</span>'+
+              '<button '+(sc>=20?'disabled':'')+' data-inc="'+a.k+'">+</button>'+
+            '</div>';
+        }
+        const row = document.createElement('div');
+        row.className = 'arow';
+        row.innerHTML =
+          '<div class="aname"><span class="an">'+a.n+'</span>'+markHTML+'</div>'+
+          '<div class="agov">'+a.gov+'</div>'+
+          '<div class="actl">'+control+'<span class="amod">'+mod(sc)+'</span></div>';
+        alloc.appendChild(row);
+      });
+      alloc.querySelectorAll('[data-inc]').forEach(b => b.addEventListener('click', () => { scores[b.dataset.inc] = Math.min(20, scores[b.dataset.inc]+1); renderAlloc(); }));
+      alloc.querySelectorAll('[data-dec]').forEach(b => b.addEventListener('click', () => { scores[b.dataset.dec] = Math.max(4, scores[b.dataset.dec]-1); renderAlloc(); }));
+      alloc.querySelectorAll('.aselect').forEach(s => s.addEventListener('change', () => {
+        const k = s.dataset.set, nv = +s.value, ov = scores[k];
+        const other = Object.keys(scores).find(x => x!==k && scores[x]===nv);
+        if (other) scores[other] = ov;   // swap so each array value stays used once
+        scores[k] = nv; renderAlloc();
+      }));
+      const status = document.getElementById('allocStatus');
+      if (method==='array') {
+        status.innerHTML = '<span class="sl">Standard array</span><span class="vals">15 · 14 · 13 · 12 · 10 · 8</span><span class="sh">assign each value once — picking a taken value swaps it</span>';
+      } else {
+        status.innerHTML = '<button class="btn sm" id="rollBtn"><svg class="ic"><use href="#i-dice"/></svg>Roll 4d6 for me</button><span class="sh">or enter the numbers you rolled — 4 to 20 each</span>';
+        const rb = document.getElementById('rollBtn');
+        if (rb) rb.addEventListener('click', () => {
+          ABLS.forEach(a => {
+            const dice = [0,0,0,0].map(() => 1 + Math.floor(Math.random()*6)).sort((x,y) => x-y);
+            scores[a.k] = dice[1] + dice[2] + dice[3]; // 4d6, drop the lowest
+          });
+          renderAlloc();
+        });
+      }
+    }
+    renderAlloc('array');
+
+    /* ── deep-link via hash (for canvas artboards) ── */
+    function fromHash(){
+      const h = location.hash.replace('#','');
+      const i = KEYS.indexOf(h);
+      if (i >= 1) cur = i;
+    }
+    fromHash();
+    render();
+  </script>
+</body>
+</html>

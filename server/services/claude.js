@@ -6,11 +6,21 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+// Per-request fetch timeouts. Without these a hung-open socket (TCP alive, no
+// response bytes) blocks a turn indefinitely — the UND_ERR_SOCKET retry only
+// fires on a socket FAULT, never on a silent hang. AbortSignal.timeout() bounds
+// the whole request (incl. body read); a fired timeout surfaces as a
+// TimeoutError/AbortError that the catch below treats as a retryable network
+// error. The gameplay cap is generous (Opus can take a while to emit 8000
+// tokens of immersive prose) so it never aborts a legitimately slow generation.
+const CLAUDE_FETCH_TIMEOUT_MS = Number(process.env.CLAUDE_FETCH_TIMEOUT_MS) || 120000; // main messages call
+const CLAUDE_PROBE_TIMEOUT_MS = Number(process.env.CLAUDE_PROBE_TIMEOUT_MS) || 20000;  // count_tokens status probe
 // Model aliases (no date suffix) auto-resolve to the latest *build* of a
 // given major.minor version, but the major.minor itself is pinned — bump these
 // manually when a new Claude release ships (e.g. 4-6 → 4-7).
 const SONNET_MODEL = 'claude-sonnet-4-6';
-const OPUS_MODEL = 'claude-opus-4-7';
+const OPUS_MODEL = 'claude-opus-4-8';
 const DEFAULT_MODEL = SONNET_MODEL;
 
 // Prompt-cache configuration. Three tiers:
@@ -31,11 +41,15 @@ const DEFAULT_MODEL = SONNET_MODEL;
 //   • No markers → plain string (legacy behavior).
 //   • Only AFTER_CORE marker → 2-block array (tier 1 cached, tier 2+3 together).
 //   • Both markers → 3-block array (tier 1 + tier 2 cached, tier 3 fresh).
-//   • Any tier below 1024 tokens → fall back to a single merged string so
-//     Anthropic accepts the request (the cache minimum would reject it).
+//   • Any tier below the cache minimum → fall back to a single merged string;
+//     Anthropic silently won't cache a sub-minimum prefix (cache_creation=0).
 const CACHE_BREAK_CORE = '<!-- CACHE_BREAK:AFTER_CORE -->';
 const CACHE_BREAK_CHARACTER = '<!-- CACHE_BREAK:AFTER_CHARACTER -->';
-const CACHE_MIN_TOKENS = 1024; // Anthropic's cacheable-block minimum
+// Anthropic's cacheable-prefix minimum is model-specific: 4096 tokens for
+// Opus 4.x (claude-opus-4-8 — our gameplay model). 1024 is the Sonnet-4.5 floor
+// and was too low here — a sub-4096 tier still got a cache_control marker that
+// Opus silently ignores (cache_creation_input_tokens: 0), so it never cached.
+const CACHE_MIN_TOKENS = 4096;
 const CACHE_MIN_CHARS = CACHE_MIN_TOKENS * 4; // rough char→token
 
 // Running cache telemetry — flushed to stdout once per turn via logCacheStats().
@@ -212,7 +226,9 @@ export async function checkClaudeStatus() {
       body: JSON.stringify({
         model: SONNET_MODEL,
         messages: [{ role: 'user', content: 'ping' }]
-      })
+      }),
+      // Bound the probe too — a hung status check shouldn't stall the caller.
+      signal: AbortSignal.timeout(CLAUDE_PROBE_TIMEOUT_MS)
     });
 
     if (response.ok) {
@@ -320,7 +336,9 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
           max_tokens: maxTokens,
           system: systemParam,
           messages: claudeMessages
-        })
+        }),
+        // Abort a hung request so a stalled socket can't wedge the turn forever.
+        signal: AbortSignal.timeout(CLAUDE_FETCH_TIMEOUT_MS)
       });
 
       if (!response.ok) {
@@ -419,8 +437,13 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
     } catch (error) {
       lastError = error;
 
-      // Check if it's a retryable network error
-      const isNetworkError = error.cause?.code === 'UND_ERR_SOCKET' ||
+      // Check if it's a retryable network error. AbortSignal.timeout() fires as
+      // a TimeoutError (or AbortError on some runtimes) — treat a fetch timeout
+      // like any other transient socket failure and retry with backoff.
+      const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError' ||
+                        error.cause?.name === 'TimeoutError' || error.cause?.name === 'AbortError';
+      const isNetworkError = isTimeout ||
+                             error.cause?.code === 'UND_ERR_SOCKET' ||
                              error.message?.includes('fetch failed') ||
                              error.message?.includes('socket') ||
                              error.message?.includes('ECONNRESET');
@@ -428,11 +451,18 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       if (isNetworkError && attempt < maxRetries) {
         // Exponential backoff: 1s, 2s, 4s
         const delay = Math.pow(2, attempt - 1) * 1000;
-        console.log(`Claude API network error (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+        console.log(`Claude API ${isTimeout ? `timeout (>${CLAUDE_FETCH_TIMEOUT_MS}ms)` : 'network error'} (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
 
+      // Exhausted retries (or a non-retryable throw). Tag a timeout so the route
+      // layer can return a friendly, retryable response that PRESERVES the
+      // player's turn, instead of the raw DOMException falling through to a bare
+      // 500 (which the client treats as fatal and discards the typed input).
+      if (isTimeout) {
+        throw new Error(`TIMEOUT: Claude API request timed out after ${attempt} attempt(s) (>${CLAUDE_FETCH_TIMEOUT_MS}ms each).`);
+      }
       throw error;
     }
   }
@@ -450,7 +480,9 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
  */
 export async function startSession(systemPrompt, openingPrompt, modelChoice = null, options = {}) {
   const messages = [{ role: 'user', content: openingPrompt }];
-  const response = await chat(systemPrompt, messages, 3, modelChoice, 4000, false, options);
+  // 8000-token cap (was 4000): a long opening scene + dialogue + trailing markers
+  // was occasionally truncating, dropping end-of-response content AND markers.
+  const response = await chat(systemPrompt, messages, 3, modelChoice, 8000, false, options);
 
   const selectedModel = getModelId(modelChoice);
   console.log(`Starting DM session with model: ${selectedModel}`);
@@ -481,7 +513,9 @@ export async function continueSession(systemPrompt, messages, playerAction, mode
     { role: 'user', content: playerAction }
   ];
 
-  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 4000, false, options);
+  // 8000-token cap (was 4000) — see startSession; stops long immersive turns
+  // from truncating mid-thought and dropping their trailing mechanical markers.
+  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 8000, false, options);
 
   return {
     response,

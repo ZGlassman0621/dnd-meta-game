@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Cockpit — Calm</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── HEADER ─────────────────────────────────────── */
+    .hdr {
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 18px; height: 54px; flex-shrink: 0;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--rule);
+    }
+    .hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+    .hdr-title { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; white-space: nowrap; }
+    .hdr-title .nm { font-family: var(--serif); font-size: 16px; color: var(--ink); letter-spacing: -.005em; white-space: nowrap; }
+    .hdr-title .sx { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-4); }
+    .ki-quick { display: inline-flex; align-items: center; gap: 8px; }
+    .ki-quick .kl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .toggles { display: flex; align-items: center; gap: 2px; }
+
+    /* ── COCKPIT GRID ──────────────────────────────── */
+    .cockpit {
+      flex: 1; min-height: 0;
+      display: grid;
+      grid-template-columns: 248px 1fr 296px;
+      gap: 14px;
+      padding: 14px;
+    }
+    .rail { display: flex; flex-direction: column; gap: 14px; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+
+    /* ── LEFT · party ──────────────────────────────── */
+    .pm {
+      display: grid; grid-template-columns: 38px 1fr; gap: 11px;
+      padding: 10px; border-radius: var(--radius);
+      border: 1px solid transparent;
+    }
+    .pm + .pm { margin-top: 2px; }
+    .pm.you {
+      background: color-mix(in oklab, var(--accent) 7%, var(--bg-card));
+      border-color: color-mix(in oklab, var(--accent) 30%, var(--rule));
+    }
+    .pm:not(.you):hover { background: var(--bg-card); }
+    .mono-portrait {
+      width: 38px; height: 38px; border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--serif); font-weight: 600; font-size: 18px;
+      border: 1px solid var(--rule); position: relative; flex-shrink: 0;
+    }
+    .mono-portrait.d { background: linear-gradient(150deg, #3a3326, #221d16); color: var(--accent); }
+    .mono-portrait.v { background: linear-gradient(150deg, #2e3340, #1d2128); color: var(--accent-2); }
+    .pm > div:last-child { min-width: 0; }
+    .pm-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+    .pm-name .n { font-family: var(--serif); font-size: 15px; color: var(--ink); white-space: nowrap; }
+    .pm-name .r { font-family: var(--mono); font-size: 8.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-4); white-space: nowrap; flex-shrink: 0; }
+    .pm-meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); margin-top: 2px; letter-spacing: .02em; }
+    .pm .hpbar { margin-top: 6px; }
+    .pm-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+    .pm-tags .chip { font-size: 10px; padding: 2px 7px; }
+
+    /* environment scene panel */
+    .env-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 12.5px; }
+    .env-row + .env-row { border-top: 1px solid var(--rule-soft); }
+    .env-row .k { font-family: var(--sans); color: var(--ink-3); white-space: nowrap; }
+    .env-row .v { font-family: var(--serif); font-style: italic; color: var(--ink-2); font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+    /* ── CENTER · reading stage ────────────────────── */
+    .stage {
+      display: flex; flex-direction: column; min-height: 0; min-width: 0;
+      background: var(--page);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .context-strip {
+      display: flex; align-items: center; gap: 14px;
+      padding: 11px 22px; flex-shrink: 0; min-width: 0;
+      border-bottom: 1px solid var(--rule-soft);
+      background: color-mix(in oklab, var(--bg-2) 55%, var(--page));
+    }
+    .cs-campaign { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); }
+    .cs-loc { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink); letter-spacing: .005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .cs-campaign { white-space: nowrap; }
+    .cs-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-4); }
+    .cs-time { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); display: inline-flex; align-items: center; gap: 7px; }
+
+    .transcript {
+      flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+      padding: 30px 0 26px;
+      display: flex; flex-direction: column; align-items: center; gap: 22px;
+    }
+    .measure { width: 100%; max-width: 690px; padding: 0 26px; }
+
+    /* DM narration — the hero */
+    .dm .who {
+      font-family: var(--sans); font-weight: 600; font-size: 9.5px;
+      letter-spacing: .22em; text-transform: uppercase; color: var(--accent);
+      display: inline-flex; align-items: center; gap: 9px; margin-bottom: 9px;
+    }
+    .dm .who::before { content: ""; width: 16px; height: 1px; background: var(--accent); opacity: .8; }
+    .dm .prose {
+      font-family: var(--serif); font-weight: 400; font-size: 18.5px; line-height: 1.72;
+      color: var(--ink); letter-spacing: .002em; text-wrap: pretty;
+    }
+    .dm .prose p { margin: 0 0 16px; }
+    .dm .prose p:last-child { margin-bottom: 0; }
+    .dm .prose em { font-style: italic; color: var(--ink-2); }
+
+    /* NPC dialogue — gold-tinted italic, set apart */
+    .npc {
+      font-family: var(--serif); font-style: italic; font-size: 18.5px; line-height: 1.7;
+      color: var(--accent); letter-spacing: .004em;
+      padding-left: 18px; border-left: 2px solid color-mix(in oklab, var(--accent) 45%, transparent);
+    }
+    .npc .speaker {
+      display: block; font-family: var(--sans); font-style: normal; font-weight: 600;
+      font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase;
+      color: color-mix(in oklab, var(--accent) 78%, var(--ink-3)); margin-bottom: 6px;
+    }
+
+    /* Player action — a sibling, quieter, indented */
+    .you-act {
+      align-self: center; width: 100%; max-width: 690px; padding: 0 26px;
+    }
+    .you-act .inner {
+      margin-left: 30px; padding-left: 16px;
+      border-left: 1px solid var(--rule);
+    }
+    .you-act .who {
+      font-family: var(--sans); font-weight: 600; font-size: 9px;
+      letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px;
+    }
+    .you-act .body {
+      font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-2);
+    }
+    .you-act .body em { font-style: italic; color: var(--ink); }
+
+    /* System / mechanics line — margin note */
+    .sys {
+      align-self: center; display: inline-flex; align-items: center; gap: 9px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: .01em;
+      color: var(--ink-3); max-width: 640px; text-align: center;
+      padding: 3px 0;
+    }
+    .sys .glyph { color: var(--ink-4); }
+    .sys .num { color: var(--accent); font-weight: 500; }
+    .sys .good { color: var(--good); }
+    .sys .bad { color: var(--bad); }
+    .sys em { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-2); }
+
+    /* ── COMPOSER ──────────────────────────────────── */
+    .composer {
+      flex-shrink: 0; padding: 16px 22px 18px;
+      border-top: 1px solid var(--rule-soft);
+      background: color-mix(in oklab, var(--bg-2) 45%, var(--page));
+    }
+    .composer-inner { max-width: 690px; margin: 0 auto; }
+    .writing-surface {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 14px 16px; min-height: 76px;
+      box-shadow: inset 0 0 0 0 transparent;
+      transition: border-color .16s, box-shadow .16s;
+    }
+    .writing-surface.focused {
+      border-color: color-mix(in oklab, var(--accent) 55%, var(--rule));
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+    }
+    .writing-surface .draft {
+      font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--ink);
+    }
+    .writing-surface .draft em { font-style: italic; color: var(--ink-2); }
+    .writing-surface .caret {
+      display: inline-block; width: 2px; height: 19px; vertical-align: -3px;
+      background: var(--accent); margin-left: 1px; animation: blink 1.1s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .composer-bar { display: flex; align-items: center; gap: 12px; margin-top: 11px; }
+    .composer-hint { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); white-space: nowrap; }
+
+    /* ── RIGHT · mechanics ─────────────────────────── */
+    .vitals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .vital {
+      padding: 11px 12px; border-radius: var(--radius);
+      background: var(--bg-card); border: 1px solid var(--rule-soft);
+    }
+    .vital .vl { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .vital .vv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 23px; letter-spacing: -.01em; color: var(--ink); margin-top: 3px; line-height: 1; }
+    .vital .vv .max { font-size: 14px; color: var(--ink-3); font-weight: 500; }
+    .vital .vv .un { font-size: 12px; color: var(--ink-3); font-weight: 500; }
+    .vital.hp { grid-column: 1 / -1; }
+    .vital.hp .vv { color: var(--good); }
+    .vital .hptrack { margin-top: 9px; }
+
+    .ki-block { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+    .ki-block .kl { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+
+    .effect {
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px;
+      padding: 8px 10px; border-radius: var(--radius);
+      background: var(--bg-card); border: 1px solid var(--rule-soft);
+      border-left: 3px solid var(--magic);
+    }
+    .effect + .effect { margin-top: 6px; }
+    .effect.buff { border-left-color: var(--good); }
+    .effect .ei { width: 13px; height: 13px; color: var(--ink-3); }
+    .effect .en { font-family: var(--serif); font-size: 14px; color: var(--ink); }
+    .effect .en em { font-style: italic; }
+    .effect .es { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-top: 1px; letter-spacing: .02em; }
+    .effect .et { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: .04em; }
+
+    .abil-row {
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: var(--radius);
+      border: 1px solid var(--rule-soft); background: var(--bg-card);
+      cursor: default;
+    }
+    .abil-row + .abil-row { margin-top: 5px; }
+    .abil-row .an { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); }
+    .abil-row .ac { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); }
+
+    /* ── COMBAT · context-strip pill ─────────────────── */
+    .cs-combat {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-family: var(--sans); font-weight: 600; font-size: 10px;
+      letter-spacing: .16em; text-transform: uppercase; color: var(--combat);
+      padding: 3px 10px; border-radius: 999px;
+      border: 1px solid color-mix(in oklab, var(--combat) 45%, var(--rule));
+      background: color-mix(in oklab, var(--combat) 10%, var(--page));
+    }
+    .cs-combat .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--combat); animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--combat) 55%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+    /* active-turn dot on portrait */
+    .mono-portrait .turn-dot {
+      position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
+      border-radius: 50%; background: var(--combat); border: 2px solid var(--bg-2);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    .pm.acting { background: color-mix(in oklab, var(--combat) 8%, var(--bg-card)); border-color: color-mix(in oklab, var(--combat) 34%, var(--rule)); }
+
+    /* ── COMBAT · initiative tracker ─────────────────── */
+    .round-meta { display: flex; align-items: baseline; gap: 9px; padding: 2px 2px 11px; margin-bottom: 10px; border-bottom: 1px dashed var(--rule); }
+    .round-meta .rn { font-family: var(--serif); font-weight: 600; font-size: 26px; color: var(--combat); line-height: 1; letter-spacing: -.02em; }
+    .round-meta .rl { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .round-meta .yt { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--combat); padding: 2px 8px; border: 1px solid color-mix(in oklab, var(--combat) 40%, transparent); border-radius: 999px; }
+
+    .init-row {
+      display: grid; grid-template-columns: 24px 1fr auto auto; gap: 10px; align-items: center;
+      padding: 7px 9px; border-radius: var(--radius); border: 1px solid transparent;
+    }
+    .init-row + .init-row { margin-top: 2px; }
+    .init-row.active { background: color-mix(in oklab, var(--combat) 12%, var(--bg-card)); border-color: color-mix(in oklab, var(--combat) 35%, var(--rule)); }
+    .init-row.done { opacity: .42; }
+    .init-row.done .nm { text-decoration: line-through; text-decoration-color: var(--ink-4); }
+    .init-marker {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--ink-3);
+      border: 1px solid var(--rule);
+    }
+    .init-row.active .init-marker { background: var(--combat); color: #211d17; border-color: var(--combat); }
+    .init-row .nm { font-family: var(--serif); font-size: 15px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .init-row.active .nm { color: var(--ink); }
+    .init-row.enemy .nm { color: var(--bad); }
+    .init-row .ihp { font-family: var(--mono); font-size: 9.5px; color: var(--ink-4); letter-spacing: .02em; }
+    .init-row .iroll { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink-3); min-width: 20px; text-align: right; }
+    .init-row.active .iroll { color: var(--combat); }
+
+    /* turn-action tracker */
+    .turn-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--rule); }
+    .ta { padding: 7px 4px; text-align: center; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--rule-soft); }
+    .ta .ta-l { font-family: var(--sans); font-weight: 600; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+    .ta .ta-s { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--good); }
+    .ta.spent { background: var(--bg); }
+    .ta.spent .ta-s { color: var(--ink-4); }
+    .ta.spent .ta-l { color: var(--ink-4); }
+/* ── SLIDE-IN PANEL FAMILY ───────────────────────── */
+    .panel-scrim { position: fixed; inset: 0; background: rgba(12,10,7,.5); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .22s; z-index: 60; }
+    .panel-scrim.show { opacity: 1; pointer-events: auto; }
+    .pnl {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 408px; max-width: 92vw;
+      background: var(--bg-2); border-left: 1px solid var(--rule);
+      box-shadow: -24px 0 60px rgba(0,0,0,.5);
+      transform: translateX(100%); transition: transform .26s cubic-bezier(.4,0,.2,1);
+      z-index: 61; display: flex; flex-direction: column;
+    }
+    .pnl.open { transform: translateX(0); }
+    .pnl-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px 15px; border-bottom: 1px solid var(--rule-soft); flex-shrink: 0; }
+    .pnl-head .ph-ic2 { width: 18px; height: 18px; color: var(--accent); }
+    .pnl-head h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; letter-spacing: -.005em; white-space: nowrap; flex-shrink: 0; }
+    .pnl-head .ph-sub2 { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-left: 2px; align-self: flex-end; padding-bottom: 3px; }
+    .pnl-close { margin-left: auto; width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--rule); background: var(--bg-card); color: var(--ink-3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .14s; }
+    .pnl-close:hover { color: var(--ink); border-color: #4a4032; }
+    .pnl-close .ic { width: 15px; height: 15px; }
+    .pnl-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 18px 20px 24px; }
+    .pnl-sec { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin: 22px 0 12px; display: flex; align-items: center; gap: 10px; }
+    .pnl-sec:first-child { margin-top: 0; }
+    .pnl-sec .ln { flex: 1; height: 1px; background: var(--rule-soft); }
+
+    /* quick-ref stat grid */
+    .qr-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .qr-stat { padding: 10px 11px; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--rule-soft); text-align: center; }
+    .qr-stat .l { font-family: var(--sans); font-weight: 600; font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+    .qr-stat .v { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 20px; color: var(--ink); margin-top: 3px; line-height: 1; }
+    .qr-stat .v .mx { font-size: 12px; color: var(--ink-3); }
+    .qr-stat.hp .v { color: var(--good); }
+
+    .tech { padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+    .tech:first-of-type { border-top: 0; }
+    .tech .tt { font-family: var(--serif); font-size: 16px; color: var(--ink); display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+    .tech .tt .cost { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--magic); margin-left: auto; }
+    .tech .tdsc { font-family: var(--serif); font-size: 14px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; }
+    .cheat { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13.5px; }
+    .cheat .ck { font-family: var(--sans); font-weight: 600; color: var(--ink-2); }
+    .cheat .cv { font-family: var(--serif); color: var(--ink-3); }
+    .pnl-foot { padding: 14px 20px; border-top: 1px solid var(--rule-soft); flex-shrink: 0; }
+    .pnl-foot .btn { width: 100%; }
+
+    /* inventory rows */
+    .inv { display: flex; flex-direction: column; }
+    .inv-row { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; padding: 9px 0; border-top: 1px solid var(--rule-soft); }
+    .inv-row:first-child { border-top: 0; }
+    .inv-row .ii { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--ink-3); flex-shrink: 0; }
+    .inv-row .ii .ic { width: 15px; height: 15px; }
+    .inv-row .inm { font-family: var(--serif); font-size: 15.5px; color: var(--ink); }
+    .inv-row .idesc { font-family: var(--mono); font-size: 9.5px; letter-spacing: .03em; color: var(--ink-4); text-transform: uppercase; margin-top: 1px; }
+    .inv-row .iqty { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink-2); }
+    .gold-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 13px 15px; border-radius: var(--radius); background: color-mix(in oklab, var(--accent) 8%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--rule)); }
+    .gold-row .gl { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+    .gold-row .gv { margin-left: auto; font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 20px; color: var(--accent); }
+    .gold-row .gv .un { font-size: 12px; }
+
+    /* conditions */
+    .cond { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; padding: 13px 0; border-top: 1px solid var(--rule-soft); }
+    .cond:first-of-type { border-top: 0; }
+    .cond .cn { font-family: var(--serif); font-size: 16.5px; color: var(--ink-2); }
+    .cond.on .cn { color: var(--ink); }
+    .cond .cd { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.45; margin-top: 3px; }
+    .cond .cd em { font-style: italic; color: var(--ink-2); }
+    .sw { width: 40px; height: 23px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--rule); position: relative; cursor: pointer; flex-shrink: 0; transition: background .16s, border-color .16s; }
+    .sw .kn { position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: var(--ink-3); transition: transform .16s, background .16s; }
+    .sw.on { background: color-mix(in oklab, var(--magic) 28%, var(--bg-card)); border-color: var(--magic); }
+    .sw.on .kn { transform: translateX(17px); background: var(--magic); }
+
+    /* notes writing surface */
+    .notes-area { width: 100%; min-height: 420px; resize: none; background: var(--page); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 17px; font-family: var(--serif); font-size: 16px; line-height: 1.65; color: var(--ink); outline: none; transition: border-color .15s; }
+    .notes-area:focus { border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+    .notes-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+    .notes-meta .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+
+    /* ── MODAL FAMILY ────────────────────────────────── */
+    .mscrim { position: fixed; inset: 0; background: rgba(12,10,7,.64); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 90; opacity: 0; pointer-events: none; transition: opacity .2s; padding: 24px; }
+    .mscrim.show { opacity: 1; pointer-events: auto; }
+    .modal { display: none; width: 470px; max-width: 100%; background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow); transform: scale(.97); transition: transform .2s; max-height: calc(100vh - 48px); overflow-y: auto; }
+    .modal.active { display: block; }
+    .mscrim.show .modal.active { transform: scale(1); }
+    .modal-head { padding: 24px 26px 4px; }
+    .modal-head .meyebrow { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; }
+    .modal-head h3 { font-family: var(--serif); font-weight: 500; font-size: 27px; margin: 0; letter-spacing: -.01em; }
+    .modal-head .msub { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 8px; }
+    .modal-body { padding: 16px 26px 22px; }
+    .modal-body > .lede { font-family: var(--serif); font-style: italic; font-size: 16.5px; line-height: 1.5; color: var(--ink-2); margin: 0 0 16px; }
+    .modal-foot { display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding: 15px 26px; border-top: 1px solid var(--rule-soft); }
+    .modal-foot .lspace { margin-right: auto; }
+
+    /* stacked choice rows */
+    .mchoice { display: grid; grid-template-columns: auto 1fr auto; gap: 13px; align-items: center; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: border-color .14s, background .14s; }
+    .mchoice + .mchoice { margin-top: 9px; }
+    .mchoice:hover { border-color: #4a4032; background: var(--raise); }
+    .mchoice.primary { border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); }
+    .mchoice.danger:hover { border-color: color-mix(in oklab, var(--bad) 45%, var(--rule)); }
+    .mchoice .mci { width: 34px; height: 34px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent); }
+    .mchoice.danger .mci { color: var(--bad); }
+    .mchoice .mci .ic { width: 17px; height: 17px; }
+    .mchoice .mct { font-family: var(--serif); font-size: 18px; color: var(--ink); display: block; }
+    .mchoice .mcd { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.4; margin-top: 2px; display: block; }
+    .mchoice .mcarrow { color: var(--ink-4); }
+    .mchoice .mcarrow .ic { width: 16px; height: 16px; }
+
+    /* reward ledger */
+    .ledger { display: flex; flex-direction: column; }
+    .led { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+    .led:first-child { border-top: 0; }
+    .led .lk { font-family: var(--serif); font-size: 16px; color: var(--ink-2); }
+    .led .ld { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); }
+    .led .lv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 16px; color: var(--ink); }
+    .led .lv .gain { color: var(--good); }
+    .led .lv .gold { color: var(--accent); }
+    .xpbar { height: 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--rule-soft); overflow: hidden; margin: 4px 0 2px; }
+    .xpbar .fill { height: 100%; background: var(--accent); }
+    .milestone { display: flex; align-items: center; gap: 11px; margin-top: 16px; padding: 13px 15px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--rule)); }
+    .milestone .ic { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+    .milestone .mt { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink); }
+
+    /* companion preview in modal */
+    .cpv { display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center; padding: 16px; border-radius: 11px; background: var(--bg-2); border: 1px solid var(--rule); margin-bottom: 4px; }
+    .cpv .cpc { width: 56px; height: 56px; border-radius: 11px; background: linear-gradient(150deg, #3a2e26, #211a14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 26px; color: var(--accent); }
+    .cpv .cpn { font-family: var(--serif); font-size: 21px; color: var(--ink); }
+    .cpv .cpr { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+    .cpv .cpt { display: flex; gap: 6px; margin-top: 8px; }
+.lvlpill { display: inline-flex; align-items: center; gap: 7px; font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); background: color-mix(in oklab, var(--accent) 11%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--rule)); border-radius: 999px; padding: 5px 11px; cursor: pointer; transition: background .14s; white-space: nowrap; }
+    .lvlpill:hover { background: color-mix(in oklab, var(--accent) 18%, transparent); }
+    .lvlpill .ic { width: 12px; height: 12px; }
+    .party-add { width: 22px; height: 22px; border-radius: 6px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule)); background: color-mix(in oklab, var(--accent) 10%, transparent); color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .14s; }
+    .party-add:hover { background: color-mix(in oklab, var(--accent) 20%, transparent); }
+    .party-add .ic { width: 13px; height: 13px; }
+  </style>
+</head>
+<body class="app-bg">
+  <!-- icon defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+    <symbol id="i-pack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-arrow-ur" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></symbol>
+    <symbol id="i-vial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v15a3 3 0 0 0 6 0V2"/><path d="M8 2h8"/><path d="M9 11h6"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></symbol>
+    <symbol id="i-bow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19A12 12 0 0 0 19 5"/><path d="M5 19l3-3M5 19H9M5 19V15"/><path d="M3 21l5-5"/></symbol>
+    <symbol id="i-leaf2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-chevup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-uplus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></symbol>
+    <symbol id="i-award" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.5 13.5L17 22l-5-3-5 3 1.5-8.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+  </defs></svg>
+
+  <div class="app">
+
+    <!-- ───────── HEADER ───────── -->
+    <header class="hdr">
+      <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+      <div class="vr"></div>
+      <div class="hdr-title">
+        <span class="nm">Dravyr Wyrmrest</span>
+        <span class="sx">Session 7</span>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="ki-quick">
+        <span class="kl">Ki</span>
+        <div class="pips">
+          <span class="pip magic full"></span><span class="pip magic full"></span><span class="pip magic full"></span>
+        </div>
+      </div>
+      <div class="vr"></div>
+      <button class="btn ghost sm"><svg class="ic"><use href="#i-coffee"/></svg>Short rest</button>
+      <button class="btn ghost sm"><svg class="ic"><use href="#i-moon"/></svg>Long rest</button>
+      <div class="vr"></div>
+      <div class="toggles">
+        <button class="btn-icon" title="Quick reference" data-panel="quickref"><svg class="ic"><use href="#i-scroll"/></svg></button>
+        <button class="btn-icon" title="Inventory" data-panel="inventory"><svg class="ic"><use href="#i-pack"/></svg></button>
+        <button class="btn-icon" title="Conditions" data-panel="conditions"><svg class="ic"><use href="#i-tag"/></svg></button>
+        <button class="btn-icon" title="Notes" data-panel="notes"><svg class="ic"><use href="#i-pen"/></svg></button>
+      </div>
+      <div class="vr"></div>
+      <span class="opus"><span class="dot"></span>Opus</span>
+      <button class="lvlpill" data-open="levelup"><svg class="ic"><use href="#i-chevup"/></svg>Level 4 ready</button>
+      <button class="btn danger sm" data-open="endsession">End session</button>
+    </header>
+
+    <!-- ───────── COCKPIT ───────── -->
+    <main class="cockpit">
+
+      <!-- LEFT · party + scene -->
+      <aside class="rail scroll">
+        <section class="panel">
+          <div class="panel-head">
+            <svg class="ph-ic"><use href="#i-users"/></svg>
+            <span class="ph-t">Party</span>
+            <span class="ph-sub">2</span>
+            <button class="party-add" data-open="companion" title="An ally wishes to join"><svg class="ic"><use href="#i-uplus"/></svg></button>
+          </div>
+          <div class="panel-body">
+            <div class="pm you acting">
+              <div class="mono-portrait d">D<span class="turn-dot"></span></div>
+              <div>
+                <div class="pm-name"><span class="n">Dravyr</span><span class="r">you · L3 monk</span></div>
+                <div class="pm-meta">HP 19/27 · AC 15</div>
+                <div class="hpbar"><div class="fill" style="width:70%"></div></div>
+                <div class="pm-tags">
+                  <span class="chip combat">your turn</span>
+                </div>
+              </div>
+            </div>
+            <div class="pm">
+              <div class="mono-portrait v">V</div>
+              <div>
+                <div class="pm-name"><span class="n">Sister Veil</span><span class="r">L3 cleric</span></div>
+                <div class="pm-meta">HP 19/22 · AC 16</div>
+                <div class="hpbar"><div class="fill" style="width:86%"></div></div>
+                <div class="pm-tags">
+                  <span class="chip magic"><svg class="ic"><use href="#i-flame"/></svg>concentrating · Bless</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <svg class="ph-ic"><use href="#i-pin"/></svg>
+            <span class="ph-t">This scene</span>
+          </div>
+          <div class="panel-body">
+            <div class="env-row"><span class="k">Place</span><span class="v">Fishmarket</span></div>
+            <div class="env-row"><span class="k">Light</span><span class="v">dark · torch</span></div>
+            <div class="env-row"><span class="k">Cover</span><span class="v">stalls, crates</span></div>
+            <div class="env-row"><span class="k">Mood</span><span class="v">violent</span></div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- CENTER · reading stage -->
+      <section class="stage">
+        <div class="context-strip">
+          <span class="cs-combat"><span class="pulse"></span>Combat · round 2</span>
+          <span class="cs-loc">Saltcross, the old fishmarket</span>
+          <span class="cs-time"><svg class="ic" style="width:12px;height:12px"><use href="#i-clock"/></svg>Day 22 · nightfall</span>
+        </div>
+
+        <div class="transcript scroll">
+
+          <div class="measure">
+            <div class="scene-break">
+              <span class="lbl">ambush at the fishmarket</span>
+              <span class="glyph">✦</span>
+            </div>
+          </div>
+
+          <div class="measure">
+            <div class="sys">
+              <span class="glyph">⚔</span>
+              <span style="color:var(--combat);font-weight:500">Combat begins</span>
+              <span>— roll for initiative.</span>
+            </div>
+          </div>
+
+          <div class="measure dm">
+            <div class="who">Dungeon Master</div>
+            <div class="prose">
+              <p>They come out of the dark between the stalls — two of them, fast, and a third hanging back with a bow already drawn. The net-mender is gone; only her basket remains, kicked over, the mended nets spilling like pale weed across the stones.</p>
+              <p>An arrow finds you before you've fully turned — a hot line of pain under the ribs. Behind it, a low voice you somehow already know: <em>the one the quarter calls the Hollow Man.</em></p>
+            </div>
+          </div>
+
+          <div class="measure">
+            <div class="sys">
+              <span class="glyph">✦</span>
+              <span>Dravyr takes <span class="bad">5 piercing damage</span> — HP <span class="bad">19/27</span>.</span>
+            </div>
+          </div>
+
+          <div class="measure">
+            <div class="npc">
+              <span class="speaker">The Hollow Man</span>
+              "You shared bread with her. Sentiment. It will cost you the way it costs everyone here."
+            </div>
+          </div>
+
+          <div class="you-act">
+            <div class="inner">
+              <div class="who">You · Dravyr</div>
+              <div class="body">I close the distance to the archer and open with a Flurry of Blows — staff, then elbow, then a sweep at the knee to put him down. <em>"Then I'll pay it standing up."</em></div>
+            </div>
+          </div>
+
+          <div class="measure">
+            <div class="sys">
+              <span class="glyph">⟡</span>
+              <span>Unarmed strike vs Bandit Archer — DC 13 → <span class="num">21</span>.</span>
+              <span><em>A clean hit.</em></span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- COMPOSER -->
+        <div class="composer">
+          <div class="composer-inner">
+            <div class="writing-surface focused">
+              <span class="draft">I spend a ki point on Patient Defense and brace for the brute's</span><span class="caret"></span>
+            </div>
+            <div class="composer-bar">
+              <span class="composer-hint">What do you do?</span>
+              <span class="spacer"></span>
+              <button class="btn primary"><svg class="ic"><use href="#i-send"/></svg>Send</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT · mechanics -->
+      <aside class="rail scroll">
+        <section class="panel">
+          <div class="panel-head">
+            <svg class="ph-ic"><use href="#i-bolt"/></svg>
+            <span class="ph-t">Initiative</span>
+            <span class="ph-sub">5 in fray</span>
+          </div>
+          <div class="panel-body">
+            <div class="round-meta">
+              <span class="rn">2</span>
+              <span class="rl">Round</span>
+              <span class="yt">your turn</span>
+            </div>
+            <div class="init-row done">
+              <span class="init-marker">19</span>
+              <span class="nm">Sister Veil</span>
+              <span class="ihp">19/22</span>
+              <span class="iroll"></span>
+            </div>
+            <div class="init-row active">
+              <span class="init-marker">17</span>
+              <span class="nm">Dravyr</span>
+              <span class="ihp">19/27</span>
+              <span class="iroll"></span>
+            </div>
+            <div class="init-row enemy">
+              <span class="init-marker">14</span>
+              <span class="nm">Bandit Archer</span>
+              <span class="ihp">bloodied</span>
+              <span class="iroll"></span>
+            </div>
+            <div class="init-row enemy">
+              <span class="init-marker">11</span>
+              <span class="nm">The Hollow Man</span>
+              <span class="ihp">unhurt</span>
+              <span class="iroll"></span>
+            </div>
+            <div class="init-row enemy">
+              <span class="init-marker">8</span>
+              <span class="nm">Bandit Brute</span>
+              <span class="ihp">unhurt</span>
+              <span class="iroll"></span>
+            </div>
+            <div class="turn-actions">
+              <div class="ta"><div class="ta-l">Action</div><div class="ta-s">ready</div></div>
+              <div class="ta spent"><div class="ta-l">Bonus</div><div class="ta-s">flurry</div></div>
+              <div class="ta"><div class="ta-l">Reaction</div><div class="ta-s">ready</div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <svg class="ph-ic"><use href="#i-shield"/></svg>
+            <span class="ph-t">Dravyr</span>
+            <span class="ph-sub">L3 monk</span>
+          </div>
+          <div class="panel-body">
+            <div class="vitals">
+              <div class="vital hp">
+                <div class="vl">Hit points</div>
+                <div class="vv">19<span class="max"> / 27</span></div>
+                <div class="hptrack"><div class="fill" style="width:70%"></div></div>
+              </div>
+              <div class="vital"><div class="vl">Armor</div><div class="vv">15</div></div>
+              <div class="vital"><div class="vl">Speed</div><div class="vv">40<span class="un"> ft</span></div></div>
+            </div>
+            <div style="height:11px"></div>
+            <div class="ki-block">
+              <span class="kl">Ki points</span>
+              <div class="pips">
+                <span class="pip magic full"></span><span class="pip magic full"></span><span class="pip magic spent"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <svg class="ph-ic"><use href="#i-sparkles"/></svg>
+            <span class="ph-t">Active effects</span>
+          </div>
+          <div class="panel-body">
+            <div class="effect buff">
+              <svg class="ei"><use href="#i-sparkles"/></svg>
+              <div>
+                <div class="en"><em>Bless</em></div>
+                <div class="es">+1d4 to attacks &amp; saves</div>
+              </div>
+              <span class="et">9 rds</span>
+            </div>
+            <div class="effect">
+              <svg class="ei"><use href="#i-shield"/></svg>
+              <div>
+                <div class="en">Martial Arts die</div>
+                <div class="es">unarmed strike → 1d6</div>
+              </div>
+              <span class="et">passive</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <svg class="ph-ic"><use href="#i-bolt"/></svg>
+            <span class="ph-t">Ki abilities</span>
+          </div>
+          <div class="panel-body">
+            <div class="abil-row"><span class="an">Flurry of Blows</span><span class="ac">1 ki · bonus</span></div>
+            <div class="abil-row"><span class="an">Patient Defense</span><span class="ac">1 ki · bonus</span></div>
+            <div class="abil-row"><span class="an">Step of the Wind</span><span class="ac">1 ki · bonus</span></div>
+          </div>
+        </section>
+      </aside>
+
+    </main>
+  </div>
+
+  <div class="panel-scrim" id="scrim"></div>
+
+  <!-- Quick reference -->
+  <aside class="pnl" data-panel="quickref">
+    <div class="pnl-head">
+      <svg class="ph-ic2"><use href="#i-scroll"/></svg>
+      <h3>Quick reference</h3>
+      <span class="ph-sub2">Dravyr · L3 monk</span>
+      <button class="pnl-close"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="pnl-body scroll">
+      <div class="pnl-sec">Vitals<span class="ln"></span></div>
+      <div class="qr-stats">
+        <div class="qr-stat hp"><div class="l">HP</div><div class="v">19<span class="mx">/27</span></div></div>
+        <div class="qr-stat"><div class="l">AC</div><div class="v">15</div></div>
+        <div class="qr-stat"><div class="l">Speed</div><div class="v">40</div></div>
+        <div class="qr-stat"><div class="l">Init</div><div class="v">+3</div></div>
+        <div class="qr-stat"><div class="l">Prof</div><div class="v">+2</div></div>
+        <div class="qr-stat"><div class="l">Ki</div><div class="v">2<span class="mx">/3</span></div></div>
+      </div>
+
+      <div class="pnl-sec">Saves &amp; key skills<span class="ln"></span></div>
+      <div class="cheat">
+        <span class="ck">Str save</span><span class="cv">+3 · proficient</span>
+        <span class="ck">Dex save</span><span class="cv">+5 · proficient</span>
+        <span class="ck">Insight</span><span class="cv">+5 · Stealth +5 · Acrobatics +5</span>
+        <span class="ck">Senses</span><span class="cv">Darkvision 60 ft · Passive Perc. 13</span>
+      </div>
+
+      <div class="pnl-sec">Ki techniques<span class="ln"></span></div>
+      <div class="tech"><div class="tt">Flurry of Blows <span class="cost">1 ki · bonus</span></div><div class="tdsc">After Attack, make two unarmed strikes as a bonus action.</div></div>
+      <div class="tech"><div class="tt">Patient Defense <span class="cost">1 ki · bonus</span></div><div class="tdsc">Take the Dodge action as a bonus action.</div></div>
+      <div class="tech"><div class="tt">Step of the Wind <span class="cost">1 ki · bonus</span></div><div class="tdsc">Dash or Disengage as a bonus action; jump distance doubles.</div></div>
+      <div class="tech"><div class="tt">Open Hand Technique <span class="cost">free</span></div><div class="tdsc">On Flurry hit: knock prone, push 15 ft, or deny reactions.</div></div>
+
+      <div class="pnl-sec">Actions in a pinch<span class="ln"></span></div>
+      <div class="cheat">
+        <span class="ck">Dodge</span><span class="cv">attacks vs you have disadvantage</span>
+        <span class="ck">Disengage</span><span class="cv">move without provoking</span>
+        <span class="ck">Deflect Missiles</span><span class="cv">reaction · reduce ranged dmg 1d10+5</span>
+      </div>
+    </div>
+    <div class="pnl-foot">
+      <a class="btn" href="Character Sheet.html"><svg class="ic"><use href="#i-arrow-ur"/></svg>Open full character sheet</a>
+    </div>
+  </aside>
+
+  <!-- Inventory -->
+  <aside class="pnl" data-panel="inventory">
+    <div class="pnl-head">
+      <svg class="ph-ic2"><use href="#i-pack"/></svg>
+      <h3>Inventory</h3>
+      <span class="ph-sub2">carried · equipped</span>
+      <button class="pnl-close"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="pnl-body scroll">
+      <div class="pnl-sec">Equipped<span class="ln"></span></div>
+      <div class="inv">
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-bolt"/></svg></span><div><div class="inm">Quarterstaff</div><div class="idesc">melee · 1d6+3 bludg.</div></div><span class="iqty"></span></div>
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-bow"/></svg></span><div><div class="inm">Shortbow</div><div class="idesc">ranged · 1d6+3 · 80/320</div></div><span class="iqty"></span></div>
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-leaf2"/></svg></span><div><div class="inm">Explorer's clothes</div><div class="idesc">no armor · AC 15</div></div><span class="iqty"></span></div>
+      </div>
+
+      <div class="pnl-sec">Carried<span class="ln"></span></div>
+      <div class="inv">
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-bow"/></svg></span><div><div class="inm">Arrows</div><div class="idesc">shortbow ammunition</div></div><span class="iqty">20</span></div>
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-vial"/></svg></span><div><div class="inm">Potion of Healing</div><div class="idesc">2d4+2 · action</div></div><span class="iqty">×2</span></div>
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-vial"/></svg></span><div><div class="inm">Healer's kit</div><div class="idesc">stabilize · 3 uses left</div></div><span class="iqty">3</span></div>
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-leaf2"/></svg></span><div><div class="inm">Hermit's herbalism notes</div><div class="idesc">advantage on foraging</div></div><span class="iqty"></span></div>
+        <div class="inv-row"><span class="ii"><svg class="ic"><use href="#i-pack"/></svg></span><div><div class="inm">Explorer's pack</div><div class="idesc">rope, rations, tinderbox…</div></div><span class="iqty"></span></div>
+      </div>
+
+      <div class="gold-row"><svg class="ic" style="width:16px;height:16px;color:var(--accent)"><use href="#i-coin"/></svg><span class="gl">Gold</span><span class="gv">112<span class="un"> gp</span></span></div>
+    </div>
+  </aside>
+
+  <!-- Conditions -->
+  <aside class="pnl" data-panel="conditions">
+    <div class="pnl-head">
+      <svg class="ph-ic2"><use href="#i-tag"/></svg>
+      <h3>Conditions</h3>
+      <span class="ph-sub2">active &amp; available</span>
+      <button class="pnl-close"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="pnl-body scroll">
+      <div class="pnl-sec">Active now<span class="ln"></span></div>
+      <div class="cond on">
+        <div><div class="cn">Concentrating · <em style="font-style:italic">Bless</em></div><div class="cd">You're sustaining a spell. Take damage → make a <em>CON save (DC 10 or half the damage)</em> or it ends.</div></div>
+        <div class="sw on" role="switch"><span class="kn"></span></div>
+      </div>
+
+      <div class="pnl-sec">Available<span class="ln"></span></div>
+      <div class="cond">
+        <div><div class="cn">Poisoned</div><div class="cd">Disadvantage on attack rolls and ability checks.</div></div>
+        <div class="sw" role="switch"><span class="kn"></span></div>
+      </div>
+      <div class="cond">
+        <div><div class="cn">Prone</div><div class="cd">Disadvantage to attack; melee attackers near you have advantage. Costs half your speed to stand.</div></div>
+        <div class="sw" role="switch"><span class="kn"></span></div>
+      </div>
+      <div class="cond">
+        <div><div class="cn">Frightened</div><div class="cd">Disadvantage while the source is in sight; you can't willingly move closer to it.</div></div>
+        <div class="sw" role="switch"><span class="kn"></span></div>
+      </div>
+      <div class="cond">
+        <div><div class="cn">Grappled</div><div class="cd">Your speed is 0. Ends if the grappler is incapacitated or you break free.</div></div>
+        <div class="sw" role="switch"><span class="kn"></span></div>
+      </div>
+      <div class="cond">
+        <div><div class="cn">Exhaustion</div><div class="cd">Stacks in levels — each worsens checks, then speed, attacks, HP, and finally death.</div></div>
+        <div class="sw" role="switch"><span class="kn"></span></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Notes -->
+  <aside class="pnl" data-panel="notes">
+    <div class="pnl-head">
+      <svg class="ph-ic2"><use href="#i-pen"/></svg>
+      <h3>Campaign notes</h3>
+      <span class="ph-sub2">your running journal</span>
+      <button class="pnl-close"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="pnl-body scroll">
+      <textarea class="notes-area" spellcheck="false">The net-mender — lost a grandchild to it. Trusts me, barely. Knows more than she's said; go back gently.
+
+The Hollow Man: takes children off the Welds, and they go willingly. Capt. Mire (Gate guard) calls them "runaways." Bought? Afraid? Or worse?
+
+Sister Veil won't abide the dead left unburied. Keep her merciful — I think it's load-bearing.
+
+TODO
+• Ask about the faceless harbor-god shrine in the square.
+• What's visible at the Welds at low tide?
+• Find out who Edran was before.</textarea>
+      <div class="notes-meta"><span class="dot"></span>Saved · only you can read this</div>
+    </div>
+  </aside>
+
+  <!-- ───────── MODALS (shared style) ───────── -->
+  <div class="mscrim" id="mscrim">
+
+    <!-- End session -->
+    <div class="modal" data-modal="endsession">
+      <div class="modal-head">
+        <h3>End this session?</h3>
+        <div class="msub">Day 22 · Session 7 · 1h 42m at the table</div>
+      </div>
+      <div class="modal-body">
+        <button class="mchoice primary" data-close>
+          <span class="mci"><svg class="ic"><use href="#i-pause"/></svg></span>
+          <span><span class="mct">Pause &amp; leave</span><span class="mcd">Set the scene down exactly here. Pick up on this beat next time.</span></span>
+          <span class="mcarrow"><svg class="ic"><use href="#i-arrow-right"/></svg></span>
+        </button>
+        <button class="mchoice" data-goto="rewards">
+          <span class="mci"><svg class="ic"><use href="#i-flag"/></svg></span>
+          <span><span class="mct">Complete the session</span><span class="mcd">Wrap here, bank rewards, and tidy a recap of what happened.</span></span>
+          <span class="mcarrow"><svg class="ic"><use href="#i-arrow-right"/></svg></span>
+        </button>
+        <button class="mchoice danger" data-close>
+          <span class="mci"><svg class="ic"><use href="#i-trash"/></svg></span>
+          <span><span class="mct">Abandon</span><span class="mcd">Discard everything since your last save. This cannot be undone.</span></span>
+          <span class="mcarrow"><svg class="ic"><use href="#i-arrow-right"/></svg></span>
+        </button>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" data-close>Keep playing</button>
+      </div>
+    </div>
+
+    <!-- Session rewards -->
+    <div class="modal" data-modal="rewards">
+      <div class="modal-head">
+        <div class="meyebrow">Session 7 · complete</div>
+        <h3>The session's tally</h3>
+      </div>
+      <div class="modal-body">
+        <div class="ledger">
+          <div class="led"><span class="lk">Experience</span><span class="ld">1,250 / 2,700 to level 5</span><span class="lv"><span class="gain">+420</span></span></div>
+        </div>
+        <div class="xpbar"><div class="fill" style="width:46%"></div></div>
+        <div class="ledger">
+          <div class="led"><span class="lk">Gold</span><span class="ld">found on the archer</span><span class="lv"><span class="gold">+35 gp</span></span></div>
+          <div class="led"><span class="lk">Found</span><span class="ld">a child's carved token</span><span class="lv">1</span></div>
+        </div>
+        <div class="milestone"><svg class="ic"><use href="#i-award"/></svg><span class="mt">Milestone — you earned the net-mender's trust.</span></div>
+      </div>
+      <div class="modal-foot">
+        <span class="lspace"></span>
+        <button class="btn ghost" data-close>Close</button>
+        <a class="btn primary" href="Level Up.html"><svg class="ic"><use href="#i-chevup"/></svg>Level up</a>
+      </div>
+    </div>
+
+    <!-- Level-up nudge -->
+    <div class="modal" data-modal="levelup">
+      <div class="modal-head">
+        <div class="meyebrow">Level 4 awaits</div>
+        <h3>Dravyr is ready to advance</h3>
+      </div>
+      <div class="modal-body">
+        <p class="lede">Enough has been earned and survived. There's more hit points, a deeper well of ki, and a choice of how to sharpen yourself.</p>
+      </div>
+      <div class="modal-foot">
+        <span class="lspace"></span>
+        <button class="btn ghost" data-close>Later</button>
+        <a class="btn primary" href="Level Up.html"><svg class="ic"><use href="#i-chevup"/></svg>Begin level up</a>
+      </div>
+    </div>
+
+    <!-- Companion joins -->
+    <div class="modal" data-modal="companion">
+      <div class="modal-head">
+        <div class="meyebrow">An ally at the door</div>
+        <h3>Travel with Corvin Ashe?</h3>
+      </div>
+      <div class="modal-body">
+        <p class="lede">The net-mender vouched for him — an old Gate soldier who turned his back on the watch when the children began to vanish.</p>
+        <div class="cpv">
+          <span class="cpc">C</span>
+          <div>
+            <div class="cpn">Corvin Ashe</div>
+            <div class="cpr">Half-orc · Fighter · frontline</div>
+            <div class="cpt"><span class="chip">L3</span><span class="chip">HP 31/31</span><span class="chip">distrusts the Gate</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" data-close>Not now</button>
+        <button class="btn primary" data-close><svg class="ic"><use href="#i-check"/></svg>Welcome them</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const scrim = document.getElementById('scrim');
+    const panels = document.querySelectorAll('.pnl');
+    function closeAll() { panels.forEach(p => p.classList.remove('open')); scrim.classList.remove('show'); }
+    document.querySelectorAll('[data-panel]').forEach(btn => {
+      if (btn.classList.contains('pnl')) return;
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.panel;
+        const wasOpen = document.querySelector('.pnl[data-panel="' + id + '"]').classList.contains('open');
+        closeAll();
+        if (!wasOpen) {
+          document.querySelector('.pnl[data-panel="' + id + '"]').classList.add('open');
+          scrim.classList.add('show');
+        }
+      });
+    });
+    document.querySelectorAll('.pnl-close').forEach(b => b.addEventListener('click', closeAll));
+    scrim.addEventListener('click', closeAll);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+    document.querySelectorAll('.cond .sw').forEach(s => s.addEventListener('click', () => {
+      s.classList.toggle('on');
+      s.closest('.cond').classList.toggle('on', s.classList.contains('on'));
+    }));
+
+    // ── modal family ──
+    const mscrim = document.getElementById('mscrim');
+    const modals = mscrim.querySelectorAll('.modal');
+    function openModal(id) {
+      closeAll();
+      modals.forEach(m => m.classList.toggle('active', m.dataset.modal === id));
+      mscrim.classList.add('show');
+    }
+    function closeModal() { mscrim.classList.remove('show'); }
+    document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.open)));
+    mscrim.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.goto)));
+    mscrim.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModal));
+    mscrim.addEventListener('click', e => { if (e.target === mscrim) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  </script>
+</body>
+</html>

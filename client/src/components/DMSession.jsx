@@ -7,12 +7,9 @@ import {
 } from '../data/forgottenRealms';
 import { getCampaignModule } from '../data/campaignModules';
 import { SEASON_ICONS } from '../data/harptos';
-import Downtime from './Downtime';
-import MetaGameDashboard from './MetaGameDashboard';
 import InventoryPanel from './InventoryPanel';
-import CommissionsPanel from './CommissionsPanel';
-import MerchantRelationshipsPanel from './MerchantRelationshipsPanel';
 import CombatTracker from './CombatTracker';
+import SessionCockpit from './SessionCockpit.jsx';
 import SessionSetup from './SessionSetup';
 import SessionRewards from './SessionRewards';
 import CampaignNotesPanel from './CampaignNotesPanel';
@@ -20,7 +17,6 @@ import QuickReferencePanel from './QuickReferencePanel';
 import CompanionsPanel from './CompanionsPanel';
 import ConditionPanel from './ConditionPanel';
 import { CONDITIONS, getConditionsToClear, reduceExhaustion } from '../data/conditions';
-import { useMerchantShop } from '../hooks/useMerchantShop';
 
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'gpt-oss:20b';
@@ -77,7 +73,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [inventoryApplied, setInventoryApplied] = useState(false);
   const [preInventorySnapshot, setPreInventorySnapshot] = useState(null);
   const [extractedNpcs, setExtractedNpcs] = useState([]);
-  const [sessionAchievements, setSessionAchievements] = useState([]);
 
   const [sessionHistory, setSessionHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -102,7 +97,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Companions quick reference panel state
   const [showCompanionsRef, setShowCompanionsRef] = useState(false);
   const [companions, setCompanions] = useState([]);
-  const [awayCompanions, setAwayCompanions] = useState([]);
 
   // Game date and spell slots state
   const [gameDate, setGameDate] = useState(null);
@@ -113,10 +107,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [pendingRecruitment, setPendingRecruitment] = useState(null);
   const [recruitmentLoading, setRecruitmentLoading] = useState(false);
 
-  // Downtime detection state
-  const [pendingDowntime, setPendingDowntime] = useState(null);
-  const [downtimeLoading, setDowntimeLoading] = useState(false);
-
   // Inventory panel state
   const [showInventory, setShowInventory] = useState(false);
   const [itemsGainedThisSession, setItemsGainedThisSession] = useState([]);
@@ -124,38 +114,40 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // Combat tracker state
   const [combatState, setCombatState] = useState(null);
 
+  // Scene descriptor for the cockpit "This scene" panel (from [SCENE] markers)
+  const [sceneState, setSceneState] = useState(null);
+  const parseSceneTag = (text) => {
+    const m = (text || '').match(/\[SCENE:\s*([^\]]+)\]/i);
+    if (!m) return null;
+    const sc = {};
+    m[1].split(';').forEach(p => { const e = p.indexOf('='); if (e > 0) { const k = p.slice(0, e).trim().toLowerCase(); const v = p.slice(e + 1).trim(); if (k && v) sc[k] = v; } });
+    return Object.keys(sc).length ? sc : null;
+  };
+
   // Condition tracking state
   const [playerConditions, setPlayerConditions] = useState([]);
   const [companionConditions, setCompanionConditions] = useState({});
   const [showConditionPanel, setShowConditionPanel] = useState(false);
-  const [showCommissions, setShowCommissions] = useState(false);
-  const [showMerchants, setShowMerchants] = useState(false);
 
-  // Weather & Survival state
-  const [weatherState, setWeatherState] = useState(null);
-  const [survivalState, setSurvivalState] = useState(null);
+  // Phase B mechanical-spine state: persisted spell effects + concentration,
+  // and the DM's pending roll request (preloaded with the player's modifier).
+  const [spellEffects, setSpellEffects] = useState([]);
+  const [rollRequest, setRollRequest] = useState(null);
 
-  // Merchant shop state (see hooks/useMerchantShop.js)
-  const {
-    pendingMerchantShop, setPendingMerchantShop,
-    shopOpen, setShopOpen,
-    lastMerchantContext, setLastMerchantContext,
-    merchantInventory, setMerchantInventory,
-    buybackItems, setBuybackItems,
-    merchantLoading, setMerchantLoading,
-    merchantDbId, setMerchantDbId,
-    merchantPersonality, setMerchantPersonality,
-    merchantGold, setMerchantGold,
-    merchantPriceModifier, setMerchantPriceModifier,
-    merchantEconomyModifiers, setMerchantEconomyModifiers,
-    shopCart, setShopCart,
-    transactionProcessing, setTransactionProcessing,
-    haggleRoller, setHaggleRoller,
-    haggleSkill, setHaggleSkill,
-    haggleResult, setHaggleResult,
-    hagglingInFlight, setHagglingInFlight,
-    haggleAttempts, setHaggleAttempts
-  } = useMerchantShop();
+  // Hydrate persisted mechanical state when a session loads/resumes so the
+  // cockpit reflects active effects, the last scene, and conditions across
+  // reloads (previously all ephemeral client state).
+  useEffect(() => {
+    if (!activeSession) return;
+    let cfg = {};
+    try { cfg = typeof activeSession.session_config === 'string' ? JSON.parse(activeSession.session_config) : (activeSession.session_config || {}); } catch { cfg = {}; }
+    if (Array.isArray(cfg.activeEffects)) setSpellEffects(cfg.activeEffects);
+    if (cfg.lastScene) setSceneState(prev => prev || cfg.lastScene);
+    let debuffs = [];
+    try { debuffs = typeof character?.debuffs === 'string' ? JSON.parse(character.debuffs) : (character?.debuffs || []); } catch { debuffs = []; }
+    if (Array.isArray(debuffs) && debuffs.length > 0) setPlayerConditions(prev => prev.length ? prev : debuffs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]);
 
   const messagesEndRef = useRef(null);
 
@@ -167,7 +159,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     fetchAvailableNpcs();
     fetchCampaignContext();
     fetchCompanions();
-    fetchAwayCompanions();
   }, [character.id]);
 
   const fetchCompanions = async () => {
@@ -182,48 +173,9 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     }
   };
 
-  const fetchAwayCompanions = async () => {
-    try {
-      const response = await fetch(`/api/companion/character/${character.id}/away`);
-      if (response.ok) {
-        const data = await response.json();
-        setAwayCompanions(data);
-      }
-    } catch (error) {
-      console.error('Error fetching away companions:', error);
-    }
-  };
-
-  const handleSendOnActivity = async (companionId, formData) => {
-    try {
-      const response = await fetch(`/api/companion/${companionId}/send-activity`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      if (response.ok) {
-        fetchCompanions();
-        fetchAwayCompanions();
-      }
-    } catch (error) {
-      console.error('Error sending companion on activity:', error);
-    }
-  };
-
-  const handleRecallCompanion = async (activityId) => {
-    try {
-      const response = await fetch(`/api/companion/activity/${activityId}/recall`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (response.ok) {
-        fetchCompanions();
-        fetchAwayCompanions();
-      }
-    } catch (error) {
-      console.error('Error recalling companion:', error);
-    }
-  };
+  // Companion activities (away/send-activity/recall) + weather/survival were
+  // archived in the MVP — their routes are unmounted (the /away endpoint now
+  // hangs), so the client calls were removed. See Phase D cleanup.
 
   const fetchCampaignContext = async () => {
     try {
@@ -425,7 +377,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
-      fetchWeatherSurvival();
     } catch (err) {
       console.error('Error checking for active session:', err);
     }
@@ -440,20 +391,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
     } catch (err) {
       console.error('Error fetching spell slots:', err);
-    }
-  };
-
-  const fetchWeatherSurvival = async () => {
-    if (!character?.campaign_id) return;
-    try {
-      const [weatherRes, survivalRes] = await Promise.all([
-        fetch(`/api/weather/${character.campaign_id}/full/${character.id}`),
-        fetch(`/api/survival/${character.id}`)
-      ]);
-      if (weatherRes.ok) setWeatherState(await weatherRes.json());
-      if (survivalRes.ok) setSurvivalState(await survivalRes.json());
-    } catch (err) {
-      console.error('Error fetching weather/survival:', err);
     }
   };
 
@@ -705,24 +642,19 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         setGameDate(data.gameDate);
       }
 
+      setSceneState(parseSceneTag(data.openingNarrative));
       setMessages([{
         type: 'narrative',
-        content: data.openingNarrative
+        content: (data.openingNarrative || '').replace(/\[SCENE:[^\]]+\]\s*/gi, '').trim()
       }]);
 
       setSessionEnded(false);
       setSessionRewards(null);
-      setSessionAchievements([]);
       setSessionRecap(null);
       setActiveGameTab('adventure');
-      setLastMerchantContext(null);
-      setMerchantDbId(null);
-      setMerchantPersonality(null);
-      setMerchantGold(null);
 
       // Fetch spell slots for caster characters
       fetchSpellSlots();
-      fetchWeatherSurvival();
 
     } catch (err) {
       setError(err.message);
@@ -736,12 +668,13 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   // via PreludeSetupWizard + PreludeArcPreview and doesn't run inside a
   // DMSession at all.
 
-  const sendAction = async (e) => {
-    e.preventDefault();
-    if (!inputAction.trim() || isLoading) return;
+  const sendAction = async (e, overrideText = null) => {
+    e?.preventDefault?.();
+    const source = overrideText != null ? overrideText : inputAction;
+    if (!source.trim() || isLoading) return;
 
-    const action = inputAction.trim();
-    setInputAction('');
+    const action = source.trim();
+    if (overrideText == null) setInputAction('');
     setIsLoading(true);
     setError('');
 
@@ -776,15 +709,34 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       }
 
       setMessages(prev => [...prev, { type: 'narrative', content: data.narrative }]);
+      if (data.scene) setSceneState(data.scene);
+
+      // Phase B — mechanical-spine state from the turn response.
+      // HP changed on the server → refetch the character so HP shows everywhere.
+      if (data.hpChange?.applied && onCharacterUpdated) {
+        try {
+          const r = await fetch(`/api/character/${character.id}`);
+          if (r.ok) onCharacterUpdated(await r.json());
+        } catch (e) { /* non-fatal */ }
+      }
+      // Authoritative persisted player conditions (server wrote characters.debuffs).
+      if (Array.isArray(data.conditions)) setPlayerConditions(data.conditions);
+      // Active spell effects + concentration (full list after this turn's changes).
+      if (Array.isArray(data.activeEffects)) setSpellEffects(data.activeEffects);
+      // Advance the initiative tracker to the named combatant / round.
+      if (data.turn) {
+        setCombatState(prev => {
+          if (!prev?.turnOrder?.length) return prev;
+          const idx = prev.turnOrder.findIndex(t => String(t.name).toLowerCase() === String(data.turn.combatant).toLowerCase());
+          return { ...prev, currentTurn: idx >= 0 ? idx : prev.currentTurn, round: data.turn.round || prev.round };
+        });
+      }
+      // A roll the DM asked for, preloaded with the player's modifier.
+      setRollRequest(data.rollRequest || null);
 
       // Check for recruitment detection
       if (data.recruitment?.detected) {
         setPendingRecruitment(data.recruitment);
-      }
-
-      // Check for downtime detection
-      if (data.downtime) {
-        setPendingDowntime(data.downtime);
       }
 
       // Track loot drops gained this session
@@ -803,15 +755,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             console.warn('Refresh character after loot drop failed:', e.message);
           }
         }
-      }
-
-      // Check for merchant shop detection
-      if (data.merchantShop?.detected) {
-        setPendingMerchantShop(data.merchantShop);
-        setLastMerchantContext(data.merchantShop);
-      } else {
-        // Clear stale merchant context when AI response has no merchant interaction
-        setLastMerchantContext(null);
       }
 
       // Handle combat start/end
@@ -865,15 +808,15 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         }
       }
 
-      // Refresh weather/survival on any weather or survival events
-      if (data.weatherChange || data.survivalEvents?.length > 0) {
-        fetchWeatherSurvival();
-      }
-
     } catch (err) {
       setError(err.message);
-      // Remove the action on error
+      // Remove the optimistic action bubble on error.
       setMessages(prev => prev.slice(0, -1));
+      // Restore the player's typed turn so it isn't silently lost (the server's
+      // retryable errors — timeout / overloaded / rate-limit — promise the input
+      // is preserved). Only for a normal send (not a quick-action override), and
+      // only if the box is still empty so we never clobber fresh typing.
+      if (overrideText == null) setInputAction(prev => (prev ? prev : action));
     } finally {
       setIsLoading(false);
     }
@@ -889,6 +832,27 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   };
 
   const endCombat = () => setCombatState(null);
+
+  // Phase B — resolve a DM roll request: roll d20 (+ advantage/disadvantage),
+  // add the player's preloaded modifier, and report the number back so the DM
+  // adjudicates against the DC. The system finally knows the result.
+  const handleRoll = (rr) => {
+    if (!rr || isLoading) return;
+    const d1 = 1 + Math.floor(Math.random() * 20);
+    let roll = d1, detail = `d20 ${d1}`;
+    if (rr.advantage === 'advantage' || rr.advantage === 'disadvantage') {
+      const d2 = 1 + Math.floor(Math.random() * 20);
+      roll = rr.advantage === 'advantage' ? Math.max(d1, d2) : Math.min(d1, d2);
+      detail = `${rr.advantage} (${d1}, ${d2}) → ${roll}`;
+    }
+    const mod = rr.modifier || 0;
+    const total = roll + mod;
+    const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+    const kindLabel = rr.label || (rr.kind === 'save' ? 'saving throw' : rr.kind === 'attack' ? 'attack roll' : 'ability check');
+    const text = `I roll a ${total} for the ${kindLabel} (${detail}${mod !== 0 ? `, ${modStr}` : ''}).`;
+    setRollRequest(null);
+    sendAction(null, text);
+  };
 
   const discardItem = async (itemName) => {
     try {
@@ -947,80 +911,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     setPendingRecruitment(null);
   };
 
-  // Handle downtime activity
-  const startDowntimeActivity = async (activityType, duration, options = {}) => {
-    setDowntimeLoading(true);
-    try {
-      const response = await fetch('/api/downtime/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          character_id: character.id,
-          activity_type: activityType,
-          duration_hours: duration,
-          ...options
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to start downtime');
-      }
-
-      // Show confirmation in chat
-      const activityNames = {
-        training: 'Training',
-        rest: options.restType === 'long' ? 'Long Rest' : (options.restType === 'short' ? 'Short Rest' : 'Rest'),
-        study: 'Study',
-        crafting: 'Crafting',
-        work: 'Work'
-      };
-
-      setMessages(prev => [...prev, {
-        type: 'narrative',
-        content: `*${character.name} begins ${duration} hour${duration !== 1 ? 's' : ''} of ${activityNames[activityType] || activityType}...*`
-      }]);
-
-      // Advance game time if we have a game date
-      if (gameDate && duration) {
-        const hoursToAdvance = duration;
-        const daysToAdvance = Math.floor(hoursToAdvance / 24);
-        if (daysToAdvance > 0) {
-          try {
-            await fetch(`/api/dm-session/${activeSession.id}/adjust-date`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ daysToAdd: daysToAdvance })
-            });
-          } catch (e) {
-            console.error('Failed to advance game time:', e);
-          }
-        }
-      }
-
-      setPendingDowntime(null);
-
-      // Refresh character data to show any benefits
-      if (onCharacterUpdated) {
-        const charResponse = await fetch(`/api/character/${character.id}`);
-        if (charResponse.ok) {
-          const updatedChar = await charResponse.json();
-          onCharacterUpdated(updatedChar);
-        }
-      }
-
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setDowntimeLoading(false);
-    }
-  };
-
-  const dismissDowntime = () => {
-    setPendingDowntime(null);
-  };
-
   const [showEndOptions, setShowEndOptions] = useState(false);
 
   const pauseSession = async () => {
@@ -1043,10 +933,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
-      setLastMerchantContext(null);
-      setMerchantDbId(null);
-      setMerchantPersonality(null);
-      setMerchantGold(null);
       onBack && onBack();
 
     } catch (err) {
@@ -1078,10 +964,9 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
-      setLastMerchantContext(null);
-      setMerchantDbId(null);
-      setMerchantPersonality(null);
-      setMerchantGold(null);
+      // Return to the roster/dashboard instead of stranding the player in DM
+      // setup (matches pauseSession). Phase D fix.
+      onBack && onBack();
 
     } catch (err) {
       setError(err.message);
@@ -1163,17 +1048,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         }
       }
 
-      // Fetch any achievements earned during this session
-      try {
-        const achRes = await fetch(`/api/achievement/recent/${character.id}`);
-        const achData = await achRes.json();
-        if (Array.isArray(achData) && achData.length > 0) {
-          setSessionAchievements(achData);
-        }
-      } catch (achErr) {
-        console.error('Failed to fetch session achievements:', achErr);
-      }
-
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1192,11 +1066,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to claim rewards');
-      }
-
-      // Acknowledge achievements so they don't show again next session
-      if (sessionAchievements.length > 0) {
-        fetch(`/api/achievement/${character.id}/acknowledge`, { method: 'POST' }).catch(() => {});
       }
 
       // Update character in parent
@@ -1221,264 +1090,16 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       setGameDate(null);
       setSessionRecap(null);
       setSpellSlots({ max: {}, used: {} });
-      setLastMerchantContext(null);
-      setMerchantDbId(null);
-      setMerchantPersonality(null);
-      setMerchantGold(null);
-      setSessionAchievements([]);
       fetchSessionHistory();
       fetchCampaignContext(); // Refresh campaign context to show updated session recap
+      // Return to the roster/dashboard after claiming, instead of stranding the
+      // player in DM setup (matches pauseSession). Phase D fix.
+      onBack && onBack();
 
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // ============================================================
-  // MERCHANT SHOP FUNCTIONS
-  // ============================================================
-
-  const playerInventory = (() => {
-    try {
-      const inv = typeof character.inventory === 'string'
-        ? JSON.parse(character.inventory || '[]')
-        : (character.inventory || []);
-      return inv;
-    } catch { return []; }
-  })();
-
-  const playerTotalCp = (character.gold_gp || 0) * 100 + (character.gold_sp || 0) * 10 + (character.gold_cp || 0);
-
-  const totalBuyQty = shopCart.buying.reduce((sum, i) => sum + (i.quantity || 1), 0);
-  const bulkDiscountPct = totalBuyQty >= 10 ? 8 : totalBuyQty >= 5 ? 5 : totalBuyQty >= 3 ? 3 : 0;
-
-  const calculateBuyTotal = () => {
-    let total = 0;
-    for (const item of shopCart.buying) {
-      total += ((item.price_gp || 0) * 100 + (item.price_sp || 0) * 10 + (item.price_cp || 0)) * item.quantity;
-    }
-    if (bulkDiscountPct > 0) total = Math.round(total * (1 - bulkDiscountPct / 100));
-    return total;
-  };
-
-  const calculateSellTotal = () => {
-    let total = 0;
-    for (const item of shopCart.selling) {
-      total += ((item.sell_price_gp || 0) * 100 + (item.sell_price_sp || 0) * 10 + (item.sell_price_cp || 0)) * item.quantity;
-    }
-    return total;
-  };
-
-  const netCostCp = calculateBuyTotal() - calculateSellTotal();
-  const sellTotalCp = calculateSellTotal();
-  const merchantCanAfford = merchantGold === null || sellTotalCp <= merchantGold * 100;
-  const canAfford = netCostCp <= playerTotalCp && merchantCanAfford;
-  const goldAfterCp = playerTotalCp - netCostCp;
-
-  const formatCopper = (cp) => {
-    const gp = Math.floor(cp / 100);
-    const sp = Math.floor((cp % 100) / 10);
-    const rem = cp % 10;
-    const parts = [];
-    if (gp > 0) parts.push(`${gp} gp`);
-    if (sp > 0) parts.push(`${sp} sp`);
-    if (rem > 0) parts.push(`${rem} cp`);
-    return parts.length > 0 ? parts.join(', ') : '0 gp';
-  };
-
-  const openMerchantShop = async (merchantData) => {
-    const ctx = merchantData || lastMerchantContext || pendingMerchantShop;
-    if (!ctx) return;
-    setMerchantLoading(true);
-    setShopOpen(true);
-    setPendingMerchantShop(null);
-    setShopCart({ buying: [], selling: [] });
-
-    try {
-      const response = await fetch(`/api/dm-session/${activeSession.id}/generate-merchant-inventory`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchantName: ctx.merchantName,
-          merchantType: ctx.merchantType,
-          location: ctx.location,
-          characterLevel: character.level || 1,
-          characterGold: { gp: character.gold_gp || 0, sp: character.gold_sp || 0, cp: character.gold_cp || 0 },
-          playerItems: playerInventory
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        console.error('Merchant inventory error:', data.error);
-        setShopOpen(false);
-        return;
-      }
-      setMerchantInventory(data.inventory || []);
-      setBuybackItems(data.buybackItems || []);
-      setMerchantDbId(data.merchantId || null);
-      setMerchantPersonality(data.personality || null);
-      setMerchantGold(data.merchantGold ?? null);
-      setMerchantPriceModifier(data.priceModifier || null);
-      setMerchantEconomyModifiers(data.economyModifiers || null);
-      // Update context with DB data
-      if (data.merchantName) {
-        const updatedCtx = { ...ctx, merchantName: data.merchantName, merchantType: data.merchantType || ctx.merchantType };
-        setLastMerchantContext(updatedCtx);
-      }
-    } catch (err) {
-      console.error('Failed to load merchant inventory:', err);
-      setShopOpen(false);
-    } finally {
-      setMerchantLoading(false);
-    }
-  };
-
-  const addToBuyCart = (item) => {
-    setShopCart(prev => {
-      const existing = prev.buying.find(i => i.name === item.name);
-      if (existing) {
-        const merchItem = merchantInventory.find(m => m.name === item.name);
-        if (existing.quantity >= (merchItem?.quantity || 1)) return prev;
-        return { ...prev, buying: prev.buying.map(i => i.name === item.name ? { ...i, quantity: i.quantity + 1 } : i) };
-      }
-      return { ...prev, buying: [...prev.buying, { ...item, quantity: 1 }] };
-    });
-  };
-
-  const removeFromBuyCart = (itemName) => {
-    setShopCart(prev => {
-      const existing = prev.buying.find(i => i.name === itemName);
-      if (!existing) return prev;
-      if (existing.quantity <= 1) return { ...prev, buying: prev.buying.filter(i => i.name !== itemName) };
-      return { ...prev, buying: prev.buying.map(i => i.name === itemName ? { ...i, quantity: i.quantity - 1 } : i) };
-    });
-  };
-
-  const addToSellCart = (item) => {
-    setShopCart(prev => {
-      const existing = prev.selling.find(i => i.name === item.name);
-      const playerItem = playerInventory.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-      const maxQty = playerItem?.quantity || 1;
-      if (existing) {
-        if (existing.quantity >= maxQty) return prev;
-        return { ...prev, selling: prev.selling.map(i => i.name === item.name ? { ...i, quantity: i.quantity + 1 } : i) };
-      }
-      return { ...prev, selling: [...prev.selling, { ...item, quantity: 1 }] };
-    });
-  };
-
-  const removeFromSellCart = (itemName) => {
-    setShopCart(prev => {
-      const existing = prev.selling.find(i => i.name === itemName);
-      if (!existing) return prev;
-      if (existing.quantity <= 1) return { ...prev, selling: prev.selling.filter(i => i.name !== itemName) };
-      return { ...prev, selling: prev.selling.map(i => i.name === itemName ? { ...i, quantity: i.quantity - 1 } : i) };
-    });
-  };
-
-  // M3: haggle against the current merchant. Uses the shopCart's most
-  // expensive item's rarity (if known) as the rarity input, since that's
-  // what drives the DC; realistic approximation when the cart has mixed
-  // rarities.
-  const haggleWithMerchant = async () => {
-    if (!merchantDbId || hagglingInFlight) return;
-    setHagglingInFlight(true);
-    try {
-      const rollerType = haggleRoller === 'character' ? 'character' : 'companion';
-      const companionId = haggleRoller.startsWith('companion:') ? Number(haggleRoller.split(':')[1]) : null;
-
-      // Derive rarity from the most expensive item in the cart (if any)
-      let itemRarity = 'common';
-      if (shopCart.buying.length > 0) {
-        const priciest = shopCart.buying.reduce((a, b) => {
-          const ap = (a.price_gp || 0) * 100 + (a.price_sp || 0) * 10 + (a.price_cp || 0);
-          const bp = (b.price_gp || 0) * 100 + (b.price_sp || 0) * 10 + (b.price_cp || 0);
-          return bp > ap ? b : a;
-        });
-        itemRarity = priciest.rarity || 'common';
-      }
-
-      const r = await fetch(`/api/merchant/${merchantDbId}/haggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId: character.id,
-          rollerType,
-          companionId,
-          skill: haggleSkill,
-          itemRarity,
-          attemptNumber: haggleAttempts + 1
-        })
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Haggle failed');
-      setHaggleResult(data);
-      setHaggleAttempts(n => n + 1);
-    } catch (e) {
-      console.warn('Haggle error:', e);
-    } finally {
-      setHagglingInFlight(false);
-    }
-  };
-
-  const confirmTransaction = async () => {
-    if (!canAfford || transactionProcessing) return;
-    setTransactionProcessing(true);
-    try {
-      const response = await fetch(`/api/dm-session/${activeSession.id}/merchant-transaction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchantName: lastMerchantContext?.merchantName || 'Merchant',
-          merchantId: merchantDbId,
-          bought: shopCart.buying.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.price_gp, price_sp: i.price_sp, price_cp: i.price_cp })),
-          sold: shopCart.selling.map(i => ({ name: i.name, quantity: i.quantity, price_gp: i.sell_price_gp, price_sp: i.sell_price_sp, price_cp: i.sell_price_cp })),
-          // M3: pass the discount% if the party successfully haggled this visit.
-          // Server clamps [0, 20] regardless.
-          haggleDiscountPercent: haggleResult?.success ? haggleResult.discountPercent : 0
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Transaction failed (${response.status})`);
-      // Defensive: if the server responds 200 but with a malformed body,
-      // don't clobber character state with undefined/NaN values.
-      if (!data.newGold || !data.newInventory) {
-        throw new Error('Transaction response is missing inventory/gold data');
-      }
-
-      onCharacterUpdated({
-        ...character,
-        inventory: JSON.stringify(data.newInventory),
-        gold_gp: data.newGold.gp,
-        gold_sp: data.newGold.sp,
-        gold_cp: data.newGold.cp
-      });
-
-      // Inject transaction context into session
-      const boughtStr = shopCart.buying.map(i => `${i.quantity}x ${i.name}`).join(', ');
-      const soldStr = shopCart.selling.map(i => `${i.quantity}x ${i.name}`).join(', ');
-      const contextMsg = `[Transaction with ${lastMerchantContext?.merchantName || 'merchant'}: ${boughtStr ? `Bought ${boughtStr}` : ''}${boughtStr && soldStr ? '. ' : ''}${soldStr ? `Sold ${soldStr}` : ''}. Net: ${netCostCp > 0 ? `spent ${formatCopper(netCostCp)}` : `earned ${formatCopper(-netCostCp)}`}]`;
-
-      try {
-        await fetch(`/api/dm-session/${activeSession.id}/inject-context`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: contextMsg })
-        });
-      } catch (e) { console.warn('Context injection failed:', e); }
-
-      setMessages(prev => [...prev, { type: 'narrative', content: `*${contextMsg}*` }]);
-      setShopOpen(false);
-      setShopCart({ buying: [], selling: [] });
-      // Reset haggle state — the discount was single-use for this transaction
-      setHaggleResult(null);
-      setHaggleAttempts(0);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setTransactionProcessing(false);
     }
   };
 
@@ -1639,28 +1260,36 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     );
   }
 
-  // Render campaign notes editor
-  if (showCampaignNotes) {
-    return (
-      <CampaignNotesPanel
-        campaignNotes={campaignNotes}
-        myNotes={myNotes}
-        characterMemories={characterMemories}
-        notesTab={notesTab}
-        sessionHistory={sessionHistory}
-        onClose={() => { setShowCampaignNotes(false); setNotesTab('history'); }}
-        onTabChange={(tab) => setNotesTab(tab)}
-        onSaveNotes={saveCampaignNotes}
-        onGenerateNotes={generateCampaignNotes}
-        onMyNotesChange={(newMyNotes, fullNotes) => {
-          setMyNotes(newMyNotes);
-          setCampaignNotes(fullNotes);
-        }}
-        notesSaving={notesSaving}
-        notesGenerating={notesGenerating}
-        notesLoading={notesLoading}
-      />
-    );
+  // Campaign reference / notes — a Hearth right-side slide-in panel. It is now a
+  // self-contained overlay (scrim + aside.pnl.open) rather than a full-screen
+  // takeover, so during an active session it slides in OVER the cockpit (rendered
+  // alongside SessionCockpit below) instead of unmounting it. Defined once here so
+  // the prop wiring is shared by both the in-session and standalone branches.
+  const campaignNotesPanel = showCampaignNotes ? (
+    <CampaignNotesPanel
+      campaignNotes={campaignNotes}
+      myNotes={myNotes}
+      characterMemories={characterMemories}
+      notesTab={notesTab}
+      sessionHistory={sessionHistory}
+      onClose={() => { setShowCampaignNotes(false); setNotesTab('history'); }}
+      onTabChange={(tab) => setNotesTab(tab)}
+      onSaveNotes={saveCampaignNotes}
+      onGenerateNotes={generateCampaignNotes}
+      onMyNotesChange={(newMyNotes, fullNotes) => {
+        setMyNotes(newMyNotes);
+        setCampaignNotes(fullNotes);
+      }}
+      notesSaving={notesSaving}
+      notesGenerating={notesGenerating}
+      notesLoading={notesLoading}
+    />
+  ) : null;
+
+  // When there is no active session (e.g. opened from setup), render the panel
+  // as a standalone self-contained slide-in over a dark scrim.
+  if (showCampaignNotes && !(activeSession && !sessionEnded)) {
+    return campaignNotesPanel;
   }
 
   // Render completed session with rewards to claim
@@ -1674,7 +1303,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         inventoryApplied={inventoryApplied}
         preInventorySnapshot={preInventorySnapshot}
         extractedNpcs={extractedNpcs}
-        sessionAchievements={sessionAchievements}
         onClaimRewards={claimRewards}
         onApplyInventory={applyInventoryChanges}
         onUndoInventory={undoInventoryChanges}
@@ -1686,1339 +1314,32 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     );
   }
 
-  // Render active session
+  // Render active session — the campaign-notes panel slides in OVER the cockpit
+  // (rendered as a sibling overlay) so opening notes never unmounts the session.
   if (activeSession && !sessionEnded) {
     return (
-      <div className="dm-session-container">
-        <div className="dm-session-header">
-          <h2>{activeSession.title || 'Adventure in Progress'}</h2>
-          <div className="session-controls" style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={() => { setShowQuickRef(!showQuickRef); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); }}
-              style={{
-                background: showQuickRef ? 'rgba(59, 130, 246, 0.4)' : 'rgba(59, 130, 246, 0.2)',
-                border: '1px solid rgba(59, 130, 246, 0.4)',
-                color: '#60a5fa',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-              title="View character sheet, spells, and equipment"
-            >
-              Character
-            </button>
-            {companions.length > 0 && (
-              <button
-                onClick={() => { setShowCompanionsRef(!showCompanionsRef); setShowQuickRef(false); setShowInventory(false); setShowConditionPanel(false); }}
-                style={{
-                  background: showCompanionsRef ? 'rgba(155, 89, 182, 0.4)' : 'rgba(155, 89, 182, 0.2)',
-                  border: '1px solid rgba(155, 89, 182, 0.4)',
-                  color: '#9b59b6',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}
-                title="View companion info"
-              >
-                Party ({companions.length})
-              </button>
-            )}
-            <button
-              onClick={openCampaignNotes}
-              style={{
-                background: 'rgba(139, 92, 246, 0.2)',
-                border: '1px solid rgba(139, 92, 246, 0.4)',
-                color: '#a78bfa',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-              title="View campaign notes and session history"
-            >
-              Notes
-            </button>
-            <button
-              onClick={() => { setShowInventory(!showInventory); setShowQuickRef(false); setShowCompanionsRef(false); setShowConditionPanel(false); }}
-              style={{
-                background: showInventory ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.2)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                color: '#10b981',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-              title="View inventory"
-            >
-              Inventory
-            </button>
-            <button
-              onClick={() => { setShowConditionPanel(!showConditionPanel); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); }}
-              style={{
-                background: showConditionPanel ? 'rgba(249, 115, 22, 0.4)' : 'rgba(249, 115, 22, 0.2)',
-                border: '1px solid rgba(249, 115, 22, 0.4)',
-                color: '#f97316',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                position: 'relative'
-              }}
-              title="Track conditions and status effects"
-            >
-              Conditions
-              {playerConditions.length > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '-6px',
-                  right: '-6px',
-                  background: '#f97316',
-                  color: '#000',
-                  borderRadius: '50%',
-                  width: '18px',
-                  height: '18px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.7rem',
-                  fontWeight: 'bold'
-                }}>
-                  {playerConditions.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => { setShowCommissions(!showCommissions); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); setShowMerchants(false); }}
-              style={{
-                background: showCommissions ? 'rgba(52, 211, 153, 0.4)' : 'rgba(52, 211, 153, 0.2)',
-                border: '1px solid rgba(52, 211, 153, 0.4)',
-                color: '#34d399',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-              title="View merchant commissions"
-            >
-              Commissions
-            </button>
-            <button
-              onClick={() => { setShowMerchants(!showMerchants); setShowQuickRef(false); setShowCompanionsRef(false); setShowInventory(false); setShowConditionPanel(false); setShowCommissions(false); }}
-              style={{
-                background: showMerchants ? 'rgba(212, 175, 55, 0.4)' : 'rgba(212, 175, 55, 0.2)',
-                border: '1px solid rgba(212, 175, 55, 0.4)',
-                color: '#d4af37',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-              title="View merchants you've traded with"
-            >
-              Merchants
-            </button>
-            <button className="end-session-btn" onClick={() => setShowEndOptions(true)} disabled={isLoading}>
-              End Adventure
-            </button>
-          </div>
-        </div>
-
-        {/* Gameplay Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: '0',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-          marginBottom: '0.5rem'
-        }}>
-          {[
-            { key: 'adventure', label: 'Adventure' },
-            { key: 'downtime', label: 'Downtime' },
-            { key: 'stats', label: 'Stats' }
-          ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveGameTab(tab.key)}
-              style={{
-                padding: '0.6rem 1.25rem',
-                background: activeGameTab === tab.key ? 'rgba(155, 89, 182, 0.2)' : 'transparent',
-                border: 'none',
-                borderBottom: activeGameTab === tab.key ? '2px solid #9b59b6' : '2px solid transparent',
-                color: activeGameTab === tab.key ? '#9b59b6' : '#888',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: activeGameTab === tab.key ? '600' : '400',
-                transition: 'all 0.15s'
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {activeGameTab === 'downtime' && (
-          <div style={{ padding: '1rem 0' }}>
-            <Downtime character={character} onCharacterUpdated={(updatedChar) => {
-              // Inject downtime context into the AI session so it knows what happened
-              if (activeSession && updatedChar) {
-                const hpDiff = updatedChar.current_hp - character.current_hp;
-                const goldDiff = (updatedChar.gold || 0) - (character.gold || 0);
-                const parts = [];
-                if (hpDiff > 0) parts.push(`recovered ${hpDiff} HP (now ${updatedChar.current_hp}/${updatedChar.max_hp})`);
-                if (goldDiff > 0) parts.push(`earned ${goldDiff} gold`);
-                if (goldDiff < 0) parts.push(`spent ${Math.abs(goldDiff)} gold`);
-
-                if (parts.length > 0) {
-                  const contextMsg = `The party completed a downtime activity. ${updatedChar.name} ${parts.join(' and ')}.`;
-                  fetch(`/api/dm-session/${activeSession.id}/inject-context`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: contextMsg })
-                  }).catch(e => console.error('Failed to inject downtime context:', e));
-
-                  // Also show it in the chat visually
-                  setMessages(prev => [...prev, {
-                    type: 'narrative',
-                    content: `*${contextMsg}*`
-                  }]);
-                }
-              }
-              onCharacterUpdated && onCharacterUpdated(updatedChar);
-            }} />
-          </div>
-        )}
-
-        {activeGameTab === 'stats' && (
-          <div style={{ padding: '1rem 0' }}>
-            <MetaGameDashboard character={character} onCharacterUpdated={onCharacterUpdated} />
-          </div>
-        )}
-
-        {activeGameTab === 'adventure' && <>
-        {/* Quick Reference Panel (Overlay) */}
-        {showQuickRef && (
-          <QuickReferencePanel
-            character={character}
-            onClose={() => setShowQuickRef(false)}
-            spellSlots={spellSlots}
-          />
-        )}
-
-        {/* Companions Quick Reference Panel (Overlay) */}
-        {showCompanionsRef && (companions.length > 0 || awayCompanions.length > 0) && (
-          <CompanionsPanel
-            companions={companions}
-            awayCompanions={awayCompanions}
-            onClose={() => setShowCompanionsRef(false)}
-            onSendActivity={handleSendOnActivity}
-            onRecallCompanion={handleRecallCompanion}
-          />
-        )}
-
-        {/* Inventory Panel (Overlay) */}
-        {showInventory && (
-          <InventoryPanel
-            character={character}
-            companions={companions}
-            itemsGainedThisSession={itemsGainedThisSession}
-            onDiscard={discardItem}
-            onClose={() => setShowInventory(false)}
-            onRefreshCharacter={onCharacterUpdated}
-          />
-        )}
-
-        {showCommissions && (
-          <CommissionsPanel
-            character={character}
-            currentGameDay={character.game_day}
-            onClose={() => setShowCommissions(false)}
-            onCharacterUpdated={onCharacterUpdated}
-          />
-        )}
-
-        {showMerchants && (
-          <MerchantRelationshipsPanel
-            character={character}
-            currentGameDay={character.game_day}
-            onClose={() => setShowMerchants(false)}
-          />
-        )}
-
-        {/* Condition Panel (Overlay) */}
-        {showConditionPanel && (
-          <ConditionPanel
-            playerConditions={playerConditions}
-            companionConditions={companionConditions}
-            companions={companions}
-            onToggleCondition={toggleCondition}
-            onClose={() => setShowConditionPanel(false)}
-          />
-        )}
-
-        {/* Game Date and Stats Bar */}
-        <div className="session-info-bar" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '0.5rem 1rem',
-          background: 'rgba(0, 0, 0, 0.2)',
-          borderRadius: '4px',
-          marginBottom: '1rem',
-          fontSize: '0.85rem',
-          flexWrap: 'wrap',
-          gap: '0.5rem'
-        }}>
-          {/* Quick Stats: HP, AC, Gold */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title={`HP: ${character.current_hp}/${character.max_hp}`}>
-              <span style={{ color: '#888' }}>HP:</span>
-              <span style={{
-                color: character.current_hp <= character.max_hp * 0.25 ? '#ef4444' :
-                       character.current_hp <= character.max_hp * 0.5 ? '#f59e0b' : '#10b981',
-                fontWeight: 'bold'
-              }}>
-                {character.current_hp}/{character.max_hp}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title="Armor Class">
-              <span style={{ color: '#888' }}>AC:</span>
-              <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{character.armor_class || 10}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title="Gold">
-              <span style={{ color: '#888' }}>Gold:</span>
-              <span style={{ color: '#d4af37', fontWeight: 'bold' }}>{character.gold_gp || 0}gp</span>
-            </div>
-            {/* Active Condition Chips */}
-            {playerConditions.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.5rem' }}>
-                <span style={{ color: '#888' }}>|</span>
-                {playerConditions.map(condKey => {
-                  const cond = CONDITIONS[condKey];
-                  if (!cond) return null;
-                  return (
-                    <span
-                      key={condKey}
-                      onClick={() => toggleCondition(condKey, 'player')}
-                      title={`${cond.name}: ${cond.description} (click to remove)`}
-                      style={{
-                        background: `${cond.color}33`,
-                        color: cond.color,
-                        border: `1px solid ${cond.color}55`,
-                        padding: '0.1rem 0.4rem',
-                        borderRadius: '3px',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      {cond.name}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Weather Widget */}
-          {weatherState && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-              title={`${weatherState.weather?.weather_type || 'clear'} | Wind: ${weatherState.weather?.wind_speed || 'calm'} | Visibility: ${weatherState.weather?.visibility || 'normal'}${weatherState.exposure?.severity ? `\nExposure: ${weatherState.exposure.severity}` : ''}`}
-            >
-              <span style={{ fontSize: '1rem' }}>
-                {weatherState.weather?.weather_type === 'clear' ? '\u2600\uFE0F' :
-                 weatherState.weather?.weather_type === 'cloudy' ? '\u2601\uFE0F' :
-                 weatherState.weather?.weather_type === 'rain' ? '\uD83C\uDF27\uFE0F' :
-                 weatherState.weather?.weather_type === 'heavy_rain' ? '\u26C8\uFE0F' :
-                 weatherState.weather?.weather_type === 'thunderstorm' ? '\u26C8\uFE0F' :
-                 weatherState.weather?.weather_type === 'snow' ? '\uD83C\uDF28\uFE0F' :
-                 weatherState.weather?.weather_type === 'blizzard' ? '\u2744\uFE0F' :
-                 weatherState.weather?.weather_type === 'fog' ? '\uD83C\uDF2B\uFE0F' :
-                 weatherState.weather?.weather_type === 'heat_wave' ? '\uD83D\uDD25' :
-                 weatherState.weather?.weather_type === 'dust_storm' ? '\uD83D\uDCA8' :
-                 '\u2600\uFE0F'}
-              </span>
-              <span style={{
-                color: (weatherState.weather?.effective_temperature ?? 65) < 32 ? '#60a5fa' :
-                       (weatherState.weather?.effective_temperature ?? 65) > 85 ? '#ef4444' : '#a3a3a3',
-                fontWeight: 'bold',
-                fontSize: '0.85rem'
-              }}>
-                {weatherState.weather?.effective_temperature ?? '--'}{'\u00B0'}F
-              </span>
-            </div>
-          )}
-
-          {/* Survival Status */}
-          {survivalState && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span title={`Hunger: ${survivalState.hunger_level || 'fed'} (${survivalState.days_without_food || 0}d without food)`}
-                style={{
-                  color: survivalState.hunger_level === 'fed' ? '#10b981' :
-                         survivalState.hunger_level === 'hungry' ? '#f59e0b' :
-                         survivalState.hunger_level === 'starving' ? '#ef4444' : '#ef4444',
-                  fontSize: '0.85rem', cursor: 'default'
-                }}>
-                {'\uD83C\uDF56'}
-              </span>
-              <span title={`Thirst: ${survivalState.thirst_level || 'hydrated'} (${survivalState.days_without_water || 0}d without water)`}
-                style={{
-                  color: survivalState.thirst_level === 'hydrated' ? '#10b981' :
-                         survivalState.thirst_level === 'thirsty' ? '#f59e0b' :
-                         survivalState.thirst_level === 'dehydrated' ? '#ef4444' : '#ef4444',
-                  fontSize: '0.85rem', cursor: 'default'
-                }}>
-                {'\uD83D\uDCA7'}
-              </span>
-            </div>
-          )}
-
-          {/* Game Date Display with Controls */}
-          {gameDate && (
-            <div className="game-date" style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: '#d4af37'
-            }}>
-              <span>{SEASON_ICONS[gameDate.season] || '📅'}</span>
-              <span>{gameDate.displayDate}</span>
-              {gameDate.isFestival && (
-                <span style={{ color: '#f39c12', marginLeft: '0.25rem' }}>
-                  (Festival!)
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Model toggle chip — Opus is the production default (v1.0.99).
-              Click to opt down to Sonnet for the next turn. Only shown when
-              Claude is the active provider. */}
-          {llmStatus?.provider === 'claude' && (
-            <button
-              onClick={() => updateUseSonnet(!useSonnet)}
-              title={useSonnet
-                ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (production default).'
-                : 'Using Opus (production default). Click to opt down to Sonnet for cost.'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.2rem 0.55rem',
-                background: useSonnet ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 140, 0, 0.18)',
-                border: `1px solid ${useSonnet ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 140, 0, 0.5)'}`,
-                color: useSonnet ? '#a78bfa' : '#ff8c00',
-                borderRadius: '999px',
-                fontSize: '0.75rem',
-                fontWeight: 'bold',
-                letterSpacing: '0.03em',
-                cursor: 'pointer'
-              }}
-            >
-              {useSonnet ? 'Sonnet' : 'Opus'}
-            </button>
-          )}
-
-          {/* Spell Slots Display */}
-          {Object.keys(spellSlots.max).length > 0 && (
-            <div className="spell-slots-tracker" style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem'
-            }}>
-              <span style={{ color: '#8b5cf6' }}>Spell Slots:</span>
-              <span style={{ color: '#6b7280', fontSize: '0.75rem', fontStyle: 'italic' }}>(click to use)</span>
-              {Object.entries(spellSlots.max).map(([level, max]) => {
-                const used = spellSlots.used[level] || 0;
-                const remaining = max - used;
-                return (
-                  <div
-                    key={level}
-                    className="spell-slot-level"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      cursor: remaining > 0 ? 'pointer' : 'default',
-                      opacity: remaining > 0 ? 1 : 0.5
-                    }}
-                    onClick={() => remaining > 0 && useSpellSlot(parseInt(level))}
-                    title={remaining > 0 ? `Click to use a level ${level} slot` : `No level ${level} slots remaining`}
-                  >
-                    <span style={{ color: '#a78bfa', fontWeight: 'bold' }}>{level}:</span>
-                    <span style={{
-                      color: remaining > 0 ? '#10b981' : '#ef4444'
-                    }}>
-                      {remaining}/{max}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Rest Buttons */}
-          <div className="rest-buttons" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            marginLeft: 'auto'
-          }}>
-            <button
-              onClick={() => takeRest('short')}
-              disabled={isLoading}
-              style={{
-                background: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
-                border: '1px solid #718096',
-                borderRadius: '4px',
-                padding: '0.25rem 0.5rem',
-                color: '#e2e8f0',
-                fontSize: '0.75rem',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
-              title="Take a short rest (1 hour) - Recover HP using Hit Dice"
-            >
-              <span>⏰</span>
-              <span>Short Rest</span>
-            </button>
-            <button
-              onClick={() => takeRest('long')}
-              disabled={isLoading}
-              style={{
-                background: 'linear-gradient(135deg, #553c9a 0%, #44337a 100%)',
-                border: '1px solid #805ad5',
-                borderRadius: '4px',
-                padding: '0.25rem 0.5rem',
-                color: '#e9d8fd',
-                fontSize: '0.75rem',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
-              title="Take a long rest (8 hours) - Recover all HP and spell slots"
-            >
-              <span>🌙</span>
-              <span>Long Rest</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Session Recap (shown when resuming a paused session) */}
-        {sessionRecap && (
-          <div className="session-recap" style={{
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%)',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
-            borderRadius: '8px',
-            padding: '1rem',
-            marginBottom: '1rem'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginBottom: '0.5rem',
-              color: '#a78bfa',
-              fontWeight: 'bold'
-            }}>
-              <span>📜</span>
-              <span>Previously on your adventure...</span>
-            </div>
-            <p style={{ color: '#e0e0e0', fontStyle: 'italic', margin: 0 }}>
-              {sessionRecap}
-            </p>
-            <button
-              onClick={() => setSessionRecap(null)}
-              style={{
-                marginTop: '0.75rem',
-                background: 'rgba(139, 92, 246, 0.2)',
-                border: '1px solid rgba(139, 92, 246, 0.4)',
-                color: '#a78bfa',
-                padding: '0.25rem 0.75rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.8rem'
-              }}
-            >
-              Continue Adventure
-            </button>
-          </div>
-        )}
-
-        {showEndOptions && (
-          <div className="modal-overlay" onClick={() => setShowEndOptions(false)}>
-            <div className="end-adventure-modal" onClick={(e) => e.stopPropagation()}>
-              <h2>End Adventure</h2>
-              <p className="modal-subtitle">How would you like to end this session?</p>
-
-              <div className="end-option-cards">
-                <div className="end-option-card pause" onClick={pauseSession}>
-                  <div className="end-option-icon">⏸️</div>
-                  <h3>Pause For Now</h3>
-                  <p>Save your progress and return later. Your adventure will be waiting exactly where you left off.</p>
-                  {isLoading && <span className="loading-text">Pausing...</span>}
-                </div>
-
-                <div className="end-option-card complete" onClick={endSession}>
-                  <div className="end-option-icon">✅</div>
-                  <h3>Complete Adventure</h3>
-                  <p>Wrap up this adventure and claim your rewards. The DM will provide a summary of your journey.</p>
-                  {isLoading && <span className="loading-text">Completing...</span>}
-                </div>
-
-                <div className="end-option-card abort" onClick={abortSession}>
-                  <div className="end-option-icon">❌</div>
-                  <h3>Abort Adventure</h3>
-                  <p>End immediately without saving. No rewards will be given and this session won't appear in your history.</p>
-                  {isLoading && <span className="loading-text">Aborting...</span>}
-                </div>
-              </div>
-
-              <button className="modal-cancel-btn" onClick={() => setShowEndOptions(false)} disabled={isLoading}>
-                Cancel - Continue Playing
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Recruitment Confirmation Modal */}
-        {pendingRecruitment && (
-          <div className="modal-overlay" onClick={dismissRecruitment}>
-            <div className="recruitment-modal" onClick={(e) => e.stopPropagation()} style={{
-              background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '450px',
-              width: '90%',
-              border: '1px solid rgba(139, 92, 246, 0.4)',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                {pendingRecruitment.npc?.avatar ? (
-                  <img
-                    src={pendingRecruitment.npc.avatar}
-                    alt={pendingRecruitment.npc.name}
-                    style={{
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      border: '2px solid #8b5cf6'
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem'
-                  }}>
-                    👤
-                  </div>
-                )}
-                <div>
-                  <h3 style={{ margin: 0, color: '#a78bfa' }}>New Companion?</h3>
-                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
-                    <strong>{pendingRecruitment.npc?.name || pendingRecruitment.npcName}</strong>
-                    {pendingRecruitment.npc?.race && ` • ${pendingRecruitment.npc.race}`}
-                    {pendingRecruitment.npc?.occupation && ` • ${pendingRecruitment.npc.occupation}`}
-                  </p>
-                </div>
-              </div>
-
-              <p style={{
-                background: 'rgba(0, 0, 0, 0.3)',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                margin: '1rem 0'
-              }}>
-                {pendingRecruitment.npcNotFound
-                  ? `"${pendingRecruitment.npcName}" agreed to join you, but they're not in your NPC database yet. You can add them as a companion manually later.`
-                  : `${pendingRecruitment.npc?.name} has agreed to join your party! Would you like to add them as a permanent companion?`
-                }
-              </p>
-
-              {!pendingRecruitment.npcNotFound && (
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button
-                    onClick={() => confirmRecruitment('npc_stats')}
-                    disabled={recruitmentLoading}
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
-                      color: 'white',
-                      cursor: recruitmentLoading ? 'wait' : 'pointer',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {recruitmentLoading ? 'Adding...' : 'Add Companion'}
-                  </button>
-                  <button
-                    onClick={dismissRecruitment}
-                    disabled={recruitmentLoading}
-                    style={{
-                      padding: '0.75rem 1.25rem',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      background: 'transparent',
-                      color: 'inherit',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Not Now
-                  </button>
-                </div>
-              )}
-
-              {pendingRecruitment.npcNotFound && (
-                <button
-                  onClick={dismissRecruitment}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    background: 'transparent',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    marginTop: '0.5rem'
-                  }}
-                >
-                  Got It
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Downtime Activity Confirmation Modal */}
-        {pendingDowntime && (
-          <div className="modal-overlay" onClick={dismissDowntime}>
-            <div className="downtime-modal" onClick={(e) => e.stopPropagation()} style={{
-              background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '450px',
-              width: '90%',
-              border: '1px solid rgba(46, 204, 113, 0.4)',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{
-                  width: '50px',
-                  height: '50px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.5rem'
-                }}>
-                  {pendingDowntime.type === 'training' && '⚔️'}
-                  {pendingDowntime.type === 'rest' && '🛏️'}
-                  {pendingDowntime.type === 'study' && '📚'}
-                  {pendingDowntime.type === 'crafting' && '🔨'}
-                  {pendingDowntime.type === 'work' && '💰'}
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, color: '#2ecc71' }}>Downtime Activity Detected</h3>
-                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem', color: '#bbb' }}>
-                    {pendingDowntime.type === 'training' && 'Training / Practice'}
-                    {pendingDowntime.type === 'rest' && (pendingDowntime.restType === 'long' ? 'Long Rest' : pendingDowntime.restType === 'short' ? 'Short Rest' : 'Rest')}
-                    {pendingDowntime.type === 'study' && 'Study / Research'}
-                    {pendingDowntime.type === 'crafting' && 'Crafting'}
-                    {pendingDowntime.type === 'work' && 'Work for Pay'}
-                  </p>
-                </div>
-              </div>
-
-              <p style={{
-                background: 'rgba(0, 0, 0, 0.3)',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                margin: '1rem 0',
-                color: '#ccc'
-              }}>
-                Would you like to use the Downtime system for this activity? This will track time, apply benefits, and advance the in-game clock.
-              </p>
-
-              {/* Duration selector */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#888', fontSize: '0.85rem' }}>
-                  Duration (hours):
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="24"
-                  defaultValue={pendingDowntime.duration || (pendingDowntime.type === 'rest' && pendingDowntime.restType === 'long' ? 8 : 4)}
-                  id="downtime-duration-input"
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    borderRadius: '6px',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: 'white',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                <button
-                  onClick={() => {
-                    const duration = parseInt(document.getElementById('downtime-duration-input').value) || 4;
-                    startDowntimeActivity(pendingDowntime.type, duration, {
-                      restType: pendingDowntime.restType
-                    });
-                  }}
-                  disabled={downtimeLoading}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
-                    color: 'white',
-                    cursor: downtimeLoading ? 'wait' : 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  {downtimeLoading ? 'Starting...' : 'Start Downtime'}
-                </button>
-                <button
-                  onClick={dismissDowntime}
-                  disabled={downtimeLoading}
-                  style={{
-                    padding: '0.75rem 1.25rem',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    background: 'transparent',
-                    color: 'inherit',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Continue Narrative
-                </button>
-              </div>
-
-              <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '1rem', textAlign: 'center' }}>
-                "Continue Narrative" lets the DM describe it without mechanics
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Merchant Shop Detection Prompt */}
-        {pendingMerchantShop && (
-          <div style={{
-            position: 'fixed', bottom: '100px', left: '50%', transform: 'translateX(-50%)',
-            background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
-            border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '12px', padding: '1rem 1.5rem',
-            display: 'flex', alignItems: 'center', gap: '1rem', zIndex: 1001,
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', maxWidth: '500px'
-          }}>
-            <span style={{ fontSize: '1.5rem' }}>🏪</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 'bold', color: '#f59e0b' }}>{pendingMerchantShop.merchantName}</div>
-              <div style={{ fontSize: '0.85rem', color: '#aaa' }}>Open shop to browse wares and trade?</div>
-            </div>
-            <button onClick={() => openMerchantShop(pendingMerchantShop)} style={{
-              padding: '0.5rem 1rem', borderRadius: '8px', border: 'none',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#000',
-              fontWeight: 'bold', cursor: 'pointer'
-            }}>Open Shop</button>
-            <button onClick={() => setPendingMerchantShop(null)} style={{
-              padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
-              background: 'transparent', color: '#888', cursor: 'pointer'
-            }}>Dismiss</button>
-          </div>
-        )}
-
-        {/* Merchant Shop Modal */}
-        {shopOpen && (
-          <div className="modal-overlay" onClick={() => { setShopOpen(false); setShopCart({ buying: [], selling: [] }); }} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1002,
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <div onClick={e => e.stopPropagation()} style={{
-              background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.99) 0%, rgba(20, 20, 30, 0.99) 100%)',
-              borderRadius: '12px', padding: '1.5rem', maxWidth: '850px', width: '95%', maxHeight: '85vh',
-              overflow: 'auto', border: '1px solid rgba(245, 158, 11, 0.4)',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.7)'
-            }}>
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                <div>
-                  <h2 style={{ margin: 0, color: '#f59e0b', fontSize: '1.3rem' }}>
-                    🏪 {lastMerchantContext?.merchantName || 'Merchant'}
-                  </h2>
-                  <div style={{ color: '#888', fontSize: '0.85rem' }}>
-                    {lastMerchantContext?.merchantType} — {lastMerchantContext?.location}
-                  </div>
-                  {merchantPersonality && (
-                    <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.25rem' }}>
-                      "{merchantPersonality}"
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {merchantDbId && (
-                    <button onClick={async () => {
-                      setMerchantLoading(true);
-                      try {
-                        const resp = await fetch(`/api/dm-session/${activeSession.id}/restock-merchant`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ merchantId: merchantDbId })
-                        });
-                        const data = await resp.json();
-                        setMerchantInventory(data.inventory || []);
-                        setMerchantGold(data.gold_gp);
-                        setShopCart({ buying: [], selling: [] });
-                      } catch (err) {
-                        console.error('Restock failed:', err);
-                      } finally {
-                        setMerchantLoading(false);
-                      }
-                    }} disabled={merchantLoading} style={{
-                      background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.4)',
-                      borderRadius: '6px', color: '#3b82f6', padding: '0.35rem 0.6rem',
-                      fontSize: '0.75rem', cursor: 'pointer'
-                    }}>
-                      Restock
-                    </button>
-                  )}
-                  <button onClick={() => { setShopOpen(false); setShopCart({ buying: [], selling: [] }); }} style={{
-                    background: 'transparent', border: 'none', color: '#888', fontSize: '1.5rem', cursor: 'pointer'
-                  }}>✕</button>
-                </div>
-              </div>
-
-              {/* Gold bar */}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem',
-                background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px', marginBottom: '1rem',
-                border: '1px solid rgba(245, 158, 11, 0.2)', flexWrap: 'wrap', gap: '0.25rem'
-              }}>
-                <span style={{ color: '#f59e0b' }}>Your Gold: {formatCopper(playerTotalCp)}</span>
-                {merchantGold !== null && (
-                  <span style={{ color: '#888', fontSize: '0.85rem' }}>
-                    Merchant's Purse: {merchantGold} gp
-                  </span>
-                )}
-                <span style={{ color: canAfford ? '#10b981' : '#ef4444' }}>
-                  After: {formatCopper(Math.max(0, goldAfterCp))}
-                  {netCostCp !== 0 && <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
-                    ({netCostCp > 0 ? `-${formatCopper(netCostCp)}` : `+${formatCopper(-netCostCp)}`})
-                  </span>}
-                </span>
-              </div>
-
-              {/* Price modifier badge */}
-              {/* Reputation price modifier badge */}
-              {merchantPriceModifier && merchantPriceModifier.multiplier !== 1 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem',
-                  borderRadius: '6px', marginBottom: '0.5rem', fontSize: '0.85rem',
-                  background: merchantPriceModifier.multiplier < 1
-                    ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                  border: `1px solid ${merchantPriceModifier.multiplier < 1
-                    ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                  color: merchantPriceModifier.multiplier < 1 ? '#10b981' : '#ef4444'
-                }}>
-                  <span style={{ fontWeight: 'bold' }}>
-                    {merchantPriceModifier.multiplier < 1
-                      ? `${Math.round((1 - merchantPriceModifier.multiplier) * 100)}% Reputation Discount`
-                      : `${Math.round((merchantPriceModifier.multiplier - 1) * 100)}% Reputation Markup`}
-                  </span>
-                  <span style={{ color: '#888', fontSize: '0.75rem' }}>
-                    — {merchantPriceModifier.details?.disposition || ''}{merchantPriceModifier.details?.faction && merchantPriceModifier.details.faction !== 'no faction link' ? `, ${merchantPriceModifier.details.faction}` : ''}
-                  </span>
-                </div>
-              )}
-
-              {/* Economy modifier badges */}
-              {merchantEconomyModifiers && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}>
-                  {/* World event effects */}
-                  {(merchantEconomyModifiers.activeEffects || []).map((effect, idx) => (
-                    <div key={`event-${idx}`} style={{
-                      padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem',
-                      background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b'
-                    }}>
-                      {effect.eventTitle}: {effect.categories.map(c =>
-                        `${c} ${Object.values(effect.modifiers)[effect.categories.indexOf(c)] > 0 ? '+' : ''}${Math.round(Object.values(effect.modifiers)[effect.categories.indexOf(c)] * 100)}%`
-                      ).join(', ')}
-                    </div>
-                  ))}
-
-                  {/* Regional modifiers */}
-                  {(merchantEconomyModifiers.appliedRegions || []).length > 0 && (
-                    <div style={{
-                      padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem',
-                      background: 'rgba(96, 165, 250, 0.1)', border: '1px solid rgba(96, 165, 250, 0.3)', color: '#60a5fa'
-                    }}>
-                      Regional: {merchantEconomyModifiers.appliedRegions.join(', ')}
-                    </div>
-                  )}
-
-                  {/* Loyalty discount */}
-                  {merchantEconomyModifiers.loyaltyDiscount > 0 && (
-                    <div style={{
-                      padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem',
-                      background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#a855f7'
-                    }}>
-                      Loyal Customer: -{Math.round(merchantEconomyModifiers.loyaltyDiscount * 100)}% ({merchantEconomyModifiers.visitCount} visits)
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {merchantLoading ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
-                  Loading merchant inventory...
-                </div>
-              ) : (
-                <>
-                  {/* Two-column layout */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                    {/* BUY column */}
-                    <div>
-                      <h3 style={{ color: '#10b981', margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Buy</h3>
-                      <div style={{ maxHeight: '300px', overflow: 'auto' }}>
-                        {merchantInventory.map((item, idx) => {
-                          const inCart = shopCart.buying.find(c => c.name === item.name);
-                          const remaining = item.quantity - (inCart?.quantity || 0);
-                          return (
-                            <div key={idx} style={{
-                              display: 'flex', alignItems: 'center', gap: '0.5rem',
-                              padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem',
-                              background: inCart ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.03)',
-                              border: inCart ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid transparent'
-                            }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 500, fontSize: '0.9rem', color: '#ddd' }}>{item.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#888' }}>
-                                  {item.description} {item.rarity !== 'common' && <span style={{
-                                    color: item.rarity === 'legendary' ? '#ff8c00' :
-                                           item.rarity === 'very_rare' ? '#c084fc' :
-                                           item.rarity === 'rare' ? '#60a5fa' :
-                                           '#a78bfa'
-                                  }}>({item.rarity === 'very_rare' ? 'very rare' : item.rarity})</span>}
-                                </div>
-                              </div>
-                              <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                <div style={{ color: '#f59e0b', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                                  {item.base_price_gp !== undefined && item.base_price_gp !== item.price_gp && (
-                                    <span style={{ textDecoration: 'line-through', color: '#666', fontWeight: 'normal', marginRight: '4px', fontSize: '0.75rem' }}>
-                                      {item.base_price_gp > 0 && `${item.base_price_gp}gp`}
-                                    </span>
-                                  )}
-                                  {item.price_gp > 0 && `${item.price_gp}gp`}{item.price_sp > 0 && ` ${item.price_sp}sp`}{item.price_cp > 0 && ` ${item.price_cp}cp`}
-                                </div>
-                                <div style={{ fontSize: '0.7rem', color: '#666' }}>×{remaining} left</div>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <button onClick={() => addToBuyCart(item)} disabled={remaining <= 0} style={{
-                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
-                                  background: remaining > 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.05)',
-                                  color: remaining > 0 ? '#10b981' : '#555', cursor: remaining > 0 ? 'pointer' : 'default',
-                                  fontSize: '0.9rem', fontWeight: 'bold'
-                                }}>+</button>
-                                {inCart && <button onClick={() => removeFromBuyCart(item.name)} style={{
-                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
-                                  background: 'rgba(239, 68, 68, 0.3)', color: '#ef4444', cursor: 'pointer',
-                                  fontSize: '0.9rem', fontWeight: 'bold'
-                                }}>-</button>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {merchantInventory.length === 0 && (
-                          <div style={{ color: '#666', textAlign: 'center', padding: '1rem' }}>No items available</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* SELL column */}
-                    <div>
-                      <h3 style={{ color: '#ef4444', margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Sell</h3>
-                      <div style={{ maxHeight: '300px', overflow: 'auto' }}>
-                        {playerInventory.map((item, idx) => {
-                          const buyback = buybackItems.find(b => b.name.toLowerCase() === item.name.toLowerCase());
-                          const sellPrice = buyback ? buyback.sell_price_gp : 0;
-                          const inCart = shopCart.selling.find(c => c.name.toLowerCase() === item.name.toLowerCase());
-                          const remaining = (item.quantity || 1) - (inCart?.quantity || 0);
-                          if (!buyback || sellPrice <= 0) return null;
-                          return (
-                            <div key={idx} style={{
-                              display: 'flex', alignItems: 'center', gap: '0.5rem',
-                              padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem',
-                              background: inCart ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                              border: inCart ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid transparent'
-                            }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 500, fontSize: '0.9rem', color: '#ddd' }}>{item.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#888' }}>Qty: {item.quantity || 1}</div>
-                              </div>
-                              <div style={{ color: '#f59e0b', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                                {sellPrice > 0 && `${sellPrice}gp`}{buyback?.sell_price_sp > 0 && ` ${buyback.sell_price_sp}sp`}
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <button onClick={() => addToSellCart({ name: item.name, sell_price_gp: buyback?.sell_price_gp || 0, sell_price_sp: buyback?.sell_price_sp || 0, sell_price_cp: buyback?.sell_price_cp || 0 })} disabled={remaining <= 0} style={{
-                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
-                                  background: remaining > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.05)',
-                                  color: remaining > 0 ? '#ef4444' : '#555', cursor: remaining > 0 ? 'pointer' : 'default',
-                                  fontSize: '0.9rem', fontWeight: 'bold'
-                                }}>+</button>
-                                {inCart && <button onClick={() => removeFromSellCart(item.name)} style={{
-                                  width: '28px', height: '24px', borderRadius: '4px', border: 'none',
-                                  background: 'rgba(255,255,255,0.1)', color: '#888', cursor: 'pointer',
-                                  fontSize: '0.9rem', fontWeight: 'bold'
-                                }}>-</button>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {playerInventory.length === 0 && (
-                          <div style={{ color: '#666', textAlign: 'center', padding: '1rem' }}>No items to sell</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cart summary */}
-                  {(shopCart.buying.length > 0 || shopCart.selling.length > 0) && (
-                    <div style={{
-                      background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '1rem',
-                      border: '1px solid rgba(255,255,255,0.1)', marginBottom: '1rem'
-                    }}>
-                      <h4 style={{ margin: '0 0 0.5rem 0', color: '#f59e0b', fontSize: '0.95rem' }}>Transaction</h4>
-                      {shopCart.buying.length > 0 && (
-                        <div style={{ color: '#10b981', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                          Buying: {shopCart.buying.map(i => `${i.quantity}x ${i.name}`).join(', ')} = {formatCopper(calculateBuyTotal())}
-                        </div>
-                      )}
-                      {bulkDiscountPct > 0 && (
-                        <div style={{ color: '#a855f7', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                          Bulk discount ({totalBuyQty} items): -{bulkDiscountPct}%
-                        </div>
-                      )}
-                      {shopCart.selling.length > 0 && (
-                        <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                          Selling: {shopCart.selling.map(i => `${i.quantity}x ${i.name}`).join(', ')} = +{formatCopper(calculateSellTotal())}
-                        </div>
-                      )}
-                      {haggleResult?.success && haggleResult.discountPercent > 0 && (
-                        <div style={{ color: '#34d399', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                          Haggle discount ({haggleResult.skill}, {haggleResult.roller?.name}): -{haggleResult.discountPercent}%
-                        </div>
-                      )}
-                      <div style={{ color: netCostCp > 0 ? '#f59e0b' : '#10b981', fontWeight: 'bold', marginTop: '0.5rem' }}>
-                        Net: {netCostCp > 0 ? `-${formatCopper(Math.round(netCostCp * (1 - (haggleResult?.success ? haggleResult.discountPercent : 0) / 100)))}` : netCostCp < 0 ? `+${formatCopper(-netCostCp)}` : '0 gp'}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* M3: Inline haggle — pick roller, pick skill, roll */}
-                  {shopCart.buying.length > 0 && (
-                    <div style={{
-                      background: 'rgba(52,211,153,0.08)',
-                      border: '1px solid rgba(52,211,153,0.3)',
-                      borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <h4 style={{ margin: 0, color: '#34d399', fontSize: '0.9rem' }}>Haggle</h4>
-                        {haggleAttempts > 0 && (
-                          <span style={{ color: '#888', fontSize: '0.72rem' }}>
-                            Attempt {haggleAttempts + 1} — repeat failures hurt disposition
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                        <select
-                          value={haggleRoller}
-                          onChange={(e) => setHaggleRoller(e.target.value)}
-                          style={{
-                            flex: 1, padding: '0.3rem', background: '#2a2a2a',
-                            border: '1px solid #444', borderRadius: '4px', color: '#fff', fontSize: '0.8rem'
-                          }}
-                        >
-                          <option value="character">{character?.name || 'You'} (character)</option>
-                          {(companions || []).map(c => (
-                            <option key={c.id} value={`companion:${c.id}`}>
-                              {c.name || c.nickname || 'Companion'} (companion)
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={haggleSkill}
-                          onChange={(e) => setHaggleSkill(e.target.value)}
-                          style={{
-                            padding: '0.3rem', background: '#2a2a2a',
-                            border: '1px solid #444', borderRadius: '4px', color: '#fff', fontSize: '0.8rem'
-                          }}
-                        >
-                          <option value="Persuasion">Persuasion</option>
-                          <option value="Deception">Deception</option>
-                          <option value="Intimidation">Intimidation</option>
-                        </select>
-                        <button
-                          onClick={haggleWithMerchant}
-                          disabled={hagglingInFlight}
-                          style={{
-                            padding: '0.3rem 0.75rem', background: '#34d399',
-                            color: '#0a0a0a', border: 'none', borderRadius: '4px',
-                            fontSize: '0.8rem', fontWeight: 600,
-                            cursor: hagglingInFlight ? 'not-allowed' : 'pointer'
-                          }}
-                        >
-                          {hagglingInFlight ? 'Rolling…' : 'Roll'}
-                        </button>
-                      </div>
-
-                      {haggleResult && (
-                        <div style={{
-                          fontSize: '0.78rem',
-                          color: haggleResult.success ? '#34d399' : '#ef4444',
-                          padding: '0.35rem 0.5rem',
-                          background: haggleResult.success ? 'rgba(52,211,153,0.1)' : 'rgba(239,68,68,0.1)',
-                          border: `1px solid ${haggleResult.success ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                          borderRadius: '4px'
-                        }}>
-                          <strong>{haggleResult.success ? 'Success!' : 'Failed.'}</strong>{' '}
-                          Rolled {haggleResult.roll} + {haggleResult.modifier} = {haggleResult.total} vs DC {haggleResult.dc}
-                          {haggleResult.critical && ' (natural 20!)'}
-                          {haggleResult.criticalFail && ' (natural 1!)'}
-                          {haggleResult.success
-                            ? ` → ${haggleResult.discountPercent}% off`
-                            : haggleResult.dispositionChange < 0
-                              ? ` → disposition ${haggleResult.dispositionChange}`
-                              : ' → no change'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Action buttons */}
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button
-                      onClick={confirmTransaction}
-                      disabled={transactionProcessing || (shopCart.buying.length === 0 && shopCart.selling.length === 0) || !canAfford}
-                      style={{
-                        flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none',
-                        background: canAfford && (shopCart.buying.length > 0 || shopCart.selling.length > 0)
-                          ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                          : 'rgba(255,255,255,0.1)',
-                        color: canAfford ? '#000' : '#555', fontWeight: 'bold', cursor: canAfford ? 'pointer' : 'default'
-                      }}
-                    >
-                      {transactionProcessing ? 'Processing...' : !merchantCanAfford ? "Merchant Can't Afford" : !canAfford ? 'Not Enough Gold' : 'Confirm Transaction'}
-                    </button>
-                    <button onClick={() => { setShopOpen(false); setShopCart({ buying: [], selling: [] }); }} style={{
-                      padding: '0.75rem 1.25rem', borderRadius: '8px',
-                      border: '1px solid rgba(255,255,255,0.2)', background: 'transparent',
-                      color: '#888', cursor: 'pointer'
-                    }}>Cancel</button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Combat Tracker (inline, above messages) */}
-        {combatState && (
-          <CombatTracker
-            combatState={combatState}
-            onAdvanceTurn={advanceTurn}
-            onEndCombat={endCombat}
-          />
-        )}
-
-        <div className="dm-messages">
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`dm-message ${msg.type}`}>
-              {msg.type === 'action' && (
-                <span className="action-label">
-                  {secondCharacter
-                    ? `${character.nickname || character.name} & ${secondCharacter.nickname || secondCharacter.name}`
-                    : character.nickname || character.name}:
-                </span>
-              )}
-              {msg.type === 'summary' && <span className="summary-label">Adventure Summary:</span>}
-              <p>{msg.content}</p>
-            </div>
-          ))}
-
-          {isLoading && (
-            <div className="dm-message narrative loading">
-              <span className="loading-dots">The DM is thinking...</span>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {error && <div className="dm-error">{error}</div>}
-
-        {/* Browse Wares button - only shows when AI has detected a merchant in the current interaction */}
-        {!shopOpen && !pendingMerchantShop && lastMerchantContext && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem', paddingRight: '0.25rem' }}>
-            <button
-              onClick={() => openMerchantShop(lastMerchantContext)}
-              disabled={merchantLoading}
-              style={{
-                padding: '0.35rem 0.75rem', borderRadius: '6px',
-                border: '1px solid rgba(245, 158, 11, 0.4)',
-                background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b',
-                fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
-              }}
-            >
-              🏪 Browse Wares ({lastMerchantContext.merchantName})
-            </button>
-          </div>
-        )}
-
-        <form onSubmit={sendAction} className="dm-input-form">
-          <textarea
-            value={inputAction}
-            onChange={(e) => setInputAction(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (inputAction.trim() && !isLoading) {
-                  sendAction(e);
-                }
-              }
-            }}
-            placeholder={secondCharacter ? "What do you both do? (Shift+Enter for new line)" : "What do you do? (Shift+Enter for new line)"}
-            disabled={isLoading}
-            autoFocus
-            rows={3}
-          />
-          <button type="submit" disabled={isLoading || !inputAction.trim()}>
-            Send
-          </button>
-        </form>
-        </>}
-      </div>
+      <>
+        <SessionCockpit
+          character={character} companions={companions} secondCharacter={secondCharacter} activeSession={activeSession} sessionNumber={(sessionHistory?.length || 0) + 1}
+          messages={messages} isLoading={isLoading} error={error} sessionRecap={sessionRecap} onClearRecap={() => setSessionRecap(null)}
+          inputAction={inputAction} onInputChange={setInputAction} onSend={sendAction} messagesEndRef={messagesEndRef}
+          combatState={combatState} onAdvanceTurn={advanceTurn} onEndCombat={endCombat}
+          playerConditions={playerConditions} companionConditions={companionConditions} onToggleCondition={toggleCondition}
+          spellEffects={spellEffects} rollRequest={rollRequest} onRoll={handleRoll}
+          spellSlots={spellSlots} gameDate={gameDate} onRest={takeRest} scene={sceneState}
+          useSonnet={useSonnet} onToggleModel={() => updateUseSonnet(!useSonnet)}
+          showQuickRef={showQuickRef} setShowQuickRef={setShowQuickRef}
+          showInventory={showInventory} setShowInventory={setShowInventory}
+          showConditionPanel={showConditionPanel} setShowConditionPanel={setShowConditionPanel}
+          showCompanionsRef={showCompanionsRef} setShowCompanionsRef={setShowCompanionsRef}
+          onOpenNotes={openCampaignNotes}
+          showEndOptions={showEndOptions} onShowEnd={() => setShowEndOptions(true)} onCancelEnd={() => setShowEndOptions(false)}
+          onPause={pauseSession} onComplete={endSession} onAbort={abortSession}
+          pendingRecruitment={pendingRecruitment} recruitmentLoading={recruitmentLoading} onConfirmRecruit={confirmRecruitment} onDismissRecruit={dismissRecruitment}
+          itemsGainedThisSession={itemsGainedThisSession} onDiscard={discardItem} onCharacterUpdated={onCharacterUpdated}
+        />
+        {campaignNotesPanel}
+      </>
     );
   }
 

@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { safeParse } from '../utils/safeParse.js';
 import { adjustStanding, AUDIT_STRATEGIES, mapToLabel } from './standingScalar.js';
 import { registerDecayConsumer, DECAY_SEMANTICS } from './timeBoundedState.js';
 
@@ -713,8 +714,8 @@ export function getMoodRPGuidance(mood) {
 function parseBackstoryJson(backstory) {
   return {
     ...backstory,
-    unresolved_threads: JSON.parse(backstory.unresolved_threads || '[]'),
-    loyalty_events: JSON.parse(backstory.loyalty_events || '[]'),
-    secrets: JSON.parse(backstory.secrets || '[]')
+    unresolved_threads: safeParse(backstory.unresolved_threads, []),
+    loyalty_events: safeParse(backstory.loyalty_events, []),
+    secrets: safeParse(backstory.secrets, [])
   };
 }

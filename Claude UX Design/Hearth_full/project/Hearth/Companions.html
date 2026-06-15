@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Companions</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+    .crest.lg { width: 76px; height: 76px; }
+    .crest.lg .mono { font-size: 36px; }
+    .crest.v { background: linear-gradient(150deg, #2e3340, #1d2128); }
+    .crest.v .mono { color: var(--accent-2); }
+
+    .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 40px; }
+    .comp-note { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-2); line-height: 1.5; max-width: 660px; margin: -4px 0 20px; }
+    .comp {
+      display: grid; grid-template-columns: auto 1fr; gap: 18px;
+      background: var(--bg-card); border: 1px solid var(--rule); border-radius: 12px;
+      padding: 20px 22px; box-shadow: var(--shadow-sm);
+    }
+    .comp .cm-name { font-family: var(--serif); font-weight: 500; font-size: 26px; letter-spacing: -.01em; margin: 0 0 3px; }
+    .comp .cm-role { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); margin-bottom: 12px; }
+    .comp .cm-role .sep { color: var(--ink-4); font-style: normal; padding: 0 5px; }
+    .comp .cm-stats { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+    .comp .cm-bio { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-3); margin-bottom: 12px; }
+    .comp .cm-bio em { font-style: italic; color: var(--ink-2); }
+    .comp .cm-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .comp.empty { display: flex; border-style: dashed; align-items: center; justify-content: center; text-align: center; color: var(--ink-3); min-height: 170px; }
+    .comp.empty .eg { font-size: 24px; color: var(--ink-4); margin-bottom: 10px; }
+    .comp.empty .et { font-family: var(--serif); font-style: italic; font-size: 17px; line-height: 1.5; color: var(--ink-3); max-width: 280px; }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 2.8-.6 3.5-2 .3-.5.5-1 .5-1.5 0-.7-.3-1.4-.5-2-.2-.4-.6-1-.5-1.5.1-.9.6-1.4 1.3-2C17 6.6 18 4.6 18 3c0 0-3 .5-6 3-2.4 2-4 4-4 7 0 .8 0 1 .5 1.5z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Dashboard.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Dravyr's home</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="page">
+    <div class="page-eyebrow"><span class="eyebrow">Companions</span><span class="ln"></span></div>
+
+    <div class="sec-head"><h2>Travelling with you</h2><span class="glyph">❧</span><span class="fl"></span><span class="sub">1 companion</span></div>
+    <p class="comp-note">Companions aren't recruited from a menu — they join your story as you earn their trust in play. Each takes a place at the fire here.</p>
+    <div class="comp-grid">
+      <div class="comp">
+        <div class="crest lg v"><span class="mono">V</span></div>
+        <div>
+          <h3 class="cm-name">Sister Veil</h3>
+          <div class="cm-role">Human <span class="sep">·</span> Cleric of the Last Lantern <span class="sep">·</span> Life domain</div>
+          <div class="cm-stats">
+            <span class="chip">L3</span>
+            <span class="chip">HP 19/22</span>
+            <span class="chip">AC 16</span>
+            <span class="chip">WIS +5</span>
+          </div>
+          <div class="cm-bio">A grave-tender from the Gate who follows a god of <em>endings done gently.</em> She joined you the night you carried a stranger's body further than the law required.</div>
+          <div class="cm-tags">
+            <span class="chip magic"><svg class="ic"><use href="#i-flame"/></svg>concentrating · Bless</span>
+            <span class="chip">healer</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp empty">
+        <div>
+          <div class="eg">❧</div>
+          <div class="et">An empty place at the fire — kept for whoever the story brings next.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

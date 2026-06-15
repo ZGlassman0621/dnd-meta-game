@@ -1,10 +1,53 @@
 import express from 'express';
 import * as campaignService from '../services/campaignService.js';
 import * as campaignPlanService from '../services/campaignPlanService.js';
+import { draftCampaign, converseCampaign, beginCampaign } from '../services/campaignDraftService.js';
 import { validateImportPayload, importCampaign, normalizePlan } from '../services/campaignImportService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
+
+// POST /api/campaign/draft — Begin-Campaign atelier: Opus authors/refines a
+// campaign draft from the player's prompt + dials (or a nudge on a prior draft).
+// Stateless — nothing is persisted until /begin.
+router.post('/draft', async (req, res) => {
+  try {
+    const { prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote, conversation } = req.body;
+    const draft = await draftCampaign({ prompt, subject, seed, characterId, dials, priorDraft, nudge, userNote, conversation });
+    res.json({ draft });
+  } catch (error) {
+    handleServerError(res, error, 'draft campaign');
+  }
+});
+
+// POST /api/campaign/converse — Begin-Campaign "Build it together" mode: Opus
+// discusses the campaign and asks clarifying questions WITHOUT drafting. The
+// client passes the running conversation each turn. Returns { opusMessage }.
+// The player drafts from the conversation via /draft with `conversation`.
+router.post('/converse', async (req, res) => {
+  try {
+    const { prompt, conversation, subject, characterId, seed, questionNumber } = req.body;
+    const result = await converseCampaign({ prompt, conversation, subject, characterId, seed, questionNumber });
+    res.json(result);
+  } catch (error) {
+    handleServerError(res, error, 'converse campaign');
+  }
+});
+
+// POST /api/campaign/begin — commit a draft: create the campaign, store the
+// co-authored draft as its plan, and link the character so /start plays it.
+router.post('/begin', async (req, res) => {
+  try {
+    const { draft, characterId, linesAndVeils } = req.body;
+    if (!draft || !characterId) {
+      return res.status(400).json({ error: 'draft and characterId are required' });
+    }
+    const result = await beginCampaign({ draft, characterId, linesAndVeils, userId: req.user?.id });
+    res.status(201).json(result);
+  } catch (error) {
+    handleServerError(res, error, 'begin campaign');
+  }
+});
 
 // GET /api/campaign - Get all campaigns
 router.get('/', async (req, res) => {

@@ -89,20 +89,22 @@ const ALIGNMENT_DESCRIPTIONS = {
 export default function AlignmentChip({ alignment, size = 'sm' }) {
   if (!alignment) return null
   const isSm = size === 'sm'
+  // Hearth idiom: the shared .chip pill (gold accent border + mono code).
+  // We keep the mono family + tight tracking for the 2-letter code, and
+  // scale the padding/size for the two call sizes (inline prompt chip vs.
+  // the larger alignment-field selector).
   return (
     <span
+      className="chip"
       title={ALIGNMENT_NAMES[alignment] || alignment}
       style={{
-        display: 'inline-block',
         fontFamily: 'var(--mono)',
         fontSize: isSm ? 10 : 12,
         fontWeight: 600,
         letterSpacing: '0.06em',
-        padding: isSm ? '2px 6px' : '4px 9px',
-        border: '1px solid var(--accent-2)',
-        borderRadius: 2,
+        padding: isSm ? '2px 7px' : '4px 10px',
+        borderColor: 'color-mix(in oklab, var(--accent) 38%, var(--rule))',
         color: 'var(--accent)',
-        background: 'transparent',
         verticalAlign: 'middle',
         userSelect: 'none'
       }}

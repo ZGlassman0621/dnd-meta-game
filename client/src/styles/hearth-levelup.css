@@ -1,0 +1,203 @@
+/* =================================================================
+   HEARTH · Level Up screen
+   Ported from "Hearth/Level Up.html". Every selector scoped under
+   ".hearth". Shared tokens/components (.btn .chip .crest .dash-hdr
+   .back .wordmark .opus .lede .eyebrow .panel .card) come from
+   hearth.css and are NOT redefined here.
+   NOTE: the design's step-rail item class was ".step", which collides
+   with the shared 44px heading primitive — renamed to ".lu-step".
+   ================================================================= */
+
+.hearth.levelup { min-height: 100vh; }
+
+.hearth .wiz { max-width: 940px; margin: 0 auto; padding: 34px 28px 70px; }
+
+/* ---- hero ---- */
+.hearth .wiz-hero { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
+.hearth .wiz-hero .crest { width: 64px; height: 64px; }
+.hearth .wiz-hero .crest .mono { font-size: 30px; }
+.hearth .wiz-hero .wh-txt .eyebrow { display: block; margin-bottom: 5px; }
+.hearth .wiz-hero .wh-txt h1 { font-family: var(--serif); font-weight: 500; font-size: 32px; margin: 0; letter-spacing: -.012em; }
+.hearth .wiz-hero .wh-txt .sub { font-family: var(--sans); font-size: 13px; color: var(--ink-3); margin-top: 3px; }
+.hearth .wiz-hero .lvlchip { margin-left: auto; display: inline-flex; align-items: center; gap: 12px; font-family: var(--sans); font-weight: 600; padding: 9px 16px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule)); background: color-mix(in oklab, var(--accent) 9%, transparent); }
+.hearth .wiz-hero .lvlchip .n { font-variant-numeric: tabular-nums; font-size: 22px; color: var(--ink-3); }
+.hearth .wiz-hero .lvlchip .n.to { color: var(--accent); }
+.hearth .wiz-hero .lvlchip .ar { color: var(--ink-4); width: 16px; height: 16px; }
+
+/* ---- layout ---- */
+.hearth .wiz-grid { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
+
+/* ---- step rail (renamed from .step → .lu-step) ---- */
+.hearth .steprail { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 82px; }
+.hearth .lu-step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: center; padding: 12px 12px; border-radius: var(--radius); cursor: pointer; border: 1px solid transparent; transition: background .14s; text-align: left; background: none; }
+.hearth .lu-step:hover { background: var(--bg-card); }
+.hearth .lu-step.active { background: var(--bg-card); border-color: var(--rule); }
+.hearth .lu-step:disabled { cursor: default; opacity: .55; }
+.hearth .lu-step:disabled:hover { background: none; }
+.hearth .lu-step .sn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.hearth .lu-step.active .sn { background: var(--accent); border-color: var(--accent); color: #211d17; font-weight: 600; }
+.hearth .lu-step.done .sn { border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); color: var(--accent); }
+.hearth .lu-step .sn .ic { width: 14px; height: 14px; }
+.hearth .lu-step .st { font-family: var(--serif); font-size: 16px; color: var(--ink-3); }
+.hearth .lu-step.active .st { color: var(--ink); }
+.hearth .lu-step .substep { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+
+/* ---- stage ---- */
+.hearth .stage { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px; box-shadow: var(--shadow); min-height: 440px; display: flex; flex-direction: column; }
+.hearth .stage-body { flex: 1; padding: 30px 32px; min-width: 0; }
+.hearth .pane h2 { font-family: var(--serif); font-weight: 500; font-size: 27px; margin: 0 0 6px; letter-spacing: -.01em; color: var(--ink); }
+.hearth .pane > .lede { margin-bottom: 24px; }
+
+.hearth .lu-banner { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 11px; border: 1px solid var(--rule); background: var(--bg-2); margin-bottom: 22px; }
+.hearth .lu-banner .bl { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .lu-banner .bc { font-family: var(--serif); font-size: 20px; color: var(--ink); }
+.hearth .lu-banner .bv { margin-left: auto; font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--accent); }
+
+.hearth .lu-group { margin-top: 26px; }
+.hearth .lu-group:first-child { margin-top: 0; }
+.hearth .lu-group > h3 { font-family: var(--serif); font-weight: 500; font-size: 20px; margin: 0 0 4px; color: var(--ink); }
+.hearth .lu-group > .gsub { font-family: var(--serif); font-style: italic; font-size: 14.5px; color: var(--ink-3); margin: 0 0 14px; line-height: 1.45; }
+.hearth .lu-group .gsub .hl { font-style: normal; color: var(--accent); }
+
+/* ---- choice cards ---- */
+.hearth .choices { display: grid; gap: 12px; }
+.hearth .choices.two { grid-template-columns: 1fr 1fr; }
+.hearth .choice { text-align: left; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 18px 19px; cursor: pointer; transition: border-color .14s, background .14s; position: relative; width: 100%; display: block; }
+.hearth .choice:hover { border-color: #4a4032; }
+.hearth .choice.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); }
+.hearth .choice.sel::after { content: ""; position: absolute; top: 15px; right: 15px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); }
+.hearth .choice .ct { font-family: var(--serif); font-size: 19px; color: var(--ink); margin-bottom: 4px; padding-right: 26px; }
+.hearth .choice .ct .syn { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-left: 8px; }
+.hearth .choice .cn { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; color: var(--accent); letter-spacing: -.02em; line-height: 1; margin-bottom: 6px; }
+.hearth .choice .cd { font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); line-height: 1.45; }
+.hearth .choice .cd em { font-style: italic; color: var(--ink-2); }
+.hearth .choice .cmeta { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); margin-top: 6px; }
+.hearth .choice.rolled .cn { color: var(--good); }
+
+/* ---- segmented toggle ---- */
+.hearth .seg { display: inline-flex; gap: 5px; padding: 4px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 9px; margin-bottom: 20px; }
+.hearth .seg button { font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); background: none; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+.hearth .seg button.on { color: #211d17; background: var(--accent); }
+
+/* ---- ASI grid ---- */
+.hearth .asi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.hearth .asi-cell { background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 14px 12px; text-align: center; }
+.hearth .asi-cell.up { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 7%, var(--bg-2)); }
+.hearth .asi-cell .ab { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .asi-cell .sc { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 30px; color: var(--ink); line-height: 1.1; position: relative; }
+.hearth .asi-cell.up .sc { color: var(--accent); }
+.hearth .asi-cell .sc .badge { font-size: 11px; color: var(--good); margin-left: 4px; vertical-align: super; }
+.hearth .asi-cell .md { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 8px; }
+.hearth .asi-ctl { display: inline-flex; gap: 6px; }
+.hearth .asi-ctl button { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--rule); background: var(--bg-card); color: var(--ink-2); font-size: 15px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.hearth .asi-ctl button:hover:not(:disabled) { border-color: #4a4032; color: var(--ink); }
+.hearth .asi-ctl button:disabled { opacity: .35; cursor: not-allowed; }
+.hearth .asi-cell .maxlbl { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); margin-top: 6px; }
+.hearth .asi-remaining { font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--ink-3); margin-bottom: 14px; }
+.hearth .asi-remaining[data-complete="true"] { color: var(--good); }
+
+/* ---- generic select / input in stage ---- */
+.hearth .lu-select, .hearth .lu-input { width: 100%; padding: 9px 11px; font-family: var(--sans); font-size: 14px; color: var(--ink); background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; outline: none; }
+.hearth .lu-select:focus, .hearth .lu-input:focus { border-color: var(--accent); }
+.hearth .lu-fieldlabel { display: block; font-family: var(--sans); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); margin-bottom: 7px; }
+.hearth .lu-note { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); margin-top: 10px; line-height: 1.45; }
+
+/* feat detail box */
+.hearth .lu-detail { margin-top: 14px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); }
+.hearth .lu-detail .dt { font-family: var(--serif); font-size: 18px; color: var(--accent); margin-bottom: 5px; }
+.hearth .lu-detail .dd { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); line-height: 1.5; }
+.hearth .lu-detail .dmeta { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--ink-4); margin-top: 8px; }
+.hearth .lu-detail ul { margin: 8px 0 0; padding-left: 18px; }
+.hearth .lu-detail li { font-family: var(--serif); font-size: 14px; color: var(--ink-3); margin-bottom: 3px; }
+
+/* ---- new-feature cards (auto grants) ---- */
+.hearth .nf { display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 16px 18px; border-radius: 11px; border: 1px solid var(--rule); background: var(--bg-2); }
+.hearth .nf + .nf { margin-top: 12px; }
+.hearth .nf .nfi { width: 38px; height: 38px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.hearth .nf .nfi .ic { width: 19px; height: 19px; }
+.hearth .nf .nft { font-family: var(--serif); font-size: 19px; color: var(--ink); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.hearth .nf .nft .src { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .nf .nfd { font-family: var(--serif); font-size: 14.5px; color: var(--ink-3); line-height: 1.45; margin-top: 3px; }
+
+/* tinted info callout (theme tier, ancestry, subclass text, prof bonus) */
+.hearth .lu-callout { padding: 14px 16px; border-radius: 11px; border: 1px solid color-mix(in oklab, var(--magic) 36%, var(--rule)); background: color-mix(in oklab, var(--magic) 8%, var(--bg-2)); margin-top: 12px; }
+.hearth .lu-callout.teal { border-color: color-mix(in oklab, var(--accent-2) 36%, var(--rule)); background: color-mix(in oklab, var(--accent-2) 8%, var(--bg-2)); }
+.hearth .lu-callout.gold { border-color: color-mix(in oklab, var(--accent) 36%, var(--rule)); background: color-mix(in oklab, var(--accent) 7%, var(--bg-2)); }
+.hearth .lu-callout .cot { font-family: var(--serif); font-size: 18px; color: var(--ink); margin-bottom: 4px; }
+.hearth .lu-callout .cod { font-family: var(--serif); font-size: 14px; color: var(--ink-2); line-height: 1.5; }
+.hearth .lu-callout .coflavor { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-3); margin-top: 6px; }
+
+/* feature lists (base/subclass) */
+.hearth .lu-featlist { list-style: none; margin: 0; padding: 0; }
+.hearth .lu-featlist li { font-family: var(--serif); font-size: 15.5px; color: var(--ink-2); padding: 7px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .lu-featlist li:first-child { border-top: 0; }
+.hearth .lu-featlist li strong { color: var(--ink); }
+.hearth .lu-featlist li p { margin: 3px 0 0; font-family: var(--serif); font-size: 13.5px; color: var(--ink-4); line-height: 1.45; }
+.hearth .lu-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* selectable pill list (texts, recitations, genres, ancestry feats) */
+.hearth .pickrow { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg-2); cursor: pointer; transition: border-color .14s, background .14s; margin-bottom: 8px; }
+.hearth .pickrow:hover { border-color: #4a4032; }
+.hearth .pickrow.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-2)); }
+.hearth .pickrow.disabled { opacity: .4; cursor: not-allowed; }
+.hearth .pickrow .pt { font-family: var(--serif); font-size: 16px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.hearth .pickrow.sel .pt { color: var(--accent); }
+.hearth .pickrow .pd { font-family: var(--serif); font-size: 13.5px; color: var(--ink-3); line-height: 1.4; margin-top: 3px; }
+.hearth .pickrow .pmeta { font-family: var(--mono); font-size: 10px; letter-spacing: .03em; color: var(--ink-4); margin-top: 4px; }
+.hearth .pickgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hearth .pickgrid .pickrow { margin-bottom: 0; }
+.hearth .pickcount { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--accent); margin-top: 10px; }
+
+/* selected spell chips that are clickable to remove */
+.hearth .selchip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 13px; color: var(--ink); padding: 5px 11px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--rule)); background: color-mix(in oklab, var(--accent) 10%, transparent); cursor: pointer; }
+.hearth .selchip:hover { border-color: var(--accent); }
+.hearth .selchip .x { color: var(--ink-4); }
+
+/* scroll list for spells */
+.hearth .spelllist { max-height: 280px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 10px; padding: 6px; background: var(--bg-2); }
+.hearth .spell-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 7px; cursor: pointer; font-family: var(--serif); font-size: 15px; color: var(--ink-2); }
+.hearth .spell-row:hover { background: var(--bg-card); color: var(--ink); }
+.hearth .spell-row .lvl { font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: .03em; }
+.hearth .spell-empty { text-align: center; padding: 18px; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-4); }
+.hearth .spell-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.hearth .spell-filters button { font-family: var(--sans); font-size: 11.5px; color: var(--ink-3); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; cursor: pointer; }
+.hearth .spell-filters button.on { color: var(--accent); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 9%, transparent); }
+
+.hearth .swap-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hearth .swap-line .old { text-decoration: line-through; color: var(--bad); }
+.hearth .swap-line .new { color: var(--good); }
+.hearth .swap-line .ar { color: var(--ink-4); }
+
+/* ---- review ---- */
+.hearth .review { display: flex; flex-direction: column; }
+.hearth .rv-group { margin-bottom: 18px; }
+.hearth .rv-group > h3 { font-family: var(--serif); font-weight: 500; font-size: 18px; margin: 0 0 4px; color: var(--ink); }
+.hearth .rv { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--rule-soft); }
+.hearth .rv:first-child { border-top: 0; }
+.hearth .rv .rk { font-family: var(--serif); font-size: 16px; color: var(--ink-2); }
+.hearth .rv .rvv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 15px; color: var(--ink); text-align: right; }
+.hearth .rv .rvv .from { color: var(--ink-4); font-weight: 500; }
+.hearth .rv .rvv .ar { color: var(--ink-4); padding: 0 6px; }
+.hearth .rv .rvv .to { color: var(--accent); }
+.hearth .rv .rvv.good { color: var(--good); }
+
+/* ---- foot ---- */
+.hearth .stage-foot { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--rule-soft); }
+.hearth .stage-foot .prog { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); }
+.hearth .stage-foot .spacer { flex: 1; }
+
+/* class-selection grid (the design has no equivalent; built from choice cards) */
+.hearth .classgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.hearth .classgrid .choice { padding: 14px 15px; }
+.hearth .classgrid .choice .ct { font-size: 17px; margin-bottom: 2px; padding-right: 0; }
+
+/* loading / error states */
+.hearth .lu-state { max-width: 940px; margin: 0 auto; padding: 80px 28px; text-align: center; }
+.hearth .lu-state .lede { display: block; }
+.hearth .lu-error { padding: 14px 16px; border-radius: 11px; border: 1px solid color-mix(in oklab, var(--bad) 36%, var(--rule)); background: color-mix(in oklab, var(--bad) 9%, var(--bg-card)); color: var(--bad); font-family: var(--sans); font-size: 13px; margin-bottom: 18px; }
+
+@media (max-width: 820px) {
+  .hearth .wiz-grid { grid-template-columns: 1fr; }
+  .hearth .steprail { position: static; flex-direction: row; flex-wrap: wrap; }
+  .hearth .choices.two, .hearth .asi-grid, .hearth .classgrid, .hearth .pickgrid { grid-template-columns: 1fr; }
+}

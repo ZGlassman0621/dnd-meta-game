@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Begin a Campaign</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+
+    /* ── shell ───────────────────────────────────────── */
+    .atelier { max-width: 1280px; margin: 0 auto; padding: 34px 30px 132px; }
+    .at-eyebrow { display: flex; align-items: center; gap: 13px; margin-bottom: 8px; }
+    .at-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+    .at-eyebrow .restart {
+      display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer;
+      font-family: var(--sans); font-size: 11px; letter-spacing: .04em; color: var(--ink-4); transition: color .14s;
+    }
+    .at-eyebrow .restart:hover { color: var(--ink-2); }
+    .at-eyebrow .restart .ic { width: 13px; height: 13px; }
+
+    .at-title { font-family: var(--serif); font-weight: 500; font-size: 30px; letter-spacing: -.012em; margin: 0 0 4px; color: var(--ink); }
+    .at-title .it { font-style: italic; color: var(--accent); }
+    .at-sub { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-3); margin-bottom: 26px; }
+
+    .at-grid { display: grid; grid-template-columns: 1fr 372px; gap: 30px; align-items: start; }
+
+    /* ════════ GREETING (entry) state ════════ */
+    .greet { display: none; }
+    body.mode-open .greet { display: block; }
+    body.mode-open .at-grid { display: none; }
+
+    .greet-hero {
+      background: var(--bg-card); border: 1px solid var(--rule); border-radius: 14px;
+      box-shadow: var(--shadow); padding: 38px 40px 34px; position: relative; overflow: hidden;
+    }
+    .greet-hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 22%, transparent)); }
+    .greet-op { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 18px; }
+    .orb { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 38% 32%, #e8cf94, var(--accent) 62%, var(--accent-d));
+      box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.4);
+      font-family: var(--serif); font-weight: 600; font-size: 15px; color: #2a2014; flex-shrink: 0; }
+    .greet-op .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .for-char { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12px; color: var(--ink-3); }
+    .for-char b { color: var(--ink-2); font-weight: 600; }
+    .for-char .crestmini { width: 20px; height: 20px; border-radius: 5px; background: linear-gradient(150deg,#3a3326,#211c14); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 11px; color: var(--accent); }
+    .greet-hero h2 { font-family: var(--serif); font-weight: 500; font-size: 33px; line-height: 1.12; letter-spacing: -.014em; margin: 0 0 12px; color: var(--ink); max-width: 660px; }
+    .greet-hero .askp { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 620px; margin: 0 0 26px; text-wrap: pretty; }
+    .greet-hero .askp em { font-style: italic; color: var(--ink); }
+
+    .glabel { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px; }
+
+    .who-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 26px; }
+    .whoc {
+      display: flex; align-items: center; gap: 13px; text-align: left; cursor: pointer;
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 14px 16px;
+      transition: border-color .15s, background .15s, transform .15s;
+    }
+    .whoc:hover { border-color: color-mix(in oklab, var(--accent) 42%, var(--rule)); background: var(--bg-card); transform: translateY(-2px); }
+    .whoc.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-card)); }
+    .whoc .crest { width: 46px; height: 46px; }
+    .whoc .crest .mono { font-size: 24px; }
+    .whoc .crest .lvl { width: 22px; height: 22px; font-size: 11px; bottom: -6px; right: -6px; }
+    .whoc .wc-blank { width: 46px; height: 46px; border-radius: 10px; border: 1px dashed var(--rule); display: flex; align-items: center; justify-content: center; color: var(--ink-4); flex-shrink: 0; }
+    .whoc .wc-blank .ic { width: 20px; height: 20px; }
+    .whoc .wc-txt { flex: 1; min-width: 0; }
+    .whoc .wc-t { font-family: var(--serif); font-weight: 500; font-size: 18px; color: var(--ink); white-space: nowrap; }
+    .whoc .wc-s { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-3); }
+
+    .seed-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+    .seedc {
+      text-align: left; cursor: pointer; position: relative;
+      background: var(--bg-2); border: 1px solid var(--rule); border-radius: 11px; padding: 16px 18px;
+      transition: border-color .15s, background .15s, transform .15s;
+    }
+    .seedc:hover { border-color: color-mix(in oklab, var(--accent-2) 42%, var(--rule)); transform: translateY(-2px); background: var(--bg-card); }
+    .seedc .stag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-2); margin-bottom: 9px; }
+    .seedc .stag .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); }
+    .seedc h4 { font-family: var(--serif); font-weight: 500; font-size: 19px; margin: 0 0 5px; color: var(--ink); letter-spacing: -.004em; }
+    .seedc p { font-family: var(--serif); font-size: 14px; line-height: 1.48; color: var(--ink-3); margin: 0; }
+
+    .prompt-wrap { position: relative; }
+    .prompt-box {
+      width: 100%; min-height: 96px; resize: none; box-sizing: border-box;
+      background: var(--bg); border: 1px solid var(--rule); border-radius: 12px;
+      padding: 16px 16px 52px; color: var(--ink);
+      font-family: var(--serif); font-size: 17px; line-height: 1.55;
+      transition: border-color .15s;
+    }
+    .prompt-box::placeholder { color: var(--ink-4); font-style: italic; }
+    .prompt-box:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+    .prompt-send { position: absolute; right: 10px; bottom: 10px; }
+
+    /* ════════ COMPOSE state ════════ */
+    .thread { display: flex; flex-direction: column; gap: 22px; }
+
+    .turn { display: flex; gap: 14px; }
+    .turn .who { width: 28px; flex-shrink: 0; }
+    .turn .who .orb { width: 28px; height: 28px; font-size: 14px; }
+    .turn .body { flex: 1; min-width: 0; }
+    .turn .speaker { font-family: var(--mono); font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 6px; }
+    .turn.op .prose { font-family: var(--serif); font-size: 18px; line-height: 1.62; color: var(--ink); max-width: 640px; text-wrap: pretty; }
+    .turn.op .prose em { font-style: italic; color: var(--ink-2); }
+
+    .turn.you { justify-content: flex-end; }
+    .turn.you .you-note {
+      max-width: 460px; background: var(--bg-2); border: 1px solid var(--rule);
+      border-left: 2px solid color-mix(in oklab, var(--accent) 55%, var(--rule));
+      border-radius: 8px; padding: 11px 15px;
+      font-family: var(--serif); font-style: italic; font-size: 15.5px; line-height: 1.5; color: var(--ink-2);
+    }
+    .turn.you .yl { display: block; font-family: var(--mono); font-style: normal; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 5px; }
+
+    /* premise draft card */
+    .premise-card {
+      position: relative; background: var(--bg-card); border: 1px solid var(--rule);
+      border-radius: 12px; box-shadow: var(--shadow-sm); padding: 22px 24px 20px; overflow: hidden;
+      max-width: 660px;
+    }
+    .premise-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 25%, transparent)); }
+    .pc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
+    .pc-marker { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+    .pc-spoil { margin-left: auto; }
+    .pc-title { font-family: var(--serif); font-weight: 500; font-size: 30px; letter-spacing: -.012em; margin: 0 0 12px; color: var(--ink); }
+    .pc-prose { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink); text-wrap: pretty; margin: 0 0 16px; }
+    .pc-prose em { font-style: italic; color: var(--ink-2); }
+    .pc-meta { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 15px; border-top: 1px solid var(--rule-soft); }
+
+    /* opening scene preview */
+    .scene-card {
+      max-width: 660px; background: var(--page); border: 1px solid var(--rule); border-radius: 12px;
+      padding: 4px 0; box-shadow: var(--shadow-sm); position: relative;
+    }
+    .scene-inner { padding: 18px 24px 20px; }
+    .scene-strip { display: flex; align-items: center; gap: 9px; padding: 11px 24px; border-bottom: 1px solid var(--rule-soft); }
+    .scene-strip .tagpill { font-size: 9.5px; }
+    .scene-dir { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-3); margin: 0 0 10px; letter-spacing: .01em; }
+    .scene-prose { font-family: var(--serif); font-size: 18px; line-height: 1.66; color: var(--ink); text-wrap: pretty; margin: 0; }
+    .scene-prose em { font-style: italic; color: var(--ink-2); }
+    .scene-prose .drop { float: left; font-size: 50px; line-height: .82; padding: 4px 9px 0 0; color: var(--accent); font-weight: 600; }
+
+    /* composer */
+    .composer { margin-top: 30px; max-width: 660px; }
+    .nudges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .nudges .nlbl { font-family: var(--sans); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); margin-right: 2px; }
+    .nudge { cursor: pointer; transition: border-color .14s, color .14s, background .14s; }
+    .nudge:hover { border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); color: var(--ink); background: var(--raise); }
+    .nudge.regen { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); }
+    .nudge .ic { width: 12px; height: 12px; }
+    .comp-field { position: relative; }
+    .comp-field textarea {
+      width: 100%; min-height: 64px; resize: none; box-sizing: border-box;
+      background: var(--bg); border: 1px solid var(--rule); border-radius: 11px;
+      padding: 14px 60px 14px 16px; color: var(--ink);
+      font-family: var(--serif); font-size: 16px; line-height: 1.5;
+    }
+    .comp-field textarea::placeholder { color: var(--ink-4); font-style: italic; }
+    .comp-field textarea:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+    .comp-send { position: absolute; right: 9px; bottom: 9px; width: 40px; height: 40px; padding: 0; }
+    .comp-send .ic { width: 17px; height: 17px; }
+
+    /* thinking indicator */
+    .thinking { display: flex; gap: 5px; align-items: center; padding: 3px 0; }
+    .thinking .d { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .35; animation: think 1.1s infinite ease-in-out; }
+    .thinking .d:nth-child(2) { animation-delay: .18s; }
+    .thinking .d:nth-child(3) { animation-delay: .36s; }
+    @keyframes think { 0%,100% { opacity: .3; transform: translateY(0); } 45% { opacity: 1; transform: translateY(-3px); } }
+
+    /* ════════ RIGHT RAIL ════════ */
+    .rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 78px; }
+    .dpanel { background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+    .dphead { display: flex; align-items: center; gap: 8px; padding: 14px 16px 11px; border-bottom: 1px solid var(--rule-soft); }
+    .dphead .ic { width: 13px; height: 13px; color: var(--ink-4); }
+    .dphead .t { font-family: var(--sans); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .dphead .by { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); display: inline-flex; align-items: center; gap: 5px; }
+    .dphead .by .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 70%, transparent); }
+    .dpbody { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 17px; }
+
+    .dial { }
+    .dial > .dl { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+    .dial .dl .k { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+    .dial .dl .edit { font-family: var(--sans); font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: 0; padding: 0; }
+    .dial .dl .edit:hover { text-decoration: underline; }
+
+    .seg { display: flex; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 3px; gap: 3px; }
+    .seg button { flex: 1; background: none; border: 0; cursor: pointer; padding: 7px 3px; border-radius: 6px;
+      font-family: var(--sans); font-weight: 500; font-size: 10.5px; letter-spacing: -.005em; color: var(--ink-3); transition: background .14s, color .14s; white-space: nowrap; }
+    .seg button:hover { color: var(--ink-2); }
+    .seg button.on { background: var(--accent); color: #211d17; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.2); }
+
+    .chiprow { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chiprow .chip { cursor: pointer; transition: border-color .14s, background .14s, color .14s; }
+    .chiprow .chip:hover { border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); }
+
+    .setting-val { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 9px; padding: 10px 12px; }
+    .setting-val .pin { width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; color: var(--accent-2); }
+    .setting-val .pin .ic { width: 15px; height: 15px; }
+    .setting-val .sv-t { font-family: var(--serif); font-weight: 500; font-size: 15.5px; color: var(--ink); }
+    .setting-val .sv-s { font-family: var(--serif); font-style: italic; font-size: 12.5px; color: var(--ink-3); }
+
+    .party { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .pmem { display: flex; align-items: center; gap: 9px; background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 13px 5px 5px; }
+    .pmem .av { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-weight: 600; font-size: 13px; flex-shrink: 0; }
+    .pmem .av.hero { background: linear-gradient(150deg,#3a3326,#211c14); border: 1px solid var(--rule); color: var(--accent); }
+    .pmem .av.ally { background: color-mix(in oklab, var(--accent-2) 22%, var(--bg-card)); border: 1px solid color-mix(in oklab, var(--accent-2) 40%, var(--rule)); color: var(--accent-2); }
+    .pmem .pn { font-family: var(--serif); font-size: 14px; color: var(--ink); }
+    .pmem .pr { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-4); }
+    .add-mem { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; background: none; border: 1px dashed var(--rule); border-radius: 999px; padding: 7px 14px; color: var(--ink-3); font-family: var(--sans); font-size: 12px; transition: border-color .14s, color .14s; }
+    .add-mem:hover { border-color: color-mix(in oklab, var(--accent) 45%, var(--rule)); color: var(--ink-2); }
+    .add-mem .ic { width: 13px; height: 13px; }
+
+    .toggle-row { display: flex; align-items: center; gap: 10px; }
+    .tg { width: 38px; height: 22px; border-radius: 999px; background: var(--accent); border: 1px solid var(--accent); position: relative; cursor: pointer; transition: background .15s, border-color .15s; flex-shrink: 0; }
+    .tg::after { content: ""; position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 50%; background: #211d17; transition: left .15s; }
+    .tg.off { background: var(--bg); border-color: var(--rule); }
+    .tg.off::after { left: 2px; background: var(--ink-4); }
+    .toggle-row .tt { font-family: var(--serif); font-size: 14px; color: var(--ink-2); }
+
+    .veil-btn { display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer; background: var(--bg); border: 1px solid var(--rule); border-radius: 9px; padding: 10px 12px; transition: border-color .14s; text-align: left; }
+    .veil-btn:hover { border-color: color-mix(in oklab, var(--warn) 40%, var(--rule)); }
+    .veil-btn .ic { width: 15px; height: 15px; color: var(--warn); flex-shrink: 0; }
+    .veil-btn .vt { font-family: var(--serif); font-size: 14.5px; color: var(--ink); }
+    .veil-btn .vc { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--ink-3); }
+
+    /* mini plan-forming */
+    .plan-mini .dpbody { padding: 6px 16px 14px; gap: 0; }
+    .pmrow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--rule-soft); }
+    .pmrow:first-child { border-top: 0; }
+    .pmrow .k { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); white-space: nowrap; }
+    .pmrow .v { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink); text-align: right; }
+    .pmrow .v.accent { color: var(--accent); }
+    .pmrow .v.veiled { color: var(--ink-4); }
+
+    /* ── inline dial editors (genre/tone, setting) ── */
+    .dial-edit { display: none; margin-top: 12px; padding-top: 13px; border-top: 1px solid var(--rule-soft); }
+    .dial-edit.open { display: block; animation: dialOpen .2s ease both; }
+    @keyframes dialOpen { from { opacity: 0; transform: translateY(-4px); } }
+    .de-group { margin-bottom: 13px; }
+    .de-group:last-child { margin-bottom: 0; }
+    .de-glabel { font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 9px; }
+    .de-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .de-actions .spacer { flex: 1; }
+    .set-input { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; color: var(--ink); font-family: var(--serif); font-size: 14.5px; }
+    .set-input:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 50%, var(--rule)); }
+    .set-input + .set-input { margin-top: 8px; }
+    .opus-redo { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer; font-family: var(--sans); font-size: 11px; color: var(--accent); padding: 0; }
+    .opus-redo:hover { text-decoration: underline; }
+    .opus-redo .ic { width: 12px; height: 12px; }
+    .party-note { font-family: var(--serif); font-style: italic; font-size: 13px; line-height: 1.45; color: var(--ink-3); margin: 11px 0 0; }
+
+    /* ── content-boundaries modal ── */
+    .modal.cb { width: 560px; }
+    .modal.cb .modal-body { max-height: 58vh; overflow-y: auto; }
+    .cb-sub { font-family: var(--serif); font-style: italic; font-size: 15px; line-height: 1.5; color: var(--ink-3); margin: 0 0 16px; }
+    .cb-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 6px; font-family: var(--sans); font-size: 11px; color: var(--ink-3); }
+    .cb-legend b { font-weight: 600; }
+    .cb-legend .lo b { color: var(--ink-2); }
+    .cb-legend .lv b { color: var(--warn); }
+    .cb-legend .ll b { color: var(--bad); }
+    .cb-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule-soft); }
+    .cb-row .cb-t { flex: 1; font-family: var(--serif); font-size: 16.5px; color: var(--ink); }
+    .cb-seg { display: flex; background: var(--bg); border: 1px solid var(--rule); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
+    .cb-seg button { background: none; border: 0; cursor: pointer; padding: 5px 12px; border-radius: 5px; font-family: var(--sans); font-weight: 500; font-size: 11px; color: var(--ink-4); transition: background .14s, color .14s; }
+    .cb-seg button:hover { color: var(--ink-2); }
+    .cb-seg button[data-s="open"].on { background: var(--raise); color: var(--ink); }
+    .cb-seg button[data-s="veil"].on { background: color-mix(in oklab, var(--warn) 24%, var(--bg-card)); color: var(--warn); }
+    .cb-seg button[data-s="line"].on { background: color-mix(in oklab, var(--bad) 24%, var(--bg-card)); color: var(--bad); }
+    .modal-foot .foot-note { margin-right: auto; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-4); }
+
+    /* ════════ STICKY COMMIT FOOTER ════════ */
+    .commit {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+      background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+      backdrop-filter: blur(10px); border-top: 1px solid var(--rule);
+      padding: 13px 30px;
+    }
+    .commit .inner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; gap: 16px; }
+    .commit .save { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--ink-4); display: inline-flex; align-items: center; gap: 8px; }
+    .commit .save .ic { width: 13px; height: 13px; color: var(--good); }
+    .commit .spacer { flex: 1; }
+    .commit .ttl { text-align: right; }
+    .commit .ttl .tl { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); display: block; margin-bottom: 2px; }
+    .commit .ttl .tn { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--accent); }
+    .commit .begin { padding: 13px 26px; font-size: 13px; }
+    .commit .begin .ic { width: 15px; height: 15px; }
+    body.mode-open .commit { display: none; }
+
+    /* ════════ CINEMATIC BEGIN ════════ */
+    .cinema {
+      position: fixed; inset: 0; z-index: 120; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; padding: 40px;
+      background:
+        radial-gradient(900px 600px at 50% 30%, rgba(201,169,106,.10), transparent 70%),
+        #0d0b07;
+      opacity: 0; visibility: hidden; transition: opacity .8s ease, visibility .8s;
+    }
+    .cinema.on { opacity: 1; visibility: visible; }
+    .cin-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); opacity: 0; transform: translateY(8px); }
+    .cin-title { font-family: var(--serif); font-weight: 500; font-size: 64px; line-height: 1.05; letter-spacing: -.02em; color: var(--ink); margin: 18px 0 22px; opacity: 0; transform: translateY(12px); max-width: 16ch; }
+    .cin-line { font-family: var(--serif); font-style: italic; font-size: 21px; line-height: 1.55; color: var(--ink-2); max-width: 30ch; opacity: 0; transform: translateY(10px); }
+    .cin-status { margin-top: 44px; display: inline-flex; align-items: center; gap: 10px; opacity: 0; font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+    .cinema.run .cin-eyebrow { opacity: 1; transform: none; transition: opacity .7s ease .25s, transform .7s ease .25s; }
+    .cinema.run .cin-title { opacity: 1; transform: none; transition: opacity .9s ease .6s, transform .9s ease .6s; }
+    .cinema.run .cin-line { opacity: 1; transform: none; transition: opacity .9s ease 1.25s, transform .9s ease 1.25s; }
+    .cinema.run .cin-status { opacity: 1; transition: opacity .7s ease 2.1s; }
+    .cin-skip { position: fixed; bottom: 26px; right: 30px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); background: none; border: 0; cursor: pointer; opacity: 0; transition: opacity .7s ease 2.1s; }
+    .cinema.run .cin-skip { opacity: 1; }
+    .cin-skip:hover { color: var(--ink-2); }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .fade-in { animation: fadeUp .5s ease both; }
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }
+    }
+  </style>
+</head>
+<body class="app-bg mode-compose">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Campaigns.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Campaigns</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="atelier">
+    <div class="at-eyebrow">
+      <span class="eyebrow">New campaign</span>
+      <span class="ln"></span>
+      <button class="restart" id="restart" type="button"><svg class="ic"><use href="#i-refresh"/></svg>Start over</button>
+    </div>
+
+    <!-- ─────────── GREETING ─────────── -->
+    <section class="greet">
+      <div class="greet-hero">
+        <div class="greet-op"><span class="orb">O</span><span class="lbl">Opus</span><span class="for-char"><span class="crestmini">D</span>Creating for <b>Dravyr Wyrmrest</b></span></div>
+        <h2>Every campaign begins as a single sentence. Tell me yours.</h2>
+        <p class="askp">I'll take whatever you give me — a mood, a place, a wound Dravyr still carries — and build the world around it: its people, its map, the truth at its centre. <em>You set the weather. I'll write the storm.</em></p>
+
+        <p class="glabel">What do you want to play?</p>
+        <div class="prompt-wrap">
+          <textarea class="prompt-box" id="promptBox" placeholder="A rain-soaked political mystery in a sinking canal city… a slow horror in a town that's forgotten how to grieve… or just a word: revenge, pilgrimage, heist."></textarea>
+          <button class="btn primary prompt-send" id="promptSend" type="button"><svg class="ic"><use href="#i-send"/></svg>Begin with Opus</button>
+        </div>
+
+        <p class="glabel">Not sure where to begin? Start from a thread I drew from Dravyr</p>
+        <div class="seed-row">
+          <button class="seedc" type="button" data-seed="passes">
+            <span class="stag"><span class="dot"></span>From your background · Hermit</span>
+            <h4>The high passes</h4>
+            <p>The years that made you a hermit left a debt to a mountain monastery unpaid — and the early snows won't let it stay buried.</p>
+          </button>
+          <button class="seedc" type="button" data-seed="surprise">
+            <span class="stag"><span class="dot"></span>Opus's choice</span>
+            <h4>Surprise me</h4>
+            <p>Not sure what you're after? I'll conjure an adventure from nothing, and we'll shape it together as we go.</p>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── COMPOSE ─────────── -->
+    <div class="at-grid">
+      <section class="thread-col">
+        <h1 class="at-title">Opus is writing <span class="it">The Debt of Snows</span></h1>
+        <p class="at-sub">A draft in progress · nudge it below, or begin when it feels right.</p>
+
+        <div class="thread" id="thread">
+          <!-- seeded turns injected by JS -->
+        </div>
+
+        <div class="composer">
+          <div class="nudges">
+            <span class="nlbl">Nudge</span>
+            <span class="chip nudge" data-nudge="darker">Darker</span>
+            <span class="chip nudge" data-nudge="hopeful">More hopeful</span>
+            <span class="chip nudge" data-nudge="stakes">Raise the stakes</span>
+            <span class="chip nudge" data-nudge="intimate">Keep it intimate</span>
+            <span class="chip nudge" data-nudge="oneshot">Make it a one-shot</span>
+            <span class="chip nudge regen" data-nudge="regen"><svg class="ic"><use href="#i-refresh"/></svg>Regenerate</span>
+          </div>
+          <div class="comp-field">
+            <textarea id="compInput" placeholder="Tell Opus more, or change a detail of the draft…"></textarea>
+            <button class="btn primary comp-send" id="compSend" type="button"><svg class="ic"><use href="#i-send"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT RAIL -->
+      <aside class="rail-col">
+        <div class="rail">
+          <div class="dpanel">
+            <div class="dphead"><svg class="ic"><use href="#i-sliders"/></svg><span class="t">The shape of it</span><span class="by"><span class="dot"></span>Set by Opus</span></div>
+            <div class="dpbody">
+
+              <div class="dial">
+                <div class="dl"><span class="k">Scope &amp; length</span></div>
+                <div class="seg" id="segScope">
+                  <button type="button" data-v="one">One-shot</button>
+                  <button type="button" class="on" data-v="arc">Short arc</button>
+                  <button type="button" data-v="open">Ongoing campaign</button>
+                </div>
+              </div>
+
+              <div class="dial" id="toneDial">
+                <div class="dl"><span class="k">Genre &amp; tone</span><button class="edit" id="toneToggle" type="button">Change</button></div>
+                <div class="chiprow" id="toneSummary"></div>
+                <div class="dial-edit" id="toneEdit">
+                  <div class="de-group">
+                    <div class="de-glabel">Genre</div>
+                    <div class="chiprow" data-grp="genre">
+                      <span class="chip on">Mystery</span>
+                      <span class="chip on">Survival</span>
+                      <span class="chip">Horror</span>
+                      <span class="chip">Heroic</span>
+                      <span class="chip">Intrigue</span>
+                      <span class="chip">Exploration</span>
+                      <span class="chip">Heist</span>
+                      <span class="chip">Warfare</span>
+                    </div>
+                  </div>
+                  <div class="de-group">
+                    <div class="de-glabel">Tone</div>
+                    <div class="chiprow" data-grp="tone">
+                      <span class="chip on">Quiet dread</span>
+                      <span class="chip">Grim</span>
+                      <span class="chip">Hopeful</span>
+                      <span class="chip">Whimsical</span>
+                      <span class="chip">Epic</span>
+                      <span class="chip">Gritty</span>
+                      <span class="chip">Bittersweet</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dial" id="setDial">
+                <div class="dl"><span class="k">Setting</span><button class="edit" id="setToggle" type="button">Edit</button></div>
+                <div class="setting-val">
+                  <span class="pin"><svg class="ic"><use href="#i-pin"/></svg></span>
+                  <span><span class="sv-t" id="setName">The Cinderpeak Reach</span><br><span class="sv-s" id="setDescTxt">high passes · a snowbound monastery road</span></span>
+                </div>
+                <div class="dial-edit" id="setEdit">
+                  <input class="set-input" id="setNameI" value="The Cinderpeak Reach" />
+                  <input class="set-input" id="setDescI" value="high passes · a snowbound monastery road" />
+                  <div class="de-actions">
+                    <button class="opus-redo" id="setRedo" type="button"><svg class="ic"><use href="#i-refresh"/></svg>Let Opus reimagine</button>
+                    <span class="spacer"></span>
+                    <button class="btn sm" id="setCancel" type="button">Cancel</button>
+                    <button class="btn primary sm" id="setSave" type="button">Save</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dial">
+                <div class="dl"><span class="k">Your party</span></div>
+                <div class="party" id="party">
+                  <span class="pmem"><span class="av hero">D</span><span><span class="pn">Dravyr</span> <span class="pr">you</span></span></span>
+                </div>
+                <p class="party-note">You set out alone &mdash; companions join as the story finds them.</p>
+              </div>
+
+              <div class="dial">
+                <div class="dl"><span class="k">Difficulty &amp; the DM</span></div>
+                <div class="toggle-row" style="margin-bottom:10px"><span class="tg" id="tgInherit"></span><span class="tt">Inherit from Settings</span></div>
+                <div class="setting-val">
+                  <span class="pin"><svg class="ic"><use href="#i-shield"/></svg></span>
+                  <span><span class="sv-t">Challenging · measured</span><br><span class="sv-s">death is possible · Opus narrates with restraint</span></span>
+                </div>
+              </div>
+
+              <div class="dial">
+                <div class="dl"><span class="k">Content boundaries</span></div>
+                <button class="veil-btn" id="veilBtn" type="button">
+                  <svg class="ic"><use href="#i-eye-off"/></svg>
+                  <span class="vt">Lines &amp; veils for the table</span>
+                  <span class="vc" id="cbCount">3 set</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="dpanel plan-mini">
+            <div class="dphead"><svg class="ic"><use href="#i-globe"/></svg><span class="t">Campaign plan · forming</span></div>
+            <div class="dpbody">
+              <div class="pmrow"><span class="k">Region</span><span class="v" id="planRegion">The Cinderpeak Reach</span></div>
+              <div class="pmrow"><span class="k">Locations</span><span class="v accent" id="locCount">4 drafted</span></div>
+              <div class="pmrow"><span class="k">Named NPCs</span><span class="v accent" id="npcCount">3</span></div>
+              <div class="pmrow"><span class="k">The truth</span><span class="v veiled">behind a veil</span></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- sticky commit -->
+  <div class="commit">
+    <div class="inner">
+      <span class="save"><svg class="ic"><use href="#i-check"/></svg>Draft autosaved to Dravyr's home</span>
+      <span class="spacer"></span>
+      <span class="ttl"><span class="tl">Your campaign</span><span class="tn" id="commitTitle">The Debt of Snows</span></span>
+      <button class="btn primary begin" id="beginBtn" type="button"><svg class="ic"><use href="#i-play"/></svg>Begin the first session</button>
+    </div>
+  </div>
+
+  <!-- content boundaries modal -->
+  <div class="scrim" id="cbScrim" style="display:none">
+    <div class="modal cb">
+      <div class="modal-head"><h3>Content boundaries</h3></div>
+      <div class="modal-body scroll">
+        <p class="cb-sub">Tell Opus what your table will and won't put on the page. Change these any time during play.</p>
+        <div class="cb-legend">
+          <span class="lo"><b>Open</b> — shown in full</span>
+          <span class="lv"><b>Veil</b> — happens off the page</span>
+          <span class="ll"><b>Line</b> — never appears</span>
+        </div>
+        <div class="cb-list" id="cbList"></div>
+      </div>
+      <div class="modal-foot">
+        <span class="foot-note" id="cbFootNote">3 boundaries set</span>
+        <button class="btn" data-cb-close type="button">Cancel</button>
+        <button class="btn primary" data-cb-close type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- cinematic begin -->
+  <div class="cinema" id="cinema">
+    <div class="cin-eyebrow" id="cinEyebrow">Session 1 · The Cinderpeak Reach</div>
+    <div class="cin-title" id="cinTitle">The Debt of Snows</div>
+    <div class="cin-line">The road climbs past the last village, and the first snow finds your shoulders like a hand that remembers you.</div>
+    <div class="cin-status"><span class="thinking"><span class="d"></span><span class="d"></span><span class="d"></span></span>Opus is setting the scene</div>
+    <button class="cin-skip" id="cinSkip" type="button">Skip →</button>
+  </div>
+
+  <script>
+  (function () {
+    var body = document.body;
+    if (location.hash === '#start') { body.classList.remove('mode-compose'); body.classList.add('mode-open'); }
+
+    /* ── conversation thread ── */
+    var thread = document.getElementById('thread');
+    var seedTurns = [
+      { who: 'you', label: 'You asked for', text: 'Something that finally pays off Dravyr\u2019s old debt to the mountain monastery. Quiet, high, and cold \u2014 more survival than swords. I want the mountain itself to feel like it\u2019s watching.' },
+      { who: 'op', text: 'Good. A debt is a kind of gravity \u2014 it pulls a person back to the one place they swore never to return. I\u2019ve set your story in <em>the Cinderpeak Reach</em>, where a single road threads up to a monastery that keeps something colder than faith. Here is the shape of it.' },
+      { type: 'premise' },
+      { who: 'op', text: 'And here is where it opens \u2014 the first breath, before any dice are cast.' },
+      { type: 'scene' },
+      { who: 'op', text: 'Tell me to raise the stakes or keep it close to the bone, change any dial to the right, or \u2014 when it feels like yours \u2014 press <em>Begin</em>.' }
+    ];
+
+    var premiseHTML =
+      '<div class="premise-card fade-in">' +
+        '<div class="pc-head"><span class="pc-marker">The premise</span>' +
+          '<span class="pc-spoil"><span class="tagpill" style="color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,var(--rule))"><svg class="ic" style="width:11px;height:11px"><use href="#i-eye-off"/></svg>Spoilers veiled</span></span></div>' +
+        '<h3 class="pc-title" id="premiseTitle">The Debt of Snows</h3>' +
+        '<p class="pc-prose">Years ago a mountain monastery saved Dravyr\u2019s life and named a price he never paid. Now the monks have gone silent through a winter that came too early, and the debt has been called in the only way the mountain knows: <em>the snow will not let you leave until it is settled.</em> Climb the Reach, learn what the brothers were keeping, and decide what a life is worth when the cold is doing the asking.</p>' +
+        '<div class="pc-meta">' +
+          '<span class="chip"><svg class="ic" style="width:11px;height:11px"><use href="#i-pin"/></svg><span id="premRegion">The Cinderpeak Reach</span></span>' +
+          '<span class="chip"><svg class="ic" style="width:11px;height:11px"><use href="#i-clock"/></svg>Short arc · ~5 sessions</span>' +
+          '<span class="chip">Mystery · survival</span>' +
+          '<span class="chip">Quiet dread</span>' +
+        '</div>' +
+      '</div>';
+
+    var sceneHTML =
+      '<div class="scene-card fade-in">' +
+        '<div class="scene-strip">' +
+          '<span class="tagpill"><svg class="ic" style="width:11px;height:11px"><use href="#i-pin"/></svg>The Reach · lower switchbacks</span>' +
+          '<span class="tagpill"><em>dusk · first snow</em></span>' +
+        '</div>' +
+        '<div class="scene-inner">' +
+          '<p class="scene-dir">Opening scene — read aloud</p>' +
+          '<p class="scene-prose"><span class="drop">T</span>he last village falls away below you, its lamps already swallowed by the climbing dark. Snow begins \u2014 not falling so much as <em>arriving</em>, fine and patient, settling into the seams of your cloak. Ahead, the road narrows to a ribbon of grey between two black walls of stone, and somewhere above, past the place where the wind starts to sound like voices, a single bell tolls once and goes still. <em>You have been here before. You promised you would not come again.</em></p>' +
+        '</div>' +
+      '</div>';
+
+    function renderTurns(list) {
+      list.forEach(function (t) {
+        var el = document.createElement('div');
+        if (t.type === 'premise') { el.innerHTML = premiseHTML; thread.appendChild(el.firstChild); return; }
+        if (t.type === 'scene') { el.innerHTML = sceneHTML; thread.appendChild(el.firstChild); return; }
+        el.className = 'turn ' + (t.who === 'op' ? 'op' : t.who) + ' fade-in';
+        if (t.who === 'op') {
+          el.innerHTML = '<div class="who"><span class="orb">O</span></div>' +
+            '<div class="body"><div class="speaker">Opus</div><div class="prose">' + t.text + '</div></div>';
+        } else {
+          el.innerHTML = '<div class="you-note"><span class="yl">' + (t.label || 'You') + '</span>' + t.text + '</div>';
+        }
+        thread.appendChild(el);
+      });
+    }
+    renderTurns(seedTurns);
+
+    /* ── thinking + reply helper ── */
+    function opusThinking() {
+      var el = document.createElement('div');
+      el.className = 'turn op fade-in';
+      el.innerHTML = '<div class="who"><span class="orb">O</span></div>' +
+        '<div class="body"><div class="speaker">Opus</div><div class="thinking"><span class="d"></span><span class="d"></span><span class="d"></span></div></div>';
+      thread.appendChild(el);
+      return el;
+    }
+    function opusReply(html) {
+      var el = document.createElement('div');
+      el.className = 'turn op fade-in';
+      el.innerHTML = '<div class="who"><span class="orb">O</span></div>' +
+        '<div class="body"><div class="speaker">Opus</div><div class="prose">' + html + '</div></div>';
+      thread.appendChild(el);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+    function youNote(label, text) {
+      var el = document.createElement('div');
+      el.className = 'turn you fade-in';
+      el.innerHTML = '<div class="you-note"><span class="yl">' + label + '</span>' + text + '</div>';
+      thread.appendChild(el);
+    }
+
+    /* scripted nudge responses */
+    var nudgeReplies = {
+      darker: 'I\u2019ll let more shadow in. The monks didn\u2019t simply starve \u2014 they <em>chose</em> the silence, and the thing they fed it is still hungry. I\u2019ve deepened the dread a shade.',
+      hopeful: 'Then I\u2019ll leave a lantern lit. Someone on the Reach is still trying to do right by the dead \u2014 a reason worth the climb, and a hand that might reach back. Softened the edges, kept the cold.',
+      stakes: 'Raised. The early winter isn\u2019t weather \u2014 it\u2019s spreading, and the valley villages below will be sealed in by the third session. Now the mountain isn\u2019t only yours to survive.',
+      intimate: 'Kept close to the bone, then. No armies, no prophecy \u2014 just you, a debt, and the few souls left on a freezing road. Trimmed the scope to a single, personal reckoning.',
+      oneshot: 'Condensed to a single sitting \u2014 one long night on the Reach, one truth to uncover, one choice at the summit. I\u2019ve set the scope to a one-shot.',
+      regen: 'A different turn of the same key. The debt is now owed to a person, not a place \u2014 a brother who once carried you down the mountain and never came back down himself. Reworked the premise around them.'
+    };
+
+    function applyNudge(kind) {
+      var labels = { darker: 'Nudge', hopeful: 'Nudge', stakes: 'Nudge', intimate: 'Nudge', oneshot: 'Nudge', regen: 'Nudge' };
+      var said = { darker: 'Darker.', hopeful: 'More hopeful.', stakes: 'Raise the stakes.', intimate: 'Keep it intimate.', oneshot: 'Make it a one-shot.', regen: 'Regenerate \u2014 same mood, new story.' };
+      youNote(labels[kind], said[kind]);
+      var t = opusThinking();
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      setTimeout(function () {
+        t.remove();
+        opusReply(nudgeReplies[kind] || 'Reworked.');
+        // reflect a couple changes in the rail
+        if (kind === 'oneshot') setSeg('one');
+        if (kind === 'stakes') { document.getElementById('locCount').textContent = '6 drafted'; document.getElementById('npcCount').textContent = '5'; }
+        if (kind === 'darker') ensureTone('Quiet dread');
+      }, 1050);
+    }
+
+    document.querySelectorAll('.nudge').forEach(function (n) {
+      n.addEventListener('click', function () { applyNudge(n.dataset.nudge); });
+    });
+
+    /* free composer */
+    function sendComposer() {
+      var box = document.getElementById('compInput');
+      var v = box.value.trim();
+      if (!v) return;
+      youNote('You', v.replace(/</g, '&lt;'));
+      box.value = '';
+      var t = opusThinking();
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      setTimeout(function () {
+        t.remove();
+        opusReply('Noted \u2014 I\u2019ve folded that into the draft. Look to the right; the shape shifts as we talk. When it reads true, press <em>Begin</em>.');
+      }, 1050);
+    }
+    document.getElementById('compSend').addEventListener('click', sendComposer);
+    document.getElementById('compInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendComposer(); }
+    });
+
+    /* ── rail interactions ── */
+    function setSeg(v) {
+      document.querySelectorAll('#segScope button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+    }
+    document.querySelectorAll('#segScope button').forEach(function (b) {
+      b.addEventListener('click', function () { setSeg(b.dataset.v); });
+    });
+    /* genre & tone — summary + expandable palette */
+    var toneEdit = document.getElementById('toneEdit');
+    var toneToggle = document.getElementById('toneToggle');
+    var toneSummary = document.getElementById('toneSummary');
+    function renderToneSummary() {
+      var sel = [];
+      toneEdit.querySelectorAll('.chip.on').forEach(function (c) { sel.push(c.textContent.trim()); });
+      if (!sel.length) sel.push('\u2014');
+      toneSummary.innerHTML = sel.map(function (s) { return '<span class="chip on">' + s + '</span>'; }).join('');
+    }
+    toneEdit.querySelectorAll('.chip').forEach(function (c) {
+      c.addEventListener('click', function () { c.classList.toggle('on'); renderToneSummary(); });
+    });
+    toneToggle.addEventListener('click', function () {
+      var open = toneEdit.classList.toggle('open');
+      toneToggle.textContent = open ? 'Done' : 'Change';
+    });
+    renderToneSummary();
+    function ensureTone(name) {
+      toneEdit.querySelectorAll('.chip').forEach(function (c) { if (c.textContent.trim() === name) c.classList.add('on'); });
+      renderToneSummary();
+    }
+
+    var tg = document.getElementById('tgInherit');
+    tg.addEventListener('click', function () { tg.classList.toggle('off'); });
+
+    /* setting editor */
+    var setEdit = document.getElementById('setEdit');
+    var setToggle = document.getElementById('setToggle');
+    var setNameI = document.getElementById('setNameI');
+    var setDescI = document.getElementById('setDescI');
+    var redoPresets = [
+      { n: 'The Cinderpeak Reach', d: 'high passes \u00b7 a snowbound monastery road' },
+      { n: 'The Hollow Coast', d: 'a fog-drowned shore of wreck-towns and tideflats' },
+      { n: 'Vetch & Gallow', d: 'a peat-cut moor where the dead are owed rent' },
+      { n: 'The Ninefold Stair', d: 'a vertical city carved down a canyon wall' }
+    ];
+    var redoIdx = 0;
+    function openSet(open) {
+      setEdit.classList.toggle('open', open);
+      setToggle.textContent = open ? 'Close' : 'Edit';
+    }
+    setToggle.addEventListener('click', function () { openSet(!setEdit.classList.contains('open')); });
+    document.getElementById('setRedo').addEventListener('click', function () {
+      redoIdx = (redoIdx + 1) % redoPresets.length;
+      setNameI.value = redoPresets[redoIdx].n;
+      setDescI.value = redoPresets[redoIdx].d;
+    });
+    document.getElementById('setCancel').addEventListener('click', function () { openSet(false); });
+    document.getElementById('setSave').addEventListener('click', function () {
+      var n = setNameI.value.trim() || 'Untitled region';
+      var d = setDescI.value.trim();
+      document.getElementById('setName').textContent = n;
+      document.getElementById('setDescTxt').textContent = d;
+      var pr = document.getElementById('planRegion'); if (pr) pr.textContent = n;
+      var prem = document.getElementById('premRegion'); if (prem) prem.textContent = n;
+      openSet(false);
+    });
+
+    /* content boundaries modal */
+    var cbScrim = document.getElementById('cbScrim');
+    var cbList = document.getElementById('cbList');
+    var cbCount = document.getElementById('cbCount');
+    var cbFootNote = document.getElementById('cbFootNote');
+    var cbTopics = [
+      { t: 'Graphic violence & gore', s: 'veil' },
+      { t: 'Character death', s: 'open' },
+      { t: 'Harm to children', s: 'line' },
+      { t: 'Torture', s: 'veil' },
+      { t: 'Romance & intimacy', s: 'open' },
+      { t: 'Substance & addiction', s: 'open' },
+      { t: 'Body horror', s: 'open' },
+      { t: 'Slurs & discrimination', s: 'open' }
+    ];
+    var cbStates = ['open', 'veil', 'line'];
+    function cbRender() {
+      cbList.innerHTML = cbTopics.map(function (topic, i) {
+        var segs = cbStates.map(function (s) {
+          return '<button type="button" data-i="' + i + '" data-s="' + s + '"' + (topic.s === s ? ' class="on"' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</button>';
+        }).join('');
+        return '<div class="cb-row"><span class="cb-t">' + topic.t + '</span><div class="cb-seg">' + segs + '</div></div>';
+      }).join('');
+      cbList.querySelectorAll('.cb-seg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          cbTopics[+b.dataset.i].s = b.dataset.s;
+          cbRender(); cbUpdateCount();
+        });
+      });
+    }
+    function cbUpdateCount() {
+      var n = cbTopics.filter(function (x) { return x.s !== 'open'; }).length;
+      cbCount.textContent = n + ' set';
+      cbFootNote.textContent = n + (n === 1 ? ' boundary set' : ' boundaries set');
+    }
+    document.getElementById('veilBtn').addEventListener('click', function () { cbScrim.style.display = 'flex'; });
+    cbScrim.addEventListener('click', function (e) {
+      if (e.target === cbScrim || e.target.hasAttribute('data-cb-close')) cbScrim.style.display = 'none';
+    });
+    cbRender(); cbUpdateCount();
+
+    /* ── greeting → compose ── */
+    document.querySelectorAll('.whoc').forEach(function (w) {
+      w.addEventListener('click', function () {
+        document.querySelectorAll('.whoc').forEach(function (x) { x.classList.remove('sel'); });
+        w.classList.add('sel');
+      });
+    });
+    function toCompose() {
+      body.classList.remove('mode-open');
+      body.classList.add('mode-compose');
+      window.scrollTo({ top: 0 });
+    }
+    document.getElementById('promptSend').addEventListener('click', toCompose);
+    document.querySelectorAll('.seedc').forEach(function (s) {
+      s.addEventListener('click', toCompose);
+    });
+    document.getElementById('restart').addEventListener('click', function () {
+      body.classList.remove('mode-compose');
+      body.classList.add('mode-open');
+      window.scrollTo({ top: 0 });
+    });
+
+    /* ── cinematic begin ── */
+    var cinema = document.getElementById('cinema');
+    var navTimer = null;
+    function goSession() { window.location.href = 'Cockpit - Calm.html'; }
+    document.getElementById('beginBtn').addEventListener('click', function () {
+      cinema.classList.add('on');
+      requestAnimationFrame(function () { requestAnimationFrame(function () { cinema.classList.add('run'); }); });
+      navTimer = setTimeout(goSession, 4200);
+    });
+    document.getElementById('cinSkip').addEventListener('click', function () {
+      if (navTimer) clearTimeout(navTimer);
+      goSession();
+    });
+  })();
+  </script>
+</body>
+</html>

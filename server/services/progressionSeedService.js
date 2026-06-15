@@ -19,9 +19,8 @@
 
 import { THEMES } from '../data/themes.js';
 import { ANCESTRY_FEATS } from '../data/ancestryFeats.js';
-import { TEAM_TACTICS } from '../data/teamTactics.js';
-import { SUBCLASS_THEME_SYNERGIES } from '../data/subclassThemeSynergies.js';
-import { MYTHIC_THEME_AMPLIFICATIONS } from '../data/mythicThemeAmplifications.js';
+// Team tactics, subclass×theme synergies, and mythic×theme amplifications were
+// removed in the MVP — their data files are archived and no longer seeded.
 
 /**
  * Run all seeders. Call after migrations have been applied.
@@ -32,9 +31,6 @@ export async function seedProgressionData(db) {
   results.themes = await seedThemes(db);
   results.theme_abilities = await seedThemeAbilities(db);
   results.ancestry_feats = await seedAncestryFeats(db);
-  results.team_tactics = await seedTeamTactics(db);
-  results.subclass_theme_synergies = await seedSubclassThemeSynergies(db);
-  results.mythic_theme_amplifications = await seedMythicThemeAmplifications(db);
 
   const totalInserted = Object.values(results).reduce((acc, r) => acc + (r.inserted || 0), 0);
   if (totalInserted > 0) {
@@ -219,109 +215,4 @@ async function seedAncestryFeats(db) {
     }
   }
   return { inserted, updated, total: ANCESTRY_FEATS.length };
-}
-
-/**
- * Seed team tactics reference table.
- */
-async function seedTeamTactics(db) {
-  let inserted = 0;
-  for (const tactic of TEAM_TACTICS) {
-    const existing = await db.execute({
-      sql: 'SELECT id FROM team_tactics WHERE id = ?',
-      args: [tactic.id]
-    });
-
-    if (existing.rows.length === 0) {
-      await db.execute({
-        sql: `INSERT INTO team_tactics (
-          id, name, category, description, trigger, effect, requirements
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          tactic.id,
-          tactic.name,
-          tactic.category,
-          tactic.description,
-          tactic.trigger,
-          tactic.effect,
-          tactic.requirements || null
-        ]
-      });
-      inserted++;
-    }
-  }
-  return { inserted, total: TEAM_TACTICS.length };
-}
-
-/**
- * Seed subclass × theme synergies reference table.
- */
-async function seedSubclassThemeSynergies(db) {
-  let inserted = 0;
-  for (const syn of SUBCLASS_THEME_SYNERGIES) {
-    const existing = await db.execute({
-      sql: `SELECT id FROM subclass_theme_synergies
-            WHERE class_name = ? AND subclass_name = ? AND theme_id = ?`,
-      args: [syn.class_name, syn.subclass_name, syn.theme_id]
-    });
-
-    if (existing.rows.length === 0) {
-      await db.execute({
-        sql: `INSERT INTO subclass_theme_synergies (
-          class_name, subclass_name, theme_id, synergy_name,
-          description, mechanics, shared_tags
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          syn.class_name,
-          syn.subclass_name,
-          syn.theme_id,
-          syn.synergy_name,
-          syn.description,
-          syn.mechanics || null,
-          syn.shared_tags || null
-        ]
-      });
-      inserted++;
-    }
-  }
-  return { inserted, total: SUBCLASS_THEME_SYNERGIES.length };
-}
-
-/**
- * Seed mythic × theme amplifications reference table.
- */
-async function seedMythicThemeAmplifications(db) {
-  let inserted = 0;
-  for (const amp of MYTHIC_THEME_AMPLIFICATIONS) {
-    const existing = await db.execute({
-      sql: `SELECT id FROM mythic_theme_amplifications
-            WHERE mythic_path = ? AND theme_id = ?`,
-      args: [amp.mythic_path, amp.theme_id]
-    });
-
-    if (existing.rows.length === 0) {
-      await db.execute({
-        sql: `INSERT INTO mythic_theme_amplifications (
-          mythic_path, theme_id, combo_name, is_dissonant, shared_identity,
-          t1_bonus, t2_bonus, t3_bonus, t4_bonus,
-          dissonant_arc_description, required_threshold_acts
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          amp.mythic_path,
-          amp.theme_id,
-          amp.combo_name,
-          amp.is_dissonant ? 1 : 0,
-          amp.shared_identity || null,
-          amp.t1_bonus || null,
-          amp.t2_bonus || null,
-          amp.t3_bonus || null,
-          amp.t4_bonus || null,
-          amp.dissonant_arc_description || null,
-          amp.required_threshold_acts || null
-        ]
-      });
-      inserted++;
-    }
-  }
-  return { inserted, total: MYTHIC_THEME_AMPLIFICATIONS.length };
 }

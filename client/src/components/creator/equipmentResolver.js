@@ -53,16 +53,50 @@ export function getFocusDescription(label) {
 }
 
 /**
- * "Any X Weapon" predicate — class equipment options often offer
- * "Any Simple Weapon" or "Any Martial Weapon" as a generic choice
- * that the player resolves to a specific weapon. Returns the matching
- * weapon list when applicable, or null.
+ * "Any X Weapon" predicate — class equipment options often offer a generic
+ * weapon choice the player resolves to a specific weapon. Recognizes the
+ * simple/martial tier plus an optional melee/ranged qualifier, e.g.:
+ *   "Any Simple Weapon", "A Martial Weapon", "Any Simple Melee Weapon",
+ *   "Any Martial Ranged Weapon".
+ * Returns the matching weapon list, or null when the label isn't a weapon choice.
  */
 export function getWeaponChoiceList(label) {
   const s = String(label || '').trim().toLowerCase()
-  if (s === 'any simple weapon' || s === 'a simple weapon') return SIMPLE_WEAPONS
-  if (s === 'any martial weapon' || s === 'a martial weapon') return MARTIAL_WEAPONS
-  return null
+  if (!/\bweapons?\b/.test(s)) return null
+  const tier = /\bsimple\b/.test(s) ? 'simple' : /\bmartial\b/.test(s) ? 'martial' : null
+  if (!tier) return null
+  const data = (tier === 'simple' ? equipmentData.simpleWeapons : equipmentData.martialWeapons) || {}
+  const melee = /\bmelee\b/.test(s)
+  const ranged = /\branged\b/.test(s)
+  if (melee && !ranged) return data.melee || []
+  if (ranged && !melee) return data.ranged || []
+  return [...(data.melee || []), ...(data.ranged || [])]
+}
+
+/**
+ * Generic non-weapon "any X" tool / instrument choice. Class equipment
+ * options often offer a choice the player resolves to a specific item:
+ *   "Any Other Musical Instrument", "a musical instrument of your choice",
+ *   "an artisan's tools of your choice", "a gaming set", and the combined
+ *   "Choose one type of artisan's tools or one musical instrument".
+ * Returns an array of pickable item names (strings), or null when the
+ * label isn't one of these generic tool/instrument choices. The combined
+ * "artisan's tools OR musical instrument" form returns both pools.
+ */
+export function getToolChoiceList(label) {
+  const s = String(label || '').trim().toLowerCase()
+  const wantsInstrument = /musical instrument/.test(s)
+  const wantsArtisan = /artisan'?s?\s+tools?/.test(s)
+  const wantsGaming = /gaming set/.test(s)
+  if (!wantsInstrument && !wantsArtisan && !wantsGaming) return null
+  const norm = (x) => (typeof x === 'string' ? x : (x?.name || String(x)))
+  const tools = equipmentData.tools || {}
+  const out = []
+  if (wantsInstrument) (equipmentData.musicalInstruments || []).forEach(i => out.push(norm(i)))
+  if (wantsArtisan) (tools.artisansTools || []).forEach(t => out.push(norm(t)))
+  if (wantsGaming) (tools.gamingSets || []).forEach(t => out.push(norm(t)))
+  const uniq = [...new Set(out.filter(Boolean))]
+  return uniq.length ? uniq.sort((a, b) => a.localeCompare(b)) : null
 }
 
 const ALL_ARMOR = [

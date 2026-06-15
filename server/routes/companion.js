@@ -1,5 +1,5 @@
 import express from 'express';
-import { dbAll, dbGet, dbRun } from '../database.js';
+import { dbAll, dbGet, dbRun, withTransaction } from '../database.js';
 import {
   HIT_DICE,
   PROFICIENCY_BONUS,
@@ -16,7 +16,6 @@ import * as companionBackstoryGenerator from '../services/companionBackstoryGene
 import * as companionBackstoryService from '../services/companionBackstoryService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 import { propagateNpcDeath, canRecruit } from '../services/npcLifecycleService.js';
-import { sendOnActivity, getAwayCompanions, getActivityById, recallCompanion } from '../services/companionActivityService.js';
 import {
   autoAssignCompanionTheme,
   autoSeedCompanionAncestryFeatTier1,
@@ -533,61 +532,68 @@ router.post('/:id/level-up', async (req, res) => {
     // identifies as, and `companion_class_levels` holds the full breakdown.
     const primary = classLevels[0];
 
-    await dbRun(`
-      UPDATE companions SET
-        companion_class = ?,
-        companion_subclass = ?,
-        companion_class_levels = ?,
-        companion_level = ?,
-        companion_max_hp = ?,
-        companion_current_hp = ?,
-        companion_ability_scores = ?
-      WHERE id = ?
-    `, [
-      primary.class,
-      primary.subclass,
-      JSON.stringify(classLevels),
-      newTotalLevel,
-      newMaxHp,
-      newCurrentHp,
-      JSON.stringify(newAbilityScores),
-      req.params.id
-    ]);
+    // Atomic, mirroring the character-side level-up (character.js): the main
+    // stat update plus the theme-tier and ancestry-feat unlocks must all land
+    // together. A mid-sequence failure previously left the companion leveled
+    // but with its tier/feat unlock missing — corrupt progression state the
+    // response reported as success.
+    await withTransaction(async (tx) => {
+      await tx.run(`
+        UPDATE companions SET
+          companion_class = ?,
+          companion_subclass = ?,
+          companion_class_levels = ?,
+          companion_level = ?,
+          companion_max_hp = ?,
+          companion_current_hp = ?,
+          companion_ability_scores = ?
+        WHERE id = ?
+      `, [
+        primary.class,
+        primary.subclass,
+        JSON.stringify(classLevels),
+        newTotalLevel,
+        newMaxHp,
+        newCurrentHp,
+        JSON.stringify(newAbilityScores),
+        req.params.id
+      ]);
 
-    // Apply theme tier auto-unlock, if any
-    if (progressionDecisions.theme_tier_unlock) {
-      const unlock = progressionDecisions.theme_tier_unlock;
-      await dbRun(
-        `INSERT OR REPLACE INTO companion_theme_unlocks
-         (companion_id, theme_id, tier, tier_ability_id, unlocked_at_level, narrative_delivery)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          req.params.id,
-          unlock.theme_id,
-          unlock.tier,
-          unlock.tier_ability_id,
-          newTotalLevel,
-          `Auto-unlocked at level ${newTotalLevel} during companion level-up.`
-        ]
-      );
-    }
+      // Apply theme tier auto-unlock, if any
+      if (progressionDecisions.theme_tier_unlock) {
+        const unlock = progressionDecisions.theme_tier_unlock;
+        await tx.run(
+          `INSERT OR REPLACE INTO companion_theme_unlocks
+           (companion_id, theme_id, tier, tier_ability_id, unlocked_at_level, narrative_delivery)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            req.params.id,
+            unlock.theme_id,
+            unlock.tier,
+            unlock.tier_ability_id,
+            newTotalLevel,
+            `Auto-unlocked at level ${newTotalLevel} during companion level-up.`
+          ]
+        );
+      }
 
-    // Apply ancestry feat auto-pick, if any
-    if (progressionDecisions.ancestry_feat_auto_pick) {
-      const pick = progressionDecisions.ancestry_feat_auto_pick;
-      await dbRun(
-        `INSERT OR REPLACE INTO companion_ancestry_feats
-         (companion_id, feat_id, tier, selected_at_level, narrative_delivery)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          req.params.id,
-          pick.feat_id,
-          pick.tier,
-          newTotalLevel,
-          `Auto-picked at level ${newTotalLevel} during companion level-up.`
-        ]
-      );
-    }
+      // Apply ancestry feat auto-pick, if any
+      if (progressionDecisions.ancestry_feat_auto_pick) {
+        const pick = progressionDecisions.ancestry_feat_auto_pick;
+        await tx.run(
+          `INSERT OR REPLACE INTO companion_ancestry_feats
+           (companion_id, feat_id, tier, selected_at_level, narrative_delivery)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            req.params.id,
+            pick.feat_id,
+            pick.tier,
+            newTotalLevel,
+            `Auto-picked at level ${newTotalLevel} during companion level-up.`
+          ]
+        );
+      }
+    });
 
     const updatedCompanion = await dbGet(`
       SELECT c.*, n.name, n.nickname, n.race, n.gender, n.occupation, n.avatar
@@ -681,7 +687,7 @@ router.get('/:id/progression', async (req, res) => {
         level: companion.companion_level
       },
       theme: themeRow
-        ? { ...themeRow, tags: themeRow.tags ? JSON.parse(themeRow.tags) : [] }
+        ? { ...themeRow, tags: themeRow.tags ? safeParse(themeRow.tags, []) : [] }
         : null,
       theme_all_tiers: themeAllTiers,
       theme_unlocks: unlocks,
@@ -847,33 +853,39 @@ router.post('/:id/spell-slots/use', async (req, res) => {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
-    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    // Atomic read-modify-write: the write-transaction serializes concurrent
+    // slot mutations so two rapid casts can't both read the same state and lose
+    // a decrement (last-write-wins). Statuses/bodies are otherwise identical.
+    const outcome = await withTransaction(async (tx) => {
+      const companion = await tx.get('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+      if (!companion) return { status: 404, body: { error: 'Companion not found' } };
 
-    if (!companion.companion_class || companion.progression_type !== 'class_based') {
-      return res.status(400).json({ error: 'Only class-based companions have spell slots' });
-    }
+      if (!companion.companion_class || companion.progression_type !== 'class_based') {
+        return { status: 400, body: { error: 'Only class-based companions have spell slots' } };
+      }
 
-    const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
-    const used = safeParse(companion.companion_spell_slots_used, {});
+      const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+      const used = safeParse(companion.companion_spell_slots_used, {});
 
-    const maxForLevel = max[level] || 0;
-    const usedForLevel = used[level] || 0;
+      const maxForLevel = max[level] || 0;
+      const usedForLevel = used[level] || 0;
 
-    if (maxForLevel === 0) {
-      return res.status(400).json({ error: `This companion has no level ${level} spell slots` });
-    }
-    if (usedForLevel >= maxForLevel) {
-      return res.status(400).json({ error: `No level ${level} spell slots remaining` });
-    }
+      if (maxForLevel === 0) {
+        return { status: 400, body: { error: `This companion has no level ${level} spell slots` } };
+      }
+      if (usedForLevel >= maxForLevel) {
+        return { status: 400, body: { error: `No level ${level} spell slots remaining` } };
+      }
 
-    used[level] = usedForLevel + 1;
-    await dbRun(
-      'UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?',
-      [JSON.stringify(used), req.params.id]
-    );
+      used[level] = usedForLevel + 1;
+      await tx.run(
+        'UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?',
+        [JSON.stringify(used), req.params.id]
+      );
 
-    res.json({ success: true, level, remaining: maxForLevel - used[level], max: maxForLevel });
+      return { status: 200, body: { success: true, level, remaining: maxForLevel - used[level], max: maxForLevel } };
+    });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'use companion spell slot');
   }
@@ -887,26 +899,30 @@ router.post('/:id/spell-slots/restore', async (req, res) => {
       return res.status(400).json({ error: 'Invalid spell level (1-9)' });
     }
 
-    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
-    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    // Atomic read-modify-write (serialized) — see /spell-slots/use above.
+    const outcome = await withTransaction(async (tx) => {
+      const companion = await tx.get('SELECT * FROM companions WHERE id = ?', [req.params.id]);
+      if (!companion) return { status: 404, body: { error: 'Companion not found' } };
 
-    const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
-    const used = safeParse(companion.companion_spell_slots_used, {});
+      const max = getSpellSlots(companion.companion_class, companion.companion_level) || {};
+      const used = safeParse(companion.companion_spell_slots_used, {});
 
-    const maxForLevel = max[level] || 0;
-    const usedForLevel = used[level] || 0;
+      const maxForLevel = max[level] || 0;
+      const usedForLevel = used[level] || 0;
 
-    if (usedForLevel <= 0) {
-      return res.status(400).json({ error: `No used level ${level} slots to restore` });
-    }
+      if (usedForLevel <= 0) {
+        return { status: 400, body: { error: `No used level ${level} slots to restore` } };
+      }
 
-    used[level] = usedForLevel - 1;
-    await dbRun(
-      'UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?',
-      [JSON.stringify(used), req.params.id]
-    );
+      used[level] = usedForLevel - 1;
+      await tx.run(
+        'UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?',
+        [JSON.stringify(used), req.params.id]
+      );
 
-    res.json({ success: true, level, remaining: maxForLevel - used[level], max: maxForLevel });
+      return { status: 200, body: { success: true, level, remaining: maxForLevel - used[level], max: maxForLevel } };
+    });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'restore companion spell slot');
   }
@@ -1046,21 +1062,26 @@ router.post('/:id/conditions/add', async (req, res) => {
       return res.status(400).json({ error: `Unknown condition: ${condition}` });
     }
 
-    const companion = await dbGet('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
-    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    // Atomic read-modify-write (serialized) so concurrent condition changes
+    // can't lose each other's updates to the active_conditions array.
+    const outcome = await withTransaction(async (tx) => {
+      const companion = await tx.get('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
+      if (!companion) return { status: 404, body: { error: 'Companion not found' } };
 
-    let conditions = safeParse(companion.active_conditions, []);
-    if (EXHAUSTION_KEYS.has(key)) {
-      // Exhaustion is mutually exclusive — strip other exhaustion levels
-      conditions = conditions.filter(c => !EXHAUSTION_KEYS.has(c));
-    }
-    if (!conditions.includes(key)) conditions.push(key);
+      let conditions = safeParse(companion.active_conditions, []);
+      if (EXHAUSTION_KEYS.has(key)) {
+        // Exhaustion is mutually exclusive — strip other exhaustion levels
+        conditions = conditions.filter(c => !EXHAUSTION_KEYS.has(c));
+      }
+      if (!conditions.includes(key)) conditions.push(key);
 
-    await dbRun(
-      'UPDATE companions SET active_conditions = ? WHERE id = ?',
-      [JSON.stringify(conditions), req.params.id]
-    );
-    res.json({ conditions });
+      await tx.run(
+        'UPDATE companions SET active_conditions = ? WHERE id = ?',
+        [JSON.stringify(conditions), req.params.id]
+      );
+      return { status: 200, body: { conditions } };
+    });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'add companion condition');
   }
@@ -1075,15 +1096,19 @@ router.post('/:id/conditions/remove', async (req, res) => {
     }
     const key = condition.toLowerCase().replace(/\s+/g, '_');
 
-    const companion = await dbGet('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
-    if (!companion) return res.status(404).json({ error: 'Companion not found' });
+    // Atomic read-modify-write (serialized) — see /conditions/add above.
+    const outcome = await withTransaction(async (tx) => {
+      const companion = await tx.get('SELECT active_conditions FROM companions WHERE id = ?', [req.params.id]);
+      if (!companion) return { status: 404, body: { error: 'Companion not found' } };
 
-    const conditions = safeParse(companion.active_conditions, []).filter(c => c !== key);
-    await dbRun(
-      'UPDATE companions SET active_conditions = ? WHERE id = ?',
-      [JSON.stringify(conditions), req.params.id]
-    );
-    res.json({ conditions });
+      const conditions = safeParse(companion.active_conditions, []).filter(c => c !== key);
+      await tx.run(
+        'UPDATE companions SET active_conditions = ? WHERE id = ?',
+        [JSON.stringify(conditions), req.params.id]
+      );
+      return { status: 200, body: { conditions } };
+    });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     handleServerError(res, error, 'remove companion condition');
   }
@@ -1303,14 +1328,19 @@ router.post('/:id/equip', async (req, res) => {
     // mechanical detail (damage, AC bonus) update via PUT /companion/:id.
     equipment[slot] = { name: remove.removed.name };
 
-    await dbRun(
-      'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(partyInv), character.id]
-    );
-    await dbRun(
-      'UPDATE companions SET equipment = ? WHERE id = ?',
-      [JSON.stringify(equipment), req.params.id]
-    );
+    // Atomic: the inventory removal and the equipment update must both land or
+    // neither — otherwise a mid-sequence failure makes the item vanish (removed
+    // from the pool but never equipped) or duplicate.
+    await withTransaction(async (tx) => {
+      await tx.run(
+        'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [JSON.stringify(partyInv), character.id]
+      );
+      await tx.run(
+        'UPDATE companions SET equipment = ? WHERE id = ?',
+        [JSON.stringify(equipment), req.params.id]
+      );
+    });
 
     res.json({
       success: true,
@@ -1354,14 +1384,18 @@ router.post('/:id/unequip', async (req, res) => {
     inventoryAddItem(partyInv, { name: current.name }, 1);
     equipment[slot] = null;
 
-    await dbRun(
-      'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify(partyInv), character.id]
-    );
-    await dbRun(
-      'UPDATE companions SET equipment = ? WHERE id = ?',
-      [JSON.stringify(equipment), req.params.id]
-    );
+    // Atomic: returning the item to the pool and clearing the slot must both
+    // land or neither — otherwise the item duplicates or vanishes on failure.
+    await withTransaction(async (tx) => {
+      await tx.run(
+        'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [JSON.stringify(partyInv), character.id]
+      );
+      await tx.run(
+        'UPDATE companions SET equipment = ? WHERE id = ?',
+        [JSON.stringify(equipment), req.params.id]
+      );
+    });
 
     res.json({
       success: true,
@@ -1391,17 +1425,22 @@ router.post('/:id/dismiss', async (req, res) => {
     // Get the character for the event
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
 
-    // Soft-delete: mark dismissed instead of deleting, preserving history
-    await dbRun(`
-      UPDATE companions SET status = 'dismissed', dismissed_at = CURRENT_TIMESTAMP, dismissed_reason = ?
-      WHERE id = ?
-    `, [req.body.reason || 'Player dismissed', req.params.id]);
+    // Atomic: dismissing the companion and freeing the NPC for re-recruitment
+    // must both land — otherwise the companion is gone but the NPC stays
+    // unavailable (or vice versa), stranding the NPC.
+    await withTransaction(async (tx) => {
+      // Soft-delete: mark dismissed instead of deleting, preserving history
+      await tx.run(`
+        UPDATE companions SET status = 'dismissed', dismissed_at = CURRENT_TIMESTAMP, dismissed_reason = ?
+        WHERE id = ?
+      `, [req.body.reason || 'Player dismissed', req.params.id]);
 
-    // Update NPC to be available for recruitment again
-    await dbRun(`
-      UPDATE npcs SET campaign_availability = 'companion'
-      WHERE id = ?
-    `, [companion.npc_id]);
+      // Update NPC to be available for recruitment again
+      await tx.run(`
+        UPDATE npcs SET campaign_availability = 'companion'
+        WHERE id = ?
+      `, [companion.npc_id]);
+    });
 
     // Emit companion dismissed event
     if (character) {
@@ -2002,84 +2041,6 @@ router.post('/:id/backstory/secret/:secretId/reveal', async (req, res) => {
     });
   } catch (error) {
     handleServerError(res, error, 'reveal secret');
-  }
-});
-
-// ============================================================
-// COMPANION ACTIVITY ROUTES
-// ============================================================
-
-// Send companion on independent activity
-router.post('/:id/send-activity', async (req, res) => {
-  try {
-    const companion = await dbGet(`
-      SELECT c.*, n.name FROM companions c
-      JOIN npcs n ON c.npc_id = n.id
-      WHERE c.id = ? AND c.status = 'active'
-    `, [req.params.id]);
-
-    if (!companion) {
-      return res.status(404).json({ error: 'Companion not found or not active' });
-    }
-
-    const character = await dbGet('SELECT campaign_id, game_day FROM characters WHERE id = ?', [companion.recruited_by_character_id]);
-
-    const activity = await sendOnActivity(companion.id, {
-      activity_type: req.body.activity_type,
-      description: req.body.description,
-      location: req.body.location,
-      objectives: req.body.objectives || [],
-      duration_days: req.body.duration_days || 3,
-      campaign_id: character?.campaign_id,
-      current_game_day: character?.game_day || 1
-    });
-
-    res.json({
-      message: `${companion.name} has been sent on a ${req.body.activity_type} activity.`,
-      activity
-    });
-  } catch (error) {
-    handleServerError(res, error, 'send companion on activity');
-  }
-});
-
-// Get away companions for a character
-router.get('/character/:characterId/away', async (req, res) => {
-  try {
-    const companions = await getAwayCompanions(parseInt(req.params.characterId));
-    res.json(companions);
-  } catch (error) {
-    handleServerError(res, error, 'fetch away companions');
-  }
-});
-
-// Recall companion from activity early
-router.post('/activity/:activityId/recall', async (req, res) => {
-  try {
-    const activity = await getActivityById(parseInt(req.params.activityId));
-    if (!activity) {
-      return res.status(404).json({ error: 'Activity not found' });
-    }
-
-    const character = await dbGet('SELECT game_day FROM characters WHERE id = ?', [activity.character_id]);
-    const result = await recallCompanion(parseInt(req.params.activityId), character?.game_day || 1);
-
-    res.json(result);
-  } catch (error) {
-    handleServerError(res, error, 'recall companion');
-  }
-});
-
-// Get activity status
-router.get('/activity/:activityId', async (req, res) => {
-  try {
-    const activity = await getActivityById(parseInt(req.params.activityId));
-    if (!activity) {
-      return res.status(404).json({ error: 'Activity not found' });
-    }
-    res.json(activity);
-  } catch (error) {
-    handleServerError(res, error, 'fetch activity status');
   }
 });
 

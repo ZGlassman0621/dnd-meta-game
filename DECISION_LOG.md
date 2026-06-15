@@ -34,6 +34,25 @@ These are the calls waiting on user input or external evidence. Listed newest-fi
 
 ## Decisions log (newest first)
 
+### 2026-06-04 — v2.0 MVP by reduction-in-place, not greenfield rebuild (Direction)
+
+**Context:** The 2026-05-06 entry below set the direction "project rebuild — v2 is a new build with a defined MVP and an intentional foundation," keeping v1 (then v1.0.165) as a maintenance fallback. When the user returned to execute that MVP, the call was to reach the same destination by a different route: **reduce the existing v1.0.167 codebase in place** down to the MVP, rather than greenfield-rebuild from scratch. The MVP target is unchanged from the 2026-05-06 articulation — a self-contained, replayable D&D session with working combat / spellcasting / roleplaying and the core DM → player → dice loop for 20–40 turns — now with **Claude Opus 4.8** as the DM.
+
+**Decision:** Reduce v1.0.167 → **v2.0.0**, a focused single-player MVP (one character, Opus 4.8 as AI DM, Player Mode). Removed systems were **moved to `/archive/`** (mirrored paths, nothing deleted; migrations left in place). This deliberately and explicitly reverses PROJECT_BRIEF's "don't remove systems — hide or mark inactive" principle, by user request, for the MVP.
+- **Kept:** CharacterCreatorV2, sheet/inventory/spells/leveling, the full progression system (themes + tier abilities + ancestry feats + knight paths), companions, the Player-Mode DM chat session, session memory (chronicles + canon facts + NPC recall + lifecycle/aging), campaign creation + Opus campaign plan + import + backstory parser, dice/combat/conditions.
+- **Cut → archive:** prelude, DM Mode, mythic/piety/boons/legendary, crafting, party bases/raids, downtime, merchant economy, notoriety, the living-world tick (weather/survival/factions/world-events/NPC-mail/narrative-queue/consequences-&-promises), factions/quests/locations/world-events/travel simulation, achievements, the odds-based "adventure" loop, theme synergies/team-tactics/mythic-amplifications.
+
+**Why:** Reduction-in-place preserved the large body of working, validated code (the creator, the DM prompt architecture, session memory, combat) instead of re-deriving it, and reached a playable, *verified* MVP in one pass (server boots, client builds, a live Opus 4.8 DM turn exercised end-to-end) rather than a multi-phase greenfield rebuild. The 2026-05-06 entry itself noted the rebuild was "not motivated by structural rot in v1" — so subtracting scope from proven code was the lower-risk path to the same MVP.
+
+**Implications:**
+- All gameplay AI repointed to `claude-opus-4-8`; Sonnet retained only for session-recap extraction; Ollama dormant.
+- Login removed — a no-op auth middleware resolves a single local user.
+- DM marker set trimmed to 6 live markers (COMBAT_START/END, LOOT_DROP, CONDITION_ADD/REMOVE, NPC_WANTS_TO_JOIN); promise/consequence automation cut.
+- Cut systems are restorable from `/archive/` (+ git). The 2026-05-06 "greenfield v2" route is itself superseded by this reduction.
+- Cut-system + superseded phase docs archived to `archive/docs/`; foundational + kept-system docs retained at root.
+
+**Related:** CHANGELOG `[2.0.0]`; CLAUDE.md MVP banner; `archive/README.md`; the 2026-05-06 rebuild entry below (the superseded route); the still-open "Session Hi-Fi" + "Project rename" pending decisions above — a dark-editorial design brief for the MVP now exists at `Claude UX Design/MVP_DESIGN_BRIEF.md`.
+
 ### 2026-05-06 — Project rebuild decision; v1 enters maintenance state (Direction)
 
 **Context:** The project has been built piecemeal across 7+ phases since the user started building it after a few weeks of unconstrained D&D play with Opus 4.5. The original starting point — a downtime system meant to give a character something to do during the user's workday — was the wrong foundation for what the project became (a system designed to play D&D, not to manage a character outside of D&D). Every phase since has been doing real, valuable work, but each has worked around the absence of an intentional starting point and a defined MVP. Phase 3 made substantial structural progress (standing-scalar abstraction, marker pipeline consolidation, time-bounded state primitives). Phase 4a shipped diagnostic infrastructure that immediately surfaced findings about prompt-shape and AI behavior issues. Test campaigns during Phase 4a revealed combat system gaps and in-window attention failures that informed the user's read of the project's state.

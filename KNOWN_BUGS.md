@@ -40,6 +40,12 @@ Each entry should specify:
 
 ## Active known bugs
 
+_None for the v2.0 MVP._
+
+## Obsoleted by the v2.0 MVP (party-base / fortress system archived)
+
+_The entries below describe the fortress / party-base system, which was archived to `/archive/` in the v2.0 reduction — so they are no longer live bugs. Retained for history; restore that system before revisiting them._
+
 ### Recapture window without recapture mechanism
 
 **What's broken.** Captured fortresses enter a 14-day recapture window during which the player is theoretically meant to be able to win the base back. The window expiry mechanism exists (`expireStaleCapturedBases` runs in the living-world tick, `RECAPTURE_WINDOW_DAYS = 14` in `raidConfig.js`, the `BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER` from Phase 3.3 SC-7.5 fires correctly). What doesn't exist: any player-side codepath to actually perform the recapture. No `recaptureBase` function. No marker the AI emits to flip a captured base back to active. No quest framework. No UI affordance.

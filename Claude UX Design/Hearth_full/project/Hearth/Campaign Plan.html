@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Campaign Plan</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+    .plan-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 8px; }
+    .plan-head h1 { font-family: var(--serif); font-weight: 500; font-size: 40px; letter-spacing: -.014em; margin: 0; white-space: nowrap; }
+    .plan-head .by { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding-bottom: 9px; display: inline-flex; align-items: center; gap: 7px; }
+    .plan-head .by .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px color-mix(in oklab, var(--accent) 70%, transparent); }
+    .plan-sub { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink-2); margin-bottom: 24px; }
+
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: 26px; }
+    .tab { padding: 11px 18px; font-family: var(--sans); font-weight: 500; font-size: 13px; color: var(--ink-3); cursor: pointer; border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px; transition: color .12s; }
+    .tab:hover { color: var(--ink); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab .ic { width: 15px; height: 15px; }
+    .tab .ct { font-family: var(--mono); font-size: 10px; padding: 1px 6px; background: var(--bg-card); border-radius: 999px; color: var(--ink-3); }
+
+    .read-grid { columns: 2; column-gap: 18px; }
+    .read-grid.single { columns: 1; max-width: 760px; }
+    .read {
+      break-inside: avoid; display: inline-block; width: 100%; margin: 0 0 18px;
+      background: var(--bg-card); border: 1px solid var(--rule); border-radius: 11px;
+      padding: 20px 22px; box-shadow: var(--shadow-sm); position: relative;
+    }
+    .read .marker { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; display: flex; align-items: center; gap: 9px; }
+    .read .marker .ic { width: 13px; height: 13px; }
+    .read .marker.blue { color: var(--accent-2); }
+    .read h3 { font-family: var(--serif); font-weight: 500; font-size: 23px; margin: 0 0 9px; letter-spacing: -.006em; }
+    .read p { font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); margin: 0 0 11px; text-wrap: pretty; }
+    .read p:last-child { margin-bottom: 0; }
+    .read p em { font-style: italic; color: var(--ink); }
+    .read .tagline { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+    /* spoiler */
+    .spoiler { position: relative; }
+    .spoiler .veil { filter: blur(7px); user-select: none; transition: filter .3s; }
+    .spoiler.open .veil { filter: none; }
+    .spoiler .reveal {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: color-mix(in oklab, var(--bg-card) 55%, transparent); border-radius: 11px;
+      cursor: pointer; transition: opacity .25s; z-index: 2;
+    }
+    .spoiler.open .reveal { opacity: 0; pointer-events: none; }
+    .spoiler .reveal .rl { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 999px; padding: 8px 16px; background: var(--bg-2); }
+    .read.spoiler-card { border-color: color-mix(in oklab, var(--combat) 30%, var(--rule)); }
+    .read .marker.spoiler-m { color: var(--combat); }
+
+    .tabpane { display: none; }
+    .tabpane.show { display: block; }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+  </defs></svg>
+
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="Campaigns.html"><svg class="ic"><use href="#i-arrow-left"/></svg>Campaigns</a>
+    <div class="spacer"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="page">
+    <div class="plan-head">
+      <h1>The Hollow Man</h1>
+      <span class="by"><span class="dot"></span>World bible · written by Opus</span>
+    </div>
+    <div class="plan-sub">Read-only. What you've seen in play is plain; what you haven't is kept behind a veil, so you never spoil your own story.</div>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="world"><svg class="ic"><use href="#i-globe"/></svg>World</button>
+      <button class="tab" data-tab="locations"><svg class="ic"><use href="#i-pin"/></svg>Locations<span class="ct">9</span></button>
+      <button class="tab" data-tab="npcs"><svg class="ic"><use href="#i-users"/></svg>NPCs<span class="ct">14</span></button>
+      <button class="tab" data-tab="lore"><svg class="ic"><use href="#i-book"/></svg>Lore</button>
+    </nav>
+
+    <!-- WORLD -->
+    <div class="tabpane show" data-pane="world">
+      <div class="read-grid">
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-globe"/></svg>The region</div>
+          <h3>The Salt Marches</h3>
+          <p>A low, drowned coast of tide-flats and failing fishing towns, ruled in name by a distant crown and in fact by whoever holds the Gate. The sea gives less each year, and the people have learned to ask fewer questions of anyone who promises more.</p>
+          <p>Mood: <em>quiet dread.</em> Salt, fog, and the sense that something patient is owed.</p>
+        </div>
+        <div class="read">
+          <div class="marker blue"><svg class="ic"><use href="#i-users"/></svg>The factions</div>
+          <h3>Who holds what</h3>
+          <p>The <em>Gate guard</em> keep an order that benefits the Gate. The <em>quarter-folk</em> protect each other quietly and trust no authority. A <em>shrine to a forgotten harbor-god</em> still draws the desperate.</p>
+        </div>
+        <div class="read spoiler-card spoiler">
+          <div class="reveal"><span class="rl"><svg class="ic" style="width:13px;height:13px"><use href="#i-eye-off"/></svg>Reveal — you haven't learned this</span></div>
+          <div class="veil">
+            <div class="marker spoiler-m"><svg class="ic"><use href="#i-book"/></svg>The truth of it</div>
+            <h3>What the Hollow Man is</h3>
+            <p>He is not taking the children for himself. He is paying a tithe — and the thing he pays was here long before the Gate, sleeping under the salt, and the town's forgetting is the first symptom of its waking.</p>
+          </div>
+        </div>
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-globe"/></svg>The stakes</div>
+          <h3>If nothing is done</h3>
+          <p>The disappearances accelerate with the tides. The Gate's denial is not cowardice but complicity — and the longer it holds, the more the marsh remembers what it is owed.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOCATIONS -->
+    <div class="tabpane" data-pane="locations">
+      <div class="read-grid">
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-pin"/></svg>Where you are</div>
+          <h3>Saltcross · the poor quarter</h3>
+          <p>A knot of leaning streets around a dry fountain and a faceless shrine. Home to the net-mender and the families who've lost the most. The old fishmarket sits at its edge — shuttered, and a poor place to be caught after dark.</p>
+        </div>
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-pin"/></svg>Seen in passing</div>
+          <h3>Thornveil Gate</h3>
+          <p>The fortified customs-house that gives the region its real government. Clean, lamplit, and indifferent. The Gate Captain's word is law within sight of its walls.</p>
+        </div>
+        <div class="read spoiler">
+          <div class="reveal"><span class="rl"><svg class="ic" style="width:13px;height:13px"><use href="#i-eye-off"/></svg>Reveal location</span></div>
+          <div class="veil">
+            <div class="marker"><svg class="ic"><use href="#i-pin"/></svg>Unvisited</div>
+            <h3>The Welds</h3>
+            <p>The tide-flats where the children walk to. At the lowest ebb, something is visible out there that should be underwater — and isn't.</p>
+          </div>
+        </div>
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-pin"/></svg>Unvisited</div>
+          <h3>The Last Lantern</h3>
+          <p>Sister Veil's shrine — a grave-tenders' chapel on the Gate road, and the one place in the region that still buries its dead with rites.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- NPCS -->
+    <div class="tabpane" data-pane="npcs">
+      <div class="read-grid">
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-users"/></svg>Met · trusts you</div>
+          <h3>The net-mender</h3>
+          <p>An old woman of the quarter who tests strangers with small courtesies. She has lost a grandchild and decided you are worth the risk of the truth. <em>Knows more than she has said.</em></p>
+          <div class="tagline"><span class="chip">ally</span><span class="chip">quest-giver</span></div>
+        </div>
+        <div class="read">
+          <div class="marker blue"><svg class="ic"><use href="#i-users"/></svg>Companion</div>
+          <h3>Sister Veil</h3>
+          <p>Grave-tender of the Last Lantern. Travels with you, heals reluctantly, and disapproves of leaving the dead unburied. Loyal — for as long as you stay merciful.</p>
+          <div class="tagline"><span class="chip">companion</span></div>
+        </div>
+        <div class="read spoiler-card spoiler">
+          <div class="reveal"><span class="rl"><svg class="ic" style="width:13px;height:13px"><use href="#i-eye-off"/></svg>Reveal — antagonist</span></div>
+          <div class="veil">
+            <div class="marker spoiler-m"><svg class="ic"><use href="#i-users"/></svg>The quarry</div>
+            <h3>The Hollow Man</h3>
+            <p>Once a Gate clerk named Edran Voss, who made a bargain to save his own daughter and has been paying for it with other people's ever since. <em>Not evil so much as emptied.</em> He can be reasoned with — at a terrible price.</p>
+          </div>
+        </div>
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-users"/></svg>Met · obstacle</div>
+          <h3>Captain Mire</h3>
+          <p>The Gate's authority in Saltcross. Calls the disappearances "runaways" and means to keep it that way. Whether from fear, bribery, or worse is not yet clear.</p>
+          <div class="tagline"><span class="chip warn">wary</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LORE -->
+    <div class="tabpane" data-pane="lore">
+      <div class="read-grid single">
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-book"/></svg>Lore fragment</div>
+          <h3>The harbor-god worn faceless</h3>
+          <p>Every quarter has its shrine, and every shrine its drowned little god. The folk leave salt and bread and do not name it, because the oldest rule of the marsh is that <em>a thing remembered grows hungry.</em> The faceless shrine in the square is the oldest of them.</p>
+        </div>
+        <div class="read">
+          <div class="marker"><svg class="ic"><use href="#i-book"/></svg>Theme</div>
+          <h3>The cost of forgetting</h3>
+          <p>This campaign turns on a single idea: that looking away has a price, and someone always pays it. Every authority in the Marches has chosen not to see — and the marsh keeps the ledger.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('show', p.dataset.pane === t.dataset.tab));
+    }));
+    document.querySelectorAll('.spoiler .reveal').forEach(r => r.addEventListener('click', () => r.closest('.spoiler').classList.add('open')));
+  </script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hearth · Character Home</title>
+  <meta name="viewport" content="width=1440, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { min-height: 100%; }
+
+    /* ── persistent dashboard header ─────────────────── */
+    .dash-hdr {
+      position: sticky; top: 0; z-index: 30;
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 28px; height: 58px;
+      background: color-mix(in oklab, var(--bg-2) 88%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--rule);
+    }
+    .dash-hdr .vr { width: 1px; height: 22px; background: var(--rule); }
+    .back {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--sans); font-size: 13px; color: var(--ink-3);
+      text-decoration: none; transition: color .14s;
+    }
+    .back:hover { color: var(--ink); }
+    .back .ic { width: 15px; height: 15px; }
+    .hdr-link {
+      font-family: var(--sans); font-size: 13px; color: var(--ink-3);
+      text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+      transition: color .14s;
+    }
+    .hdr-link:hover { color: var(--ink-2); }
+    .hdr-link .ic { width: 14px; height: 14px; }
+
+    /* ── canvas ──────────────────────────────────────── */
+    .home { max-width: 1120px; margin: 0 auto; padding: 46px 28px 80px; }
+    .home-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    .home-eyebrow .ln { flex: 1; height: 1px; background: var(--rule); }
+
+    /* ── hero · continue your adventure ──────────────── */
+    .hero {
+      position: relative; overflow: hidden;
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 34px 38px 30px;
+      margin-bottom: 40px;
+    }
+    .hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 30%, transparent)); }
+    .hero-top { display: grid; grid-template-columns: auto 1fr auto; gap: 26px; align-items: center; }
+
+    .crest {
+      width: 92px; height: 92px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; position: relative;
+      background: linear-gradient(150deg, #3a3326, #211c14);
+      border: 1px solid var(--rule);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    .crest .mono { font-family: var(--serif); font-weight: 600; font-size: 46px; color: var(--accent); line-height: 1; }
+    .crest .lvl {
+      position: absolute; bottom: -8px; right: -8px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--bg-2); border: 1px solid var(--rule);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--sans); font-weight: 700; font-size: 13px; color: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .hero-id h1 { font-family: var(--serif); font-weight: 500; font-size: 44px; line-height: 1.05; letter-spacing: -.014em; margin: 0 0 7px; }
+    .hero-id .desc { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--ink-2); }
+    .hero-id .desc .sep { color: var(--ink-4); font-style: normal; padding: 0 7px; }
+    .hero-id .campaign { margin-top: 11px; display: inline-flex; align-items: center; gap: 9px; }
+    .hero-id .campaign .ct { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); }
+    .hero-id .campaign .cn { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--accent); white-space: nowrap; }
+
+    .hero-cta { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    .hero-cta .last { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); white-space: nowrap; }
+
+    .hero-recap { margin: 26px 0 22px; padding: 0 2px; }
+    .recap-label { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
+    .recap-prose { font-family: var(--serif); font-size: 19px; line-height: 1.62; color: var(--ink); max-width: 760px; text-wrap: pretty; }
+    .recap-prose em { font-style: italic; color: var(--ink-2); }
+
+    .hero-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding-top: 20px; border-top: 1px solid var(--rule-soft); }
+    .stat {
+      display: inline-flex; align-items: baseline; gap: 7px;
+      padding: 6px 13px; border-radius: 999px;
+      border: 1px solid var(--rule); background: var(--bg-2);
+    }
+    .stat .sl { font-family: var(--sans); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+    .stat .sv { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); letter-spacing: -.01em; }
+    .stat .sv .mx { color: var(--ink-3); font-weight: 500; }
+    .stat.hp .sv { color: var(--good); }
+    .stat.gold .sv { color: var(--accent); }
+    .stat-pips { display: inline-flex; gap: 4px; align-items: center; }
+    .stat-pips .pip { width: 11px; height: 11px; }
+
+    /* ── navigation grid ─────────────────────────────── */
+    .nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .nav-card {
+      display: block; text-decoration: none;
+      background: var(--bg-2); border: 1px solid var(--rule);
+      border-radius: 11px; padding: 20px 20px 18px;
+      transition: border-color .15s, background .15s, transform .15s;
+      position: relative;
+    }
+    .nav-card:hover { border-color: color-mix(in oklab, var(--accent) 40%, var(--rule)); background: var(--bg-card); transform: translateY(-2px); }
+    .nav-card .nc-top { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+    .nav-card .nc-ic {
+      width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-card); border: 1px solid var(--rule); color: var(--accent);
+    }
+    .nav-card .nc-ic .ic { width: 18px; height: 18px; }
+    .nav-card .nc-meta { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--ink-4); text-transform: uppercase; }
+    .spoiler-flag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--warn); border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--rule)); background: color-mix(in oklab, var(--warn) 10%, transparent); padding: 3px 8px; border-radius: 999px; }
+    .spoiler-flag .ic { width: 11px; height: 11px; }
+    .nav-card h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0 0 5px; letter-spacing: -.005em; color: var(--ink); }
+    .nav-card p { font-family: var(--serif); font-size: 15px; line-height: 1.45; color: var(--ink-3); margin: 0; }
+    .nav-card .arrow { position: absolute; top: 20px; right: 20px; color: var(--ink-4); transition: color .15s, transform .15s; }
+    .nav-card:hover .arrow { color: var(--accent); transform: translateX(2px); }
+    .nav-card .arrow .ic { width: 16px; height: 16px; }
+  </style>
+</head>
+<body class="app-bg">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4.5v15a1 1 0 0 0 1.54.84l11.5-7.5a1 1 0 0 0 0-1.68L7.54 3.66A1 1 0 0 0 6 4.5z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></symbol>
+    <symbol id="i-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+  </defs></svg>
+
+  <!-- persistent header -->
+  <header class="dash-hdr">
+    <div class="wordmark">D<span class="amp">&amp;</span>D</div>
+    <div class="vr"></div>
+    <a class="back" href="#"><svg class="ic"><use href="#i-arrow-left"/></svg>Your characters</a>
+    <div class="spacer"></div>
+    <a class="hdr-link" href="Settings.html"><svg class="ic"><use href="#i-settings"/></svg>Settings</a>
+    <div class="vr"></div>
+    <span class="opus"><span class="dot"></span>Opus</span>
+  </header>
+
+  <main class="home">
+
+    <div class="home-eyebrow">
+      <span class="eyebrow">Character home</span>
+      <span class="ln"></span>
+    </div>
+
+    <!-- HERO · continue -->
+    <section class="hero">
+      <div class="hero-top">
+        <div class="crest"><span class="mono">D</span><span class="lvl">3</span></div>
+        <div class="hero-id">
+          <h1>Dravyr Wyrmrest</h1>
+          <div class="desc">Wood elf <span class="sep">·</span> Monk of the Open Hand <span class="sep">·</span> Hermit</div>
+          <div class="campaign"><span class="ct">Campaign</span><span class="cn">The Hollow Man</span></div>
+        </div>
+        <div class="hero-cta">
+          <button class="btn primary lg"><svg class="ic"><use href="#i-play"/></svg>Continue</button>
+          <span class="last">Last played · Day 22, dusk</span>
+        </div>
+      </div>
+
+      <div class="hero-recap">
+        <div class="recap-label">Where you left off</div>
+        <div class="recap-prose">You sit with the net-mender on the lip of a dry fountain, half a loaf shared between you, while she names the thing the poor quarter fears — <em>a man who takes the children quietly, and a Gate guard who calls it nothing at all.</em></div>
+      </div>
+
+      <div class="hero-stats">
+        <span class="stat hp"><span class="sl">HP</span><span class="sv">24<span class="mx"> / 27</span></span></span>
+        <span class="stat"><span class="sl">AC</span><span class="sv">15</span></span>
+        <span class="stat"><span class="sl">Speed</span><span class="sv">40 ft</span></span>
+        <span class="stat"><span class="sl">Ki</span><span class="stat-pips"><span class="pip magic full"></span><span class="pip magic full"></span><span class="pip magic full"></span></span></span>
+        <span class="stat gold"><span class="sl">Gold</span><span class="sv">112 gp</span></span>
+        <span class="spacer"></span>
+        <span class="stat"><span class="sl">Session</span><span class="sv">7</span></span>
+      </div>
+    </section>
+
+    <!-- NAVIGATION -->
+    <div class="home-eyebrow">
+      <span class="eyebrow">Manage Dravyr</span>
+      <span class="ln"></span>
+    </div>
+
+    <div class="nav-grid">
+      <a class="nav-card" href="Character Sheet.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-scroll"/></svg></span>
+        </div>
+        <h3>Character Sheet</h3>
+        <p>Abilities, features, spells, equipment, and progression.</p>
+      </a>
+
+      <a class="nav-card" href="Companions.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-users"/></svg></span>
+        </div>
+        <h3>Companions</h3>
+        <p>Sister Veil and the allies who travel with you.</p>
+      </a>
+
+      <a class="nav-card" href="Campaigns.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-compass"/></svg></span>
+        </div>
+        <h3>Campaigns</h3>
+        <p>The adventures you've begun, and the ones waiting.</p>
+      </a>
+
+      <a class="nav-card" href="Campaign Plan.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-globe"/></svg></span>
+          <span class="spoiler-flag"><svg class="ic"><use href="#i-eye-off"/></svg>Spoilers</span>
+        </div>
+        <h3>Campaign Plan</h3>
+        <p>The world bible Opus wrote — locations, NPCs, lore.</p>
+      </a>
+
+      <a class="nav-card" href="Backstory.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-feather"/></svg></span>
+        </div>
+        <h3>Backstory</h3>
+        <p>Your origin, parsed into people, places, and hooks.</p>
+      </a>
+
+      <a class="nav-card" href="Settings.html">
+        <div class="arrow"><svg class="ic"><use href="#i-arrow-right"/></svg></div>
+        <div class="nc-top">
+          <span class="nc-ic"><svg class="ic"><use href="#i-sliders"/></svg></span>
+        </div>
+        <h3>Settings</h3>
+        <p>Difficulty, tone, and how the Dungeon Master behaves.</p>
+      </a>
+    </div>
+
+  </main>
+</body>
+</html>

@@ -46,7 +46,7 @@ const checks = [
   { needle: 'Length: 30-120 words', label: 'V2 target (SPOTLIGHT word range)' },
   { needle: 'Length: 120-250 words total', label: 'V2 target (COUNCIL word range)' },
   { needle: 'BEFORE YOU SEND — SELF-CHECK', label: 'V3 target (self-check heading)' },
-  { needle: 'If all five clean, send.', label: 'V3 target (self-check tail)' },
+  { needle: 'If every check is clean, send.', label: 'V3 target (self-check tail)' },
   { needle: 'MECHANICAL MARKERS', label: 'V4 target (mechanical markers heading)' },
   { needle: 'END OF CORE RULES', label: 'V4 boundary (end-of-core anchor)' }
 ];
@@ -63,7 +63,7 @@ const transforms = {
     .replace(/  Length: \d+-\d+ words.*\n/g, '')
     .replace(/  Length: \d+-\d+ words total.*\n/g, ''),
   V3: (p) => p.replace(
-    /═══+\s*\nBEFORE YOU SEND — SELF-CHECK[\s\S]*?If all five clean, send\.\s*$/m,
+    /═══+\s*\nBEFORE YOU SEND — SELF-CHECK[\s\S]*?If every check is clean, send\.\s*$/m,
     ''
   ).trimEnd(),
   V4: (p) => p.replace(

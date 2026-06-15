@@ -1,0 +1,81 @@
+/* =================================================================
+   HEARTH · Companions screen
+   Per-screen styles for CompanionsPage. Ported from the design mockup
+   Claude UX Design/Hearth_full/project/Hearth/Companions.html — every
+   selector scoped under `.hearth` so it coexists with the shared sheet
+   and the legacy index.css. Shared classes (.crest .chip .btn .panel …)
+   live in hearth.css and are NOT redefined here.
+   ================================================================= */
+
+/* level-badged crest variants used for companion portraits */
+.hearth .crest.lg { width: 76px; height: 76px; }
+.hearth .crest.lg .mono { font-size: 36px; }
+.hearth .crest.v { background: linear-gradient(150deg, #2e3340, #1d2128); }
+.hearth .crest.v .mono { color: var(--accent-2); }
+
+/* portrait image inside a crest frame (when the companion has an avatar) */
+.hearth .crest .crest-img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+
+/* companion roster grid */
+.hearth .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 40px; }
+.hearth .comp-note {
+  font-family: var(--serif); font-style: italic; font-size: 16px;
+  color: var(--ink-2); line-height: 1.5; max-width: 660px; margin: -4px 0 20px;
+}
+
+.hearth .comp {
+  display: grid; grid-template-columns: auto 1fr; gap: 18px;
+  background: var(--bg-card); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 20px 22px; box-shadow: var(--shadow-sm);
+  text-align: left;
+}
+/* the card is a button (opens the sheet) — strip native chrome */
+.hearth button.comp { width: 100%; font: inherit; cursor: pointer; transition: background .14s, border-color .14s; }
+.hearth button.comp:hover { background: var(--raise); border-color: #4a4032; }
+
+.hearth .comp .cm-name { font-family: var(--serif); font-weight: 500; font-size: 26px; letter-spacing: -.01em; margin: 0 0 3px; color: var(--ink); }
+.hearth .comp .cm-role { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); margin-bottom: 12px; }
+.hearth .comp .cm-role .sep { color: var(--ink-4); font-style: normal; padding: 0 5px; }
+.hearth .comp .cm-stats { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.hearth .comp .cm-bio { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-3); margin-bottom: 12px; }
+.hearth .comp .cm-bio em { font-style: italic; color: var(--ink-2); }
+.hearth .comp .cm-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* thin HP rail inside a card, under the stat chips */
+.hearth .comp .cm-hp { margin: -4px 0 12px; }
+.hearth .comp .cm-hp .cm-hp-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.hearth .comp .cm-hp .cm-hp-l { font-family: var(--sans); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .16em; color: var(--ink-3); }
+.hearth .comp .cm-hp .cm-hp-v { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+
+/* empty seat at the fire */
+.hearth .comp.empty {
+  display: flex; border-style: dashed; align-items: center; justify-content: center;
+  text-align: center; color: var(--ink-3); min-height: 170px; cursor: default;
+}
+.hearth .comp.empty:hover { background: var(--bg-card); border-color: var(--rule); }
+.hearth .comp.empty .eg { font-size: 24px; color: var(--ink-4); margin-bottom: 10px; }
+.hearth .comp.empty .et { font-family: var(--serif); font-style: italic; font-size: 17px; line-height: 1.5; color: var(--ink-3); max-width: 280px; }
+
+/* recruit / create-member actions live in the section head's right slot */
+.hearth .comp-actions { display: flex; gap: 8px; align-items: center; }
+
+/* recruit-modal NPC chooser list */
+.hearth .recruit-list { display: flex; flex-direction: column; gap: 8px; }
+.hearth .recruit-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 11px 13px; font: inherit; cursor: pointer;
+  background: var(--bg-2); border: 1px solid var(--rule); border-radius: var(--radius);
+  transition: background .14s, border-color .14s;
+}
+.hearth .recruit-row:hover { background: var(--raise); border-color: #4a4032; }
+.hearth .recruit-row .rr-name { font-family: var(--serif); font-size: 17px; color: var(--ink); }
+.hearth .recruit-row .rr-meta { font-family: var(--sans); font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+.hearth .recruit-row img { width: 44px; height: 44px; border-radius: var(--radius); object-fit: cover; flex-shrink: 0; }
+
+/* error banner */
+.hearth .comp-error {
+  font-family: var(--sans); font-size: 13px; color: var(--bad);
+  background: color-mix(in oklab, var(--bad) 10%, var(--bg-card));
+  border: 1px solid color-mix(in oklab, var(--bad) 34%, var(--rule));
+  border-radius: var(--radius); padding: 11px 14px; margin-bottom: 22px;
+}

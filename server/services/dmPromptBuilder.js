@@ -7,7 +7,6 @@
  */
 
 import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
-import { formatFactionStandingFragment } from './factionService.js';
 
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
@@ -295,6 +294,27 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     ? JSON.parse(character.tool_proficiencies || '[]')
     : (character.tool_proficiencies || []);
 
+  // Lifestyle as social/economic texture for the DM (no gold mechanics) — how
+  // the character lives, where they sleep, and how NPCs read their station.
+  // The player picks this in the creator; honor it narratively.
+  const LIFESTYLE_FLAVOR = {
+    wretched: 'destitute — sleeps rough or in flophouses on scraps; commoners pity or shun them, the watch moves them along, and fine establishments turn them away',
+    squalid: 'barely scraping by — crowded tenements and cheap gruel; read as the desperate poor, easy to overlook or take advantage of',
+    poor: 'humble means — common rooms and plain fare; unremarkable to most, neither courted nor disdained',
+    modest: 'respectable — clean inns and honest meals; treated as a reliable working person, coin watched but not scarce',
+    comfortable: 'well-off — good lodging and warm welcomes; merchants and innkeepers court the custom, and doors open a little wider',
+    wealthy: 'affluent — fine rooms and fine company; met with deference and granted access the common folk are not',
+    aristocratic: 'high station — the best of everything, with servants and society; nobles receive them as a peer, commoners with awe or resentment'
+  }
+  const formatLifestyle = (val) => {
+    const key = String(val || '').trim().toLowerCase()
+    const flavor = LIFESTYLE_FLAVOR[key]
+    const display = key ? key.charAt(0).toUpperCase() + key.slice(1) : (val || '')
+    return flavor
+      ? `${display} — ${flavor}. Let this colour lodging, prices, and how NPCs first read the character`
+      : display
+  }
+
   const identityLines = [
     `${label}:`,
     `- Full Name: ${fullName}`,
@@ -308,7 +328,7 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     `- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}${keeperSection}`,
     character.alignment ? `- Alignment: ${character.alignment}` : null,
     character.faith ? `- Faith: ${character.faith}` : null,
-    character.lifestyle ? `- Lifestyle: ${character.lifestyle}` : null,
+    character.lifestyle ? `- Lifestyle: ${formatLifestyle(character.lifestyle)}` : null,
     character.age ? `- Age: ${character.age}` : null,
     [character.height, character.weight].filter(Boolean).length > 0
       ? `- Build: ${[character.height, character.weight].filter(Boolean).join(', ')}` : null,
@@ -331,14 +351,17 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     character.backstory ? `- Backstory: ${character.backstory}` : null
   ].filter(Boolean);
 
+  // Current Location / Current Quest are deliberately NOT asserted here. This
+  // block is frozen at /start and never rebuilt, so a stated location/quest goes
+  // stale within a few exchanges — and on a fresh character it reads
+  // "Unknown"/"None", contradicting the campaign-plan opening scene. The live
+  // transcript and the opening scene own location/quest instead.
   const stateLines = [
     `${label} — CURRENT STATE (live values, may change during play):`,
     `- HP: ${character.current_hp}/${character.max_hp}`,
     `- Armor Class: ${ac}`,
     `- Weapon: ${weaponStr}`,
-    `- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}`,
-    `- Current Location: ${character.current_location || 'Unknown'}`,
-    `- Current Quest: ${character.current_quest || 'None'}`
+    `- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}`
   ];
 
   return {
@@ -1237,7 +1260,7 @@ export function formatProgression(progression) {
   return parts.join('\n');
 }
 
-function formatCampaignPlan(planSummary) {
+export function formatCampaignPlan(planSummary) {
   if (!planSummary) return '';
 
   const isImported = !!planSummary.campaign_metadata || !!planSummary.dm_directives;
@@ -1309,6 +1332,27 @@ When inventing historical references, use dates 50-200 years BEFORE ${campaignYe
     }
   }
 
+  // Content boundaries — lines & veils (player-set safety tool, from the Begin
+  // Campaign atelier). NON-NEGOTIABLE and rendered near the top of the plan so
+  // it carries primacy; it is also reinforced at the recency self-check.
+  if (Array.isArray(planSummary.lines_and_veils) && planSummary.lines_and_veils.length > 0) {
+    const lvLines = planSummary.lines_and_veils.filter(b => b && b.state === 'line').map(b => b.topic);
+    const lvVeils = planSummary.lines_and_veils.filter(b => b && b.state === 'veil').map(b => b.topic);
+    if (lvLines.length > 0 || lvVeils.length > 0) {
+      let lv = `=== CONTENT BOUNDARIES — LINES & VEILS (NON-NEGOTIABLE) ===
+The player set these limits for the table. They OVERRIDE drama, realism, pacing, NPC behavior, and every other instruction in this prompt. Apply them on EVERY turn.`;
+      if (lvLines.length > 0) {
+        lv += `\n- LINES (these NEVER appear): do not depict, narrate, name, foreshadow, threaten, or imply them — on-screen OR off-screen. If the story trends toward one, steer away before it arrives: ${lvLines.join('; ')}.`;
+      }
+      if (lvVeils.length > 0) {
+        lv += `\n- VEILS (these happen "off the page"): they may exist in the world, but cut away before they occur — acknowledge aftermath or consequence without portraying the act itself: ${lvVeils.join('; ')}.`;
+      }
+      lv += `\nTopics not listed here may be portrayed as the story warrants.
+=== END CONTENT BOUNDARIES ===`;
+      sections.push(lv);
+    }
+  }
+
   // === CORE PLAN: Main quest, acts, world state ===
 
   if (planSummary.main_quest_title) {
@@ -1320,6 +1364,38 @@ When inventing historical references, use dates 50-200 years BEFORE ${campaignYe
       questSection += `\nSTAKES: ${planSummary.main_quest_stakes}`;
     }
     sections.push(questSection);
+  }
+
+  // Atelier-authored world detail — surface the full co-authored design so the
+  // DM narrates the world the player actually built.
+  if (planSummary.from_atelier) {
+    if (planSummary.setting || planSummary.region) {
+      const sd = planSummary.setting;
+      let setLine = `SETTING: ${sd?.name || planSummary.region}`;
+      if (sd?.sub) setLine += ` — ${sd.sub}`;
+      sections.push(setLine);
+    }
+    if (planSummary.locations && planSummary.locations.length > 0) {
+      sections.push(`KEY LOCATIONS (drafted for this world — use these exact names):\n${planSummary.locations.map(l => `- ${l}`).join('\n')}`);
+    }
+    if (planSummary.opening_scene) {
+      sections.push(`OPENING SCENE (how this campaign begins — anchor the first session in this moment; if play is already underway, treat it as the established origin):\n${planSummary.opening_scene}`);
+    }
+    if (planSummary.campaign_scope) {
+      const scopeGuide = {
+        one: 'ONE-SHOT — a single, self-contained story that resolves in one sitting. Keep hooks immediate and the arc tight.',
+        arc: 'SHORT ARC — a handful of sessions with a clear beginning, middle, and end building to one climax.',
+        open: 'ONGOING CAMPAIGN — no set endpoint. Plant long-term threads and let consequences develop over time.'
+      };
+      if (scopeGuide[planSummary.campaign_scope]) {
+        sections.push(`CAMPAIGN SCOPE: ${scopeGuide[planSummary.campaign_scope]}`);
+      }
+    }
+  }
+
+  // DM-only hidden truth — the secret at the campaign's centre (atelier-authored).
+  if (planSummary.hidden_truth) {
+    sections.push(`THE HIDDEN TRUTH (DM-ONLY — never state this to the player):\n${planSummary.hidden_truth}\nReveal it only gradually, through play, as the player earns it. NPCs guard it; the world only hints at it.`);
   }
 
   if (planSummary.current_act) {
@@ -1583,38 +1659,10 @@ function formatWorldStateSnapshot(worldState) {
 
   const sections = [];
 
-  // 1. Faction Standings (skip neutrals unless member). Phase 3 SC-3:
-  // the "LABEL (+N)" fragment now comes from FACTION_STANDING_CONFIG via
-  // formatFactionStandingFragment — single source of truth for label
-  // bands. Output is byte-identical to the legacy hand-rolled string;
-  // tests/faction-standing-prompt-snapshot.test.js guards this.
-  const meaningfulStandings = (worldState.factionStandings || [])
-    .filter(s => s.standing !== 0 || s.is_member);
-  if (meaningfulStandings.length > 0) {
-    const lines = meaningfulStandings.slice(0, 6).map(s => {
-      const fragment = formatFactionStandingFragment(s.standing);
-      const memberNote = s.is_member ? ', Member' : '';
-      const behavior = getStandingBehavior(s.standing_label || 'neutral');
-      return `- ${s.faction_name}: ${fragment}${memberNote} - ${behavior}`;
-    });
-    sections.push('FACTION STANDINGS:\n' + lines.join('\n'));
-  }
+  // Faction standings + world-events simulation were removed in the MVP. World
+  // memory now comes from NPC relationships + story chronicles + canon facts.
 
-  // 2. Active World Events (with stage info)
-  const events = worldState.visibleEvents || [];
-  if (events.length > 0) {
-    const lines = events.slice(0, 5).map(e => {
-      const totalStages = e.stages?.length || 0;
-      const stageNum = (e.current_stage || 0) + 1;
-      const stageInfo = totalStages > 0 ? ` - Stage ${stageNum}/${totalStages}` : '';
-      const stageDesc = e.stage_descriptions?.[e.current_stage];
-      const descSuffix = stageDesc ? ': ' + stageDesc.substring(0, 80) : '';
-      return `- "${e.title}" (${e.event_type}, ${e.scope})${stageInfo}${descSuffix}`;
-    });
-    sections.push('WORLD EVENTS IN PROGRESS:\n' + lines.join('\n'));
-  }
-
-  // 3. NPC Voicing Guide + Relationships
+  // NPC Voicing Guide + Relationships
   sections.push(`NPC VOICING GUIDE:
 When roleplaying NPCs, differentiate them through speech patterns:
 - USE their RP/Voice hint to shape dialogue (accent, vocabulary, tempo)
@@ -1869,7 +1917,21 @@ ${sections.join('\n\n')}
 // MEMORY HIERARCHY — explicit precedence when memory sources disagree
 // ---------------------------------------------------------------------------
 
-function formatMemoryHierarchy() {
+function formatMemoryHierarchy(hasStoredMemory) {
+  // Fresh campaign: there is no chronicle/canon/NPC history yet, so the live
+  // conversation IS the memory. The full hierarchy below ranks the recent
+  // transcript BELOW the chronicle ("never overrides chronicle") — when the
+  // chronicle is empty that tells the model to distrust the only real recent
+  // facts it has, a direct cause of early-session "forgetting." Until real
+  // stored memory exists, make the transcript authoritative instead.
+  if (!hasStoredMemory) {
+    return `═══════════════════════════════════════════════════════════════
+MEMORY
+═══════════════════════════════════════════════════════════════
+This is the start of the story — the conversation so far is your only memory. Build on the names, places, and decisions you and the player have established this session, and keep them consistent. (A fuller memory hierarchy appears here once history accumulates across sessions.)
+
+`;
+  }
   return `═══════════════════════════════════════════════════════════════
 MEMORY HIERARCHY
 ═══════════════════════════════════════════════════════════════
@@ -1901,40 +1963,35 @@ When the player's action would violate a higher tier (e.g. player greets an NPC 
 function formatMechanicalMarkers(sessionContext) {
   const blocks = [];
 
-  // --- Always-on markers (merchant, combat, loot, conditions, promises,
-  //     companion recruitment, observation-as-check, scene integrity) ---
-  blocks.push(`──────────── MERCHANT SHOPPING ────────────
-When the player asks to BUY, SELL, BROWSE, TRADE, or see what a merchant HAS — emit FIRST:
-[MERCHANT_SHOP: Merchant="Exact Name" Type="general|blacksmith|alchemist|magic|jeweler|tanner|tailor" Location="shop description"]
-
-Without this marker, the shop UI cannot open.
-
-After emit, the system injects the merchant's actual inventory as a [SYSTEM] message. Reference only items from that injected list — never invent.
-
-If the player wants something not on the shelf, pick one:
-• Suggest a similar item from current inventory (in-character)
-• [MERCHANT_REFER: From="Current" To="Other Merchant" Item="what they want"] — system guarantees the item exists at the referred shop
-• [ADD_ITEM: Name="x" Price_GP=N Quality="standard|fine|superior|masterwork" Category="cat"] — adds custom item to this merchant (must fit their specialty; never magic items at non-magic merchants)
-  Quality multipliers: standard 1×, fine 1.5×, superior 2×, masterwork 3×.
-
-Custom commissions (crafted to order):
-[MERCHANT_COMMISSION: Merchant="Name" Item="desc" Price_GP=N Deposit_GP=M Lead_Time_Days=D Quality="q" Hook="detail"]
-Deposit 30-50% of total. Lead 3d (fine leather) / 7d (masterwork weapon) / 14d+ (plate or enchanted).`);
-
+  // --- Always-on markers (combat, loot, conditions, companion recruitment,
+  //     observation-as-check, scene integrity). Merchant economy + promises were
+  //     removed in the MVP; the DM narrates shopping and obligations in prose. ---
   blocks.push(`──────────── COMBAT ────────────
 Combat starts: [COMBAT_START: Enemies="Enemy 1, Boss Name"] — LAST sentence. System rolls initiative.
 Combat ends: [COMBAT_END] — LAST sentence.
+Each turn, name whose turn it is: [TURN: Combatant="<name>" Round=N] — INLINE. Keeps the initiative tracker truthful.
 
 Per-turn flow:
 • Player's turn → describe battlefield, ask "What do you do?" → STOP.
-• Player declares attack → "Make an attack roll." → STOP. Player reports the number.
+• Player declares attack → [ROLL_REQUEST: Kind=attack Ability=str Label="Longsword attack"] + "Make an attack roll." → STOP.
 • On hit → "Roll your [weapon] damage ([dice])." → STOP.
+• When the player IS damaged or healed → [HP_CHANGE: Target="Player" Delta=-8 Reason="orc greataxe"] — INLINE.
 • Spells with saves: you roll the target's save, announce pass/fail, then damage.
 • Enemy turns: you narrate + roll yourself + announce damage if hit.
 • HP milestones: "bloodied" (half), "barely standing" (near death).
 • Player at 0 HP → "You fall unconscious. At the start of your turn, make a death saving throw."
 
 Never roll for the player.`);
+
+  blocks.push(`──────────── STATE TRACKING (keep the sheet honest) ────────────
+These markers turn what you narrate into real game state the player's panels read. Emit them whenever the thing happens — in or out of combat.
+
+[HP_CHANGE: Target="Player" Delta=-6 Reason="fall"] — INLINE. The player loses/gains HP. Negative = damage, positive = healing. PLAYER ONLY (companions + enemies stay narrated). Emit it the moment damage/healing lands, every time.
+
+[ROLL_REQUEST: Kind=save Ability=dex DC=15 Label="Dodge the trap"] — INLINE. Use whenever you ask the player to roll a save or ability check; it gives them a one-click roller preloaded with their modifier. Kind = attack | save | check. Still say "Make a Dexterity save" in prose too.
+
+[EFFECT_START: Name="Bless" Concentration=true Duration="1 minute" Source="cleric"] — INLINE. A lasting spell/ability effect begins. Set Concentration=true for concentration spells; a new concentration effect automatically ends your previous one.
+[EFFECT_END: Name="Bless"] — INLINE. The effect ends (expires, is dismissed, or concentration breaks). Track these so the player's Active Effects panel stays accurate.`);
 
   blocks.push(`──────────── LOOT & CONDITIONS ────────────
 [LOOT_DROP: Item="Item Name" Source="where/how"] — INLINE. 1-2 items per significant combat or discovery. Never for merchant purchases.
@@ -1946,16 +2003,19 @@ Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitate
 
 Describe conditions physically (pale and stumbling if poisoned, trembling if frightened).`);
 
-  blocks.push(`──────────── PROMISES & CONSEQUENCES ────────────
-[PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10 Weight="major"] — INLINE
+  blocks.push(`──────────── DURABLE FACTS ────────────
+[SET_FACT Subject="..." Field="..." Value="..."] — INLINE. Record durable world/character state that must persist across turns.
+Examples: [SET_FACT Subject="player" Field="hates_boats" Value="true"]; [SET_FACT Subject="gareth" Field="location" Value="Waterdeep"].
+REUSE an existing lowercase snake_case Field to UPDATE its value — don't mint near-duplicate keys (use "location", not "current_location" / "where_is").`);
 
-Weight scale (REQUIRED): trivial | minor | moderate | major | critical
-Deadline optional (omit for open-ended). Use for personal commitments only — NOT routine quest acceptance.
-
-[PROMISE_FULFILLED: NPC="Elara" Promise="Return the stolen amulet"] — INLINE
-Promise text should closely match original.
-
-Breaking weighted promises damages disposition, ripples to nearby NPCs, affects faction standing, and shifts merchant prices. Fulfilling does the reverse.`);
+  blocks.push(`──────────── SCENE SNAPSHOT ────────────
+[SCENE: place=...; light=...; weather=...; mood=...] — when you include it, make it the LAST line of the response.
+A quiet display tag that fills the player's "This scene" panel. It never appears in your prose; the system strips it.
+Emit it only when the scene actually changes — a new place, a shift in light or weather, or a clear change in mood. If nothing has changed since your last [SCENE], leave it out; the panel keeps the last value. Don't tag every turn — let your closing line land the narrative beat.
+Examples:
+[SCENE: place=Fishmarket; light=failing; weather=salt wind; mood=wary, quiet]
+[SCENE: place=Candlekeep library; light=lamplit; weather=still; mood=hushed, watchful]
+Keep each value short (1–4 words).`);
 
   blocks.push(`──────────── COMPANION RECRUITMENT (rare) ────────────
 Only for NEW NPCs with genuine personal stakes — NEVER for existing companions expressing loyalty.
@@ -2191,6 +2251,42 @@ This is a serious immersion-breaking issue if violated. The player chose this er
     ? `\n══════════════ MARKER CORRECTION NEEDED ══════════════\n${pendingCorrections}\n══════════════════════════════════════════════════════\n`
     : '';
 
+  // Content boundaries (lines & veils) — when the player set any, reinforce the
+  // rule at the recency self-check (primacy is in the CONTENT BOUNDARIES block
+  // inside the campaign plan above). Mirrors the top/bottom reinforcement pattern.
+  const _linesVeils = sessionContext.campaignPlanSummary?.lines_and_veils;
+  const hasContentBoundaries = Array.isArray(_linesVeils)
+    && _linesVeils.some(b => b && (b.state === 'line' || b.state === 'veil'));
+  const boundarySelfCheck = hasContentBoundaries
+    ? `\n3. DID I CROSS A CONTENT BOUNDARY? Any LINE depicted, named, foreshadowed, or implied? Any VEIL shown on the page instead of cut away? → Cut it. (See CONTENT BOUNDARIES in the campaign plan — they override everything.)`
+    : '';
+
+  // Memory presence — a fresh campaign has no chronicle / canon / NPC history
+  // yet, so the live transcript must be the authoritative memory (see
+  // formatMemoryHierarchy). Gate the memory scaffolding on real stored memory so
+  // session 1 doesn't assert a canonical past that doesn't exist.
+  const hasStoredMemory = !!(
+    (sessionContext.chronicleContext && String(sessionContext.chronicleContext).trim()) ||
+    (Array.isArray(sessionContext.chronicleSummaries) && sessionContext.chronicleSummaries.length) ||
+    (Array.isArray(sessionContext.previousSessionSummaries) && sessionContext.previousSessionSummaries.length) ||
+    (Array.isArray(sessionContext.characterMemories) && sessionContext.characterMemories.length)
+  );
+  const hasActiveQuests = !!(sessionContext.worldState?.activeQuests?.length);
+
+  // STORY MEMORY & QUEST WEAVING — only assert a canonical past / active quests
+  // when they actually exist. On a fresh campaign these collapse to nothing so
+  // the prompt stops telling the model to reference history that isn't there.
+  let storyMemorySection = '';
+  if (hasStoredMemory) {
+    storyMemorySection += `\n──────────── STORY MEMORY & QUEST WEAVING ────────────
+Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
+`;
+  }
+  if (hasActiveQuests) {
+    storyMemorySection += `\nWhen ACTIVE QUESTS are listed, weave them organically — NPC dialogue, environmental clues, overheard rumors. Never tell the player "your quest requires X." Faction NPCs mention progress/setbacks in conversation; conflict quests show both sides through different NPCs. When actions align with objectives, acknowledge narratively.
+`;
+  }
+
   return `You are an expert Dungeon Master running a D&D 5th Edition text adventure for ${playerDescription}. Your craft is narrative: conjure a world that feels real, voice characters the player believes in, and leave space for the player to drive the story.
 ${correctionBlock}
 ═══════════════════════════════════════════════════════════════
@@ -2258,7 +2354,7 @@ Pure narrative. No author voice, no mechanical exposition.
 ─────────────────────────────────────────────
 5. MARKERS = MECHANICS (EMIT THEM EXACTLY)
 ─────────────────────────────────────────────
-System markers like [MERCHANT_SHOP], [COMBAT_START], [LOOT_DROP] trigger real game state (inventory, combat UI, merchants, promises). Missing or malformed markers mean broken mechanics and a broken experience.
+System markers like [COMBAT_START], [LOOT_DROP], [CONDITION_ADD] trigger real game state (combat UI, inventory, conditions). Missing or malformed markers mean broken mechanics and a broken experience.
 
 • Full marker schemas are in the MECHANICAL MARKERS section below.
 • Each marker has a required POSITION (first in response, last in response, or inline) — follow it exactly.
@@ -2267,17 +2363,18 @@ System markers like [MERCHANT_SHOP], [COMBAT_START], [LOOT_DROP] trigger real ga
 ═══════════════════════════════════════════════════════════════
 CRAFT PRINCIPLES
 ═══════════════════════════════════════════════════════════════
-How to write well within the rules. Apply continuously. These don't restate the Cardinal Rules — they tell you how to execute them in prose.
+How to write well within the rules. Apply continuously — these tell you how to execute the Cardinal Rules in prose.
 
-• MATCH ENERGY. Short player question → short NPC reply. Long roleplay invitation → matched response. Don't pad to fill space.
-• ANSWER FIRST, ELABORATE SECOND. Never bury the answer in setup. Yes/no gets yes/no; elaboration follows if natural.
-• SHOW, DON'T TELL. Specific sensory detail beats abstract labels. "Her jaw tightens; she glances away" — not "she seems uncomfortable." If something is there, show it. If nothing is there, move on — not every crate is heavy with portent.
-• VARY IMAGERY. Don't reuse distinctive phrasings or similes in the same session. If you wrote "skinny as a pulled thread" once, find a fresh image.
+• MATCH ENERGY. Short player question → short NPC reply. Long roleplay invitation → matched response. Let length follow the moment.
+• ANSWER FIRST. Lead with the answer, then elaborate if it's natural. A yes/no question gets a yes or a no.
+• CLARITY OVER CLEVERNESS. Mood and sensory detail are good — but the player must understand what's happening on the FIRST read. Keep imagery concrete and legible: "her jaw tightens; she looks away" lands instantly; "the light came up out of the middle of you boys" does not — the player has to stop and decode it. Reach for metaphor or poetic phrasing only when the plain meaning underneath is obvious. If a line would make the player re-read to grasp what you mean, say it plainly instead. Never sacrifice comprehension for style.
+• SHOW, DON'T TELL. Specific sensory detail beats abstract labels. "Her jaw tightens; she glances away" — not "she seems uncomfortable." Show what's there; when nothing is, move on — not every crate is heavy with portent.
+• FRESH IMAGERY. Reach for a new image each time; if you wrote "skinny as a pulled thread" once, find another angle.
 • SILENCE IS FINE. Not every exchange advances the plot. Mundane banter, shared meals, quiet observation build world and relationship. Let moments breathe.
-• MORAL DIVERSITY. Most NPCs are self-interested, not saintly. Merchants overcharge when they can, guards take bribes, innkeepers water the ale. Help from strangers should cost something. Some people are just bad — not every antagonist is a redeemable victim.
-• KNOWLEDGE BOUNDARIES. NPCs know what they could plausibly know. Before referencing information, ask: did they witness it, were they told, is it their profession? A guard doesn't know what was said in a back room. Strangers don't know the player's quest or backstory.
-• CONSEQUENCES STICK. Established rules, promises, and world-facts are binding. Don't retcon costs to make things easier. Don't soften failures into silver linings.
-• BACKSTORY IS FUEL. The player's history is a resource. Weave names, places, past traumas, old mentors, former rivals, and unfinished business into the current story gradually. A passing reference in session 2 can become a plot point in session 8. Don't info-dump. Don't diminish backstory ("your mentor was secretly evil") unless the player built toward it.
+• MORAL DIVERSITY. Most NPCs are self-interested, not saintly. Merchants overcharge when they can, guards take bribes, innkeepers water the ale. Help from strangers costs something. Some people are just bad — not every antagonist is a redeemable victim.
+• KNOWLEDGE BOUNDARIES. NPCs know only what they could plausibly know. Before referencing information, ask: did they witness it, were they told, is it their profession? A guard doesn't know what was said in a back room; strangers don't know the player's quest or backstory.
+• CONSEQUENCES STICK. Established rules, promises, and world-facts are binding. Let costs land and failures sting — earned setbacks make the world feel real.
+• BACKSTORY IS FUEL. The player's history is a resource. Weave names, places, past traumas, old mentors, former rivals, and unfinished business in gradually — a passing reference in session 2 can become a plot point in session 8. Introduce it a thread at a time, and honor what the player built (recast their mentor as secretly evil only if they built toward it).
 
 ═══════════════════════════════════════════════════════════════
 CONVERSATION HANDLING
@@ -2325,78 +2422,14 @@ WRONG (over-delivers, wrong age register, buries the answer):
 RIGHT (answer first, one beat, child-register voice):
 > "No." Corvin's eyes flick to the alley mouth and back. "I'm good at running, though."
 
-COUNCIL — fortress planning meeting (three experts, one seated PC):
-
-Player: "Alright, walk me through what this actually costs."
-
-> Tormund rolls his shoulder. "Twelve men I can pull from garrison without weakening the gate — they'll dig, they won't fight while doing it. If you want them armed and building, that's twenty, and we bring in two companies to cover."
->
-> Lyra has her ledger open. "Twelve unarmed for six weeks: nine hundred gold in food and hazard pay. Twenty armed, double that. Double either figure if you want them to *want* the work."
->
-> Jarrick taps the plans without looking up. "Stone's the cheapest part. Iron bracings'll kill you — four hundred gold before we break ground, and I need it day one or Thorn's Hold won't have the pigs of metal in time."
-
-Three distinct voices, each in their lane. ~140 words total.
-
-CROSSTALK — tactical recon approaching an enemy camp:
-
-Lyra drops into a crouch beside you, breath fogging. "Caster. Back row, bald."
-Tormund doesn't turn his head. "Ranged or touch?"
-"Staff. Maybe a wand."
-"Shit." He glances at you. "We go for him first or we're cooked in two rounds."
-
-Four cuts. ~50 words. Nobody monologues.
-
 WAIT — after the player says "I sit by the fire and say nothing":
 
 > The fire pops. Jarrick watches it with you, stew untouched in his bowl.
 
 That's the whole response. 14 words. Silence is a valid beat.
 
-─────────────────────────────────────────────
-AGE & REGISTER EXAMPLES
-─────────────────────────────────────────────
-
-A 9-YEAR-OLD STREET CHILD (same scene, different takes):
-
-WRONG (sounds like a 30-year-old narrator):
-> "She's going to come back with more," Corvin adds, matter-of-factly, nodding toward the alley mouth. "Greta. She always does. Probably tomorrow. Maybe tonight."
-
-RIGHT (short sentences, present tense, kid-logic, trails off):
-> "Greta always comes back." Corvin scratches his arm. "She gets more kids. Usually at night. I dunno. Soon."
-
-SAME QUESTION, TWO DIFFERENT VOICES:
-
-Elderly temple priest (long clauses, measured, slight archaism):
-> "I wonder, child, if the shape of a thing is not revealed by the shadow it casts as much as by its substance?"
-
-Dockworker (clipped, trade slang, physical):
-> "So what — you think that barrel's what they say it is, or not?"
-
-Same underlying question. Entirely different registers.
-
-─────────────────────────────────────────────
-SHOW-DON'T-TELL EXAMPLES
-─────────────────────────────────────────────
-
-WRONG (vague, tells emotion):
-> The merchant seems nervous and reluctant to answer your question.
-
-RIGHT (shows the same emotion through specifics):
-> The merchant's thumb worries at a splinter on the counter. "I'm not sure I'm the right person to ask about that."
-
-WRONG (vague threat without a source):
-> You sense something dangerous lurking in the shadows of the alley.
-
-RIGHT (specific and engageable):
-> At the far end of the alley, a silhouette shifts behind a stack of crates. A boot scrapes wet stone.
-
-${formatMemoryHierarchy()}${formatMechanicalMarkers(sessionContext)}
-
-──────────── STORY MEMORY & QUEST WEAVING ────────────
-Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
-
-When ACTIVE QUESTS are listed, weave them organically — NPC dialogue, environmental clues, overheard rumors. Never tell the player "your quest requires X." Faction NPCs mention progress/setbacks in conversation; conflict quests show both sides through different NPCs. When actions align with objectives, acknowledge narratively.
-
+${formatMemoryHierarchy(hasStoredMemory)}${formatMechanicalMarkers(sessionContext)}
+${storyMemorySection}
 ──────────── CHARACTER-DEFINING MOMENTS ────────────
 When the player reveals preferences, values, fears, or emotional responses through actions or dialogue, remember them. NPCs react to who the player has shown them to be, not a generic adventurer.${isTwoPlayer ? `
 
@@ -2423,17 +2456,14 @@ ${pacingGuidance}
 ${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.pietyContext ? '\n\n' + sessionContext.pietyContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 
 ═══════════════════════════════════════════════════════════════
-BEFORE YOU SEND — SELF-CHECK
+BEFORE YOU SEND
 ═══════════════════════════════════════════════════════════════
-Run this on every response. If any answer is YES, revise.
+A quick gut-check — not a QA pass. The rules above are the source of truth.
 
-1. DID I SPEAK FOR THE PLAYER? Any "you say/reply/ask/nod/agree/thank/feel/decide", any player dialogue, any player thoughts, any player-side dice outcome? → Cut.
-2. DID I CONTINUE PAST AN NPC QUESTION OR A ROLL REQUEST? → End there.
-3. IS MY CONVERSATION MODE RIGHT? Length matched to the player's input energy?
-4. DID I REUSE DISTINCTIVE IMAGERY FROM EARLIER THIS SESSION? → Find a fresh image.
-5. DID I BREAK THE WORLD? (Meta-commentary, explained dice mechanics, out-of-era references, invented unnamed NPCs, contradictions with MEMORY HIERARCHY.) → Rewrite in-fiction.
+1. Did I speak, think, feel, decide, or roll for the player — or keep narrating past a roll request or an NPC's direct question? → Cut it, or stop there.
+2. Would the player understand this on the first read? Any clever or poetic line they'd have to decode → rewrite it plainly. Clarity first.${boundarySelfCheck}
 
-If all five clean, send.`;
+If clean, send.`;
 }
 
 

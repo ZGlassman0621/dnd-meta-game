@@ -34,40 +34,87 @@ export default function BumpCelebrationCard({ bumps, assignments, onAssignmentCh
   const headingVerb = n === 1 ? 'shaped' : 'shaped'  // verb stays "shaped" per §5.5.5
   const heading = `${countWord(n)} ${headingNoun} ${headingVerb} you:`
 
+  // Hearth idiom: the gold "locked/earned" celebration treatment
+  // (.lock-cele) — same warm accent card as CelebrationCard, but each
+  // earned beat carries a +N magnitude chip, and the outcome region holds
+  // a per-bump ability allocator (Hearth .aselect dropdowns).
   return (
-    <div className="celebration">
-      <div className="marker">From your Prelude</div>
-      <p className="opening">{heading}</p>
-      <ul>
+    <div className="lock-cele" style={{ padding: '18px 22px 18px 24px' }}>
+      <div className="lc-top">
+        <span className="lc-fleuron" aria-hidden="true">❧</span>
+        <span className="lc-marker">From your Prelude</span>
+        <span className="lc-lock">
+          <svg className="ic" aria-hidden="true"><use href="#i-lock" /></svg>
+          Earned
+        </span>
+      </div>
+
+      <p style={{
+        fontFamily: 'var(--serif)',
+        fontStyle: 'italic',
+        fontSize: 15,
+        color: 'var(--ink-2)',
+        margin: '0 0 12px',
+        lineHeight: 1.45
+      }}>
+        {heading}
+      </p>
+
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
         {bumps.map((b, i) => (
-          <li key={i}>
-            <span className="ch">Ch{b.chapter ?? '—'}</span>
-            {b.chapter_beat || b.reason || '(no chapter beat recorded)'}
-            <span style={{
-              color: 'var(--accent)',
+          <li key={i} style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'baseline',
+            fontFamily: 'var(--serif)',
+            fontSize: 15,
+            lineHeight: 1.45,
+            color: 'var(--ink-2)'
+          }}>
+            <span className="chip" style={{
+              flexShrink: 0,
               fontFamily: 'var(--mono)',
-              fontSize: 11,
-              marginLeft: 10,
-              padding: '1px 6px',
-              border: '1px solid var(--accent-2)',
-              borderRadius: 2
+              fontSize: 9.5,
+              letterSpacing: '.06em',
+              padding: '2px 7px',
+              color: 'var(--accent)',
+              borderColor: 'color-mix(in oklab, var(--accent) 38%, var(--rule))'
+            }}>
+              Ch{b.chapter ?? '—'}
+            </span>
+            <span style={{ flex: 1 }}>{b.chapter_beat || b.reason || '(no chapter beat recorded)'}</span>
+            <span className="chip on" style={{
+              flexShrink: 0,
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              padding: '2px 8px'
             }}>
               +{b.magnitude || 1}
             </span>
           </li>
         ))}
       </ul>
-      <div className="outcome" style={{ paddingTop: 18 }}>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 17, color: 'var(--ink-2)', marginBottom: 14 }}>
+
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid color-mix(in oklab, var(--accent) 22%, var(--rule))' }}>
+        <div className="lc-note" style={{ marginBottom: 14 }}>
           Though your past shaped you, you may shape your future. Where would you like each to land?
         </div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
           {bumps.map((b, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span className="label" style={{ fontSize: 11 }}>Bump {i + 1}</span>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: 'var(--sans)',
+                fontWeight: 600,
+                fontSize: 9.5,
+                letterSpacing: '.16em',
+                textTransform: 'uppercase',
+                color: 'var(--ink-3)'
+              }}>
+                Bump {i + 1}
+              </span>
               <select
-                className="select"
-                style={{ width: 'auto', fontSize: 16, padding: '6px 24px 6px 6px' }}
+                className="aselect"
+                style={{ width: 'auto', fontSize: 15 }}
                 value={assignments[i] || ''}
                 onChange={e => onAssignmentChange(i, e.target.value)}
               >

@@ -30,8 +30,8 @@ export default function MomentList({
       <div style={{
         fontFamily: 'var(--serif)',
         fontStyle: 'italic',
-        fontSize: 15,
-        color: 'var(--ink-3)',
+        fontSize: 14.5,
+        color: 'var(--ink-4)',
         padding: '8px 0'
       }}>
         No theme-flavored moments available — use "Write your own" below.
@@ -53,8 +53,9 @@ export default function MomentList({
       {/* --- Picked chips (with reorder/remove) ----------------- */}
       {pickedKeys.length > 0 && (
         <div>
-          <div className="label" style={{ fontSize: 11, marginBottom: 10 }}>
-            Your backstory ({pickedKeys.length} picked)
+          <div className="block-label" style={{ marginBottom: 10 }}>
+            <span className="l">Your backstory</span>
+            <span className="hint">{pickedKeys.length} picked — they become hooks</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {pickedKeys.map((key, idx) => {
@@ -69,15 +70,16 @@ export default function MomentList({
                     gap: 12,
                     alignItems: 'center',
                     padding: '12px 16px',
-                    background: 'var(--bg-2)',
+                    borderRadius: 11,
+                    background: 'color-mix(in oklab, var(--accent) 8%, var(--bg-2))',
                     border: '1px solid var(--accent)',
                     fontFamily: 'var(--serif)'
                   }}
                 >
                   <div style={{
-                    fontSize: 16,
+                    fontSize: 15.5,
                     lineHeight: 1.45,
-                    color: 'var(--ink-2)'
+                    color: 'var(--ink)'
                   }}>
                     <span style={{
                       fontFamily: 'var(--mono)',
@@ -91,10 +93,9 @@ export default function MomentList({
                     {moment.text}
                     {moment.isCustom && (
                       <span style={{
-                        fontFamily: 'var(--sans)',
-                        fontStyle: 'italic',
-                        fontSize: 10,
-                        letterSpacing: '0.14em',
+                        fontFamily: 'var(--mono)',
+                        fontSize: 9,
+                        letterSpacing: '0.08em',
                         color: 'var(--ink-3)',
                         textTransform: 'uppercase',
                         marginLeft: 8
@@ -133,11 +134,15 @@ export default function MomentList({
       )}
 
       {/* --- Curated moment picker -------------------------------- */}
+      {/* Hearth idiom: the Step-7 backstory .chipwrap > .mchip pattern —
+          each curated moment is a selectable chip with a .tk check token
+          that fills gold when picked. */}
       <div>
-        <div className="label" style={{ fontSize: 11, marginBottom: 10 }}>
-          Curated moments — click to add
+        <div className="block-label" style={{ marginBottom: 10 }}>
+          <span className="l">Backstory moments</span>
+          <span className="hint">click the few that are true</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="chipwrap">
           {moments.map((text, i) => {
             const key = `curated:${i}`
             const picked = isPicked(key)
@@ -145,45 +150,13 @@ export default function MomentList({
               <button
                 key={key}
                 type="button"
+                className={`mchip${picked ? ' on' : ''}`}
                 onClick={() => picked ? onUnpick(key) : onPick(key)}
-                style={{
-                  padding: '12px 16px',
-                  background: picked ? 'var(--bg-2)' : 'var(--bg)',
-                  border: `1px solid ${picked ? 'var(--accent)' : 'var(--rule-soft)'}`,
-                  borderLeftWidth: picked ? 3 : 1,
-                  fontFamily: 'var(--serif)',
-                  fontSize: 16,
-                  lineHeight: 1.45,
-                  color: 'var(--ink-2)',
-                  cursor: 'pointer',
-                  transition: 'all .12s',
-                  textAlign: 'left',
-                  width: '100%',
-                  display: 'flex',
-                  gap: 14,
-                  alignItems: 'center'
-                }}
               >
-                <span style={{
-                  width: 18,
-                  height: 18,
-                  border: `1px solid ${picked ? 'var(--accent)' : 'var(--rule)'}`,
-                  background: picked ? 'var(--accent)' : 'var(--bg-card)',
-                  flexShrink: 0,
-                  position: 'relative'
-                }}>
-                  {picked && (
-                    <span style={{
-                      position: 'absolute',
-                      top: 1,
-                      left: 4,
-                      color: 'var(--bg-card)',
-                      fontSize: 12,
-                      fontFamily: 'var(--mono)'
-                    }}>✓</span>
-                  )}
+                <span className="tk">
+                  <svg className="ic" aria-hidden="true"><use href="#i-check" /></svg>
                 </span>
-                <span>{text}</span>
+                {text}
               </button>
             )
           })}
@@ -192,8 +165,8 @@ export default function MomentList({
 
       {/* --- Custom (write-your-own) ----------------------------- */}
       <div>
-        <div className="label" style={{ fontSize: 11, marginBottom: 10 }}>
-          Write your own
+        <div className="block-label" style={{ marginBottom: 10 }}>
+          <span className="l">Write your own</span>
         </div>
         <CustomMomentInput onAdd={onAddCustom} />
         {customMoments.length > 0 && (
@@ -202,7 +175,7 @@ export default function MomentList({
             fontFamily: 'var(--serif)',
             fontStyle: 'italic',
             fontSize: 14,
-            color: 'var(--ink-3)'
+            color: 'var(--ink-4)'
           }}>
             ({customMoments.length} custom moment{customMoments.length === 1 ? '' : 's'} authored — picked ones appear in your backstory above.)
           </div>
@@ -213,19 +186,23 @@ export default function MomentList({
 }
 
 function iconButtonStyle(disabled) {
+  // Hearth idiom: small square control echoing the design's .stepper /
+  // .rv-edit buttons — rounded, bg-2 surface, ink-3 glyph.
   return {
     width: 28,
     height: 28,
     border: '1px solid var(--rule)',
-    background: 'transparent',
+    borderRadius: 7,
+    background: 'var(--bg-2)',
     fontFamily: 'var(--sans)',
     fontSize: 12,
-    color: disabled ? 'var(--ink-3)' : 'var(--ink-2)',
+    color: disabled ? 'var(--ink-4)' : 'var(--ink-3)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.4 : 1,
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    transition: 'all .12s'
   }
 }
 
@@ -243,10 +220,10 @@ function CustomMomentInput({ onAdd }) {
       <input
         ref={el => { inputEl = el }}
         type="text"
-        className="input"
+        className="finput"
         placeholder="A formative moment in your own words…"
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
-        style={{ flex: 1 }}
+        style={{ flex: 1, fontSize: 16 }}
       />
       <button type="button" className="btn" onClick={submit}>Add</button>
     </div>

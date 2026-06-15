@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { abilityModifier } from '../utils/dndMath.js'
 import npcPersonalities from '../data/npcPersonalities.json'
 import equipmentData from '../data/equipment.json'
 import classesData from '../data/classes.json'
@@ -152,7 +153,7 @@ function CompanionEditor({ companion, onSave, onCancel }) {
   }
 
   const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2)
+    const mod = abilityModifier(score)
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 

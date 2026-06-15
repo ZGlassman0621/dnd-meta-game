@@ -1,915 +1,207 @@
-import { useState, useEffect } from 'react';
+import { Fragment } from 'react';
 import classesData from '../data/classes.json';
 import racesData from '../data/races.json';
-import spellsData from '../data/spells/index.js';
+
+// Local inline sprite — symbol paths copied from the cockpit design's <defs>.
+// Kept local so we never touch the shared HearthSprite.
+function QRSprite() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+      <defs>
+        <symbol id="qr-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4" />
+          <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+        </symbol>
+        <symbol id="qr-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </symbol>
+        <symbol id="qr-arrow-ur" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 17L17 7M7 7h10v10" />
+        </symbol>
+      </defs>
+    </svg>
+  );
+}
+
+const parseJson = (v, dflt) => {
+  if (v == null) return dflt;
+  if (typeof v !== 'string') return v;
+  try { return JSON.parse(v); } catch { return dflt; }
+};
+
+const sign = (n) => (n >= 0 ? `+${n}` : `${n}`);
+const ABBR = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wis', cha: 'Cha' };
+// Save proficiency keys → which ability score they use
+const SKILL_ABILITY = {
+  acrobatics: 'dex', 'animal handling': 'wis', arcana: 'int', athletics: 'str',
+  deception: 'cha', history: 'int', insight: 'wis', intimidation: 'cha',
+  investigation: 'int', medicine: 'wis', nature: 'int', perception: 'wis',
+  performance: 'cha', persuasion: 'cha', religion: 'int', 'sleight of hand': 'dex',
+  stealth: 'dex', survival: 'wis'
+};
 
 function QuickReferencePanel({ character, onClose, spellSlots }) {
-  const [quickRefTab, setQuickRefTab] = useState('equipment');
-  const [expandedSpell, setExpandedSpell] = useState(null);
+  const level = character?.level || 1;
+  const classKey = character?.class?.toLowerCase();
+  const classData = classesData[classKey];
+  const isMonk = classKey === 'monk';
+  const shortName = character?.nickname || character?.name?.split(' ')[0] || character?.name || 'You';
+  const speed = character?.speed || 30;
+  const profBonus = Math.ceil(level / 4) + 1;
 
-  // Fetch progression data for inline theme/ancestry display in Abilities tab
-  const [progression, setProgression] = useState(null);
-  useEffect(() => {
-    if (!character?.id) return;
-    let cancelled = false;
-    fetch(`/api/character/${character.id}/progression`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (!cancelled) setProgression(data); })
-      .catch(() => { /* silent — progression is supplemental in quick ref */ });
-    return () => { cancelled = true };
-  }, [character?.id]);
-
-  const getSpellDetails = (spellName) => {
-    if (!spellName) return null;
-    const lower = spellName.toLowerCase();
-    // Check cantrips first
-    for (const className of Object.keys(spellsData.cantrips || {})) {
-      const cantrip = spellsData.cantrips[className]?.find(s => s.name.toLowerCase() === lower);
-      if (cantrip) return { ...cantrip, level: 'Cantrip' };
-    }
-    // Check leveled spells
-    for (const level of Object.keys(spellsData.spells || {})) {
-      const spell = spellsData.spells[level]?.find(s => s.name.toLowerCase() === lower);
-      if (spell) return { ...spell, spellLevel: level };
-    }
-    return null;
+  // ability scores (JSON column, or separate columns as fallback)
+  const abil = parseJson(character?.ability_scores, null) || {
+    str: character?.strength, dex: character?.dexterity, con: character?.constitution,
+    int: character?.intelligence, wis: character?.wisdom, cha: character?.charisma
   };
+  const abilMod = (k) => Math.floor((((abil?.[k]) ?? 10) - 10) / 2);
+
+  const hitDie = classData?.hitDie || 8;
+  const conMod = abilMod('con');
+  const computedMaxHp = Math.max(1, hitDie + conMod + Math.max(0, level - 1) * (Math.floor(hitDie / 2) + 1 + conMod));
+  const maxHp = character?.max_hp > 0 ? character.max_hp : computedMaxHp;
+  const curHp = character?.current_hp > 0 ? character.current_hp : maxHp;
+  const ac = (() => {
+    if (isMonk) return 10 + abilMod('dex') + abilMod('wis');
+    if (classKey === 'barbarian') return 10 + abilMod('dex') + abilMod('con');
+    return (character?.armor_class && character.armor_class > 0) ? character.armor_class : 10 + abilMod('dex');
+  })();
+  const init = abilMod('dex');
+  // Monk ki points equal monk level (no per-session "used" value is tracked).
+  const kiMax = isMonk ? level : 0;
+
+  // ── Saves & key skills ──────────────────────────────────────────────
+  const saveKeys = Array.isArray(classData?.savingThrows) ? classData.savingThrows : [];
+  const saves = saveKeys
+    .filter((k) => ABBR[k])
+    .map((k) => ({ label: `${ABBR[k]} save`, value: `${sign(abilMod(k) + profBonus)} · proficient` }));
+
+  const skillList = parseJson(character?.skills, []) || [];
+  const skills = skillList
+    .map((s) => {
+      const raw = (typeof s === 'string' ? s : s?.name) || '';
+      const key = raw.toLowerCase().replace(/_/g, ' ').trim();
+      const ability = SKILL_ABILITY[key];
+      if (!ability) return null;
+      const nice = key.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      return { label: nice, value: `${sign(abilMod(ability) + profBonus)} · proficient` };
+    })
+    .filter(Boolean);
+  const isPerceptionProf = skillList.some((s) => {
+    const raw = (typeof s === 'string' ? s : s?.name) || '';
+    return raw.toLowerCase().replace(/_/g, ' ').trim() === 'perception';
+  });
+
+  // Senses: passive perception is always derivable; darkvision comes from race traits.
+  const passivePerc = 10 + abilMod('wis') + (isPerceptionProf ? profBonus : 0);
+  const raceInfo = racesData[character?.race?.toLowerCase()];
+  let raceTraits = raceInfo?.traits || [];
+  if (character?.subrace && raceInfo?.subraces) {
+    const sr = raceInfo.subraces.find((x) => x.name?.toLowerCase() === character.subrace?.toLowerCase());
+    if (sr?.traits) raceTraits = sr.traits;
+  }
+  const darkvision = raceTraits.find((t) => String(t).trim().toLowerCase().startsWith('darkvision'));
+  const senses = [darkvision ? String(darkvision).split(' - ')[0].trim() : null, `Passive Perc. ${passivePerc}`]
+    .filter(Boolean).join(' · ');
+
+  // ── Class features / Ki techniques ──────────────────────────────────
+  const features = (() => {
+    const out = [];
+    if (Array.isArray(classData?.features)) classData.features.forEach((f) => {
+      const s = String(f); const d = s.indexOf(' - ');
+      out.push({ name: d > 0 ? s.slice(0, d).trim() : s.trim(), desc: d > 0 ? s.slice(d + 3).trim() : '' });
+    });
+    const sub = classData?.subclasses?.find((sc) => sc.name === character?.subclass);
+    if (sub?.featuresByLevel) Object.entries(sub.featuresByLevel)
+      .filter(([l]) => parseInt(l) <= level)
+      .forEach(([, fs]) => (fs || []).forEach((f) => out.push({ name: f.name || String(f), desc: f.description || '' })));
+    return out.slice(0, 8);
+  })();
+
+  // ── Actions in a pinch (universal 5e action rules, not character data) ─
+  const pinchActions = [
+    { label: 'Dodge', value: 'attacks vs you have disadvantage' },
+    { label: 'Disengage', value: 'move without provoking opportunity attacks' },
+    { label: 'Dash', value: 'gain extra movement equal to your speed' },
+    { label: 'Help', value: 'give an ally advantage on their next check or attack' }
+  ];
 
   return (
-          <div className="quick-ref-overlay" style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            width: '400px',
-            maxWidth: '90vw',
-            height: '100vh',
-            background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(30, 30, 45, 0.98) 100%)',
-            borderLeft: '1px solid rgba(59, 130, 246, 0.3)',
-            boxShadow: '-5px 0 20px rgba(0, 0, 0, 0.5)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
-            {/* Panel Header */}
-            <div style={{
-              padding: '1rem',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <h3 style={{ margin: 0, color: '#60a5fa' }}>
-                {character.nickname || character.name}
-              </h3>
-              <button
-                onClick={() => onClose()}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#888',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  padding: '0.25rem'
-                }}
-              >
-                ×
-              </button>
-            </div>
+    <>
+      <QRSprite />
+      <div className="panel-scrim show" onClick={onClose} />
+      <aside className="pnl open" data-panel="quickref">
+        <div className="pnl-head">
+          <svg className="ph-ic2"><use href="#qr-scroll" /></svg>
+          <h3>Quick reference</h3>
+          <span className="ph-sub2">{shortName} · L{level} {character?.class || ''}</span>
+          <button className="pnl-close" onClick={onClose} aria-label="Close">
+            <svg className="ic"><use href="#qr-x" /></svg>
+          </button>
+        </div>
 
-            {/* Tab Navigation */}
-            <div style={{
-              display: 'flex',
-              borderBottom: '1px solid rgba(255,255,255,0.1)'
-            }}>
-              {[
-                { id: 'equipment', label: 'Equipment' },
-                { id: 'spells', label: 'Spells' },
-                { id: 'abilities', label: 'Abilities' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setQuickRefTab(tab.id)}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    background: quickRefTab === tab.id ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                    border: 'none',
-                    borderBottom: quickRefTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent',
-                    color: quickRefTab === tab.id ? '#60a5fa' : '#888',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    fontWeight: quickRefTab === tab.id ? 'bold' : 'normal'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '1rem'
-            }}>
-              {/* Equipment Tab */}
-              {quickRefTab === 'equipment' && (
-                <div className="quick-ref-equipment">
-                  {(() => {
-                    const equipment = typeof character.equipment === 'string'
-                      ? JSON.parse(character.equipment || '{}')
-                      : (character.equipment || {});
-
-                    const ARMOR_DISPLAY_NAMES = {
-                      'leather': 'Leather Armor', 'padded': 'Padded Armor',
-                      'studded': 'Studded Leather Armor', 'studded leather': 'Studded Leather Armor',
-                      'hide': 'Hide Armor', 'scale': 'Scale Mail', 'scale mail': 'Scale Mail',
-                      'half plate': 'Half Plate Armor', 'ring mail': 'Ring Mail',
-                      'chain mail': 'Chain Mail', 'chain shirt': 'Chain Shirt',
-                      'splint': 'Splint Armor', 'plate': 'Plate Armor',
-                      'breastplate': 'Breastplate'
-                    };
-                    const getDisplayName = (name) => ARMOR_DISPLAY_NAMES[(name || '').toLowerCase()] || name;
-
-                    const QUALITY_COLORS = {
-                      'Fine': '#60a5fa', 'Superior': '#a78bfa', 'Masterwork': '#fbbf24'
-                    };
-
-                    const renderQuality = (item) => {
-                      if (!item?.quality || item.quality === 'Standard' || item.quality === 'standard') return null;
-                      const label = item.quality.charAt(0).toUpperCase() + item.quality.slice(1);
-                      return (
-                        <span style={{ color: QUALITY_COLORS[label] || '#888', fontSize: '0.75rem', fontStyle: 'italic' }}>
-                          {label}
-                        </span>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {/* Main Hand Weapon */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                          <h4 style={{ color: '#ef4444', marginBottom: '0.5rem', borderBottom: '1px solid rgba(239, 68, 68, 0.3)', paddingBottom: '0.25rem' }}>
-                            Main Hand
-                          </h4>
-                          {equipment.mainHand ? (
-                            <div style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', fontSize: '0.9rem' }}>
-                              <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>{getDisplayName(equipment.mainHand.name || equipment.mainHand)}</span>
-                                {renderQuality(equipment.mainHand)}
-                              </div>
-                              {equipment.mainHand.damage && (
-                                <div style={{ color: '#f87171', fontSize: '0.85rem' }}>
-                                  Damage: {equipment.mainHand.damage} {equipment.mainHand.damageType || ''}
-                                </div>
-                              )}
-                              {equipment.mainHand.properties && (
-                                <div style={{ color: '#888', fontSize: '0.8rem' }}>
-                                  {Array.isArray(equipment.mainHand.properties) ? equipment.mainHand.properties.join(', ') : equipment.mainHand.properties}
-                                </div>
-                              )}
-                              {equipment.mainHand.magical && (
-                                <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                                  {equipment.mainHand.magical}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>No weapon equipped</p>
-                          )}
-                        </div>
-
-                        {/* Off Hand */}
-                        {equipment.offHand && (
-                          <div style={{ marginBottom: '1.5rem' }}>
-                            <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
-                              Off Hand
-                            </h4>
-                            <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px', fontSize: '0.9rem' }}>
-                              <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>{getDisplayName(equipment.offHand.name || equipment.offHand)}</span>
-                                {renderQuality(equipment.offHand)}
-                              </div>
-                              {equipment.offHand.acBonus && (
-                                <div style={{ color: '#60a5fa', fontSize: '0.85rem' }}>+{equipment.offHand.acBonus} AC</div>
-                              )}
-                              {equipment.offHand.damage && (
-                                <div style={{ color: '#f87171', fontSize: '0.85rem' }}>
-                                  Damage: {equipment.offHand.damage} {equipment.offHand.damageType || ''}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Armor & AC */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                          <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
-                            Armor & AC
-                          </h4>
-                          <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px' }}>
-                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#60a5fa' }}>
-                              AC: {character.armor_class || 10}
-                            </div>
-                            {equipment.armor ? (
-                              <div style={{ fontSize: '0.85rem', color: '#ccc', marginTop: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>{getDisplayName(equipment.armor.name || equipment.armor)}</span>
-                                {renderQuality(equipment.armor)}
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem', fontStyle: 'italic' }}>
-                                No armor equipped
-                              </div>
-                            )}
-                            {equipment.armor?.magical && (
-                              <div style={{ color: '#a78bfa', fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.25rem' }}>
-                                {equipment.armor.magical}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Spells Tab */}
-              {quickRefTab === 'spells' && (
-                <div className="quick-ref-spells">
-                  {(() => {
-                    // Parse cantrips and prepared spells from character
-                    const cantrips = typeof character.known_cantrips === 'string'
-                      ? JSON.parse(character.known_cantrips || '[]')
-                      : (character.known_cantrips || []);
-
-                    const preparedSpells = typeof character.prepared_spells === 'string'
-                      ? JSON.parse(character.prepared_spells || '[]')
-                      : (character.prepared_spells || []);
-
-                    // Add domain/subclass always-prepared spells
-                    const charClass = character.class?.toLowerCase();
-                    const classInfo = classesData[charClass];
-                    if (character.subclass && classInfo?.subclasses) {
-                      const subclass = classInfo.subclasses.find(
-                        sc => sc.name.toLowerCase() === character.subclass?.toLowerCase()
-                      );
-                      const spellListKey = subclass?.domainSpells ? 'domainSpells' :
-                        subclass?.oathSpells ? 'oathSpells' :
-                        subclass?.expandedSpells ? 'expandedSpells' :
-                        subclass?.circleSpells ? 'circleSpells' : null;
-
-                      if (spellListKey && subclass[spellListKey]) {
-                        Object.entries(subclass[spellListKey]).forEach(([classLevel, spellNames]) => {
-                          if (parseInt(classLevel) <= character.level) {
-                            spellNames.forEach(spellName => {
-                              const alreadyPrepared = preparedSpells.some(s => {
-                                const name = typeof s === 'string' ? s : s.name;
-                                return name.toLowerCase() === spellName.toLowerCase();
-                              });
-                              if (!alreadyPrepared) {
-                                const details = getSpellDetails(spellName);
-                                const spellLevel = details?.spellLevel
-                                  ? parseInt(details.spellLevel.replace(/\D/g, ''))
-                                  : parseInt(classLevel) <= 1 ? 1 : Math.ceil(parseInt(classLevel) / 2);
-                                preparedSpells.push({ name: spellName, level: spellLevel, alwaysPrepared: true });
-                              }
-                            });
-                          }
-                        });
-                      }
-                    }
-
-                    if (cantrips.length === 0 && preparedSpells.length === 0) {
-                      const nonCasters = ['barbarian', 'fighter', 'monk', 'rogue'];
-                      if (nonCasters.includes(charClass)) {
-                        return (
-                          <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
-                            {character.class} does not use spellcasting
-                          </p>
-                        );
-                      }
-                      return (
-                        <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
-                          No spells prepared
-                        </p>
-                      );
-                    }
-
-                    // Group spells by level
-                    const spellsByLevel = { 0: [] };
-
-                    cantrips.forEach(cantrip => {
-                      const spell = typeof cantrip === 'string' ? { name: cantrip } : cantrip;
-                      spellsByLevel[0].push({ ...spell, level: 0 });
-                    });
-
-                    preparedSpells.forEach(spell => {
-                      const spellObj = typeof spell === 'string' ? { name: spell, level: 1 } : spell;
-                      const level = spellObj.level || 1;
-                      if (!spellsByLevel[level]) spellsByLevel[level] = [];
-                      spellsByLevel[level].push(spellObj);
-                    });
-
-                    if (spellsByLevel[0].length === 0) delete spellsByLevel[0];
-
-                    return Object.entries(spellsByLevel)
-                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                      .map(([level, levelSpells]) => (
-                        <div key={level} style={{ marginBottom: '1.5rem' }}>
-                          <h4 style={{
-                            color: level === '0' ? '#10b981' : '#8b5cf6',
-                            marginBottom: '0.5rem',
-                            borderBottom: `1px solid ${level === '0' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(139, 92, 246, 0.3)'}`,
-                            paddingBottom: '0.25rem'
-                          }}>
-                            {level === '0' ? 'Cantrips' : `Level ${level}`}
-                            {level !== '0' && spellSlots.max[level] && (
-                              <span style={{ fontWeight: 'normal', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                                ({spellSlots.max[level] - (spellSlots.used[level] || 0)}/{spellSlots.max[level]} slots)
-                              </span>
-                            )}
-                          </h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {levelSpells.map((spell, idx) => {
-                              const details = getSpellDetails(spell.name);
-                              const spellKey = `${level}-${idx}`;
-                              const isExpanded = expandedSpell === spellKey;
-                              return (
-                                <div key={idx}
-                                  onClick={() => setExpandedSpell(isExpanded ? null : spellKey)}
-                                  style={{
-                                    padding: '0.5rem',
-                                    background: level === '0' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                                    borderRadius: '4px',
-                                    fontSize: '0.9rem',
-                                    cursor: 'pointer',
-                                    border: isExpanded ? `1px solid ${level === '0' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(139, 92, 246, 0.4)'}` : '1px solid transparent',
-                                    transition: 'border-color 0.2s'
-                                  }}
-                                >
-                                  <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>
-                                      {spell.name}
-                                      {spell.alwaysPrepared && (
-                                        <span style={{ fontSize: '0.7rem', color: '#fbbf24', marginLeft: '0.5rem' }}>(Domain)</span>
-                                      )}
-                                    </span>
-                                    <span style={{ color: '#888', fontSize: '0.75rem' }}>{isExpanded ? '▼' : '▸'}</span>
-                                  </div>
-                                  {!isExpanded && (details?.school || spell.school) && (
-                                    <div style={{ color: '#888', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                                      {details?.school || spell.school}
-                                    </div>
-                                  )}
-                                  {isExpanded && (
-                                    <div style={{ marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem' }}>
-                                      {(details?.school || spell.school) && (
-                                        <div style={{ color: '#888', fontSize: '0.8rem', fontStyle: 'italic', marginBottom: '0.25rem' }}>
-                                          {details?.school || spell.school}
-                                        </div>
-                                      )}
-                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                                        <span><strong style={{ color: '#60a5fa' }}>Cast:</strong> {details?.castingTime || spell.castingTime || '—'}</span>
-                                        <span><strong style={{ color: '#60a5fa' }}>Range:</strong> {details?.range || spell.range || 'Self'}</span>
-                                        <span><strong style={{ color: '#60a5fa' }}>Duration:</strong> {details?.duration || spell.duration || '—'}</span>
-                                        {(details?.components || spell.components) && (
-                                          <span><strong style={{ color: '#60a5fa' }}>Comp:</strong> {details?.components || spell.components}</span>
-                                        )}
-                                      </div>
-                                      <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem', lineHeight: '1.4' }}>
-                                        {details?.description || spell.description || 'No description available.'}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ));
-                  })()}
-                </div>
-              )}
-
-              {/* Abilities Tab */}
-              {quickRefTab === 'abilities' && (
-                <div className="quick-ref-abilities">
-                  {/* Ability Scores */}
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#f59e0b', marginBottom: '0.5rem', borderBottom: '1px solid rgba(245, 158, 11, 0.3)', paddingBottom: '0.25rem' }}>
-                      Ability Scores
-                    </h4>
-                    {(() => {
-                      // Parse ability_scores from JSON string
-                      let abilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
-                      try {
-                        const parsed = typeof character.ability_scores === 'string'
-                          ? JSON.parse(character.ability_scores || '{}')
-                          : (character.ability_scores || {});
-                        abilityScores = { ...abilityScores, ...parsed };
-                      } catch (e) {
-                        console.error('Error parsing ability_scores:', e);
-                      }
-
-                      return (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                          {[
-                            { abbr: 'STR', key: 'str' },
-                            { abbr: 'DEX', key: 'dex' },
-                            { abbr: 'CON', key: 'con' },
-                            { abbr: 'INT', key: 'int' },
-                            { abbr: 'WIS', key: 'wis' },
-                            { abbr: 'CHA', key: 'cha' }
-                          ].map(stat => {
-                            const score = abilityScores[stat.key] || 10;
-                            const modifier = Math.floor((score - 10) / 2);
-                            return (
-                              <div key={stat.abbr} style={{
-                                padding: '0.5rem',
-                                background: 'rgba(245, 158, 11, 0.1)',
-                                borderRadius: '4px',
-                                textAlign: 'center'
-                              }}>
-                                <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#fbbf24' }}>{stat.abbr}</div>
-                                <div style={{ fontSize: '1.1rem' }}>{score}</div>
-                                <div style={{ fontSize: '0.8rem', color: modifier >= 0 ? '#10b981' : '#ef4444' }}>
-                                  {modifier >= 0 ? '+' : ''}{modifier}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Theme (active abilities from progression system) */}
-                  {progression?.theme && (
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{
-                        color: '#8b5cf6',
-                        marginBottom: '0.5rem',
-                        borderBottom: '1px solid rgba(139, 92, 246, 0.3)',
-                        paddingBottom: '0.25rem'
-                      }}>
-                        Theme: {progression.theme.theme_name}
-                        {progression.theme.path_choice && (
-                          <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: '#a78bfa' }}>
-                            ({progression.theme.path_choice.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')})
-                          </span>
-                        )}
-                      </h4>
-                      {(progression.theme_unlocks || []).length > 0 ? (
-                        progression.theme_unlocks.map((unlock, idx) => (
-                          <div key={idx} style={{
-                            padding: '0.5rem 0.75rem',
-                            marginBottom: '0.4rem',
-                            background: 'rgba(139, 92, 246, 0.08)',
-                            border: '1px solid rgba(139, 92, 246, 0.25)',
-                            borderRadius: '4px'
-                          }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#a78bfa' }}>
-                              L{unlock.tier} · {unlock.ability_name}
-                            </div>
-                            <div style={{ fontSize: '0.8rem', marginTop: '0.2rem', opacity: 0.9 }}>
-                              {unlock.ability_description}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ fontSize: '0.8rem', opacity: 0.6, fontStyle: 'italic' }}>
-                          No theme abilities unlocked yet.
-                        </div>
-                      )}
-                      {progression.knight_moral_path && (
-                        <div style={{ fontSize: '0.75rem', marginTop: '0.4rem', opacity: 0.8 }}>
-                          <strong>Moral Path:</strong>{' '}
-                          <span style={{ color: '#a78bfa', textTransform: 'capitalize' }}>
-                            {progression.knight_moral_path.current_path}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Ancestry Feats (active list) */}
-                  {progression?.ancestry_feats?.length > 0 && (
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{
-                        color: '#14b8a6',
-                        marginBottom: '0.5rem',
-                        borderBottom: '1px solid rgba(20, 184, 166, 0.3)',
-                        paddingBottom: '0.25rem'
-                      }}>
-                        Ancestry Feats
-                      </h4>
-                      {progression.ancestry_feats.map((feat, idx) => (
-                        <div key={idx} style={{
-                          padding: '0.5rem 0.75rem',
-                          marginBottom: '0.4rem',
-                          background: 'rgba(20, 184, 166, 0.08)',
-                          border: '1px solid rgba(20, 184, 166, 0.25)',
-                          borderRadius: '4px'
-                        }}>
-                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#2dd4bf' }}>
-                            L{feat.tier} · {feat.feat_name}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', marginTop: '0.2rem', opacity: 0.9 }}>
-                            {feat.description}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Resonant Synergy (compact callout) */}
-                  {progression?.subclass_theme_synergy && (
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{
-                        color: '#6366f1',
-                        marginBottom: '0.5rem',
-                        borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
-                        paddingBottom: '0.25rem'
-                      }}>
-                        Resonant Synergy: {progression.subclass_theme_synergy.synergy_name}
-                      </h4>
-                      <div style={{
-                        padding: '0.5rem 0.75rem',
-                        background: 'rgba(99, 102, 241, 0.08)',
-                        border: '1px solid rgba(99, 102, 241, 0.25)',
-                        borderRadius: '4px',
-                        fontSize: '0.8rem',
-                        opacity: 0.95
-                      }}>
-                        {progression.subclass_theme_synergy.description}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Class Features - loaded from classes.json based on character class/level */}
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#ec4899', marginBottom: '0.5rem', borderBottom: '1px solid rgba(236, 72, 153, 0.3)', paddingBottom: '0.25rem' }}>
-                      Class Features
-                    </h4>
-                    {(() => {
-                      const features = [];
-
-                      // Generic subclass-choice features that should show the actual chosen subclass
-                      const GENERIC_SUBCLASS_FEATURES = [
-                        'Divine Domain', 'Martial Archetype', 'Roguish Archetype', 'Monastic Tradition',
-                        'Sorcerous Origin', 'Otherworldly Patron', 'Arcane Tradition', 'Primal Path',
-                        'Ranger Archetype', 'Sacred Oath', 'Bardic College', 'Druid Circle'
-                      ];
-
-                      // Get base class features
-                      const charClass = character.class?.toLowerCase();
-                      const classInfo = classesData[charClass];
-
-                      if (classInfo?.features) {
-                        classInfo.features.forEach(f => {
-                          if (typeof f === 'string') {
-                            const [name, ...descParts] = f.split(' - ');
-                            const trimmedName = name.trim();
-                            // Replace generic subclass text with actual chosen subclass
-                            if (GENERIC_SUBCLASS_FEATURES.includes(trimmedName) && character.subclass) {
-                              features.push({ name: character.subclass, description: `Your chosen ${trimmedName.toLowerCase()}.` });
-                            } else {
-                              features.push({ name: trimmedName, description: descParts.join(' - ').trim() });
-                            }
-                          } else {
-                            features.push(f);
-                          }
-                        });
-                      }
-
-                      // Get subclass features based on level
-                      if (character.subclass && classInfo?.subclasses) {
-                        const subclass = classInfo.subclasses.find(
-                          sc => sc.name.toLowerCase() === character.subclass?.toLowerCase()
-                        );
-                        if (subclass?.featuresByLevel) {
-                          Object.entries(subclass.featuresByLevel).forEach(([level, levelFeatures]) => {
-                            if (parseInt(level) <= character.level) {
-                              levelFeatures.forEach(f => {
-                                features.push({ ...f, level: parseInt(level), source: subclass.name });
-                              });
-                            }
-                          });
-                        }
-                      }
-
-                      if (features.length === 0) {
-                        return (
-                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            No class features available
-                          </p>
-                        );
-                      }
-
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {features.map((feature, idx) => (
-                            <div key={idx} style={{
-                              padding: '0.5rem',
-                              background: 'rgba(236, 72, 153, 0.1)',
-                              borderRadius: '4px',
-                              fontSize: '0.9rem'
-                            }}>
-                              <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>{feature.name}</span>
-                                {feature.level && (
-                                  <span style={{ color: '#888', fontSize: '0.75rem' }}>Lvl {feature.level}</span>
-                                )}
-                              </div>
-                              {feature.description && (
-                                <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                  {feature.description.length > 120 ? feature.description.substring(0, 120) + '...' : feature.description}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Skill Proficiencies */}
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#22c55e', marginBottom: '0.5rem', borderBottom: '1px solid rgba(34, 197, 94, 0.3)', paddingBottom: '0.25rem' }}>
-                      Skill Proficiencies
-                    </h4>
-                    {(() => {
-                      const skills = typeof character.skills === 'string'
-                        ? JSON.parse(character.skills || '[]')
-                        : (character.skills || []);
-
-                      if (skills.length === 0) {
-                        return (
-                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            No skill proficiencies recorded
-                          </p>
-                        );
-                      }
-
-                      // Format skill names nicely
-                      const formatSkill = (skill) => {
-                        const name = typeof skill === 'string' ? skill : skill.name;
-                        return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                      };
-
-                      return (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {skills.map((skill, idx) => (
-                            <span key={idx} style={{
-                              padding: '0.25rem 0.5rem',
-                              background: 'rgba(34, 197, 94, 0.1)',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem'
-                            }}>
-                              {formatSkill(skill)}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Armor & Weapon Proficiencies from class */}
-                  <div>
-                    <h4 style={{ color: '#3b82f6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(59, 130, 246, 0.3)', paddingBottom: '0.25rem' }}>
-                      Equipment Proficiencies
-                    </h4>
-                    {(() => {
-                      const charClass = character.class?.toLowerCase();
-                      const classInfo = classesData[charClass];
-
-                      if (!classInfo) {
-                        return (
-                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            Class info not found
-                          </p>
-                        );
-                      }
-
-                      const armor = classInfo.armorProficiencies || [];
-                      const weapons = classInfo.weaponProficiencies || [];
-                      const tools = classInfo.toolProficiencies ? [classInfo.toolProficiencies] : [];
-
-                      return (
-                        <div style={{ fontSize: '0.85rem' }}>
-                          {armor.length > 0 && (
-                            <div style={{ marginBottom: '0.5rem' }}>
-                              <span style={{ color: '#60a5fa' }}>Armor: </span>
-                              <span style={{ color: '#ccc' }}>{armor.map(a => a.charAt(0).toUpperCase() + a.slice(1)).join(', ')}</span>
-                            </div>
-                          )}
-                          {weapons.length > 0 && (
-                            <div style={{ marginBottom: '0.5rem' }}>
-                              <span style={{ color: '#60a5fa' }}>Weapons: </span>
-                              <span style={{ color: '#ccc' }}>{weapons.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(', ')}</span>
-                            </div>
-                          )}
-                          {tools.length > 0 && tools[0] && (
-                            <div>
-                              <span style={{ color: '#60a5fa' }}>Tools: </span>
-                              <span style={{ color: '#ccc' }}>{tools.join(', ')}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Racial Traits (filtered — no choice-based placeholders) */}
-                  <div style={{ marginTop: '1.5rem' }}>
-                    <h4 style={{ color: '#14b8a6', marginBottom: '0.5rem', borderBottom: '1px solid rgba(20, 184, 166, 0.3)', paddingBottom: '0.25rem' }}>
-                      Racial Traits ({character.subrace || character.race || 'Unknown'})
-                    </h4>
-                    {(() => {
-                      const raceName = character.race?.toLowerCase();
-                      const raceInfo = racesData[raceName];
-
-                      if (!raceInfo) {
-                        return (
-                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            Race info not found
-                          </p>
-                        );
-                      }
-
-                      let traits = raceInfo.traits || [];
-                      if (character.subrace && raceInfo.subraces) {
-                        const subrace = raceInfo.subraces.find(
-                          sr => sr.name.toLowerCase() === character.subrace?.toLowerCase()
-                        );
-                        if (subrace?.traits) {
-                          traits = subrace.traits;
-                        }
-                      }
-
-                      // Filter out choice-based placeholder traits
-                      const CHOICE_PREFIXES = ['Extra Language', 'Feat', 'Skills', 'Ability Score Increase', 'Versatile'];
-                      const filteredTraits = traits.filter(trait => {
-                        const traitName = trait.split(' - ')[0].trim();
-                        return !CHOICE_PREFIXES.some(prefix => traitName.startsWith(prefix));
-                      });
-
-                      if (filteredTraits.length === 0) {
-                        return (
-                          <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                            No racial traits
-                          </p>
-                        );
-                      }
-
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {filteredTraits.map((trait, idx) => {
-                            const [name, ...descParts] = trait.split(' - ');
-                            const description = descParts.join(' - ').trim();
-                            return (
-                              <div key={idx} style={{
-                                padding: '0.5rem',
-                                background: 'rgba(20, 184, 166, 0.1)',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem'
-                              }}>
-                                <div style={{ fontWeight: 'bold', color: '#5eead4' }}>{name.trim()}</div>
-                                {description && (
-                                  <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                    {description.length > 150 ? description.substring(0, 150) + '...' : description}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Languages */}
-                  <div style={{ marginTop: '1.5rem' }}>
-                    <h4 style={{ color: '#06b6d4', marginBottom: '0.5rem', borderBottom: '1px solid rgba(6, 182, 212, 0.3)', paddingBottom: '0.25rem' }}>
-                      Languages
-                    </h4>
-                    {(() => {
-                      const charLangs = typeof character.languages === 'string'
-                        ? (() => { try { return JSON.parse(character.languages || '[]'); } catch { return character.languages.split(',').map(l => l.trim()).filter(Boolean); } })()
-                        : (character.languages || []);
-                      const raceLangs = racesData[character.race?.toLowerCase()]?.languages || [];
-                      const allLangs = [...new Set([...raceLangs, ...charLangs])].filter(l =>
-                        !l.toLowerCase().includes('extra language') && !l.toLowerCase().includes('of your choice') && !l.toLowerCase().includes('one extra')
-                      );
-
-                      if (allLangs.length === 0) {
-                        return <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>No languages recorded</p>;
-                      }
-                      return (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {allLangs.map((lang, idx) => (
-                            <span key={idx} style={{
-                              padding: '0.25rem 0.5rem',
-                              background: 'rgba(6, 182, 212, 0.1)',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem'
-                            }}>{lang}</span>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Feats */}
-                  {(() => {
-                    const feats = typeof character.feats === 'string'
-                      ? (() => { try { return JSON.parse(character.feats || '[]'); } catch { return []; } })()
-                      : (character.feats || []);
-                    if (feats.length === 0) return null;
-                    return (
-                      <div style={{ marginTop: '1.5rem' }}>
-                        <h4 style={{ color: '#f97316', marginBottom: '0.5rem', borderBottom: '1px solid rgba(249, 115, 22, 0.3)', paddingBottom: '0.25rem' }}>
-                          Feats
-                        </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {feats.map((feat, idx) => {
-                            const featObj = typeof feat === 'string' ? { name: feat } : feat;
-                            return (
-                              <div key={idx} style={{
-                                padding: '0.5rem',
-                                background: 'rgba(249, 115, 22, 0.1)',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem'
-                              }}>
-                                <div style={{ fontWeight: 'bold', color: '#fb923c' }}>{featObj.name}</div>
-                                {featObj.description && (
-                                  <div style={{ color: '#ccc', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                    {featObj.description}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Tool Proficiencies */}
-                  {(() => {
-                    const tools = typeof character.tool_proficiencies === 'string'
-                      ? (() => { try { return JSON.parse(character.tool_proficiencies || '[]'); } catch { return []; } })()
-                      : (character.tool_proficiencies || []);
-                    if (tools.length === 0) return null;
-                    return (
-                      <div style={{ marginTop: '1.5rem' }}>
-                        <h4 style={{ color: '#84cc16', marginBottom: '0.5rem', borderBottom: '1px solid rgba(132, 204, 22, 0.3)', paddingBottom: '0.25rem' }}>
-                          Tool Proficiencies
-                        </h4>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {tools.map((tool, idx) => (
-                            <span key={idx} style={{
-                              padding: '0.25rem 0.5rem',
-                              background: 'rgba(132, 204, 22, 0.1)',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem'
-                            }}>{typeof tool === 'string' ? tool : tool.name}</span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-
-            {/* Panel Footer with HP */}
-            <div style={{
-              padding: '1rem',
-              borderTop: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(0, 0, 0, 0.2)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <span style={{ color: '#888' }}>HP: </span>
-                  <span style={{
-                    color: character.current_hp <= character.max_hp * 0.25 ? '#ef4444' :
-                           character.current_hp <= character.max_hp * 0.5 ? '#f59e0b' : '#10b981',
-                    fontWeight: 'bold'
-                  }}>
-                    {character.current_hp}/{character.max_hp}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: '#888' }}>Level </span>
-                  <span style={{ fontWeight: 'bold' }}>{character.level}</span>
-                  <span style={{ color: '#888' }}> {character.class}</span>
-                </div>
-              </div>
-            </div>
+        <div className="pnl-body scroll">
+          <div className="pnl-sec">Vitals<span className="ln"></span></div>
+          <div className="qr-stats">
+            <div className="qr-stat hp"><div className="l">HP</div><div className="v">{curHp}<span className="mx">/{maxHp}</span></div></div>
+            <div className="qr-stat"><div className="l">AC</div><div className="v">{ac}</div></div>
+            <div className="qr-stat"><div className="l">Speed</div><div className="v">{speed}</div></div>
+            <div className="qr-stat"><div className="l">Init</div><div className="v">{sign(init)}</div></div>
+            <div className="qr-stat"><div className="l">Prof</div><div className="v">{sign(profBonus)}</div></div>
+            {isMonk && (
+              <div className="qr-stat"><div className="l">Ki</div><div className="v">{kiMax}</div></div>
+            )}
           </div>
+
+          {(saves.length > 0 || skills.length > 0 || senses) && (
+            <>
+              <div className="pnl-sec">Saves &amp; key skills<span className="ln"></span></div>
+              <div className="cheat">
+                {saves.map((s, i) => (
+                  <Fragment key={`sv-${i}`}>
+                    <span className="ck">{s.label}</span><span className="cv">{s.value}</span>
+                  </Fragment>
+                ))}
+                {skills.map((s, i) => (
+                  <Fragment key={`sk-${i}`}>
+                    <span className="ck">{s.label}</span><span className="cv">{s.value}</span>
+                  </Fragment>
+                ))}
+                {senses && (<><span className="ck">Senses</span><span className="cv">{senses}</span></>)}
+              </div>
+            </>
+          )}
+
+          {features.length > 0 && (
+            <>
+              <div className="pnl-sec">{isMonk ? 'Ki techniques' : 'Class features'}<span className="ln"></span></div>
+              {features.map((f, i) => (
+                <div className="tech" key={`ft-${i}`}>
+                  <div className="tt">{f.name}</div>
+                  {f.desc && <div className="tdsc">{f.desc}</div>}
+                </div>
+              ))}
+            </>
+          )}
+
+          <div className="pnl-sec">Actions in a pinch<span className="ln"></span></div>
+          <div className="cheat">
+            {pinchActions.map((a, i) => (
+              <Fragment key={`pa-${i}`}>
+                <span className="ck">{a.label}</span><span className="cv">{a.value}</span>
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        <div className="pnl-foot">
+          <button className="btn" onClick={onClose}>
+            <svg className="ic"><use href="#qr-arrow-ur" /></svg>Open full character sheet
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 

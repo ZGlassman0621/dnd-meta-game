@@ -12,6 +12,7 @@ import { dbGet, dbRun } from '../database.js';
 import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
 import { extractLLMJson } from '../utils/llmJson.js';
+import { safeParse } from '../utils/safeParse.js';
 
 /**
  * Parse a character's backstory into structured elements
@@ -56,7 +57,8 @@ export async function getParsedBackstory(characterId) {
     return null;
   }
 
-  const parsed = JSON.parse(character.parsed_backstory);
+  const parsed = safeParse(character.parsed_backstory, null);
+  if (!parsed) return null; // corrupt JSON → treat as no parsed backstory (was an uncaught crash)
 
   // Check if backstory has changed since parsing
   const currentHash = hashBackstory(character.backstory || '');
@@ -82,7 +84,7 @@ export async function reparseBackstory(characterId, preserveManualEdits = false)
   }
 
   // Get existing parsed data for preservation
-  const existing = character.parsed_backstory ? JSON.parse(character.parsed_backstory) : null;
+  const existing = character.parsed_backstory ? safeParse(character.parsed_backstory, null) : null;
 
   // Parse the backstory fresh
   const prompt = buildParsingPrompt(character.backstory, character);
@@ -138,7 +140,8 @@ export async function updateElement(characterId, elementType, elementId, updates
     throw new Error('No parsed backstory found');
   }
 
-  const parsed = JSON.parse(character.parsed_backstory);
+  const parsed = safeParse(character.parsed_backstory, null);
+  if (!parsed) throw new Error('Corrupt parsed backstory'); // preserve prior throw-on-corrupt (500), never mutate unparseable data
   const elements = parsed.elements[elementType];
 
   if (!elements) {
@@ -178,7 +181,8 @@ export async function addElement(characterId, elementType, element) {
     throw new Error('Character not found');
   }
 
-  let parsed = character.parsed_backstory ? JSON.parse(character.parsed_backstory) : createEmptyParsedBackstory();
+  let parsed = character.parsed_backstory ? safeParse(character.parsed_backstory, null) : createEmptyParsedBackstory();
+  if (character.parsed_backstory && !parsed) throw new Error('Corrupt parsed backstory'); // preserve prior throw-on-corrupt (500)
 
   if (!parsed.elements[elementType]) {
     throw new Error(`Invalid element type: ${elementType}`);
@@ -216,7 +220,8 @@ export async function removeElement(characterId, elementType, elementId) {
     throw new Error('No parsed backstory found');
   }
 
-  const parsed = JSON.parse(character.parsed_backstory);
+  const parsed = safeParse(character.parsed_backstory, null);
+  if (!parsed) throw new Error('Corrupt parsed backstory'); // preserve prior throw-on-corrupt (500)
 
   if (!parsed.elements[elementType]) {
     throw new Error(`Invalid element type: ${elementType}`);

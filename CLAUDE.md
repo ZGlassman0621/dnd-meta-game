@@ -1,19 +1,53 @@
 # CLAUDE.md — Project Instructions for Claude Code
 
+> ## ⚠️ MVP REDUCTION (v2.0.0, 2026-06-04) — READ FIRST
+>
+> The app was deliberately reduced to a focused **Player-Mode MVP**: play one
+> character with **Claude Opus 4.8** as the AI Dungeon Master. **Many systems
+> described in the sections below were removed and MOVED to `/archive/`** (nothing
+> was deleted; mirrored paths; see [`archive/README.md`](archive/README.md)).
+> Migrations were left in place — orphaned tables are harmless.
+>
+> **Live in the MVP:** character creator (`creator/CharacterCreatorV2`), character
+> sheet / inventory / spells / leveling, the full progression system (themes +
+> tier abilities + ancestry feats + knight paths), companions, the Player-Mode DM
+> chat session, session memory (story chronicles + canon facts + NPC recall + NPC
+> lifecycle/aging), campaign creation + Opus campaign plan + import + backstory
+> parser, dice/combat/conditions, session rewards, AI-behavior debug page.
+>
+> **Archived (the sections below largely describe these — treat as historical
+> until restored):** prelude, DM Mode, mythic/piety/boons/legendary, crafting,
+> party bases/raids, downtime, merchant economy/bargaining/commissions, notoriety,
+> living-world tick (weather/survival/factions/world-events/NPC-mail/narrative-
+> queue/consequences), factions/quests/locations/world-events/travel simulation,
+> achievements, the odds-based "adventure" loop, theme synergies/team-tactics/
+> mythic-amplifications.
+>
+> **Other deltas:** all gameplay AI → `claude-opus-4-8`; **login removed**
+> (no-op `server/middleware/auth.js` resolves one local user); DM marker set was
+> trimmed to 6 live markers, then v2.1.0 added the mechanical-spine markers
+> (`HP_CHANGE`, `EFFECT_START`/`EFFECT_END`, `TURN`, `ROLL_REQUEST`, `SCENE`) handled
+> by `gameStateMarkerService.js`; `npm`/`npx` bin shims break on this folder's `&` in
+> the path — invoke binaries via `node node_modules/<pkg>/bin/...` (e.g.
+> `node node_modules/vite/bin/vite.js build` from `client/`).
+
 ## Project Overview
-D&D Meta Game: AI-powered solo D&D 5e campaign management system.
+D&D Meta Game: AI-powered solo D&D 5e campaign management system (MVP — see banner above).
 - **Frontend**: React 18 + Vite (SPA at `client/`)
 - **Backend**: Node.js + Express (ES modules at `server/`)
 - **Database**: SQLite via `@libsql/client` (local `file:local.db` or Turso cloud)
-- **AI**: Claude Opus (world building) + Claude Sonnet (DM sessions) + Ollama fallback
+- **AI**: Claude **Opus 4.8** (`claude-opus-4-8`) for all gameplay; Sonnet (`claude-sonnet-4-6`) for session-recap extraction. (Ollama fallback retained but dormant.)
 
 ## Development Commands
-- `npm run dev` — Start both server (port 3000) and client (port 5173)
+- `npm run dev` — Start both server (port 3000) and client (port 5173). NOTE: the
+  server needs **port 3000 free** — if another local app is using it, stop that
+  app or change `PORT` (server) + the `proxy.target` in `client/vite.config.js`.
 - `npm run server` — Server only with `--watch`
 - `npm run client` — Vite dev server only
-- `npm run build` — Production client build
+- `npm run build` — Production client build (or `node node_modules/vite/bin/vite.js build` from `client/` if the npm shim trips on the `&` path)
 - `npm run install-all` — Install root + client dependencies
-- Tests: `node tests/<testfile>.test.js` (no framework, custom assertions)
+- `npm run backup` — One-off DB backup (cloud→portable `.sql` dump, local→file copy, in `backups/`). The server also backs up automatically on a schedule (see `backupService.js`); opt out with `BACKUP_DISABLE=1`.
+- Tests: `node tests/<testfile>.test.js` (no framework; cut-system tests are in `/archive/tests/`)
 
 ## Architecture
 
@@ -32,9 +66,10 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - Structured JSON from LLMs goes through `server/utils/llmJson.js` — `extractLLMJson()` / `tryExtractLLMJson()`. Don't write new ad-hoc parsers; Opus occasionally emits multi-block responses that naive extractors splice into invalid JSON.
 
 ### Prompt structure
-- DM prompt uses **primacy/recency reinforcement**: critical rules appear at the top (ABSOLUTE RULES) AND bottom (FINAL REMINDER). Don't modify this structure without understanding the pattern — it's the main lever holding the AI to the rules.
+- DM prompt uses **primacy/recency reinforcement**: critical rules at the top (CARDINAL RULES) and a slim recency anchor at the bottom (BEFORE YOU SEND). As of v2.4.0 the bottom is a slim **2–3 item gut-check** (player sovereignty + a clarity check [v2.7.0] + the conditional content-boundary check), NOT a full restatement of the top — the prior redundant 5–6 item self-check doubled rule salience and crowded out the live thread. The clarity check pairs with the **CLARITY OVER CLEVERNESS** craft principle (v2.7.0), which counterbalances SHOW-DON'T-TELL/FRESH-IMAGERY so narration stays understandable on first read (player feedback: prose was too oblique). Keep the anchors load-bearing; don't re-bloat the recency block past a few short items.
+- **Render only what currently exists** (v2.4.0): the MEMORY HIERARCHY, the "past sessions are canonical" paragraph, and the quest-weaving paragraph are gated on real stored memory — a fresh campaign instead gets a one-line directive making the live transcript authoritative (ranking the recent transcript below an empty canon ledger was the main early-session "forgetting" cause). Mechanical per-turn state (active conditions/effects) goes in the **system-prompt tail** (sent, strip-before-persist), never as user-role turns in the transcript. `formatCampaignPlan`'s CONTENT BOUNDARIES block is the gating template.
 - DM Mode prompt uses a 3-point reinforcement (ABSOLUTE RULES → character sheets + dynamics → FINAL REMINDER).
-- Prompt caching via `claude.js` has three tiers (cache-break markers embedded in the prompt string): universal-static, per-character static, dynamic. Only blocks ≥1024 tokens are cached.
+- Prompt caching via `claude.js` has three tiers (cache-break markers embedded in the prompt string): universal-static, per-character static, dynamic. Only prefixes **≥4096 tokens** cache on Opus 4.x (`CACHE_MIN_TOKENS`); shorter tiers are merged (1024 is the Sonnet floor and silently won't cache on Opus).
 
 ### DM session markers + marker pipeline
 Markers the DM AI emits during Player Mode sessions:
@@ -44,7 +79,9 @@ Prelude sessions have their own marker set (19 markers — see prelude section b
 
 **Marker pipeline (canonical path post-Phase-3.2):** `markerSchemas.js` (schema definitions) + `markerPipeline.js` (dispatch) own marker validation + side-effect dispatch. Every marker in `MARKER_SCHEMAS` flows through `validateDmMarkers` (schema validation + correction-loop feedback) and `processResponseMarkers` (handler dispatch to consumer services). Schemas double as future tool-use definitions — no rewrite needed when that migration lands.
 
-Handlers register via `registerHandler(schemaKey, fn)` at module-load time, co-located with the consumer service that owns the side effect: `pietyService` (PIETY_CHANGE), `dmModeBondShiftService` (BOND_SHIFT), `survivalService` (SHELTER_FOUND/EAT/DRINK/FORAGE), `weatherService` (WEATHER_CHANGE), `craftingService` (CRAFT_PROGRESS/RECIPE_FOUND/MATERIAL_FOUND/RECIPE_GIFT), `merchantService` (MERCHANT_SHOP/MERCHANT_REFER), `merchantOrderService` (MERCHANT_COMMISSION), `lootDropService` (LOOT_DROP), `consequenceService` (PROMISE_MADE/PROMISE_FULFILLED), `notorietyService` (NOTORIETY_GAIN/NOTORIETY_LOSS), `mythicService` (MYTHIC_TRIAL/ITEM_AWAKEN/MYTHIC_SURGE), `baseThreatService` (FORTRESS_THREAT/BASE_DEFENSE_RESULT), `combatMarkerService` (COMBAT_START/COMBAT_END). When a handler doesn't naturally co-locate with an existing service, the precedent is a single-purpose marker-handler module (`lootDropService.js`, `combatMarkerService.js`).
+Handlers register via `registerHandler(schemaKey, fn)` at module-load time, co-located with the consumer service that owns the side effect: `pietyService` (PIETY_CHANGE), `dmModeBondShiftService` (BOND_SHIFT), `survivalService` (SHELTER_FOUND/EAT/DRINK/FORAGE), `weatherService` (WEATHER_CHANGE), `craftingService` (CRAFT_PROGRESS/RECIPE_FOUND/MATERIAL_FOUND/RECIPE_GIFT), `merchantService` (MERCHANT_SHOP/MERCHANT_REFER), `merchantOrderService` (MERCHANT_COMMISSION), `lootDropService` (LOOT_DROP), `consequenceService` (PROMISE_MADE/PROMISE_FULFILLED), `notorietyService` (NOTORIETY_GAIN/NOTORIETY_LOSS), `mythicService` (MYTHIC_TRIAL/ITEM_AWAKEN/MYTHIC_SURGE), `baseThreatService` (FORTRESS_THREAT/BASE_DEFENSE_RESULT), `combatMarkerService` (COMBAT_START/COMBAT_END), `gameStateMarkerService` (HP_CHANGE/EFFECT_START/EFFECT_END/TURN/ROLL_REQUEST — the v2.1.0 mechanical spine). When a handler doesn't naturally co-locate with an existing service, the precedent is a single-purpose marker-handler module (`lootDropService.js`, `combatMarkerService.js`, `gameStateMarkerService.js`).
+
+**Mechanical-spine markers (v2.1.0):** `gameStateMarkerService.js` persists narrated mechanics so the cockpit + DM stop guessing. `[HP_CHANGE]` writes `characters.current_hp` (clamped); `[EFFECT_START]`/`[EFFECT_END]` maintain `session_config.activeEffects` with the 5e single-concentration rule (injected back into the prompt); `[TURN]` updates `session_config.combat`; `[ROLL_REQUEST]` returns the player's preloaded modifier for a one-click in-UI roll. `[CONDITION_ADD/REMOVE]` now persist to `characters.debuffs` and `[SCENE]` to `session_config.lastScene` — both handled at the route call site (they reuse the existing in-route detector/parser), not in the service. The `routes/dmSession.js` `/message` handler surfaces `hpChange`/`conditions`/`activeEffects`/`turn`/`rollRequest` on the turn response for the cockpit.
 
 **Fortress threat origination is marker-driven** (Phase 3.7 SC-3.7.1): the AI DM emits `[FORTRESS_THREAT]` when narrative context warrants a threat against a player-owned base; the handler in `baseThreatService.js` validates ownership/active-status, enforces the single-active-threat-per-base invariant, and creates the `base_threats` row. Source/Category fields fall back handler-side to `RAID_CAPABLE_EVENTS[EventType]` lookups when omitted on the marker. The legacy world-event-tick path (`generateThreatsForCampaign` reading raid-capable `event_type` rows from `world_events`) is **deprecated** and unused in production — kept in place per Phase 3.7 §1.2 (removing it would touch the living-world tick architecture).
 
@@ -181,9 +218,9 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 
 **Chunk 5 content data files** (`client/src/data/`): `themeGoldModifiers.js`, `themePersonalityPrompts.js`, `themeIdealsPrompts.js`, `themeBondsPrompts.js`, `themeFlawsPrompts.js`, `themeBackstoryMoments.js`, `themeNarrativeContinuity.js` — 637 PM-authored entries transcribed verbatim from spec §7 + §5.4.5. Prompt files (personality / ideals / bonds / flaws) are `{ themeId: [{ text, alignment }] }` with always-visible 9-square alignment indicators (Decision 3). Backstory moments are `{ themeId: [string] }` — bare strings, no alignment per Decision 4 (events ≠ commitments). Narrative-continuity is `{ themeId: string }` (19 entries — Knight + Haunted One excluded per Decision D). Bracketed placeholders in prompt/moment text (e.g. `[the village that raised you]`) are intentional player-fill-in invitations.
 
-**Chunk 5 main creator (LIVE as of v1.0.114; Phase 2 closed)** — `client/src/components/creator/` houses the rebuilt 8-step creator + new home flow. **The new flow is the live path**: when no character is selected, App.jsx renders `<HomeFlow>` (HomeScreenV2 → PathChoiceScreen → CharacterCreatorV2). When a character is selected, the existing dashboard chrome renders with a "← Your characters" button at the top to return to HomeFlow. Components: `CharacterCreatorV2.jsx` (shell — scroll-to-top, Submit branching, save-before-advance with `persistProgress` prop, `initialState` + `initialCharacterId` for resume), `creatorPrimitives.jsx` (Field/Stepper/WizardHead/WizardFoot/Eyebrow), `CelebrationCard.jsx` (handoff-mode primitive shared by Steps 2/3), `BumpCelebrationCard.jsx` (Step 5's count-aware variant), `AlignmentChip.jsx` (9-square chip + ALIGNMENT_DESCRIPTIONS for Step 7), `ExpansionSection.jsx` (collapsible w/ chevron — closed-by-default in BOTH modes per PM review feedback, see spec §5.7.3 annotation), `PromptList.jsx` (Model A click-to-fill), `MomentList.jsx` (Model B multi-select chips), `RaceAwareDimensionPicker.jsx` (PHB-derived demographics dropdowns + Custom override + dual-unit display), `equipmentResolver.js` (equipment.json lookup + filter `(if proficient)` + pack contents), `creatorPersistence.js` (`submitCreator` for final commit; `saveProgress` for partial saves on step advance; `rehydrateManualCreatorState` + `rehydrateHandoffCreatorState` for resume), `Step1Identity.jsx`, `Step2Ancestry.jsx`, `Step3Theme.jsx`, `Step4ClassCalling.jsx`, `Step5AbilityScores.jsx`, `Step6Equipment.jsx`, `Step7IdentityDetails.jsx`, `Step8Review.jsx`, `HomeScreenV2.jsx` (single-section "Your Characters" grid w/ Diablo-4 Create entry + 3 card states), `PathChoiceScreen.jsx` (Screen 2 — Prelude/Campaign two-card layout), `HomeFlow.jsx` (live wrapper — fetches /api/character, routes home → path → wizard, hands active-character clicks back to App.jsx via `onSelectActive`). Editorial aesthetic: EB Garamond + Inter + JetBrains Mono via Google Fonts in `client/index.html`; design tokens + structural classes in `client/src/styles/creator-theme.css`, all scoped under `.creator-v2`. Per Decision 6: editorial-only, no aesthetic toggle.
+**Chunk 5 main creator (LIVE as of v1.0.114; Phase 2 closed)** — `client/src/components/creator/` houses the rebuilt 8-step creator + new home flow. **The new flow is the live path**: when no character is selected, App.jsx renders `<HomeFlow>` (HomeScreenV2 → PathChoiceScreen → CharacterCreatorV2). When a character is selected, the existing dashboard chrome renders with a "← Your characters" button at the top to return to HomeFlow. Components: `CharacterCreatorV2.jsx` (shell — scroll-to-top, Submit branching, save-before-advance with `persistProgress` prop, `initialState` + `initialCharacterId` for resume), `creatorPrimitives.jsx` (Field/Stepper/WizardHead/WizardFoot/Eyebrow), `CelebrationCard.jsx` (handoff-mode primitive shared by Steps 2/3), `BumpCelebrationCard.jsx` (Step 5's count-aware variant), `AlignmentChip.jsx` (9-square chip + ALIGNMENT_DESCRIPTIONS for Step 7), `ExpansionSection.jsx` (collapsible w/ chevron — closed-by-default in BOTH modes per PM review feedback, see spec §5.7.3 annotation), `PromptList.jsx` (Model A click-to-fill), `MomentList.jsx` (Model B multi-select chips), `RaceAwareDimensionPicker.jsx` (PHB-derived demographics dropdowns + Custom override + dual-unit display), `equipmentResolver.js` (equipment.json lookup + filter `(if proficient)` + pack contents), `creatorPersistence.js` (`submitCreator` for final commit; `saveProgress` for partial saves on step advance; `rehydrateManualCreatorState` + `rehydrateHandoffCreatorState` for resume), `Step1Identity.jsx`, `Step2Ancestry.jsx`, `Step3Theme.jsx`, `Step4ClassCalling.jsx`, `Step5AbilityScores.jsx`, `Step6Equipment.jsx`, `Step7IdentityDetails.jsx`, `Step8Review.jsx`, `Step4LevelOnePicks.jsx` (Step 4's level-1 class picks — cantrips/spells filtered from spells.json by class, wizard 6-spell spellbook, Fighter fighting style; the Variant Human bonus feat from feats.json lives in `Step5AbilityScores.jsx` and Rogue Expertise lives there too, after the skills picker), `HomeScreenV2.jsx` (single-section "Your Characters" grid w/ Diablo-4 Create entry + 3 card states), `PathChoiceScreen.jsx` (Screen 2 — Prelude/Campaign two-card layout), `HomeFlow.jsx` (live wrapper — fetches /api/character, routes home → path → wizard, hands active-character clicks back to App.jsx via `onSelectActive`). Editorial aesthetic: EB Garamond + Inter + JetBrains Mono via Google Fonts in `client/index.html`; design tokens + structural classes in `client/src/styles/creator-theme.css`, all scoped under `.creator-v2`. Per Decision 6: editorial-only, no aesthetic toggle.
 
-**Chunk 5 server-side** (live as of v1.0.114): `server/routes/character.js` POST accepts `creation_phase` (defaults `'active'` for backwards compat); PUT detects `'ready_for_primary' → 'active'` transition and runs (a) `applyHeirloomChoiceOnSubmit()` to flip chosen candidate → `'carried_forward'` and others → `'left_behind'`, (b) `transferCanonToCampaign()` from `server/services/campaignCanonTransferService.js` to copy `prelude_canon_npcs / locations / threads` into `npcs / locations / campaign_threads` with idempotent prelude-source markers (campaign_id NULL until campaign assignment lands; parking-lot entry). Migration 050 added `physical_build` column for Step 7's "build" field; PUT allowlist accepts it.
+**Chunk 5 server-side** (live as of v1.0.114): `server/routes/character.js` POST accepts `creation_phase` (defaults `'active'` for backwards compat); PUT detects `'ready_for_primary' → 'active'` transition and runs (a) `applyHeirloomChoiceOnSubmit()` to flip chosen candidate → `'carried_forward'` and others → `'left_behind'`, (b) `transferCanonToCampaign()` from `server/services/campaignCanonTransferService.js` to copy `prelude_canon_npcs / locations / threads` into `npcs / locations / campaign_threads` with idempotent prelude-source markers (campaign_id NULL until campaign assignment lands; parking-lot entry). Migration 050 added `physical_build` column for Step 7's "build" field; PUT allowlist accepts it. Migration 058 added `fighting_style` + `expertise` columns; the POST INSERT and PUT allowlist carry both (plus the already-existing `known_cantrips`/`known_spells`/`feats`), so the creator's level-1 picks — caster cantrips/spells, Variant Human general feat, Fighter fighting style, Rogue expertise — persist on create and resume.
 
 **Deprecated (per CLAUDE.md "deprecate by hiding nav, not deleting code")**: `client/src/components/CharacterCreationWizard.jsx` and `client/src/components/CharacterManager.jsx` are retained but unwired from the live path. CharacterManager only renders when `showCreationForm` is true (CharacterSheet's "Edit in Wizard" affordance — until the new creator grows an edit-existing surface, parking-lot entry).
 
@@ -208,6 +245,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/utils/errorHandler.js` — `handleServerError`, `notFound`, `validationError`
 - `server/middleware/auth.js` — JWT middleware
 - `server/services/eventEmitter.js` — Event bus between game systems
+- `server/services/backupService.js` — DB backups: portable `.sql` dump for Turso cloud, byte-faithful file copy for local; `runBackup()` (shared by `scripts/backup.js`) + `startBackupScheduler()` (auto-runs from `index.js`, env-tunable, defensive — never crashes boot)
 
 ### Prompt builders & session
 - `server/services/dmPromptBuilder.js` — Player Mode DM system prompt
@@ -217,6 +255,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/services/markerSchemas.js` — Marker schema definitions + validation (canonical dispatch surface, post Phase 3.2)
 - `server/services/markerPipeline.js` — `processResponseMarkers` dispatch + `registerHandler` API
 - `server/services/combatMarkerService.js` — COMBAT_START + COMBAT_END handlers (initiative orchestration)
+- `server/services/gameStateMarkerService.js` — v2.1.0 mechanical-spine handlers (HP_CHANGE, EFFECT_START/END, TURN, ROLL_REQUEST)
 - `server/services/lootDropService.js` — LOOT_DROP handler (character-inventory mutation for AI-driven drops)
 - `server/routes/dmSession.js` — DM session routes (main API surface)
 - `server/routes/dmMode.js` — DM Mode routes
@@ -239,6 +278,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/services/narrativeQueueService.js`
 - `server/services/consequenceService.js`
 - `server/services/campaignPlanService.js` — Opus campaign plan
+- `server/services/campaignDraftService.js` — Begin-Campaign atelier (v2.2.0; v2.3.0 design refresh; v2.5.0 two modes): Opus drafts/refines a campaign from a prompt + dials; commit creates the campaign + plan + links the character and persists the table's content boundaries (lines & veils, three-state open/veil/line) onto the plan as `lines_and_veils` (`POST /api/campaign/draft` + `/begin`). **v2.5.0 modes:** *Collaborative* — `converseCampaign()` + `POST /api/campaign/converse` (uses `CONVERSE_SYSTEM_PROMPT`) talks the campaign through and never drafts; the client passes the running conversation each turn, and `draftCampaign({ conversation })` authors the draft from that transcript when the player is ready. **v2.6.0** made converse return **structured `{reply, why, readyToDraft}`** (parsed via `extractLLMJson`, raw-text fallback) and accept `questionNumber` — driving a finite ~6–10-question budget, a per-question "why", a visible "Question N of ~8" counter, an offer-to-draft-early `readyToDraft` cue, no praise-padding, and honoring what the player asks to leave open (prompt synthesized via a judge-panel). Don't revert converse to plain-text — the client renders the `why` sub-line + counter off the JSON. *Quick start* — `draftCampaign` with `seed:'surprise'` + dials, no prompt. Subject resolution is shared via `resolveSubject()`. The whole atelier design reaches the live DM: `getPlanSummaryForSession` (campaignPlanService) carries the atelier fields through (premise/opening_scene/region/setting/hidden_truth/scope/locations/tone/lines_and_veils, `from_atelier` flag), and `dmPromptBuilder.formatCampaignPlan` renders them — including a **non-negotiable CONTENT BOUNDARIES block** (primacy) reinforced by a conditional 6th BEFORE-YOU-SEND self-check item (recency). Canonical/imported plans are unaffected (atelier sections render only when present).
 - `server/services/backstoryParserService.js` — Structured backstory extraction
 - `server/services/progressionService.js` — Character progression snapshot
 - `server/services/progressionSeedService.js` — Idempotent seed loader
@@ -267,6 +307,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 ### Frontend
 - `client/src/App.jsx` — SPA root, navigation, top-level state
 - `client/src/components/DMSession.jsx` — Main Player Mode session UI (~3000 lines, do not split further without plan)
+- `client/src/components/BeginCampaign.jsx` — conversational "Begin a new Campaign" atelier (v2.2.0; v2.3.0 design refresh; v2.5.0 two modes): four `mode`s — `greet` (entry: prompt box + character-grounded seeds), `converse` (v2.5.0 collaborative open conversation — Opus asks questions in the thread; "Draft it from our conversation" authors the draft), `quickstart` (v2.5.0 "Surprise me" dedicated screen — only length + genre/tone + lines & veils, then Opus conjures a draft from those dials), and `compose` (the living draft: dialogue thread + premise/scene preview + rail dials + cinematic begin). "Build it together" → `converse`; "Surprise me" → `quickstart`; both land in `compose`. Reached from CampaignsPage, wired to campaignDraftService (`/draft`, `/converse`, `/begin`).
 - `client/src/components/DMMode.jsx` — DM Mode UI
 - `client/src/components/CharacterCreationWizard.jsx` — 4-step wizard (~4300 lines)
 - `client/src/components/CharacterSheet.jsx` — Character view/edit (~3600 lines)
@@ -304,7 +345,7 @@ Every new API endpoint gets integration tests in `tests/integration.test.js` (ha
 - Don't add a CSS framework.
 - Don't split `DMSession.jsx`, `CharacterSheet.jsx`, or `CharacterCreationWizard.jsx` unless explicitly asked or working a state-refactor plan.
 - Don't change AI model aliases or add date suffixes.
-- Don't modify the primacy/recency prompt structure without understanding the pattern.
+- Don't modify the primacy/recency prompt structure without understanding the pattern — and don't re-bloat the recency "BEFORE YOU SEND" block back into a full rule restatement (it's intentionally a slim 2–3 item gut-check; see Prompt structure).
 - Don't write new ad-hoc JSON extractors — use `server/utils/llmJson.js`.
 - Don't create new documentation files unless asked.
 - Don't forget to update CHANGELOG, CLAUDE.md, and package.json versions together at each phase boundary.

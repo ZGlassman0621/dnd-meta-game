@@ -1,12 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
-const RARITY_COLORS = {
-  common: '#9ca3af',
-  uncommon: '#a78bfa',
-  rare: '#60a5fa',
-  very_rare: '#c084fc',
-  legendary: '#ff8c00'
-};
+// Local inline SVG sprite — symbol paths copied from the cockpit design's <defs>.
+// Kept private to this component so we never depend on / edit a shared sprite.
+function InventorySprite() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+      <defs>
+        <symbol id="inv-i-pack" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 10h8M8 18v-8a4 4 0 0 1 8 0v8"/></symbol>
+        <symbol id="inv-i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+        <symbol id="inv-i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+        <symbol id="inv-i-vial" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2v15a3 3 0 0 0 6 0V2"/><path d="M8 2h8"/><path d="M9 11h6"/></symbol>
+        <symbol id="inv-i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol>
+        <symbol id="inv-i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
+        <symbol id="inv-i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></symbol>
+        <symbol id="inv-i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="inv-i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+      </defs>
+    </svg>
+  );
+}
 
 const RARITY_LABELS = {
   common: 'Common',
@@ -16,24 +28,34 @@ const RARITY_LABELS = {
   legendary: 'Legendary'
 };
 
-// Ultima-style sectioned layout: all items visible at once, grouped.
-// Order matters — this is the display order in the panel.
-const CATEGORY_ORDER = ['weapons', 'armor', 'consumables', 'quest', 'misc'];
-
 const CATEGORY_LABELS = {
-  weapons: 'Weapons',
+  weapons: 'Weapon',
   armor: 'Armor',
-  consumables: 'Consumables',
-  quest: 'Quest Items',
-  misc: 'Misc'
+  consumables: 'Consumable',
+  quest: 'Quest item',
+  misc: 'Item'
 };
 
-const CATEGORY_COLORS = {
-  weapons: '#ef4444',
-  armor: '#60a5fa',
-  consumables: '#34d399',
-  quest: '#f59e0b',
-  misc: '#9ca3af'
+// Map an item category to one of the local sprite icons.
+const CATEGORY_ICON = {
+  weapons: 'inv-i-bolt',
+  armor: 'inv-i-shield',
+  consumables: 'inv-i-vial',
+  quest: 'inv-i-scroll',
+  misc: 'inv-i-pack'
+};
+
+// Slot → which sprite icon to show for an equipped piece.
+const SLOT_ICON = {
+  mainHand: 'inv-i-bolt',
+  offHand: 'inv-i-shield',
+  armor: 'inv-i-shield'
+};
+
+const SLOT_LABEL = {
+  mainHand: 'Main hand',
+  offHand: 'Off hand',
+  armor: 'Armor'
 };
 
 // Non-weapon religious / focus items that accidentally match weapon heuristics
@@ -51,8 +73,6 @@ const CONSUMABLE_KEYWORDS = [
 ];
 
 // Quest item heuristics — kept narrow so we don't mis-label mundane items.
-// An item is "quest" only if explicitly flagged or the name contains one of
-// these words. Most items shouldn't land here.
 const QUEST_KEYWORDS = [
   'quest', 'relic', 'artifact', 'heirloom', 'sacred', 'ancient',
   'prophecy', 'token of', 'letter from', 'sealed letter',
@@ -88,48 +108,55 @@ function getItemCategory(item, rarityData) {
   return 'misc';
 }
 
-// Collect equipment from character + all active companions into a map of
-// { itemName_lower → [{ holder, slot, color }] } for fast lookup during render.
-function buildEquippedByMap(character, companions) {
-  const map = new Map();
-  const add = (itemName, holder, slot, color) => {
-    if (!itemName) return;
-    const key = itemName.toLowerCase();
-    const list = map.get(key) || [];
-    list.push({ holder, slot, color });
-    map.set(key, list);
-  };
-
-  const parseEq = (raw) => {
-    if (!raw) return {};
-    if (typeof raw === 'string') {
-      try { return JSON.parse(raw) || {}; } catch { return {}; }
-    }
-    return raw;
-  };
-
-  const charEq = parseEq(character?.equipment);
-  ['mainHand', 'offHand', 'armor'].forEach(slot => {
-    const item = charEq[slot];
-    if (item?.name) add(item.name, character.name || 'You', slot, '#10b981');
-  });
-
-  (companions || []).forEach(c => {
-    const compEq = parseEq(c.equipment);
-    ['mainHand', 'offHand', 'armor'].forEach(slot => {
-      const item = compEq[slot];
-      if (item?.name) add(item.name, c.name || c.nickname || 'Companion', slot, '#a78bfa');
-    });
-  });
-
-  return map;
+// Parse a possibly-stringified equipment blob into an object.
+function parseEquipment(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw) || {}; } catch { return {}; }
+  }
+  return raw;
 }
 
-const SLOT_LABEL = {
-  mainHand: 'main',
-  offHand: 'off',
-  armor: 'armor'
-};
+// Build the "Equipped" list from the character + every active companion.
+// Each entry: { name, sub, icon, key }.
+function buildEquippedList(character, companions) {
+  const rows = [];
+  const seen = new Set();
+
+  const pushSlot = (eq, slot, holderLabel, isYou) => {
+    const item = eq?.[slot];
+    const name = item?.name || (typeof item === 'string' ? item : null);
+    if (!name) return;
+    const key = `${holderLabel}-${slot}-${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    // Sub line: slot label + holder (companions only) + a damage/AC hint if stored.
+    const parts = [];
+    parts.push(isYou ? SLOT_LABEL[slot] : `${SLOT_LABEL[slot]} · ${holderLabel}`);
+    if (item?.damage) parts.push(`${item.damage}${item.damageType ? ' ' + item.damageType : ''}`);
+    else if (item?.acBonus) parts.push(`+${item.acBonus} AC`);
+    if (item?.magical) parts.push(typeof item.magical === 'string' ? item.magical : 'magical');
+
+    rows.push({
+      key,
+      name,
+      sub: parts.join(' · '),
+      icon: SLOT_ICON[slot] || 'inv-i-pack'
+    });
+  };
+
+  const charEq = parseEquipment(character?.equipment);
+  ['mainHand', 'offHand', 'armor'].forEach(slot => pushSlot(charEq, slot, character?.name || 'You', true));
+
+  (companions || []).forEach(c => {
+    const compEq = parseEquipment(c.equipment);
+    const holder = c.nickname || c.name || 'Companion';
+    ['mainHand', 'offHand', 'armor'].forEach(slot => pushSlot(compEq, slot, holder, false));
+  });
+
+  return rows;
+}
 
 export default function InventoryPanel({ character, companions, itemsGainedThisSession, onDiscard, onClose, onRefreshCharacter }) {
   const [rarityData, setRarityData] = useState({});
@@ -157,6 +184,8 @@ export default function InventoryPanel({ character, companions, itemsGainedThisS
     setDiscarding(itemName);
     try {
       await onDiscard(itemName);
+      // Pull fresh character state after a successful discard, if provided.
+      onRefreshCharacter?.();
     } finally {
       setDiscarding(null);
     }
@@ -168,262 +197,140 @@ export default function InventoryPanel({ character, companions, itemsGainedThisS
   };
 
   const isNewItem = (itemName) => {
-    return itemsGainedThisSession.some(n => n.toLowerCase() === (itemName || '').toLowerCase());
+    return (itemsGainedThisSession || []).some(n => n.toLowerCase() === (itemName || '').toLowerCase());
   };
 
-  // Precompute equipped-by map (recomputes only when companions / character.equipment change)
-  const equippedByMap = useMemo(
-    () => buildEquippedByMap(character, companions),
+  // Equipped list (character + companions). Recompute only when relevant inputs change.
+  const equippedList = useMemo(
+    () => buildEquippedList(character, companions),
     [character?.equipment, character?.name, companions]
   );
 
-  // Group items into the five sections
-  const grouped = useMemo(() => {
-    const out = { weapons: [], armor: [], consumables: [], quest: [], misc: [] };
-    for (const item of inventory) {
+  // Carried items, lightly categorized so we can pick a sensible icon + sub line.
+  const carried = useMemo(() => {
+    return inventory.map((item) => {
+      const name = item.name || item;
       const cat = getItemCategory(item, rarityData);
-      out[cat].push(item);
-    }
-    return out;
-  }, [inventory, rarityData]);
+      const rarity = getItemRarity(name);
+      // Sub line: rarity (if notable) else the category label.
+      const sub = rarity && rarity !== 'common'
+        ? RARITY_LABELS[rarity]
+        : CATEGORY_LABELS[cat];
+      return {
+        name,
+        quantity: item.quantity || 1,
+        icon: CATEGORY_ICON[cat] || 'inv-i-pack',
+        sub,
+        isNew: isNewItem(name)
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inventory, rarityData, itemsGainedThisSession]);
 
-  const renderItem = (item, idx) => {
-    const itemName = item.name || item;
-    const quantity = item.quantity || 1;
-    const rarity = getItemRarity(itemName);
-    const isNew = isNewItem(itemName);
-    const rarityColor = rarity ? RARITY_COLORS[rarity] : '#ccc';
-    const equippedBy = equippedByMap.get((itemName || '').toLowerCase()) || [];
+  const goldGp = character.gold_gp || 0;
 
-    return (
-      <div
-        key={idx}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          padding: '0.5rem 0.75rem',
-          background: isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-          borderRadius: '4px',
-          border: isNew ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
-          transition: 'background 0.2s'
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            color: rarityColor,
-            fontWeight: rarity && rarity !== 'common' ? 'bold' : 'normal',
-            fontSize: '0.9rem',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
-            {itemName}
-          </div>
-          {rarity && rarity !== 'common' && (
-            <div style={{ fontSize: '0.7rem', color: rarityColor, opacity: 0.8 }}>
-              {RARITY_LABELS[rarity]}
-            </div>
+  return (
+    <>
+      <InventorySprite />
+      <div className="panel-scrim show" onClick={onClose} />
+      <aside className="pnl open" data-panel="inventory">
+        <div className="pnl-head">
+          <svg className="ph-ic2"><use href="#inv-i-pack" /></svg>
+          <h3>Inventory</h3>
+          <span className="ph-sub2">carried · equipped</span>
+          <button className="pnl-close" onClick={onClose} aria-label="Close inventory">
+            <svg className="ic"><use href="#inv-i-x" /></svg>
+          </button>
+        </div>
+
+        <div className="pnl-body scroll">
+          {/* Equipped — from character + active companions */}
+          {equippedList.length > 0 && (
+            <>
+              <div className="pnl-sec">Equipped<span className="ln" /></div>
+              <div className="inv">
+                {equippedList.map((row) => (
+                  <div className="inv-row" key={row.key}>
+                    <span className="ii"><svg className="ic"><use href={`#${row.icon}`} /></svg></span>
+                    <div>
+                      <div className="inm">{row.name}</div>
+                      {row.sub && <div className="idesc">{row.sub}</div>}
+                    </div>
+                    <span className="iqty" />
+                  </div>
+                ))}
+              </div>
+            </>
           )}
-          {/* Equipped-by badges. Multiple if the same-named item is equipped by
-              multiple party members. Clicking would be nice-to-have later. */}
-          {equippedBy.length > 0 && (
-            <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
-              {equippedBy.map((eq, i) => (
-                <span
-                  key={i}
-                  title={`Equipped by ${eq.holder} (${eq.slot})`}
-                  style={{
-                    background: `${eq.color}22`,
-                    border: `1px solid ${eq.color}`,
-                    color: eq.color,
-                    padding: '1px 6px',
-                    borderRadius: '8px',
-                    fontSize: '0.65rem',
-                    whiteSpace: 'nowrap'
-                  }}
+
+          {/* Carried — real inventory items */}
+          <div className="pnl-sec">Carried<span className="ln" /></div>
+          {carried.length === 0 ? (
+            <p style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', color: 'var(--ink-3)' }}>
+              Nothing carried.
+            </p>
+          ) : (
+            <div className="inv">
+              {carried.map((row, idx) => (
+                <div
+                  className="inv-row"
+                  key={`${row.name}-${idx}`}
+                  style={row.isNew ? { background: 'color-mix(in oklab, var(--good) 9%, transparent)' } : undefined}
                 >
-                  {eq.holder} · {SLOT_LABEL[eq.slot] || eq.slot}
-                </span>
+                  <span className="ii"><svg className="ic"><use href={`#${row.icon}`} /></svg></span>
+                  <div>
+                    <div className="inm">
+                      {row.name}
+                      {row.isNew && (
+                        <span style={{
+                          marginLeft: 8,
+                          fontFamily: 'var(--sans)',
+                          fontWeight: 600,
+                          fontSize: 8.5,
+                          letterSpacing: '.14em',
+                          textTransform: 'uppercase',
+                          color: 'var(--good)'
+                        }}>
+                          New
+                        </span>
+                      )}
+                    </div>
+                    {row.sub && <div className="idesc">{row.sub}</div>}
+                  </div>
+                  <span className="iqty" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {row.quantity > 1 ? `×${row.quantity}` : ''}
+                    <button
+                      onClick={() => handleDiscard(row.name)}
+                      disabled={discarding === row.name}
+                      title="Discard item"
+                      aria-label={`Discard ${row.name}`}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 2,
+                        cursor: discarding === row.name ? 'wait' : 'pointer',
+                        color: 'var(--ink-4)',
+                        opacity: discarding === row.name ? 0.4 : 1,
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <svg className="ic" style={{ width: 14, height: 14 }}><use href="#inv-i-trash" /></svg>
+                    </button>
+                  </span>
+                </div>
               ))}
             </div>
           )}
-        </div>
 
-        {isNew && (
-          <span style={{
-            padding: '0.1rem 0.4rem',
-            background: 'rgba(16, 185, 129, 0.3)',
-            border: '1px solid rgba(16, 185, 129, 0.5)',
-            borderRadius: '3px',
-            color: '#10b981',
-            fontSize: '0.65rem',
-            fontWeight: 'bold',
-            letterSpacing: '0.05em'
-          }}>
-            NEW
-          </span>
-        )}
-
-        {quantity > 1 && (
-          <span style={{
-            padding: '0.1rem 0.4rem',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '3px',
-            color: '#ccc',
-            fontSize: '0.75rem',
-            fontWeight: 'bold'
-          }}>
-            ×{quantity}
-          </span>
-        )}
-
-        <button
-          onClick={() => handleDiscard(itemName)}
-          disabled={discarding === itemName}
-          title="Discard item"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#666',
-            cursor: discarding === itemName ? 'wait' : 'pointer',
-            padding: '0.2rem',
-            fontSize: '1rem',
-            lineHeight: 1,
-            opacity: discarding === itemName ? 0.5 : 1
-          }}
-          onMouseEnter={(e) => e.target.style.color = '#ef4444'}
-          onMouseLeave={(e) => e.target.style.color = '#666'}
-        >
-          ×
-        </button>
-      </div>
-    );
-  };
-
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      right: 0,
-      width: '400px',
-      maxWidth: '90vw',
-      height: '100vh',
-      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(30, 30, 45, 0.98) 100%)',
-      borderLeft: '1px solid rgba(16, 185, 129, 0.3)',
-      boxShadow: '-5px 0 20px rgba(0, 0, 0, 0.5)',
-      zIndex: 1000,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden'
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '1rem',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <h3 style={{ margin: 0, color: '#10b981' }}>Party Inventory</h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#888',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            padding: '0.25rem'
-          }}
-        >
-          ×
-        </button>
-      </div>
-
-      {/* Gold Bar */}
-      <div style={{
-        padding: '0.75rem 1rem',
-        background: 'rgba(234, 179, 8, 0.1)',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex',
-        gap: '1rem',
-        alignItems: 'center'
-      }}>
-        <div>
-          <span style={{ color: '#d4af37', fontWeight: 'bold', fontSize: '1.1rem' }}>
-            {character.gold_gp || 0}
-          </span>
-          <span style={{ color: '#888', marginLeft: '0.25rem' }}>gp</span>
-        </div>
-        {character.gold_sp > 0 && (
-          <div>
-            <span style={{ color: '#c0c0c0', fontWeight: 'bold' }}>{character.gold_sp}</span>
-            <span style={{ color: '#888', marginLeft: '0.25rem' }}>sp</span>
+          {/* Gold */}
+          <div className="gold-row">
+            <svg className="ic" style={{ width: 16, height: 16, color: 'var(--accent)' }}><use href="#inv-i-coin" /></svg>
+            <span className="gl">Gold</span>
+            <span className="gv">{goldGp}<span className="un"> gp</span></span>
           </div>
-        )}
-        {character.gold_cp > 0 && (
-          <div>
-            <span style={{ color: '#cd7f32', fontWeight: 'bold' }}>{character.gold_cp}</span>
-            <span style={{ color: '#888', marginLeft: '0.25rem' }}>cp</span>
-          </div>
-        )}
-      </div>
-
-      {/* Item List — Ultima-style sectioned layout, all categories visible */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '0.75rem'
-      }}>
-        {inventory.length === 0 ? (
-          <p style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
-            No items in inventory
-          </p>
-        ) : (
-          CATEGORY_ORDER.map(cat => {
-            const items = grouped[cat];
-            if (items.length === 0) return null;
-            return (
-              <div key={cat} style={{ marginBottom: '1rem' }}>
-                <div style={{
-                  color: CATEGORY_COLORS[cat],
-                  fontSize: '0.72rem',
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  marginBottom: '0.35rem',
-                  paddingBottom: '0.25rem',
-                  borderBottom: `1px solid ${CATEGORY_COLORS[cat]}33`
-                }}>
-                  {CATEGORY_LABELS[cat]} <span style={{ opacity: 0.6, fontWeight: 'normal' }}>({items.length})</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                  {items.map((item, idx) => renderItem(item, `${cat}-${idx}`))}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Footer: item count */}
-      <div style={{
-        padding: '0.5rem 1rem',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '0.8rem',
-        color: '#666'
-      }}>
-        <span>{inventory.length} item{inventory.length !== 1 ? 's' : ''}</span>
-        {itemsGainedThisSession.length > 0 && (
-          <span style={{ color: '#10b981' }}>
-            +{itemsGainedThisSession.length} this session
-          </span>
-        )}
-      </div>
-    </div>
+        </div>
+      </aside>
+    </>
   );
 }

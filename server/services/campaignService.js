@@ -111,30 +111,40 @@ export async function deleteCampaign(id) {
     await dbRun(`UPDATE npc_relationships SET first_met_location_id = NULL WHERE first_met_location_id IN (${placeholders})`, locationIds);
   }
 
-  // 3. Delete merchant inventories
-  await dbRun('DELETE FROM merchant_inventories WHERE campaign_id = ?', [id]);
-
-  // 4. Delete narrative queue items
-  await dbRun('DELETE FROM narrative_queue WHERE campaign_id = ?', [id]);
-
-  // 5. Delete journeys (journey_encounters cascade via ON DELETE CASCADE)
-  await dbRun('DELETE FROM journeys WHERE campaign_id = ?', [id]);
-
-  // 6. Clear self-references in world_events, then delete (event_effects cascade)
+  // 3. Clear self-references that would otherwise block their own table's delete.
   await dbRun('UPDATE world_events SET triggered_by_event_id = NULL WHERE campaign_id = ?', [id]);
-  await dbRun('DELETE FROM world_events WHERE campaign_id = ?', [id]);
-
-  // 7. Delete factions (faction_goals, faction_standings cascade via ON DELETE CASCADE)
-  await dbRun('DELETE FROM factions WHERE campaign_id = ?', [id]);
-
-  // 8. Delete quests (quest_requirements cascade via ON DELETE CASCADE)
-  await dbRun('DELETE FROM quests WHERE campaign_id = ?', [id]);
-
-  // 9. Clear self-references in locations, then delete
   await dbRun('UPDATE locations SET parent_location_id = NULL WHERE campaign_id = ?', [id]);
-  await dbRun('DELETE FROM locations WHERE campaign_id = ?', [id]);
 
-  // 10. Finally delete the campaign
+  // 4. Delete from every table that declares a foreign key to `campaigns`
+  //    (except `characters`, which we UNASSIGN above rather than delete).
+  //    Discovered dynamically from the schema so new campaign-scoped tables are
+  //    handled automatically — the prior hand-written list missed tables like
+  //    `campaign_weather` and 500'd on a FOREIGN KEY constraint. The retry loop
+  //    lets chained FKs resolve across passes; ON DELETE CASCADE handles
+  //    grandchildren (faction_goals, quest_requirements, event_effects, …).
+  const tables = await dbAll(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('campaigns','characters')`
+  );
+  const holders = [];
+  for (const t of tables) {
+    const fks = await dbAll(`PRAGMA foreign_key_list(${t.name})`);
+    const fk = fks.find(f => f.table === 'campaigns');
+    if (fk) holders.push({ table: t.name, column: fk.from });
+  }
+  for (let pass = 0; pass < holders.length + 2; pass++) {
+    let blocked = 0;
+    for (const { table, column } of holders) {
+      try {
+        await dbRun(`DELETE FROM ${table} WHERE ${column} = ?`, [id]);
+      } catch (e) {
+        if (String(e?.message || '').includes('FOREIGN KEY')) blocked++;
+        else throw e;
+      }
+    }
+    if (blocked === 0) break;
+  }
+
+  // 5. Finally delete the campaign.
   const result = await dbRun('DELETE FROM campaigns WHERE id = ?', [id]);
   return result.changes > 0;
 }

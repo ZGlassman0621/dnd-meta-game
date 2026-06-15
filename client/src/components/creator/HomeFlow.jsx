@@ -1,19 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import HomeScreenV2 from './HomeScreenV2.jsx'
-import PathChoiceScreen from './PathChoiceScreen.jsx'
 import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
-import PreludeCreatorV2 from './PreludeCreatorV2.jsx'
-import PreludeArcPreview from '../PreludeArcPreview.jsx'
-import PreludeSession from '../PreludeSession.jsx'
 import SettingsOverlay from '../settings/SettingsOverlay.jsx'
 
 // Phase 4a SC-4a.4 — lazy-load the diagnostic page; only fetched when
 // the user clicks the AI Behavior appbar link.
 const AIBehaviorDebugPage = lazy(() => import('../AIBehaviorDebugPage.jsx'))
-import {
-  rehydrateManualCreatorState,
-  rehydrateHandoffCreatorState
-} from './creatorPersistence.js'
+import { rehydrateManualCreatorState } from './creatorPersistence.js'
 
 /**
  * Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) — live home flow.
@@ -50,12 +43,6 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   const [resumePayload, setResumePayload] = useState(null)
   const [resumeState, setResumeState] = useState(null)
   const [resumeCharacterId, setResumeCharacterId] = useState(null)
-  const [preludeCharacter, setPreludeCharacter] = useState(null)
-  // v1.0.138 — resume state for the 6-step PreludeCreatorV2. Set when a
-  // 'prelude_setup' home card is clicked; cleared when the player starts
-  // a fresh Prelude or finishes the wizard.
-  const [preludeDraftState, setPreludeDraftState] = useState(null)
-  const [preludeDraftCharacterId, setPreludeDraftCharacterId] = useState(null)
   const [error, setError] = useState(null)
   // Phase 3.5 — Settings overlay open state. Scoped per-character; the
   // home appbar's `Settings` link picks the most-recently-updated active
@@ -107,83 +94,26 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       if (!charRes.ok) throw new Error(`Could not load character #${uiCharacter.id}`)
       const character = await charRes.json()
 
-      if (uiCharacter.state === 'prelude_setup') {
-        // Resume the new 6-step prelude wizard mid-flight (v1.0.138+).
-        // Fetch the stored wizard state from prelude_setup_data and hand
-        // it to PreludeCreatorV2 via initialState / initialCharacterId.
-        const draftRes = await fetch(`/api/prelude/setup/draft/${uiCharacter.id}`)
-        if (!draftRes.ok) throw new Error(`Could not load prelude draft #${uiCharacter.id}`)
-        const draft = await draftRes.json()
-        setPreludeDraftState(draft.state || null)
-        setPreludeDraftCharacterId(draft.id)
-        setRoute('prelude.setup')
-      } else if (uiCharacter.state === 'prelude') {
-        // Resume the in-flight Prelude session on this character.
-        setPreludeCharacter(character)
-        setRoute('prelude.session')
-      } else if (uiCharacter.state === 'ready_for_primary') {
-        const payloadRes = await fetch(`/api/prelude/${uiCharacter.id}/handoff-payload`)
-        const payload = payloadRes.ok ? await payloadRes.json() : null
-        setResumePayload(payload)
-        setResumeState(rehydrateHandoffCreatorState(character, payload))
-        setResumeCharacterId(character.id)
-        setRoute('wizard.resume.handoff')
-      } else {
-        // 'creating' — manual rehydration (no payload)
-        setResumePayload(null)
-        setResumeState(rehydrateManualCreatorState(character))
-        setResumeCharacterId(character.id)
-        setRoute('wizard.resume.manual')
-      }
+      // Any in-progress draft resumes in the manual creator. (The prelude
+      // creator was removed in the MVP; legacy prelude / ready_for_primary
+      // cards also resume here.)
+      setResumePayload(null)
+      setResumeState(rehydrateManualCreatorState(character))
+      setResumeCharacterId(character.id)
+      setRoute('wizard.resume.manual')
     } catch (err) {
       setError(err.message || 'Could not open character.')
     }
   }, [characters, onSelectActive])
 
-  const handleNew = useCallback(() => setRoute('path'), [])
-
-  const handlePickCampaign = useCallback(() => {
+  // "Create New" goes straight to the manual creator. (The prelude path
+  // was removed in the MVP, so there's no longer a path-choice step.)
+  const handleNew = useCallback(() => {
     setResumePayload(null)
     setResumeState(null)
     setResumeCharacterId(null)
     setRoute('wizard.manual')
   }, [])
-
-  const handlePickPrelude = useCallback(() => {
-    // Fresh start — clear any draft-resume state from a prior card click
-    setPreludeCharacter(null)
-    setPreludeDraftState(null)
-    setPreludeDraftCharacterId(null)
-    setRoute('prelude.setup')
-  }, [])
-
-  const handlePreludeCreated = useCallback((char, opts = {}) => {
-    // Setup wizard finished: it created a character row in 'prelude'
-    // phase. Route into arc preview by default; into the session loop
-    // when the testing checkbox bypasses the preview.
-    if (opts.showArcPreview === false) {
-      setPreludeCharacter(char)
-      setRoute('prelude.session')
-    } else {
-      setPreludeCharacter(char)
-      setRoute('prelude.arc')
-    }
-  }, [])
-
-  const handlePreludeArcBegin = useCallback(() => {
-    setRoute('prelude.session')
-  }, [])
-
-  const handlePreludeReturn = useCallback(async () => {
-    // Player exited from setup / arc preview / session. Refresh the
-    // roster so the new card (or the now-'ready_for_primary' card if
-    // [PRELUDE_END] fired) shows up, then return home.
-    setPreludeCharacter(null)
-    setPreludeDraftState(null)
-    setPreludeDraftCharacterId(null)
-    await loadCharacters()
-    setRoute('home')
-  }, [loadCharacters])
 
   const handleSubmitSuccess = useCallback(async (result) => {
     // Refresh the character list and route back to home; if the
@@ -271,158 +201,33 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       />
     )
   }
-  if (route === 'wizard.resume.handoff') {
-    return (
-      <CharacterCreatorV2
-        preludePayload={resumePayload}
-        initialState={resumeState}
-        initialCharacterId={resumeCharacterId}
-        persistProgress={true}
-        onExit={handleExitWizard}
-        onSubmitSuccess={handleSubmitSuccess}
-      />
-    )
-  }
+  // (The 'wizard.resume.handoff' route was removed in Phase D — handoff/prelude
+  // mode is gone in the MVP, so handleOpenCharacter only ever routes in-progress
+  // drafts to 'wizard.resume.manual'. resumePayload stays null throughout.)
 
-  if (route === 'prelude.setup') {
-    // v1.0.143 cutover: PreludeCreatorV2 (6-step structural redesign)
-    // is now the live path for the prelude entry. Resume from a draft
-    // card uses the same component with initialState + initialCharacterId.
-    // Legacy PreludeSetupWizard is retained but unwired per
-    // "deprecate by hiding nav, not deleting code."
+  // Home route (default). HomeScreenV2 is a full-screen `.hearth` surface, so
+  // the old `.creator-v2` appbar that used to carry Settings / AI-Behavior was
+  // painted behind it and unreachable. Those affordances now live in the
+  // roster's own Hearth header (onSettings / onAIBehavior props). The loading /
+  // error states render on a matching Hearth backdrop so there's no light flash.
+  if (loading || error) {
     return (
-      <PreludeCreatorV2
-        onCancel={handlePreludeReturn}
-        onPreludeCreated={handlePreludeCreated}
-        initialState={preludeDraftState}
-        initialCharacterId={preludeDraftCharacterId}
-      />
-    )
-  }
-  if (route === 'prelude.arc' && preludeCharacter) {
-    return (
-      <PreludeArcPreview
-        character={preludeCharacter}
-        onBegin={handlePreludeArcBegin}
-        onReturn={handlePreludeReturn}
-      />
-    )
-  }
-  if (route === 'prelude.session' && preludeCharacter) {
-    return (
-      <PreludeSession
-        character={preludeCharacter}
-        onBack={handlePreludeReturn}
-      />
-    )
-  }
-
-  if (route === 'path') {
-    return (
-      <div className="creator-v2">
-        <div className="appbar">
-          <div className="brand">
-            D <span className="amp">&amp;</span> D
-            <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-          </div>
-          <div className="crumbs">A choice of beginnings</div>
-          <div className="spacer" />
-          <button
-            type="button"
-            className="nav-settings"
-            onClick={() => setAiBehaviorOpen(true)}
-            aria-label="AI Behavior debug"
-            title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
-          >
-            <span className="glyph">◇</span>AI Behavior
-          </button>
-          {settingsCharacter && (
-            <button
-              type="button"
-              className="nav-settings"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Settings"
-            >
-              <span className="glyph">✦</span>Settings
-            </button>
-          )}
-        </div>
-        <div className="stage center">
-          <PathChoiceScreen
-            onPrelude={handlePickPrelude}
-            onCampaign={handlePickCampaign}
-            onBack={() => setRoute('home')}
-          />
-        </div>
-        {settingsOpen && settingsCharacter && (
-          <SettingsOverlay
-            character={settingsCharacter}
-            context="home"
-            onClose={() => setSettingsOpen(false)}
-            onSaved={handleSettingsSaved}
-          />
-        )}
+      <div className="hearth app-bg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        {loading
+          ? <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink-3)' }}>Gathering your characters…</p>
+          : <div style={{ maxWidth: 640, padding: '16px 20px', borderRadius: 'var(--radius-lg)', background: 'color-mix(in oklab, var(--bad) 10%, var(--bg-card))', border: '1px solid color-mix(in oklab, var(--bad) 40%, var(--rule))', color: 'var(--bad)', fontFamily: 'var(--serif)' }}>{error}</div>}
       </div>
     )
   }
-
-  // Home route (default)
   return (
-    <div className="creator-v2">
-      <div className="appbar">
-        <div className="brand">
-          D <span className="amp">&amp;</span> D
-          <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-        </div>
-        <div className="crumbs">The roster</div>
-        <div className="spacer" />
-        <button
-          type="button"
-          className="nav-settings"
-          onClick={() => setAiBehaviorOpen(true)}
-          aria-label="AI Behavior debug"
-          title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
-        >
-          <span className="glyph">◇</span>AI Behavior
-        </button>
-        {settingsCharacter && (
-          <button
-            type="button"
-            className="nav-settings"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-          >
-            <span className="glyph">✦</span>Settings
-          </button>
-        )}
-      </div>
-      <div className="stage">
-        {loading && (
-          <p className="lede" style={{ textAlign: 'center', padding: '60px 0' }}>
-            Gathering your characters…
-          </p>
-        )}
-        {error && (
-          <div style={{
-            maxWidth: 640,
-            margin: '40px auto',
-            padding: '16px 20px',
-            background: 'rgba(231, 76, 60, 0.08)',
-            border: '1px solid #e74c3c',
-            color: '#c0392b',
-            fontFamily: 'var(--serif)'
-          }}>
-            {error}
-          </div>
-        )}
-        {!loading && !error && (
-          <HomeScreenV2
-            characters={characters.map(mapCharacterForHome)}
-            onNew={handleNew}
-            onOpenCharacter={handleOpenCharacter}
-          />
-        )}
-      </div>
+    <>
+      <HomeScreenV2
+        characters={characters.map(mapCharacterForHome)}
+        onNew={handleNew}
+        onOpenCharacter={handleOpenCharacter}
+        onAIBehavior={() => setAiBehaviorOpen(true)}
+        onSettings={settingsCharacter ? () => setSettingsOpen(true) : null}
+      />
       {settingsOpen && settingsCharacter && (
         <SettingsOverlay
           character={settingsCharacter}
@@ -431,7 +236,7 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
           onSaved={handleSettingsSaved}
         />
       )}
-    </div>
+    </>
   )
 }
 
