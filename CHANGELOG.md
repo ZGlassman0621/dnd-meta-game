@@ -2,6 +2,112 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [2.9.0] - 2026-06-14 — Memory as variables (Phases 1–3): canon supersede + [SET_FACT] flag marker + continuous persistence
+
+Phases 1–3 of the memory-as-variables plan — evolving long-term memory from
+accumulating prose-recall toward game-style overwritable variables. Built as a
+gated, dependency-ordered multi-agent pipeline; every phase passed a build + test
++ adversarial-review gate, then an independent backstop run. Phase 4 (flag-aware,
+scene-scoped retrieval) is the deliberate follow-up. NOTE: CLAUDE.md architecture
+snapshot update is deferred to the next session (storm-prep commit).
+
+- **Phase 1 — canon facts behave like overwritable variables.** Added a nullable
+  `field` column to `canon_facts` (migration 057) + a partial unique index on
+  `(campaign_id, character_id, subject, category, field) WHERE is_active=1 AND
+  field IS NOT NULL`. `recordCanonFact` gained a trailing `field` param and a
+  category policy: TERMINAL (`death`/`npc_death` — never superseded, protects
+  deaths-don't-resurrect), APPEND_ONLY (`event`/`lore`/`player_choice`), and
+  OVERWRITABLE (npc/location/quest/item/secret/promise/world_flag). A field-bearing
+  overwritable fact now retires the prior same-key value (newest wins) and links it
+  via `superseded_by`; field-null free-form facts keep their prior behavior.
+  `propagateNpcDeath`'s raw INSERT was routed through `recordCanonFact` so no path
+  bypasses the invariant. `tests/canon-variables.test.js`.
+- **Phase 2 — `[SET_FACT]` dynamic flag marker.** The DM can now record emergent
+  state at runtime (`[SET_FACT Subject="player" Field="hates_boats" Value="true"]`),
+  persisted per turn through Phase 1's overwrite-by-key. New `markerSchemas` entry +
+  strip coverage, new `factFlagService.js` handler, an always-on prompt block, and
+  dispatch wiring in `dmSession.js`. `tests/set-fact-marker.test.js`.
+- **Phase 3 — continuous persistence.** New `sessionRecoveryService.js` +
+  boot-time `recoverAbandonedSessions()` sweep (deferred, unref'd, fully defensive)
+  so a session abandoned before `/end-session` still gets chronicled on next boot.
+  The lossy >40k-char head+tail transcript truncation in `generateSessionChronicle`
+  is replaced with the non-lossy map-reduce summarizer (promoted to an exported
+  `summarizeMessagesMapReduce`). `tests/session-recovery.test.js`.
+- **CRITICAL pre-existing bug fixed (found during Phase 3).** `generateSessionChronicle`
+  selected `campaign_id` and `game_day` from `dm_sessions` — columns that **do not
+  exist** there (they live on `characters`). The query threw "no such column" on its
+  first statement, so end-of-session chronicles, recap-extracted canon facts, and
+  NPC conversation summaries were **never being written** (which is why `canon_facts`
+  was empty). Fixed via a LEFT JOIN to `characters` (alias `campaign_id` + COALESCE
+  game day) with a defensive null-campaign skip. Verified live generating a real chronicle.
+
+## [2.8.4] - 2026-06-14 — Durability: real, automatic backups for the cloud save
+
+The campaign's cloud (Turso) database had **no working backup** — `npm run backup`
+only knew how to copy a local `local.db` file, so in cloud mode it found nothing
+and exited with an error, and nothing ran it automatically. A save meant to be
+nurtured for years was one provider incident away from gone. This makes backups
+real and automatic, audit item #2.
+
+- **New `server/services/backupService.js`.** Cloud mode (TURSO_DATABASE_URL set)
+  now writes a portable, restorable `.sql` dump (CREATE TABLE + INSERTs +
+  indexes/triggers/views, wrapped in a transaction with FKs off) to `backups/`.
+  Local mode keeps the byte-faithful file copy. The cloud path uses only
+  `@libsql/client` and the same query path the app runs on — no Turso CLI, no
+  embedded-replica native bindings — so a backup works on any machine that can run
+  the game. Restore with `sqlite3 restored.db < backups/turso-<stamp>.sql` (header
+  in every dump). Values are serialized safely (apostrophes, NULLs, unicode,
+  embedded newlines, BLOBs as `X'hex'`); the dump streams to disk with backpressure
+  handling so large saves don't buffer in memory; old backups auto-prune to the
+  newest `BACKUP_RETAIN` (default 30).
+- **Automatic scheduling.** `startBackupScheduler()` runs from server boot: first
+  backup ~30s after start, then every `BACKUP_INTERVAL_HOURS` (default 24).
+  Defensive by construction — a backup failure can never crash the server, the
+  timers are `unref`'d, and it's opt-out via `BACKUP_DISABLE=1`. Env knobs:
+  `BACKUP_INTERVAL_HOURS`, `BACKUP_FIRST_DELAY_MS`, `BACKUP_RETAIN`.
+- **`server/scripts/backup.js`** is now a thin CLI wrapper over the service, so
+  `npm run backup` and the scheduler share one code path. Exit code preserved
+  (1 when there's nothing to back up).
+- **Tests.** New `tests/backup-dump.test.js` (24 assertions) unit-tests the value
+  serializer and does a full dump→restore round-trip through two independent
+  in-memory libsql databases, asserting every tricky value survives and indexes
+  are recreated. Verified end-to-end against the live Turso DB: a real dump (95
+  tables, 687 rows, 4.49 MB) restored cleanly into a fresh database.
+
+## [2.8.3] - 2026-06-14 — Durability fix: dead NPCs stay dead (death canon-category mismatch)
+
+A single data-integrity bug that struck directly at the project's #1 promise —
+play one character for years without the AI forgetting canon — surfaced by a
+full-codebase audit. Fixed plus a self-healing migration for existing saves.
+
+- **Dead NPCs could quietly come back to life.** Every propagated NPC death was
+  written to `canon_facts` under category `'npc_death'`
+  (`npcLifecycleService.propagateNpcDeath`), but the always-included
+  "DEATHS (DO NOT RESURRECT)" block fed to the DM every session — and
+  `getChronicleStats` — only queried category `'death'`
+  (`storyChronicleService.getRelevantContext`). The two labels never matched, so
+  a propagated death never reached the *guaranteed* deaths section; it could only
+  leak in via the budget-limited, recency-biased "recent/major facts" blocks, and
+  over a long campaign would silently drop out, freeing the DM to resurrect the
+  NPC.
+- **Fix.** Standardized new writes on the canonical `'death'` label, and made
+  every death read accept `category IN ('death','npc_death')` as belt-and-
+  suspenders so existing saves heal at read time without waiting on the
+  migration. Death facts are now also excluded from the generic budget blocks
+  (`NOT IN ('death','npc_death','promise')`) so they no longer double-count
+  against the context budget now that they sit in the guaranteed block. The
+  death→supersede-"alive"-fact path now recognizes both labels too.
+- **Migration 056** (`056_unify_death_canon_category.js`) relabels any legacy
+  `'npc_death'` canon facts to `'death'` so the stored data is uniform going
+  forward. Idempotent; `down()` is a deliberate no-op (post-migration, genuine
+  `'death'` facts and relabeled ones are indistinguishable).
+- **Tests.** New `tests/npc-death-canon.test.js` (9 assertions) proves a
+  propagated death lands under `'death'` and reaches the DEATHS block, a legacy
+  `'npc_death'` row still surfaces via the read guards, and the migration
+  relabels. Both the canonical-label and legacy-surfacing assertions fail on the
+  pre-fix code, so it is a real regression guard. Updated the
+  `npc-lifecycle.test.js` death-cascade assertion to the canonical label.
+
 ## [2.8.2] - 2026-06-09 — History-bounding pass: non-turn LLM input + fetch timeout
 
 Follow-up to 2.8.1, clearing the remaining second-pass-review items plus the

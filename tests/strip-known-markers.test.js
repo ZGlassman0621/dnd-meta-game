@@ -133,9 +133,10 @@ test('non-string input returned unchanged (null/undefined)', () => {
   assert.equal(stripKnownMarkers(undefined), undefined);
 });
 
-test('STRIP_MARKER_KEYS covers all 31 legacy markers', () => {
-  assert.equal(STRIP_MARKER_KEYS.length, 31);
-  for (const k of ['SCENE', 'COMBAT_END', 'LOOT_DROP', 'HP_CHANGE', 'PROMISE_FULFILLED']) {
+test('STRIP_MARKER_KEYS covers all 31 legacy markers + SET_FACT (Phase 2)', () => {
+  // 31 legacy bodied+bodyless markers, plus SET_FACT added in Phase 2.
+  assert.equal(STRIP_MARKER_KEYS.length, 32);
+  for (const k of ['SCENE', 'COMBAT_END', 'LOOT_DROP', 'HP_CHANGE', 'PROMISE_FULFILLED', 'SET_FACT']) {
     assert.ok(STRIP_MARKER_KEYS.includes(k), `${k} present`);
   }
 });

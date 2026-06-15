@@ -159,7 +159,7 @@ export async function compressMessageHistory(messages, sessionId, model) {
 // delete the middle. The prior implementation spliced head (first 14k) + tail
 // (last 14k) and dropped everything between, silently losing any death, promise,
 // or item that lived only in the middle of a long session.
-const SUMMARY_SINGLE_SHOT_CHARS = 30000;
+export const SUMMARY_SINGLE_SHOT_CHARS = 30000;
 const SUMMARY_CHUNK_CHARS = 24000;   // target transcript chars per map chunk
 const SUMMARY_MAX_CHUNKS = 8;        // cap LLM map calls; grow chunk size past this
 
@@ -220,7 +220,10 @@ async function summarizeText(input) {
 }
 
 /**
- * Generate a compressed summary of older messages.
+ * Generate a compressed summary of older messages (MAP-REDUCE, never drops the
+ * middle). Exported as `summarizeMessagesMapReduce` so other extractors (e.g. the
+ * story chronicle) can fold an over-long transcript down to a complete recap
+ * instead of head+tail splicing it.
  *
  * Short transcript → one summarization call. Long transcript → MAP-REDUCE: chunk
  * the messages on their boundaries, summarize each chunk, then fold the partial
@@ -228,11 +231,11 @@ async function summarizeText(input) {
  * splicing it out (the old head+tail truncation dropped load-bearing canon).
  *
  * @param {Array} messages - Messages to summarize
- * @param {string} model - retained for signature compatibility (compression is always Sonnet)
+ * @param {string} [model] - retained for signature compatibility (compression is always Sonnet)
  * @returns {Promise<string>} Compressed summary
  */
-async function generateMessageSummary(messages, model) {
-  const full = messagesToTranscript(messages);
+export async function summarizeMessagesMapReduce(messages, model) {
+  const full = messagesToTranscript(messages || []);
   if (full.length <= SUMMARY_SINGLE_SHOT_CHARS) {
     return summarizeText(full);
   }
@@ -264,10 +267,15 @@ async function generateMessageSummary(messages, model) {
   return combined;
 }
 
+// Back-compat alias for the prior private name used by compressMessageHistory.
+const generateMessageSummary = summarizeMessagesMapReduce;
+
 export default {
   estimateTokens,
   getModelLimits,
   calculateChronicleBudget,
   shouldCompress,
-  compressMessageHistory
+  compressMessageHistory,
+  chunkMessagesByChars,
+  summarizeMessagesMapReduce
 };

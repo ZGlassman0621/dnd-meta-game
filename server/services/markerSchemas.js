@@ -175,6 +175,31 @@ export const MARKER_SCHEMAS = {
     }
   },
 
+  // AI-declared dynamic flag/variable. The DM emits [SET_FACT] to record durable
+  // world/character state that must persist across turns (e.g. player hates_boats,
+  // an NPC's current location). Writes through recordCanonFact's field-aware
+  // supersede (Phase 1): (Subject, Category, Field) is a variable key — reusing a
+  // Field UPDATES the value rather than appending a near-duplicate fact. Handler
+  // lives in factFlagService.js.
+  SET_FACT: {
+    position: 'inline',
+    fields: {
+      Subject: { type: 'string', required: true },
+      Field: { type: 'string', required: true },
+      Value: { type: 'string', required: true },
+      Category: {
+        type: 'enum',
+        enum: ['npc', 'location', 'quest', 'item', 'secret', 'world_flag'],
+        required: false
+      },
+      Importance: {
+        type: 'enum',
+        enum: ['critical', 'major', 'minor', 'flavor'],
+        required: false
+      }
+    }
+  },
+
   // Scene snapshot for the cockpit "This scene" panel. Values are unquoted and
   // semicolon-separated in practice, so the route parses them directly; this
   // schema entry exists for marker-awareness + correction-loop coverage (all
@@ -201,11 +226,16 @@ export const MARKER_SCHEMAS = {
  *   extractMarkerBody("...[LOOT_DROP: Item="Gold" Source="chest"]...", "LOOT_DROP")
  *   → 'Item="Gold" Source="chest"'
  *
+ * The body may be introduced by a colon (`[KEY: body]`, the form the DM emits
+ * for the legacy markers) OR by whitespace (`[KEY body]`, the SET_FACT form).
+ * A bodyless `[KEY]` returns an empty string. Lazy body capture + a trailing
+ * `\s*]` keeps both forms unambiguous.
+ *
  * Returns all matches when `all=true`.
  */
 export function extractMarkerBodies(text, markerName, { all = false } = {}) {
   if (!text || typeof text !== 'string') return all ? [] : null;
-  const re = new RegExp(`\\[${markerName}(?:\\s*:\\s*([^\\]]*))?\\]`, all ? 'gi' : 'i');
+  const re = new RegExp(`\\[${markerName}(?:(?:\\s*:\\s*|\\s+)([^\\]]*?))?\\s*\\]`, all ? 'gi' : 'i');
   if (!all) {
     const m = re.exec(text);
     if (!m) return null;
@@ -390,6 +420,7 @@ export function validateDmMarkers(text) {
 // player-invisible marker is introduced.
 const STRIP_BODYLESS_MARKERS = ['COMBAT_END'];
 const STRIP_BODIED_MARKERS = [
+  'SET_FACT',
   'SCENE', 'MERCHANT_SHOP', 'MERCHANT_REFER', 'ADD_ITEM', 'LOOT_DROP', 'COMBAT_START',
   'HP_CHANGE', 'EFFECT_START', 'EFFECT_END', 'TURN', 'ROLL_REQUEST', 'SKILL_CHECK',
   'CONDITION_ADD', 'CONDITION_REMOVE', 'WEATHER_CHANGE', 'SHELTER_FOUND', 'SWIM',
@@ -406,8 +437,19 @@ export const STRIP_MARKER_KEYS = [...STRIP_BODIED_MARKERS, ...STRIP_BODYLESS_MAR
 // per-marker `\[KEY:[^\]]+\]\s*` / `\[COMBAT_END\]\s*` chain. The colon-body
 // requirement on bodied markers is preserved so a bodyless `[TURN]` is left
 // untouched exactly as before.
+//
+// SET_FACT gets an extra alternation arm: unlike the legacy markers (which the
+// DM always emits in colon form), SET_FACT is taught/emitted in the NO-COLON
+// form `[SET_FACT Subject="..." ...]` (matching extractMarkerBodies' tolerant
+// parse). The arm accepts either a `:` or a whitespace body-introducer, so both
+// `[SET_FACT: ...]` and `[SET_FACT ...]` are scrubbed; a bare `[SET_FACT]` with
+// no body is left alone, consistent with the bodyless convention.
 const STRIP_MARKER_RE = new RegExp(
-  `\\[(?:(?:${STRIP_BODIED_MARKERS.join('|')}):[^\\]]+|${STRIP_BODYLESS_MARKERS.join('|')})\\]\\s*`,
+  `\\[(?:` +
+    `SET_FACT(?:\\s*:\\s*|\\s+)[^\\]]+` +
+    `|(?:${STRIP_BODIED_MARKERS.join('|')}):[^\\]]+` +
+    `|${STRIP_BODYLESS_MARKERS.join('|')}` +
+  `)\\]\\s*`,
   'gi'
 );
 

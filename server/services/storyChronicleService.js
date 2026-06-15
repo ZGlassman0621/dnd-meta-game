@@ -15,7 +15,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { chat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
-import { estimateTokens } from '../utils/contextManager.js';
+import { estimateTokens, summarizeMessagesMapReduce, SUMMARY_SINGLE_SHOT_CHARS } from '../utils/contextManager.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 import { saveNpcConversation, recordInteraction } from './npcRelationshipService.js';
 import { setMood } from './companionBackstoryService.js';
@@ -33,9 +33,18 @@ import { propagateNpcDeath } from './npcLifecycleService.js';
  * @returns {object} The generated chronicle record
  */
 export async function generateSessionChronicle(sessionId) {
-  // Fetch session data
+  // Fetch session data. campaign_id and game_day live on the CHARACTER, not on
+  // dm_sessions (which only has game_start_day/game_end_day), so we LEFT JOIN
+  // characters and alias them back to session.campaign_id / session.game_day to
+  // keep every downstream reference unchanged. (The prior SELECT named
+  // dm_sessions.campaign_id / dm_sessions.game_day directly, which don't exist —
+  // it threw "no such column" before any chronicle could be written.)
   const session = await dbGet(
-    'SELECT id, character_id, campaign_id, messages, summary, game_day, created_at FROM dm_sessions WHERE id = ?',
+    `SELECT s.id, s.character_id, c.campaign_id AS campaign_id, s.messages, s.summary,
+            COALESCE(s.game_end_day, s.game_start_day, c.game_day) AS game_day, s.created_at
+       FROM dm_sessions s
+       LEFT JOIN characters c ON c.id = s.character_id
+      WHERE s.id = ?`,
     [sessionId]
   );
 
@@ -66,18 +75,44 @@ export async function generateSessionChronicle(sessionId) {
     return null;
   }
 
+  // story_chronicles.campaign_id is NOT NULL. A session whose character has no
+  // campaign (e.g. an orphaned/DM-mode row) can't get a meaningful chronicle —
+  // skip rather than throw on the INSERT. The recovery sweep relies on this
+  // returning null gracefully.
+  if (session.campaign_id === null || session.campaign_id === undefined) {
+    console.log(`[Chronicle] Session ${sessionId} has no campaign_id — skipping chronicle`);
+    return null;
+  }
+
   // Build transcript for AI analysis
   const transcript = conversation
     .map(m => `${m.role === 'user' ? 'PLAYER' : 'DM'}: ${m.content}`)
     .join('\n\n');
 
-  // Truncate very long transcripts
+  // Long transcripts: NEVER drop the middle. The old path spliced head (13k) +
+  // tail (26k) and discarded everything between — silently losing any death,
+  // promise, or item that lived only in the middle of a long session. Instead
+  // map-reduce the FULL conversation (chunk on message boundaries → summarize
+  // each chunk → fold) via contextManager's summarizer, then hand the chronicle
+  // extractor a complete recap. Threshold matches the summarizer's single-shot
+  // cutoff so we only pay for map-reduce when the transcript genuinely needs it.
   let input = transcript;
-  if (input.length > 40000) {
-    const third = 13000;
-    input = input.substring(0, third) +
-      '\n\n[...middle portion condensed...]\n\n' +
-      input.substring(input.length - third * 2);
+  if (transcript.length > SUMMARY_SINGLE_SHOT_CHARS) {
+    try {
+      const folded = await summarizeMessagesMapReduce(conversation, 'sonnet');
+      if (folded && folded.trim().length > 0) {
+        input =
+          'NOTE: This session was long; below is a complete, non-lossy recap of the ' +
+          'ENTIRE session (no portion was dropped) assembled from chunk summaries. ' +
+          'Extract the chronicle from it as if it were the full transcript.\n\n' +
+          folded.trim();
+      }
+      // If folding produced nothing usable, fall through with the full transcript
+      // (the downstream LLM can still handle it — completeness beats brevity).
+    } catch (e) {
+      console.error(`[Chronicle] Map-reduce summarization failed for session ${sessionId}, using full transcript:`, e.message);
+      // Leave `input = transcript` (full, un-truncated) — never silently drop the middle.
+    }
   }
 
   // Calculate session number for this campaign
@@ -336,22 +371,50 @@ Guidelines for npc_deaths:
 // ============================================================
 
 /**
- * Record a single canonical fact. Auto-supersedes conflicting older facts
- * on the same subject within the same category.
+ * Record a single canonical fact.
+ *
+ * Two distinct behaviors keyed on whether this fact is an explicit VARIABLE:
+ *
+ * - VARIABLE write (category in OVERWRITABLE AND a non-empty `field`): the fact
+ *   is keyed by (subject, category, field). On a key collision the NEWEST write
+ *   wins — every prior active row with the same key is retired via supersedeFact
+ *   (is_active=0 + superseded_by link). Unrelated attributes (different field)
+ *   are independent variables and untouched. The partial unique index
+ *   uq_canon_facts_variable (migration 057) backstops this at the storage layer.
+ *
+ * - FREE-FORM write (field null, or a non-overwritable category): CURRENT
+ *   behavior is preserved — deaths supersede matching 'alive' npc rows, and
+ *   verbatim-duplicate facts are deduped, but otherwise nothing is overwritten.
+ *
+ * @param {string} [field] - When non-empty AND category is overwritable, makes
+ *   this fact an overwritable variable keyed by (subject, category, field).
  */
-export async function recordCanonFact(campaignId, characterId, category, subject, fact, sessionId, gameDay, importance) {
+export async function recordCanonFact(campaignId, characterId, category, subject, fact, sessionId, gameDay, importance, field = null) {
   if (!fact || fact.trim().length === 0) return null;
+
+  // Category policy.
+  // TERMINAL    — deaths. NEVER superseded (protects "deaths don't resurrect").
+  // APPEND_ONLY — history. Never overwritten (events accumulate over time).
+  // OVERWRITABLE — mutable world state. Eligible for field-keyed variable supersede.
+  const TERMINAL = ['death', 'npc_death'];
+  const APPEND_ONLY = ['event', 'lore', 'player_choice'];
+  const OVERWRITABLE = ['npc', 'location', 'quest', 'item', 'secret', 'promise', 'world_flag'];
+
+  const isDeathCategory = TERMINAL.includes(category);
+  const hasField = typeof field === 'string' && field.trim().length > 0;
+  const isVariable = OVERWRITABLE.includes(category) && hasField;
 
   // Check for existing active facts about the same subject in the same category
   // that might be superseded by this new fact
-  if (category === 'death' || category === 'npc' || category === 'location') {
+  if (isDeathCategory || category === 'npc' || category === 'location') {
     const existingFacts = await dbAll(
       'SELECT id, fact FROM canon_facts WHERE campaign_id = ? AND character_id = ? AND subject = ? AND category = ? AND is_active = 1',
       [campaignId, characterId, subject, category]
     );
 
-    // For death facts, supersede any "alive" facts about the same subject
-    if (category === 'death') {
+    // For death facts, supersede any "alive" facts about the same subject.
+    // PRESERVED EXACTLY: deaths are terminal; this only retires stale 'alive' npc rows.
+    if (isDeathCategory) {
       const aliveFactIds = await dbAll(
         'SELECT id FROM canon_facts WHERE campaign_id = ? AND character_id = ? AND subject = ? AND category = "npc" AND is_active = 1 AND fact LIKE "%alive%"',
         [campaignId, characterId, subject]
@@ -371,20 +434,49 @@ export async function recordCanonFact(campaignId, characterId, category, subject
     }
   }
 
+  // VARIABLE supersede: newest write of (subject, category, field) wins.
+  // Retire prior active rows with the SAME variable key BEFORE inserting the
+  // new row — the partial unique index uq_canon_facts_variable allows only one
+  // active (field IS NOT NULL) row per key, so the old row must leave the active
+  // set first. We capture the ids here and link them to the new fact via
+  // superseded_by once we have the new id.
+  let priorVariableIds = [];
+  if (isVariable) {
+    const priorVariables = await dbAll(
+      `SELECT id FROM canon_facts
+       WHERE campaign_id = ? AND character_id = ? AND subject = ? AND category = ?
+       AND field = ? AND is_active = 1`,
+      [campaignId, characterId, subject, category, field.trim()]
+    );
+    priorVariableIds = priorVariables.map(r => r.id);
+    for (const id of priorVariableIds) {
+      // Retire without the link yet; superseded_by is set after the insert.
+      await dbRun('UPDATE canon_facts SET is_active = 0 WHERE id = ?', [id]);
+    }
+  }
+
   // Build tags from category and importance
   const tags = [category, importance].filter(Boolean).join(',');
 
   const result = await dbRun(`
     INSERT INTO canon_facts (
       campaign_id, character_id, category, subject, fact,
-      source_session_id, game_day, is_active, tags, importance
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      source_session_id, game_day, is_active, tags, importance, field
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
   `, [
     campaignId, characterId, category, subject, fact,
-    sessionId, gameDay, tags, importance
+    sessionId, gameDay, tags, importance, hasField ? field.trim() : null
   ]);
 
-  return Number(result.lastInsertRowid);
+  const newId = Number(result.lastInsertRowid);
+
+  // Link the retired variable rows to the new fact (superseded_by) now that the
+  // new row's is_active=0 contention is resolved.
+  for (const oldId of priorVariableIds) {
+    await supersedeFact(oldId, newId);
+  }
+
+  return newId;
 }
 
 /**
@@ -455,7 +547,7 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
   const deaths = await dbAll(
     `SELECT cf.*, sc.session_number FROM canon_facts cf
      LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
-     WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.category = 'death' AND cf.is_active = 1
+     WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.category IN ('death', 'npc_death') AND cf.is_active = 1
      ORDER BY cf.game_day DESC`,
     [campaignId, characterId]
   );
@@ -476,7 +568,7 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
     `SELECT cf.*, sc.session_number FROM canon_facts cf
      LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
      WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.importance = 'critical' AND cf.is_active = 1
-     AND cf.category NOT IN ('death', 'promise')
+     AND cf.category NOT IN ('death', 'npc_death', 'promise')
      ORDER BY cf.game_day DESC`,
     [campaignId, characterId]
   );
@@ -531,7 +623,7 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
        LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
        WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.is_active = 1
        AND cf.source_session_id IN (${placeholders})
-       AND cf.category NOT IN ('death', 'promise')
+       AND cf.category NOT IN ('death', 'npc_death', 'promise')
        AND cf.importance != 'critical'
        ORDER BY cf.game_day DESC, cf.id DESC`,
       [campaignId, characterId, ...recentSessionIds]
@@ -545,7 +637,7 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
       `SELECT cf.*, sc.session_number FROM canon_facts cf
        LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
        WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.importance = 'major' AND cf.is_active = 1
-       AND cf.category NOT IN ('death', 'promise')
+       AND cf.category NOT IN ('death', 'npc_death', 'promise')
        ORDER BY cf.game_day DESC`,
       [campaignId, characterId]
     );
@@ -570,7 +662,7 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
       `SELECT cf.*, sc.session_number FROM canon_facts cf
        LEFT JOIN story_chronicles sc ON cf.source_session_id = sc.session_id
        WHERE cf.campaign_id = ? AND cf.character_id = ? AND cf.importance IN ('minor', 'flavor') AND cf.is_active = 1
-       AND cf.category NOT IN ('death', 'promise')
+       AND cf.category NOT IN ('death', 'npc_death', 'promise')
        ORDER BY cf.game_day DESC`,
       [campaignId, characterId]
     );
@@ -732,7 +824,7 @@ export async function getChronicleStats(campaignId, characterId) {
 
   const deaths = await dbAll(
     `SELECT subject, fact FROM canon_facts
-     WHERE campaign_id = ? AND character_id = ? AND category = 'death' AND is_active = 1
+     WHERE campaign_id = ? AND character_id = ? AND category IN ('death', 'npc_death') AND is_active = 1
      ORDER BY game_day DESC`,
     [campaignId, characterId]
   );

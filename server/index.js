@@ -20,6 +20,8 @@ import aiBehaviorRoutes from './routes/aiBehavior.js';
 import authRoutes from './routes/auth.js';
 import authMiddleware from './middleware/auth.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
+import { startBackupScheduler } from './services/backupService.js';
+import { recoverAbandonedSessions } from './services/sessionRecoveryService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -89,3 +91,18 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// Automatic campaign backups (the cloud Turso save is otherwise un-backed-up).
+// Defensive: never throws into boot; opt out with BACKUP_DISABLE=1.
+startBackupScheduler();
+
+// Continuous persistence (Phase 3): on boot, chronicle any sessions that were
+// abandoned (browser closed / crash / sleep) before /end-session ran, so their
+// memory isn't lost. Deferred slightly (like the backup scheduler) so it never
+// competes with boot, and fully defensive — a failure here must not crash the
+// server. The sweep is idempotent (skips sessions that already have a chronicle).
+setTimeout(() => {
+  recoverAbandonedSessions().catch(e =>
+    console.error('[Recovery] Abandoned-session sweep failed:', e?.message || e)
+  );
+}, Number(process.env.RECOVERY_FIRST_DELAY_MS) || 15_000).unref?.();

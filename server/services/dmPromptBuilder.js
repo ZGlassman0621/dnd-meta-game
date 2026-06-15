@@ -2003,6 +2003,11 @@ Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitate
 
 Describe conditions physically (pale and stumbling if poisoned, trembling if frightened).`);
 
+  blocks.push(`──────────── DURABLE FACTS ────────────
+[SET_FACT Subject="..." Field="..." Value="..."] — INLINE. Record durable world/character state that must persist across turns.
+Examples: [SET_FACT Subject="player" Field="hates_boats" Value="true"]; [SET_FACT Subject="gareth" Field="location" Value="Waterdeep"].
+REUSE an existing lowercase snake_case Field to UPDATE its value — don't mint near-duplicate keys (use "location", not "current_location" / "where_is").`);
+
   blocks.push(`──────────── SCENE SNAPSHOT ────────────
 [SCENE: place=...; light=...; weather=...; mood=...] — when you include it, make it the LAST line of the response.
 A quiet display tag that fills the player's "This scene" panel. It never appears in your prose; the system strips it.

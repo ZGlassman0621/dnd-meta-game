@@ -14,6 +14,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { emit } from './eventEmitter.js';
 import { GAME_EVENTS } from '../config/eventTypes.js';
+import { recordCanonFact } from './storyChronicleService.js';
 
 // Valid lifecycle statuses
 const VALID_STATUSES = ['alive', 'deceased', 'missing', 'imprisoned', 'unknown'];
@@ -162,25 +163,32 @@ export async function propagateNpcDeath(npcId, campaignId, characterId, details 
     `, [activeCompanion.id]);
   }
 
-  // 3. Create canon fact
+  // 3. Create canon fact.
+  // Routed through recordCanonFact (instead of a raw INSERT) so EVERY death
+  // write goes through the single canon invariant gate — death is TERMINAL there
+  // and is never superseded, protecting "deaths don't resurrect."
+  // Category MUST be 'death' (the canonical label) — getRelevantContext's
+  // always-included "DEATHS (DO NOT RESURRECT)" block queries category='death'.
+  // Writing the legacy 'npc_death' here silently dropped propagated deaths from
+  // that guaranteed block, letting the DM resurrect dead NPCs over a long
+  // campaign. See migration 056 (relabels legacy rows) + read-side IN(...) guards.
+  // field is null: a death is free-form canon, not an overwritable variable.
   const causeText = details.cause || 'unknown causes';
   const locationText = details.location ? ` at ${details.location}` : '';
   const killerText = details.killer ? ` by ${details.killer}` : '';
   const factText = `${npc.name} died${killerText} from ${causeText}${locationText}.`;
 
-  await dbRun(`
-    INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, source_session_id, game_day, importance)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
+  await recordCanonFact(
     campaignId,
     characterId,
-    'npc_death',
+    'death',
     npc.name,
     factText,
     details.sessionId || null,
     details.gameDay || null,
-    'major'
-  ]);
+    'major',
+    null
+  );
 
   // 4. Void pending promises/debts
   const relationship = await dbGet(`
@@ -250,7 +258,7 @@ export async function syncDeathsFromCanonFacts(campaignId) {
   const deathFacts = await dbAll(`
     SELECT cf.subject, cf.fact, cf.game_day, cf.source_session_id, cf.character_id
     FROM canon_facts cf
-    WHERE cf.campaign_id = ? AND cf.category = 'npc_death' AND cf.is_active = 1
+    WHERE cf.campaign_id = ? AND cf.category IN ('death', 'npc_death') AND cf.is_active = 1
   `, [campaignId]);
 
   let synced = 0;

@@ -18,6 +18,9 @@ import '../services/combatMarkerService.js';
 // gameStateMarkerService registers the Phase B mechanical-spine handlers
 // (HP_CHANGE, EFFECT_START/END, TURN, ROLL_REQUEST) at module load.
 import '../services/gameStateMarkerService.js';
+// factFlagService registers the SET_FACT handler (AI-declared dynamic flags →
+// field-aware canon-fact supersede) at module load.
+import '../services/factFlagService.js';
 import { applyToMessages } from '../services/rollingSummaryService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
@@ -1824,6 +1827,13 @@ router.post('/:sessionId/message', async (req, res) => {
       else if (NOTORIETY_KEYS.has(hr.schemaKey)) notorietyEvents.push(hr.result);
     }
 
+    // Phase 2 — SET_FACT handlers (factFlagService) write AI-declared dynamic
+    // flags through the field-aware canon-fact supersede. Side effect done in
+    // the handler; route assembles the per-marker summaries for the response.
+    const setFacts = pipelineResult.handlerResults
+      .filter(hr => hr.ok && hr.schemaKey === 'SET_FACT' && hr.result)
+      .map(hr => hr.result);
+
     // Pillar 5: record distinctive imagery from this response so the next
     // prompt can tell the DM "don't reuse these." Strict on similes +
     // "X of Y" imagery; loose on functional language (see
@@ -1875,7 +1885,8 @@ router.post('/:sessionId/message', async (req, res) => {
       craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined,
       mythicEvents: mythicEvents.length > 0 ? mythicEvents : undefined,
       promiseEvents: promiseEvents.length > 0 ? promiseEvents : undefined,
-      notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined
+      notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined,
+      setFacts: setFacts.length > 0 ? setFacts : undefined
     });
   } catch (error) {
     // Tagged-error mapping (set by claude.js in service/claude.js error path).

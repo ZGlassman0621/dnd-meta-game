@@ -46,6 +46,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system (MVP — see ba
 - `npm run client` — Vite dev server only
 - `npm run build` — Production client build (or `node node_modules/vite/bin/vite.js build` from `client/` if the npm shim trips on the `&` path)
 - `npm run install-all` — Install root + client dependencies
+- `npm run backup` — One-off DB backup (cloud→portable `.sql` dump, local→file copy, in `backups/`). The server also backs up automatically on a schedule (see `backupService.js`); opt out with `BACKUP_DISABLE=1`.
 - Tests: `node tests/<testfile>.test.js` (no framework; cut-system tests are in `/archive/tests/`)
 
 ## Architecture
@@ -244,6 +245,7 @@ Phase 1–4 shipped; full plan in `PRELUDE_IMPLEMENTATION_PLAN.md`. Sessions pla
 - `server/utils/errorHandler.js` — `handleServerError`, `notFound`, `validationError`
 - `server/middleware/auth.js` — JWT middleware
 - `server/services/eventEmitter.js` — Event bus between game systems
+- `server/services/backupService.js` — DB backups: portable `.sql` dump for Turso cloud, byte-faithful file copy for local; `runBackup()` (shared by `scripts/backup.js`) + `startBackupScheduler()` (auto-runs from `index.js`, env-tunable, defensive — never crashes boot)
 
 ### Prompt builders & session
 - `server/services/dmPromptBuilder.js` — Player Mode DM system prompt
