@@ -168,13 +168,20 @@ export async function propagateNpcDeath(npcId, campaignId, characterId, details 
   const killerText = details.killer ? ` by ${details.killer}` : '';
   const factText = `${npc.name} died${killerText} from ${causeText}${locationText}.`;
 
+  // Category MUST be 'death' — that is the single canon-fact death category
+  // for the whole application. `storyChronicleService` reads deaths with
+  // `category = 'death'` (its recent-deaths query, the canon-fact budget
+  // sections, and the `NOT IN ('death','promise')` exclusions), and the LLM
+  // extraction prompt enumerates 'death' as the allowed value. This used to
+  // write 'npc_death', which no reader anywhere queried — every NPC death
+  // propagated here was invisible to the DM prompt.
   await dbRun(`
     INSERT INTO canon_facts (campaign_id, character_id, category, subject, fact, source_session_id, game_day, importance)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     campaignId,
     characterId,
-    'npc_death',
+    'death',
     npc.name,
     factText,
     details.sessionId || null,
@@ -245,12 +252,17 @@ export async function propagateNpcDeath(npcId, campaignId, characterId, details 
  * weren't propagated to the npcs table.
  *
  * Called at session start to catch any missed deaths.
+ *
+ * Reads 'death' — the same category `recordCanonFact` writes from chronicle
+ * extraction. It previously read 'npc_death', which only `propagateNpcDeath`
+ * ever wrote, so the reconciler could only ever see deaths that had already
+ * been propagated: it was a no-op against the exact case it exists for.
  */
 export async function syncDeathsFromCanonFacts(campaignId) {
   const deathFacts = await dbAll(`
     SELECT cf.subject, cf.fact, cf.game_day, cf.source_session_id, cf.character_id
     FROM canon_facts cf
-    WHERE cf.campaign_id = ? AND cf.category = 'npc_death' AND cf.is_active = 1
+    WHERE cf.campaign_id = ? AND cf.category = 'death' AND cf.is_active = 1
   `, [campaignId]);
 
   let synced = 0;

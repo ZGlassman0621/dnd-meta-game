@@ -1,6 +1,8 @@
 /**
  * Tests for NPC lifecycle state machine and personality enrichment (Components A + B).
- * Run: node tests/npc-lifecycle.test.js
+ * Run: npm test npc-lifecycle   — NEVER `node tests/npc-lifecycle.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Covers:
  * - Valid lifecycle transitions (alive, missing, imprisoned, deceased)
@@ -9,7 +11,7 @@
  * - NPC enrichment fields (voice, personality, mannerism, etc.)
  * - Death propagation cascade (companion, canon_fact, narrative_queue)
  *
- * Uses the same local.db database; all test data prefixed with TEST_ and cleaned up.
+ * All test data prefixed with TEST_ and cleaned up.
  */
 
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';
@@ -274,10 +276,13 @@ async function testDeathPropagation() {
   const companionAfter = await dbGet('SELECT status FROM companions WHERE id = ?', [companion.id]);
   assertEqual(companionAfter.status, 'deceased', 'Companion status changed to deceased after NPC death');
 
-  // Verify canon_fact was created for the death
+  // Verify canon_fact was created for the death, under the ONE category the
+  // rest of the app reads deaths with. Asserting the exact string is the
+  // point of this check: writing 'npc_death' here (as this did) made every
+  // propagated death invisible to storyChronicleService's 'death' queries.
   const deathFact = await dbGet(`
     SELECT * FROM canon_facts
-    WHERE campaign_id = ? AND category = 'npc_death' AND subject = 'TEST_NPC_Death_Propagation'
+    WHERE campaign_id = ? AND category = 'death' AND subject = 'TEST_NPC_Death_Propagation'
   `, [testCampaignId]);
   assert(deathFact !== null && deathFact !== undefined, 'Canon fact created recording the NPC death');
 
