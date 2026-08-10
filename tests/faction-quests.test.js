@@ -7,7 +7,9 @@
  * - Quest type handling ('faction_conflict')
  * - Living world integration (conflict quest in rival reactions)
  *
- * Run: node tests/faction-quests.test.js
+ * Run: npm test faction-quests   — NEVER `node tests/faction-quests.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import {

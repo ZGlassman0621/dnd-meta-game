@@ -23,7 +23,11 @@
  * runs sessions in production). Outputs land in
  * tests/output/prose-quality-results.md for human read-and-rank.
  *
- * Run: node tests/prose-quality.test.js
+ * Run: TEST_INCLUDE_LLM=1 npm test prose-quality — excluded from the default
+ *      run because it makes BILLED Anthropic calls. Never `node
+ *      tests/prose-quality.test.js` directly: only run-tests.js redirects
+ *      TURSO_DATABASE_URL to a throwaway file, so a bare `node` run writes
+ *      into the LIVE campaign database.
  * Requires ANTHROPIC_API_KEY in .env.
  */
 

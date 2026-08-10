@@ -1,6 +1,8 @@
 /**
  * Tests for narrative queue service: add, retrieve, deliver, expire, format, and stats.
- * Run: node tests/narrative-queue.test.js
+ * Run: npm test narrative-queue   — NEVER `node tests/narrative-queue.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Covers:
  * - addToQueue: insert and return parsed items

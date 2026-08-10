@@ -6,7 +6,9 @@
  * Each scenario seeds data, exercises the real services, and prints
  * detailed narrative output.
  *
- * Run: node tests/scenarios.test.js
+ * Run: npm test scenarios   — NEVER `node tests/scenarios.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import express from 'express';

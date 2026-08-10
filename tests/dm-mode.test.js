@@ -1,6 +1,8 @@
 /**
  * Tests for DM Mode: marker detection, segment parsing, prompt building.
- * Run: node tests/dm-mode.test.js
+ * Run: npm test dm-mode   — NEVER `node tests/dm-mode.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import {

@@ -1,6 +1,8 @@
 /**
  * Tests for companion skill modifier calculation and prompt injection.
- * Run: node tests/companion-skill-checks.test.js
+ * Run: npm test companion-skill-checks   — NEVER `node tests/companion-skill-checks.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { SKILL_ABILITY_MAP, computeSkillModifiers, computePassivePerception, formatCompanionProgressionLines } from '../server/services/dmPromptBuilder.js';

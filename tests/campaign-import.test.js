@@ -1,6 +1,8 @@
 /**
  * Campaign Import integration tests
- * Run: node tests/campaign-import.test.js
+ * Run: npm test campaign-import   — NEVER `node tests/campaign-import.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Uses port 3001 to avoid conflicts with dev server.
  * All test data prefixed with TEST_ and cleaned up at the end.

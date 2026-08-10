@@ -1,6 +1,8 @@
 /**
  * Weather System Tests — Config tables, weather service functions, and DM marker detection.
- * Run: node tests/weather.test.js
+ * Run: npm test weather   — NEVER `node tests/weather.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import {

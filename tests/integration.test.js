@@ -1,6 +1,8 @@
 /**
  * Integration tests — starts a real Express server, seeds data, hits real endpoints.
- * Run: node tests/integration.test.js
+ * Run: npm test integration   — NEVER `node tests/integration.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Uses port 3001 to avoid conflicts with dev server.
  * Uses the same local.db database; all test data prefixed with TEST_ and cleaned up.

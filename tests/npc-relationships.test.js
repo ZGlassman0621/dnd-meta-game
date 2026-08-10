@@ -1,6 +1,8 @@
 /**
  * Tests for NPC relationship service functions.
- * Run: node tests/npc-relationships.test.js
+ * Run: npm test npc-relationships   — NEVER `node tests/npc-relationships.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Tests getOrCreateRelationship, adjustDisposition, adjustTrust,
  * recordInteraction, getNpcsByLocation, and disposition label ranges.

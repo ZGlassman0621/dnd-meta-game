@@ -1,7 +1,9 @@
 /**
  * Tests for the living world tick pipeline: processLivingWorldTick,
  * getWorldState, and getCharacterWorldView.
- * Run: node tests/living-world.test.js
+ * Run: npm test living-world   — NEVER `node tests/living-world.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * All test data prefixed with TEST_ and cleaned up at the end.
  * Some subsystems (companion activities, NPC mail) depend on AI calls —

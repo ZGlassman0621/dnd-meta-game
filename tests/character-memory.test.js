@@ -2,7 +2,9 @@
  * Tests for character memory system and player autonomy enforcement.
  * Verifies extraction prompt, memory formatting, update logic, and prompt injection.
  *
- * Run: node tests/character-memory.test.js
+ * Run: npm test character-memory   — NEVER `node tests/character-memory.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { createDMSystemPrompt } from '../server/services/dmPromptBuilder.js';

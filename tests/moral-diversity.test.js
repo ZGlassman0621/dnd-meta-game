@@ -5,7 +5,9 @@
  *
  * Also tests the session start date randomization fix.
  *
- * Run: node tests/moral-diversity.test.js
+ * Run: npm test moral-diversity   — NEVER `node tests/moral-diversity.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { createDMSystemPrompt } from '../server/services/dmPromptBuilder.js';

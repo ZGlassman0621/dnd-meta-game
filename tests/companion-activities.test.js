@@ -3,7 +3,9 @@
  * Verifies sendOnActivity, getAwayCompanions, getActiveActivities,
  * cancelActivity, recallCompanion, dismiss soft-delete, and activity type validation.
  *
- * Run: node tests/companion-activities.test.js
+ * Run: npm test companion-activities   — NEVER `node tests/companion-activities.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Uses local.db directly via initDatabase. All test data prefixed with TEST_ and cleaned up.
  */

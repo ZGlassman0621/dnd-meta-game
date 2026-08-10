@@ -1,6 +1,8 @@
 /**
  * Tests for condition tracking: data validation, marker detection, auto-clear, prompt formatting.
- * Run: node tests/condition-tracking.test.js
+ * Run: npm test condition-tracking   — NEVER `node tests/condition-tracking.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { detectConditionChanges, formatConditionsForAI, CONDITION_NAMES } from '../server/data/conditions.js';

@@ -1,7 +1,9 @@
 /**
  * Tests for NPC mail/message system: candidate scoring, mail type selection,
  * template generation, and MAIL_TYPES constant.
- * Run: node tests/npc-mail.test.js
+ * Run: npm test npc-mail   — NEVER `node tests/npc-mail.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import {

@@ -6,7 +6,9 @@
  * resolveForNpc against every audience rule (default, friends, allied,
  * devoted, specific_npc, role, bard override), and clean up on exit.
  *
- * Run: node tests/nickname-resolver.test.js
+ * Run: npm test nickname-resolver   — NEVER `node tests/nickname-resolver.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { initDatabase, dbGet, dbRun, dbAll } from '../server/database.js';

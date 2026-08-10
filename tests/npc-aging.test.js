@@ -2,7 +2,9 @@
  * Tests for NPC aging and absence effects (Component H).
  * Verifies decay formulas, absence thresholds, integration processing, and reunion boosts.
  *
- * Run: node tests/npc-aging.test.js
+ * Run: npm test npc-aging   — NEVER `node tests/npc-aging.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';

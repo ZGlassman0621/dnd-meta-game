@@ -1,6 +1,8 @@
 /**
  * Tests for combat marker detection and initiative rolling.
- * Run: node tests/combat-tracker.test.js
+ * Run: npm test combat-tracker   — NEVER `node tests/combat-tracker.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
 import { detectCombatStart, detectCombatEnd, estimateEnemyDexMod } from '../server/services/dmSessionService.js';

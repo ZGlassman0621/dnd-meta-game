@@ -2,7 +2,9 @@
  * Tests for world event NPC effects (Component G).
  * Verifies generateNpcEffectsForEvent, getActiveNpcEffects, resolveNpcEffectsForEvent.
  *
- * Run: node tests/world-event-npcs.test.js
+ * Run: npm test world-event-npcs   — NEVER `node tests/world-event-npcs.test.js` directly:
+ *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
+ *      file, so a bare `node` run writes into the LIVE campaign database.
  *
  * Uses the local.db database; all test data prefixed with TEST_ and cleaned up.
  */
