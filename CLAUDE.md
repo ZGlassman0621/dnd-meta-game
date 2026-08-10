@@ -50,6 +50,8 @@ The suite runs against a throwaway SQLite file — **never** the live database. 
 
 **Known failing (pre-existing, not yours):** `campaign-import.test.js` and `integration.test.js` need a running dev server; `world-event-npcs.test.js` has a real FK bug. `integration.test.js` is also intermittently flaky under the shared test DB.
 
+**Testing anything that calls an LLM** — use `tests/helpers/llmHarness.js`. `installLlmStub()` swaps `globalThis.fetch`, so it intercepts every `api.anthropic.com` request without touching production code, and the real `claude.js` still runs (cache-tier splitting, retry triage, error tagging). `startTurnServer()` mounts the DM router on an ephemeral port — never import `server/index.js` in a test, it calls `app.listen(3000)` at import time. Cost safety is structural: no request escapes, and in the default strict mode an unscripted call throws instead of reaching the network. Don't script `429`/`529`/`503`/`500` — `claude.js` retries those with real backoff, up to ~60s; use `401` for the error path.
+
 ### 4. Feature flags, not commented-out code
 Subsystems are switched off via `server/config/featureFlags.js`. Flags are **getters** that read `process.env` at access time — that is deliberate, and it is what lets a test opt back into a subsystem after imports are hoisted:
 
@@ -109,7 +111,10 @@ All defaults live in `server/config/featureFlags.js`.
 6. Handler results folded into `result.messages`.
 7. **Exactly one** `UPDATE dm_sessions SET messages`.
 
-`tests/turn-write-ordering.test.js` enforces steps 4–7 structurally. It is a source-level guard because there is no stubbed-LLM harness; **building one and replacing that test is the highest-value testing work outstanding.**
+Two tests cover this path, and they cover different things:
+
+- `tests/turn-e2e.test.js` drives the real route over HTTP against a real database with only the Anthropic transport stubbed (`tests/helpers/llmHarness.js`). It asserts on behaviour: markers apply, the player-facing narrative is marker-free while stored history keeps markers intact, a malformed marker queues then consumes a correction, 0 HP triggers a system-rolled death save, a failed LLM call writes nothing, and a concurrent POST gets `409` before the model is called.
+- `tests/turn-write-ordering.test.js` still enforces steps 4–7 **structurally**, and is not redundant: on the happy path both orderings produce identical output, so no behavioural test can see the difference.
 
 **Do not wrap marker dispatch in `db.transaction('write')`.** libSQL transactions are connection-scoped while all 26 handlers write through `dbRun` on the outer client, so it would roll back nothing while taking a `BEGIN IMMEDIATE` lock that the handlers then contend against — and `markerPipeline` swallows handler errors into `{ok:false}`, so the failure would surface as a `200` with a saved narrative and no effects. Real turn atomicity needs an `AsyncLocalStorage`-backed ambient executor in `server/database.js`; that is its own project.
 
@@ -161,7 +166,7 @@ Unbounded prompt growth is the failure mode that would eventually end a long cam
 
 Verified during the Phase 1–3 refactor; none of it is scheduled yet.
 
-- **No stubbed-LLM harness.** The turn handler cannot be tested end to end. Biggest gap.
+- **`dm_sessions` has no `campaign_id` column**, so `session.campaign_id` in `dmSession.js` is always `undefined` — it reaches `ai_call_log` as a null. The campaign is only reachable via `characters.campaign_id`.
 - **The prelude runs two parsers** over the same text (`validateDmMarkers` + `detectPreludeMarkers`) and carries an ordering invariant (`AGE_ADVANCE` → `HP_CHANGE`) that the pipeline's declaration-order dispatch cannot express.
 - **Marker lists drift by hand** — `MARKER_SCHEMAS`, the prompt text, the strip regexes, and the handler registry are maintained separately. `preludeMarkerDetection.js` already has a catch-all strip regex worth adopting.
 - **`ai_call_log` has no archival job.** It stores full prompts and full conversation history per call, growing quadratically within a session. This makes backups progressively more expensive.

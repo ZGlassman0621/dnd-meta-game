@@ -2,6 +2,27 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.169] - 2026-08-10 — Phase 3.5: the stubbed-LLM harness
+
+Closes the gap `CLAUDE.md` named as the biggest one: the turn handler could not be tested end to end, so `turn-write-ordering.test.js` had to assert on the handler's *source text* rather than its behaviour.
+
+**`tests/helpers/llmHarness.js`.** The seam is `globalThis.fetch`. Every Anthropic request in the codebase bottoms out in a bare `fetch(...)` inside `services/claude.js`, and `fetch` resolves at call time — so replacing the global intercepts calls made by modules imported long before. This buys three things a module-level mock of `claude.chat` would not: **zero production code changes** (no injectable transport, no `NODE_ENV === 'test'` branch in a gameplay path); **the real `claude.js` runs**, so three-tier cache splitting, status-class retry triage, `cleanupResponse` and the `AUTH_FAILURE:`/`OVERLOADED:` error tagging are all under test; and **request assertions**, so a test can check what actually reached the model.
+
+Cost safety is structural, not conventional — the stub intercepts every `api.anthropic.com` request and forwards none, so a test cannot spend money even with a live key in the environment, and in the default strict mode an *unscripted* call throws rather than falling through to the network. Test 9 asserts exactly that. Ollama's `:11434` is intercepted too (reporting "running, model not installed"), because otherwise `getLLMProvider`'s auto-fallback probes a real daemon and results differ per machine. Everything else passes through to the captured real `fetch`.
+
+`startTurnServer()` mounts the DM router on an ephemeral port rather than importing `server/index.js`, which calls `app.listen(3000)` at import time and wraps every `/api` route in `authMiddleware`.
+
+**`tests/turn-e2e.test.js`** — 45 assertions over the real route, real database, stubbed transport: a marker drives a real DB write while being stripped from the player-facing narrative and kept intact in stored history; live vitals are injected fresh each turn and *replaced* rather than accreted; a malformed marker queues a correction that the next turn injects and consumes; 0 HP triggers a system-rolled death save appended to the AI's history; a failed LLM call writes nothing and leaves the session replayable; a concurrent POST gets `409` **before** the model is called.
+
+`turn-write-ordering.test.js` is kept, not replaced. On the happy path both orderings of dispatch-and-persist produce identical output, so no behavioural test can distinguish them — the structural guard is the only thing that can.
+
+**Two documentation corrections** (rule 1 — a doc that lies gets fixed in the same change):
+
+- `markerPipeline.js`'s header still read *"No handlers are registered yet at SC-6.1 ship"*. It was accurate the day it was written and stayed there while 26 handlers accumulated; an audit then built a finding on it, concluding the codebase ran two competing marker pipelines. Corrected in place rather than deleted, because the failure mode is the point.
+- `dm_sessions` has **no `campaign_id` column**, so `session.campaign_id` in `dmSession.js` is always `undefined` and reaches `ai_call_log` as a null. Recorded under known structural debt.
+
+Suite: 75/78 files green → **76/79 green, 4456 assertions passing** (+45), same three pre-existing failures.
+
 ## [1.0.0.168] - 2026-08-09 — Phases 1-3 of the "scale back to scale up" refactor
 
 Cut the system to a stable narrative core, hardened persistence, then made combat mechanically real. Executed against `CAMPAIGN_READINESS_AUDIT.md`, but **only after verifying every claim** — three of the plan's steps turned out to target code that does not behave as the audit described, and were corrected or dropped. `CLAUDE.md` was rewritten from scratch for the new architecture.

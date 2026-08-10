@@ -1,30 +1,33 @@
 /**
- * Marker pipeline (Phase 3 SC-6.1).
+ * Marker pipeline — validation and dispatch for AI-emitted markers.
  *
- * Two parallel marker-processing pipelines run in the codebase today:
- *   1. Schema-driven (`markerSchemas.js` + `ruleVerifiers.js` + correction-loop)
- *      — validates AI output, surfaces correction notes for next-turn re-emission,
- *      but DOES NOT drive side effects.
- *   2. Ad-hoc detect-functions sprawl (`dmSessionService.js` ~28 functions)
- *      — drives side effects, but lacks schema validation, has 28 separate
- *      regex parsers with inconsistent error handling, and silently drops
- *      malformed markers.
+ * This is THE marker pipeline. All ~26 handled marker schemas dispatch through
+ * `processResponseMarkers` below; each handler is registered by the service
+ * that owns its side effect, at that service's module load. A handler service
+ * must therefore be imported for side effect in `routes/dmSession.js` or it
+ * silently never runs.
  *
- * SC-6.1 lays the foundation for consolidation: a small dispatch module that
- * pairs each existing marker schema with a registered handler. The handler
- * is the single place that knows about the consumer service. Per spec §3.3,
- * this is the integration point with §3.1's standing-scalar abstraction —
- * standing markers like [PIETY_CHANGE] and [BOND_SHIFT] become handlers
- * that call `adjustStanding(...)`.
+ * CORRECTION (Phase 3.5): this header previously read "No handlers are
+ * registered yet at SC-6.1 ship; behavior is unchanged", describing the state
+ * on the day the module landed. It stayed there while 26 handlers accumulated,
+ * and a subsequent audit built a whole finding on it — concluding the codebase
+ * ran two competing marker pipelines and that the "legacy" detect-functions
+ * needed deleting. It does not, and they did not. The note is corrected here
+ * rather than removed, because the failure mode is worth remembering: a comment
+ * describing a moment in time reads as a description of the present.
  *
- * Per spec §3.7 + DECISION_LOG entry 2026-05-03: this module wires
- * ALONGSIDE the existing detect-functions in routes/dmSession.js. No
- * handlers are registered yet at SC-6.1 ship; behavior is unchanged.
- * SC-2 through SC-5 register their per-system handlers as part of those
- * sub-checkpoints (§4.2 — handlers move WITH abstraction migrations to
- * keep the codebase honest about half-implementations).
+ * What is genuinely still true:
+ *   • `markerSchemas.js` defines ~50 schemas; a schema with no handler is a
+ *     legitimate end state, because validation alone feeds the correction loop.
+ *   • `ruleVerifiers.js` stays a parallel sibling — text-pattern detection with
+ *     no schema. The two are combined only at the last mile, in
+ *     `buildPendingCorrectionsNote`.
+ *   • Handler errors are CONTAINED: they land in `handlerResults` as
+ *     `{ok:false}` and never throw. That is why marker dispatch must not be
+ *     wrapped in a transaction — a rolled-back turn would surface as a 200 with
+ *     a saved narrative and no effects. See CLAUDE.md, "The turn loop".
  *
- * Public API (per spec §3.7):
+ * Public API:
  *   registerHandler(schemaKey, handler)
  *   processResponseMarkers(text, context) → { handlerResults, failures }
  *   buildPendingCorrectionsNote({ markerFailures, ruleViolations }) → string|null
