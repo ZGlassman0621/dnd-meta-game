@@ -17,6 +17,7 @@ import { chat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { estimateTokens } from '../utils/contextManager.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
+import { safeParse } from '../utils/safeParse.js';
 import { saveNpcConversation, recordInteraction } from './npcRelationshipService.js';
 import { setMood } from './companionBackstoryService.js';
 import { propagateNpcDeath } from './npcLifecycleService.js';
@@ -33,9 +34,25 @@ import { propagateNpcDeath } from './npcLifecycleService.js';
  * @returns {object} The generated chronicle record
  */
 export async function generateSessionChronicle(sessionId) {
-  // Fetch session data
+  // Fetch session data.
+  //
+  // BUG FIX (Phase 4): this query used to read `campaign_id` and `game_day`
+  // directly off `dm_sessions`. Neither column exists — `dm_sessions` has
+  // `game_start_day`/`game_end_day` and reaches the campaign only through
+  // `characters`. The query therefore threw `no such column: campaign_id` on
+  // EVERY call, and the sole caller (routes/dmSession.js session end) swallows
+  // chronicle errors into a console.error. The result was silent and total:
+  // `story_chronicles` was never written, so `getSessionSummariesForPrompt`
+  // always returned [] and the DM's cross-session memory fell back to the
+  // thinner `dm_sessions.summary` text. Canon facts were never recorded either.
   const session = await dbGet(
-    'SELECT id, character_id, campaign_id, messages, summary, game_day, created_at FROM dm_sessions WHERE id = ?',
+    `SELECT s.id, s.character_id, s.messages, s.summary, s.created_at,
+            s.game_start_day, s.game_end_day,
+            c.campaign_id AS campaign_id,
+            c.game_day    AS character_game_day
+       FROM dm_sessions s
+       LEFT JOIN characters c ON c.id = s.character_id
+      WHERE s.id = ?`,
     [sessionId]
   );
 
@@ -43,6 +60,26 @@ export async function generateSessionChronicle(sessionId) {
     console.error(`[Chronicle] Session ${sessionId} not found`);
     return null;
   }
+
+  // story_chronicles.campaign_id is NOT NULL, so a character with no campaign
+  // would fail on INSERT after we had already paid for the extraction call.
+  // Bail before spending the tokens, and say why — this is the visible edge of
+  // the known `characters.campaign_id is not set at creation` gap.
+  if (!session.campaign_id) {
+    console.warn(
+      `[Chronicle] Session ${sessionId}: character ${session.character_id} has no campaign_id, ` +
+      'so no chronicle can be recorded. Assign the character to a campaign to enable ' +
+      'cross-session memory.'
+    );
+    return null;
+  }
+
+  // The session spans from the day it opened to wherever the campaign clock now
+  // sits. Session end advances characters.game_day BEFORE calling this, and
+  // writes dm_sessions.game_end_day AFTER, so the character row is the
+  // authoritative end day at this moment.
+  const gameDayStart = session.game_start_day ?? session.character_game_day ?? null;
+  const gameDayEnd = session.game_end_day ?? session.character_game_day ?? gameDayStart;
 
   // Check if chronicle already exists
   const existing = await dbGet('SELECT id FROM story_chronicles WHERE session_id = ?', [sessionId]);
@@ -199,8 +236,8 @@ Guidelines for npc_deaths:
       session.character_id,
       sessionId,
       sessionNumber,
-      session.game_day || null,
-      session.game_day || null,
+      gameDayStart,
+      gameDayEnd,
       chronicle.summary || '',
       JSON.stringify(chronicle.key_decisions || []),
       JSON.stringify(chronicle.npcs_involved || []),
@@ -228,7 +265,7 @@ Guidelines for npc_deaths:
           fact.subject || 'Unknown',
           fact.fact || '',
           sessionId,
-          session.game_day || null,
+          gameDayEnd,
           fact.importance || 'minor'
         );
       }
@@ -249,7 +286,7 @@ Guidelines for npc_deaths:
             session.character_id,
             npc.id,
             sessionId,
-            session.game_day || null,
+            gameDayEnd,
             {
               summary: conv.summary,
               topics: conv.topics || [],
@@ -260,7 +297,7 @@ Guidelines for npc_deaths:
             }
           );
           // Update last_interaction_game_day for NPC aging system
-          await recordInteraction(session.character_id, npc.id, null, session.game_day || null);
+          await recordInteraction(session.character_id, npc.id, null, gameDayEnd);
           conversationsSaved++;
         } catch (e) {
           console.error(`[Chronicle] Failed to save conversation with ${conv.npc_name}:`, e.message);
@@ -289,7 +326,7 @@ Guidelines for npc_deaths:
             moodChange.new_mood,
             moodChange.cause || null,
             moodChange.intensity || 3,
-            session.game_day || null
+            gameDayEnd
           );
           moodChanges++;
         } catch (e) {
@@ -310,7 +347,7 @@ Guidelines for npc_deaths:
         try {
           await propagateNpcDeath(npc.id, session.campaign_id, session.character_id, {
             cause: death.cause || 'Died during session',
-            gameDay: session.game_day || null,
+            gameDay: gameDayEnd,
             location: death.location || null,
             killer: death.killer || null,
             sessionId
@@ -645,6 +682,217 @@ export async function getSessionSummariesForPrompt(
   );
 }
 
+// ============================================================
+// CHRONICLE ROLLUP (Phase 4)
+// ============================================================
+
+/**
+ * How many of the newest chronicles stay verbatim in the DM prompt. Everything
+ * older is compressed into the running rollup. Deliberately the same number as
+ * `SESSION_SUMMARY_PROMPT_LIMIT` — the verbatim window and the prompt window
+ * are the same window, and letting them drift apart would either drop sessions
+ * that were never rolled up or duplicate ones that were.
+ */
+export const CHRONICLE_VERBATIM_TAIL = SESSION_SUMMARY_PROMPT_LIMIT;
+
+/** Hard ceiling on the stored rollup, so the "compressed" half cannot itself grow without bound. */
+export const MAX_ROLLUP_CHARS = 6000;
+
+/**
+ * Read the stored "campaign so far" rollup, if one exists.
+ */
+export async function getCampaignRollup(campaignId, characterId) {
+  if (!campaignId || !characterId) return null;
+  return await dbGet(
+    `SELECT summary, through_session_number, sessions_rolled, updated_at
+       FROM campaign_chronicle_rollups
+      WHERE campaign_id = ? AND character_id = ?`,
+    [campaignId, characterId]
+  );
+}
+
+/**
+ * Fold every chronicle older than the verbatim tail into one running summary.
+ *
+ * Incremental by design. The existing rollup paragraph plus only the chronicles
+ * that have newly aged out are sent to the model, which returns a single
+ * rewritten paragraph. Re-reading the entire campaign each time would make the
+ * call grow linearly with campaign length — the exact unbounded cost this
+ * exists to prevent.
+ *
+ * A no-op (returning `{rolled: false}`) until the campaign actually has more
+ * chronicles than the verbatim tail, and again whenever no chronicle has aged
+ * out since the last roll. Short campaigns never pay for it at all.
+ *
+ * Uses Sonnet, matching `generateSessionChronicle` — this is extraction and
+ * compression, not gameplay prose.
+ *
+ * @returns {Promise<{rolled: boolean, reason?: string, throughSession?: number, sessionsRolled?: number, newlyRolled?: number}>}
+ */
+export async function rollUpOldChronicles(campaignId, characterId, options = {}) {
+  if (!campaignId || !characterId) {
+    return { rolled: false, reason: 'missing campaign or character' };
+  }
+
+  const tail = options.verbatimTail ?? CHRONICLE_VERBATIM_TAIL;
+
+  const totalRow = await dbGet(
+    `SELECT COUNT(*) AS count, MAX(session_number) AS newest
+       FROM story_chronicles
+      WHERE campaign_id = ? AND character_id = ?`,
+    [campaignId, characterId]
+  );
+  const total = totalRow?.count || 0;
+
+  if (total <= tail) {
+    return { rolled: false, reason: 'campaign is still shorter than the verbatim window' };
+  }
+
+  // Everything at or below this session number has aged out of the verbatim
+  // window. Computed from session_number rather than a row offset so a gap in
+  // the sequence (a session that never produced a chronicle) cannot shift the
+  // boundary and silently skip a session.
+  const boundaryRow = await dbGet(
+    `SELECT MIN(session_number) AS cutoff FROM (
+       SELECT session_number
+         FROM story_chronicles
+        WHERE campaign_id = ? AND character_id = ?
+        ORDER BY session_number DESC
+        LIMIT ?
+     )`,
+    [campaignId, characterId, tail]
+  );
+  const oldestVerbatim = boundaryRow?.cutoff;
+  if (!oldestVerbatim) {
+    return { rolled: false, reason: 'could not resolve the verbatim boundary' };
+  }
+
+  const existing = await getCampaignRollup(campaignId, characterId);
+  const alreadyThrough = existing?.through_session_number || 0;
+
+  const pending = await dbAll(
+    `SELECT session_number, summary, mood, cliffhanger, key_decisions,
+            game_day_start, game_day_end
+       FROM story_chronicles
+      WHERE campaign_id = ? AND character_id = ?
+        AND session_number < ?
+        AND session_number > ?
+      ORDER BY session_number ASC`,
+    [campaignId, characterId, oldestVerbatim, alreadyThrough]
+  );
+
+  if (pending.length === 0) {
+    return { rolled: false, reason: 'no chronicles have aged out since the last rollup' };
+  }
+
+  const renderChronicle = (c) => {
+    const days = c.game_day_start && c.game_day_end
+      ? ` (days ${c.game_day_start}-${c.game_day_end})`
+      : '';
+    const decisions = typeof c.key_decisions === 'string'
+      ? (safeParse(c.key_decisions, []) ?? [])
+      : (c.key_decisions || []);
+    const decisionText = Array.isArray(decisions) && decisions.length > 0
+      ? '\nKey decisions: ' + decisions
+          .slice(0, 3)
+          .map(d => (d.decision || d) + (d.consequence ? ` → ${d.consequence}` : ''))
+          .join('; ')
+      : '';
+    return `Session ${c.session_number}${days}: ${c.summary || '(no summary)'}` +
+      (c.cliffhanger ? `\nUnresolved: ${c.cliffhanger}` : '') +
+      decisionText;
+  };
+
+  const newestPending = pending[pending.length - 1].session_number;
+  const sessionsRolled = (existing?.sessions_rolled || 0) + pending.length;
+
+  const systemPrompt = `You are maintaining the long-term memory of an ongoing solo D&D campaign.
+
+You will be given the current "campaign so far" summary (possibly empty, if this is the first rollup) and the chronicles of sessions that have just aged out of recent memory. Merge them into a SINGLE updated "campaign so far" summary.
+
+Rules:
+- Write 3-6 dense paragraphs, at most ${Math.floor(MAX_ROLLUP_CHARS * 0.9)} characters. Prose, not bullet points.
+- Past tense, third person, narrative voice. This is read by a Dungeon Master, not a player.
+- PRESERVE, at any cost: character deaths, promises and debts made or owed, betrayals, standing enemies and allies, permanent changes to the world, items of lasting significance, and anything left unresolved.
+- COMPRESS aggressively: travel, shopping, routine combat, atmosphere, and any thread that was opened and closed within the rolled-up sessions.
+- Name people and places explicitly. "An old friend" is useless to a DM; "Marta the innkeeper at Phandalin" is not.
+- Where an older thread was later resolved, say so and stop carrying its detail.
+- Do NOT invent anything. If the material is thin, the summary is short.
+- Output ONLY the summary text. No preamble, no headings, no markdown.`;
+
+  const userContent =
+    `CURRENT CAMPAIGN-SO-FAR SUMMARY (sessions 1-${alreadyThrough}):\n` +
+    `${existing?.summary || '(none — this is the first rollup)'}\n\n` +
+    `NEWLY AGED-OUT SESSIONS (${pending[0].session_number}-${newestPending}):\n\n` +
+    pending.map(renderChronicle).join('\n\n');
+
+  let summary;
+  try {
+    const response = await loggedChat(
+      {
+        character_id: characterId,
+        campaign_id: campaignId,
+        prompt_builder: 'storyChronicleService',
+        call_purpose: 'chronicle_rollup',
+        metadata: {
+          through_session: newestPending,
+          newly_rolled: pending.length,
+          previous_through: alreadyThrough
+        }
+      },
+      systemPrompt,
+      [{ role: 'user', content: userContent }],
+      2,
+      'sonnet',
+      2000,
+      true // raw — this is prose, and cleanupResponse strips trailing parentheticals
+    );
+    summary = (response || '').trim();
+  } catch (e) {
+    console.error('[Chronicle] rollup LLM call failed:', e?.message);
+    return { rolled: false, reason: `llm call failed: ${e?.message}` };
+  }
+
+  if (!summary) {
+    // Writing an empty rollup would advance through_session_number past
+    // material that was never actually compressed — the campaign's early
+    // history would be dropped from the prompt with nothing standing in for it.
+    return { rolled: false, reason: 'model returned an empty summary' };
+  }
+
+  if (summary.length > MAX_ROLLUP_CHARS) {
+    console.warn(
+      `[Chronicle] rollup for campaign ${campaignId} came back at ${summary.length} chars; ` +
+      `truncating to ${MAX_ROLLUP_CHARS}.`
+    );
+    summary = summary.slice(0, MAX_ROLLUP_CHARS);
+  }
+
+  await dbRun(
+    `INSERT INTO campaign_chronicle_rollups
+       (campaign_id, character_id, summary, through_session_number, sessions_rolled, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT (campaign_id, character_id) DO UPDATE SET
+       summary = excluded.summary,
+       through_session_number = excluded.through_session_number,
+       sessions_rolled = excluded.sessions_rolled,
+       updated_at = datetime('now')`,
+    [campaignId, characterId, summary, newestPending, sessionsRolled]
+  );
+
+  console.log(
+    `[Chronicle] rolled up sessions ${pending[0].session_number}-${newestPending} ` +
+    `for campaign ${campaignId} (${sessionsRolled} session(s) now compressed into ${summary.length} chars)`
+  );
+
+  return {
+    rolled: true,
+    throughSession: newestPending,
+    sessionsRolled,
+    newlyRolled: pending.length
+  };
+}
+
 /**
  * Get all session chronicles for a campaign
  */
@@ -763,8 +1011,11 @@ export default {
   recordCanonFact,
   supersedeFact,
   getRelevantContext,
+  getSessionSummariesForPrompt,
   getChroniclesForCampaign,
   getTimelineForCharacter,
   searchFacts,
-  getChronicleStats
+  getChronicleStats,
+  getCampaignRollup,
+  rollUpOldChronicles
 };

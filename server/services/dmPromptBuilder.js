@@ -981,15 +981,46 @@ IMPORTANT: Reference this downtime ONCE at the start, then move on. Don't keep b
 }
 
 /**
+ * Render the compressed "campaign so far" block.
+ *
+ * Labelled explicitly as compressed and as the earlier part of the same
+ * campaign. Without that framing the DM reads two overlapping accounts of the
+ * same events and treats the older one as a separate, earlier campaign.
+ */
+function formatCampaignRollup(rollup) {
+  if (!rollup || !rollup.summary) return '';
+  const through = rollup.through_session_number;
+  const span = through ? `sessions 1-${through}` : 'the early sessions';
+  return `THE CAMPAIGN SO FAR (${span}, compressed):
+These sessions are summarised rather than shown in full because the campaign has run long. They are no less canon for it — treat every name, debt, grudge and unresolved thread here as live.
+
+${rollup.summary}`;
+}
+
+/**
  * Format previous session summaries for campaign continuity.
  * Prefers richer chronicle summaries (300-500 words with mood/cliffhanger) when available.
+ *
+ * Phase 4 adds a two-tier history. `campaignRollup` is the compressed
+ * "campaign so far" covering everything that has aged out of the verbatim
+ * window (see storyChronicleService.rollUpOldChronicles); `chronicleSummaries`
+ * remains the newest sessions, verbatim. Before this, a campaign past session
+ * 10 simply stopped showing the DM its own beginning.
  */
-function formatPreviousSessionSummaries(summaries, isContinuing, chronicleSummaries = []) {
+function formatPreviousSessionSummaries(summaries, isContinuing, chronicleSummaries = [], campaignRollup = null) {
   // Use chronicle summaries if available (richer data), otherwise fall back to dm_sessions summaries
   const hasChronicles = chronicleSummaries && chronicleSummaries.length > 0;
   const hasSummaries = summaries && summaries.length > 0;
+  const hasRollup = !!(campaignRollup && campaignRollup.summary);
 
-  if (!hasChronicles && !hasSummaries) return '';
+  if (!hasChronicles && !hasSummaries && !hasRollup) return '';
+
+  // The rollup alone is still worth rendering — a campaign with a rollup but
+  // no verbatim chronicles would otherwise show the DM nothing at all.
+  if (!hasChronicles && !hasSummaries) {
+    return `\n\nPREVIOUS ADVENTURES — FULL CAMPAIGN HISTORY:
+${formatCampaignRollup(campaignRollup)}`;
+  }
 
   let summaryDescriptions;
 
@@ -1025,11 +1056,14 @@ function formatPreviousSessionSummaries(summaries, isContinuing, chronicleSummar
     });
   }
 
+  const rollupBlock = hasRollup ? `${formatCampaignRollup(campaignRollup)}\n\n` : '';
+  const recentHeader = hasRollup ? 'RECENT SESSIONS (in full):\n\n' : '';
+
   return `\n\nPREVIOUS ADVENTURES — FULL CAMPAIGN HISTORY:
 This character has a rich history of previous adventures. ALL of these events are CANON — they happened and shape the ongoing story.
 NPCs remember the character. Consequences of past actions persist. The story is deeply connected across sessions.
 
-${summaryDescriptions.join('\n\n')}
+${rollupBlock}${recentHeader}${summaryDescriptions.join('\n\n')}
 
 USING THIS HISTORY:
 - Reference past events naturally when they become relevant — NPCs may mention them, consequences may surface
@@ -1329,9 +1363,23 @@ When inventing historical references, use dates 50-200 years BEFORE ${campaignYe
 
   if (planSummary.current_act) {
     const act = planSummary.current_act;
-    sections.push(`CURRENT ACT (Act ${act.act_number || 1}): ${act.title || 'The Beginning'}
+    // Phase 4 — the act number comes from the campaign's stored pointer
+    // (`campaigns.current_act_index`), not from the act object, because plans
+    // do not reliably carry `act_number` and the pointer is what actually
+    // moved. `act.act_number` remains a fallback for imported plans that do
+    // number their acts.
+    const actNumber = planSummary.current_act_number || act.act_number || 1;
+    const ofTotal = planSummary.total_acts > 1 ? ` of ${planSummary.total_acts}` : '';
+    // The "start at the starting location" instruction belongs to act one
+    // only. Carrying it into act three would pin an advanced campaign back to
+    // the town it opened in.
+    const openingConstraint =
+      !isImported && actNumber === 1
+        ? ' IMPORTANT: The opening scene must take place at the character\'s STARTING LOCATION (see WORLD SETTING above) — build toward this act\'s events from there, do not skip ahead.'
+        : '';
+    sections.push(`CURRENT ACT (Act ${actNumber}${ofTotal}): ${act.title || 'The Beginning'}
 ${act.summary || act.description || ''}
-Use this act to guide the current story arc.${!isImported ? ' IMPORTANT: The opening scene must take place at the character\'s STARTING LOCATION (see WORLD SETTING above) — build toward this act\'s events from there, do not skip ahead.' : ''}`);
+Use this act to guide the current story arc.${openingConstraint}`);
   }
 
   if (planSummary.world_state) {
@@ -2461,7 +2509,7 @@ ${char2 ? '\n\n' + char2.dynamicText : ''}
 ${sessionContext.usedNames?.length > 0 ? `\nNAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n` : ''}
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}
-${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.pietyContext ? '\n\n' + sessionContext.pietyContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
+${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries, sessionContext.campaignRollup)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.pietyContext ? '\n\n' + sessionContext.pietyContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 
 ═══════════════════════════════════════════════════════════════
 BEFORE YOU SEND — SELF-CHECK

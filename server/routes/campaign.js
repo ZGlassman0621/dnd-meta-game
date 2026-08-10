@@ -214,6 +214,43 @@ router.get('/:id/plan/summary', async (req, res) => {
   }
 });
 
+// GET /api/campaign/:id/act - Current act pointer + resolved act (Phase 4)
+router.get('/:id/act', async (req, res) => {
+  try {
+    const act = await campaignPlanService.getCampaignAct(req.params.id);
+    if (!act) return res.status(404).json({ error: 'Campaign not found' });
+    res.json(act);
+  } catch (error) {
+    handleServerError(res, error, 'fetch campaign act');
+  }
+});
+
+// POST /api/campaign/:id/act/advance - Move the main arc forward one act.
+// Explicit rather than automatic: see advanceCampaignAct's note on why no
+// mechanical trigger drives this.
+router.post('/:id/act/advance', async (req, res) => {
+  try {
+    const result = await campaignPlanService.advanceCampaignAct(req.params.id);
+    res.json(result);
+  } catch (error) {
+    handleServerError(res, error, 'advance campaign act');
+  }
+});
+
+// PUT /api/campaign/:id/act - Set the act pointer directly (0-based, clamped)
+router.put('/:id/act', async (req, res) => {
+  try {
+    const { index } = req.body;
+    if (!Number.isInteger(index) || index < 0) {
+      return res.status(400).json({ error: 'index must be a non-negative integer' });
+    }
+    const result = await campaignPlanService.setCampaignAct(req.params.id, index);
+    res.json(result);
+  } catch (error) {
+    handleServerError(res, error, 'set campaign act');
+  }
+});
+
 // PUT /api/campaign/:id/plan/:section - Update a section of the campaign plan
 router.put('/:id/plan/:section', async (req, res) => {
   try {

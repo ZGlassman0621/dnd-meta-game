@@ -342,6 +342,23 @@ export async function seedTurnFixture(dbRun, opts = {}) {
     `You are the Dungeon Master for ${prefix} Hero, a level 3 Fighter.\n` +
     'Narrate the scene and emit mechanical markers where appropriate.'
 
+  // Opening exchange, then `playerTurns` played rounds on top.
+  //
+  // Session end counts player actions as user messages at index > 1, so the
+  // opening prompt does not count as one. A fixture left at zero played turns
+  // takes the "the adventure ended before it truly began" early return, which
+  // skips rewards, the game-date advance, the chronicle and the world tick
+  // entirely — pass `playerTurns: 1` for any test that ends a session.
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: 'Begin the adventure.' },
+    { role: 'assistant', content: 'You stand at the gates of a ruined keep.' }
+  ]
+  for (let i = 0; i < (opts.playerTurns ?? 0); i++) {
+    messages.push({ role: 'user', content: `I press deeper into the keep. (turn ${i + 1})` })
+    messages.push({ role: 'assistant', content: `The corridor opens ahead. (turn ${i + 1})` })
+  }
+
   // NOTE: dm_sessions has no campaign_id column — the campaign is reached
   // through characters.campaign_id. (routes/dmSession.js passes
   // `session.campaign_id` into the ai_call_log payload, where it is always
@@ -354,11 +371,7 @@ export async function seedTurnFixture(dbRun, opts = {}) {
     [
       characterId,
       `${prefix} Session`,
-      JSON.stringify([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Begin the adventure.' },
-        { role: 'assistant', content: 'You stand at the gates of a ruined keep.' }
-      ]),
+      JSON.stringify(messages),
       100,
       1492
     ]

@@ -9,15 +9,25 @@
  * the result was readable. It also backed up the wrong database entirely when
  * TURSO_DATABASE_URL is set — which is the normal configuration here.
  *
- * Two paths, chosen by config:
+ * Two paths, chosen by the URL SCHEME — not by whether TURSO_DATABASE_URL is
+ * merely set:
  *
- *  - Turso configured → pull the remote database down into a local file using
- *    an embedded replica sync. VACUUM INTO cannot be used here: it executes on
- *    the Turso server and writes to the server's filesystem, so it produces
- *    nothing on this machine.
+ *  - A remote scheme (libsql://, https://, http://, wss://, ws://) → pull the
+ *    remote database down into a local file using an embedded replica sync.
+ *    VACUUM INTO cannot be used here: it executes on the Turso server and
+ *    writes to the server's filesystem, so it produces nothing on this machine.
  *
- *  - Local file → `VACUUM INTO`, which SQLite guarantees is a consistent
- *    snapshot of a live database, unlike a file copy.
+ *  - A local file (TURSO_DATABASE_URL unset, or set to a `file:` URL) →
+ *    `VACUUM INTO`, which SQLite guarantees is a consistent snapshot of a live
+ *    database, unlike a file copy.
+ *
+ * The scheme check matters (Phase 4 fix). `database.js` accepts a `file:` URL
+ * in TURSO_DATABASE_URL and treats it as a plain local database — that is
+ * exactly what the test runner sets. Detecting the cloud path from presence
+ * alone sent a `file:` URL into `syncUrl`, where the libsql native layer
+ * PANICS on the invalid URI. A Rust panic is not catchable by the try/catch
+ * around this call, so the fire-and-forget session-end backup took the whole
+ * process down instead of logging a failure.
  *
  * Every backup is verified by reopening it and reading its schema before older
  * backups are pruned, so a failed backup can never evict a good one.
@@ -38,6 +48,39 @@ const LOCAL_DB = path.join(ROOT, 'local.db');
 
 /** How many backups to keep. Older ones are pruned newest-first. */
 const RETAIN = Number(process.env.BACKUP_RETAIN || 10);
+
+/** Schemes libSQL serves over the network; everything else is a local file. */
+const REMOTE_SCHEMES = ['libsql:', 'https:', 'http:', 'wss:', 'ws:'];
+
+/**
+ * Decide what we are backing up, from the configured URL's scheme.
+ *
+ * @returns {{remote: boolean, sourceFile: string|null}} `sourceFile` is the
+ *   local database to VACUUM from; null on the remote path.
+ */
+function resolveBackupSource() {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (!url) return { remote: false, sourceFile: LOCAL_DB };
+
+  let scheme;
+  try {
+    scheme = new URL(url).protocol;
+  } catch {
+    // Not a URL at all — treat it as a bare filesystem path.
+    return { remote: false, sourceFile: path.resolve(ROOT, url) };
+  }
+
+  if (REMOTE_SCHEMES.includes(scheme)) return { remote: true, sourceFile: null };
+
+  if (scheme === 'file:') {
+    // `file:local.db` is relative and does NOT survive fileURLToPath, so strip
+    // the scheme by hand and resolve against the project root — matching how
+    // libSQL itself interprets it.
+    return { remote: false, sourceFile: path.resolve(ROOT, url.slice('file:'.length)) };
+  }
+
+  return { remote: false, sourceFile: path.resolve(ROOT, url) };
+}
 
 function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -103,12 +146,12 @@ async function backupTurso(target) {
   }
 }
 
-async function backupLocal(target) {
-  console.log('Backing up local SQLite database via VACUUM INTO…');
-  if (!fs.existsSync(LOCAL_DB)) {
-    throw new Error(`No local.db found at ${LOCAL_DB} — nothing to back up.`);
+async function backupLocal(target, sourceFile = LOCAL_DB) {
+  console.log(`Backing up local SQLite database via VACUUM INTO… (${sourceFile})`);
+  if (!fs.existsSync(sourceFile)) {
+    throw new Error(`No database found at ${sourceFile} — nothing to back up.`);
   }
-  const client = createClient({ url: `file:${LOCAL_DB}` });
+  const client = createClient({ url: pathToFileURL(sourceFile).href });
   try {
     // VACUUM INTO refuses to overwrite, which is what we want — the timestamped
     // name should always be fresh.
@@ -121,15 +164,15 @@ async function backupLocal(target) {
 async function main() {
   fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
-  const isTurso = Boolean(process.env.TURSO_DATABASE_URL);
-  const name = `${isTurso ? 'turso' : 'local'}-${timestamp()}.db`;
+  const { remote, sourceFile } = resolveBackupSource();
+  const name = `${remote ? 'turso' : 'local'}-${timestamp()}.db`;
   const target = path.join(BACKUPS_DIR, name);
 
   try {
-    if (isTurso) {
+    if (remote) {
       await backupTurso(target);
     } else {
-      await backupLocal(target);
+      await backupLocal(target, sourceFile);
     }
   } catch (e) {
     console.error(`Backup FAILED: ${e.message}`);

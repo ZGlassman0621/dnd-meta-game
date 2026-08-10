@@ -27,10 +27,18 @@ export const FEATURE_FLAGS = {
   /**
    * The whole living-world tick: faction goals, world events, NPC mail, base
    * income, notoriety decay, merchant order fulfilment, base threats.
-   * OFF for MVP — the world is deliberately static.
+   *
+   * ON as of Phase 4. It was off through the MVP scale-back so the narrative
+   * core could be stabilised against a deliberately static world; that job is
+   * done. It is now driven by in-game time at session end
+   * (`POST /:sessionId/end`, ticking `daysElapsed`) rather than by a UI button,
+   * so the world advances by exactly the span the adventure consumed.
+   *
+   * Turning it back off is still a one-value change and remains safe: the tick
+   * self-guards and returns its full result shape either way.
    */
   get LIVING_WORLD_TICK() {
-    return flag('FF_LIVING_WORLD_TICK', false);
+    return flag('FF_LIVING_WORLD_TICK', true);
   },
 
   /** NPC absence/aging effects applied at session start. */
@@ -56,10 +64,13 @@ export const FEATURE_FLAGS = {
    * Player actions that queue a resolution the tick would later deliver:
    * companion away-activities, merchant commissions, fortress threats.
    *
-   * Bound to the tick on purpose. With the tick off these never resolve, so a
-   * companion sent away never returns and a commissioned item never arrives —
-   * a soft-lock rather than a paused system. Keeping them off while the world
-   * is static is what makes the scale-back safe.
+   * Still OFF, but the reason has changed. Through the scale-back this was
+   * bound to the tick: with the tick off these never resolve, so a companion
+   * sent away never returns — a soft-lock rather than a paused system. Phase 4
+   * turned the tick back on, so that blocker is gone and this is now simply an
+   * un-taken decision. Enabling it is a one-value change; it is left off
+   * because nobody has playtested the deferred-resolution loop against the
+   * time-driven tick yet.
    */
   get DEFERRED_RESOLUTION_ACTIONS() {
     return flag('FF_DEFERRED_RESOLUTION_ACTIONS', false);

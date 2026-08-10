@@ -353,6 +353,97 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 }
 
 /**
+ * Queue narrative-queue entries for the tick outcomes that have no other route
+ * into the next session's prompt (Phase 4).
+ *
+ * Most of what the tick produces already queues itself at the point of
+ * production, and re-queueing it here would double every entry:
+ *   • faction quests      → spawnFactionQuestForMilestone → 'quest_available'
+ *   • merchant orders     → step 3.9 → 'merchant_order_ready' / '_expired'
+ *   • base threats        → baseThreatService → 'base_threat_*'
+ *   • NPC mail            → npcMailService → 'npc_mail'
+ *   • overdue promises    → consequenceService
+ *   • notoriety           → notorietyService
+ *
+ * The gap is faction-milestone and goal-completion **world events**. Those
+ * create a `world_events` row and nothing more. That row only reaches the DM
+ * prompt through `getEventsVisibleToCharacter`, which filters by visibility —
+ * so a `secret` escalation moves the world with no trace anywhere the DM can
+ * see it, and the player experiences the consequences with no lead-up.
+ *
+ * Entries are capped, and a truncation is logged rather than silently dropped:
+ * a fifty-day gap can spawn a lot of milestones at once, and flooding the queue
+ * would push genuinely urgent items out of the next prompt's budget.
+ *
+ * Best-effort throughout — the narrative queue is enrichment, and a failure
+ * here must not fail the session end that triggered the tick.
+ *
+ * @returns {Promise<{queued: number, skipped: number}>}
+ */
+export async function queueTickHighlights(campaignId, characterId, results, options = {}) {
+  const maxEntries = options.maxEntries ?? 5;
+  const outcome = { queued: 0, skipped: 0 };
+
+  if (!campaignId || !characterId || !results) return outcome;
+
+  // Faction quests carry quest_id and queued themselves; world events carry
+  // event_id and did not.
+  const worldEvents = (results.spawned_events || []).filter(e => e && e.event_id);
+
+  // A goal can cross several milestones in one multi-day tick, each spawning
+  // its own event row. Keep the highest milestone per goal so the DM gets
+  // "nears goal" rather than a three-line crescendo.
+  const byGoal = new Map();
+  for (const e of worldEvents) {
+    const key = e.goal_id ?? `event:${e.event_id}`;
+    const existing = byGoal.get(key);
+    if (!existing || (e.milestone || 0) > (existing.milestone || 0)) {
+      byGoal.set(key, e);
+    }
+  }
+
+  const candidates = [...byGoal.values()].sort((a, b) => (b.milestone || 0) - (a.milestone || 0));
+  const selected = candidates.slice(0, maxEntries);
+  outcome.skipped = candidates.length - selected.length;
+
+  if (outcome.skipped > 0) {
+    console.warn(
+      `[livingWorld] campaign ${campaignId}: ${candidates.length} world events spawned this tick, ` +
+      `queueing the ${selected.length} highest-milestone ones. ${outcome.skipped} not queued ` +
+      `(they still exist as world_events rows).`
+    );
+  }
+
+  for (const e of selected) {
+    try {
+      await narrativeQueueService.addToQueue({
+        campaign_id: campaignId,
+        character_id: characterId,
+        event_type: 'world_event_escalated',
+        priority: (e.milestone || 0) >= 75 ? 'high' : 'normal',
+        title: e.title || 'The world shifts',
+        description:
+          `While the party was occupied, this developed: ${e.title || 'an unnamed event'}` +
+          (e.milestone ? ` (faction goal now ~${e.milestone}% complete).` : '.') +
+          ' Surface it as rumour, consequence, or changed circumstance — not as an announcement.',
+        context: {
+          world_event_id: e.event_id,
+          faction_id: e.faction_id,
+          goal_id: e.goal_id,
+          milestone: e.milestone,
+          triggered_by: e.triggered_by || 'living_world_tick'
+        }
+      });
+      outcome.queued++;
+    } catch (err) {
+      console.error('[livingWorld] failed to queue tick highlight (non-fatal):', err?.message);
+    }
+  }
+
+  return outcome;
+}
+
+/**
  * Check faction goal results and spawn world events for significant milestones.
  * Also checks for rival faction reactions at milestones >= 50%.
  */
@@ -1017,6 +1108,7 @@ function groupBy(array, key) {
 
 export default {
   processLivingWorldTick,
+  queueTickHighlights,
   processCharacterTimeAdvance,
   getWorldState,
   getCharacterWorldView

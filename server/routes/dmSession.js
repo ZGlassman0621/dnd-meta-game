@@ -9,7 +9,7 @@ import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
 import { getNarrativeContextForSession, markNarrativeItemsDelivered, onDMSessionStarted } from '../services/narrativeIntegration.js';
 import { getPlanSummaryForSession } from '../services/campaignPlanService.js';
-import { getCharacterWorldView, processLivingWorldTick } from '../services/livingWorldService.js';
+import { getCharacterWorldView, processLivingWorldTick, queueTickHighlights } from '../services/livingWorldService.js';
 import { getActiveFactions } from '../services/factionService.js';
 // SC-6.4c: addPromise / fulfillPromise / getPendingPromises /
 // adjustDisposition / adjustTrust no longer imported — PROMISE_MADE +
@@ -75,7 +75,7 @@ import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVe
 import { processResponseMarkers } from '../services/markerPipeline.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
 import { initTranscript, appendToTranscript, getTurnCount, getTranscript } from '../utils/sessionTranscript.js';
-import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt } from '../services/storyChronicleService.js';
+import { generateSessionChronicle, getRelevantContext, getSessionSummariesForPrompt, getCampaignRollup, rollUpOldChronicles } from '../services/storyChronicleService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
 import { resolveForNpcBatch as resolveNicknamesForNpcBatch } from '../services/nicknameService.js';
 import { getCompanionProgression, ensureCompanionProgressionInitialized } from '../services/progressionCompanionService.js';
@@ -853,6 +853,7 @@ router.post('/start', async (req, res) => {
       notorietyContextResult,
       projectsContextResult,
       chronicleSummariesResult,
+      campaignRollupResult,
       progression,
       secondaryProgression,
       nicknameResolutionsResult
@@ -871,6 +872,11 @@ router.post('/start', async (req, res) => {
       campaignId
         ? getSessionSummariesForPrompt(campaignId, characterId).catch(e => { console.error('Error chronicle summaries:', e); return []; })
         : Promise.resolve([]),
+      // Phase 4 — the compressed half of campaign history. Pairs with the
+      // verbatim chronicles above; see rollUpOldChronicles.
+      campaignId
+        ? getCampaignRollup(campaignId, characterId).catch(e => { console.error('Error chronicle rollup:', e); return null; })
+        : Promise.resolve(null),
       getCharacterProgression(characterId).catch(e => { console.error('Error progression primary:', e); return null; }),
       secondCharacterId
         ? getCharacterProgression(secondCharacterId).catch(e => { console.error('Error progression secondary:', e); return null; })
@@ -907,6 +913,7 @@ router.post('/start', async (req, res) => {
     const notorietyContext = notorietyContextResult;
     const projectsContext = projectsContextResult;
     const chronicleSummaries = chronicleSummariesResult;
+    const campaignRollup = campaignRollupResult;
     const nicknameResolutions = nicknameResolutionsResult;
 
     let mythicContext = '';
@@ -949,6 +956,7 @@ router.post('/start', async (req, res) => {
       campaignPlanSummary,
       chronicleContext,
       chronicleSummaries,
+      campaignRollup,
       weatherContext,
       survivalContext,
       craftingContext,
@@ -2682,6 +2690,57 @@ router.post('/:sessionId/end', async (req, res) => {
     await dbRun('UPDATE characters SET game_day = ?, game_year = ? WHERE id = ?',
       [newGameDate.day, newGameDate.year, session.character_id]);
 
+    // ─────────── PHASE 4: THE WORLD MOVES WITH IN-GAME TIME ───────────
+    // The living-world tick used to run only when someone pressed a button —
+    // a debug endpoint, or the meta-game "advance time" control. That made the
+    // world's motion an out-of-character chore, and a player who never touched
+    // those screens played in a world frozen since session one.
+    //
+    // Session end is the right driver: it is the one moment the campaign clock
+    // moves a meaningful amount, and `daysElapsed` above is exactly the amount
+    // it moved. Ticking here means the world advances by the same span the
+    // adventure consumed, with no UI involvement at all.
+    //
+    // ORDERING IS LOAD-BEARING: this must run AFTER the characters.game_day
+    // UPDATE above. The tick derives its own clock from
+    // `MAX(game_day) FROM characters WHERE campaign_id = ?` for weather, world
+    // events, mail, consequences, notoriety, merchant orders and base threats.
+    // Ticking before the write would advance the world against the day the
+    // session STARTED on, so every deadline would resolve one session late.
+    //
+    // Gated on FEATURE_FLAGS.LIVING_WORLD_TICK. The tick self-guards too and
+    // returns its full result shape when disabled; the check here is so a
+    // disabled world costs nothing rather than paying for a no-op call.
+    let worldTick = null;
+    if (FEATURE_FLAGS.LIVING_WORLD_TICK && character.campaign_id && daysElapsed > 0) {
+      try {
+        worldTick = await processLivingWorldTick(character.campaign_id, daysElapsed);
+
+        const failedSteps = (worldTick.step_statuses || []).filter(s => s.status === 'failed');
+        console.log(
+          `[living-world] session ${sessionId}: ticked ${daysElapsed} day(s) — ` +
+          `${worldTick.faction_results?.length || 0} faction goal(s), ` +
+          `${worldTick.spawned_events?.length || 0} event(s) spawned, ` +
+          `${failedSteps.length} step(s) failed`
+        );
+
+        // Feed the outcomes into the next session's prompt. Only the world
+        // events spawned here need it — every other subsystem the tick touches
+        // queues its own entries. See queueTickHighlights.
+        const queued = await queueTickHighlights(
+          character.campaign_id, session.character_id, worldTick
+        );
+        if (queued.queued > 0) {
+          console.log(`[living-world] queued ${queued.queued} narrative item(s) for the next session`);
+        }
+      } catch (e) {
+        // A world that failed to advance is a strictly better outcome than a
+        // session that failed to end. The turn's rewards, chronicle and game
+        // date are all still recorded below.
+        console.error('[living-world] tick failed at session end (non-fatal):', e?.message);
+      }
+    }
+
     // Extract campaign notes
     let extractedNotes = '';
     try {
@@ -2821,6 +2880,31 @@ router.post('/:sessionId/end', async (req, res) => {
       console.error('Error generating story chronicle:', e);
     }
 
+    // Phase 4 — compress whatever just aged out of the verbatim window.
+    //
+    // Must run AFTER generateSessionChronicle: this session's chronicle is what
+    // pushes the oldest one out of the window, so rolling first would leave the
+    // campaign permanently one session behind.
+    //
+    // Cheap in the common case — it reads two counts and returns without an
+    // LLM call unless a chronicle actually aged out, which for a 10-session
+    // window means at most once per session and never at all before session 11.
+    try {
+      if (character.campaign_id) {
+        const rollup = await rollUpOldChronicles(character.campaign_id, session.character_id);
+        if (rollup.rolled) {
+          console.log(
+            `[chronicle] rolled ${rollup.newlyRolled} session(s) into the campaign summary ` +
+            `(now covering 1-${rollup.throughSession})`
+          );
+        }
+      }
+    } catch (e) {
+      // Losing a rollup costs prompt fidelity next session, not data — the
+      // chronicles themselves are untouched and the next roll retries.
+      console.error('Error rolling up chronicles (non-fatal):', e?.message);
+    }
+
     // (Old prelude completion hook removed in v1.0.44 — the origin-story
     // system is gone. The prelude-forward creator's transition is handled
     // by its own [PRELUDE_END] marker in Phase 5, not this code path.)
@@ -2898,7 +2982,20 @@ router.post('/:sessionId/end', async (req, res) => {
       analysis: rewardsAnalysis,
       daysElapsed,
       newGameDate: dayToDate(newGameDate.day, newGameDate.year),
-      npcsExtracted: extractedNpcs.length > 0 ? extractedNpcs : undefined
+      npcsExtracted: extractedNpcs.length > 0 ? extractedNpcs : undefined,
+      // Phase 4 — what the world did while the session ran. Undefined when the
+      // tick is disabled or no in-game time passed.
+      worldTick: worldTick
+        ? {
+            daysElapsed,
+            factionGoalsAdvanced: worldTick.faction_results?.length || 0,
+            eventsSpawned: worldTick.spawned_events?.length || 0,
+            effectsExpired: worldTick.effects_expired || 0,
+            failedSteps: (worldTick.step_statuses || [])
+              .filter(s => s.status === 'failed')
+              .map(s => s.step)
+          }
+        : undefined
     });
 
     // Phase 2.3b — snapshot the campaign after the session is safely recorded.

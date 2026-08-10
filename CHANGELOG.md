@@ -2,6 +2,36 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.170] - 2026-08-10 — Phase 4: the world moves, the arc advances, the campaign remembers
+
+Three reintegrations, plus two bugs found while doing them — one of which had silently disabled an entire subsystem since it was written.
+
+**The living world runs on in-game time.** `processLivingWorldTick` had no caller on the normal play path: it ran only from two debug endpoints and the meta-game "advance time" screen, so a player who never opened those screens played in a world frozen since session one. It now fires at session end for exactly the `daysElapsed` the adventure consumed. `FEATURE_FLAGS.LIVING_WORLD_TICK` defaults **on**.
+
+The placement is load-bearing and asserted: the tick must run **after** the `UPDATE characters SET game_day`, because it derives its own clock from `MAX(game_day) FROM characters`. Ticking first would advance the world against the day the session *started* on, so every deadline — merchant orders, base threats, promises, world events — would resolve a session late. The test proves it through the weather stamp, which records the game day the tick actually saw.
+
+New `queueTickHighlights` feeds outcomes into the next session's prompt, and deliberately queues **only** spawned world events. Faction quests, merchant orders, base threats, NPC mail, consequences and notoriety already queue themselves at the point of production; re-queueing them would double every entry. Milestones are folded to the highest per goal (so a multi-day tick produces "nears goal", not a three-line crescendo), capped at five, and the overflow count is returned rather than silently dropped.
+
+**`DEFERRED_RESOLUTION_ACTIONS` stays off.** Its stated reason is now obsolete — it was bound to the tick because those actions queue a resolution the tick delivers — but the loop has not been playtested against the time-driven tick, so flipping it was not in scope.
+
+**Campaign acts advance.** `getPlanSummaryForSession` hardcoded `plan.main_quest.acts[0]`, so a three-act campaign described Act 1 in the DM prompt forever. Migration 055 adds `campaigns.current_act_index`; reads go through `resolveCurrentAct`, which **clamps** — the pointer is a column and the acts live in a regenerable JSON blob, so they drift. The prompt now says "Act 2 of 3", and the "open at the starting location" instruction is confined to act one, where it belongs; carrying it into act three pinned an advanced campaign back to the town it opened in. Driven by `POST /api/campaign/:id/act/advance` — nothing advances it automatically, because deciding an act has ended is a narrative judgement and a mechanical trigger would advance the arc on a schedule the story has not earned.
+
+**Chronicle rollup.** Phase 1.1 bounded the prompt at the newest 10 chronicles, but it bounded it by *forgetting* — at session 30, sessions 1-20 stopped reaching the DM. Migration 056 adds `campaign_chronicle_rollups`; older chronicles now compress into a running "campaign so far" paragraph that the prompt renders above the verbatim tail, explicitly labelled as compressed and no less canon. The roll is **incremental** — only newly aged-out chronicles go to the model, along with the previous paragraph — so cost stays flat instead of growing with campaign length. A failed or empty roll does not advance `through_session_number`, since that would drop history with nothing standing in for it.
+
+### Two bugs found on the way
+
+**`generateSessionChronicle` had never worked, at all.** Its opening query selected `campaign_id` and `game_day` from `dm_sessions`. Neither column exists — `dm_sessions` carries `game_start_day`/`game_end_day` and reaches the campaign only through `characters`. It threw `no such column: campaign_id` on every call, and the sole caller swallows chronicle errors into a `console.error`. The consequence was silent and total: `story_chronicles` was never written, `getSessionSummariesForPrompt` always returned `[]`, no canon fact was ever recorded, and the DM's cross-session memory quietly fell back to the thinner `dm_sessions.summary` text. Fixed by joining through `characters`. This also made the rollup meaningful — it would otherwise have compressed an empty table forever.
+
+It now also refuses early, with a warning, when the character has no `campaign_id`, rather than paying for an extraction it cannot store (`story_chronicles.campaign_id` is `NOT NULL`).
+
+**`backup.js` could take the whole process down.** It chose the Turso path from `Boolean(process.env.TURSO_DATABASE_URL)`, but `database.js` accepts a `file:` URL there and treats it as an ordinary local database — which is exactly what the test runner sets. Feeding a `file:` URL into `syncUrl` makes the libsql native layer **panic**, and a Rust panic is not catchable by the `try/catch` around the fire-and-forget session-end backup. Detection is now by URL scheme. `run-tests.js` also forces `FF_SESSION_END_BACKUP=false`, so a suite with session-end tests cannot snapshot the throwaway database into `backups/` and prune the user's real backups out of retention.
+
+### Tests
+
+`campaign-act.test.js` (38), `chronicle-rollup.test.js` (51), `session-end-world-tick.test.js` (33) — the latter two on the Phase 3.5 stubbed-LLM harness, which paid for itself immediately: both exercise multi-call LLM paths that were previously untestable without spending money. `seedTurnFixture` gained `playerTurns`, because a fixture with no played turns takes session end's "the adventure ended before it truly began" early return and skips rewards, the date advance, the chronicle and the tick entirely.
+
+Suite: 76/79 files green → **79/82 green, 4581 assertions passing** (+125), same three pre-existing failures.
+
 ## [1.0.0.169] - 2026-08-10 — Phase 3.5: the stubbed-LLM harness
 
 Closes the gap `CLAUDE.md` named as the biggest one: the turn handler could not be tested end to end, so `turn-write-ordering.test.js` had to assert on the handler's *source text* rather than its behaviour.

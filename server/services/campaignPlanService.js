@@ -587,6 +587,108 @@ function parseAIResponse(response) {
   }
 }
 
+// ============================================================
+// ACT PROGRESSION (Phase 4)
+// ============================================================
+
+/**
+ * Resolve the campaign's current act from the stored pointer.
+ *
+ * The acts live inside the `campaign_plan` JSON blob; the pointer lives in the
+ * `campaigns.current_act_index` column (migration 055) so it survives a plan
+ * regeneration. Because those two can drift — a plan rewritten with fewer acts
+ * leaves a pointer past the end — the index is CLAMPED here rather than
+ * constrained in the schema.
+ *
+ * Returns nulls rather than throwing when there is no act structure at all:
+ * plenty of campaigns (imported ones especially) have a main quest with no
+ * `acts` array, and prompt assembly must not fail over a missing section.
+ *
+ * @returns {{act: object|null, index: number, total: number, clamped: boolean}}
+ */
+export function resolveCurrentAct(plan, storedIndex) {
+  const acts = Array.isArray(plan?.main_quest?.acts) ? plan.main_quest.acts : [];
+  if (acts.length === 0) {
+    return { act: null, index: 0, total: 0, clamped: false };
+  }
+
+  const raw = Number.isInteger(storedIndex) ? storedIndex : Number(storedIndex);
+  const wanted = Number.isFinite(raw) ? raw : 0;
+  const index = Math.min(Math.max(wanted, 0), acts.length - 1);
+
+  return { act: acts[index], index, total: acts.length, clamped: index !== wanted };
+}
+
+/**
+ * Read the campaign's act pointer, act list length, and resolved act.
+ */
+export async function getCampaignAct(campaignId) {
+  const campaign = await dbGet(
+    'SELECT current_act_index FROM campaigns WHERE id = ?',
+    [campaignId]
+  );
+  if (!campaign) return null;
+
+  const plan = await getCampaignPlan(campaignId);
+  return resolveCurrentAct(plan, campaign.current_act_index ?? 0);
+}
+
+/**
+ * Move the campaign to a specific act. Clamped to the plan's act list, so a
+ * caller cannot push the pointer past the final act and blank the prompt's
+ * CURRENT ACT section.
+ *
+ * @returns {{act, index, total, changed: boolean, atFinalAct: boolean}}
+ */
+export async function setCampaignAct(campaignId, index) {
+  const campaign = await dbGet(
+    'SELECT current_act_index FROM campaigns WHERE id = ?',
+    [campaignId]
+  );
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  const plan = await getCampaignPlan(campaignId);
+  const resolved = resolveCurrentAct(plan, index);
+  const previous = campaign.current_act_index ?? 0;
+
+  if (resolved.total === 0) {
+    return { ...resolved, changed: false, atFinalAct: false };
+  }
+
+  if (resolved.index !== previous) {
+    await dbRun(
+      "UPDATE campaigns SET current_act_index = ?, updated_at = datetime('now') WHERE id = ?",
+      [resolved.index, campaignId]
+    );
+  }
+
+  return {
+    ...resolved,
+    changed: resolved.index !== previous,
+    atFinalAct: resolved.index === resolved.total - 1
+  };
+}
+
+/**
+ * Advance the campaign one act. A no-op at the final act — the arc ends there,
+ * and silently wrapping or running off the end would be worse than standing
+ * still.
+ *
+ * NOTE: nothing calls this automatically. Deciding that an act has *ended* is a
+ * narrative judgement, not a mechanical one, and inventing a trigger (session
+ * count, quest completion, XP) would advance the arc on a schedule the story
+ * has not earned. It is driven explicitly via
+ * `POST /api/campaign/:id/advance-act` until that design exists.
+ */
+export async function advanceCampaignAct(campaignId) {
+  const current = await getCampaignAct(campaignId);
+  if (!current) throw new Error(`Campaign ${campaignId} not found`);
+  if (current.total === 0) {
+    return { ...current, changed: false, atFinalAct: false };
+  }
+  return await setCampaignAct(campaignId, current.index + 1);
+}
+
 /**
  * Get a summary of the campaign plan for DM session context
  * @param {number} campaignId - The campaign ID
@@ -596,12 +698,30 @@ export async function getPlanSummaryForSession(campaignId) {
   const plan = await getCampaignPlan(campaignId);
   if (!plan) return null;
 
+  // Phase 4 — the act is looked up dynamically instead of being pinned to
+  // acts[0]. Reading the pointer here (rather than taking it as a parameter)
+  // keeps every existing caller working unchanged.
+  const campaignRow = await dbGet(
+    'SELECT current_act_index FROM campaigns WHERE id = ?',
+    [campaignId]
+  );
+  const actState = resolveCurrentAct(plan, campaignRow?.current_act_index ?? 0);
+  if (actState.clamped) {
+    console.warn(
+      `[campaignPlan] campaign ${campaignId}: stored act index ` +
+      `${campaignRow?.current_act_index} is outside the plan's ${actState.total} act(s); ` +
+      `clamped to ${actState.index}.`
+    );
+  }
+
   return {
     main_quest_title: plan.main_quest?.title,
     main_quest_summary: plan.main_quest?.summary,
     main_quest_hook: plan.main_quest?.hook,
     main_quest_stakes: plan.main_quest?.stakes,
-    current_act: plan.main_quest?.acts?.[0],
+    current_act: actState.act,
+    current_act_number: actState.total > 0 ? actState.index + 1 : null,
+    total_acts: actState.total,
     world_state: plan.world_state,
     active_npcs: plan.npcs?.filter(n => n.from_backstory).map(n => ({
       name: n.name,
@@ -662,5 +782,9 @@ export default {
   updatePlanSection,
   addWorldEvent,
   addNPC,
-  getPlanSummaryForSession
+  getPlanSummaryForSession,
+  resolveCurrentAct,
+  getCampaignAct,
+  setCampaignAct,
+  advanceCampaignAct
 };

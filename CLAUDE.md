@@ -4,7 +4,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 
 **This file is a present-tense snapshot, not a history.** Version-by-version detail belongs in `CHANGELOG.md`. Update this file when architecture changes, not when a bug is fixed.
 
-> **Status: mid-refactor.** The project is executing a "scale back to scale up" plan — cut to a stable core, harden the data layer, then reintroduce mechanics deliberately. Phases 1–3 have landed. World simulation is intentionally switched off. See **MVP scale-back** below before assuming a subsystem is live.
+> **Status: mid-refactor.** The project is executing a "scale back to scale up" plan — cut to a stable core, harden the data layer, then reintroduce mechanics deliberately. Phases 1–4 have landed: the world simulation is back on and driven by in-game time, and campaign memory is compressed rather than truncated. Several subsystems are still switched off. See **Feature flags** below before assuming one is live.
 
 ---
 
@@ -73,27 +73,27 @@ Version + `CHANGELOG.md` entry at each atomic phase boundary, not per edit. Bump
 
 ---
 
-## MVP scale-back — what is currently OFF
+## Feature flags — what is on and off
 
 All defaults live in `server/config/featureFlags.js`.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `LIVING_WORLD_TICK` | **off** | Faction goals, world events, NPC mail, base income, notoriety decay, merchant order fulfilment, base threats — all frozen |
-| `NPC_AGING` | **off** | NPC absence/disposition decay at session start |
-| `COMPANION_MOOD_DECAY` | **off** | Companion mood decay at session start |
-| `SURVIVAL_DAY_CHANGE` | **off** | Food spoilage + exhaustion application |
-| `DEFERRED_RESOLUTION_ACTIONS` | **off** | Companion away-activities, merchant commissions, fortress threats |
-| `PROGRESSION_AWARDS` | **off** | Mythic tier auto-advance, quest/achievement XP |
+| `LIVING_WORLD_TICK` | **on** (Phase 4) | Faction goals, world events, NPC mail, base income, notoriety decay, merchant order fulfilment, base threats. Driven by in-game time at session end |
+| `NPC_AGING` | off | NPC absence/disposition decay at session start |
+| `COMPANION_MOOD_DECAY` | off | Companion mood decay at session start |
+| `SURVIVAL_DAY_CHANGE` | off | Food spoilage + exhaustion application |
+| `DEFERRED_RESOLUTION_ACTIONS` | off | Companion away-activities, merchant commissions, fortress threats |
+| `PROGRESSION_AWARDS` | off | Mythic tier auto-advance, quest/achievement XP |
 | `NPC_DEATH_SYNC` | on | Canon-fact death reconciler — a reconciler, not simulation |
-| `SESSION_END_BACKUP` | on | Fire-and-forget snapshot after session end |
+| `SESSION_END_BACKUP` | on | Fire-and-forget snapshot after session end. Forced off in `run-tests.js` |
 
-**Two known inconsistencies while the world is static** — expect them, don't "fix" them by re-enabling the tick:
+**Known inconsistencies** — expect them:
 
-1. Hunger and thirst still advance. They are derived from `game_day` at read time, not ticked.
-2. NPC "days since last seen" and promise deadlines still advance — computed inline in the prompt builder — while the stored dispositions behind them never decay. The DM will say "you haven't spoken to Marta in 40 days" while Marta's disposition is unchanged.
+1. Hunger and thirst are derived from `game_day` at read time, not ticked. They were never affected by the flag in either direction.
+2. NPC "days since last seen" and promise deadlines are computed inline in the prompt builder, but the stored dispositions behind them decay only under `NPC_AGING`, which is still off. The DM can still say "you haven't spoken to Marta in 40 days" while Marta's disposition is unchanged. **The tick does not fix this** — `NPC_AGING` is a separate session-start flag.
 
-`DEFERRED_RESOLUTION_ACTIONS` is bound to the tick on purpose: those actions queue a resolution the tick would deliver, so enabling them without it soft-locks (a companion sent away never returns).
+`DEFERRED_RESOLUTION_ACTIONS` was bound to the tick during the scale-back: those actions queue a resolution the tick delivers, so with the tick off they soft-locked (a companion sent away never returned). Phase 4 removed that blocker; it stays off now only because the deferred-resolution loop has not been playtested against the time-driven tick.
 
 ---
 
@@ -132,18 +132,35 @@ The `HP_CHANGE` prompt instruction lives in `formatPlayerHpRules()`, **outside**
 
 Session-end HP heuristics are retired (`hpChange = 0`). All three `Math.max(1, ...)` floors are gone, and `PUT /api/character/:id` clamps `current_hp` to `[0, max_hp]`.
 
+### Session end — `POST /:sessionId/end`
+
+Also order-sensitive. `daysElapsed` comes from `calculateGameTimeAdvance(rewardsAnalysis)`, then:
+
+1. `UPDATE characters SET game_day` — advances the campaign clock.
+2. **Living-world tick**, `processLivingWorldTick(campaign_id, daysElapsed)`. **Must run after step 1**: the tick derives its own clock from `MAX(game_day) FROM characters`, so ticking first would advance the world against the day the session *started* on and every deadline would resolve a session late. `tests/session-end-world-tick.test.js` asserts this via the weather stamp.
+3. `queueTickHighlights` — narrative-queue entries for spawned world events **only**. Faction quests, merchant orders, base threats, NPC mail, consequences and notoriety all queue themselves at the point of production; re-queueing them here would double every entry.
+4. Notes / NPC / memory extraction, then `generateSessionChronicle`.
+5. `rollUpOldChronicles` — **after** the chronicle, since this session's chronicle is what pushes the oldest one out of the verbatim window.
+
+Every one of these is individually wrapped: a failed tick or rollup must never fail the session that triggered it.
+
 ### Context bounds
 
-Unbounded prompt growth is the failure mode that would eventually end a long campaign. Three bounds, all in place:
+Unbounded prompt growth is the failure mode that would eventually end a long campaign.
 
-- `getSessionSummariesForPrompt` returns the newest 10, **ordered oldest-first** — `dmSession.js` treats the last element as most recent, so do not flip to DESC.
+- **Two-tier campaign history.** `getSessionSummariesForPrompt` returns the newest 10 verbatim, **ordered oldest-first** — `dmSession.js` treats the last element as most recent, so do not flip to DESC. Everything older is compressed by `rollUpOldChronicles` into one running "campaign so far" paragraph on `campaign_chronicle_rollups` (one row per campaign+character, rewritten in place), capped at `MAX_ROLLUP_CHARS`. The rollup is **incremental**: only newly aged-out chronicles are sent, with the previous paragraph, so cost does not grow with campaign length. `through_session_number` is the resume point and must not advance on a failed or empty roll — that would drop history with nothing standing in for it.
+- `CHRONICLE_VERBATIM_TAIL` is deliberately the same value as `SESSION_SUMMARY_PROMPT_LIMIT`. The verbatim window and the prompt window are the same window; letting them drift drops or duplicates sessions.
 - `calculateChronicleBudget` is capped by `MAX_CHRONICLE_BUDGET`.
 - `checkPromptSize` in `aiCallLogger.js` warns at 60k / errors at 100k estimated tokens. It **never throws** — instrumentation must not break gameplay. It sits there because every AI call funnels through the logger with the full prompt in hand.
+
+### Campaign acts
+
+`campaigns.current_act_index` (migration 055) points into `campaign_plan.main_quest.acts`. Reads go through `resolveCurrentAct`, which **clamps** — the pointer is a column and the acts live in a regenerable JSON blob, so they drift. Nothing advances the act automatically; `POST /api/campaign/:id/act/advance` drives it, because deciding an act has ended is a narrative judgement and a mechanical trigger would advance the arc on a schedule the story has not earned.
 
 ### Persistence
 
 - **Migrations** (`server/migrationRunner.js`): each `up()` and its `_migrations` insert run in **one transaction**, so a failure rolls back and is safely retried. Pass `tx` into `up()`, never `db`. Numbered `NNN_*.js`, additive, idempotent via `PRAGMA table_info`.
-- **Backups** (`server/scripts/backup.js`): Turso is pulled down via embedded-replica `sync()`; a local file uses `VACUUM INTO`. `VACUUM INTO` does **not** work against Turso — it runs server-side. Every backup is reopened and verified before older ones are pruned.
+- **Backups** (`server/scripts/backup.js`): the path is chosen by the **URL scheme**, not by whether `TURSO_DATABASE_URL` is merely set. A remote scheme is pulled down via embedded-replica `sync()`; unset or a `file:` URL uses `VACUUM INTO`. `VACUUM INTO` does **not** work against Turso — it runs server-side. Getting this wrong is not a soft failure: feeding a `file:` URL into `syncUrl` makes the libsql native layer **panic**, which no JS `try/catch` can absorb, so the fire-and-forget session-end backup takes the whole process down. Every backup is reopened and verified before older ones are pruned.
 - **RNG** (`server/utils/rng.js`): mechanically meaningful rolls (initiative, crafting, death saves) go through `roll`/`rollD20`/`pick`/`shuffle`. Cosmetic randomness is deliberately left alone. Seeding is not implemented; its correct home is per-session, not per-campaign.
 
 ---
@@ -164,12 +181,12 @@ Unbounded prompt growth is the failure mode that would eventually end a long cam
 
 ## Known structural debt
 
-Verified during the Phase 1–3 refactor; none of it is scheduled yet.
+Verified during the Phase 1–4 refactor; none of it is scheduled yet.
 
-- **`dm_sessions` has no `campaign_id` column**, so `session.campaign_id` in `dmSession.js` is always `undefined` — it reaches `ai_call_log` as a null. The campaign is only reachable via `characters.campaign_id`.
+- **`characters.campaign_id` is the single point of failure for world state.** It is not set at creation, and it gates chronicle generation, chronicle summaries, canon-fact budget, crafting, weather, notoriety, the living-world tick and the rollup. A character created on the default path engages almost none of the world — and now fails to record a chronicle at all (logged as a warning by `generateSessionChronicle`, which refuses rather than paying for an extraction it cannot store). **This is the highest-value fix outstanding.**
+- **`dm_sessions` has no `campaign_id` column**, so `session.campaign_id` in `dmSession.js` is always `undefined` — it reaches `ai_call_log` as a null. The campaign is only reachable via `characters.campaign_id`. This is what broke `generateSessionChronicle` for its entire life before Phase 4; check the column exists before selecting it.
 - **The prelude runs two parsers** over the same text (`validateDmMarkers` + `detectPreludeMarkers`) and carries an ordering invariant (`AGE_ADVANCE` → `HP_CHANGE`) that the pipeline's declaration-order dispatch cannot express.
 - **Marker lists drift by hand** — `MARKER_SCHEMAS`, the prompt text, the strip regexes, and the handler registry are maintained separately. `preludeMarkerDetection.js` already has a catch-all strip regex worth adopting.
 - **`ai_call_log` has no archival job.** It stores full prompts and full conversation history per call, growing quadratically within a session. This makes backups progressively more expensive.
-- **`characters.campaign_id` is not set at creation**, and it gates chronicle summaries, canon-fact budget, crafting, weather, notoriety, and the tick. Much of the world state simply does not engage for a character created on the default path.
 - **`validateDmMarkers` runs twice per turn** over the same narrative.
-- **`campaignPlanService` hardcodes `current_act` to `acts[0]`** — the main arc never advances.
+- **No trigger advances the campaign act.** The lookup is dynamic as of Phase 4, but `POST /api/campaign/:id/act/advance` is the only thing that moves the pointer.

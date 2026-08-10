@@ -70,6 +70,12 @@ const env = {
   // Redirect libSQL away from Turso. See SAFETY note above.
   TURSO_DATABASE_URL: `file:${TEST_DB}`,
   TURSO_AUTH_TOKEN: '',
+  // Session-end fires a fire-and-forget backup. Under test that would snapshot
+  // the throwaway database into backups/ on every ended session, and — because
+  // retention prunes to the newest N — a run with several session-end tests
+  // would evict the user's real backups. Off by default; a test that wants to
+  // exercise the backup path sets it back on for itself.
+  FF_SESSION_END_BACKUP: 'false',
 }
 
 function runOne(file) {

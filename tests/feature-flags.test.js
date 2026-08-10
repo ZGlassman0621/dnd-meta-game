@@ -48,7 +48,9 @@ async function run() {
   delete process.env.FF_DEFERRED_RESOLUTION_ACTIONS;
   delete process.env.FF_NPC_DEATH_SYNC;
 
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, false, 'living world tick defaults off');
+  // Phase 4 flipped this on: the tick is now driven by in-game time at session
+  // end rather than by a UI button, so a static world is no longer the default.
+  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'living world tick defaults ON as of Phase 4');
   assertEqual(FEATURE_FLAGS.NPC_AGING, false, 'NPC aging defaults off');
   assertEqual(FEATURE_FLAGS.COMPANION_MOOD_DECAY, false, 'companion mood decay defaults off');
   assertEqual(FEATURE_FLAGS.SURVIVAL_DAY_CHANGE, false, 'survival day change defaults off');
@@ -59,11 +61,22 @@ async function run() {
   console.log('\n=== Test 2: env override is read live ===\n');
   // ============================================================
 
-  process.env.FF_LIVING_WORLD_TICK = 'true';
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'flag flips on without re-importing the module');
-
+  // Both directions matter, and which one is the "interesting" one depends on
+  // the default — so assert both against a flag whose default is now true.
   process.env.FF_LIVING_WORLD_TICK = 'false';
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, false, 'literal "false" turns it back off');
+  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, false, 'literal "false" turns a default-on flag off, live');
+
+  process.env.FF_LIVING_WORLD_TICK = 'true';
+  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'flag flips back on without re-importing the module');
+
+  delete process.env.FF_LIVING_WORLD_TICK;
+  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'unsetting restores the Phase 4 default');
+
+  // NPC_AGING is still default-off, so it proves the opposite direction.
+  process.env.FF_NPC_AGING = 'true';
+  assertEqual(FEATURE_FLAGS.NPC_AGING, true, 'a default-off flag can be forced on');
+  delete process.env.FF_NPC_AGING;
+  assertEqual(FEATURE_FLAGS.NPC_AGING, false, 'unsetting restores the default off');
 
   process.env.FF_NPC_DEATH_SYNC = 'false';
   assertEqual(FEATURE_FLAGS.NPC_DEATH_SYNC, false, 'a default-on flag can be forced off');
