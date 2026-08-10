@@ -8,6 +8,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { rollD20 as rngRollD20 } from '../utils/rng.js';
 import { DEFAULT_RECIPES } from '../data/craftingRecipes.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 
@@ -51,7 +52,9 @@ function getProficiencyBonus(level) {
  * @returns {number} 1-20
  */
 function rollD20() {
-  return Math.floor(Math.random() * 20) + 1;
+  // Crafting checks are mechanically meaningful — routed through the central
+  // RNG (Phase 3.3), which also removes a duplicate of this exact function.
+  return rngRollD20('crafting check');
 }
 
 /**

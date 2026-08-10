@@ -18,7 +18,63 @@
  */
 
 import { dbRun } from '../database.js';
-import { computePromptSections } from './promptShapeAccounting.js';
+import { computePromptSections, estimateTokens } from './promptShapeAccounting.js';
+
+// ============================================================
+// System-prompt size guard
+// ============================================================
+
+/**
+ * Thresholds for the assembled system prompt, in estimated tokens.
+ *
+ * These live here rather than at session start because every AI call — session
+ * start, each gameplay turn, both the Claude and Ollama paths — funnels through
+ * this module with the full prompt already in hand. A check at session start
+ * alone would miss the per-turn growth from the repetition ledger and the
+ * marker-correction block, which append to the prompt as a session runs.
+ *
+ * Override with DM_PROMPT_WARN_TOKENS / DM_PROMPT_ERROR_TOKENS. Keep ERROR well
+ * under the smallest context window in play: small local models (gemma, llama,
+ * mistral) are treated as a 8k window / 6k safe budget in utils/contextManager.js,
+ * so a prompt sized for Claude will not fit them at all.
+ */
+const PROMPT_WARN_TOKENS = Number(process.env.DM_PROMPT_WARN_TOKENS || 60000);
+const PROMPT_ERROR_TOKENS = Number(process.env.DM_PROMPT_ERROR_TOKENS || 100000);
+
+/**
+ * Log loudly when the assembled system prompt crosses a size threshold.
+ *
+ * Deliberately never throws. This module's contract is that instrumentation
+ * failures never affect gameplay, and a prompt that is merely large still
+ * produces a perfectly good turn — refusing the call would convert a
+ * degradation into an outage. The point is that unbounded growth becomes
+ * observable before it becomes fatal, not that it gets blocked.
+ *
+ * @param {string} systemPrompt
+ * @param {string} callPurpose
+ * @returns {{ tokens: number, level: 'ok'|'warn'|'error' }}
+ */
+export function checkPromptSize(systemPrompt, callPurpose = 'unknown') {
+  const tokens = estimateTokens(systemPrompt);
+  let level = 'ok';
+
+  if (tokens >= PROMPT_ERROR_TOKENS) {
+    level = 'error';
+    console.error(
+      `[promptSize] ERROR: system prompt for "${callPurpose}" is ~${tokens} tokens, ` +
+        `over the ${PROMPT_ERROR_TOKENS} ceiling. Context growth is no longer bounded — ` +
+        `check chronicle summary count, canon-fact budget, and per-turn prompt appends.`
+    );
+  } else if (tokens >= PROMPT_WARN_TOKENS) {
+    level = 'warn';
+    console.warn(
+      `[promptSize] WARN: system prompt for "${callPurpose}" is ~${tokens} tokens ` +
+        `(warn at ${PROMPT_WARN_TOKENS}, error at ${PROMPT_ERROR_TOKENS}).`
+    );
+  }
+
+  return { tokens, level };
+}
 
 // ============================================================
 // Public API
@@ -60,6 +116,12 @@ export async function logAiCall(opts, callFn) {
 
   const startedAt = Date.now();
   const startedIso = new Date(startedAt).toISOString().slice(0, 19).replace('T', ' ');
+
+  // Size guard runs before the call, so an oversized prompt is visible in the
+  // logs even if the API then rejects it.
+  if (opts.system_prompt) {
+    checkPromptSize(opts.system_prompt, opts.call_purpose);
+  }
 
   let result;
   let response_text = null;
@@ -235,6 +297,7 @@ export async function logAiCallWithId(opts, callFn) {
   let prompt_sections = null;
   try {
     if (opts.system_prompt) {
+      checkPromptSize(opts.system_prompt, opts.call_purpose);
       prompt_sections = JSON.stringify(computePromptSections(opts.system_prompt, opts.prompt_builder));
     }
   } catch (e) {

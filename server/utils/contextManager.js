@@ -37,12 +37,24 @@ export function getModelLimits(model) {
 }
 
 /**
+ * Hard ceiling on canon-fact context, regardless of how much room appears free.
+ *
+ * Without this the function is fed only a few hundred tokens of input (world
+ * state + notes + memories) and so hands back ~67,000 tokens of budget on a
+ * 180k safeBudget — a number large enough that canon facts alone could crowd
+ * out the rest of the prompt. The caller's estimate being incomplete stops
+ * mattering once the output itself is bounded, which is why this cap exists
+ * rather than a more precise input measurement.
+ */
+export const MAX_CHRONICLE_BUDGET = 20000;
+
+/**
  * Calculate adaptive chronicle budget based on remaining context space
  *
  * @param {number} systemPromptTokens - Estimated tokens in system prompt
  * @param {number} conversationTokens - Estimated tokens in message history
  * @param {string} model - Model identifier
- * @returns {number} Token budget available for chronicle context (2000+, no hard cap)
+ * @returns {number} Token budget for chronicle context, between 2000 and MAX_CHRONICLE_BUDGET
  */
 export function calculateChronicleBudget(systemPromptTokens, conversationTokens, model) {
   const { safeBudget } = getModelLimits(model);
@@ -54,9 +66,10 @@ export function calculateChronicleBudget(systemPromptTokens, conversationTokens,
     return 2000; // Minimum guaranteed budget
   }
 
-  // Use 40% of remaining space for chronicle — no hard cap, let the context window be the limit
+  // Use 40% of remaining space, then clamp. Small-context local models (gemma,
+  // llama, mistral) land near the 2000 floor; Claude-class models hit the cap.
   const budget = Math.floor(remaining * 0.4);
-  return Math.max(2000, budget);
+  return Math.min(MAX_CHRONICLE_BUDGET, Math.max(2000, budget));
 }
 
 /**

@@ -1650,7 +1650,10 @@ async function applyBenefits(character, benefits) {
   const params = [];
 
   if (benefits.hpRestored !== 0) {
-    const newHp = Math.max(1, Math.min(character.max_hp, character.current_hp + benefits.hpRestored));
+    // Phase 3.2 — floor removed. Downtime usually heals, but hpRestored can be
+    // negative for harmful activities, and those should be able to drop the
+    // character to 0 rather than being silently softened.
+    const newHp = Math.max(0, Math.min(character.max_hp, character.current_hp + benefits.hpRestored));
     updates.push('current_hp = ?');
     params.push(newHp);
   }

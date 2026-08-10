@@ -15,7 +15,16 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function runMigrations(db) {
+/**
+ * Apply any migrations not yet recorded in _migrations.
+ *
+ * @param {object} db - libSQL client
+ * @param {object} [options]
+ * @param {string} [options.migrationsDir] - Override the directory scanned.
+ *   Exists so the atomicity behaviour can be tested against fixture
+ *   migrations without touching the real schema.
+ */
+export async function runMigrations(db, options = {}) {
   // Ensure _migrations table exists
   await db.execute(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -30,7 +39,7 @@ export async function runMigrations(db) {
   const appliedNames = new Set(applied.rows.map(r => r.name));
 
   // Scan the migrations directory for .js files
-  const migrationsDir = path.join(__dirname, 'migrations');
+  const migrationsDir = options.migrationsDir || path.join(__dirname, 'migrations');
 
   if (!fs.existsSync(migrationsDir)) {
     console.log('No migrations directory found. Skipping.');
@@ -53,12 +62,39 @@ export async function runMigrations(db) {
     const migrationPath = path.join(migrationsDir, file);
     const migration = await import(`file://${migrationPath.replace(/\\/g, '/')}`);
 
-    await migration.up(db);
-
-    await db.execute({
-      sql: 'INSERT INTO _migrations (name) VALUES (?)',
-      args: [name]
-    });
+    // Apply the migration and record it as ONE atomic unit.
+    //
+    // Previously these were two independent statements, so a migration that
+    // half-applied and threw was never recorded — the next boot re-ran it and
+    // typically died on "duplicate column", with no way forward but manual
+    // surgery on _migrations. Now a failure rolls the schema change back too,
+    // which makes every migration safe to retry simply by restarting.
+    //
+    // `tx` is handed to up() instead of `db` — writing through the outer client
+    // would escape the transaction and silently defeat the whole point.
+    // Migrations only ever call .execute(), which Transaction also provides.
+    const tx = await db.transaction('write');
+    try {
+      await migration.up(tx);
+      await tx.execute({
+        sql: 'INSERT INTO _migrations (name) VALUES (?)',
+        args: [name]
+      });
+      await tx.commit();
+    } catch (err) {
+      // rollback() can itself throw if the transaction is already dead; that
+      // must not mask the real migration error.
+      try {
+        await tx.rollback();
+      } catch {
+        // already rolled back or closed — nothing to salvage
+      }
+      throw new Error(
+        `Migration ${name} failed and was rolled back — the database is unchanged ` +
+        `and this migration will be retried on next boot. Cause: ${err?.message || err}`,
+        { cause: err }
+      );
+    }
 
     appliedCount++;
     console.log(`  Applied: ${name}`);

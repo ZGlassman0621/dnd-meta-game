@@ -13,6 +13,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import { registerThresholdConsumer } from './timeBoundedState.js';
 import {
@@ -743,6 +744,11 @@ export { BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER };
 
 registerMarkerHandler('FORTRESS_THREAT', async (parsed, context) => {
   if (!context?.characterId) return null;
+
+  // Phase 1.2 — threats are matured and auto-resolved by the living-world tick
+  // (markDueThreatsForResolution / autoResolveDueThreats). With the tick static
+  // a created threat would hang over the base forever without ever resolving.
+  if (!FEATURE_FLAGS.DEFERRED_RESOLUTION_ACTIONS) return null;
 
   // Fetch the dispatching character's campaign to validate ownership.
   const character = await dbGet(

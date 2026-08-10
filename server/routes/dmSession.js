@@ -1,5 +1,6 @@
 import express from 'express';
 import db, { dbAll, dbGet, dbRun } from '../database.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
 import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat } from '../services/aiCallLogger.js';
@@ -32,6 +33,11 @@ import '../services/baseThreatService.js';
 // SC-6.4d: combatMarkerService is new — registers COMBAT_START + COMBAT_END
 // handlers at module load.
 import '../services/combatMarkerService.js';
+// Phase 3.1: characterHpService registers the HP_CHANGE handler on the player
+// path at module load. Imported for its side effect, like the services above —
+// without this import damage silently never applies.
+import '../services/characterHpService.js';
+import { getHpState, rollDeathSave } from '../services/characterHpService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
   // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
@@ -79,7 +85,8 @@ import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
 import { getAwayCompanions } from '../services/companionActivityService.js';
 import { processAbsenceEffects } from '../services/npcAgingService.js';
 import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget } from '../utils/contextManager.js';
-import { handleServerError } from '../utils/errorHandler.js';
+import { handleServerError, conflict } from '../utils/errorHandler.js';
+import { acquireSessionLock, releaseSessionLock } from '../utils/sessionLocks.js';
 import { getWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
 import { getSurvivalStatus, formatSurvivalForPrompt } from '../services/survivalService.js';
 import { formatCraftingForPrompt } from '../services/craftingService.js';
@@ -737,8 +744,11 @@ router.post('/start', async (req, res) => {
       }
     }
 
-    // Sync any deaths from canon facts that weren't propagated to NPC lifecycle
-    if (character.campaign_id) {
+    // Sync any deaths from canon facts that weren't propagated to NPC lifecycle.
+    // Deliberately still ON during the Phase 1.2 scale-back: this is a canon
+    // reconciler, not world simulation. Disabling it would let an NPC the
+    // chronicle records as dead reappear alive in the DM prompt.
+    if (FEATURE_FLAGS.NPC_DEATH_SYNC && character.campaign_id) {
       try {
         await syncDeathsFromCanonFacts(character.campaign_id);
       } catch (e) {
@@ -808,15 +818,27 @@ router.post('/start', async (req, res) => {
 
     // Phase B — mutations (decay companion moods + NPC dispositions). Parallel
     // since they touch different tables.
+    //
+    // Phase 1.2: each is gated independently so one can be re-enabled without
+    // the other. Both off for MVP — with the living-world tick static, decaying
+    // moods and dispositions here would be the only thing still moving.
     if (character.game_day) {
-      await Promise.all([
-        decayMoods(characterId, character.game_day).catch(e => {
-          console.error('Error decaying companion moods:', e);
-        }),
-        processAbsenceEffects(characterId, character.game_day).catch(e => {
-          console.error('Error processing NPC absence effects:', e);
-        })
-      ]);
+      const agingWork = [];
+      if (FEATURE_FLAGS.COMPANION_MOOD_DECAY) {
+        agingWork.push(
+          decayMoods(characterId, character.game_day).catch(e => {
+            console.error('Error decaying companion moods:', e);
+          })
+        );
+      }
+      if (FEATURE_FLAGS.NPC_AGING) {
+        agingWork.push(
+          processAbsenceEffects(characterId, character.game_day).catch(e => {
+            console.error('Error processing NPC absence effects:', e);
+          })
+        );
+      }
+      if (agingWork.length > 0) await Promise.all(agingWork);
     }
 
     // Phase C — remaining independent reads. Also dedupes the weather fetch
@@ -1195,6 +1217,22 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
 
 // Send a message/action in the session
 router.post('/:sessionId/message', async (req, res) => {
+  const { sessionId: lockKey } = req.params;
+
+  // Phase 2.2 — one turn per session at a time. The handler makes a slow LLM
+  // call, so a client retry after a timeout would otherwise run the turn twice
+  // and apply every marker twice. Acquired before any work and released in the
+  // finally below, which covers all nine exits (validation returns, the 404,
+  // the tagged-error branches, and the success path alike) — a missed path
+  // would wedge the session until the lock went stale.
+  const lock = acquireSessionLock(lockKey);
+  if (!lock.acquired) {
+    return conflict(
+      res,
+      'A turn is already being processed for this session. Wait for it to finish before sending another action.'
+    );
+  }
+
   try {
     const { sessionId } = req.params;
     // modelOverride: 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch (v1.0.99+)
@@ -1234,19 +1272,54 @@ router.post('/:sessionId/message', async (req, res) => {
     // sees "Recently used imagery — do not reuse" before composing the next
     // response. Builds an augmented messages array without mutating the
     // original (which is const). Silent-fail on read errors.
+    // Per-turn system-prompt suffixes. Two blocks are re-appended fresh each
+    // turn — current vitals (Phase 3.1) and the repetition ledger — and BOTH
+    // must be stripped before re-appending.
+    //
+    // One combined strip, not two: these blocks sit at the tail of the prompt
+    // and the old ledger-only regex consumed `[\s\S]*` to the end of the
+    // string. Stripping only the ledger would either delete a vitals block
+    // appended after it, or let a vitals block appended before it accrete
+    // every turn forever. Anchoring on whichever tail block comes first and
+    // cutting from there rebuilds the suffix cleanly.
+    const TURN_SUFFIX_RE =
+      /\n*══════════════════════════════════════════════════════════════\n(?:RECENTLY USED IMAGERY|CURRENT VITALS)[\s\S]*/;
+
     let augmentedMessages = messages;
     try {
+      let suffix = '';
+
+      // Vitals first — the DM must see current HP before composing the turn.
+      // The character sheet in the system prompt was assembled at session start
+      // and is frozen, so without this the AI is narrating from stale HP.
+      try {
+        const { getHpState } = await import('../services/characterHpService.js');
+        const hp = await getHpState(session.character_id);
+        if (hp) {
+          const dying = hp.current_hp === 0 && !hp.is_dead;
+          suffix +=
+            `\n\n══════════════════════════════════════════════════════════════\n` +
+            `CURRENT VITALS (live — overrides the character sheet above)\n` +
+            `══════════════════════════════════════════════════════════════\n` +
+            `Hit points: ${hp.current_hp}/${hp.max_hp}\n` +
+            (dying
+              ? `THE PLAYER IS AT 0 HP AND DYING. Death saves: ${hp.death_save_successes || 0} success(es), ${hp.death_save_failures || 0} failure(s). The system rolls these — narrate, then stop.\n`
+              : '') +
+            (hp.is_dead ? `THE PLAYER CHARACTER IS DEAD.\n` : '');
+        }
+      } catch {
+        // Silent-fail — a vitals read must never cost the player their turn.
+      }
+
       const { getLedger, formatRepetitionLedger } = await import('../services/repetitionLedgerService.js');
       const ledger = await getLedger(parseInt(sessionId));
       const ledgerBlock = formatRepetitionLedger(ledger);
-      if (ledgerBlock && messages[0] && messages[0].role === 'system' && messages[0].content) {
-        // Strip any previously-appended ledger (we re-inject the latest each turn).
-        const cleaned = messages[0].content.replace(
-          /\n*══════════════════════════════════════════════════════════════\nRECENTLY USED IMAGERY[\s\S]*/,
-          ''
-        );
+      if (ledgerBlock) suffix += ledgerBlock;
+
+      if (suffix && messages[0] && messages[0].role === 'system' && messages[0].content) {
+        const cleaned = messages[0].content.replace(TURN_SUFFIX_RE, '');
         augmentedMessages = [
-          { ...messages[0], content: cleaned + ledgerBlock },
+          { ...messages[0], content: cleaned + suffix },
           ...messages.slice(1)
         ];
       }
@@ -1369,8 +1442,63 @@ router.post('/:sessionId/message', async (req, res) => {
       result = await ollama.continueSession(messagesToSend, action, session.model);
     }
 
-    // Update the session in the database (LLM-facing, may be compacted)
-    await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
+    // ─────────── MARKER DISPATCH RUNS BEFORE ANY PERSIST (Phase 2.1) ───────────
+    // Ordering is the whole point. Previously the narrative was written first
+    // and markers dispatched afterwards, so a crash between the two left a
+    // transcript saying "you hand over 50 gold and take the blade" with the
+    // gold unspent and no blade — permanently, and silently, because each step
+    // swallowed its own errors.
+    //
+    // Dispatching first means a failure loses the turn instead of recording a
+    // narrative whose mechanical consequences never happened. The single
+    // `dm_sessions.messages` write now happens once, further down, after the
+    // handler results have been folded into result.messages — replacing what
+    // used to be five separate writes of the same column.
+    //
+    // Phase 3 SC-6.1 — dispatches to handlers registered against marker
+    // schemas. SC-6.4 captures the result so downstream code can read
+    // handlerResults to assemble response-payload arrays (survivalEvents, etc.)
+    // preserving the existing client contract. Wrapped in try/catch so a
+    // pipeline bug never blocks the existing flow.
+    let pipelineResult = { handlerResults: [], failures: [] };
+    try {
+      // gameDay isn't passed in context — handlers that need it can SELECT
+      // characters.game_day via characterId (matches the SC-4 piety pattern).
+      // SC-6.4b adds `narrative` so MERCHANT_SHOP handler can self-orchestrate
+      // the coupled ADD_ITEM markers (parked from independent dispatch).
+      pipelineResult = await processResponseMarkers(result.narrative || '', {
+        characterId: session.character_id,
+        sessionId: parseInt(sessionId),
+        narrative: result.narrative || ''
+      });
+    } catch (err) {
+      console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
+    }
+
+    // Phase 3.1 — death saves. If the turn left the player at 0 HP, roll one
+    // save now. The prompt instructs the DM to narrate the fall and stop; the
+    // system owns the die, so the AI cannot decide whether the player lives.
+    // Runs after dispatch so an HP_CHANGE from this very turn is reflected.
+    let deathSave = null;
+    try {
+      const hpState = await getHpState(session.character_id);
+      if (hpState && hpState.current_hp === 0 && !hpState.is_dead) {
+        deathSave = await rollDeathSave(session.character_id);
+        if (deathSave) {
+          result.messages.push({
+            role: 'user',
+            content:
+              `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Death saving throw rolled: ${deathSave.roll}. ` +
+              `Result: ${deathSave.outcome}. Successes ${deathSave.successes}/3, failures ${deathSave.failures}/3.` +
+              (deathSave.died ? ' THE PLAYER CHARACTER HAS DIED.' : '') +
+              (deathSave.stabilised ? ' The player is now stable at 0 HP, still unconscious.' : '') +
+              (deathSave.outcome === 'revived' ? ' The player regained 1 HP and is conscious again.' : '')
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[hp] death save failed (non-fatal):', err.message);
+    }
 
     // Append this turn's user + assistant pair to the full transcript.
     // Best-effort — never breaks the session for a persistence issue.
@@ -1432,26 +1560,7 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('[marker-schema] validation pass failed (non-fatal):', err.message);
     }
 
-    // Phase 3 SC-6.1 — marker pipeline (parallel with detect-functions).
-    // Dispatches to handlers registered against marker schemas. SC-6.4
-    // captures the result so downstream code can read handlerResults to
-    // assemble response-payload arrays (survivalEvents, etc.) preserving
-    // the existing client contract. Wrapped in try/catch so a pipeline
-    // bug never blocks the existing flow.
-    let pipelineResult = { handlerResults: [], failures: [] };
-    try {
-      // gameDay isn't passed in context — handlers that need it can SELECT
-      // characters.game_day via characterId (matches the SC-4 piety pattern).
-      // SC-6.4b adds `narrative` so MERCHANT_SHOP handler can self-orchestrate
-      // the coupled ADD_ITEM markers (parked from independent dispatch).
-      pipelineResult = await processResponseMarkers(result.narrative || '', {
-        characterId: session.character_id,
-        sessionId: parseInt(sessionId),
-        narrative: result.narrative || ''
-      });
-    } catch (err) {
-      console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
-    }
+    // (Marker dispatch moved above, ahead of every persist — see Phase 2.1.)
 
     // Phase 4a SC-4a.1 — annotate the ai_call_log row created above with
     // marker-dispatch + correction-loop outcomes. Best-effort; row id is
@@ -1619,6 +1728,9 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
+    // Phase 3.1 — HP_CHANGE drives real damage now, so the marker must not
+    // reach the player as raw text.
+    cleanNarrative = cleanNarrative.replace(/\[HP_CHANGE:[^\]]+\]\s*/gi, '').trim();
     // Prelude-flow skill checks. The AI is instructed to emit these when a
     // check is required, but the marker itself must never reach the player.
     cleanNarrative = cleanNarrative.replace(/\[SKILL_CHECK:[^\]]+\]\s*/gi, '').trim();
@@ -1651,13 +1763,11 @@ router.post('/:sessionId/message', async (req, res) => {
     // ADD_ITEM is parked from independent dispatch (schema-only). The
     // MERCHANT_SHOP handler self-orchestrates ADD_ITEM markers from the
     // same narrative because they coordinate (legacy behavior preserved).
-    let merchantMessagesAdded = false;
     let merchantShop = null;
     for (const hr of pipelineResult.handlerResults) {
       if (!hr.ok || !hr.result) continue;
       if (hr.schemaKey === 'MERCHANT_SHOP') {
         result.messages.push({ role: 'user', content: hr.result.inventoryContext });
-        merchantMessagesAdded = true;
         // Reshape handler result → client-facing payload (DMSession.jsx
         // checks data.merchantShop?.detected to drive the shop UI).
         merchantShop = {
@@ -1668,12 +1778,8 @@ router.post('/:sessionId/message', async (req, res) => {
         };
       } else if (hr.schemaKey === 'MERCHANT_COMMISSION') {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
-        merchantMessagesAdded = true;
       }
       // MERCHANT_REFER: no AI-context message push (silent side effect).
-    }
-    if (merchantMessagesAdded) {
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
     }
 
     // SC-6.4d — BASE_DEFENSE_RESULT handler in baseThreatService.js
@@ -1685,7 +1791,6 @@ router.post('/:sessionId/message', async (req, res) => {
       for (const hr of defenseHandlerResults) {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
       }
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
     }
 
     // SC-6.4b — LOOT_DROP handler in lootDropService.js owns the
@@ -1701,7 +1806,6 @@ router.post('/:sessionId/message', async (req, res) => {
         role: 'user',
         content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The following items have been added to the player's inventory: ${itemNames}. The player's character sheet now reflects these items.`
       });
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
     }
 
     // SC-6.4d — COMBAT_START + COMBAT_END handlers in combatMarkerService.js
@@ -1709,20 +1813,24 @@ router.post('/:sessionId/message', async (req, res) => {
     // combatStart payload + pushes the systemNote to result.messages.
     let combatStart = null;
     let combatEnd = false;
-    let combatSystemNoteAdded = false;
     for (const hr of pipelineResult.handlerResults) {
       if (!hr.ok || !hr.result) continue;
       if (hr.schemaKey === 'COMBAT_START') {
         combatStart = hr.result.combatStart;
         result.messages.push({ role: 'user', content: hr.result.systemNote });
-        combatSystemNoteAdded = true;
       } else if (hr.schemaKey === 'COMBAT_END') {
         combatEnd = true;
       }
     }
-    if (combatSystemNoteAdded) {
-      await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
-    }
+
+    // ─────────── THE SINGLE MESSAGES WRITE (Phase 2.1) ───────────
+    // Every handler-derived system note has now been folded into
+    // result.messages, so the LLM-facing history persists exactly once.
+    // This replaces five separate UPDATEs of the same column — one eager write
+    // before dispatch plus four conditional re-writes after it — which on the
+    // Turso path meant up to five sequential round trips per turn to store
+    // successively longer versions of the same array.
+    await dbRun('UPDATE dm_sessions SET messages = ? WHERE id = ?', [JSON.stringify(result.messages), sessionId]);
 
     // Detect condition changes from AI response
     const conditionChanges = detectConditionChanges(result.narrative);
@@ -1839,7 +1947,13 @@ router.post('/:sessionId/message', async (req, res) => {
       craftingEvents: craftingEvents.length > 0 ? craftingEvents : undefined,
       mythicEvents: mythicEvents.length > 0 ? mythicEvents : undefined,
       promiseEvents: promiseEvents.length > 0 ? promiseEvents : undefined,
-      notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined
+      notorietyEvents: notorietyEvents.length > 0 ? notorietyEvents : undefined,
+      // Phase 3.1 — HP is authoritative server-side now, so the turn reports it
+      // back rather than leaving the client to infer damage from prose.
+      hpChanges: pipelineResult.handlerResults
+        .filter(hr => hr.ok && hr.schemaKey === 'HP_CHANGE' && hr.result?.applied)
+        .map(hr => hr.result),
+      deathSave: deathSave || undefined
     });
   } catch (error) {
     // Tagged-error mapping (set by claude.js in service/claude.js error path).
@@ -1869,6 +1983,9 @@ router.post('/:sessionId/message', async (req, res) => {
       });
     }
     handleServerError(res, error, 'process DM session message');
+  } finally {
+    // Every exit above — early return, thrown error, or success — lands here.
+    releaseSessionLock(lockKey);
   }
 });
 
@@ -2546,7 +2663,15 @@ router.post('/:sessionId/end', async (req, res) => {
       ? { xp: 0, gold: { cp: 0, sp: 0, gp: 0 }, loot: null, breakdown: null }
       : calculateSessionRewards(character, durationHours, rewardsAnalysis);
 
-    const hpChange = calculateHPChange(character, rewardsAnalysis);
+    // Phase 3.2 — the session-end HP heuristic is retired. HP is now applied
+    // per-turn from [HP_CHANGE] markers (characterHpService), so running
+    // calculateHPChange here as well would subtract a second, invented amount
+    // of damage on top of the damage that actually happened during play.
+    //
+    // calculateHPChange itself stays exported in dmSessionService; it is simply
+    // no longer called. It derived damage from an LLM 0-10 "combat" score and
+    // carried a known bug where the quests branch discarded the damage branch.
+    const hpChange = 0;
     const daysElapsed = calculateGameTimeAdvance(rewardsAnalysis);
 
     // Advance game date
@@ -2775,6 +2900,20 @@ router.post('/:sessionId/end', async (req, res) => {
       newGameDate: dayToDate(newGameDate.day, newGameDate.year),
       npcsExtracted: extractedNpcs.length > 0 ? extractedNpcs : undefined
     });
+
+    // Phase 2.3b — snapshot the campaign after the session is safely recorded.
+    //
+    // Deliberately AFTER res.json and deliberately not awaited: pulling the
+    // database down is multi-megabyte work that grows with the campaign, and
+    // holding the response open for it would make every session end feel
+    // broken. A backup failure is logged, never surfaced — the session already
+    // succeeded, and failing the request over a backup would be worse than the
+    // missing backup.
+    if (FEATURE_FLAGS.SESSION_END_BACKUP) {
+      import('../scripts/backup.js')
+        .then(({ main: runBackup }) => runBackup())
+        .catch(err => console.error('[backup] session-end backup failed (non-fatal):', err?.message));
+    }
   } catch (error) {
     handleServerError(res, error, 'end DM session');
   }
@@ -3076,7 +3215,12 @@ router.post('/:sessionId/claim', async (req, res) => {
       gold_cp: character.gold_cp + (rewards.gold?.cp || 0),
       gold_sp: character.gold_sp + (rewards.gold?.sp || 0),
       gold_gp: character.gold_gp + (rewards.gold?.gp || 0),
-      current_hp: Math.max(1, Math.min(character.max_hp, character.current_hp + (session.hp_change || 0)))
+      // Phase 3.2 — floor removed. This clamps to [0, max_hp], not [1, max_hp]:
+      // the old Math.max(1, ...) was not an edge-case guard, it was the reason
+      // the player character could never reach 0 HP. session.hp_change is 0 for
+      // sessions run after Phase 3.2, so in practice this now preserves the HP
+      // that per-turn markers already wrote.
+      current_hp: Math.max(0, Math.min(character.max_hp, character.current_hp + (session.hp_change || 0)))
     };
 
     // Add loot to inventory

@@ -606,17 +606,42 @@ export async function getRelevantContext(characterId, campaignId, hints = {}, to
 // ============================================================
 
 /**
- * Get ALL session chronicle summaries for injection into DM prompt.
+ * Get the most recent session chronicle summaries for injection into the DM prompt.
  * These are richer (300-500 word AI-generated recaps) than dm_sessions.summary.
+ *
+ * Capped deliberately. Each row renders to roughly 650 prompt tokens
+ * (summary + cliffhanger + up to three key decisions), and every past session
+ * used to be injected into every new session's system prompt with no limit —
+ * unbounded growth that eventually consumes the whole context window.
+ *
+ * Returns the NEWEST `limit` chronicles, ordered OLDEST-FIRST. Callers depend on
+ * ascending order and treat the last element as the most recent session
+ * (routes/dmSession.js), so the newest-N selection happens in a subquery and the
+ * outer query restores chronological order. Do not flip this to DESC.
+ *
+ * @param {number} campaignId
+ * @param {number} characterId
+ * @param {number} [limit=10] - How many recent sessions to include.
+ * @returns {Promise<Array>} Ascending by session_number.
  */
-export async function getSessionSummariesForPrompt(campaignId, characterId) {
+export const SESSION_SUMMARY_PROMPT_LIMIT = 10;
+
+export async function getSessionSummariesForPrompt(
+  campaignId,
+  characterId,
+  limit = SESSION_SUMMARY_PROMPT_LIMIT
+) {
   return await dbAll(
-    `SELECT session_number, summary, mood, cliffhanger, key_decisions,
-            game_day_start, game_day_end
-     FROM story_chronicles
-     WHERE campaign_id = ? AND character_id = ?
+    `SELECT * FROM (
+       SELECT session_number, summary, mood, cliffhanger, key_decisions,
+              game_day_start, game_day_end
+       FROM story_chronicles
+       WHERE campaign_id = ? AND character_id = ?
+       ORDER BY session_number DESC
+       LIMIT ?
+     )
      ORDER BY session_number ASC`,
-    [campaignId, characterId]
+    [campaignId, characterId, limit]
   );
 }
 

@@ -2,6 +2,30 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.168] - 2026-08-09 — Phases 1-3 of the "scale back to scale up" refactor
+
+Cut the system to a stable narrative core, hardened persistence, then made combat mechanically real. Executed against `CAMPAIGN_READINESS_AUDIT.md`, but **only after verifying every claim** — three of the plan's steps turned out to target code that does not behave as the audit described, and were corrected or dropped. `CLAUDE.md` was rewritten from scratch for the new architecture.
+
+**Test infrastructure (new).** `npm test` now exists (`server/scripts/run-tests.js`). It redirects `TURSO_DATABASE_URL` to a throwaway file, so the suite can no longer touch the live campaign database; `prose-quality.test.js` is excluded by default because it makes billed API calls. Baseline at start: 69/72 files green. Now: **75/78 green, 4411 assertions passing**, with the same three pre-existing failures throughout. Fixed `npc-relationships.test.js`, which imported a symbol removed in Phase 3 SC-4 and could not load at all.
+
+**Phase 1.1 — context bounds.** `getSessionSummariesForPrompt` capped at the newest 10 (still oldest-first; `dmSession.js` depends on last-element-is-newest). Added `MAX_CHRONICLE_BUDGET` — a one-line clamp that made the plan's expensive budget-reorder unnecessary. Added `checkPromptSize` in `aiCallLogger`, which covers session start *and* every turn because all AI calls funnel through the logger. Wrapped an unguarded `JSON.parse` that could take down prompt assembly.
+
+**Phase 1.2 — living world disabled.** New `server/config/featureFlags.js`. Flags are getters reading `process.env` at access time, so tests opt back in after hoisted imports. Guards at the tick plus `processFactionTick`/`processEventTick`, which routes call directly and would have bypassed the choke point. Also gated the three player actions that queue a resolution the tick would deliver — otherwise disabling the tick ships soft-locks where a companion sent away never returns.
+
+**Phase 1.3 — dropped.** All 26 DM markers already dispatch through `markerPipeline`; 26 of 28 legacy `detect*` functions have no production caller. The audit finding rested on a stale comment at `markerPipeline.js:4-25` reading "No handlers are registered yet" while 26 were. Deleting the exports would have changed nothing and broken four suites.
+
+**Phase 1.4 — reduced.** The `canLevelUp`/`XP_THRESHOLDS` gate was dropped: four call sites, all player-initiated endpoints, none on the session path. Gated what actually fires mid-turn instead — the `MYTHIC_TRIAL` to `advanceTier` cascade, and quest/achievement XP (XP branch only; gold and items still apply).
+
+**Phase 2.1 — atomic-ish turns.** Marker dispatch now runs **before** any persist, and the five separate `UPDATE dm_sessions SET messages` writes collapsed into one. **The transaction half was deliberately not shipped**: libSQL transactions are connection-scoped while all 26 handlers write through the outer client, so it would have rolled back nothing while taking a `BEGIN IMMEDIATE` lock the handlers then contend against — and since `markerPipeline` swallows handler errors, the failure would have appeared as a 200 with a saved narrative and no effects, exactly the bug the step existed to fix.
+
+**Phase 2.2 — idempotency.** `server/utils/sessionLocks.js` + `409` on concurrent POST. A Map with timestamps, not a Set, so a leaked lock self-heals after 10 minutes instead of wedging the session forever. Client fixed in the same change: it parsed JSON before checking `ok`, and cleared the input before the fetch, so a 409 would have lost the typed action.
+
+**Phase 2.3 — persistence.** Migrations now run `up()` and the `_migrations` insert in one transaction (`tx` passed to `up()`, never `db`), verified by fixture migrations that half-apply and throw. Backup rewritten: `VACUUM INTO` cannot back up Turso — it executes server-side — so the Turso path pulls the database down via embedded-replica `sync()`. Every backup is reopened and verified before older ones are pruned. Fires automatically after session end, non-blocking.
+
+**Phase 3.1/3.2 — the player can die.** Migration 054 adds death-save columns. New `characterHpService.js` registers the `HP_CHANGE` handler on the player path, applying deltas via a single atomic clamped `UPDATE`. At 0 HP the system rolls 5e death saves; the AI narrates and stops. All three `Math.max(1, ...)` floors removed (`dmSession`, `adventure`, `downtime`), `PUT /api/character/:id` now clamps `current_hp`, and the session-end HP heuristic is retired so damage is not counted twice. The `HP_CHANGE` prompt instruction sits **outside** the mechanical-markers section because `applyLeanTransforms` strips that section — placing it there would have made the player silently invulnerable on lean turns.
+
+**Phase 3.3 — RNG.** `server/utils/rng.js`, folding in two byte-identical `rollD20` definitions that had drifted into separate services. Initiative, crafting checks, and death saves route through it with a diagnostic roll log. Cosmetic randomness deliberately untouched.
+
 ## [1.0.0.167] - 2026-05-06 — Phase 4a review fix part 2: home-route appbar missed the AI Behavior link
 
 PM 2026-05-06 review caught that v1.0.166's "fix" only landed on one of HomeFlow's two appbars. The path-route appbar (`route === 'path'`, the choice-of-beginnings screen) got the AI Behavior link; the home-route appbar (`route === 'home'`, the default — the user's primary surface) did not.

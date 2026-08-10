@@ -8,6 +8,13 @@
  * Uses local.db directly via initDatabase. All test data prefixed with TEST_ and cleaned up.
  */
 
+// Away-activities are disabled by default from Phase 1.2 onward — they only
+// resolve inside the living-world tick, which the MVP scale-back turns off.
+// This suite tests the subsystem itself, so it opts back in. Safe after the
+// imports: FEATURE_FLAGS reads process.env at flag-read time, not load time.
+process.env.FF_DEFERRED_RESOLUTION_ACTIONS = 'true';
+process.env.FF_LIVING_WORLD_TICK = 'true';
+
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';
 import {
   sendOnActivity, getAwayCompanions, getActiveActivities,

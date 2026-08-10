@@ -6,6 +6,7 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import {
   getMythicTierInfo,
@@ -597,7 +598,10 @@ registerMarkerHandler('MYTHIC_TRIAL', async (parsed, context) => {
       ...trialResult
     }];
 
-    if (trialResult.canAdvance) {
+    // Phase 1.4 — the auto-cascade is the one progression side effect that
+    // fires mid-turn without the player asking, and advanceTier throws at the
+    // tier-5 ceiling. Gated for MVP; the trial itself is still recorded.
+    if (trialResult.canAdvance && FEATURE_FLAGS.PROGRESSION_AWARDS) {
       try {
         const advanceResult = await advanceTier(character.id, character.game_day);
         events.push({

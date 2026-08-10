@@ -1,6 +1,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { generateNpcEffectsForEvent, resolveNpcEffectsForEvent } from './worldEventNpcService.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { registerThresholdConsumer, daysSince } from './timeBoundedState.js';
 
 /**
@@ -507,6 +508,11 @@ const WORLD_EVENT_DEADLINE_THRESHOLD_CONSUMER = registerThresholdConsumer({
  * null-anchor short-circuit.
  */
 export async function processEventTick(campaignId, currentGameDay = 0) {
+  // Phase 1.2 — guarded here as well as in livingWorldService, because
+  // routes/worldEvent.js calls this directly and would otherwise bypass the
+  // living-world choke point. Returns the normal empty-results shape.
+  if (!FEATURE_FLAGS.LIVING_WORLD_TICK) return [];
+
   const events = await getEventsForTick(campaignId);
   const results = [];
 

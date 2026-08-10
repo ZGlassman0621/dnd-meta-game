@@ -282,6 +282,14 @@ router.put('/:id', async (req, res) => {
       priorPhase = row?.creation_phase || null
     }
 
+    // Phase 3.2 — the stored max_hp is the ceiling for clamping an incoming
+    // current_hp when the request does not also set max_hp. Read only when
+    // needed, so the common no-HP update keeps its single round trip.
+    let existing = null;
+    if (req.body.current_hp !== undefined && req.body.max_hp === undefined) {
+      existing = await dbGet('SELECT max_hp FROM characters WHERE id = ?', [req.params.id]);
+    }
+
     const updates = [];
     const values = [];
 
@@ -331,6 +339,24 @@ router.put('/:id', async (req, res) => {
         if (key === 'survival_intensity' && !VALID_SURVIVAL_INTENSITIES.has(value)) {
           continue;
         }
+
+        // Phase 3.2 — HP is authoritative server-side now (per-turn
+        // [HP_CHANGE] markers plus death saves). This endpoint still needs to
+        // accept current_hp for the character sheet's manual editor, but it
+        // must not be a hole straight through the invariants: clamp to
+        // [0, max_hp] and reject non-numeric input rather than writing it raw.
+        if (key === 'current_hp') {
+          const requested = Number(value);
+          if (!Number.isFinite(requested)) continue;
+          const ceiling = Number(req.body.max_hp ?? existing?.max_hp);
+          const clamped = Number.isFinite(ceiling)
+            ? Math.max(0, Math.min(ceiling, Math.trunc(requested)))
+            : Math.max(0, Math.trunc(requested));
+          updates.push(`${key} = ?`);
+          values.push(clamped);
+          continue;
+        }
+
         updates.push(`${key} = ?`);
         values.push(value);
       }

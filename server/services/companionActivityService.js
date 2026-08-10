@@ -9,6 +9,7 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { adjustLoyalty, setMood } from './companionBackstoryService.js';
 import { emit } from './eventEmitter.js';
@@ -34,6 +35,16 @@ const VALID_ACTIVITY_TYPES = [
  * @returns {object} - The created activity
  */
 export async function sendOnActivity(companionId, data) {
+  // Phase 1.2 — away-activities resolve only inside the living-world tick
+  // (checkAndResolveActivities). With the tick static, sending a companion away
+  // would strand them permanently: a soft-lock, not a paused system.
+  if (!FEATURE_FLAGS.DEFERRED_RESOLUTION_ACTIONS) {
+    throw new Error(
+      'Companion away-activities are disabled while the living world is static ' +
+      '(FEATURE_FLAGS.DEFERRED_RESOLUTION_ACTIONS). The companion would never return.'
+    );
+  }
+
   const companion = await dbGet(`
     SELECT c.*, n.name as npc_name, n.race as npc_race, n.occupation as npc_occupation
     FROM companions c

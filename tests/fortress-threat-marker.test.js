@@ -28,6 +28,12 @@
  * Test data uses TEST_PHASE37_ prefix; cleanup runs at end + on failure.
  */
 
+// FORTRESS_THREAT is disabled by default from Phase 1.2 onward — threats are
+// matured and auto-resolved by the living-world tick, which the MVP scale-back
+// turns off. This suite tests the handler itself, so it opts back in. Safe
+// after the imports: FEATURE_FLAGS reads process.env at flag-read time.
+process.env.FF_DEFERRED_RESOLUTION_ACTIONS = 'true'
+
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js'
 import { parseMarkerBody, validateDmMarkers } from '../server/services/markerSchemas.js'
 import { processResponseMarkers } from '../server/services/markerPipeline.js'

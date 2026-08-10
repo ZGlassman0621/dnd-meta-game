@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { safeParse } from '../utils/safeParse.js';
 import { emit, GAME_EVENTS } from './eventEmitter.js';
 
@@ -297,8 +298,10 @@ async function applyQuestRewards(characterId, rewards, questTitle) {
     params.push(newGp);
   }
 
-  // Apply XP reward (validate it's a positive number)
-  if (rewards.xp && typeof rewards.xp === 'number' && rewards.xp > 0 && Number.isFinite(rewards.xp)) {
+  // Apply XP reward (validate it's a positive number).
+  // Phase 1.4 — XP accrual is paused for MVP; gold and items below still apply.
+  if (FEATURE_FLAGS.PROGRESSION_AWARDS &&
+      rewards.xp && typeof rewards.xp === 'number' && rewards.xp > 0 && Number.isFinite(rewards.xp)) {
     const newXP = (character.experience || 0) + rewards.xp;
     updates.push('experience = ?');
     params.push(newXP);

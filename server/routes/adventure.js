@@ -270,7 +270,9 @@ router.post('/claim/:adventure_id', async (req, res) => {
     if (consequences) {
       for (const consequence of consequences) {
         if (consequence.type === 'hp_loss') {
-          updates.current_hp = Math.max(1, character.current_hp - consequence.value);
+          // Phase 3.2 — floor removed; adventure consequences can now drop the
+          // character to 0 and into death saves, like any other damage source.
+          updates.current_hp = Math.max(0, character.current_hp - consequence.value);
         }
         if (consequence.type === 'gold_loss') {
           const lossPercent = consequence.value;

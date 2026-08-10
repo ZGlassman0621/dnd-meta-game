@@ -11,8 +11,19 @@ import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';
 import {
   getOrCreateRelationship, createRelationship, getRelationship,
   adjustDisposition, adjustTrust, recordInteraction,
-  getCharacterRelationships, getDispositionLabel, getNpcsByLocation
+  getCharacterRelationships, getNpcsByLocation, NPC_DISPOSITION_CONFIG
 } from '../server/services/npcRelationshipService.js';
+import { mapToLabel } from '../server/services/standingScalar.js';
+
+// The service's own `getDispositionLabel` was removed in Phase 3 SC-4 and
+// superseded by the shared band-mapper. Reconstruct it here so this suite keeps
+// asserting the disposition bands themselves.
+//
+// Deliberately NOT the same-named export in server/config/eventTypes.js — that
+// one is a different function with different boundaries (it maps -25 to
+// 'neutral' where these bands map it to 'unfriendly').
+const getDispositionLabel = (score) =>
+  mapToLabel(score, NPC_DISPOSITION_CONFIG.labelBands);
 
 let passed = 0;
 let failed = 0;

@@ -769,10 +769,29 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         })
       });
 
-      const data = await response.json();
+      // Parse defensively: a proxy error or a dropped connection returns
+      // non-JSON, and parsing before checking `ok` turned those into a
+      // misleading "Unexpected token < in JSON" instead of the real status.
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to send action');
+        // 409 — a turn is already in flight for this session (server-side
+        // session lock). Not a failure of this action: the previous one is
+        // still running. Restore the typed action so it is not lost, and say
+        // so plainly rather than surfacing a generic error.
+        if (response.status === 409) {
+          setInputAction(action);
+          setMessages(prev => prev.slice(0, -1));
+          throw new Error(
+            data.error || 'That turn is still being processed. Give it a moment, then send again.'
+          );
+        }
+        throw new Error(data.error || data.message || 'Failed to send action');
       }
 
       setMessages(prev => [...prev, { type: 'narrative', content: data.narrative }]);

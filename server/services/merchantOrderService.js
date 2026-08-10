@@ -8,6 +8,7 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import { getMerchantInventory, createMerchantOnTheFly } from './merchantService.js';
 import { registerThresholdConsumer } from './timeBoundedState.js';
@@ -379,6 +380,11 @@ export { MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER, MERCHANT_ORDER_EXPIRE_THRESHOLD_
  */
 registerMarkerHandler('MERCHANT_COMMISSION', async (parsed, context) => {
   if (!context?.characterId) return null;
+
+  // Phase 1.2 — commissions are fulfilled by the living-world tick
+  // (processDueOrders). With the tick static, a commissioned item would never
+  // become ready, so the order is declined rather than silently stranded.
+  if (!FEATURE_FLAGS.DEFERRED_RESOLUTION_ACTIONS) return null;
   const character = await dbGet(
     'SELECT campaign_id, game_day FROM characters WHERE id = ?',
     [context.characterId]

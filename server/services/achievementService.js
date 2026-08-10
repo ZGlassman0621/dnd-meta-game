@@ -7,6 +7,7 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { ACHIEVEMENTS } from '../config/achievements.js';
 
 // ============================================================
@@ -237,7 +238,9 @@ async function applyAchievementRewards(characterId, rewards) {
     params.push((character.gold_gp || 0) + rewards.gold);
   }
 
-  if (rewards.xp && typeof rewards.xp === 'number' && rewards.xp > 0) {
+  // Phase 1.4 — XP accrual is paused for MVP; gold and items still apply.
+  if (FEATURE_FLAGS.PROGRESSION_AWARDS &&
+      rewards.xp && typeof rewards.xp === 'number' && rewards.xp > 0) {
     updates.push('experience = ?');
     params.push((character.experience || 0) + rewards.xp);
   }

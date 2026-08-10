@@ -18,8 +18,11 @@ import { dbAll, dbGet } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import { estimateEnemyDexMod } from './dmSessionService.js';
+import { rollD20 as rngRollD20 } from '../utils/rng.js';
 
-const rollD20 = () => Math.floor(Math.random() * 20) + 1;
+// Initiative is mechanically meaningful, so it routes through the central RNG
+// (Phase 3.3) rather than a local Math.random wrapper.
+const rollD20 = () => rngRollD20('initiative');
 
 /**
  * COMBAT_START handler. Single-instance per response. Heaviest handler

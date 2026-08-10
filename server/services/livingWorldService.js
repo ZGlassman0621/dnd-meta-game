@@ -1,5 +1,6 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import * as factionService from './factionService.js';
 import * as worldEventService from './worldEventService.js';
 import * as questGenerator from './questGenerator.js';
@@ -54,6 +55,26 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     // digging through stdout. { step: '3.6 base_income', status: 'ok'|'failed'|'skipped', ...details }
     step_statuses: []
   };
+
+  // Phase 1.2 — MVP scale-back. The entire tick is bypassed while the world is
+  // deliberately static. This one guard covers all four call paths:
+  // routes/dmSession.js (long rest / downtime), routes/metaGame.js (advance
+  // time, via processCharacterTimeAdvance), and both routes/livingWorld.js
+  // debug endpoints.
+  //
+  // Returns the FULL result shape rather than null: callers reduce over
+  // faction_results.length / spawned_events.length / effects_expired, and the
+  // simulate endpoint loops on them. Returning early here also sidesteps the
+  // empty-results re-throw below, so the debug buttons get an honest 200 with a
+  // visible "skipped" status instead of a 500.
+  if (!FEATURE_FLAGS.LIVING_WORLD_TICK) {
+    results.step_statuses.push({
+      step: 'ALL',
+      status: 'skipped',
+      reason: 'FEATURE_FLAGS.LIVING_WORLD_TICK is false (Phase 1.2 MVP scale-back)'
+    });
+    return results;
+  }
 
   // Helper that records step status + appends to errors[] on failure.
   // Skipped steps (e.g., no character in campaign) should call this with
@@ -844,9 +865,13 @@ export async function processCharacterTimeAdvance(characterId, hoursAdvanced) {
   // Process the living world tick
   const results = await processLivingWorldTick(character.campaign_id, daysPassed);
 
-  // Process survival day-change if a full day passed
+  // Process survival day-change if a full day passed.
+  // Flagged separately from the tick because it runs after processLivingWorldTick
+  // returns, so choke point A does not cover it. Off for MVP: this stops food
+  // spoilage and exhaustion application only — hunger and thirst LEVELS are
+  // derived from game_day at read time and keep advancing regardless.
   let survivalEffects = null;
-  if (daysPassed >= 1) {
+  if (FEATURE_FLAGS.SURVIVAL_DAY_CHANGE && daysPassed >= 1) {
     try {
       const weather = await getWeather(character.campaign_id);
       survivalEffects = await processSurvivalDayChange(characterId, character.game_day || 1, weather);

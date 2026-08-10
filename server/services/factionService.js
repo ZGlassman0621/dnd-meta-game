@@ -1,6 +1,7 @@
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { adjustStanding, AUDIT_STRATEGIES, mapToLabel } from './standingScalar.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 
 /**
  * Faction Service - CRUD operations for factions, faction goals, and faction standings
@@ -745,6 +746,11 @@ export async function getGoalsForTick(campaignId) {
  * wider variance for unpredictability, and random disruptions/opportunities.
  */
 export async function processFactionTick(campaignId, gameDaysPassed = 1) {
+  // Phase 1.2 — guarded here as well as in livingWorldService, because
+  // routes/faction.js calls this directly and would otherwise bypass the
+  // living-world choke point. Returns the normal empty-results shape.
+  if (!FEATURE_FLAGS.LIVING_WORLD_TICK) return [];
+
   const goals = await getGoalsForTick(campaignId);
   const results = [];
 

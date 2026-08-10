@@ -8,6 +8,7 @@
 
 import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
 import { formatFactionStandingFragment } from './factionService.js';
+import { safeParse } from '../utils/safeParse.js';
 
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
@@ -1002,9 +1003,13 @@ function formatPreviousSessionSummaries(summaries, isContinuing, chronicleSummar
       if (c.cliffhanger) {
         text += `\n  Cliffhanger: ${c.cliffhanger}`;
       }
-      // Include key decisions if available
-      const decisions = typeof c.key_decisions === 'string' ? JSON.parse(c.key_decisions || '[]') : (c.key_decisions || []);
-      if (decisions.length > 0) {
+      // Include key decisions if available. safeParse rather than a bare
+      // JSON.parse: this runs during system-prompt assembly, so one malformed
+      // key_decisions row would otherwise take down session start entirely.
+      const decisions = typeof c.key_decisions === 'string'
+        ? (safeParse(c.key_decisions, []) ?? [])
+        : (c.key_decisions || []);
+      if (Array.isArray(decisions) && decisions.length > 0) {
         const decisionLines = decisions.slice(0, 3).map(d => {
           const decision = d.decision || d;
           const consequence = d.consequence ? ` → ${d.consequence}` : '';
@@ -1898,6 +1903,42 @@ When the player's action would violate a higher tier (e.g. player greets an NPC 
  * the always-on markers front-and-center and stops Sonnet from carrying
  * specs for features that won't fire.
  */
+/**
+ * HP rules — ALWAYS ON, deliberately outside formatMechanicalMarkers.
+ *
+ * applyLeanTransforms strips the entire MECHANICAL MARKERS section. If the
+ * HP_CHANGE instruction lived there, every lean-prompt turn would silently
+ * stop applying damage with no error anywhere — the character would simply
+ * become invulnerable. HP is the one marker that must survive lean mode, so it
+ * is emitted here, ahead of that section, where the strip regex cannot reach.
+ *
+ * Phase 3.1 — HP is authoritative in the database now, not in narration.
+ */
+function formatPlayerHpRules() {
+  return `
+═══════════════════════════════════════════════════════════════
+HIT POINTS — REAL AND TRACKED
+═══════════════════════════════════════════════════════════════
+The player's HP is stored in the database and shown on their character sheet.
+It only changes when you say so, using this marker:
+
+[HP_CHANGE: delta=-7 reason="ogre's club"] — INLINE, immediately after the blow lands.
+
+• delta is REQUIRED and is a whole number. Negative for damage, positive for healing.
+• Emit one on EVERY hit the player takes, every trap, every failed save with
+  damage, every potion drunk, every spell of healing received.
+• Do NOT emit it for damage the player deals to enemies — only for changes to
+  the PLAYER's own hit points.
+• Never state the player's exact remaining HP in prose. Narrate the blow; the
+  sheet carries the number. "Bloodied" (about half) and "barely standing"
+  (near death) remain the right register.
+
+AT 0 HIT POINTS: the player falls unconscious and begins making death saving
+throws. The system rolls these — narrate the fall and the tension, then STOP.
+Do not roll, do not announce the result, and do not decide whether they live.
+`;
+}
+
 function formatMechanicalMarkers(sessionContext) {
   const blocks = [];
 
@@ -2390,7 +2431,7 @@ WRONG (vague threat without a source):
 RIGHT (specific and engageable):
 > At the far end of the alley, a silhouette shifts behind a stack of crates. A boot scrapes wet stone.
 
-${formatMemoryHierarchy()}${formatMechanicalMarkers(sessionContext)}
+${formatMemoryHierarchy()}${formatPlayerHpRules()}${formatMechanicalMarkers(sessionContext)}
 
 ──────────── STORY MEMORY & QUEST WEAVING ────────────
 Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
@@ -2605,7 +2646,7 @@ export function applyLeanTransforms(systemPrompt) {
   // (1) Strip the entire MECHANICAL MARKERS section.
   result = result.replace(
     /═══+\s*\nMECHANICAL MARKERS\s*\n═══+[\s\S]*?(?=\n═══+\s*\nEND OF CORE RULES|\n──────────── STORY MEMORY)/,
-    '═══════════════════════════════════════════════════════════════\nMECHANICAL MARKERS — DISABLED THIS SESSION\n═══════════════════════════════════════════════════════════════\nLean prompt mode is active. System markers (combat, loot, merchant, conditions, promises) are disabled — narrate cleanly without bracketed system tags. Game-state systems will not update from this session.\n\n'
+    '═══════════════════════════════════════════════════════════════\nMECHANICAL MARKERS — MOSTLY DISABLED THIS SESSION\n═══════════════════════════════════════════════════════════════\nLean prompt mode is active. System markers (combat, loot, merchant, conditions, promises) are disabled — narrate cleanly without bracketed system tags. Those game-state systems will not update from this session.\n\nEXCEPTION: [HP_CHANGE] is still live. Hit points are tracked for real even in lean mode — keep emitting it on every change to the player\'s HP, exactly as described in the HIT POINTS section above.\n\n'
   );
 
   // (2) Replace Cardinal Rule 2 (HARD STOPS) with the soft version.

@@ -13,6 +13,13 @@ import {
   processLivingWorldTick, getWorldState, getCharacterWorldView
 } from '../server/services/livingWorldService.js';
 
+// The living-world tick is disabled by default from Phase 1.2 onward (MVP
+// scale-back). This suite tests the subsystem itself, so it opts back in.
+// Safe to set after the imports: FEATURE_FLAGS exposes getters that read
+// process.env when the flag is *read*, not when the module is loaded.
+process.env.FF_LIVING_WORLD_TICK = 'true';
+process.env.FF_SURVIVAL_DAY_CHANGE = 'true';
+
 let passed = 0;
 let failed = 0;
 
