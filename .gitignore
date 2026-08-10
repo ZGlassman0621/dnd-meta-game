@@ -14,3 +14,8 @@ uploads/
 *.sqlite-wal
 *.sqlite-shm
 backups/
+
+# Published third-party adventure modules kept locally as campaign source
+# material. Deliberately untracked: this is copyrighted WotC content, and once
+# a 256K document is in git history it is painful to remove.
+dnd-documents/
