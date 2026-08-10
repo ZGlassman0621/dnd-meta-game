@@ -21,6 +21,7 @@ import {
   expireStaleCapturedBases
 } from './baseThreatService.js';
 import { getSeason } from '../config/harptos.js';
+import { getPrimaryCharacter } from '../utils/primaryCharacter.js';
 
 /**
  * Living World Service - Coordinates faction and world event progression
@@ -150,10 +151,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 
     // 3.6. Base income and upkeep
     try {
-      const charRowBase = await dbGet(
-        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-        [campaignId]
-      );
+      const charRowBase = await getPrimaryCharacter(campaignId);
       if (charRowBase) {
         const base = await partyBaseService.getBase(charRowBase.id, campaignId);
         if (base && base.status === 'active') {
@@ -182,10 +180,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       const mailGameDay = maxDayRow2?.max_day || 0;
       if (mailGameDay > 0) {
         // Get character for this campaign (solo game — one character per campaign)
-        const charRow = await dbGet(
-          'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-          [campaignId]
-        );
+        const charRow = await getPrimaryCharacter(campaignId);
         if (charRow) {
           const npcMail = await generateNpcMail(campaignId, charRow.id, mailGameDay);
           results.npc_mail_generated = npcMail.length;
@@ -203,10 +198,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 
     // 3.8. Process consequences (overdue promises, expired quests)
     try {
-      const charRow2 = await dbGet(
-        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-        [campaignId]
-      );
+      const charRow2 = await getPrimaryCharacter(campaignId);
       const maxDayRow3 = await dbGet(
         'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
         [campaignId]
@@ -226,10 +218,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 
     // 3.85. Notoriety decay and entanglement checks
     try {
-      const charRowNotoriety = await dbGet(
-        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-        [campaignId]
-      );
+      const charRowNotoriety = await getPrimaryCharacter(campaignId);
       const maxDayRowNotoriety = await dbGet(
         'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
         [campaignId]
@@ -253,10 +242,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     //      ones. Queue a narrative queue entry for each so the DM can mention
     //      the pickup next session.
     try {
-      const charRowOrders = await dbGet(
-        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-        [campaignId]
-      );
+      const charRowOrders = await getPrimaryCharacter(campaignId);
       const maxDayRowOrders = await dbGet(
         'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
         [campaignId]
@@ -742,14 +728,10 @@ async function checkRivalReactions(campaignId, goal, milestone) {
  * The player must choose which side to support (or mediate).
  */
 async function spawnConflictQuest(campaignId, aggressor, defender, goal, milestone) {
-  const characters = await dbAll(
-    'SELECT * FROM characters WHERE campaign_id = ?',
-    [campaignId]
-  );
-  if (characters.length === 0) return null;
+  const character = await getPrimaryCharacter(campaignId);
+  if (!character) return null;
 
   const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [campaignId]);
-  const character = characters[0];
 
   try {
     const [aggressorStanding, defenderStanding, existingQuests] = await Promise.all([
@@ -832,24 +814,17 @@ async function spawnConflictQuest(campaignId, aggressor, defender, goal, milesto
 
 /**
  * Generate a faction quest when a goal hits a milestone.
- * Creates one quest per character in the campaign.
+ * Creates one quest, for the campaign's primary playable character.
  */
 async function spawnFactionQuestForMilestone(campaignId, goal, milestone) {
   const faction = await factionService.getFactionById(goal.faction_id);
   if (!faction) return null;
 
-  // Get characters in this campaign
-  const characters = await dbAll(
-    'SELECT * FROM characters WHERE campaign_id = ?',
-    [campaignId]
-  );
-
-  if (characters.length === 0) return null;
+  // Solo game — the campaign's primary playable character receives the quest.
+  const character = await getPrimaryCharacter(campaignId);
+  if (!character) return null;
 
   const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [campaignId]);
-
-  // Generate a quest for the first character (solo game, typically one character per campaign)
-  const character = characters[0];
 
   try {
     // Get character's standing with this faction

@@ -16,6 +16,7 @@ import { safeParse } from '../utils/safeParse.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import { registerThresholdConsumer } from './timeBoundedState.js';
+import { getPrimaryCharacter } from '../utils/primaryCharacter.js';
 import {
   RAID_CAPABLE_EVENTS,
   SIEGE_FORCE_THRESHOLD,
@@ -165,10 +166,7 @@ export async function generateThreatsForCampaign(campaignId, currentGameDay) {
 
       // Warn the player via narrative queue
       try {
-        const character = await dbGet(
-          'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-          [campaignId]
-        );
+        const character = await getPrimaryCharacter(campaignId);
         if (character) {
           const verb = threatType === 'siege' ? 'is preparing to lay siege to' : 'is moving on';
           await narrativeQueueService.addToQueue({
@@ -470,10 +468,7 @@ export async function autoResolveThreat(threatId, currentGameDay) {
 
   // Queue a narrative entry describing what happened in the player's absence
   try {
-    const character = await dbGet(
-      'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-      [threat.campaign_id]
-    );
+    const character = await getPrimaryCharacter(threat.campaign_id);
     if (character) {
       await narrativeQueueService.addToQueue({
         campaign_id: threat.campaign_id,
@@ -653,10 +648,7 @@ const BASE_RECAPTURE_EXPIRE_THRESHOLD_CONSUMER = registerThresholdConsumer({
       [row.id]
     );
     try {
-      const character = await dbGet(
-        'SELECT id FROM characters WHERE campaign_id = ? LIMIT 1',
-        [campaignId]
-      );
+      const character = await getPrimaryCharacter(campaignId);
       if (character) {
         await narrativeQueueService.addToQueue({
           campaign_id: campaignId,

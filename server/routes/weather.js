@@ -10,6 +10,7 @@ import { getSeason, getTimeOfDay } from '../config/harptos.js';
 import { SEASON_BASE_TEMP, REGION_TEMP_MOD } from '../config/weather.js';
 import { dbGet } from '../database.js';
 import { handleServerError } from '../utils/errorHandler.js';
+import { getPrimaryCharacter } from '../utils/primaryCharacter.js';
 
 const router = express.Router();
 
@@ -23,10 +24,7 @@ router.get('/:campaignId', async (req, res) => {
     const weather = await weatherService.getWeather(parseInt(campaignId));
 
     // Get character for time context
-    const character = await dbGet(
-      'SELECT game_day, game_year, game_hour FROM characters WHERE campaign_id = ? LIMIT 1',
-      [campaignId]
-    );
+    const character = await getPrimaryCharacter(campaignId);
 
     let effectiveTemp = weather.temperature_f;
     let timeOfDay = 'midday';
@@ -104,10 +102,7 @@ router.post('/:campaignId/set', async (req, res) => {
       return res.status(400).json({ error: 'weather_type is required' });
     }
 
-    const character = await dbGet(
-      'SELECT game_day FROM characters WHERE campaign_id = ? LIMIT 1',
-      [campaignId]
-    );
+    const character = await getPrimaryCharacter(campaignId);
     const currentGameDay = game_day || character?.game_day || 1;
     const season = getSeason(currentGameDay);
 
@@ -130,10 +125,7 @@ router.post('/:campaignId/roll', async (req, res) => {
     const { campaignId } = req.params;
 
     const weather = await weatherService.getWeather(parseInt(campaignId));
-    const character = await dbGet(
-      'SELECT game_day FROM characters WHERE campaign_id = ? LIMIT 1',
-      [campaignId]
-    );
+    const character = await getPrimaryCharacter(campaignId);
 
     const season = getSeason(character?.game_day || 1);
     const newWeather = weatherService.rollNewWeather(season, weather.region_type || 'temperate');
