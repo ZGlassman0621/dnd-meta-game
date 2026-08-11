@@ -93,7 +93,7 @@ import { formatCraftingForPrompt } from '../services/craftingService.js';
 // (Loading these services also fires their module-level
 // registerMarkerHandler() calls — survival/weather/crafting handlers
 // wire up at server boot regardless of import order.)
-import { formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK } from '../services/dmPromptBuilder.js';
+import { formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK, parsePlayerDiceInput, formatPlayerDiceDirective } from '../services/dmPromptBuilder.js';
 // SC-6.4d: recordTrial / useMythicPower / advanceTier / findLegendaryItemByName /
 // advanceItemState no longer imported — MYTHIC_TRIAL / ITEM_AWAKEN / MYTHIC_SURGE
 // handlers in mythicService.js own the calls.
@@ -1244,11 +1244,25 @@ router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
     // modelOverride: 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch (v1.0.99+)
-    const { action, providerPreference, modelOverride, leanPrompt, activeConditions } = req.body;
+    // attackRoll / damage: Phase 4 hybrid combat. Optional whole numbers the
+    // player rolled at their own table; see parsePlayerDiceInput.
+    const { action, providerPreference, modelOverride, leanPrompt, activeConditions, attackRoll, damage } = req.body;
 
     if (!action || !action.trim()) {
       return res.status(400).json({ error: 'Action is required' });
     }
+
+    // Validated before the session lookup and long before the LLM call — a
+    // malformed number should cost nothing, and a 400 here still releases the
+    // session lock through the finally below.
+    const dice = parsePlayerDiceInput({ attackRoll, damage });
+    if (!dice.ok) {
+      return res.status(400).json({ error: dice.error });
+    }
+    const diceDirective = formatPlayerDiceDirective(dice.value);
+    // What the model sees. `action` stays the clean, player-authored text and
+    // is what gets persisted, transcribed, and echoed back to the client.
+    const actionForLlm = action + diceDirective;
 
     // Get the session
     const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
@@ -1427,12 +1441,19 @@ router.post('/:sessionId/message', async (req, res) => {
           prompt_builder: 'dmPromptBuilder',
           call_purpose: 'gameplay_turn',
           system_prompt: apiSystemPrompt,
-          user_message: action,
+          // Logs what was actually sent, dice directive included — otherwise a
+          // turn where the AI ignored a binding roll is undiagnosable from the log.
+          user_message: actionForLlm,
           conversation_history: messagesToSend.filter(m => m.role !== 'system'),
-          metadata: { model_choice: turnModel, lean_prompt: !!leanPrompt, observation_verb_injected: !!observationVerbInjection }
+          metadata: {
+            model_choice: turnModel,
+            lean_prompt: !!leanPrompt,
+            observation_verb_injected: !!observationVerbInjection,
+            player_dice: diceDirective ? dice.value : null
+          }
         },
         (chatOptions) => claude.continueSession(
-          apiSystemPrompt, messagesToSend, action, turnModel,
+          apiSystemPrompt, messagesToSend, actionForLlm, turnModel,
           { ...chatOptions, sessionId }
         )
       );
@@ -1447,7 +1468,23 @@ router.post('/:sessionId/message', async (req, res) => {
       };
     } else {
       // Use Ollama
-      result = await ollama.continueSession(messagesToSend, action, session.model);
+      result = await ollama.continueSession(messagesToSend, actionForLlm, session.model);
+    }
+
+    // Strip the dice directive back out of the history about to be persisted.
+    // Same discipline as the system-prompt restore above and the observation
+    // block: a per-turn injection must not survive into stored history, where
+    // it would replay "these numbers are authoritative" against a roll that
+    // resolved twenty turns ago. Matched on the exact suffix and walked from
+    // the end, so it can only ever hit the turn that was just sent.
+    if (diceDirective && Array.isArray(result.messages)) {
+      for (let i = result.messages.length - 1; i >= 0; i--) {
+        const m = result.messages[i];
+        if (m?.role === 'user' && typeof m.content === 'string' && m.content.endsWith(diceDirective)) {
+          result.messages[i] = { ...m, content: action };
+          break;
+        }
+      }
     }
 
     // ─────────── MARKER DISPATCH RUNS BEFORE ANY PERSIST (Phase 2.1) ───────────

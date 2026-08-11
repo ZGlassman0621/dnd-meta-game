@@ -1,5 +1,7 @@
 /**
- * Migration 056: Campaign chronicle rollup (Phase 4)
+ * Migration 063: Campaign chronicle rollup (Phase 4)
+ *
+ * Renumbered from 056 on 2026-08-10 — see migration 061's header.
  *
  * `getSessionSummariesForPrompt` caps the DM prompt at the newest 10 session
  * chronicles (Phase 1.1). That bounded the prompt, but it bounded it by

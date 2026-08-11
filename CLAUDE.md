@@ -130,6 +130,18 @@ HP is **authoritative in the database**. `[HP_CHANGE: delta=-7 reason="..."]` ap
 
 The `HP_CHANGE` prompt instruction lives in `formatPlayerHpRules()`, **outside** `formatMechanicalMarkers()`, because `applyLeanTransforms` strips that entire section — putting it there would make the player silently invulnerable on lean turns.
 
+### Hybrid combat — player-rolled dice
+
+The player rolls their own attack and damage dice. `POST /:sessionId/message` accepts two optional integers, `attackRoll` and `damage`; both are **binding facts** for that turn. The AI adjudicates against the target's AC and narrates, and does not re-roll. The server keeps player HP, unconsciousness and death saves; the AI keeps enemy HP and hit resolution. There is no server-side enemy HP table, and string-matching the narrative for enemy names to build one was rejected outright.
+
+`parsePlayerDiceInput` + `formatPlayerDiceDirective` in `dmPromptBuilder.js` are a pair — validator and the prompt text it guards — and are kept adjacent so the bounds and the wording cannot drift apart. Three rules worth knowing:
+
+- **Absent ≠ zero ≠ malformed.** `null`/`undefined`/`''` mean "no roll" and are the common case. Damage `0` is legitimate; guard with `Number.isInteger`, never truthiness.
+- **Malformed is a `400`**, raised before the session lookup. Silently dropping a number the player typed returns the roll to the AI without telling anyone.
+- **The directive is appended to the player's action, not the system prompt** — `applyLeanTransforms` could strip it there, and the numbers describe *this* action so recency belongs next to it. The route strips it back off before the single `messages` write, so it never accretes in stored history. The clean action is what persists, transcribes and reaches the client; `ai_call_log` alone records the augmented text.
+
+`tests/hybrid-combat-dice.test.js` covers both layers — the pure functions, and the real route over the stubbed-LLM harness.
+
 Session-end HP heuristics are retired (`hpChange = 0`). All three `Math.max(1, ...)` floors are gone, and `PUT /api/character/:id` clamps `current_hp` to `[0, max_hp]`.
 
 ### Session end — `POST /:sessionId/end`
@@ -155,7 +167,7 @@ Unbounded prompt growth is the failure mode that would eventually end a long cam
 
 ### Campaign acts
 
-`campaigns.current_act_index` (migration 055) points into `campaign_plan.main_quest.acts`. Reads go through `resolveCurrentAct`, which **clamps** — the pointer is a column and the acts live in a regenerable JSON blob, so they drift. Nothing advances the act automatically; `POST /api/campaign/:id/act/advance` drives it, because deciding an act has ended is a narrative judgement and a mechanical trigger would advance the arc on a schedule the story has not earned.
+`campaigns.current_act_index` (migration 062) points into `campaign_plan.main_quest.acts`. Reads go through `resolveCurrentAct`, which **clamps** — the pointer is a column and the acts live in a regenerable JSON blob, so they drift. Nothing advances the act automatically; `POST /api/campaign/:id/act/advance` drives it, because deciding an act has ended is a narrative judgement and a mechanical trigger would advance the arc on a schedule the story has not earned.
 
 ### Persistence
 

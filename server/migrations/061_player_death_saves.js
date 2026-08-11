@@ -1,5 +1,10 @@
 /**
- * Migration 054: Player Death Saves (Phase 3.1)
+ * Migration 061: Player Death Saves (Phase 3.1)
+ *
+ * Renumbered from 054 on 2026-08-10. The live database had already recorded
+ * a different 054-060 block (applied from a working tree that was never
+ * committed), so this Phase 3.1 work was renumbered to sit after it and keep
+ * the timeline linear. Behaviour is unchanged.
  *
  * Until now the protagonist could not reach 0 HP. HP moved only at session end
  * via a heuristic clamped with Math.max(1, ...), so the one character the

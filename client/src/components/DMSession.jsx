@@ -68,6 +68,13 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Hybrid combat (Phase 4) — the player rolls their own attack/damage dice at
+  // the table and types the results here. Both optional; kept as strings so an
+  // empty field stays empty rather than collapsing to 0 (a real, meaningful
+  // damage value). The server treats whatever arrives as binding.
+  const [attackRollInput, setAttackRollInput] = useState('');
+  const [damageInput, setDamageInput] = useState('');
+
   // Rewards state
   const [sessionEnded, setSessionEnded] = useState(false);
   const [sessionRewards, setSessionRewards] = useState(null);
@@ -741,12 +748,25 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     if (!inputAction.trim() || isLoading) return;
 
     const action = inputAction.trim();
+    // Empty means "no roll this turn", not zero. Send null so the server can
+    // tell the difference; anything else goes through as typed and is
+    // validated there rather than silently coerced here.
+    const attackRoll = attackRollInput.trim() === '' ? null : attackRollInput.trim();
+    const damage = damageInput.trim() === '' ? null : damageInput.trim();
+
     setInputAction('');
+    setAttackRollInput('');
+    setDamageInput('');
     setIsLoading(true);
     setError('');
 
-    // Add action to messages immediately
-    setMessages(prev => [...prev, { type: 'action', content: action }]);
+    // Add action to messages immediately. `dice` is display-only — the stored
+    // transcript keeps the clean action, so this chip is not restored on reload.
+    setMessages(prev => [...prev, {
+      type: 'action',
+      content: action,
+      dice: (attackRoll !== null || damage !== null) ? { attackRoll, damage } : null
+    }]);
 
     try {
       const response = await fetch(`/api/dm-session/${activeSession.id}/message`, {
@@ -754,6 +774,10 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
+          // Hybrid combat (Phase 4) — binding player-rolled dice. Omitted as
+          // null on any non-attack turn, which is most of them.
+          attackRoll,
+          damage,
           providerPreference,
           // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
           modelOverride: useSonnet ? 'sonnet' : null,
@@ -784,11 +808,21 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         // session lock). Not a failure of this action: the previous one is
         // still running. Restore the typed action so it is not lost, and say
         // so plainly rather than surfacing a generic error.
-        if (response.status === 409) {
+        //
+        // 400 — the server rejected the payload before spending a turn, which
+        // in practice means a malformed dice value. Same treatment: nothing
+        // happened, so hand the player everything they typed back rather than
+        // making them retype an action and re-read their dice.
+        if (response.status === 409 || response.status === 400) {
           setInputAction(action);
+          if (attackRoll !== null) setAttackRollInput(attackRoll);
+          if (damage !== null) setDamageInput(damage);
           setMessages(prev => prev.slice(0, -1));
           throw new Error(
-            data.error || 'That turn is still being processed. Give it a moment, then send again.'
+            data.error ||
+            (response.status === 409
+              ? 'That turn is still being processed. Give it a moment, then send again.'
+              : 'That action could not be sent.')
           );
         }
         throw new Error(data.error || data.message || 'Failed to send action');
@@ -2983,6 +3017,15 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
               )}
               {msg.type === 'summary' && <span className="summary-label">Adventure Summary:</span>}
               <p>{msg.content}</p>
+              {msg.dice && (
+                <div style={{
+                  display: 'flex', gap: '0.5rem', marginTop: '0.35rem',
+                  fontSize: '0.75rem', color: '#8b95a5'
+                }}>
+                  {msg.dice.attackRoll !== null && <span>🎲 Attack {msg.dice.attackRoll}</span>}
+                  {msg.dice.damage !== null && <span>💥 Damage {msg.dice.damage}</span>}
+                </div>
+              )}
             </div>
           ))}
 
@@ -3014,6 +3057,71 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             </button>
           </div>
         )}
+
+        {/* Hybrid combat dice (Phase 4). Deliberately OUTSIDE .dm-input-form:
+            index.css gives `.dm-input-form input` flex:1, which would stretch
+            these two boxes across the whole row and crush the textarea. */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          marginBottom: '0.5rem', paddingLeft: '0.25rem',
+          fontSize: '0.8rem', color: '#8b95a5', flexWrap: 'wrap'
+        }}>
+          <span title="Optional. Roll your own dice; the DM will not re-roll or change these numbers.">
+            🎲 Your roll (optional):
+          </span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            Attack
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={100}
+              step={1}
+              value={attackRollInput}
+              onChange={(e) => setAttackRollInput(e.target.value)}
+              disabled={isLoading}
+              placeholder="—"
+              style={{
+                width: '4.5rem', padding: '0.3rem 0.45rem', fontSize: '0.85rem',
+                borderRadius: '5px', background: '#2a2a3e', border: '1px solid #444',
+                color: '#e0e0e0'
+              }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            Damage
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={1000}
+              step={1}
+              value={damageInput}
+              onChange={(e) => setDamageInput(e.target.value)}
+              disabled={isLoading}
+              placeholder="—"
+              style={{
+                width: '4.5rem', padding: '0.3rem 0.45rem', fontSize: '0.85rem',
+                borderRadius: '5px', background: '#2a2a3e', border: '1px solid #444',
+                color: '#e0e0e0'
+              }}
+            />
+          </label>
+          {(attackRollInput !== '' || damageInput !== '') && (
+            <button
+              type="button"
+              onClick={() => { setAttackRollInput(''); setDamageInput(''); }}
+              disabled={isLoading}
+              style={{
+                padding: '0.25rem 0.55rem', borderRadius: '5px',
+                border: '1px solid #444', background: 'transparent',
+                color: '#8b95a5', fontSize: '0.75rem', cursor: 'pointer'
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
 
         <form onSubmit={sendAction} className="dm-input-form">
           <textarea

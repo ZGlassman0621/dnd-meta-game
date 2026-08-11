@@ -1,5 +1,7 @@
 /**
- * Migration 055: Campaign act progression (Phase 4)
+ * Migration 062: Campaign act progression (Phase 4)
+ *
+ * Renumbered from 055 on 2026-08-10 — see migration 061's header.
  *
  * `campaignPlanService.getPlanSummaryForSession` hardcoded
  * `plan.main_quest.acts[0]`, so however many acts a campaign plan defined, the
@@ -18,7 +20,7 @@
  * here: the column outlives any particular plan, and a plan regenerated with
  * fewer acts would otherwise leave the pointer dangling.
  *
- * Additive and idempotent via PRAGMA table_info, matching migration 054.
+ * Additive and idempotent via PRAGMA table_info, matching migration 061.
  */
 
 export async function up(db) {

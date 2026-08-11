@@ -2660,6 +2660,110 @@ The player's input commits to a perception, investigation, stealth, or related s
 Per Cardinal Rule 2 (ROLL REQUESTS — DON'T SPOIL OUTCOMES): you may narrate the surrounding moment, but never describe what the check reveals/achieves until the player gives you their number. Companions with matching proficiencies may also attempt — if the player fails but a companion succeeds, narrate the companion stepping in.
 `;
 
+// ───────────────────────── HYBRID COMBAT DICE ─────────────────────────
+//
+// The player rolls real dice at their table. The two numbers they type —
+// attack roll and damage — are binding facts for the turn, not suggestions:
+// the AI adjudicates them against the target's AC and narrates, but never
+// re-rolls or "corrects" them. The server keeps what it already owned
+// (player HP, unconsciousness, death saves); the AI keeps enemy HP and hit
+// resolution. See the Phase 4 ruling, Decision 1 (Option B — binding numbers).
+//
+// `parsePlayerDiceInput` and `formatPlayerDiceDirective` are a pair and are
+// kept adjacent on purpose. CLAUDE.md's "marker lists drift by hand" note is
+// about exactly this failure: a validator in one file and the prompt text it
+// guards in another drift until the bounds no longer match the wording.
+
+/** Attack rolls are d20 + modifiers. Generous ceiling, but not unbounded. */
+const MAX_ATTACK_ROLL = 100;
+/** A single turn's damage. High enough for crit + smite stacking at any tier. */
+const MAX_DAMAGE = 1000;
+
+/**
+ * Validate the optional dice fields on a /message request body.
+ *
+ * Absent is not the same as invalid. `null`, `undefined` and `''` all mean
+ * "the player did not roll this" and yield `{ ok: true }` with a null field —
+ * the overwhelmingly common case, since most turns are not attacks.
+ *
+ * A value that IS present but unusable is a hard 400 rather than a silent
+ * drop. Silently discarding a number the player typed would hand the roll
+ * back to the AI without telling anyone, which is the precise failure the
+ * binding-numbers ruling exists to prevent.
+ *
+ * @param {{attackRoll?: *, damage?: *}} body
+ * @returns {{ok: true, value: {attackRoll: number|null, damage: number|null}} | {ok: false, error: string}}
+ */
+export function parsePlayerDiceInput(body = {}) {
+  const fields = [
+    { key: 'attackRoll', label: 'Attack roll', min: 1, max: MAX_ATTACK_ROLL },
+    // 0 is legitimate — resistance, or a damage floor applied at the table.
+    { key: 'damage', label: 'Damage', min: 0, max: MAX_DAMAGE }
+  ];
+
+  const value = { attackRoll: null, damage: null };
+
+  for (const { key, label, min, max } of fields) {
+    const raw = body?.[key];
+    if (raw === null || raw === undefined || raw === '') continue;
+
+    // Accept the string form too — an <input type="number"> hands back a
+    // string, and JSON round-trips it as one.
+    const n = typeof raw === 'string' ? Number(raw.trim()) : raw;
+    if (typeof n !== 'number' || !Number.isFinite(n) || !Number.isInteger(n)) {
+      return { ok: false, error: `${label} must be a whole number.` };
+    }
+    if (n < min || n > max) {
+      return { ok: false, error: `${label} must be between ${min} and ${max}.` };
+    }
+    value[key] = n;
+  }
+
+  return { ok: true, value };
+}
+
+/**
+ * Build the per-turn directive that binds the player's dice.
+ *
+ * Appended to the player's action for the LLM call only — NOT to the system
+ * prompt. Two reasons, both load-bearing:
+ *
+ *   1. `applyLeanTransforms` strips whole system-prompt sections. A directive
+ *      living there could vanish on a lean turn and let the AI re-roll, the
+ *      same trap `formatPlayerHpRules` was moved out of `formatMechanicalMarkers`
+ *      to avoid.
+ *   2. Recency. The numbers describe *this* action, so they belong immediately
+ *      next to it — the last thing the model reads before composing the turn.
+ *
+ * The route strips it back off before the single `dm_sessions.messages` write,
+ * so "do not re-roll" never accretes across stored history.
+ *
+ * @param {{attackRoll: number|null, damage: number|null}} dice
+ * @returns {string} '' when neither number was supplied.
+ */
+export function formatPlayerDiceDirective(dice = {}) {
+  const hasAttack = Number.isInteger(dice?.attackRoll);
+  const hasDamage = Number.isInteger(dice?.damage);
+  if (!hasAttack && !hasDamage) return '';
+
+  if (hasAttack && hasDamage) {
+    return `\n\n[SYSTEM: The player's attack roll is ${dice.attackRoll} and damage is ${dice.damage}. ` +
+      `These numbers are authoritative — do not re-roll, reinterpret, or alter them. ` +
+      `Adjudicate against the target's AC, apply damage if hit, and narrate the outcome.]`;
+  }
+
+  if (hasAttack) {
+    return `\n\n[SYSTEM: The player's attack roll is ${dice.attackRoll}. ` +
+      `This number is authoritative — do not re-roll, reinterpret, or alter it. ` +
+      `Adjudicate it against the target's AC and narrate the outcome. The player has not ` +
+      `supplied a damage roll — if the attack hits, ask them for it rather than rolling it yourself.]`;
+  }
+
+  return `\n\n[SYSTEM: The player's damage roll is ${dice.damage}. ` +
+    `This number is authoritative — do not re-roll, reinterpret, or alter it. ` +
+    `Apply it to the target and narrate the outcome.]`;
+}
+
 /**
  * applyLeanTransforms — diagnostic post-processor.
  *

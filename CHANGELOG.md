@@ -2,6 +2,65 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.172] - 2026-08-11 — Phase 4: hybrid combat, the player rolls their own dice
+
+The player rolls real dice at their own table. Two optional integer fields now sit above the message box — **Attack** and **Damage** — and whatever the player types is a binding fact for that turn. Per the Phase 4 ruling (Decision 1, Option B): the AI adjudicates the number against the target's AC, applies the damage, and narrates. It does not re-roll, reinterpret, or "correct" it.
+
+This splits authority cleanly. The server keeps what it already owned — player HP, unconsciousness, death saves, all unchanged from Phase 3. The AI keeps enemy HP and hit resolution, which is where it was always going to live, because there is no enemy HP table to arbitrate against. Deliberately **not** attempted: string-matching the narrative for enemy names to track their HP server-side. That path is the reason this decision was escalated in the first place.
+
+### Where the directive lives, and why it is not in the system prompt
+
+`formatPlayerDiceDirective` builds a one-line `[SYSTEM: ...]` block that is appended to the **player's action** for the LLM call only. Two reasons, both load-bearing:
+
+- `applyLeanTransforms` strips whole sections out of the system prompt. A directive living there could vanish on a lean turn and hand the roll straight back to the AI — precisely the trap `formatPlayerHpRules` was moved out of `formatMechanicalMarkers` to avoid.
+- Recency. The numbers describe *this* action, so they belong immediately next to it, as the last thing the model reads before composing the turn.
+
+The route strips the directive back off before the single `dm_sessions.messages` write, the same discipline already applied to the system-prompt restore and the observation-verb block. Persisting it would replay "these numbers are authoritative" against a roll that resolved twenty turns ago, and would feed the phrase to the chronicle extractor as if it were prose. The append-only transcript likewise keeps the player's own words. `ai_call_log` is the one place the augmented text *is* recorded, because a turn where the AI ignored a binding roll is otherwise undiagnosable from the log.
+
+### Absent, zero, and malformed are three different things
+
+`parsePlayerDiceInput` treats `null`, `undefined` and `''` as "the player did not roll this" — the common case, since most turns are not attacks. **Damage `0` is a legitimate value** (resistance, or a table ruling) and is not absence; a truthiness check instead of `Number.isInteger` would have dropped it and quietly returned the number to the AI. Numeric strings are coerced, since `<input type="number">` round-trips as one.
+
+A value that is present but unusable is a hard `400` rather than a silent drop, raised before the session lookup and long before the model call. Silently discarding a number the player typed would hand the roll back to the AI without telling anyone — the exact failure the binding-numbers ruling exists to prevent. Bounds: attack `1–100`, damage `0–1000`. The client restores everything the player typed on both `400` and `409`, so a fat-fingered value costs a retype and nothing else.
+
+Supplying only one number is supported: an attack roll without damage tells the DM to **ask** for damage rather than roll it.
+
+### Verification
+
+`tests/hybrid-combat-dice.test.js` — 58 assertions across two layers. The pure functions cover absence, coercion, the `0`-damage trap, every malformed shape, and the exact wording per dice combination. The route layer drives the real `POST /:sessionId/message` over HTTP against a real database through `tests/helpers/llmHarness.js`, and asserts what a unit test cannot see: both numbers reach the model, the directive is the *tail* of the user turn and is absent from the system prompt, stored history holds only the clean action, damage the player *takes* still applies through `HP_CHANGE` (30→24), a malformed value spends no model call and persists nothing, the session lock releases on the `400` so the corrected turn goes straight through, and a failed turn with dice writes nothing.
+
+Full suite: 83/85 files green — `campaign-import` and `integration` are the documented dev-server-dependent failures. `turn-e2e` (45/45) and `turn-write-ordering` (7/7) both still green. Client builds clean.
+
+## [1.0.0.171] - 2026-08-10 — Migration reconciliation: the repo can build the database again
+
+The live Turso database had seven migrations the repository did not — `054_npc_distinguishing_features` through `060_distinguishing_features_column`. They were applied from a working tree that was never committed: not to a branch, not to a stash, not to any dangling commit, and nowhere on the filesystem. Production had the columns; `server/migrations/` could not produce them.
+
+Nothing caught this because nothing asserted the two halves agree. Live kept working. Every *freshly built* database was quietly broken — `dmSessionService` SELECTs `npcs.distinguishing_features` on the NPC-enrichment path, so a new dev environment or any test reaching that path died on `SQLITE_ERROR: no such column`, a failure that reads like a code bug and is actually a schema-provenance bug.
+
+**The seven are reconstructed from the live schema**, under their exact recorded names — that is what makes them idempotent against the by-name migration ledger: live already lists them, so they skip there and apply only to fresh databases. Five carry real DDL (`npcs.distinguishing_features`; `canon_facts.field` plus the `uq_canon_facts_variable` partial unique index; `characters.fighting_style`/`expertise`; `characters.creator_draft`; `characters.distinguishing_features`).
+
+`055_expand_pack_inventory` and `056_unify_death_canon_category` are deliberately empty, and that is the faithful reconstruction rather than a stub. A full column-and-index diff shows they left no schema footprint, so both were one-time data migrations — and both are unreachable now: the runner skips them on live, and a fresh database has no rows to migrate. Inventing plausible-looking `UPDATE`s would have been strictly worse than nothing, since they would fire against real data if an older backup were ever migrated forward. Each file documents what it did and why its body is empty.
+
+**Local Phase 3.1/4 work renumbered 054/055/056 → 061/062/063.** Two different "054"s existed in the world. The ledger tolerated it (it tracks by name), but the timeline was unreadable and "apply in order" was ambiguous. `campaigns.current_act_index` is now migration **062**, and `campaign_chronicle_rollups` is **063**; CLAUDE.md updated to match. Sequence is now 001–063: gapless, no duplicate prefixes, zero ghost migrations.
+
+### The guard that was missing
+
+`tests/migration-schema-contract.test.js` builds a database from `server/migrations/` alone and asserts the tables, columns and indexes the services actually query — including running `dmSessionService`'s NPC-enrichment SELECT for real. It also enforces file hygiene: gapless numbering, no duplicate prefixes. Verified to fail correctly: removing `054` reproduces the original error exactly.
+
+### Orphaned characters — diagnosed, deliberately not "fixed"
+
+Two characters carry a NULL `campaign_id`. Both are abandoned creator drafts (`creation_phase='creating'`, created 2026-06-15, zero sessions, quests, canon facts or relationships). The one real character already has `campaign_id=346`, so Phase 4 was never blocked on them.
+
+Enrolling them would have caused harm. `livingWorldService` picks the character it attributes world events, faction quests, NPC mail, base threats and consequences to with `SELECT id FROM characters WHERE campaign_id = ? LIMIT 1` — **no ORDER BY, no `creation_phase` filter**. Adding drafts to a campaign makes them eligible to receive its world state on an arbitrary row pick.
+
+`server/scripts/backfill-character-campaign-id.js` (a script, not a migration — orphans are produced continuously by a live bug, so this must stay re-runnable) is dry-run by default, enrols genuine play characters, and reports-and-skips abandoned drafts unless explicitly overridden. Against live it currently plans zero writes, which is the correct outcome.
+
+### Verification
+
+Full suite: 79/82 files green, matching the documented known-failing set exactly (`campaign-import`, `integration` — both need a dev server — and `world-event-npcs`, a real FK bug). `turn-e2e` passes 45/45 in isolation; its intermittent failure under the shared test DB is the documented flakiness. Smoke test booted the real server against a local `file:` database with the Anthropic transport stubbed process-wide: migrations 001–063 applied clean, routes mounted, and a turn returned `200` with a marker-free narrative, `HP_CHANGE` applied 30→26, the raw marker retained in stored history, and zero errors in the log. **This reconciliation pass itself made no writes to Turso.**
+
+Migrations 061–063 were applied to live on 2026-08-10 at 14:42 UTC — not by this pass, but by a test file invoked with a bare `node` during the 4.1/4.2 polish work, which bypasses the `run-tests.js` database redirect. All three are additive and idempotent, the schema they produce is what the Phase 4 code already expects, and the stray `TEST_`-prefixed rows that run created were removed the same session (verified: campaign and character counts back to 1 and 3). A verified backup was taken first: `backups/turso-2026-08-10T14-44-04-290Z.db`.
+
 ## [1.0.0.170] - 2026-08-10 — Phase 4: the world moves, the arc advances, the campaign remembers
 
 Three reintegrations, plus two bugs found while doing them — one of which had silently disabled an entire subsystem since it was written.
