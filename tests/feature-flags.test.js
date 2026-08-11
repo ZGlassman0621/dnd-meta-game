@@ -47,30 +47,44 @@ async function run() {
   delete process.env.FF_SURVIVAL_DAY_CHANGE;
   delete process.env.FF_DEFERRED_RESOLUTION_ACTIONS;
   delete process.env.FF_NPC_DEATH_SYNC;
+  delete process.env.FF_PROGRESSION_AWARDS;
 
-  // Phase 4 flipped this on: the tick is now driven by in-game time at session
-  // end rather than by a UI button, so a static world is no longer the default.
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'living world tick defaults ON as of Phase 4');
+  // The MVP is narrative-first — dialogue, exploration, persistent progression.
+  // Simulation is deferred to Phase 2, so the tick is off again; it was on
+  // through Phase 4, which is where its time-driven wiring was built.
+  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, false, 'living world tick defaults OFF for the MVP');
   assertEqual(FEATURE_FLAGS.NPC_AGING, false, 'NPC aging defaults off');
   assertEqual(FEATURE_FLAGS.COMPANION_MOOD_DECAY, false, 'companion mood decay defaults off');
   assertEqual(FEATURE_FLAGS.SURVIVAL_DAY_CHANGE, false, 'survival day change defaults off');
   assertEqual(FEATURE_FLAGS.DEFERRED_RESOLUTION_ACTIONS, false, 'deferred-resolution actions default off');
   assertEqual(FEATURE_FLAGS.NPC_DEATH_SYNC, true, 'canon death reconciler stays ON — not simulation');
 
+  // Persistent progression is an MVP pillar: with this off, quests and
+  // achievements paid gold and items but never XP.
+  assertEqual(FEATURE_FLAGS.PROGRESSION_AWARDS, true, 'progression awards default ON for the MVP');
+
+  // The soft-lock pair. Deferred actions queue a resolution only the tick
+  // delivers, so "deferred on, tick off" strands a companion sent away
+  // permanently. Asserted as a pair so the two cannot drift apart silently.
+  assert(
+    !(FEATURE_FLAGS.DEFERRED_RESOLUTION_ACTIONS && !FEATURE_FLAGS.LIVING_WORLD_TICK),
+    'deferred-resolution actions are never on while the tick is off'
+  );
+
   // ============================================================
   console.log('\n=== Test 2: env override is read live ===\n');
   // ============================================================
 
   // Both directions matter, and which one is the "interesting" one depends on
-  // the default — so assert both against a flag whose default is now true.
-  process.env.FF_LIVING_WORLD_TICK = 'false';
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, false, 'literal "false" turns a default-on flag off, live');
+  // the default — so assert both against a flag whose default is true.
+  process.env.FF_PROGRESSION_AWARDS = 'false';
+  assertEqual(FEATURE_FLAGS.PROGRESSION_AWARDS, false, 'literal "false" turns a default-on flag off, live');
 
-  process.env.FF_LIVING_WORLD_TICK = 'true';
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'flag flips back on without re-importing the module');
+  process.env.FF_PROGRESSION_AWARDS = 'true';
+  assertEqual(FEATURE_FLAGS.PROGRESSION_AWARDS, true, 'flag flips back on without re-importing the module');
 
-  delete process.env.FF_LIVING_WORLD_TICK;
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'unsetting restores the Phase 4 default');
+  delete process.env.FF_PROGRESSION_AWARDS;
+  assertEqual(FEATURE_FLAGS.PROGRESSION_AWARDS, true, 'unsetting restores the MVP default');
 
   // NPC_AGING is still default-off, so it proves the opposite direction.
   process.env.FF_NPC_AGING = 'true';

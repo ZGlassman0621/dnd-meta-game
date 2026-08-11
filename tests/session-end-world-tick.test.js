@@ -95,10 +95,12 @@ async function endSession(server, fixture) {
 async function run() {
   await initDatabase()
 
-  // The route reads the flag at call time, so this is set for the whole file
-  // and restored at the end. Test 4 deliberately turns it off again.
-  delete process.env.FF_LIVING_WORLD_TICK
-  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'the tick is on by default as of Phase 4')
+  // The tick is OFF by default for the MVP (simulation is deferred to Phase 2).
+  // This file tests the tick subsystem itself, so it opts back in explicitly —
+  // same pattern as living-world.test.js. Safe after the imports: FEATURE_FLAGS
+  // exposes getters that read process.env when the flag is *read*.
+  process.env.FF_LIVING_WORLD_TICK = 'true'
+  assertEqual(FEATURE_FLAGS.LIVING_WORLD_TICK, true, 'the suite opted the tick back on')
 
   const llm = installLlmStub()
   const server = await startTurnServer()
@@ -246,7 +248,9 @@ async function run() {
     const offChar = await dbGet('SELECT game_day FROM characters WHERE id = ?', [f2.characterId])
     assertEqual(Number(offChar.game_day), 103, 'the calendar advances regardless — it is not part of the tick')
 
-    delete process.env.FF_LIVING_WORLD_TICK
+    // Back on for the rest of the file. Deleting would restore the MVP default,
+    // which is now off — the opposite of what the remaining tests assume.
+    process.env.FF_LIVING_WORLD_TICK = 'true'
 
     // ============================================================
     console.log('\n=== Test 6: queue failures are contained ===\n')
