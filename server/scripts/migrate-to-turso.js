@@ -140,7 +140,7 @@ async function migrate() {
   console.log('Next steps:');
   console.log('1. Start your server: npm run dev');
   console.log('2. Your app now uses Turso cloud database');
-  console.log('3. Register/login — your campaigns will be there');
+  console.log('3. Your campaigns will be there — no sign-in, the app opens straight into play');
   console.log('');
 }
 

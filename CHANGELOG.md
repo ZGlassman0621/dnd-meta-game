@@ -2,6 +2,42 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.173] - 2026-08-11 — The sign-in screen is gone
+
+A solo game running on the player's own machine was asking them to log in. The account system — register, bcrypt password hashing, JWT signing with an auto-generated secret, a Bearer token attached to every `/api` request by a global `window.fetch` monkey-patch, a login page, a "Sign Out" button and a change-password modal — was an artifact of a build that anticipated multiple users. It is deleted. Per rule 2, deleted rather than hidden: git history is the archive.
+
+Gone: `server/routes/auth.js`, `server/services/authService.js`, `server/middleware/auth.js`, `client/src/components/LoginPage.jsx`, the fetch interceptor and auth bootstrap in `App.jsx`, the account chip and password modal in `NavigationMenu.jsx`, and the `bcryptjs` + `jsonwebtoken` dependencies.
+
+### The part that could not be deleted
+
+Removing `app.use('/api', authMiddleware)` looks like it opens the API up. What it actually does is empty it, and silently.
+
+`campaigns.user_id` (migration 013) still scopes ownership, and `campaignService` was deliberately written so a caller with no user context leaks nothing:
+
+```js
+export async function getAllCampaigns(userId = null) {
+  if (!userId) return [];   // <-- not an error. an empty list.
+}
+```
+
+`getActiveCampaigns` does the same, and `routes/campaign.js` passes `req.user?.id` with an optional chain. So dropping `req.user` would have left every endpoint returning a cheerful `200` while every campaign vanished from the UI — the exact failure shape this codebase keeps getting bitten by.
+
+`server/middleware/currentPlayer.js` replaces the gate with a resolver. It rejects nothing; it resolves the lowest-id `users` row, creates a default if the table is empty, caches it for the process (it runs on *every* `/api` request), and attaches it as `req.user`. Routes are untouched. Failure is logged loudly and non-fatally rather than 500-ing every route, since a database that cannot answer this query cannot answer any of the others either.
+
+The `users` table, `campaigns.user_id` and `_app_settings` stay. Migration 013 is applied and is not edited; the JWT-secret row is inert.
+
+### A "known failing" test that was never broken for the stated reason
+
+CLAUDE.md said `campaign-import.test.js` and `integration.test.js` "need a running dev server". Neither talks to the dev server — **each builds its own Express app on port 3001**. `campaign-import` mounted `campaignRoutes` with no middleware at all, so `req.user` was always undefined and all four of its failures were one root cause: the import worked perfectly, then `GET /api/campaign` returned `[]` and every "campaign appears in the list" assertion failed.
+
+Mounting `currentPlayer` in the test's own server — mirroring production — takes it to **125/125**. It had been red its entire life for a reason nobody had checked, and it could not have been fixed cleanly before now without minting a JWT inside the test.
+
+`tests/current-player.test.js` (15 assertions) guards the round trip that matters: create a campaign the way the route does, list it back the way the route does. Its last assertion is a negative control pinning `getAllCampaigns(undefined) === []`, so the trap stays documented in executable form rather than in a comment.
+
+### Verification
+
+Full suite **85/86 files green, 4733 assertions** — up from 83/85. The one remaining failure is `integration.test.js`, 3 assertions expecting `410 Gone` from retired give-item / take-item / companion-merchant endpoints that now `404`. Unrelated to this change and left alone. Client builds clean; lint introduces nothing new. Verified live against the running server: `/api/character` and `/api/campaign` answer `200` with no `Authorization` header, and `/api/auth/login` is now `404`.
+
 ## [1.0.0.172] - 2026-08-11 — Phase 4: hybrid combat, the player rolls their own dice
 
 The player rolls real dice at their own table. Two optional integer fields now sit above the message box — **Attack** and **Damage** — and whatever the player types is a binding fact for that turn. Per the Phase 4 ruling (Decision 1, Option B): the AI adjudicates the number against the target's AC, applies the damage, and narrates. It does not re-roll, reinterpret, or "correct" it.

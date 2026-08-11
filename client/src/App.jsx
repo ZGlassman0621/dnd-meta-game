@@ -12,7 +12,6 @@ import CompanionsPage from './components/CompanionsPage'
 import CampaignsPage from './components/CampaignsPage'
 import BackstoryParserPage from './components/BackstoryParserPage'
 import NavigationMenu from './components/NavigationMenu'
-import LoginPage from './components/LoginPage'
 
 // Lazy-loaded pages (loaded on demand to reduce initial bundle)
 const DMSession = lazy(() => import('./components/DMSession'))
@@ -49,18 +48,9 @@ import HomeFlow from './components/creator/HomeFlow.jsx'
 import SettingsOverlay from './components/settings/SettingsOverlay.jsx'
 
 
-// Global fetch interceptor — adds auth token to all /api requests automatically.
-// This avoids touching every fetch call across all components.
-const _originalFetch = window.fetch;
-window.fetch = (url, opts = {}) => {
-  if (typeof url === 'string' && url.startsWith('/api') && !url.startsWith('/api/auth/login') && !url.startsWith('/api/auth/register')) {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
-    }
-  }
-  return _originalFetch(url, opts);
-};
+// (The global fetch interceptor that attached a Bearer token to every /api
+// request was removed in v1.0.173 along with the account system. The server
+// resolves the single local player itself — see middleware/currentPlayer.js.)
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -90,8 +80,6 @@ class ErrorBoundary extends Component {
 }
 
 function App() {
-  const [user, setUser] = useState(null)
-  const [authLoading, setAuthLoading] = useState(true)
   const [characters, setCharacters] = useState([])
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [activeAdventure, setActiveAdventure] = useState(null)
@@ -156,30 +144,6 @@ function App() {
   // browser console for prompt-design experiments. The toggle is just no
   // longer surfaced to users.)
 
-  // Check for existing auth token on mount
-  useEffect(() => {
-    const token = localStorage.getItem('auth_token')
-    if (!token) {
-      setAuthLoading(false)
-      return
-    }
-    fetch('/api/auth/me', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => setUser(data.user))
-      .catch(() => localStorage.removeItem('auth_token'))
-      .finally(() => setAuthLoading(false))
-  }, [])
-
-  const handleLogout = () => {
-    localStorage.removeItem('auth_token')
-    setUser(null)
-    setCharacters([])
-    setSelectedCharacter(null)
-    setActiveView(null)
-  }
-
   // Navigation helper
   const navigateTo = (view) => {
     setActiveView(view)
@@ -193,12 +157,12 @@ function App() {
     window.scrollTo(0, 0)
   }
 
+  // Runs once on mount. This used to be gated on `user` being set by the login
+  // flow; with no login there is nothing to wait for.
   useEffect(() => {
-    if (user) {
-      loadCharacters()
-      checkLLMStatus()
-    }
-  }, [user])
+    loadCharacters()
+    checkLLMStatus()
+  }, [])
 
   const checkLLMStatus = async () => {
     try {
@@ -319,18 +283,6 @@ function App() {
     setSelectedCharacter(updatedCharacter)
     setShowLevelUp(false)
     setActiveView('showCharacterSheet')
-  }
-
-  if (authLoading) {
-    return (
-      <div className="app">
-        <div className="loading">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <LoginPage onLogin={setUser} />
   }
 
   if (loading) {
@@ -473,8 +425,6 @@ function App() {
           onNavigate={navigateTo}
           hasCharacter={!!selectedCharacter}
           onHome={goHome}
-          user={user}
-          onLogout={handleLogout}
         />
       </header>
 

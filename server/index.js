@@ -35,8 +35,7 @@ import progressionRoutes from './routes/progression.js';
 import merchantRoutes from './routes/merchant.js';
 import preludeRoutes from './routes/prelude.js';
 import aiBehaviorRoutes from './routes/aiBehavior.js';
-import authRoutes from './routes/auth.js';
-import authMiddleware from './middleware/auth.js';
+import currentPlayer from './middleware/currentPlayer.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,17 +63,17 @@ await initDatabase();
 // Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
 await initNarrativeSystems();
 
-// Public routes (no authentication required)
-app.use('/api/auth', authRoutes);
-
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'D&D Meta Game API is running' });
 });
 
-// Auth middleware for all other /api routes
-app.use('/api', authMiddleware);
+// Attaches the single local player as req.user. Not a gate — nothing is
+// rejected here. It exists because campaign ownership is still scoped by
+// user_id; see middleware/currentPlayer.js for why removing it would empty
+// the campaign list rather than open it up.
+app.use('/api', currentPlayer);
 
-// Protected routes
+// Game routes
 app.use('/api/character', characterRoutes);
 app.use('/api/character', nicknameRoutes);
 app.use('/api/adventure', adventureRoutes);

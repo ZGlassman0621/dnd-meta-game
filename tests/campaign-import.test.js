@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';
 import campaignRoutes from '../server/routes/campaign.js';
+import currentPlayer from '../server/middleware/currentPlayer.js';
 import characterRoutes from '../server/routes/character.js';
 import npcRoutes from '../server/routes/npc.js';
 import companionRoutes from '../server/routes/companion.js';
@@ -60,6 +61,15 @@ async function startServer() {
   app.use(express.json({ limit: '2mb' }));
 
   await initDatabase();
+
+  // Mirrors server/index.js. Without this `req.user` is undefined, and
+  // `campaignService.getAllCampaigns` returns [] for a caller with no user
+  // context by design — so every "campaign appears in the list" assertion
+  // below failed while the import itself was working perfectly. That was
+  // read as "this test needs a running dev server" for a long time; it does
+  // not, it builds its own app right here and was simply missing the
+  // middleware that populates the owner.
+  app.use('/api', currentPlayer);
 
   app.use('/api/campaign', campaignRoutes);
   app.use('/api/character', characterRoutes);

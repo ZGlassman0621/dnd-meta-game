@@ -1,6 +1,6 @@
 {
   "name": "dnd-meta-game",
-  "version": "1.0.172",
+  "version": "1.0.173",
   "description": "D&D Meta Game - AI-powered solo D&D campaign management system",
   "type": "module",
   "scripts": {
@@ -27,11 +27,9 @@
   "license": "MIT",
   "dependencies": {
     "@libsql/client": "^0.17.0",
-    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2"
   },
   "devDependencies": {

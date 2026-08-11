@@ -48,7 +48,9 @@ The suite runs against a throwaway SQLite file — **never** the live database. 
 - Build the client when you touch `client/`.
 - `prose-quality.test.js` is excluded by default — it makes **billed** Anthropic API calls. Opt in with `TEST_INCLUDE_LLM=1`.
 
-**Known failing (pre-existing, not yours):** `campaign-import.test.js` and `integration.test.js` need a running dev server; `world-event-npcs.test.js` has a real FK bug. `integration.test.js` is also intermittently flaky under the shared test DB.
+**Known failing (pre-existing, not yours):** `integration.test.js` — 3 assertions expecting `410 Gone` from retired give-item / take-item / companion-merchant endpoints that now `404`. It is also intermittently flaky under the shared test DB, as is `turn-e2e.test.js`.
+
+**"Needs a running dev server" was wrong** and cost real time. Neither `campaign-import.test.js` nor `integration.test.js` talks to the dev server — each builds its own Express app on port 3001. `campaign-import` failed because that app never mounted the middleware populating `req.user`, so `getAllCampaigns` correctly returned `[]`; it is green as of v1.0.173. `world-event-npcs.test.js` was fixed earlier and passes.
 
 **Testing anything that calls an LLM** — use `tests/helpers/llmHarness.js`. `installLlmStub()` swaps `globalThis.fetch`, so it intercepts every `api.anthropic.com` request without touching production code, and the real `claude.js` still runs (cache-tier splitting, retry triage, error tagging). `startTurnServer()` mounts the DM router on an ephemeral port — never import `server/index.js` in a test, it calls `app.listen(3000)` at import time. Cost safety is structural: no request escapes, and in the default strict mode an unscripted call throws instead of reaching the network. Don't script `429`/`529`/`503`/`500` — `claude.js` retries those with real backoff, up to ~60s; use `401` for the error path.
 
@@ -169,6 +171,14 @@ Unbounded prompt growth is the failure mode that would eventually end a long cam
 
 `campaigns.current_act_index` (migration 062) points into `campaign_plan.main_quest.acts`. Reads go through `resolveCurrentAct`, which **clamps** — the pointer is a column and the acts live in a regenerable JSON blob, so they drift. Nothing advances the act automatically; `POST /api/campaign/:id/act/advance` drives it, because deciding an act has ended is a narrative judgement and a mechanical trigger would advance the arc on a schedule the story has not earned.
 
+### No authentication — but `req.user` is still load-bearing
+
+There is no sign-in. The account system (register, bcrypt, JWT, per-request Bearer token, `LoginPage.jsx`) was deleted in v1.0.173; the app opens straight into play.
+
+**What survived is campaign ownership.** `campaigns.user_id` (migration 013) still exists, and `campaignService.getAllCampaigns` / `getActiveCampaigns` both open with `if (!userId) return []` — written so a caller with no user context leaks nothing. That makes a missing `req.user` a **silent empty campaign list**, not an error: every request still returns `200`.
+
+`server/middleware/currentPlayer.js` therefore keeps `req.user` populated — it resolves the lowest-id `users` row (creating a default when the table is empty) and caches it for the process. It is not a gate; it rejects nothing. **Any Express app that mounts campaign routes must mount it too**, production and tests alike — that omission is what kept `campaign-import.test.js` red for its whole life. `tests/current-player.test.js` guards the round trip.
+
 ### Persistence
 
 - **Migrations** (`server/migrationRunner.js`): each `up()` and its `_migrations` insert run in **one transaction**, so a failure rolls back and is safely retried. Pass `tx` into `up()`, never `db`. Numbered `NNN_*.js`, additive, idempotent via `PRAGMA table_info`.
@@ -179,7 +189,7 @@ Unbounded prompt growth is the failure mode that would eventually end a long cam
 
 ## Key files
 
-**Infrastructure** — `server/index.js`, `server/database.js`, `server/migrationRunner.js`, `server/config/featureFlags.js`, `server/utils/{rng,sessionLocks,contextManager,llmJson,safeParse,errorHandler}.js`, `server/scripts/{backup,run-tests}.js`
+**Infrastructure** — `server/index.js`, `server/database.js`, `server/migrationRunner.js`, `server/config/featureFlags.js`, `server/middleware/currentPlayer.js`, `server/utils/{rng,sessionLocks,contextManager,llmJson,safeParse,errorHandler}.js`, `server/scripts/{backup,run-tests}.js`
 
 **Session & prompt** — `server/routes/dmSession.js`, `server/services/{dmPromptBuilder,dmSessionService,markerSchemas,markerPipeline,characterHpService,combatMarkerService,aiCallLogger,claude}.js`
 
