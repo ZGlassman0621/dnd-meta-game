@@ -41,12 +41,28 @@ function assertEqual(actual, expected, message) {
 
 // ===== Helpers =====
 
+/**
+ * Every row this file creates, tracked by id.
+ *
+ * Cleanup used to be `DELETE ... WHERE name LIKE 'TEST_%'`, which reaches
+ * outside this file's fixtures and deletes rows owned by every other suite in
+ * the shared test database. Sixteen tables carry an FK to `campaigns`, so once
+ * another suite had left a chronicle or a canon fact behind, that global delete
+ * hit a FOREIGN KEY constraint and this file failed — in the full run only,
+ * never in isolation, which is exactly what made it look like a production bug.
+ * It never was one: the production path writes `event_effects`, whose only FK
+ * is `ON DELETE CASCADE` to `world_events`.
+ */
+const created = { campaigns: [], characters: [], npcs: [], relationships: [], events: [] };
+
 async function createTestCampaign(name = 'TEST_WorldEventNpc Campaign') {
   const result = await dbRun(
     `INSERT INTO campaigns (name, setting, status) VALUES (?, 'Forgotten Realms', 'active')`,
     [name]
   );
-  return Number(result.lastInsertRowid);
+  const id = Number(result.lastInsertRowid);
+  created.campaigns.push(id);
+  return id;
 }
 
 async function createTestCharacter(campaignId, name = 'TEST_WEN Hero') {
@@ -54,7 +70,9 @@ async function createTestCharacter(campaignId, name = 'TEST_WEN Hero') {
     INSERT INTO characters (name, class, race, level, current_hp, max_hp, current_location, experience_to_next_level, campaign_id)
     VALUES (?, 'Fighter', 'Human', 5, 40, 40, 'TEST_Waterdeep Market', 6500, ?)
   `, [name, campaignId]);
-  return Number(result.lastInsertRowid);
+  const id = Number(result.lastInsertRowid);
+  created.characters.push(id);
+  return id;
 }
 
 async function createTestNpc(name, location, opts = {}) {
@@ -62,7 +80,9 @@ async function createTestNpc(name, location, opts = {}) {
     INSERT INTO npcs (name, race, occupation, current_location, lifecycle_status)
     VALUES (?, 'Human', ?, ?, 'alive')
   `, [name, opts.occupation || 'Guard', location]);
-  return Number(result.lastInsertRowid);
+  const id = Number(result.lastInsertRowid);
+  created.npcs.push(id);
+  return id;
 }
 
 async function createTestRelationship(characterId, npcId, disposition = 0) {
@@ -70,7 +90,9 @@ async function createTestRelationship(characterId, npcId, disposition = 0) {
     INSERT INTO npc_relationships (character_id, npc_id, disposition, disposition_label, trust_level, times_met)
     VALUES (?, ?, ?, 'neutral', 0, 1)
   `, [characterId, npcId, disposition]);
-  return Number(result.lastInsertRowid);
+  const id = Number(result.lastInsertRowid);
+  created.relationships.push(id);
+  return id;
 }
 
 async function createTestWorldEvent(campaignId, opts = {}) {
@@ -83,7 +105,9 @@ async function createTestWorldEvent(campaignId, opts = {}) {
     opts.event_type || 'political',
     opts.affected_locations || '["TEST_Waterdeep Market"]'
   ]);
-  return Number(result.lastInsertRowid);
+  const id = Number(result.lastInsertRowid);
+  created.events.push(id);
+  return id;
 }
 
 async function getEvent(eventId) {
@@ -324,18 +348,30 @@ async function runTests() {
   // ============================================================
   console.log('\n--- Cleanup ---');
 
-  await dbRun("DELETE FROM event_effects WHERE event_id IN (SELECT id FROM world_events WHERE title LIKE 'TEST_%')");
-  await dbRun("DELETE FROM npc_lifecycle_history WHERE npc_id IN (SELECT id FROM npcs WHERE name LIKE 'TEST_%')");
-  await dbRun("DELETE FROM world_events WHERE title LIKE 'TEST_%'");
-  await dbRun("DELETE FROM npc_relationships WHERE character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%')");
-  await dbRun("DELETE FROM npcs WHERE name LIKE 'TEST_%'");
-  await dbRun("DELETE FROM characters WHERE name LIKE 'TEST_%'");
-  await dbRun("DELETE FROM campaigns WHERE name LIKE 'TEST_%'");
-  console.log('  Cleaned up TEST_ rows');
+  // Scoped to this file's own fixtures, children before parents. Never
+  // `LIKE 'TEST_%'` — see the note on `created` above.
+  const del = async (sql, ids) => {
+    if (!ids.length) return;
+    await dbRun(sql.replace('?ids', ids.map(() => '?').join(',')), ids);
+  };
+
+  await del('DELETE FROM event_effects WHERE event_id IN (?ids)', created.events);
+  await del('DELETE FROM npc_lifecycle_history WHERE npc_id IN (?ids)', created.npcs);
+  await del('DELETE FROM world_events WHERE id IN (?ids)', created.events);
+  await del('DELETE FROM npc_relationships WHERE id IN (?ids)', created.relationships);
+  await del('DELETE FROM npcs WHERE id IN (?ids)', created.npcs);
+  await del('DELETE FROM characters WHERE id IN (?ids)', created.characters);
+  await del('DELETE FROM campaigns WHERE id IN (?ids)', created.campaigns);
+
+  const counts = Object.entries(created).map(([k, v]) => `${k}=${v.length}`).join(' ');
+  console.log(`  Cleaned up this suite's fixtures (${counts})`);
 
   // ===== Summary =====
+  // Must read "Results: N passed, M failed" — run-tests.js parses exactly that
+  // to aggregate the suite total. This file printed its own wording, so its 27
+  // assertions were counted as 0 in every run.
   console.log(`\n${'='.repeat(50)}`);
-  console.log(`World Event NPC Effects: ${passed} passed, ${failed} failed`);
+  console.log(`=== Results: ${passed} passed, ${failed} failed ===`);
   console.log('='.repeat(50));
 
   process.exit(failed > 0 ? 1 : 0);
