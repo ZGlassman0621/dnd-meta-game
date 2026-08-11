@@ -96,6 +96,7 @@ export default function Step7IdentityDetails({ state, set, mode, payload }) {
         id,
         name: d.name || id,
         description: d.description,
+        knownFor: d.knownFor,
         alignment: d.alignment,
         domain: d.domain,
         pantheon: d.pantheon
@@ -252,9 +253,16 @@ function RequiredCoreSection({ identity, setIdentity, faithOptions, raceId }) {
           onChange={e => setIdentity({ faith: e.target.value })}
         >
           <option value="">Choose a faith…</option>
+          {/* Pantheon alone told the player which culture venerates the god
+              but nothing about what the god *is* — you had to select one to
+              find out. `knownFor` (2–3 words, in deities.json) puts the
+              domain in the option itself so the list can be read straight
+              through. */}
           {faithOptions.map(f => (
             <option key={f.id} value={f.id}>
-              {f.name}{f.pantheon ? ` (${f.pantheon})` : ''}
+              {f.name}
+              {f.pantheon ? ` (${f.pantheon})` : ''}
+              {f.knownFor ? ` — ${f.knownFor}` : ''}
             </option>
           ))}
         </select>

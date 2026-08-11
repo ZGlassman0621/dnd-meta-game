@@ -89,6 +89,10 @@ function App() {
   // owns its own copy. The overlay always scopes to `selectedCharacter`
   // here since the dashboard branch is only reached when one is selected.
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Set when a character is created, so CampaignsPage opens straight into its
+  // New Campaign form instead of an empty list. Cleared by navigateTo, so
+  // visiting Campaigns later behaves normally (list first).
+  const [pendingCampaignSetup, setPendingCampaignSetup] = useState(false)
 
   // Phase 4a SC-4a.4 — shared style for the appbar text-link buttons
   // (Settings, AI Behavior). Mirrors HomeFlow's `.nav-settings` class
@@ -148,6 +152,7 @@ function App() {
   const navigateTo = (view) => {
     setActiveView(view)
     setShowLevelUp(false)
+    setPendingCampaignSetup(false)
     window.scrollTo(0, 0)
   }
 
@@ -240,6 +245,13 @@ function App() {
   const handleCharacterCreated = (character) => {
     setCharacters([character, ...characters])
     setSelectedCharacter(character)
+    // A brand-new character has no campaign, and without one they engage
+    // almost none of the world — no chronicle, no weather, no living world
+    // (see CLAUDE.md, "characters.campaign_id is the single point of failure").
+    // Landing them on the dashboard made campaign creation something you had
+    // to go looking for under a nav dropdown. Now it is the next screen.
+    setPendingCampaignSetup(true)
+    setActiveView('showCampaigns')
   }
 
   const handleCharacterUpdated = (character) => {
@@ -542,6 +554,7 @@ function App() {
         <CampaignsPage
           character={selectedCharacter}
           allCharacters={characters}
+          autoOpenCreate={pendingCampaignSetup}
           onCharacterUpdated={() => loadCharacters()}
           onNavigateToPlay={() => {
             loadCharacters()

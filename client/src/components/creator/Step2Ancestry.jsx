@@ -199,6 +199,27 @@ export default function Step2Ancestry({ state, set, mode, payload }) {
                 <option key={s.name} value={s.name}>{s.name}</option>
               ))}
             </select>
+
+            {/* The picker used to render the bare name and nothing else, so
+                "Variant Human" — the one subrace whose whole point is a
+                mechanical trade — read as an unexplained label. races.json
+                has carried `description` and `traits` all along; this just
+                surfaces them, mirroring how Faith renders its blurb in
+                Step 7. */}
+            {(() => {
+              const s = subraces.find(x => x.name === subrace)
+              if (!s) return null
+              return (
+                <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+                  {s.description}
+                  {s.traits?.length > 0 && (
+                    <ul style={{ margin: '6px 0 0', paddingLeft: '1.1em' }}>
+                      {s.traits.map(t => <li key={t}>{t}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )
+            })()}
           </Field>
         )}
 

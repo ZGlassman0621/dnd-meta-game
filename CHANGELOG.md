@@ -2,6 +2,28 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.174] - 2026-08-11 — MVP pass: one creation path, a straight line into play
+
+**The Prelude is switched off, not deleted.** `client/src/config/mvpFeatures.js` is the client-side counterpart to `server/config/featureFlags.js` — the server flags gate subsystems that cost money or mutate the world, this gates *surfaces*. `PRELUDE_ENABLED = false` makes "Create New Character" go straight to the 8-step creator instead of the Prelude/Campaign fork; the fork screen was a dead click with only one live branch.
+
+Nothing about the Prelude is broken — it is scope, not quality — so the wizard, arc preview, play loop, `/api/prelude` routes and every test stay intact. The **resume path is deliberately still live**: a character already sitting in `prelude_setup` or `prelude` state still resumes from their home-screen card, so flipping the flag cannot strand someone mid-wizard.
+
+**Ancestry feats stay — they were already wired end to end.** Checked rather than assumed: `ancestry_feats` table (migration 024) seeded by `progressionSeedService`, served by `GET /api/progression/ancestry-feats/:listId`, picked at L1 in creator Step 2, persisted through `persistAncestryFeatSelection` into `character_ancestry_feats`, offered again at L3/7/13/18 by `LevelUpPage`, displayed on the character sheet's Progression tab, and read by `dmPromptBuilder`. Nothing to remove.
+
+**Subraces now explain themselves.** The subrace picker rendered the bare name and nothing else, so "Variant Human" — the one subrace whose entire point is a mechanical trade — read as an unexplained label. `races.json` has carried `description` and `traits` all along; Step 2 now surfaces them under the select, mirroring how Faith renders its blurb in Step 7. This fixes every subrace, not just Variant Human.
+
+**The god list is readable without selecting.** The dropdown showed `Tyr (Faerûnian)` — which culture venerates the god, but nothing about what the god *is*. A `knownFor` field (2–3 words) is now data on all 53 deities in `deities.json`, so options read `Tyr (Faerûnian) — Justice and law`. Derived once from each description and committed as data rather than regex-ed at render time; twelve entries where the mechanical rule clipped a phrase mid-clause ("Winter and cruel", "Dawn, renewal, and", "Magic and the") are hand-authored. The two non-deity anchors, Atheist and Agnostic, correctly carry none.
+
+**Character creation leads into campaign creation.** Finishing the creator set `selectedCharacter` and dropped the player on the dark dashboard, where creating a campaign meant hunting through a nav dropdown. It now routes to `showCampaigns` with the New Campaign form already open (`autoOpenCreate`). This is not just navigation polish: a character with no `campaign_id` engages almost none of the world — no chronicle, no weather, no living world — which CLAUDE.md flags as the highest-value structural fix outstanding. The old flow made the step that avoids it optional and hidden.
+
+### Two more documentation lies, per rule 1
+
+The feature-flag table was wrong in **both directions**. `LIVING_WORLD_TICK` was documented **on** ("Phase 4") and is `false` in code; `PROGRESSION_AWARDS` was documented **off** and is `true`. The MVP feature-flag posture commit (`3b9a208`, "progression on, simulation off") flipped both and the table was never updated — so the file's own Phase 4 narrative, which says the world simulation is back on, contradicted the code it describes. Corrected, along with the status banner.
+
+### Verification
+
+Full suite **85/86 files green, 4733 assertions** — unchanged, and the one failure is the documented `integration.test.js` 410/404 mismatch. Client builds clean. Verified against the running dev server that the new module resolves and `HomeFlow` transforms.
+
 ## [1.0.0.173] - 2026-08-11 — The sign-in screen is gone
 
 A solo game running on the player's own machine was asking them to log in. The account system — register, bcrypt password hashing, JWT signing with an auto-generated secret, a Bearer token attached to every `/api` request by a global `window.fetch` monkey-patch, a login page, a "Sign Out" button and a change-password modal — was an artifact of a build that anticipated multiple users. It is deleted. Per rule 2, deleted rather than hidden: git history is the archive.

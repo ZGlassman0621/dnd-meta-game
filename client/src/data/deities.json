@@ -12,370 +12,423 @@
     "alignment": "LE",
     "domain": "Trickery",
     "description": "God of tyranny and domination",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Tyranny and domination"
   },
   "auril": {
     "name": "Auril",
     "alignment": "NE",
     "domain": "Nature, Tempest",
     "description": "Goddess of winter and cruel cold",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Winter and cold"
   },
   "azuth": {
     "name": "Azuth",
     "alignment": "LN",
     "domain": "Arcana, Knowledge",
     "description": "God of wizards and mages",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Wizards and mages"
   },
   "bahamut": {
     "name": "Bahamut",
     "alignment": "LG",
     "domain": "Life, War",
     "description": "Dragon god of justice and protection",
-    "pantheon": "Draconic"
+    "pantheon": "Draconic",
+    "knownFor": "Justice and protection"
   },
   "bane": {
     "name": "Bane",
     "alignment": "LE",
     "domain": "War",
     "description": "God of war and conquest",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "War and conquest"
   },
   "beshaba": {
     "name": "Beshaba",
     "alignment": "CE",
     "domain": "Trickery",
     "description": "Goddess of misfortune and bad luck",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Misfortune"
   },
   "bhaal": {
     "name": "Bhaal",
     "alignment": "NE",
     "domain": "Death",
     "description": "God of murder",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Murder"
   },
   "chauntea": {
     "name": "Chauntea",
     "alignment": "NG",
     "domain": "Life, Nature",
     "description": "Goddess of agriculture and growth",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Agriculture and growth"
   },
   "corellon": {
     "name": "Corellon Larethian",
     "alignment": "CG",
     "domain": "Arcana, Light",
     "description": "Elven god of art and magic",
-    "pantheon": "Elven"
+    "pantheon": "Elven",
+    "knownFor": "Art and magic"
   },
   "cyric": {
     "name": "Cyric",
     "alignment": "CE",
     "domain": "Trickery",
     "description": "God of lies and madness",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Lies and madness"
   },
   "deneir": {
     "name": "Deneir",
     "alignment": "NG",
     "domain": "Knowledge",
     "description": "God of writing and knowledge",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Writing and knowledge"
   },
   "eldath": {
     "name": "Eldath",
     "alignment": "NG",
     "domain": "Life, Nature",
     "description": "Goddess of peace and waterfalls",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Peace and waterfalls"
   },
   "gond": {
     "name": "Gond",
     "alignment": "N",
     "domain": "Forge, Knowledge",
     "description": "God of craft and invention",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Craft and invention"
   },
   "gruumsh": {
     "name": "Gruumsh",
     "alignment": "CE",
     "domain": "Tempest, War",
     "description": "Orc god of slaughter and destruction",
-    "pantheon": "Orcish"
+    "pantheon": "Orcish",
+    "knownFor": "Slaughter and destruction"
   },
   "helm": {
     "name": "Helm",
     "alignment": "LN",
     "domain": "Life, Light",
     "description": "God of protection and vigilance",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Protection and vigilance"
   },
   "ilmater": {
     "name": "Ilmater",
     "alignment": "LG",
     "domain": "Life",
     "description": "God of endurance and suffering",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Endurance and suffering"
   },
   "kelemvor": {
     "name": "Kelemvor",
     "alignment": "LN",
     "domain": "Death, Grave",
     "description": "God of the dead and judge of the damned",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "The dead"
   },
   "lathander": {
     "name": "Lathander",
     "alignment": "NG",
     "domain": "Life, Light",
     "description": "God of dawn, renewal, and vitality",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Dawn and renewal"
   },
   "lolth": {
     "name": "Lolth",
     "alignment": "CE",
     "domain": "Trickery",
     "description": "Spider goddess of the drow",
-    "pantheon": "Drow"
+    "pantheon": "Drow",
+    "knownFor": "Spider queen"
   },
   "loviatar": {
     "name": "Loviatar",
     "alignment": "LE",
     "domain": "Death",
     "description": "Goddess of pain and torture",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Pain and torture"
   },
   "malar": {
     "name": "Malar",
     "alignment": "CE",
     "domain": "Nature",
     "description": "God of the hunt and savage beasts",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "The savage hunt"
   },
   "mask": {
     "name": "Mask",
     "alignment": "CN",
     "domain": "Trickery",
     "description": "God of thieves and shadows",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Thieves and shadows"
   },
   "mielikki": {
     "name": "Mielikki",
     "alignment": "NG",
     "domain": "Nature",
     "description": "Goddess of forests and rangers",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Forests and rangers"
   },
   "milil": {
     "name": "Milil",
     "alignment": "NG",
     "domain": "Light",
     "description": "God of poetry and song",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Poetry and song"
   },
   "moradin": {
     "name": "Moradin",
     "alignment": "LG",
     "domain": "Forge, Knowledge",
     "description": "Dwarven god of creation and smithing",
-    "pantheon": "Dwarven"
+    "pantheon": "Dwarven",
+    "knownFor": "Creation and smithing"
   },
   "myrkul": {
     "name": "Myrkul",
     "alignment": "NE",
     "domain": "Death",
     "description": "God of death and decay",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Death and decay"
   },
   "mystra": {
     "name": "Mystra",
     "alignment": "NG",
     "domain": "Arcana, Knowledge",
     "description": "Goddess of magic and the Weave",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Magic"
   },
   "oghma": {
     "name": "Oghma",
     "alignment": "N",
     "domain": "Knowledge",
     "description": "God of knowledge and invention",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Knowledge and invention"
   },
   "savras": {
     "name": "Savras",
     "alignment": "LN",
     "domain": "Knowledge",
     "description": "God of divination and fate",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Divination and fate"
   },
   "selune": {
     "name": "Selûne",
     "alignment": "CG",
     "domain": "Knowledge, Life, Light",
     "description": "Goddess of the moon and stars",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Moon and stars"
   },
   "shar": {
     "name": "Shar",
     "alignment": "NE",
     "domain": "Death, Trickery",
     "description": "Goddess of darkness and loss",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Darkness and loss"
   },
   "silvanus": {
     "name": "Silvanus",
     "alignment": "N",
     "domain": "Nature",
     "description": "God of wild nature",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Wild nature"
   },
   "sune": {
     "name": "Sune",
     "alignment": "CG",
     "domain": "Life, Light",
     "description": "Goddess of love and beauty",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Love and beauty"
   },
   "talos": {
     "name": "Talos",
     "alignment": "CE",
     "domain": "Tempest",
     "description": "God of storms and destruction",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Storms and destruction"
   },
   "tempus": {
     "name": "Tempus",
     "alignment": "N",
     "domain": "War",
     "description": "God of war and battle",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "War and battle"
   },
   "tiamat": {
     "name": "Tiamat",
     "alignment": "LE",
     "domain": "Trickery, War",
     "description": "Dragon goddess of greed and evil",
-    "pantheon": "Draconic"
+    "pantheon": "Draconic",
+    "knownFor": "Greed and evil"
   },
   "torm": {
     "name": "Torm",
     "alignment": "LG",
     "domain": "War",
     "description": "God of courage and self-sacrifice",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Courage and self-sacrifice"
   },
   "tymora": {
     "name": "Tymora",
     "alignment": "CG",
     "domain": "Trickery",
     "description": "Goddess of good fortune and adventure",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Luck and daring"
   },
   "tyr": {
     "name": "Tyr",
     "alignment": "LG",
     "domain": "War",
     "description": "God of justice and law",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Justice and law"
   },
   "umberlee": {
     "name": "Umberlee",
     "alignment": "CE",
     "domain": "Tempest",
     "description": "Goddess of the sea and storms",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Sea and storms"
   },
   "waukeen": {
     "name": "Waukeen",
     "alignment": "N",
     "domain": "Knowledge, Trickery",
     "description": "Goddess of trade and wealth",
-    "pantheon": "Faerûnian"
+    "pantheon": "Faerûnian",
+    "knownFor": "Trade and wealth"
   },
   "yondalla": {
     "name": "Yondalla",
     "alignment": "LG",
     "domain": "Life",
     "description": "Halfling goddess of protection and bounty",
-    "pantheon": "Halfling"
+    "pantheon": "Halfling",
+    "knownFor": "Protection and bounty"
   },
   "avandra": {
     "name": "Avandra",
     "alignment": "CG",
     "domain": "Trickery",
     "description": "Goddess of change and luck",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Change and luck"
   },
   "erathis": {
     "name": "Erathis",
     "alignment": "LN",
     "domain": "Knowledge",
     "description": "Goddess of civilization and invention",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Civilization and invention"
   },
   "ioun": {
     "name": "Ioun",
     "alignment": "N",
     "domain": "Knowledge",
     "description": "Goddess of knowledge and skill",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Knowledge and skill"
   },
   "kord": {
     "name": "Kord",
     "alignment": "CN",
     "domain": "Tempest, War",
     "description": "God of strength and storms",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Strength and storms"
   },
   "melora": {
     "name": "Melora",
     "alignment": "N",
     "domain": "Nature, Tempest",
     "description": "Goddess of wilderness and the sea",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Wilderness and sea"
   },
   "pelor": {
     "name": "Pelor",
     "alignment": "NG",
     "domain": "Life, Light",
     "description": "God of the sun and healing",
-    "pantheon": "Greyhawk"
+    "pantheon": "Greyhawk",
+    "knownFor": "Sun and healing"
   },
   "raven_queen": {
     "name": "The Raven Queen",
     "alignment": "LN",
     "domain": "Life, Death",
     "description": "Goddess of death and fate",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Death and fate"
   },
   "sehanine": {
     "name": "Sehanine Moonbow",
     "alignment": "CG",
     "domain": "Trickery",
     "description": "Goddess of the moon and illusions",
-    "pantheon": "Elven"
+    "pantheon": "Elven",
+    "knownFor": "Moon and illusions"
   },
   "torog": {
     "name": "Torog",
     "alignment": "NE",
     "domain": "Death",
     "description": "God of the Underdark and imprisonment",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Underdark and imprisonment"
   },
   "vecna": {
     "name": "Vecna",
     "alignment": "NE",
     "domain": "Arcana, Death",
     "description": "God of evil secrets and undeath",
-    "pantheon": "Greyhawk"
+    "pantheon": "Greyhawk",
+    "knownFor": "Secrets and undeath"
   },
   "zehir": {
     "name": "Zehir",
     "alignment": "CE",
     "domain": "Trickery, Death",
     "description": "God of darkness and poison",
-    "pantheon": "Exandrian"
+    "pantheon": "Exandrian",
+    "knownFor": "Darkness and poison"
   }
 }

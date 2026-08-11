@@ -304,14 +304,18 @@ const IMPORT_STEPS = [
   { key: 'done', label: 'Campaign imported!' }
 ];
 
-const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay }) => {
+// `autoOpenCreate` — open the New Campaign form on mount instead of the
+// campaign list. Used by the post-creation handoff: a character who has just
+// been made has no campaign yet, so the list is empty and "+ New" is the only
+// meaningful action on the screen. Skipping that click is the whole point.
+const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigateToPlay, autoOpenCreate = false }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
   const [campaignStats, setCampaignStats] = useState(null);
   const [filter, setFilter] = useState('active');
   const [loading, setLoading] = useState(true);
-  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [showNewCampaign, setShowNewCampaign] = useState(autoOpenCreate);
   const [selectedCharacterToAssign, setSelectedCharacterToAssign] = useState('');
   const [customLocation, setCustomLocation] = useState('');
   const [backstoryLocation, setBackstoryLocation] = useState(null);

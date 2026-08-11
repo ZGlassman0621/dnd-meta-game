@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import HomeScreenV2 from './HomeScreenV2.jsx'
 import PathChoiceScreen from './PathChoiceScreen.jsx'
+import { PRELUDE_ENABLED } from '../../config/mvpFeatures.js'
 import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
 import PreludeCreatorV2 from './PreludeCreatorV2.jsx'
 import PreludeArcPreview from '../PreludeArcPreview.jsx'
@@ -140,7 +141,18 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
     }
   }, [characters, onSelectActive])
 
-  const handleNew = useCallback(() => setRoute('path'), [])
+  // MVP: with the Prelude off there is only one path, so the fork screen is
+  // a dead click — go straight to the manual creator. See config/mvpFeatures.js.
+  const handleNew = useCallback(() => {
+    if (!PRELUDE_ENABLED) {
+      setResumePayload(null)
+      setResumeState(null)
+      setResumeCharacterId(null)
+      setRoute('wizard.manual')
+      return
+    }
+    setRoute('path')
+  }, [])
 
   const handlePickCampaign = useCallback(() => {
     setResumePayload(null)

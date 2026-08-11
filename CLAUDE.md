@@ -4,7 +4,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 
 **This file is a present-tense snapshot, not a history.** Version-by-version detail belongs in `CHANGELOG.md`. Update this file when architecture changes, not when a bug is fixed.
 
-> **Status: mid-refactor.** The project is executing a "scale back to scale up" plan — cut to a stable core, harden the data layer, then reintroduce mechanics deliberately. Phases 1–4 have landed: the world simulation is back on and driven by in-game time, and campaign memory is compressed rather than truncated. Several subsystems are still switched off. See **Feature flags** below before assuming one is live.
+> **Status: mid-refactor.** The project is executing a "scale back to scale up" plan — cut to a stable core, harden the data layer, then reintroduce mechanics deliberately. Phases 1–4 have landed, then the MVP pass changed the posture: **progression on, simulation off**. Campaign memory is compressed rather than truncated. Several subsystems are switched off. See **Feature flags** below before assuming one is live.
 
 ---
 
@@ -81,12 +81,12 @@ All defaults live in `server/config/featureFlags.js`.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `LIVING_WORLD_TICK` | **on** (Phase 4) | Faction goals, world events, NPC mail, base income, notoriety decay, merchant order fulfilment, base threats. Driven by in-game time at session end |
+| `LIVING_WORLD_TICK` | **off** (MVP) | Faction goals, world events, NPC mail, base income, notoriety decay, merchant order fulfilment, base threats. Driven by in-game time at session end. Phase 4 turned it on; the MVP feature-flag posture turned it back off |
 | `NPC_AGING` | off | NPC absence/disposition decay at session start |
 | `COMPANION_MOOD_DECAY` | off | Companion mood decay at session start |
 | `SURVIVAL_DAY_CHANGE` | off | Food spoilage + exhaustion application |
 | `DEFERRED_RESOLUTION_ACTIONS` | off | Companion away-activities, merchant commissions, fortress threats |
-| `PROGRESSION_AWARDS` | off | Mythic tier auto-advance, quest/achievement XP |
+| `PROGRESSION_AWARDS` | **on** (MVP) | Mythic tier auto-advance, quest/achievement XP. Ancestry feats ride on this and are wired end to end — creator pick at L1, tier picks at L3/7/13/18, `character_ancestry_feats`, character sheet, DM prompt |
 | `NPC_DEATH_SYNC` | on | Canon-fact death reconciler — a reconciler, not simulation |
 | `SESSION_END_BACKUP` | on | Fire-and-forget snapshot after session end. Forced off in `run-tests.js` |
 
