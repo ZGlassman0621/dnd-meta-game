@@ -2,6 +2,28 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.175] - 2026-08-11 — Nav pruned to the MVP spine
+
+Step 1 of the UI unification: shrink the target before converting it.
+
+Navigation was three dropdown menus over ten entries. That was the right shape when the app was a meta-game console with a session attached; it is the wrong shape for "make a character, build a campaign, play". It is now **four flat links** — Character, Companions, Campaign, Play — with no categories and no dropdowns. A menu you must open to discover a single item underneath is pure friction.
+
+Character *select* is not a nav item: it is the root surface (HomeFlow), reached by "← Your characters" in the app header.
+
+**Hidden, not deleted** — every view below still routes in `App.jsx` and still works, it simply has no menu entry. Restoring one is a single line in `NAV_ITEMS`. Cut in this pass: Backstory Parser, Downtime & Stats, the per-character Settings page, Campaign Plan, Player Journal, DM Mode. Verified first that nothing else in the app links to any of them — the only in-app navigation targets are `showCampaigns`, `showCharacterSheet` and `showDMSession`, all of which survive.
+
+One trap worth naming: the cut `showSettings` nav entry is **not** the settings the player uses. The appbar "Settings" link opens `SettingsOverlay`, a different surface, and it is untouched. The nav comment block records this so the next person does not "restore" the wrong one.
+
+Links are disabled rather than hidden when no character is selected, so the shape of the app stays legible instead of rearranging itself.
+
+### Verification
+
+Full suite **85/86 files green, 4733 assertions** — the only failure is the documented `integration.test.js` 410/404 mismatch. (One run reported 84/86; the extra failure was the documented shared-test-DB flakiness and did not reproduce.) Client builds clean; HMR confirmed against the running dev server.
+
+### Next
+
+Screens remaining on the dark shell, in conversion order: dashboard shell (~250 lines), CampaignsPage (1359), SessionSetup (706), DMSession (3197), CharacterSheet (3609), CompanionsPage + CompanionSheet. One screen per commit, build between each.
+
 ## [1.0.0.174] - 2026-08-11 — MVP pass: one creation path, a straight line into play
 
 **The Prelude is switched off, not deleted.** `client/src/config/mvpFeatures.js` is the client-side counterpart to `server/config/featureFlags.js` — the server flags gate subsystems that cost money or mutate the world, this gates *surfaces*. `PRELUDE_ENABLED = false` makes "Create New Character" go straight to the 8-step creator instead of the Prelude/Campaign fork; the fork screen was a dead click with only one live branch.

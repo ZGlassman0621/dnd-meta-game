@@ -1,150 +1,49 @@
-import { useState, useRef, useEffect } from 'react'
+/**
+ * Primary navigation.
+ *
+ * MVP spine (v1.0.175): four destinations, flat. Three dropdown menus over ten
+ * entries was the right shape when the app was a meta-game console with a
+ * session attached; it is the wrong shape for "make a character, build a
+ * campaign, play". Four links do not need to be filed under categories, and a
+ * dropdown you must open to discover a single item is pure friction.
+ *
+ * Character *select* is not here — it is the root surface (HomeFlow), reached
+ * by the "← Your characters" button in the app header.
+ *
+ * ── Hidden from nav, code intact ─────────────────────────────────────────
+ * Every view below still routes in App.jsx and still works; it just has no
+ * menu entry. Restoring one means adding a line to NAV_ITEMS, nothing more.
+ * Per the standing convention in this project: hide surfaces, keep the code.
+ *
+ *   Cut in the MVP pass (v1.0.175):
+ *     showParsedBackstory  — Backstory Parser
+ *     showDowntime         — Downtime & Stats
+ *     showSettings         — per-character settings page. NOTE: the appbar
+ *                            "Settings" link opens SettingsOverlay, which is a
+ *                            different surface and is still available.
+ *     showCampaignPlan     — Campaign Plan viewer (generated during campaign
+ *                            creation; the plan is used, just not browsable)
+ *     showPlayerJournal    — Player Journal
+ *     showDMMode           — DM Mode (tooling, not play)
+ *
+ *   Cut earlier:
+ *     showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld,
+ *     showNPCGenerator, showNPCRelationships, showNarrativeQueue, showQuests,
+ *     showBackstories, showMetaGame (embedded as a DM Session tab),
+ *     showGeneration (runs automatically via the campaign plan)
+ *
+ * `showAIBehavior` is deliberately not a nav item either — it is a diagnostic
+ * surface reached from the appbar.
+ */
 
-// Pages hidden from nav but code still exists for future reintegration / offline play:
-// Character: (Downtime is now its own combined page with meta game + adventure history)
-// World: showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld,
-//        showNPCGenerator, showNPCRelationships
-// Story: showNarrativeQueue, showQuests, showBackstories (covered by Campaign Plan)
-// Play: showMetaGame (embedded as DM Session tab), showGeneration (auto via campaign plan)
-
-const menuCategories = {
-  character: {
-    label: 'Character',
-    color: '#3498db',
-    items: [
-      { key: 'showCharacterSheet', label: 'Character Sheet' },
-      { key: 'showCompanions', label: 'Companions' },
-      { key: 'showParsedBackstory', label: 'Backstory Parser' },
-      { key: 'showDowntime', label: 'Downtime & Stats' },
-      { key: 'showSettings', label: 'Settings' }
-    ]
-  },
-  story: {
-    label: 'Story',
-    color: '#9b59b6',
-    items: [
-      { key: 'showCampaigns', label: 'Campaigns' },
-      { key: 'showCampaignPlan', label: 'Campaign Plan' },
-      { key: 'showPlayerJournal', label: 'Player Journal' }
-    ]
-  },
-  play: {
-    label: 'Play',
-    color: '#e67e22',
-    items: [
-      { key: 'showDMSession', label: 'AI Dungeon Master' },
-      { key: 'showDMMode', label: 'DM Mode' }
-    ]
-  }
-}
-
-function DropdownMenu({ category, isOpen, onToggle, activeView, onNavigate, hasCharacter }) {
-  const menuRef = useRef(null)
-  const { label, color, items } = menuCategories[category]
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        if (isOpen) onToggle(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, onToggle])
-
-  // Check if any item in this category is active
-  const hasActiveItem = items.some(item => activeView === item.key)
-
-  return (
-    <div ref={menuRef} style={{ position: 'relative' }}>
-      <button
-        onClick={() => onToggle(isOpen ? null : category)}
-        style={{
-          background: hasActiveItem ? `${color}33` : 'rgba(255, 255, 255, 0.1)',
-          border: hasActiveItem ? `1px solid ${color}` : '1px solid rgba(255, 255, 255, 0.2)',
-          color: '#fff',
-          padding: '0.5rem 1rem',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.3rem'
-        }}
-      >
-        {label}
-        <span style={{
-          fontSize: '0.7rem',
-          marginLeft: '0.2rem',
-          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s'
-        }}>
-          ▼
-        </span>
-      </button>
-
-      {isOpen && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          right: 0,
-          marginTop: '0.25rem',
-          background: 'rgba(30, 30, 40, 0.98)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          borderRadius: '6px',
-          padding: '0.5rem 0',
-          minWidth: '180px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-          zIndex: 1000
-        }}>
-          {items.map(item => {
-            // Skip character-dependent items if no character selected
-            if (!hasCharacter && item.key !== 'showNPCGenerator' && item.key !== 'showDMMode') {
-              return null
-            }
-
-            const isActive = activeView === item.key
-
-            return (
-              <button
-                key={item.key}
-                onClick={() => {
-                  onNavigate(item.key)
-                  onToggle(null)
-                }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '0.6rem 1rem',
-                  background: isActive ? `${color}33` : 'transparent',
-                  border: 'none',
-                  color: isActive ? color : '#fff',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  transition: 'background 0.15s'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.target.style.background = 'rgba(255, 255, 255, 0.1)'
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.target.style.background = 'transparent'
-                }}
-              >
-                {item.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
+const NAV_ITEMS = [
+  { key: 'showCharacterSheet', label: 'Character', color: '#3498db' },
+  { key: 'showCompanions', label: 'Companions', color: '#3498db' },
+  { key: 'showCampaigns', label: 'Campaign', color: '#9b59b6' },
+  { key: 'showDMSession', label: 'Play', color: '#e67e22' }
+]
 
 export default function NavigationMenu({ activeView, onNavigate, hasCharacter, onHome }) {
-  const [openMenu, setOpenMenu] = useState(null)
-
   const isAnyViewActive = activeView !== null
 
   return (
@@ -173,17 +72,33 @@ export default function NavigationMenu({ activeView, onNavigate, hasCharacter, o
         </button>
       )}
 
-      {Object.keys(menuCategories).map(category => (
-        <DropdownMenu
-          key={category}
-          category={category}
-          isOpen={openMenu === category}
-          onToggle={setOpenMenu}
-          activeView={activeView}
-          onNavigate={onNavigate}
-          hasCharacter={hasCharacter}
-        />
-      ))}
+      {NAV_ITEMS.map(item => {
+        const isActive = activeView === item.key
+        // Everything in the spine acts on a selected character, so without one
+        // the links are inert rather than hidden — the shape of the app stays
+        // legible instead of rearranging itself.
+        const disabled = !hasCharacter
+        return (
+          <button
+            key={item.key}
+            onClick={() => !disabled && onNavigate(item.key)}
+            disabled={disabled}
+            style={{
+              background: isActive ? item.color : 'rgba(255, 255, 255, 0.1)',
+              border: `1px solid ${isActive ? item.color : 'rgba(255, 255, 255, 0.2)'}`,
+              color: isActive ? '#1a1a2e' : (disabled ? '#666' : '#fff'),
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: isActive ? 600 : 400,
+              opacity: disabled ? 0.5 : 1
+            }}
+          >
+            {item.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
