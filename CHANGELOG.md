@@ -2,6 +2,26 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.176] - 2026-08-11 — Design tokens promoted out of the creator scope
+
+Phase 1 of the UI unification. No screen changes; this is the CSS architecture the conversion sits on.
+
+`creator-theme.css` carried its own header instruction: *"Promote to design-tokens.css when a second surface starts referencing the same tokens. Don't pre-promote."* That condition had already been met and passed — the palette was declared **twice in that one file**, once on `.creator-v2` and once hand-mirrored onto `.settings-overlay-root`, whose comment openly described the duplication as "small palette, low cost". Converting five more screens would have made that the third, fourth and fifth copy.
+
+The 18 tokens now live on `:root` in `client/src/styles/design-tokens.css`. Both copies in `creator-theme.css` are gone.
+
+### Why `:root` cannot leak into the un-converted screens
+
+Custom properties *declare*; they do not *apply*. A global `--ink` restyles nothing until something references it. Verified before promoting rather than after: `index.css` — the 4606-line dark dashboard shell — contains **zero** `var()` references and **zero** custom property declarations. There is no name to collide with and nothing to accidentally restyle. The dark screens render byte-identically.
+
+### What deliberately stayed scoped
+
+Only tokens were promoted. The ~37 structural classes in `creator-theme.css` (`.card`, `.btn`, `.input`, `.select`, `.label`, `.chip`, `.frame`, …) remain under `.creator-v2`. Those names are generic enough to collide with `index.css` as the dark shell changes; it currently defines none of them, which is luck rather than a contract, and unscoping them would convert that luck into a live hazard.
+
+### Verification
+
+A completeness check rather than a spot check: every `var(--x)` referenced across `creator-theme.css`, all components and `App.jsx` was cross-referenced against the declarations in `design-tokens.css` — **18 referenced, 18 declared, zero missing, zero orphaned**. Confirmed `:root{--bg: #fcfcfa;…}` is present in the built bundle and `.creator-v2` is still scoped. Full suite 85/86 files green, 4733 assertions (the one failure is the documented `integration.test.js` 410/404 mismatch). Client builds clean.
+
 ## [1.0.0.175] - 2026-08-11 — Nav pruned to the MVP spine
 
 Step 1 of the UI unification: shrink the target before converting it.

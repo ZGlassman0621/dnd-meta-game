@@ -1,0 +1,56 @@
+/* ============================================================
+ * Design tokens — the editorial ("paper") aesthetic.
+ *
+ * Promoted out of `creator-theme.css` in v1.0.176. That file's own header
+ * said to promote "when a second surface starts referencing the same
+ * tokens", and by then there were already two copies of the palette in it:
+ * one on `.creator-v2` and a hand-mirrored one on `.settings-overlay-root`.
+ * The MVP UI unification adds several more surfaces, so the copies were
+ * about to multiply.
+ *
+ * ── Why `:root` is safe here ─────────────────────────────────────────────
+ * Custom properties declare; they do not apply. Defining them globally
+ * changes nothing on its own — only a `var()` reference does. Verified
+ * before promoting: `index.css` (the dark dashboard shell, 4606 lines)
+ * contains **zero** `var()` references and **zero** custom properties, so
+ * there is no name to collide with and nothing to accidentally restyle.
+ * The un-converted dark screens are untouched by this file.
+ *
+ * ── What is deliberately NOT here ────────────────────────────────────────
+ * Only tokens. The ~37 structural classes in `creator-theme.css`
+ * (`.card`, `.btn`, `.input`, `.select`, `.label`, `.chip`, …) stay scoped
+ * under `.creator-v2`. Those names are generic enough that unscoping them
+ * would be a live collision hazard against `index.css` as it grows —
+ * today it happens to define none of them, which is luck, not a contract.
+ *
+ * Per CLAUDE.md "no CSS framework": plain CSS, no build step, no
+ * preprocessor.
+ * ============================================================ */
+
+:root {
+  /* Editorial palette (locked — see DECISION_LOG 2026-05-02, Decision 6:
+     "editorial & literary" is the aesthetic; parchment and dark variants
+     from the original mockup are deliberately not carried over). */
+  --bg: #fcfcfa;
+  --bg-2: #f3f3ee;
+  --bg-card: #ffffff;
+  --ink: #18181a;
+  --ink-2: #4a4a4f;
+  --ink-3: #86868b;
+  --rule: #e3e3df;
+  --rule-soft: #ededea;
+  --accent: #2f3a52;     /* muted ink-blue */
+  --accent-2: #6b6f78;
+  --selection: #d8e0ee;
+  --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 30px rgba(0,0,0,.04);
+  --shadow-card: 0 1px 0 rgba(0,0,0,.02), 0 12px 40px rgba(0,0,0,.06);
+
+  /* Typography */
+  --serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Layout */
+  --content-w: 880px;
+  --content-w-wide: 1120px;
+}

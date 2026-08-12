@@ -1,49 +1,33 @@
 /* ============================================================
  * Character Creator V2 — editorial aesthetic, scoped under
- * `.creator-v2` so the rest of the app (dark slate gradient
- * shell) stays untouched.
+ * `.creator-v2`.
  *
  * Per Decision 6 (DECISION_LOG 2026-05-02): editorial & literary
  * is the locked aesthetic. Parchment + dark variants from the
  * design mockup are NOT carried over — single-aesthetic only per
  * PM ruling.
  *
- * Per CLAUDE.md "no CSS framework": this file is plain CSS for
- * design tokens + the small set of structural classes the new
- * creator components reference (`.creator-frame`, `.celebration`,
- * `.narrative-card`, etc.). Component layout / one-off styling
- * stays inline-style throughout, referencing var(--ink-1) etc.
+ * Per CLAUDE.md "no CSS framework": plain CSS for the structural
+ * classes the creator components reference (`.frame`,
+ * `.celebration`, `.narrative-card`, etc.). Component layout /
+ * one-off styling stays inline-style throughout, referencing
+ * var(--ink) etc.
  *
- * Promote to client/src/styles/design-tokens.css when a second
- * surface (Origin & Identity tab, Progression tab) starts
- * referencing the same tokens. Don't pre-promote.
+ * ── Tokens live in `design-tokens.css` (v1.0.176) ────────────
+ * The palette used to be declared twice in THIS file — once on
+ * `.creator-v2` and once hand-mirrored onto
+ * `.settings-overlay-root`. Both copies are gone; the tokens are
+ * now global on `:root`, so any surface can consume them without
+ * a third copy appearing. See that file for why `:root` is safe.
+ *
+ * The ~37 structural class names below stay scoped under
+ * `.creator-v2` on purpose. `.card` / `.btn` / `.input` /
+ * `.select` / `.label` are generic enough to collide with
+ * `index.css` as the dark shell changes; today it defines none
+ * of them, which is luck rather than a contract.
  * ============================================================ */
 
 .creator-v2 {
-  /* Editorial palette (locked) */
-  --bg: #fcfcfa;
-  --bg-2: #f3f3ee;
-  --bg-card: #ffffff;
-  --ink: #18181a;
-  --ink-2: #4a4a4f;
-  --ink-3: #86868b;
-  --rule: #e3e3df;
-  --rule-soft: #ededea;
-  --accent: #2f3a52;     /* muted ink-blue */
-  --accent-2: #6b6f78;
-  --selection: #d8e0ee;
-  --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 30px rgba(0,0,0,.04);
-  --shadow-card: 0 1px 0 rgba(0,0,0,.02), 0 12px 40px rgba(0,0,0,.06);
-
-  /* Typography */
-  --serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
-  --sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
-
-  /* Layout */
-  --content-w: 880px;
-  --content-w-wide: 1120px;
-
   /* Apply the editorial palette to the creator surface itself */
   background: var(--bg);
   color: var(--ink);
@@ -853,28 +837,14 @@
  * Scoped under `.settings-overlay-root` so the overlay can be reached from
  * the editorial-aesthetic HomeFlow AND the legacy dark-aesthetic dashboard
  * — the scrim + sheet provide their own visual separation either way.
- * Tokens are duplicated here (small palette, low cost) rather than
- * promoted into design-tokens.css; the comment at the top of this file
- * notes that a token-promotion ship can land later when a third surface
- * starts referencing them.
+ *
+ * The hand-mirrored copy of the palette that used to sit here was the
+ * second copy in this file, and the reason the promotion happened. Tokens
+ * now come from `design-tokens.css` via `:root`, which this selector
+ * inherits like everything else.
  * ============================================================ */
 
 .settings-overlay-root {
-  /* Editorial palette (mirrors `.creator-v2`) */
-  --bg: #fcfcfa;
-  --bg-2: #f3f3ee;
-  --bg-card: #ffffff;
-  --ink: #18181a;
-  --ink-2: #4a4a4f;
-  --ink-3: #86868b;
-  --rule: #e3e3df;
-  --rule-soft: #ededea;
-  --accent: #2f3a52;
-  --accent-2: #6b6f78;
-  --serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
-  --sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
-
   position: fixed;
   inset: 0;
   z-index: 1000;
