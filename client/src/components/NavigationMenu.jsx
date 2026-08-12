@@ -37,43 +37,32 @@
  */
 
 const NAV_ITEMS = [
-  { key: 'showCharacterSheet', label: 'Character', color: '#3498db' },
-  { key: 'showCompanions', label: 'Companions', color: '#3498db' },
-  { key: 'showCampaigns', label: 'Campaign', color: '#9b59b6' },
-  { key: 'showDMSession', label: 'Play', color: '#e67e22' }
+  { key: 'showCharacterSheet', label: 'Character' },
+  { key: 'showCompanions', label: 'Companions' },
+  { key: 'showCampaigns', label: 'Campaign' },
+  { key: 'showDMSession', label: 'Play' }
 ]
 
+/**
+ * v1.0.177 — converted to the paper shell. The per-item accent colours are
+ * gone: they were category tints from the dropdown era, and with four flat
+ * links the active state carries the meaning on its own. Styling lives in
+ * `styles/shell.css` under `.shell-nav`, reading design tokens.
+ *
+ * The nav also stopped being absolutely positioned in the top-right corner.
+ * It now sits in the header's flow, which is what lets the paper band size
+ * itself to its contents instead of overlapping them.
+ */
 export default function NavigationMenu({ activeView, onNavigate, hasCharacter, onHome }) {
   const isAnyViewActive = activeView !== null
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: '1rem',
-      right: '1rem',
-      display: 'flex',
-      gap: '0.5rem',
-      alignItems: 'center'
-    }}>
+    <nav className="shell-nav">
       {isAnyViewActive && (
-        <button
-          onClick={onHome}
-          style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            color: '#fff',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.9rem'
-          }}
-        >
-          Home
-        </button>
+        <button type="button" onClick={onHome}>Home</button>
       )}
 
       {NAV_ITEMS.map(item => {
-        const isActive = activeView === item.key
         // Everything in the spine acts on a selected character, so without one
         // the links are inert rather than hidden — the shape of the app stays
         // legible instead of rearranging itself.
@@ -81,24 +70,15 @@ export default function NavigationMenu({ activeView, onNavigate, hasCharacter, o
         return (
           <button
             key={item.key}
+            type="button"
+            className={activeView === item.key ? 'is-active' : undefined}
             onClick={() => !disabled && onNavigate(item.key)}
             disabled={disabled}
-            style={{
-              background: isActive ? item.color : 'rgba(255, 255, 255, 0.1)',
-              border: `1px solid ${isActive ? item.color : 'rgba(255, 255, 255, 0.2)'}`,
-              color: isActive ? '#1a1a2e' : (disabled ? '#666' : '#fff'),
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: isActive ? 600 : 400,
-              opacity: disabled ? 0.5 : 1
-            }}
           >
             {item.label}
           </button>
         )
       })}
-    </div>
+    </nav>
   )
 }

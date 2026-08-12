@@ -94,31 +94,9 @@ function App() {
   // visiting Campaigns later behaves normally (list first).
   const [pendingCampaignSetup, setPendingCampaignSetup] = useState(false)
 
-  // Phase 4a SC-4a.4 — shared style for the appbar text-link buttons
-  // (Settings, AI Behavior). Mirrors HomeFlow's `.nav-settings` class
-  // semantically; the dashboard chrome uses dark-aesthetic inline styles.
-  const appbarLinkStyle = {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.15)',
-    color: '#ccc',
-    padding: '0.4rem 0.85rem',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.75rem',
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase',
-    fontFamily: 'Inter, system-ui, sans-serif',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px'
-  }
-  const appbarLinkGlyph = {
-    fontFamily: "'EB Garamond', Georgia, serif",
-    fontStyle: 'italic',
-    fontSize: '15px',
-    letterSpacing: 0,
-    color: '#d4a86a'
-  }
+  // v1.0.177 — the appbar links' inline dark styling moved into
+  // `styles/shell.css` as `.shell-link`. Kept as classes rather than inline
+  // objects so the converted shell reads from design tokens.
   const [showCreationForm, setShowCreationForm] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
@@ -328,53 +306,40 @@ function App() {
 
   return (
     <div className="app">
-      <header style={{ paddingTop: '3rem' }}>
+      <header className="shell-header">
         {/* Back-to-roster affordance per Phase 2 chunk 5 batch 3
            sub-checkpoint 2 — clears selectedCharacter so HomeFlow
            takes over again. Always available when a character is
            selected (which is always true in this branch since the
            !selectedCharacter case is handled by the early return). */}
         {selectedCharacter && (
-          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="shell-appbar">
             <button
               type="button"
+              className="shell-link"
               onClick={() => setSelectedCharacter(null)}
-              style={{
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.15)',
-                color: '#ccc',
-                padding: '0.4rem 0.85rem',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
             >
               ← Your characters
             </button>
-            {/* Phase 3.5 — Settings access in the dashboard appbar. Mirrors
-               the HomeFlow appbar's editorial-aesthetic Settings link
-               using the dark dashboard's button register.
-               Phase 4a SC-4a.4 — AI Behavior link added beside it; same
-               appbar treatment, different surface. */}
-            <span style={{ flex: 1 }} />
+            <span className="spacer" />
             <button
               type="button"
+              className="shell-link"
               onClick={() => setActiveView('showAIBehavior')}
               aria-label="AI Behavior debug"
               title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
-              style={appbarLinkStyle}
             >
-              <span style={{ ...appbarLinkGlyph, color: '#7aafff' }}>◇</span>
+              <span className="glyph">◇</span>
               AI Behavior
             </button>
             <button
               type="button"
+              className="shell-link"
               onClick={() => setSettingsOpen(true)}
               aria-label="Settings"
               title="Settings"
-              style={appbarLinkStyle}
             >
-              <span style={appbarLinkGlyph}>✦</span>
+              <span className="glyph">✦</span>
               Settings
             </button>
           </div>
@@ -387,24 +352,22 @@ function App() {
           // selects Sonnet as an opt-down. Any non-Claude case stays a plain
           // status indicator.
           const isClickable = llmStatus.available && llmStatus.provider === 'claude'
+          // v1.0.177 — chrome (shape, type, spacing) moved to `.shell-status`;
+          // only the state colours stay inline, because they are state rather
+          // than theme. Re-tuned for the paper band: the previous values were
+          // picked against a near-black background, and #ff8c00 / #a78bfa on
+          // #fcfcfa fail contrast badly.
           const accent = !llmStatus.available
-            ? { bg: 'rgba(231, 76, 60, 0.2)', border: '#e74c3c', text: '#e74c3c', dot: '🔴', label: 'AI Offline' }
+            ? { bg: 'rgba(192, 57, 43, 0.08)', border: 'rgba(192, 57, 43, 0.35)', text: '#a5291d', dot: '🔴', label: 'AI Offline' }
             : isClickable && useSonnet
-              ? { bg: 'rgba(139, 92, 246, 0.2)', border: '#8b5cf6', text: '#a78bfa', dot: '🟣', label: 'Sonnet' }
+              ? { bg: 'rgba(109, 67, 200, 0.08)', border: 'rgba(109, 67, 200, 0.35)', text: '#5b37a8', dot: '🟣', label: 'Sonnet' }
               : isClickable
-                ? { bg: 'rgba(255, 140, 0, 0.2)', border: '#ff8c00', text: '#ff8c00', dot: '🟠', label: 'Opus' }
-                : { bg: 'rgba(46, 204, 113, 0.2)', border: '#2ecc71', text: '#2ecc71', dot: '🟢', label: 'Ollama' }
+                ? { bg: 'rgba(178, 97, 0, 0.09)', border: 'rgba(178, 97, 0, 0.35)', text: '#8f4e00', dot: '🟠', label: 'Opus' }
+                : { bg: 'rgba(30, 122, 69, 0.08)', border: 'rgba(30, 122, 69, 0.35)', text: '#186139', dot: '🟢', label: 'Ollama' }
           const baseStyle = {
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            padding: '0.25rem 0.75rem',
-            borderRadius: '12px',
-            fontSize: '0.75rem',
             background: accent.bg,
             border: `1px solid ${accent.border}`,
             color: accent.text,
-            marginTop: '0.5rem',
             cursor: isClickable ? 'pointer' : 'default'
           }
           const tooltip = isClickable
@@ -421,14 +384,15 @@ function App() {
           return isClickable ? (
             <button
               type="button"
+              className="shell-status"
               onClick={() => updateUseSonnet(!useSonnet)}
               title={tooltip}
-              style={{ ...baseStyle, font: 'inherit', fontSize: '0.75rem' }}
+              style={baseStyle}
             >
               {inner}
             </button>
           ) : (
-            <div style={baseStyle} title={tooltip}>{inner}</div>
+            <div className="shell-status" style={baseStyle} title={tooltip}>{inner}</div>
           )
         })()}
 

@@ -2,6 +2,31 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.177] - 2026-08-11 — Dashboard shell converted to paper
+
+Phase 2 of the UI unification, and the first screen conversion. `styles/shell.css` is the first consumer of `design-tokens.css` outside `.creator-v2` — which is what the v1.0.176 promotion existed to enable.
+
+The header chrome — appbar links, title, subtitle, LLM status pill, primary nav — now reads from design tokens: serif display type, ink on paper, hairline rules, uppercase letterspaced sans for controls. Roughly 100 lines of inline dark styling came out of `App.jsx` and `NavigationMenu.jsx` and became named classes.
+
+**The nav also stopped being absolutely positioned** in the top-right of the viewport. It sits in the header's flow now, which is what lets the paper band size to its own contents instead of overlapping them. Per-item accent colours are gone: they were category tints from the dropdown era, and with four flat links the active state carries the meaning by itself.
+
+### `body` is deliberately still dark, and that is not an oversight
+
+`index.css` sets both the dark gradient **and** `color: #e4e4e4` on `body`, and the un-converted screens — DMSession, CharacterSheet, CampaignsPage, CompanionsPage — inherit that light default text colour rather than declaring their own. Flipping `body` to paper in this commit would have rendered all four as near-white text on a near-white page. Not a cosmetic regression; an unreadable one.
+
+So the shell converts as a **paper band**: chrome is paper, the canvas below stays dark until the screens on it are converted. The seam is intentional and reads as light-chrome-over-dark-canvas. When the last screen converts, `body` takes the paper tokens, the full-bleed negative margins in `shell.css` come out, and the file merges into the general stylesheet — nothing here needs unwinding.
+
+The LLM status pill's colours were re-tuned rather than carried over: `#ff8c00` and `#a78bfa` were chosen against near-black and fail contrast on `#fcfcfa`.
+
+### Verification
+
+- All four nav keys (`showCharacterSheet`, `showCompanions`, `showCampaigns`, `showDMSession`) confirmed to resolve to a route in `App.jsx`.
+- Every selector in `shell.css` verified to be scoped under `.shell-*`, so nothing can reach an un-converted screen.
+- `index.css` confirmed untouched by this commit — the dark screens render byte-identically.
+- Full suite **85/86 files green, 4733 assertions**; the one failure is the documented `integration.test.js` 410/404 mismatch. Client builds clean, HMR applied without error.
+
+Net −54 lines.
+
 ## [1.0.0.176] - 2026-08-11 — Design tokens promoted out of the creator scope
 
 Phase 1 of the UI unification. No screen changes; this is the CSS architecture the conversion sits on.
