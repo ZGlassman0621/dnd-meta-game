@@ -1,0 +1,709 @@
+/* ============================================================
+ * Campaigns screen — converted to the editorial ("paper") aesthetic.
+ *
+ * Phase 3 of the UI unification. Second screen converted, after the
+ * dashboard shell (v1.0.177).
+ *
+ * ── Scoping ──────────────────────────────────────────────────────────────
+ * Every selector below is scoped under `.campaigns-page`, the root element
+ * of `CampaignsPage.jsx`. That is deliberate and load-bearing, not tidiness:
+ * `index.css` (the 4606-line dark shell that still owns DMSession,
+ * CharacterSheet and CompanionsPage) already defines `.stat`, `.stat-label`,
+ * `.stat-value`, `.button`, `.container`, `.character-card` and `.form-group`
+ * as bare global classes, and styles `label`, `input`, `select`, `textarea`
+ * and `select option` by ELEMENT selector. The scope prefix does two jobs:
+ *   1. Nothing here can reach an un-converted screen.
+ *   2. Two classes (0,2,0) always outrank index.css's bare class (0,1,0) and
+ *      element (0,0,1) rules, so this file wins without editing that file.
+ *
+ * ── Why the vocabulary is duplicated from creator-theme.css ──────────────
+ * `.btn` / `.card` / `.field` / `.label` are re-declared here rather than
+ * shared, because creator-theme.css keeps its ~37 structural classes scoped
+ * under `.creator-v2` on purpose (see its header). Only the TOKENS are
+ * shared, via `design-tokens.css`. The promotion trigger that file documents
+ * — "when a second surface starts referencing the same tokens" — applies to
+ * structural classes too: when a THIRD screen needs this same `.btn`, that is
+ * the moment to lift the shared subset into a common stylesheet. Not before.
+ *
+ * ── Why `.campaigns-page` full-bleeds ────────────────────────────────────
+ * `body` is still dark (index.css sets both the gradient and `color:#e4e4e4`)
+ * and stays dark until the last screen converts — see shell.css for why.
+ * `.shell-header` is therefore a full-bleed PAPER BAND over a dark canvas.
+ * If this screen were a plain block it would sit as a paper column inside a
+ * dark page, with a 2.5rem dark gutter between it and the band above — two
+ * sheets of the same paper separated by a dark stripe, which reads as
+ * breakage rather than as a seam.
+ *
+ * So it uses the same full-bleed technique as the band and pulls up flush
+ * against it: `margin-top:-2.5rem` cancels `.shell-header`'s `margin-bottom`
+ * (adjoining sibling margins sum), and `margin-bottom:-2rem` eats `.app`'s
+ * bottom padding. The paper now runs from under the header to the bottom of
+ * the document.
+ *
+ * `min-height:100vh` is what guarantees no dark strip below short content
+ * (an empty campaign list is roughly 600px tall — well short of the fold).
+ * Its cost, stated plainly: the document is always about one header-height
+ * taller than it needs to be, so a sparse screen can scroll ~150px. That is
+ * the better of the two artefacts, and it is one line to delete.
+ *
+ * The unwind, when the last screen converts, is the same as shell.css's:
+ * `body` takes the paper tokens, the negative margins and the `min-height`
+ * come out, and nothing here needs rewriting.
+ * ============================================================ */
+
+.campaigns-page {
+  /* Full-bleed paper, flush to the header band above. Mirrors `.shell-header`. */
+  margin: -2.5rem -50vw -2rem;
+  padding: 2.5rem calc(50vw - 600px + 2rem) 4rem;
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  min-height: 100vh;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.55;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (max-width: 1280px) {
+  /* Below `.app`'s 1200px content width the calc() inset would go negative. */
+  .campaigns-page { padding-left: 2rem; padding-right: 2rem; }
+}
+
+.campaigns-page ::selection { background: var(--selection); color: var(--ink); }
+.campaigns-page button { font: inherit; color: inherit; cursor: pointer; }
+.campaigns-page button:focus,
+.campaigns-page input:focus,
+.campaigns-page select:focus,
+.campaigns-page textarea:focus { outline: none; }
+
+/* Semantic state colours.
+ *
+ * Kept as scoped custom properties rather than added to `design-tokens.css`:
+ * the editorial palette has no success/danger hue, and inventing two global
+ * tokens for one screen is exactly the pre-promotion creator-theme.css warns
+ * against. When a second converted screen needs them, they promote.
+ *
+ * Both are re-picked for paper, not carried over. The dark screen's #2ecc71
+ * scores 1.9:1 on #fcfcfa and #e74c3c 3.9:1 — both illegible. These are
+ * 5.5:1 and 6.4:1. */
+.campaigns-page {
+  --ok: #1f6f43;
+  --danger: #9c2f27;
+  --danger-soft: #f6ecea;
+}
+
+/* === Page head ======================================================== */
+
+.campaigns-page .page-head {
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--rule);
+}
+.campaigns-page .page-head h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 2.25rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+.campaigns-page .page-head .lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink-2);
+  margin-top: 0.5rem;
+  max-width: 46em;
+  text-wrap: pretty;
+}
+
+/* === Two-column layout ================================================ */
+
+.campaigns-page .cols {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .campaigns-page .cols { grid-template-columns: 1fr; }
+}
+
+.campaigns-page .panel {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+  padding: 1.5rem 1.75rem 1.75rem;
+}
+
+.campaigns-page .panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.9rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+.campaigns-page .panel-head .name {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.35rem;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0;
+}
+.campaigns-page .panel-head .tools { display: flex; gap: 0.5rem; }
+
+/* === Buttons ==========================================================
+   Same shape language as `.creator-v2 .btn`: uppercase sans, hairline
+   border, 2px radius, ink fill for the primary action. */
+
+.campaigns-page .btn {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-2);
+  transition: color .12s, border-color .12s, background .12s;
+}
+.campaigns-page .btn:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-3); }
+
+.campaigns-page .btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg-card);
+}
+.campaigns-page .btn.primary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.campaigns-page .btn.danger { color: var(--danger); border-color: var(--danger); }
+.campaigns-page .btn.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.campaigns-page .btn.danger.fill {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.campaigns-page .btn.danger.fill:hover:not(:disabled) { background: #83271f; border-color: #83271f; color: #fff; }
+
+.campaigns-page .btn.sm { padding: 0.3rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.12em; }
+.campaigns-page .btn.lg { padding: 0.8rem 1.9rem; font-size: 0.78rem; letter-spacing: 0.16em; }
+
+.campaigns-page .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* === Filter tabs (the `.chip` idiom) ================================== */
+
+.campaigns-page .tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.campaigns-page .tab {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink-2);
+  transition: color .12s, border-color .12s, background .12s;
+}
+.campaigns-page .tab:hover { border-color: var(--ink-3); color: var(--ink); }
+.campaigns-page .tab.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg-card);
+}
+
+/* === Campaign list ==================================================== */
+
+.campaigns-page .list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.campaigns-page .entry {
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  background: var(--bg);
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.campaigns-page .entry:hover { border-color: var(--rule); border-left-color: var(--ink-3); }
+.campaigns-page .entry.on {
+  background: var(--bg-2);
+  border-color: var(--rule);
+  border-left-color: var(--accent);
+}
+.campaigns-page .entry.archived { opacity: 0.6; }
+
+.campaigns-page .entry .name {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.campaigns-page .entry .meta {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+.campaigns-page .entry .meta .setting {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+/* Status badges — outline chips rather than the dark screen's tinted fills.
+   A tinted fill needs a hue with enough weight to read on paper; a hairline
+   outline carries the same information with the palette that exists. */
+.campaigns-page .badge {
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  color: var(--ink-3);
+}
+.campaigns-page .badge.active { border-color: var(--accent); color: var(--accent); }
+.campaigns-page .badge.archived { border-color: var(--rule); color: var(--ink-3); }
+
+/* === Forms ============================================================
+   Boxed fields rather than `.creator-v2`'s underlines: the creator's
+   19px underline field is built for a full-width wizard, and reads as
+   unbounded inside a 1fr panel column. Same hairline / 2px-radius /
+   serif vocabulary, higher density. */
+
+.campaigns-page .form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-bottom: 1rem;
+}
+.campaigns-page .field { display: flex; flex-direction: column; gap: 0.4rem; }
+.campaigns-page .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+@media (max-width: 900px) {
+  .campaigns-page .field-row { grid-template-columns: 1fr; }
+}
+
+.campaigns-page .label {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0;
+}
+.campaigns-page .label .from-backstory {
+  margin-left: 0.5rem;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+
+.campaigns-page .help {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-3);
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.campaigns-page .input,
+.campaigns-page .select,
+.campaigns-page .textarea {
+  font-family: var(--serif);
+  font-size: 1rem;
+  width: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.5rem 0.7rem;
+  transition: border-color .12s;
+}
+/* `background` is restated, not inherited from the rule above: index.css's
+   `input:focus, select:focus, textarea:focus` sets a translucent white
+   background, and losing only the border-color to us would leave that
+   painting over paper on focus. */
+.campaigns-page .input:focus,
+.campaigns-page .select:focus,
+.campaigns-page .textarea:focus { border-color: var(--accent); background: var(--bg); }
+
+.campaigns-page .input::placeholder,
+.campaigns-page .textarea::placeholder { color: var(--ink-3); font-style: italic; }
+
+.campaigns-page .textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+.campaigns-page .textarea.code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  min-height: 300px;
+  line-height: 1.5;
+}
+
+.campaigns-page .select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 9px) 55%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 1.9rem;
+}
+
+/* index.css paints native dropdown items dark by element selector; the
+   popup has to follow the field it belongs to. */
+.campaigns-page select option { background: var(--bg-card); color: var(--ink); }
+.campaigns-page select optgroup { background: var(--bg-card); color: var(--ink-3); font-style: normal; }
+
+/* === Campaign detail ================================================== */
+
+.campaigns-page .section { margin-bottom: 1.75rem; }
+.campaigns-page .section:last-child { margin-bottom: 0; }
+
+.campaigns-page .section-title {
+  font-family: var(--sans);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.75rem;
+}
+
+.campaigns-page .detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.campaigns-page .detail-head h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+
+.campaigns-page .blurb {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--accent-2);
+  text-wrap: pretty;
+}
+
+.campaigns-page .info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--rule-soft);
+  margin-bottom: 1.75rem;
+}
+.campaigns-page .info {
+  padding: 0.85rem 1rem 0.85rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.campaigns-page .info .k {
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.3rem;
+}
+.campaigns-page .info .v {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.campaigns-page .stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 1.75rem;
+}
+.campaigns-page .stat {
+  background: var(--bg);
+  padding: 1rem 0.5rem;
+  text-align: center;
+}
+.campaigns-page .stat .n {
+  font-family: var(--serif);
+  font-size: 1.9rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--accent);
+}
+.campaigns-page .stat .k {
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 0.4rem;
+}
+
+/* Assigned characters */
+
+.campaigns-page .roster {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rule-soft);
+}
+.campaigns-page .member {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.campaigns-page .member .who { display: flex; flex-direction: column; gap: 0.15rem; }
+.campaigns-page .member .name {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.campaigns-page .member .meta {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.campaigns-page .assign {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+}
+.campaigns-page .assign .row { display: flex; gap: 0.5rem; align-items: stretch; }
+.campaigns-page .assign .row .select { flex: 1; }
+
+.campaigns-page .actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.campaigns-page .empty {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--ink-3);
+  text-align: center;
+  padding: 2rem 1rem;
+}
+.campaigns-page .empty.tight { padding: 1rem; text-align: left; }
+
+/* === Pipeline / import progress ======================================= */
+
+.campaigns-page .pipeline {
+  padding: 1.4rem 1.5rem;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+  margin-bottom: 1rem;
+}
+.campaigns-page .pipeline .head {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  color: var(--ink);
+  margin-bottom: 0.9rem;
+}
+
+.campaigns-page .step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  color: var(--ink-3);
+}
+.campaigns-page .step.done { color: var(--ok); }
+.campaigns-page .step.now { color: var(--ink); }
+.campaigns-page .step .glyph {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  width: 1.4rem;
+  text-align: center;
+}
+.campaigns-page .step .txt { font-family: var(--serif); font-size: 1rem; }
+
+.campaigns-page .track {
+  flex: 1;
+  height: 2px;
+  background: var(--rule);
+  overflow: hidden;
+  margin-left: 0.5rem;
+}
+.campaigns-page .track .bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  animation: pipelineProgress 60s ease-out forwards;
+}
+
+/* Moved out of an inline <style> tag in CampaignsPage.jsx. Keyframe names
+   are global; `pipelineProgress` is unique across the client. */
+@keyframes pipelineProgress {
+  0%   { width: 0%; }
+  10%  { width: 15%; }
+  30%  { width: 35%; }
+  50%  { width: 55%; }
+  70%  { width: 70%; }
+  90%  { width: 85%; }
+  100% { width: 95%; }
+}
+
+.campaigns-page .pipeline-foot {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1.1rem;
+}
+.campaigns-page .pipeline-note {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--ink-2);
+  margin-top: 1rem;
+}
+
+/* === Alerts =========================================================== */
+
+.campaigns-page .alert {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 2px;
+  padding: 0.7rem 0.9rem;
+  white-space: pre-wrap;
+}
+.campaigns-page .alert.spaced { margin-top: 1rem; }
+.campaigns-page .alert .btn { margin-left: 0.9rem; vertical-align: baseline; }
+
+.campaigns-page .loaded-note {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ok);
+  align-self: center;
+}
+
+.campaigns-page .file-row {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+/* === Delete confirmation ==============================================
+   The dialog is a `position:fixed` descendant of `.campaigns-page`, which
+   is `position:relative` but creates no stacking context (no z-index, no
+   transform), so it still positions against the viewport and z-index 2000
+   is honoured globally. */
+
+.campaigns-page .scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(28, 24, 19, 0.42);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.campaigns-page .dialog {
+  width: 440px;
+  max-width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--danger);
+  border-radius: 2px;
+  padding: 1.75rem 2rem 1.5rem;
+  box-shadow: 0 30px 80px rgba(28, 24, 19, 0.18);
+}
+.campaigns-page .dialog h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.5rem;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0 0 0.6rem;
+}
+.campaigns-page .dialog p {
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 1.25rem;
+  text-wrap: pretty;
+}
+.campaigns-page .dialog p strong { color: var(--ink); font-weight: 600; }
+.campaigns-page .dialog .row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

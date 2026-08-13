@@ -1,292 +1,10 @@
 import { useState, useEffect } from 'react';
 import { STARTING_LOCATIONS } from '../data/forgottenRealms';
 
-const styles = {
-  container: {
-    padding: '1rem',
-    maxWidth: '1400px',
-    margin: '0 auto'
-  },
-  header: {
-    marginBottom: '1.5rem'
-  },
-  title: {
-    fontSize: '1.8rem',
-    marginBottom: '0.5rem',
-    color: '#f5f5f5'
-  },
-  subtitle: {
-    color: '#888',
-    fontSize: '0.95rem'
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1.5fr',
-    gap: '1.5rem'
-  },
-  panel: {
-    background: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: '8px',
-    padding: '1rem',
-    border: '1px solid rgba(255, 255, 255, 0.1)'
-  },
-  panelTitle: {
-    fontSize: '1.1rem',
-    marginBottom: '1rem',
-    color: '#f5f5f5',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-    paddingBottom: '0.5rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  filterTabs: {
-    display: 'flex',
-    gap: '0.5rem',
-    marginBottom: '1rem',
-    flexWrap: 'wrap'
-  },
-  filterTab: {
-    padding: '0.4rem 0.8rem',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '0.85rem',
-    transition: 'all 0.2s',
-    background: 'rgba(255, 255, 255, 0.1)',
-    color: '#888'
-  },
-  filterTabActive: {
-    background: 'rgba(155, 89, 182, 0.3)',
-    color: '#9b59b6'
-  },
-  campaignList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    maxHeight: '500px',
-    overflowY: 'auto'
-  },
-  campaignCard: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '6px',
-    padding: '0.75rem',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    border: '1px solid transparent'
-  },
-  campaignCardSelected: {
-    border: '1px solid #9b59b6',
-    background: 'rgba(155, 89, 182, 0.1)'
-  },
-  campaignCardArchived: {
-    opacity: 0.6
-  },
-  campaignName: {
-    fontSize: '0.95rem',
-    color: '#f5f5f5',
-    fontWeight: '500',
-    marginBottom: '0.25rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem'
-  },
-  campaignMeta: {
-    display: 'flex',
-    gap: '0.5rem',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: '0.25rem'
-  },
-  badge: {
-    padding: '0.2rem 0.5rem',
-    borderRadius: '4px',
-    fontSize: '0.7rem',
-    fontWeight: '500',
-    textTransform: 'uppercase'
-  },
-  statusBadge: {
-    active: { background: 'rgba(46, 204, 113, 0.3)', color: '#2ecc71' },
-    archived: { background: 'rgba(149, 165, 166, 0.3)', color: '#95a5a6' }
-  },
-  detailSection: {
-    marginBottom: '1.5rem'
-  },
-  sectionTitle: {
-    fontSize: '0.9rem',
-    color: '#888',
-    marginBottom: '0.5rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px'
-  },
-  infoGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '1rem',
-    marginBottom: '1rem'
-  },
-  infoItem: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '0.75rem',
-    borderRadius: '6px'
-  },
-  infoLabel: {
-    fontSize: '0.75rem',
-    color: '#888',
-    marginBottom: '0.25rem'
-  },
-  infoValue: {
-    fontSize: '1rem',
-    color: '#f5f5f5'
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '1rem',
-    marginTop: '1rem'
-  },
-  statBox: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '1rem',
-    borderRadius: '6px',
-    textAlign: 'center'
-  },
-  statValue: {
-    fontSize: '1.5rem',
-    fontWeight: '600',
-    color: '#9b59b6'
-  },
-  statLabel: {
-    fontSize: '0.75rem',
-    color: '#888',
-    marginTop: '0.25rem'
-  },
-  description: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '1rem',
-    borderRadius: '6px',
-    fontSize: '0.9rem',
-    color: '#ccc',
-    lineHeight: '1.5',
-    fontStyle: 'italic'
-  },
-  characterList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-    marginTop: '0.75rem'
-  },
-  characterCard: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '6px',
-    padding: '0.75rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  characterInfo: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  characterName: {
-    fontSize: '0.9rem',
-    color: '#f5f5f5',
-    fontWeight: '500'
-  },
-  characterMeta: {
-    fontSize: '0.8rem',
-    color: '#888'
-  },
-  assignSection: {
-    marginTop: '1rem',
-    padding: '1rem',
-    background: 'rgba(155, 89, 182, 0.1)',
-    borderRadius: '6px',
-    border: '1px solid rgba(155, 89, 182, 0.2)'
-  },
-  actions: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-    marginTop: '1rem'
-  },
-  button: {
-    padding: '0.5rem 1rem',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '0.85rem',
-    transition: 'all 0.2s'
-  },
-  primaryButton: {
-    background: '#9b59b6',
-    color: '#fff'
-  },
-  secondaryButton: {
-    background: 'rgba(255, 255, 255, 0.1)',
-    color: '#fff',
-    border: '1px solid rgba(255, 255, 255, 0.2)'
-  },
-  successButton: {
-    background: '#2ecc71',
-    color: '#fff'
-  },
-  dangerButton: {
-    background: '#e74c3c',
-    color: '#fff'
-  },
-  emptyState: {
-    textAlign: 'center',
-    padding: '2rem',
-    color: '#888'
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
-    marginBottom: '1rem'
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.25rem'
-  },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '1rem'
-  },
-  label: {
-    fontSize: '0.85rem',
-    color: '#888'
-  },
-  input: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.3)',
-    color: '#f5f5f5',
-    fontSize: '0.9rem'
-  },
-  textarea: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.3)',
-    color: '#f5f5f5',
-    fontSize: '0.9rem',
-    minHeight: '80px',
-    resize: 'vertical'
-  },
-  select: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '4px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.3)',
-    color: '#f5f5f5',
-    fontSize: '0.9rem'
-  }
-};
+// Presentation lives in `../styles/campaigns.css`, scoped under
+// `.campaigns-page`. The ~90-line inline `styles` object that used to sit
+// here was the dark-shell palette hardcoded per-element; see that file for
+// why the classes stay scoped and why `body` is still dark.
 
 const toneOptions = ['heroic fantasy', 'dark fantasy', 'comedic', 'mysterious', 'epic', 'gritty', 'whimsical', 'survival'];
 
@@ -547,7 +265,6 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
 
       // Handle non-JSON responses (server errors, HTML error pages, empty bodies)
       let result;
-      const contentType = response.headers.get('content-type') || '';
       try {
         const text = await response.text();
         if (!text) throw new Error(`Server returned empty response (HTTP ${response.status})`);
@@ -653,28 +370,30 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
   ) || [];
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>Campaigns</h2>
-        <p style={styles.subtitle}>
+    <div className="campaigns-page">
+      <div className="page-head">
+        <h2>Campaigns</h2>
+        <p className="lede">
           Organize your adventures into campaigns with their own world settings and timelines
         </p>
       </div>
 
-      <div style={styles.grid}>
+      <div className="cols">
         {/* Left Panel - Campaign List */}
-        <div style={styles.panel}>
-          <div style={styles.panelTitle}>
-            <span>Campaigns</span>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="panel">
+          <div className="panel-head">
+            <span className="name">Campaigns</span>
+            <div className="tools">
               <button
-                style={{ ...styles.button, ...styles.primaryButton }}
+                type="button"
+                className="btn primary"
                 onClick={() => { setShowImport(false); resetImport(); setShowNewCampaign(!showNewCampaign); }}
               >
                 {showNewCampaign ? 'Cancel' : '+ New'}
               </button>
               <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
+                type="button"
+                className="btn"
                 onClick={() => { setShowNewCampaign(false); resetPipeline(); setShowImport(!showImport); }}
               >
                 {showImport ? 'Cancel' : 'Import'}
@@ -682,14 +401,12 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
             </div>
           </div>
 
-          <div style={styles.filterTabs}>
+          <div className="tabs">
             {['active', 'archived', 'all'].map(f => (
               <button
                 key={f}
-                style={{
-                  ...styles.filterTab,
-                  ...(filter === f ? styles.filterTabActive : {})
-                }}
+                type="button"
+                className={`tab${filter === f ? ' on' : ''}`}
                 onClick={() => setFilter(f)}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -698,11 +415,11 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
           </div>
 
           {showNewCampaign && !pipelineStep && (
-            <form style={styles.form} onSubmit={handleCreateCampaign}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Campaign Name *</label>
+            <form className="form" onSubmit={handleCreateCampaign}>
+              <div className="field">
+                <label className="label">Campaign Name *</label>
                 <input
-                  style={styles.input}
+                  className="input"
                   type="text"
                   value={newCampaign.name}
                   onChange={e => setNewCampaign({ ...newCampaign, name: e.target.value })}
@@ -711,21 +428,21 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Description</label>
+              <div className="field">
+                <label className="label">Description</label>
                 <textarea
-                  style={styles.textarea}
+                  className="textarea"
                   value={newCampaign.description}
                   onChange={e => setNewCampaign({ ...newCampaign, description: e.target.value })}
                   placeholder="An epic adventure in a world of magic and mystery..."
                 />
               </div>
 
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Setting</label>
+              <div className="field-row">
+                <div className="field">
+                  <label className="label">Setting</label>
                   <input
-                    style={styles.input}
+                    className="input"
                     type="text"
                     value={newCampaign.setting}
                     onChange={e => setNewCampaign({ ...newCampaign, setting: e.target.value })}
@@ -733,10 +450,10 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                   />
                 </div>
 
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Tone</label>
+                <div className="field">
+                  <label className="label">Tone</label>
                   <select
-                    style={styles.select}
+                    className="select"
                     value={newCampaign.tone}
                     onChange={e => setNewCampaign({ ...newCampaign, tone: e.target.value })}
                   >
@@ -749,18 +466,16 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 </div>
               </div>
 
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>
+              <div className="field-row">
+                <div className="field">
+                  <label className="label">
                     Starting Location
                     {backstoryLocation && (
-                      <span style={{ color: '#9b59b6', marginLeft: '0.5rem', fontSize: '0.75rem' }}>
-                        (from backstory)
-                      </span>
+                      <span className="from-backstory">(from backstory)</span>
                     )}
                   </label>
                   <select
-                    style={styles.select}
+                    className="select"
                     value={newCampaign.starting_location}
                     onChange={e => {
                       setNewCampaign({ ...newCampaign, starting_location: e.target.value });
@@ -782,7 +497,7 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                   </select>
                   {newCampaign.starting_location === 'custom' && (
                     <input
-                      style={{ ...styles.input, marginTop: '0.5rem' }}
+                      className="input"
                       type="text"
                       value={customLocation}
                       onChange={e => setCustomLocation(e.target.value)}
@@ -791,10 +506,10 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                   )}
                 </div>
 
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Time Ratio</label>
+                <div className="field">
+                  <label className="label">Time Ratio</label>
                   <select
-                    style={styles.select}
+                    className="select"
                     value={newCampaign.time_ratio}
                     onChange={e => setNewCampaign({ ...newCampaign, time_ratio: e.target.value })}
                   >
@@ -807,21 +522,15 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 </div>
               </div>
 
-              <button type="submit" style={{ ...styles.button, ...styles.successButton }}>
+              <button type="submit" className="btn primary">
                 Create Campaign
               </button>
             </form>
           )}
 
           {pipelineStep && (
-            <div style={{
-              padding: '1.5rem',
-              background: 'rgba(155, 89, 182, 0.05)',
-              borderRadius: '8px',
-              border: '1px solid rgba(155, 89, 182, 0.2)',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ marginBottom: '1rem', fontSize: '1rem', color: '#f5f5f5', fontWeight: '500' }}>
+            <div className="pipeline">
+              <div className="head">
                 {pipelineStep === 'done' ? 'Campaign Ready!' : 'Setting up your campaign...'}
               </div>
 
@@ -830,7 +539,6 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 const thisIndex = i;
                 const isCompleted = thisIndex < stepIndex || pipelineStep === 'done';
                 const isCurrent = step.key === pipelineStep && pipelineStep !== 'done';
-                const isPending = thisIndex > stepIndex && pipelineStep !== 'done';
 
                 // Skip parsing step display if no backstory
                 if (step.key === 'parsing' && (!character?.backstory || character?.parsed_backstory)) {
@@ -840,33 +548,17 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 if (!character && ['assigning', 'parsing', 'generating'].includes(step.key)) return null;
 
                 return (
-                  <div key={step.key} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.5rem 0',
-                    color: isCompleted ? '#2ecc71' : isCurrent ? '#f5f5f5' : '#555'
-                  }}>
-                    <span style={{ fontSize: '1rem', width: '1.5rem', textAlign: 'center' }}>
-                      {isCompleted ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'}
+                  <div
+                    key={step.key}
+                    className={`step${isCompleted ? ' done' : isCurrent ? ' now' : ''}`}
+                  >
+                    <span className="glyph">
+                      {isCompleted ? '✓' : isCurrent ? '●' : '○'}
                     </span>
-                    <span style={{ fontSize: '0.9rem' }}>{step.label}</span>
+                    <span className="txt">{step.label}</span>
                     {isCurrent && step.key === 'generating' && (
-                      <div style={{
-                        flex: 1,
-                        height: '4px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: '2px',
-                        overflow: 'hidden',
-                        marginLeft: '0.5rem'
-                      }}>
-                        <div style={{
-                          height: '100%',
-                          background: 'linear-gradient(90deg, #9b59b6, #8e44ad)',
-                          borderRadius: '2px',
-                          animation: 'pipelineProgress 60s ease-out forwards',
-                          width: '0%'
-                        }} />
+                      <div className="track">
+                        <div className="bar" />
                       </div>
                     )}
                   </div>
@@ -874,18 +566,11 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
               })}
 
               {pipelineError && (
-                <div style={{
-                  marginTop: '1rem',
-                  padding: '0.75rem',
-                  background: 'rgba(231, 76, 60, 0.1)',
-                  border: '1px solid rgba(231, 76, 60, 0.3)',
-                  borderRadius: '6px',
-                  color: '#e74c3c',
-                  fontSize: '0.85rem'
-                }}>
+                <div className="alert spaced">
                   Error: {pipelineError}
                   <button
-                    style={{ ...styles.button, ...styles.primaryButton, marginLeft: '1rem', padding: '0.3rem 0.75rem' }}
+                    type="button"
+                    className="btn sm primary"
                     onClick={() => {
                       setPipelineError(null);
                       if (createdCampaign) {
@@ -908,16 +593,10 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
               )}
 
               {pipelineStep === 'done' && (
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                <div className="pipeline-foot">
                   <button
-                    style={{
-                      ...styles.button,
-                      background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                      color: '#fff',
-                      padding: '0.75rem 2rem',
-                      fontSize: '1rem',
-                      fontWeight: '600'
-                    }}
+                    type="button"
+                    className="btn primary lg"
                     onClick={() => {
                       resetPipeline();
                       onNavigateToPlay?.();
@@ -926,46 +605,28 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                     Play Now
                   </button>
                   <button
-                    style={{ ...styles.button, ...styles.secondaryButton }}
+                    type="button"
+                    className="btn"
                     onClick={resetPipeline}
                   >
                     Back to Campaigns
                   </button>
                 </div>
               )}
-
-              <style>{`
-                @keyframes pipelineProgress {
-                  0% { width: 0%; }
-                  10% { width: 15%; }
-                  30% { width: 35%; }
-                  50% { width: 55%; }
-                  70% { width: 70%; }
-                  90% { width: 85%; }
-                  100% { width: 95%; }
-                }
-              `}</style>
             </div>
           )}
 
           {showImport && !importStep && (
-            <div style={styles.form}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Import Campaign JSON</label>
-                <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 0.5rem 0' }}>
+            <div className="form">
+              <div className="field">
+                <label className="label">Import Campaign JSON</label>
+                <p className="help">
                   Load a JSON file or paste campaign JSON below. Must contain a "campaign" section; "character" and "campaign_plan" are optional.
                 </p>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <div className="file-row">
                   <button
-                    style={{
-                      padding: '0.5rem 1rem',
-                      background: 'rgba(52, 152, 219, 0.15)',
-                      border: '1px solid rgba(52, 152, 219, 0.4)',
-                      borderRadius: '6px',
-                      color: '#3498db',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem'
-                    }}
+                    type="button"
+                    className="btn"
                     onClick={() => {
                       const input = document.createElement('input');
                       input.type = 'file';
@@ -983,19 +644,13 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                     Load from File
                   </button>
                   {importJSON && (
-                    <span style={{ fontSize: '0.8rem', color: '#27ae60', alignSelf: 'center' }}>
+                    <span className="loaded-note">
                       {(importJSON.length / 1024).toFixed(1)} KB loaded
                     </span>
                   )}
                 </div>
                 <textarea
-                  style={{
-                    ...styles.textarea,
-                    minHeight: '300px',
-                    fontFamily: 'monospace',
-                    fontSize: '0.8rem',
-                    resize: 'vertical'
-                  }}
+                  className="textarea code"
                   value={importJSON}
                   onChange={e => setImportJSON(e.target.value)}
                   placeholder={'{\n  "campaign": { "name": "..." },\n  "campaign_plan": { ... },\n  "character": { "name": "...", "class": "...", "race": "..." }\n}'}
@@ -1003,22 +658,14 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
               </div>
 
               {importError && (
-                <div style={{
-                  padding: '0.75rem',
-                  background: 'rgba(231, 76, 60, 0.1)',
-                  border: '1px solid rgba(231, 76, 60, 0.3)',
-                  borderRadius: '6px',
-                  color: '#e74c3c',
-                  fontSize: '0.85rem',
-                  whiteSpace: 'pre-wrap',
-                  marginBottom: '0.75rem'
-                }}>
+                <div className="alert">
                   {importError}
                 </div>
               )}
 
               <button
-                style={{ ...styles.button, ...styles.successButton }}
+                type="button"
+                className="btn primary"
                 onClick={handleImportCampaign}
                 disabled={!importJSON.trim()}
               >
@@ -1028,14 +675,8 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
           )}
 
           {importStep && (
-            <div style={{
-              padding: '1.5rem',
-              background: 'rgba(155, 89, 182, 0.05)',
-              borderRadius: '8px',
-              border: '1px solid rgba(155, 89, 182, 0.2)',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ marginBottom: '1rem', fontSize: '1rem', color: '#f5f5f5', fontWeight: '500' }}>
+            <div className="pipeline">
+              <div className="head">
                 {importStep === 'done' ? 'Campaign Imported!' : 'Importing campaign...'}
               </div>
 
@@ -1045,24 +686,21 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 const isCurrent = step.key === importStep && importStep !== 'done';
 
                 return (
-                  <div key={step.key} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.5rem 0',
-                    color: isCompleted ? '#2ecc71' : isCurrent ? '#f5f5f5' : '#555'
-                  }}>
-                    <span style={{ fontSize: '1rem', width: '1.5rem', textAlign: 'center' }}>
-                      {isCompleted ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'}
+                  <div
+                    key={step.key}
+                    className={`step${isCompleted ? ' done' : isCurrent ? ' now' : ''}`}
+                  >
+                    <span className="glyph">
+                      {isCompleted ? '✓' : isCurrent ? '●' : '○'}
                     </span>
-                    <span style={{ fontSize: '0.9rem' }}>{step.label}</span>
+                    <span className="txt">{step.label}</span>
                   </div>
                 );
               })}
 
               {importStep === 'done' && importResult && (
-                <div style={{ marginTop: '1rem' }}>
-                  <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.75rem' }}>
+                <>
+                  <div className="pipeline-note">
                     {importResult.characterId ? (
                       <>
                         Created {importResult.sessionsCreated} session record{importResult.sessionsCreated !== 1 ? 's' : ''}
@@ -1072,17 +710,11 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                       'Campaign and plan imported. Create a character and assign them from the campaign details panel.'
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <div className="pipeline-foot">
                     {importResult.characterId && (
                       <button
-                        style={{
-                          ...styles.button,
-                          background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                          color: '#fff',
-                          padding: '0.75rem 2rem',
-                          fontSize: '1rem',
-                          fontWeight: '600'
-                        }}
+                        type="button"
+                        className="btn primary lg"
                         onClick={() => {
                           resetImport();
                           onNavigateToPlay?.();
@@ -1092,7 +724,8 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                       </button>
                     )}
                     <button
-                      style={{ ...styles.button, ...styles.secondaryButton }}
+                      type="button"
+                      className="btn"
                       onClick={() => {
                         setSelectedCampaign(importResult.campaign);
                         resetImport();
@@ -1101,42 +734,39 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                       View Campaign
                     </button>
                   </div>
-                </div>
+                </>
               )}
             </div>
           )}
 
           {!showNewCampaign && !showImport && !pipelineStep && !importStep && (
-            <div style={styles.campaignList}>
+            <div className="list">
               {loading ? (
-                <div style={styles.emptyState}>Loading campaigns...</div>
+                <div className="empty">Loading campaigns...</div>
               ) : filteredCampaigns.length === 0 ? (
-                <div style={styles.emptyState}>
+                <div className="empty">
                   No {filter !== 'all' ? filter : ''} campaigns found
                 </div>
               ) : (
                 filteredCampaigns.map(campaign => (
                   <div
                     key={campaign.id}
-                    style={{
-                      ...styles.campaignCard,
-                      ...(selectedCampaign?.id === campaign.id ? styles.campaignCardSelected : {}),
-                      ...(campaign.status === 'archived' ? styles.campaignCardArchived : {})
-                    }}
+                    className={
+                      'entry'
+                      + (selectedCampaign?.id === campaign.id ? ' on' : '')
+                      + (campaign.status === 'archived' ? ' archived' : '')
+                    }
                     onClick={() => setSelectedCampaign(campaign)}
                   >
-                    <div style={styles.campaignName}>
+                    <div className="name">
                       {campaign.name}
                     </div>
-                    <div style={styles.campaignMeta}>
-                      <span style={{
-                        ...styles.badge,
-                        ...styles.statusBadge[campaign.status]
-                      }}>
+                    <div className="meta">
+                      <span className={`badge ${campaign.status}`}>
                         {campaign.status}
                       </span>
                       {campaign.setting && (
-                        <span style={{ fontSize: '0.8rem', color: '#888' }}>
+                        <span className="setting">
                           {campaign.setting}
                         </span>
                       )}
@@ -1149,97 +779,95 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
         </div>
 
         {/* Right Panel - Campaign Details */}
-        <div style={styles.panel}>
-          <h3 style={styles.panelTitle}>Campaign Details</h3>
+        <div className="panel">
+          <div className="panel-head">
+            <h3 className="name">Campaign Details</h3>
+          </div>
 
           {!selectedCampaign ? (
-            <div style={styles.emptyState}>Select a campaign to view details</div>
+            <div className="empty">Select a campaign to view details</div>
           ) : (
             <>
-              <div style={styles.detailSection}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <h3 style={{ margin: 0, color: '#f5f5f5', fontSize: '1.25rem' }}>
-                    {selectedCampaign.name}
-                  </h3>
-                  <span style={{
-                    ...styles.badge,
-                    ...styles.statusBadge[selectedCampaign.status]
-                  }}>
+              <div className="section">
+                <div className="detail-head">
+                  <h3>{selectedCampaign.name}</h3>
+                  <span className={`badge ${selectedCampaign.status}`}>
                     {selectedCampaign.status}
                   </span>
                 </div>
 
                 {selectedCampaign.description && (
-                  <div style={styles.description}>
+                  <div className="blurb">
                     {selectedCampaign.description}
                   </div>
                 )}
               </div>
 
-              <div style={styles.infoGrid}>
-                <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>Setting</div>
-                  <div style={styles.infoValue}>{selectedCampaign.setting || 'Forgotten Realms'}</div>
+              <div className="info-grid">
+                <div className="info">
+                  <div className="k">Setting</div>
+                  <div className="v">{selectedCampaign.setting || 'Forgotten Realms'}</div>
                 </div>
-                <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>Tone</div>
-                  <div style={styles.infoValue}>
+                <div className="info">
+                  <div className="k">Tone</div>
+                  <div className="v">
                     {(selectedCampaign.tone || 'heroic fantasy').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                   </div>
                 </div>
                 {selectedCampaign.starting_location && (
-                  <div style={styles.infoItem}>
-                    <div style={styles.infoLabel}>Starting Location</div>
-                    <div style={styles.infoValue}>{selectedCampaign.starting_location}</div>
+                  <div className="info">
+                    <div className="k">Starting Location</div>
+                    <div className="v">{selectedCampaign.starting_location}</div>
                   </div>
                 )}
-                <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>Time Ratio</div>
-                  <div style={styles.infoValue}>
+                <div className="info">
+                  <div className="k">Time Ratio</div>
+                  <div className="v">
                     {(selectedCampaign.time_ratio || 'normal').charAt(0).toUpperCase() + (selectedCampaign.time_ratio || 'normal').slice(1)}
                   </div>
                 </div>
               </div>
 
               {campaignStats && (
-                <div style={styles.statsGrid}>
-                  <div style={styles.statBox}>
-                    <div style={styles.statValue}>{campaignStats.character_count || 0}</div>
-                    <div style={styles.statLabel}>Characters</div>
+                <div className="stats">
+                  <div className="stat">
+                    <div className="n">{campaignStats.character_count || 0}</div>
+                    <div className="k">Characters</div>
                   </div>
-                  <div style={styles.statBox}>
-                    <div style={styles.statValue}>{campaignStats.quest_count || 0}</div>
-                    <div style={styles.statLabel}>Quests</div>
+                  <div className="stat">
+                    <div className="n">{campaignStats.quest_count || 0}</div>
+                    <div className="k">Quests</div>
                   </div>
-                  <div style={styles.statBox}>
-                    <div style={styles.statValue}>{campaignStats.location_count || 0}</div>
-                    <div style={styles.statLabel}>Locations</div>
+                  <div className="stat">
+                    <div className="n">{campaignStats.location_count || 0}</div>
+                    <div className="k">Locations</div>
                   </div>
                 </div>
               )}
 
               {/* Characters Section */}
-              <div style={{ ...styles.detailSection, marginTop: '1.5rem' }}>
-                <div style={styles.sectionTitle}>
+              <div className="section">
+                <div className="section-title">
                   Characters ({campaignCharacters.length})
                 </div>
 
                 {campaignCharacters.length === 0 ? (
-                  <div style={{ ...styles.emptyState, padding: '1rem' }}>
+                  <div className="empty tight">
                     No characters assigned to this campaign
                   </div>
                 ) : (
-                  <div style={styles.characterList}>
+                  <div className="roster">
                     {campaignCharacters.map(char => (
-                      <div key={char.id} style={styles.characterCard}>
-                        <div style={styles.characterInfo}>
-                          <span style={styles.characterName}>{char.name}</span>
-                          <span style={styles.characterMeta}>
+                      <div key={char.id} className="member">
+                        <div className="who">
+                          <span className="name">{char.name}</span>
+                          <span className="meta">
                             Level {char.level} {char.race} {char.class?.charAt(0).toUpperCase() + char.class?.slice(1)}
                           </span>
                         </div>
                         <button
-                          style={{ ...styles.button, ...styles.secondaryButton, padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                          type="button"
+                          className="btn sm"
                           onClick={() => handleRemoveCharacter(char.id)}
                         >
                           Remove
@@ -1250,11 +878,11 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 )}
 
                 {selectedCampaign.status === 'active' && unassignedCharacters.length > 0 && (
-                  <div style={styles.assignSection}>
-                    <div style={styles.sectionTitle}>Assign Character</div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <div className="assign">
+                    <div className="section-title">Assign Character</div>
+                    <div className="row">
                       <select
-                        style={{ ...styles.select, flex: 1 }}
+                        className="select"
                         value={selectedCharacterToAssign}
                         onChange={e => setSelectedCharacterToAssign(e.target.value)}
                       >
@@ -1266,7 +894,8 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                         ))}
                       </select>
                       <button
-                        style={{ ...styles.button, ...styles.successButton }}
+                        type="button"
+                        className="btn primary"
                         onClick={handleAssignCharacter}
                         disabled={!selectedCharacterToAssign}
                       >
@@ -1277,23 +906,19 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
                 )}
               </div>
 
-              <div style={styles.actions}>
+              <div className="actions">
                 {selectedCampaign.status === 'active' && (
                   <button
-                    style={{ ...styles.button, ...styles.dangerButton }}
+                    type="button"
+                    className="btn"
                     onClick={handleArchiveCampaign}
                   >
                     Archive Campaign
                   </button>
                 )}
                 <button
-                  style={{
-                    ...styles.button,
-                    background: 'transparent',
-                    color: '#e74c3c',
-                    border: '1px solid rgba(231, 76, 60, 0.4)',
-                    fontSize: '0.8rem'
-                  }}
+                  type="button"
+                  className="btn danger"
                   onClick={() => setConfirmDelete(selectedCampaign)}
                 >
                   Delete Campaign
@@ -1306,44 +931,25 @@ const CampaignsPage = ({ character, allCharacters, onCharacterUpdated, onNavigat
 
       {/* Delete Confirmation Modal */}
       {confirmDelete && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000
-        }} onClick={() => setConfirmDelete(null)}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.99) 0%, rgba(40, 30, 35, 0.99) 100%)',
-            borderRadius: '8px',
-            padding: '1.5rem',
-            maxWidth: '400px',
-            width: '90%',
-            border: '1px solid rgba(231, 76, 60, 0.3)',
-            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
-          }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 0.75rem', color: '#e74c3c', fontSize: '1.1rem' }}>
-              Delete Campaign?
-            </h3>
-            <p style={{ color: '#ccc', fontSize: '0.9rem', lineHeight: '1.5', margin: '0 0 1rem' }}>
-              This will permanently delete <strong style={{ color: '#f5f5f5' }}>{confirmDelete.name}</strong> and
+        <div className="scrim" onClick={() => setConfirmDelete(null)}>
+          <div className="dialog" onClick={e => e.stopPropagation()}>
+            <h3>Delete Campaign?</h3>
+            <p>
+              This will permanently delete <strong>{confirmDelete.name}</strong> and
               all associated locations, quests, factions, merchants, and world data. Characters will be unassigned
               but not deleted.
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <div className="row">
               <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
+                type="button"
+                className="btn"
                 onClick={() => setConfirmDelete(null)}
               >
                 Cancel
               </button>
               <button
-                style={{ ...styles.button, ...styles.dangerButton }}
+                type="button"
+                className="btn danger fill"
                 onClick={handleDeleteCampaign}
               >
                 Delete Forever

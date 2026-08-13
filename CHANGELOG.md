@@ -2,6 +2,42 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.178] - 2026-08-12 — Campaigns screen converted to paper
+
+Phase 3 of the UI unification. Second screen converted, after the dashboard shell.
+
+`CampaignsPage.jsx` opened with a ~90-line inline `styles` object: the dark-shell palette hardcoded per element, plus another two dozen ad-hoc `style={{…}}` objects inline in the markup and a `<style>` tag carrying the pipeline keyframes. All of it is now `client/src/styles/campaigns.css`, reading from `design-tokens.css`. The component keeps zero style objects; every handler, effect, conditional and fetch is unchanged.
+
+### Scoping
+
+Every selector in the new file is scoped under `.campaigns-page`, the component's root element. That is load-bearing rather than tidy. `index.css` — which still owns DMSession, CharacterSheet and CompanionsPage — already defines `.stat`, `.stat-label`, `.stat-value`, `.button`, `.container`, `.character-card` and `.form-group` as bare global classes, and styles `label`, `input`, `select`, `textarea` and `select option` by **element** selector. The scope prefix does two jobs at once: nothing here can reach an un-converted screen, and two classes (0,2,0) outrank index.css's bare class (0,1,0) and element (0,0,1) rules, so this file wins without editing that file.
+
+One override was easy to miss and is called out in a comment: index.css's `input:focus, select:focus, textarea:focus` sets a translucent white `background` as well as a border colour. Winning only `border-color` would have left that painting over paper on every focus, so the focus rule restates `background`.
+
+The structural vocabulary (`.btn`, `.field`, `.label`, `.input`) is **re-declared** here rather than shared with `creator-theme.css`, whose ~37 structural classes stay scoped under `.creator-v2` on purpose. Only tokens are shared. The promotion rule that file documents applies to structural classes too: when a *third* screen needs this same `.btn`, that is the moment to lift the shared subset out. Not before.
+
+### Why the screen full-bleeds
+
+`body` stays dark until the last screen converts, so `.shell-header` is a paper **band** over a dark canvas. A converted CampaignsPage rendered as a plain block would sit as a paper column inside a dark page with a 2.5rem dark gutter between it and the band above — two sheets of the same paper separated by a dark stripe, which reads as breakage rather than as a seam.
+
+So it uses the same full-bleed technique as the band and pulls flush against it: `margin-top: -2.5rem` cancels `.shell-header`'s `margin-bottom` (adjoining sibling margins sum), and `margin-bottom: -2rem` eats `.app`'s bottom padding. `min-height: 100vh` is what guarantees no dark strip under short content — an empty campaign list is roughly 600px tall, well short of the fold. Its cost, stated plainly: the document is always about one header-height taller than it needs to be, so a sparse screen can scroll ~150px. That is the better of the two artefacts, and it is one line to delete. The unwind is the same as `shell.css`'s and needs no rewriting.
+
+### Colours re-picked, not carried over
+
+The dark screen's semantics fail on paper: `#2ecc71` scores 1.9:1 on `#fcfcfa` and `#e74c3c` 3.9:1. Success and danger are re-picked at 5.5:1 and 6.4:1 and held as **scoped** custom properties on `.campaigns-page` — the editorial palette has no success/danger hue, and minting two global tokens for one screen is exactly the pre-promotion `creator-theme.css` warns against. They promote when a second converted screen needs them.
+
+Two deliberate re-tunes beyond a straight port: the purple `#9b59b6` accent becomes `var(--accent)`, matching the shell's decision to drop the dropdown-era category tints; and **Archive Campaign is no longer styled as a destructive action** — it was red only because it reused `dangerButton`, and archiving is reversible. Delete keeps the red. Status badges became hairline outline chips, since a tinted fill needs a hue with enough weight to read on paper.
+
+### Verification
+
+- Component isolation confirmed by construction and by grep: every selector requires a `.campaigns-page` ancestor, and none of SessionSetup, DMSession, CharacterSheet or CompanionsPage renders that class. Verified against the **built** bundle, not just the source, so nothing was unscoped by bundling.
+- `index.css`, `shell.css` and `creator-theme.css` untouched — the remaining dark screens render byte-identically.
+- Full suite **85/86 files green, 4733 assertions**; the 3 failures are the documented `integration.test.js` 410/404 mismatch, unchanged from v1.0.177. Client builds clean.
+
+Also removed while rewriting the file: two provably dead locals — an unused `contentType` read in the import handler and an unused `isPending` in the pipeline map.
+
+The component goes 1359 → 965 lines (−394); the stylesheet that replaces its inline styling is 709.
+
 ## [1.0.0.177] - 2026-08-11 — Dashboard shell converted to paper
 
 Phase 2 of the UI unification, and the first screen conversion. `styles/shell.css` is the first consumer of `design-tokens.css` outside `.creator-v2` — which is what the v1.0.176 promotion existed to enable.
