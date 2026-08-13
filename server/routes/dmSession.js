@@ -26,6 +26,7 @@ import '../services/merchantOrderService.js';
 // SC-6.4b: lootDropService is new — registers the LOOT_DROP handler at
 // module load.
 import '../services/lootDropService.js';
+import { sonnetModel } from '../services/modelRegistry.js';
 // SC-6.4d: recordPlayerDefenseOutcome no longer imported — BASE_DEFENSE_RESULT
 // handler in baseThreatService.js owns the call. Loading the module fires
 // the module-level registerMarkerHandler registration.
@@ -699,7 +700,7 @@ router.post('/start', async (req, res) => {
 
         // Calculate adaptive token budget
         const estimatedPromptTokens = estimateTokens(JSON.stringify(worldState || '') + (character.campaign_notes || '') + (character.character_memories || ''));
-        const chronicleBudget = calculateChronicleBudget(estimatedPromptTokens, 0, 'claude-sonnet-4-6');
+        const chronicleBudget = calculateChronicleBudget(estimatedPromptTokens, 0, sonnetModel());
 
         const chronicleResult = await getRelevantContext(characterId, character.campaign_id, hints, chronicleBudget);
         chronicleContext = chronicleResult.context || '';
@@ -1334,7 +1335,7 @@ router.post('/:sessionId/message', async (req, res) => {
     // Reactive context-window compression as a safety net. With rolling
     // summaries in place this should rarely fire — but we keep it for
     // cases where summarization lags behind (e.g. rapid-fire turns).
-    const modelForCompression = provider === 'claude' ? 'claude-sonnet-4-6' : (session.model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
+    const modelForCompression = provider === 'claude' ? sonnetModel() : (session.model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
     const compressionCheck = shouldCompress(messagesToSend, modelForCompression);
 
     if (compressionCheck.needsCompression) {

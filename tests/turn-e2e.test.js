@@ -17,6 +17,7 @@
 
 import { initDatabase, dbRun, dbGet } from '../server/database.js'
 import { safeParse } from '../server/utils/safeParse.js'
+import { opusModel } from '../server/services/modelRegistry.js'
 import {
   installLlmStub,
   restoreLlm,
@@ -107,7 +108,10 @@ async function run() {
 
     assertEqual(llm.callCount, 1, 'exactly one Anthropic call was made for one turn')
     const call = llm.lastCall
-    assertEqual(call.model, 'claude-opus-4-7', 'Opus is the default model for a gameplay turn')
+    // Asserted against the registry, not a literal. The point of this check is
+    // "a gameplay turn uses the Opus pin", which stays true across a model
+    // bump; hardcoding the ID made it fail on the v1.0.182 bump for no reason.
+    assertEqual(call.model, opusModel(), 'a gameplay turn uses the Opus pin')
     assert(/CURRENT VITALS/.test(call.system), 'the live vitals block was injected into the system prompt')
     assert(/Hit points: 30\/30/.test(call.system), 'vitals reflect pre-turn HP, read fresh from the database')
     assertEqual(call.lastUserMessage, 'I raise my shield and charge the ogre.', 'the player action was the final user turn')

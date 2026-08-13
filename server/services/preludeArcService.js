@@ -51,6 +51,7 @@ import {
   REGIONS
 } from './preludeSetupLabels.js';
 import { buildLockedToneBlock } from '../data/preludeToneDescription.js';
+import { opusModel } from './modelRegistry.js';
 import { findSiblingOption, findAuthorityFigure } from '../data/preludeWizardEnums.js';
 
 // Re-roll cap. Keep this low to avoid "shopping" behaviour where the player
@@ -501,7 +502,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
       regenerate_count = ?`,
     [
       characterId,
-      'claude-opus-4-7',
+      opusModel(),
       null,                // tone_tags (legacy)
       null,                // tone_reflection (legacy)
       serializeField(parsed.home_world),

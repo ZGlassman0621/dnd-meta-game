@@ -2,6 +2,59 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.182] - 2026-08-13 — Claude 5: Opus 5 and Sonnet 5
+
+The gameplay model moves from Claude Opus 4.7 to **Claude Opus 5**, and the cost opt-down from Sonnet 4.6 to **Claude Sonnet 5**. Both were a full generation behind.
+
+**A model-string swap alone would have broken every turn in the game.** That is the headline, not the version numbers.
+
+### The bug the bump would have shipped
+
+Adaptive thinking is **on by default** on Claude 5 models — omitting the `thinking` parameter does not disable it. So the API returns:
+
+```
+content: [ {type: "thinking"}, {type: "text"} ]
+```
+
+`claude.js` read the narrative as `data.content?.[0]?.text || ''`. On a thinking block `.text` is `undefined`, so **every gameplay turn would have returned an empty narrative** — silently, with `stop_reason: "end_turn"` and a 200 response.
+
+Verified against the live API rather than reasoned about: `blocks=[thinking, text]`, `content[0].text is undefined`, at both `low` and `high` effort. The reader now collects and concatenates every `text` block, which is also correct when the API splits a long response across several.
+
+**The whole test suite passed with that bug**, because `llmHarness` emitted a text block first. The stub now leads with a thinking block — the true shape — so the suite can catch this class of bug at all. That change alone is worth more than the model bump.
+
+### Other Claude 5 consequences handled
+
+- **`max_tokens` now bounds thinking + response text together.** The gameplay ceiling went 4000 → 16000 (`DM_MAX_TOKENS`). A truncated turn loses the markers at the end of the response, which means effects the narrative already described silently never apply — the exact failure the turn-loop ordering exists to prevent. A ceiling is not a spend; an unused one costs nothing.
+- **Thinking is left enabled, not disabled.** With thinking off, Claude 5 models can leak `<thinking>` tags into the visible response, and this app renders that text straight to the player. `effort` is the cost/latency dial instead, defaulting to `low` (`DM_EFFORT`) because every increment is felt as wait time by a player who just typed an action. Live-checked round trip: ~3.5s Opus, ~2.8s Sonnet.
+- **Context window corrected 200K → 1M.** `getModelLimits` claimed 200K for Claude; every currently-pinned model is 1M. `MAX_CHRONICLE_BUDGET` caps the output either way, so this is a correctness fix to a number that was also a lying comment.
+
+### One source of truth for model IDs
+
+The pins were two consts in `claude.js` — and three other call sites had drifted into hardcoding their own copies: `dmSession.js` twice (chronicle budget, history compression) and `preludeArcService.js` once (provenance stamp on a generated arc). Two still named Sonnet 4.6 long after gameplay had moved on, so "bump the model" would have missed them.
+
+New `server/services/modelRegistry.js` owns the pins. Every model ID in `server/` now resolves through `opusModel()` / `sonnetModel()`; a grep for `claude-opus-` / `claude-sonnet-` in `server/` returns exactly two lines, both in that file. Accessors are synchronous by design — `claude.chat()` is on the per-turn hot path and must not await a database read to learn what to call. `setPins()` exists for v1.0.183's runtime updates.
+
+### The label bug
+
+The provider strip displayed `llmStatus.model`, which the health check hardcoded to `DEFAULT_MODEL` (= Sonnet). It never reflected the Opus/Sonnet toggle, so the screen reported Sonnet 4.6 while Opus 4.7 was actually serving turns — the wrong one of two stale pins. The singular `model` field is gone from the status response entirely; the client derives the label from `models[useSonnet ? 'sonnet' : 'opus']`, the same map the server resolves from, so it cannot disagree with what runs.
+
+### Tests
+
+New `tests/claude-request-shape.test.js` (14 assertions) covers what the bump depends on and nothing else did: text extraction past a leading thinking block, thinking content never reaching the narrative, a thinking-disabled response still reading, `thinking` + `effort` + a registry-resolved model on the request, and `setPins` semantics including that a blank or null value cannot blank a pin. **Validated by reverting the fix**: 13/14 with the old reader, 14/14 with it.
+
+Two existing tests failed on the bump and were fixed by removing hardcoded model values rather than by updating them to new literals:
+
+- `turn-e2e.test.js` asserted `call.model === 'claude-opus-4-7'`. It now asserts against `opusModel()` — the claim worth making is "a gameplay turn uses the Opus pin", which survives the next bump.
+- `context-bounds.test.js` asserted a 179000-token prompt falls back to the budget floor, a number chosen against the old 180k `safeBudget`. With a 1M window 179k is not nearly-full, so the literal asserted nothing; it now derives from `getModelLimits`.
+
+Two remaining `claude-opus-4-7` literals in tests are deliberate: they are stub inputs and a DB fixture value, testing round-trip plumbing where any string works.
+
+### Verification
+
+- Live round trip on both pins through the real `claude.chat()` path: correct model IDs echoed back, non-empty narrative, trailing `[HP_CHANGE: …]` marker intact, `stop_reason: end_turn`. `thinking` and `output_config.effort` accepted with no beta header.
+- Response block ordering inspected directly against the API to confirm the reader fix was necessary rather than precautionary.
+- Full suite **86/87 files green, 4747 assertions**; the 3 failures are the documented `integration.test.js` 410/404 mismatch. `npm run lint` byte-identical to baseline. Client builds clean.
+
 ## [1.0.0.181] - 2026-08-13 — Second player character removed
 
 Cut from the MVP on review, because the concept was wrong rather than merely unwanted. The session setup screen offered a field labelled "Second Player Character (Optional)" whose help text read "Add a companion to your adventure" — two different concepts on one control.

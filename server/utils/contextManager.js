@@ -32,8 +32,11 @@ export function getModelLimits(model) {
   if (model && (model.includes('llama') || model.includes('mistral'))) {
     return { contextWindow: 8192, safeBudget: 6000 };
   }
-  // Claude Opus/Sonnet — 200K context
-  return { contextWindow: 200000, safeBudget: 180000 };
+  // Claude Opus/Sonnet — 1M context on every currently-pinned model.
+  // Was stated as 200K until v1.0.182, which understated the budget; in
+  // practice MAX_CHRONICLE_BUDGET caps the output either way, so this is a
+  // correctness fix to the number rather than a behaviour change.
+  return { contextWindow: 1000000, safeBudget: 900000 };
 }
 
 /**

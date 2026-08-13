@@ -20,8 +20,10 @@ import {
 } from '../server/services/storyChronicleService.js';
 import {
   calculateChronicleBudget,
+  getModelLimits,
   MAX_CHRONICLE_BUDGET,
 } from '../server/utils/contextManager.js';
+import { opusModel } from '../server/services/modelRegistry.js';
 import { checkPromptSize } from '../server/services/aiCallLogger.js';
 
 let passed = 0;
@@ -125,13 +127,18 @@ async function run() {
   console.log('\n=== Test 2: chronicle budget is clamped ===\n');
   // ============================================================
 
-  // The real call site passes a few hundred tokens against a 180k safe budget,
-  // which previously yielded ~67,000.
-  const generous = calculateChronicleBudget(500, 0, 'claude-opus-4-7');
+  // The real call site passes a few hundred tokens against the Claude safe
+  // budget, which without the cap would yield hundreds of thousands.
+  const claudeModel = opusModel();
+  const { safeBudget } = getModelLimits(claudeModel);
+  const generous = calculateChronicleBudget(500, 0, claudeModel);
   assert(generous <= MAX_CHRONICLE_BUDGET, `budget is capped at ${MAX_CHRONICLE_BUDGET} (got ${generous})`);
   assertEqual(generous, MAX_CHRONICLE_BUDGET, 'a near-empty prompt saturates to exactly the cap');
 
-  const squeezed = calculateChronicleBudget(179000, 0, 'claude-opus-4-7');
+  // "Nearly full" is derived from the model's own safe budget rather than
+  // hardcoded. It was 179000 against a stated 180k window; v1.0.182 corrected
+  // the Claude window to 1M, which left the literal asserting nothing.
+  const squeezed = calculateChronicleBudget(safeBudget - 1000, 0, claudeModel);
   assertEqual(squeezed, 2000, 'a nearly-full context falls back to the 2000 floor');
 
   // Small local models must not be handed a Claude-sized budget.

@@ -5,13 +5,35 @@
  * Requires ANTHROPIC_API_KEY environment variable.
  */
 
+import { opusModel, sonnetModel } from './modelRegistry.js';
+
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-// Model aliases (no date suffix) auto-resolve to the latest *build* of a
-// given major.minor version, but the major.minor itself is pinned — bump these
-// manually when a new Claude release ships (e.g. 4-6 → 4-7).
-const SONNET_MODEL = 'claude-sonnet-4-6';
-const OPUS_MODEL = 'claude-opus-4-7';
-const DEFAULT_MODEL = SONNET_MODEL;
+
+// Adaptive thinking is ON BY DEFAULT on Claude 5 models — omitting `thinking`
+// does not disable it. Two consequences this file has to handle:
+//
+//   1. `max_tokens` bounds thinking + response text TOGETHER, so the gameplay
+//      ceiling was raised (see startSession / continueSession). It is a ceiling,
+//      not a spend — an unused ceiling costs nothing.
+//   2. Thinking blocks arrive FIRST in `content[]`, so the response reader must
+//      collect text blocks rather than indexing `content[0]`.
+//
+// Thinking is deliberately left enabled rather than set to `disabled`: with
+// thinking off, Claude 5 models can leak `<thinking>` tags into the visible
+// response, and this app renders that text straight to the player.
+const THINKING_CONFIG = { type: 'adaptive' };
+
+// Effort is the cost/latency dial. `low` is a deliberate choice for an
+// interactive turn loop — Opus 5 at low effort is strong, and every increment
+// is felt as wait time by a player who has just typed an action. Sweep this
+// against your own play sessions before treating it as settled.
+const DM_EFFORT = process.env.DM_EFFORT || 'low';
+
+// Ceiling for an interactive DM turn. Raised from 4000 in v1.0.182: thinking
+// and the narrative share this budget, and a truncated turn loses the markers
+// at the end of the response — effects the narrative already described would
+// silently never apply. Overridable for cost-capped installs.
+const GAMEPLAY_MAX_TOKENS = Number(process.env.DM_MAX_TOKENS || 16000);
 
 // Prompt-cache configuration. Three tiers:
 //   Tier 1 (universal static): Cardinal Rules + Craft + Conversation + examples
@@ -159,9 +181,9 @@ export function getCumulativeCacheStats() {
  * @param {string} modelChoice - 'opus', 'sonnet', or undefined for default
  */
 function getModelId(modelChoice) {
-  if (modelChoice === 'opus') return OPUS_MODEL;
-  if (modelChoice === 'sonnet') return SONNET_MODEL;
-  return DEFAULT_MODEL;
+  if (modelChoice === 'opus') return opusModel();
+  if (modelChoice === 'sonnet') return sonnetModel();
+  return sonnetModel();
 }
 
 /**
@@ -210,7 +232,7 @@ export async function checkClaudeStatus() {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: SONNET_MODEL,
+        model: sonnetModel(),
         messages: [{ role: 'user', content: 'ping' }]
       })
     });
@@ -218,8 +240,7 @@ export async function checkClaudeStatus() {
     if (response.ok) {
       return {
         available: true,
-        model: DEFAULT_MODEL,
-        models: { opus: OPUS_MODEL, sonnet: SONNET_MODEL },
+        models: { opus: opusModel(), sonnet: sonnetModel() },
         provider: 'Anthropic Claude'
       };
     }
@@ -318,6 +339,8 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
         body: JSON.stringify({
           model: selectedModel,
           max_tokens: maxTokens,
+          thinking: THINKING_CONFIG,
+          output_config: { effort: DM_EFFORT },
           system: systemParam,
           messages: claudeMessages
         })
@@ -383,7 +406,15 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
       }
 
       const data = await response.json();
-      const content = data.content?.[0]?.text || '';
+      // Collect TEXT blocks rather than indexing content[0]. With adaptive
+      // thinking on (the default on Claude 5), content[0] is a thinking block
+      // whose `.text` is undefined — indexing it returned an empty narrative
+      // for every turn. Concatenating is also correct when the API splits a
+      // long response across several text blocks.
+      const content = (data.content || [])
+        .filter(block => block?.type === 'text')
+        .map(block => block.text || '')
+        .join('');
 
       // Pillar 6: log cache stats for this turn. Only interesting when
       // caching is active (i.e. system prompt had the CACHE_BREAK marker).
@@ -450,7 +481,7 @@ export async function chat(systemPrompt, messages, maxRetries = 3, modelChoice =
  */
 export async function startSession(systemPrompt, openingPrompt, modelChoice = null, options = {}) {
   const messages = [{ role: 'user', content: openingPrompt }];
-  const response = await chat(systemPrompt, messages, 3, modelChoice, 4000, false, options);
+  const response = await chat(systemPrompt, messages, 3, modelChoice, GAMEPLAY_MAX_TOKENS, false, options);
 
   const selectedModel = getModelId(modelChoice);
   console.log(`Starting DM session with model: ${selectedModel}`);
@@ -481,7 +512,7 @@ export async function continueSession(systemPrompt, messages, playerAction, mode
     { role: 'user', content: playerAction }
   ];
 
-  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, 4000, false, options);
+  const response = await chat(systemPrompt, updatedMessages, 3, modelChoice, GAMEPLAY_MAX_TOKENS, false, options);
 
   return {
     response,

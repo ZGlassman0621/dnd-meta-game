@@ -110,12 +110,29 @@ function toResponse(value, requestBody) {
     )
   }
 
+  // A thinking block LEADS the content array, because that is what the real
+  // API returns: adaptive thinking is on by default on Claude 5 models, so
+  // `content[0]` is a thinking block whose `.text` is undefined.
+  //
+  // This is not decoration. Until v1.0.182 the stub emitted a text block first,
+  // and `claude.js` read the narrative as `content[0].text`. Every test in the
+  // suite passed while the real API would have returned an empty narrative for
+  // every single turn. Emitting the true shape here is what makes the suite
+  // able to catch that class of bug at all.
+  //
+  // Pass `thinking: false` to simulate a thinking-disabled response.
+  const blocks = []
+  if (spec.thinking !== false) {
+    blocks.push({ type: 'thinking', thinking: spec.thinking || '' })
+  }
+  blocks.push({ type: 'text', text: spec.text ?? '' })
+
   return jsonResponse({
     id: 'msg_stub',
     type: 'message',
     role: 'assistant',
-    model: spec.model || requestBody?.model || 'claude-opus-4-7',
-    content: [{ type: 'text', text: spec.text ?? '' }],
+    model: spec.model || requestBody?.model || 'claude-opus-5',
+    content: blocks,
     stop_reason: spec.stopReason || 'end_turn',
     usage: {
       input_tokens: 100,
@@ -183,6 +200,14 @@ export function installLlmStub(opts = {}) {
 
     const call = {
       url,
+      /**
+       * The raw parsed request body. The named fields below cover the common
+       * assertions; `body` is here for everything else — `thinking`,
+       * `output_config.effort`, and anything a future model generation adds.
+       * Without it, a test cannot check that the request carries the parameters
+       * the model's behaviour depends on.
+       */
+      body,
       model: body.model,
       maxTokens: body.max_tokens,
       system: flattenSystem(body.system),

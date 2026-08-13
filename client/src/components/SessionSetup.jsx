@@ -53,6 +53,11 @@ export default function SessionSetup({
   isLoading,
   error
 }) {
+  // The model that will actually serve this session, resolved the same way the
+  // server resolves it: `modelOverride: 'sonnet'` when the toggle is on, Opus
+  // otherwise. `llmStatus.models` is the server's live pin map.
+  const selectedModelId = llmStatus?.models?.[useSonnet ? 'sonnet' : 'opus'] || null;
+
   return (
     <div className="session-setup">
       <div className="page-head">
@@ -87,7 +92,12 @@ export default function SessionSetup({
             <span>
               <span className="k">AI Provider</span>
               <span className="v">{llmStatus.provider === 'claude' ? 'Claude (Anthropic)' : 'Ollama (Local)'}</span>
-              {llmStatus.model && <span className="model">{llmStatus.model}</span>}
+              {/* Derived from the toggle, not from a `model` field on the status
+                  response. That field was the health check's own ping model —
+                  always Sonnet — so it reported Sonnet while Opus was selected
+                  and actually serving turns. Reading the same map the server
+                  resolves from makes the label unable to disagree with it. */}
+              {selectedModelId && <span className="model">{selectedModelId}</span>}
             </span>
 
             {/* Model selector — Opus is the production default (v1.0.99).
