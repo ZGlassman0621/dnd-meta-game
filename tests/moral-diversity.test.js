@@ -53,7 +53,6 @@ console.log('\n=== Test 1: DM System Prompt — NPC Moral Diversity ===\n');
 
   const mockContext = {
     isContinuing: false,
-    campaignModule: null,
     startingLocation: { name: 'Waterdeep' },
     era: null,
     customConcepts: '',
@@ -122,7 +121,6 @@ console.log('\n=== Test 2: DM System Prompt — Companion Personality & Independ
 
   const mockContext = {
     isContinuing: false,
-    campaignModule: null,
     startingLocation: { name: 'Baldur\'s Gate' },
     era: null,
     customConcepts: '',
@@ -272,8 +270,7 @@ console.log('\n=== Test 6: Moral Diversity Prompt Reinforcement (Primacy/Recency
   };
 
   const mockContext = {
-    isContinuing: false, campaignModule: null,
-    startingLocation: { name: 'Neverwinter' }, era: null,
+    isContinuing: false,    startingLocation: { name: 'Neverwinter' }, era: null,
     customConcepts: '', contentPreferences: {},
     companions: [], customNpcs: [],
     previousSummaries: [], campaignNotes: '',

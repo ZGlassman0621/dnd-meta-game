@@ -4,7 +4,6 @@ import {
   ARRIVAL_HOOKS,
   CAMPAIGN_LENGTHS
 } from '../data/forgottenRealms';
-import { CAMPAIGN_MODULES, getCampaignModule } from '../data/campaignModules';
 
 // Presentation lives in `../styles/session-setup.css`, scoped under
 // `.session-setup`. The ~40 inline style objects that used to sit in this
@@ -33,8 +32,6 @@ export default function SessionSetup({
   sessionHistory,
   onShowHistory,
   // Setup state
-  selectedModule,
-  onSelectedModuleChange,
   secondCharacterId,
   onSecondCharacterIdChange,
   startingLocation,
@@ -191,110 +188,97 @@ export default function SessionSetup({
             <div className="summary">
               <div className="head">Campaign Settings</div>
 
-              {/* Campaign Type */}
+              {/* Starting Location */}
               <div className="row">
-                <span className="k">Campaign Type</span>
+                <span className="k">Location</span>
+                {startingLocation ? (
+                  <span className="v">{STARTING_LOCATIONS.find(loc => loc.id === startingLocation)?.name}</span>
+                ) : (
+                  <select
+                    className="select"
+                    value={startingLocation}
+                    onChange={(e) => onStartingLocationChange(e.target.value)}
+                  >
+                    <option value="">Choose a location...</option>
+                    <optgroup label="Major Cities">
+                      {STARTING_LOCATIONS.filter(loc => loc.type === 'city').map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name} ({loc.region})</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Regions & Wilderness">
+                      {STARTING_LOCATIONS.filter(loc => loc.type === 'region').map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                )}
+              </div>
+
+              {/* Era/Year */}
+              <div className="row">
+                <span className="k">Era</span>
+                {era ? (
+                  <span className="v">{ERAS.find(e => e.id === era)?.name}</span>
+                ) : (
+                  <select
+                    className="select"
+                    value={era}
+                    onChange={(e) => onEraChange(e.target.value)}
+                  >
+                    <option value="">Choose an era...</option>
+                    {ERAS.map(e => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Arrival Hook */}
+              <div className="row">
+                <span className="k">What Brought You Here</span>
+                {arrivalHook && !(arrivalHook === 'custom' && !customArrivalHook.trim()) ? (
+                  <span className="v">
+                    {arrivalHook === 'custom' ? customArrivalHook : ARRIVAL_HOOKS.find(h => h.id === arrivalHook)?.name}
+                  </span>
+                ) : (
+                  <>
+                    <select
+                      className="select"
+                      value={arrivalHook}
+                      onChange={(e) => onArrivalHookChange(e.target.value)}
+                    >
+                      <option value="">Choose your backstory hook...</option>
+                      {ARRIVAL_HOOKS.map(hook => (
+                        <option key={hook.id} value={hook.id}>{hook.name}</option>
+                      ))}
+                    </select>
+                    {arrivalHook === 'custom' && (
+                      <textarea
+                        className="textarea spaced"
+                        value={customArrivalHook}
+                        onChange={(e) => onCustomArrivalHookChange(e.target.value)}
+                        placeholder="What originally brought your character to this region?"
+                        rows={2}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Campaign Length */}
+              <div className="row">
+                <span className="k">Campaign Length</span>
                 <span className="v">
-                  {getCampaignModule(selectedModule)?.icon} {getCampaignModule(selectedModule)?.name}
+                  {CAMPAIGN_LENGTHS.find(l => l.id === campaignLength)?.name || 'Ongoing Saga'}
                 </span>
               </div>
 
-              {/* Custom adventure settings - only for custom campaigns */}
-              {selectedModule === 'custom' && (
-                <>
-                  {/* Starting Location */}
-                  <div className="row">
-                    <span className="k">Location</span>
-                    {startingLocation ? (
-                      <span className="v">{STARTING_LOCATIONS.find(loc => loc.id === startingLocation)?.name}</span>
-                    ) : (
-                      <select
-                        className="select"
-                        value={startingLocation}
-                        onChange={(e) => onStartingLocationChange(e.target.value)}
-                      >
-                        <option value="">Choose a location...</option>
-                        <optgroup label="Major Cities">
-                          {STARTING_LOCATIONS.filter(loc => loc.type === 'city').map(loc => (
-                            <option key={loc.id} value={loc.id}>{loc.name} ({loc.region})</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Regions & Wilderness">
-                          {STARTING_LOCATIONS.filter(loc => loc.type === 'region').map(loc => (
-                            <option key={loc.id} value={loc.id}>{loc.name}</option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Era/Year */}
-                  <div className="row">
-                    <span className="k">Era</span>
-                    {era ? (
-                      <span className="v">{ERAS.find(e => e.id === era)?.name}</span>
-                    ) : (
-                      <select
-                        className="select"
-                        value={era}
-                        onChange={(e) => onEraChange(e.target.value)}
-                      >
-                        <option value="">Choose an era...</option>
-                        {ERAS.map(e => (
-                          <option key={e.id} value={e.id}>{e.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Arrival Hook */}
-                  <div className="row">
-                    <span className="k">What Brought You Here</span>
-                    {arrivalHook && !(arrivalHook === 'custom' && !customArrivalHook.trim()) ? (
-                      <span className="v">
-                        {arrivalHook === 'custom' ? customArrivalHook : ARRIVAL_HOOKS.find(h => h.id === arrivalHook)?.name}
-                      </span>
-                    ) : (
-                      <>
-                        <select
-                          className="select"
-                          value={arrivalHook}
-                          onChange={(e) => onArrivalHookChange(e.target.value)}
-                        >
-                          <option value="">Choose your backstory hook...</option>
-                          {ARRIVAL_HOOKS.map(hook => (
-                            <option key={hook.id} value={hook.id}>{hook.name}</option>
-                          ))}
-                        </select>
-                        {arrivalHook === 'custom' && (
-                          <textarea
-                            className="textarea spaced"
-                            value={customArrivalHook}
-                            onChange={(e) => onCustomArrivalHookChange(e.target.value)}
-                            placeholder="What originally brought your character to this region?"
-                            rows={2}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Campaign Length */}
-                  <div className="row">
-                    <span className="k">Campaign Length</span>
-                    <span className="v">
-                      {CAMPAIGN_LENGTHS.find(l => l.id === campaignLength)?.name || 'Ongoing Saga'}
-                    </span>
-                  </div>
-
-                  {/* Narrative Vision */}
-                  {customConcepts && (
-                    <div className="row">
-                      <span className="k">Narrative Vision</span>
-                      <span className="v quoted">&ldquo;{customConcepts}&rdquo;</span>
-                    </div>
-                  )}
-                </>
+              {/* Narrative Vision */}
+              {customConcepts && (
+                <div className="row">
+                  <span className="k">Narrative Vision</span>
+                  <span className="v quoted">&ldquo;{customConcepts}&rdquo;</span>
+                </div>
               )}
 
               {/* Selected NPCs */}
@@ -335,40 +319,9 @@ export default function SessionSetup({
               a Prelude, not from inside an existing character's sessions. */}
 
 
-          {/* Campaign Module Selection - hide when continuing existing campaign or when campaign plan exists */}
+          {/* Hidden when continuing an existing campaign or when a campaign plan exists. */}
           {!(continueCampaign && campaignContext?.hasPreviousSessions) && !campaignContext?.campaignPlan && (
           <>
-          <div className="field">
-            <label className="label">Campaign Type</label>
-            <div className="modules">
-              {CAMPAIGN_MODULES.map(module => (
-                <div
-                  key={module.id}
-                  className={`module${selectedModule === module.id ? ' on' : ''}`}
-                  onClick={() => onSelectedModuleChange(module.id)}
-                >
-                  <span className="icon">{module.icon}</span>
-                  <div className="body">
-                    <span className="n">{module.name}</span>
-                    <span className="lvl">Levels {module.suggestedLevel}</span>
-                    {module.year && <span className="yr">{module.year}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {selectedModule && (
-              <div className="module-note">
-                <p className="synopsis">{getCampaignModule(selectedModule)?.synopsis}</p>
-                {getCampaignModule(selectedModule)?.type === 'published' && (
-                  <div className="facts">
-                    <p><strong>Setting</strong> {getCampaignModule(selectedModule)?.setting}</p>
-                    <p><strong>Themes</strong> {getCampaignModule(selectedModule)?.themes.join(', ')}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {allCharacters && allCharacters.length > 1 && (
             <div className="field">
               <label className="label">Second Player Character (Optional)</label>
@@ -391,123 +344,118 @@ export default function SessionSetup({
             </div>
           )}
 
-          {/* Custom adventure options - only show for custom campaigns */}
-          {selectedModule === 'custom' && (
-            <>
-              <div className="field">
-                <label className="label">Where Are You Starting?</label>
-                <select
-                  className="select"
-                  value={startingLocation}
-                  onChange={(e) => onStartingLocationChange(e.target.value)}
-                  required
-                >
-                  <option value="">Choose a location...</option>
-                  <optgroup label="Major Cities">
-                    {STARTING_LOCATIONS.filter(loc => loc.type === 'city').map(loc => (
-                      <option key={loc.id} value={loc.id}>{loc.name} ({loc.region})</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Regions & Wilderness">
-                    {STARTING_LOCATIONS.filter(loc => loc.type === 'region').map(loc => (
-                      <option key={loc.id} value={loc.id}>{loc.name}</option>
-                    ))}
-                  </optgroup>
-                </select>
-                {startingLocation && (
-                  <p className="help">
-                    {STARTING_LOCATIONS.find(loc => loc.id === startingLocation)?.description}
-                  </p>
-                )}
-              </div>
-
-              <div className="field">
-                <label className="label">What Year Is It?</label>
-                <select
-                  className="select"
-                  value={era}
-                  onChange={(e) => onEraChange(e.target.value)}
-                  required
-                >
-                  <option value="">Choose an era...</option>
-                  {ERAS.map(e => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
+            <div className="field">
+              <label className="label">Where Are You Starting?</label>
+              <select
+                className="select"
+                value={startingLocation}
+                onChange={(e) => onStartingLocationChange(e.target.value)}
+                required
+              >
+                <option value="">Choose a location...</option>
+                <optgroup label="Major Cities">
+                  {STARTING_LOCATIONS.filter(loc => loc.type === 'city').map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name} ({loc.region})</option>
                   ))}
-                </select>
-                {era && (
-                  <p className="help">
-                    {ERAS.find(e => e.id === era)?.description}
-                  </p>
-                )}
-              </div>
-
-              <div className="field">
-                <label className="label">What Brought You Here?</label>
-                <p className="help lead">
-                  Your character's backstory reason for being in this region
+                </optgroup>
+                <optgroup label="Regions & Wilderness">
+                  {STARTING_LOCATIONS.filter(loc => loc.type === 'region').map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+              {startingLocation && (
+                <p className="help">
+                  {STARTING_LOCATIONS.find(loc => loc.id === startingLocation)?.description}
                 </p>
-                <select
-                  className="select"
-                  value={arrivalHook}
-                  onChange={(e) => onArrivalHookChange(e.target.value)}
-                  required
-                >
-                  <option value="">Choose your backstory hook...</option>
-                  {ARRIVAL_HOOKS.map(hook => (
-                    <option key={hook.id} value={hook.id}>{hook.name}</option>
-                  ))}
-                </select>
-                {arrivalHook && arrivalHook !== 'custom' && (
-                  <p className="help">
-                    {ARRIVAL_HOOKS.find(h => h.id === arrivalHook)?.description}
-                  </p>
-                )}
-                {arrivalHook === 'custom' && (
-                  <textarea
-                    className="textarea spaced"
-                    value={customArrivalHook}
-                    onChange={(e) => onCustomArrivalHookChange(e.target.value)}
-                    placeholder="What originally brought your character to this region? (e.g., fleeing past troubles, following a rumor, returning home after years away...)"
-                    rows={3}
-                    required
-                  />
-                )}
-              </div>
+              )}
+            </div>
 
-              <div className="field">
-                <label className="label">Campaign Length</label>
-                <div className="options">
-                  {CAMPAIGN_LENGTHS.map(length => (
-                    <label key={length.id} className={`option${campaignLength === length.id ? ' on' : ''}`}>
-                      <input
-                        type="radio"
-                        name="campaignLength"
-                        value={length.id}
-                        checked={campaignLength === length.id}
-                        onChange={(e) => onCampaignLengthChange(e.target.value)}
-                      />
-                      <span className="text">
-                        <span className="n">{length.name}</span>
-                        <span className="d">{length.description}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+            <div className="field">
+              <label className="label">What Year Is It?</label>
+              <select
+                className="select"
+                value={era}
+                onChange={(e) => onEraChange(e.target.value)}
+                required
+              >
+                <option value="">Choose an era...</option>
+                {ERAS.map(e => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+              {era && (
+                <p className="help">
+                  {ERAS.find(e => e.id === era)?.description}
+                </p>
+              )}
+            </div>
 
-              <div className="field">
-                <label className="label">Narrative Vision (Optional)</label>
+            <div className="field">
+              <label className="label">What Brought You Here?</label>
+              <p className="help lead">
+                Your character's backstory reason for being in this region
+              </p>
+              <select
+                className="select"
+                value={arrivalHook}
+                onChange={(e) => onArrivalHookChange(e.target.value)}
+                required
+              >
+                <option value="">Choose your backstory hook...</option>
+                {ARRIVAL_HOOKS.map(hook => (
+                  <option key={hook.id} value={hook.id}>{hook.name}</option>
+                ))}
+              </select>
+              {arrivalHook && arrivalHook !== 'custom' && (
+                <p className="help">
+                  {ARRIVAL_HOOKS.find(h => h.id === arrivalHook)?.description}
+                </p>
+              )}
+              {arrivalHook === 'custom' && (
                 <textarea
-                  className="textarea"
-                  value={customConcepts}
-                  onChange={(e) => onCustomConceptsChange(e.target.value)}
-                  placeholder="What themes do you want this campaign to explore? (e.g., found family, redemption, romance, betrayal, building a legacy, healing from trauma...)"
+                  className="textarea spaced"
+                  value={customArrivalHook}
+                  onChange={(e) => onCustomArrivalHookChange(e.target.value)}
+                  placeholder="What originally brought your character to this region? (e.g., fleeing past troubles, following a rumor, returning home after years away...)"
                   rows={3}
+                  required
                 />
-                <p className="help">The AI will create situations and NPCs that embody these themes over time</p>
+              )}
+            </div>
+
+            <div className="field">
+              <label className="label">Campaign Length</label>
+              <div className="options">
+                {CAMPAIGN_LENGTHS.map(length => (
+                  <label key={length.id} className={`option${campaignLength === length.id ? ' on' : ''}`}>
+                    <input
+                      type="radio"
+                      name="campaignLength"
+                      value={length.id}
+                      checked={campaignLength === length.id}
+                      onChange={(e) => onCampaignLengthChange(e.target.value)}
+                    />
+                    <span className="text">
+                      <span className="n">{length.name}</span>
+                      <span className="d">{length.description}</span>
+                    </span>
+                  </label>
+                ))}
               </div>
-            </>
-          )}
+            </div>
+
+            <div className="field">
+              <label className="label">Narrative Vision (Optional)</label>
+              <textarea
+                className="textarea"
+                value={customConcepts}
+                onChange={(e) => onCustomConceptsChange(e.target.value)}
+                placeholder="What themes do you want this campaign to explore? (e.g., found family, redemption, romance, betrayal, building a legacy, healing from trauma...)"
+                rows={3}
+              />
+              <p className="help">The AI will create situations and NPCs that embody these themes over time</p>
+            </div>
 
           {availableNpcs.length > 0 && !campaignContext?.campaignPlan && (
             <div className="field">
@@ -554,7 +502,7 @@ export default function SessionSetup({
             <button
               className="btn primary lg wide"
               onClick={onStartSession}
-              disabled={isLoading || (selectedModule === 'custom' && !continueCampaign && !campaignContext?.campaignPlan && (!startingLocation || !era || !arrivalHook || (arrivalHook === 'custom' && !customArrivalHook.trim())))}
+              disabled={isLoading || (!continueCampaign && !campaignContext?.campaignPlan && (!startingLocation || !era || !arrivalHook || (arrivalHook === 'custom' && !customArrivalHook.trim())))}
             >
               {isLoading ? 'Starting Adventure...' : 'Begin Adventure'}
             </button>

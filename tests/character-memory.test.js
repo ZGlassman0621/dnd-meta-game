@@ -79,7 +79,6 @@ console.log('\n=== Test 2: Character Memory Formatting in DM Prompt ===\n');
 {
   const mockContext = {
     isContinuing: false,
-    campaignModule: null,
     startingLocation: { name: 'Bryn Shander' },
     era: null,
     customConcepts: '',
@@ -149,7 +148,6 @@ console.log('\n=== Test 4: Player Autonomy Enforcement (Strengthened) ===\n');
 {
   const mockContext = {
     isContinuing: false,
-    campaignModule: null,
     startingLocation: { name: 'Waterdeep' },
     era: null,
     customConcepts: '',
@@ -198,7 +196,6 @@ console.log('\n=== Test 5: DM Guideline — Character Observation ===\n');
 {
   const mockContext = {
     isContinuing: false,
-    campaignModule: null,
     startingLocation: { name: 'Neverwinter' },
     era: null,
     customConcepts: '',

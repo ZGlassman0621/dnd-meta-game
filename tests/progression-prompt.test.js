@@ -334,7 +334,6 @@ console.log('\n=== Test 11: createDMSystemPrompt includes progression when suppl
     mythic_theme_amplification: null
   };
   const sessionContext = {
-    campaignModule: null,
     startingLocation: { id: 'waterdeep', name: 'Waterdeep', description: 'a city', region: 'Sword Coast', type: 'city' },
     era: { id: 'present', name: 'Present', years: '1492 DR', loreContext: '' },
     arrivalHook: null, customConcepts: null, campaignLength: 'short-campaign',
@@ -361,7 +360,6 @@ console.log('\n=== Test 12: createDMSystemPrompt works without progression ===\n
     prepared_spells: '[]', feats: '[]', current_location: 'Waterdeep'
   };
   const sessionContext = {
-    campaignModule: null,
     startingLocation: { id: 'waterdeep', name: 'Waterdeep', description: '', region: '', type: 'city' },
     era: { id: 'present', name: 'Present', years: '1492 DR', loreContext: '' },
     arrivalHook: null, customConcepts: null, campaignLength: 'short-campaign',

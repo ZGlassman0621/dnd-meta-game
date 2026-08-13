@@ -5,7 +5,6 @@ import {
   ARRIVAL_HOOKS,
   CAMPAIGN_LENGTHS
 } from '../data/forgottenRealms';
-import { getCampaignModule } from '../data/campaignModules';
 import { SEASON_ICONS } from '../data/harptos';
 import Downtime from './Downtime';
 import MetaGameDashboard from './MetaGameDashboard';
@@ -41,7 +40,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   };
 
   // Campaign module selection
-  const [selectedModule, setSelectedModule] = useState('custom');
 
   // New session setup state
   const [startingLocation, setStartingLocation] = useState('');
@@ -248,9 +246,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         if (cfg.selectedNpcIds && cfg.selectedNpcIds.length > 0) {
           setSelectedNpcIds(cfg.selectedNpcIds);
         }
-        if (cfg.campaignModule && cfg.campaignModule !== 'custom') {
-          setSelectedModule(cfg.campaignModule);
-        }
         if (data.campaignPlan?.startingLocation) {
           // Campaign's starting_location is the source of truth (resolve name or ID to STARTING_LOCATIONS ID)
           const campLoc = data.campaignPlan.startingLocation;
@@ -293,9 +288,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
           }
           if (data.sessionConfig.campaignLength) {
             setCampaignLength(data.sessionConfig.campaignLength);
-          }
-          if (data.sessionConfig.campaignModule && data.sessionConfig.campaignModule.id !== 'custom') {
-            setSelectedModule(data.sessionConfig.campaignModule.id);
           }
         }
       }
@@ -639,21 +631,11 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
     setIsLoading(true);
     setError('');
 
-    // Get campaign module data
-    const moduleData = getCampaignModule(selectedModule);
-
-    // Get full location and era data (only for custom adventures)
-    const locationData = selectedModule === 'custom'
-      ? STARTING_LOCATIONS.find(loc => loc.id === startingLocation)
-      : null;
-    const eraData = selectedModule === 'custom'
-      ? ERAS.find(e => e.id === era)
-      : null;
-    const hookData = selectedModule === 'custom'
-      ? (arrivalHook === 'custom'
-        ? { id: 'custom', name: 'Custom', description: customArrivalHook }
-        : ARRIVAL_HOOKS.find(h => h.id === arrivalHook))
-      : null;
+    const locationData = STARTING_LOCATIONS.find(loc => loc.id === startingLocation);
+    const eraData = ERAS.find(e => e.id === era);
+    const hookData = arrivalHook === 'custom'
+      ? { id: 'custom', name: 'Custom', description: customArrivalHook }
+      : ARRIVAL_HOOKS.find(h => h.id === arrivalHook);
 
     // Get selected NPCs data
     const selectedNpcs = availableNpcs.filter(npc => selectedNpcIds.includes(npc.id));
@@ -665,9 +647,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         body: JSON.stringify({
           characterId: character.id,
           secondCharacterId: secondCharacterId || null,
-          // Campaign module (published adventure or custom)
-          campaignModule: moduleData,
-          // Custom adventure config (only used if module is 'custom')
+          // Custom adventure config
           startingLocation: locationData || null,
           era: eraData || null,
           arrivalHook: hookData || null,
@@ -3169,8 +3149,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       onContinueCampaignChange={setContinueCampaign}
       sessionHistory={sessionHistory}
       onShowHistory={() => setShowHistory(true)}
-      selectedModule={selectedModule}
-      onSelectedModuleChange={setSelectedModule}
       secondCharacterId={secondCharacterId}
       onSecondCharacterIdChange={setSecondCharacterId}
       startingLocation={startingLocation}

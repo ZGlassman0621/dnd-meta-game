@@ -2,6 +2,46 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.180] - 2026-08-13 — Published campaign modules removed
+
+Cut from the MVP on review. The session setup screen offered 15 published D&D adventures — Curse of Strahd, Tomb of Annihilation, Rime of the Frostmaiden — as a 16-card picker. Every one of them is gone; a custom adventure is the only path.
+
+### What the feature actually was
+
+Worth recording, because the picker looked like more than it was. `campaignModules.js` held 402 lines of metadata per adventure: a synopsis, `keyLocations`, `keyNpcs`, `plotPoints`, and a `dmGuidance` paragraph. Choosing one fed that into the DM prompt as a `CAMPAIGN / SETTING / THEMES / KEY LOCATIONS / KEY NPCs / PLOT STRUCTURE` block, plus a per-module hardcoded opening scene in `ollama.js`.
+
+So it was wired end to end — it genuinely changed the prompt — but there was no adventure content behind it. Pick Curse of Strahd and the AI improvised Barovia from six location names and a paragraph of guidance. The screen promised a published module and delivered themed improvisation, which is worse than not offering it, and there is no plan yet for how real module content would work.
+
+### Removed
+
+- `client/src/data/campaignModules.js` — deleted (402 lines, 16 entries).
+- `SessionSetup.jsx` — the module grid, the selected-module synopsis panel, and the "Campaign Type" row in the continuing-campaign summary.
+- `DMSession.jsx` — `selectedModule` state and the two config-restore branches that rehydrated it from `campaign_config` and `session_config`.
+- `dmPromptBuilder.js` — the published-module `worldSettingSection` and its `pacingGuidance` arm.
+- `dmSession.js` — the `campaignModule` request field, its `sessionConfig` entry, the published-module opening prompts, and the module-derived session title.
+- `ollama.js` — the `campaignOpenings` map of hardcoded per-adventure opening scenes.
+- `metaGame.js` — the `campaignModule` passthrough in `campaignConfig`.
+- Nine dead `campaignModule: null` fixture keys across four test files.
+
+### Simplifications that fell out
+
+Everything gated on `selectedModule === 'custom'` is now unconditional: location, era, arrival hook, campaign length, and narrative vision always render, and the client always resolves location/era/hook data instead of nulling them for published modules. The Begin Adventure disabled-predicate loses its module check. The session title no longer branches on module type.
+
+Two locals in `ollama.js` died with the openings and came out here rather than being left for a later sweep: `char2Name`, and the 17-line `companionText` block that built an inline " along with their companions X and Y" clause. That clause was interpolated **only** into the hardcoded module openings — the custom-adventure opening has always used `companionReminder` instead — so custom openings are unaffected. `companionGenderNote`, built in the same block, is still live and stays.
+
+### What deliberately stayed
+
+`campaigns` / `campaign_plan` — the auto-generated world system — is untouched. It is a different feature that happens to share the word "campaign": the modules were pre-written adventures, campaign plans are generated per character. Nothing in the campaign-plan path referenced `campaignModule`.
+
+### Verification
+
+- Zero references to `campaignModule`, `campaignModules`, `CAMPAIGN_MODULES`, `isPublishedModule`, or `selectedModule` remain anywhere in `client/src` or `server/`.
+- Every deletion made against asserted anchors — each edit verified the text it was cutting existed exactly once before cutting, and every touched server file re-checked with `node --check`.
+- `npm run lint` output is **byte-identical** to the pre-change baseline (297 problems, 50 errors, 247 warnings) — diffed as a set, not just compared by count, so the two orphaned locals above were caught and removed rather than shipped as new warnings.
+- Full suite **85/86 files green, 4733 assertions**; the 3 failures are the documented `integration.test.js` 410/404 mismatch, unchanged from v1.0.179. Client builds clean.
+
+Net −621 lines.
+
 ## [1.0.0.179] - 2026-08-12 — Session setup screen converted to paper
 
 Phase 4 of the UI unification. Third screen converted, after the dashboard shell and Campaigns.

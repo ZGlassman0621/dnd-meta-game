@@ -2154,10 +2154,6 @@ export function createDMSystemPrompt(character, sessionContext, secondCharacter 
     ? `${char1.nickname || char1.firstName} and ${char2.nickname || char2.firstName}`
     : char1.nickname || char1.firstName;
 
-  // Check if this is a published campaign module
-  const campaignModule = sessionContext.campaignModule;
-  const isPublishedModule = campaignModule && campaignModule.type === 'published';
-
   // Build Forgotten Realms context (for custom adventures)
   const location = sessionContext.startingLocation;
   const era = sessionContext.era;
@@ -2167,55 +2163,26 @@ export function createDMSystemPrompt(character, sessionContext, secondCharacter 
   const customNpcs = sessionContext.customNpcs;
   const nicknameResolutions = sessionContext.nicknameResolutions || null;
 
-  // Build world setting section based on module type
+  // Build world setting section
   let worldSettingSection = '';
 
-  if (isPublishedModule) {
-    worldSettingSection = `CAMPAIGN: ${campaignModule.name}
-SETTING: ${campaignModule.setting}
-THEMES: ${campaignModule.themes.join(', ')}
-
-CAMPAIGN SYNOPSIS:
-${campaignModule.synopsis}
-
-KEY LOCATIONS:
-${campaignModule.keyLocations.map(loc => `- ${loc}`).join('\n')}
-
-KEY NPCs (canonical to this adventure):
-${campaignModule.keyNpcs.map(npc => `- ${npc}`).join('\n')}
-
-PLOT STRUCTURE - IMPORTANT:
-Follow the general story beats of the ${campaignModule.name} campaign while adapting to player choices:
-${campaignModule.plotPoints.map((point, i) => `${i + 1}. ${point}`).join('\n')}
-
-DM GUIDANCE FOR THIS CAMPAIGN:
-${campaignModule.dmGuidance}
-
-ADAPTING THE CAMPAIGN:
-- Stay true to the themes and major story beats of ${campaignModule.name}
-- Canonical NPCs should appear and act according to their established characterization
-- Key locations should match their published descriptions
-- BUT adapt pacing and details to fit the player's choices and this character's backstory
-- If the player has relevant prior adventures, weave them into the narrative naturally
-- The player is experiencing their unique version of this classic adventure`;
-  } else {
-    let campaignYear = null;
-    if (era && era.years) {
-      const yearMatch = era.years.match(/(\d{3,4})/);
-      if (yearMatch) {
-        campaignYear = parseInt(yearMatch[1]);
-      }
+  let campaignYear = null;
+  if (era && era.years) {
+    const yearMatch = era.years.match(/(\d{3,4})/);
+    if (yearMatch) {
+      campaignYear = parseInt(yearMatch[1]);
     }
+  }
 
-    // Skip the STARTING LOCATION RULE for imported mid-progress campaigns
-    // (they have session_continuity which overrides starting location)
-    const planSummary = sessionContext.campaignPlanSummary;
-    const isImportedMidProgress = planSummary?.session_continuity && (planSummary?.campaign_metadata || planSummary?.dm_directives);
-    const startingLocationRule = isImportedMidProgress
-      ? ''
-      : `\n- STARTING LOCATION RULE: The FIRST session MUST begin physically IN ${location?.name}. The opening scene takes place in this location — not traveling away from it, not days after leaving it. The player chose this starting location; respect that choice.`;
+  // Skip the STARTING LOCATION RULE for imported mid-progress campaigns
+  // (they have session_continuity which overrides starting location)
+  const planSummary = sessionContext.campaignPlanSummary;
+  const isImportedMidProgress = planSummary?.session_continuity && (planSummary?.campaign_metadata || planSummary?.dm_directives);
+  const startingLocationRule = isImportedMidProgress
+    ? ''
+    : `\n- STARTING LOCATION RULE: The FIRST session MUST begin physically IN ${location?.name}. The opening scene takes place in this location — not traveling away from it, not days after leaving it. The player chose this starting location; respect that choice.`;
 
-    worldSettingSection = `WORLD SETTING - THE FORGOTTEN REALMS:
+  worldSettingSection = `WORLD SETTING - THE FORGOTTEN REALMS:
 ${location ? `- Starting Location: ${location.name} - ${location.description}${location.region ? ` (${location.region})` : ''}${startingLocationRule}` : ''}
 ${era ? `- Era: ${era.years}
 - Historical Context: ${era.loreContext}` : ''}
@@ -2243,13 +2210,10 @@ IF UNCERTAIN ABOUT A DATE OR EVENT:
 
 This is a serious immersion-breaking issue if violated. The player chose this era deliberately.
 === END TIMELINE ENFORCEMENT ===` : ''}`;
-  }
 
   // Campaign pacing guidance based on length
   let pacingGuidance = '';
-  if (isPublishedModule) {
-    pacingGuidance = `This is a PUBLISHED CAMPAIGN (${campaignModule.name}). Follow the established story structure while allowing player agency to shape details.`;
-  } else if (campaignLength === 'one-shot') {
+  if (campaignLength === 'one-shot') {
     pacingGuidance = `This is a ONE-SHOT adventure meant to be completed in a single session. Structure the story with:
 - A clear, achievable goal that can be resolved quickly
 - Immediate hooks and stakes - no slow burns

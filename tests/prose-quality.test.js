@@ -116,7 +116,6 @@ const SESSION_CTX = {
   campaignLength: 'short-campaign',
   customConcepts: null,
   customNpcs: null,
-  campaignModule: null,
   companions: [],
   awayCompanions: [],
   pendingDowntimeNarratives: null,

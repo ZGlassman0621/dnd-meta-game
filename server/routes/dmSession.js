@@ -271,7 +271,6 @@ router.get('/debug/latest-session', async (req, res) => {
       openingNarrative: messages.find(m => m.role === 'assistant')?.content || null,
       systemPromptPreview: messages.find(m => m.role === 'system')?.content?.substring(0, 500) + '...',
       configSummary: {
-        campaignModule: config.campaignModule?.name || 'Custom',
         startingLocation: config.startingLocation?.name || 'Unknown',
         era: config.era?.id || 'default',
         campaignLength: config.campaignLength
@@ -426,8 +425,7 @@ router.get('/campaign-context/:characterId', async (req, res) => {
         era: sessionConfig.era,
         startingLocation: sessionConfig.startingLocation,
         campaignLength: sessionConfig.campaignLength,
-        customConcepts: sessionConfig.customConcepts,
-        campaignModule: sessionConfig.campaignModule
+        customConcepts: sessionConfig.customConcepts
       },
       // Character's persistent campaign config (takes priority over session config)
       campaignConfig,
@@ -464,7 +462,6 @@ router.post('/start', async (req, res) => {
     const {
       characterId,
       secondCharacterId,
-      campaignModule,
       startingLocation,
       era,
       arrivalHook,
@@ -931,9 +928,8 @@ router.post('/start', async (req, res) => {
       : '';
     // ──────────── END PARALLEL CONTEXT ASSEMBLY ────────────
 
-    // Build session config with campaign module or custom Forgotten Realms context
+    // Build session config with the custom Forgotten Realms context
     const sessionConfig = {
-      campaignModule,
       startingLocation,
       era,
       arrivalHook,
@@ -985,7 +981,6 @@ router.post('/start', async (req, res) => {
 
       // Build opening prompt (simplified version of what Ollama does internally)
       const charName = character.nickname || character.name.split(' ')[0];
-      const isPublishedModule = campaignModule && campaignModule.type === 'published';
       const location = startingLocation;
 
       let openingPrompt;
@@ -1003,13 +998,7 @@ router.post('/start', async (req, res) => {
       const isImportedMidProgress = campaignPlanSummary?.session_continuity
         && (campaignPlanSummary?.campaign_metadata || campaignPlanSummary?.dm_directives);
 
-      if (isPublishedModule) {
-        if (isContinuing && lastSessionSummary) {
-          openingPrompt = `Continue the ${campaignModule.name} campaign! This is a CONTINUATION from the previous session. Here's what happened last time:\n\n${lastSessionSummary}\n\nCRITICAL - HONOR SPECIFIC PLANS: If the summary mentions ANY specific plans, decisions, or timing the party made (like "agreed to leave at dawn", "planned to depart before sunrise", "decided to meet someone at midnight"), you MUST start the scene at EXACTLY that moment. Do NOT skip past their plans or change the timing they chose. The player made those decisions - respect them.\n\nPick up the story from where it left off. Write in second person ("you see", "you hear"). Do not speak dialogue for the player character. Do NOT recap the entire previous session - just smoothly continue the narrative.`;
-        } else {
-          openingPrompt = `Begin the ${campaignModule.name} campaign! Set an appropriate opening scene in ${campaignModule.setting}. Write in second person ("you see", "you hear"). Do not speak dialogue for the player character. Present the scene and let the player decide what to do.`;
-        }
-      } else if (isImportedMidProgress && !isContinuing) {
+      if (isImportedMidProgress && !isContinuing) {
         // Imported mid-progress campaign, character's first session in the system.
         // Use session_continuity from plan to pick up where the external campaign left off.
         const currentLoc = character.current_location || 'their current location';
@@ -1081,17 +1070,11 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
     }
 
     // Create the session in the database
-    const isPublishedModule = campaignModule && campaignModule.type === 'published';
-    const locationName = isPublishedModule
-      ? campaignModule.setting
-      : (startingLocation?.name || 'Unknown Location');
-    const moduleName = isPublishedModule ? campaignModule.name : null;
+    const locationName = startingLocation?.name || 'Unknown Location';
 
-    const title = isPublishedModule
-      ? `${moduleName}: ${character.nickname || character.name}`
-      : secondCharacter
-        ? `${character.nickname || character.name} & ${secondCharacter.nickname || secondCharacter.name} in ${locationName}`
-        : `${character.nickname || character.name} in ${locationName}`;
+    const title = secondCharacter
+      ? `${character.nickname || character.name} & ${secondCharacter.nickname || secondCharacter.name} in ${locationName}`
+      : `${character.nickname || character.name} in ${locationName}`;
 
     // Get character's current in-game date for session tracking
     // Prioritize the selected era's year - the player explicitly chose this era for the session
@@ -1171,7 +1154,6 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
     const campaignConfigToSave = {
       customConcepts: customConcepts || '',
       selectedNpcIds: (customNpcs || []).map(npc => npc.id),
-      campaignModule: campaignModule?.id || 'custom',
       startingLocation: startingLocation?.id || '',
       era: era?.id || '',
       arrivalHook: arrivalHook || null,  // Store the full hook object { id, name, description }
