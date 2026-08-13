@@ -23,6 +23,10 @@ export default function SessionSetup({
   onCheckStatus,
   useSonnet,
   onUseSonnetChange,
+  // Model updates — manual check, manual adopt. See DMSession for why.
+  modelCheck,
+  onCheckModelUpdates,
+  onApplyModelUpdate,
   // Campaign context
   campaignContext,
   continueCampaign,
@@ -122,6 +126,14 @@ export default function SessionSetup({
                   Opus
                 </button>
                 <button
+                  className="seg"
+                  onClick={onCheckModelUpdates}
+                  disabled={modelCheck?.checking}
+                  title="Ask Anthropic which models this API key can reach, and whether a newer one exists. Checks only — nothing is adopted without confirming."
+                >
+                  {modelCheck?.checking ? 'Checking…' : 'Models'}
+                </button>
+                <button
                   className="seg glyph"
                   onClick={onCheckStatus}
                   title="Recheck provider availability"
@@ -131,6 +143,49 @@ export default function SessionSetup({
               </div>
             )}
           </div>
+
+          {/* Model update result. Renders only after an explicit check. */}
+          {modelCheck && !modelCheck.checking && (
+            <div className={`model-check${modelCheck.error ? ' bad' : ''}`}>
+              {modelCheck.error ? (
+                <span className="msg">Could not check for model updates: {modelCheck.error}</span>
+              ) : modelCheck.comparison?.anyStale ? (
+                <>
+                  <span className="msg">
+                    A newer model is available. Adopting a new generation can change how the
+                    DM behaves — worth reading the release notes first.
+                  </span>
+                  <div className="rows">
+                    {['opus', 'sonnet'].map(family => {
+                      const f = modelCheck.comparison[family];
+                      if (!f?.stale) return null;
+                      return (
+                        <div className="row" key={family}>
+                          <span className="k">{family}</span>
+                          <span className="from">{f.pinned}</span>
+                          <span className="arrow">&rarr;</span>
+                          <span className="to">{f.newest}</span>
+                          <button
+                            className="btn sm"
+                            disabled={modelCheck.applying}
+                            onClick={() => onApplyModelUpdate({ [family]: f.newest })}
+                          >
+                            {modelCheck.applying ? 'Updating…' : 'Update'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <span className="msg">
+                  {modelCheck.applied ? 'Updated. ' : ''}
+                  Both models are the newest available
+                  {modelCheck.pins ? ` — ${modelCheck.pins.opus} / ${modelCheck.pins.sonnet}` : ''}.
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Campaign Continuity - Show if there are previous sessions */}
           {campaignContext?.hasPreviousSessions && (

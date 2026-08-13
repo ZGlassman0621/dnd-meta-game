@@ -126,6 +126,22 @@ Two tests cover this path, and they cover different things:
 
 Schemas without handlers are a legitimate end state — validation alone provides correction-loop feedback. Malformed markers queue a correction on `session_config` that is injected into the next turn.
 
+### Which model runs — `server/services/modelRegistry.js`
+
+**Every model ID in `server/` resolves through `opusModel()` / `sonnetModel()`.** A grep for `claude-opus-` or `claude-sonnet-` under `server/` should return exactly two lines, both in that file. It is a registry rather than two constants because the IDs had already drifted into four other call sites, two of which were a generation stale by the time anyone noticed.
+
+Accessors are **synchronous** — `claude.chat()` is on the per-turn hot path and must not await a database read to learn what to call. Pins live in a module-level cache: `hydratePins()` fills it from `_app_settings` at boot, `persistPins()` writes through. Tests never hydrate, so they get the compiled-in defaults; nothing here needs a reachable database.
+
+**Staleness is reported, never applied.** `logStalenessCheck()` runs fire-and-forget at boot and logs when a newer model exists; the UI has a manual check-and-adopt in the provider strip. This is deliberate: a new generation can change request semantics, and adopting one silently is how you ship a broken turn loop. See the Claude 5 notes below for what that looked like in practice.
+
+### The Claude 5 request contract — `server/services/claude.js`
+
+Three things about the current models that the code depends on. Break any of them and the failure is quiet.
+
+1. **Adaptive thinking is on by default.** Omitting `thinking` does not disable it. The response is `content: [{type:'thinking'}, {type:'text'}]`, so the reader **collects text blocks** — indexing `content[0].text` yields `undefined` and returns an empty narrative for every turn, with a `200` and `stop_reason: end_turn`. `tests/helpers/llmHarness.js` emits a leading thinking block for exactly this reason; a stub that leads with text lets this bug pass the whole suite.
+2. **`max_tokens` bounds thinking + response text together.** Gameplay runs at 16000 (`DM_MAX_TOKENS`). A truncated turn loses the markers at the end of the response, so effects the narrative already described never apply.
+3. **Thinking stays enabled rather than `disabled`.** With it off, these models can leak `<thinking>` tags into visible output, and this app renders the narrative straight to the player. `output_config.effort` (`DM_EFFORT`, default `low`) is the cost/latency dial instead.
+
 ### HP and death — `server/services/characterHpService.js`
 
 HP is **authoritative in the database**. `[HP_CHANGE: delta=-7 reason="..."]` applies via a single atomic clamped `UPDATE` (no transaction needed). At 0 HP the player falls unconscious and the **system** rolls 5e death saves — the AI narrates and stops. Three failures kill; `is_dead` is terminal.
@@ -191,7 +207,7 @@ There is no sign-in. The account system (register, bcrypt, JWT, per-request Bear
 
 **Infrastructure** — `server/index.js`, `server/database.js`, `server/migrationRunner.js`, `server/config/featureFlags.js`, `server/middleware/currentPlayer.js`, `server/utils/{rng,sessionLocks,contextManager,llmJson,safeParse,errorHandler}.js`, `server/scripts/{backup,run-tests}.js`
 
-**Session & prompt** — `server/routes/dmSession.js`, `server/services/{dmPromptBuilder,dmSessionService,markerSchemas,markerPipeline,characterHpService,combatMarkerService,aiCallLogger,claude}.js`
+**Session & prompt** — `server/routes/dmSession.js`, `server/services/{dmPromptBuilder,dmSessionService,markerSchemas,markerPipeline,characterHpService,combatMarkerService,aiCallLogger,claude,modelRegistry}.js`
 
 **World & story** — `storyChronicleService.js`, `livingWorldService.js`, `campaignPlanService.js`, `questService.js`, `consequenceService.js`, `narrativeQueueService.js`, the `npc*Service.js` family
 

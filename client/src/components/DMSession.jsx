@@ -373,6 +373,53 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
     }
   };
 
+  // ── Model updates ──────────────────────────────────────────────────────
+  //
+  // Checking is manual and adopting is manual, deliberately. A new Claude
+  // generation can change request semantics — Claude 5 turning adaptive
+  // thinking on by default would have emptied every narrative — so nothing here
+  // ever applies an update on its own. The server logs a staleness warning at
+  // boot; this is the affordance that acts on it.
+  //
+  // `modelCheck` is one of: null (never checked), { checking: true },
+  // { error }, or { pins, comparison, catalog }.
+  const [modelCheck, setModelCheck] = useState(null);
+
+  const checkModelUpdates = async () => {
+    setModelCheck({ checking: true });
+    try {
+      const response = await fetch('/api/dm-session/model-catalog');
+      const data = await response.json();
+      setModelCheck(response.ok ? data : { error: data.error || `HTTP ${response.status}` });
+    } catch (err) {
+      setModelCheck({ error: err.message });
+    }
+  };
+
+  const applyModelUpdate = async (next) => {
+    setModelCheck(prev => ({ ...prev, applying: true }));
+    try {
+      const response = await fetch('/api/dm-session/model-pins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setModelCheck(prev => ({ ...prev, applying: false, error: data.error || `HTTP ${response.status}` }));
+        return;
+      }
+      // Re-read the status so the provider strip's label reflects the new pin
+      // immediately. Without this the strip keeps naming the old model until
+      // the next mount, which is exactly the stale-label bug this screen just
+      // stopped having.
+      await checkLLMStatus();
+      setModelCheck({ ...data, applied: true });
+    } catch (err) {
+      setModelCheck(prev => ({ ...prev, applying: false, error: err.message }));
+    }
+  };
+
   const checkForActiveSession = async () => {
     try {
       const response = await fetch(`/api/dm-session/active/${character.id}`);
@@ -3134,6 +3181,9 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
       onCheckStatus={() => checkLLMStatus()}
       useSonnet={useSonnet}
       onUseSonnetChange={updateUseSonnet}
+      modelCheck={modelCheck}
+      onCheckModelUpdates={checkModelUpdates}
+      onApplyModelUpdate={applyModelUpdate}
       campaignContext={campaignContext}
       continueCampaign={continueCampaign}
       onContinueCampaignChange={setContinueCampaign}

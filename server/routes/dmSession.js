@@ -26,7 +26,9 @@ import '../services/merchantOrderService.js';
 // SC-6.4b: lootDropService is new — registers the LOOT_DROP handler at
 // module load.
 import '../services/lootDropService.js';
-import { sonnetModel } from '../services/modelRegistry.js';
+import {
+  sonnetModel, getPins, getDefaultPins, persistPins, resetPins, fetchCatalog, comparePins
+} from '../services/modelRegistry.js';
 // SC-6.4d: recordPlayerDefenseOutcome no longer imported — BASE_DEFENSE_RESULT
 // handler in baseThreatService.js owns the call. Loading the module fires
 // the module-level registerMarkerHandler registration.
@@ -223,6 +225,61 @@ router.get('/llm-status', async (req, res) => {
     res.json({ ...status, provider });
   } catch (error) {
     handleServerError(res, error, 'check LLM status');
+  }
+});
+
+/**
+ * Which models this API key can reach, and whether our pins are the newest.
+ *
+ * Read-only and side-effect free — it never adopts anything. Adopting a new
+ * generation can change request semantics, so it stays a decision a human makes
+ * after reading the release notes. `POST /model-pins` is the deliberate act.
+ */
+router.get('/model-catalog', async (req, res) => {
+  try {
+    const catalog = await fetchCatalog();
+    res.json({ pins: getPins(), defaults: getDefaultPins(), catalog, comparison: comparePins(catalog) });
+  } catch (error) {
+    // A 502 rather than a 500: the failure is upstream (no key, Anthropic
+    // unreachable), not a bug here, and the client shows the message verbatim.
+    res.status(502).json({ error: error.message });
+  }
+});
+
+/**
+ * Adopt model pins. `{ opus?, sonnet?, reset? }`.
+ *
+ * Every requested ID is validated against the live catalog before anything is
+ * written. A typo would otherwise persist happily and surface as a 404 on the
+ * next gameplay turn — a long way from its cause, and after the session lock
+ * has already been taken.
+ */
+router.post('/model-pins', async (req, res) => {
+  try {
+    const { opus, sonnet, reset } = req.body || {};
+
+    if (reset) {
+      return res.json({ pins: await resetPins(), reset: true });
+    }
+    if (!opus && !sonnet) {
+      return res.status(400).json({ error: 'Provide at least one of `opus` or `sonnet`, or `reset: true`.' });
+    }
+
+    const catalog = await fetchCatalog();
+    const known = new Set(catalog.map(m => m.id));
+    const unknown = [opus, sonnet].filter(id => id && !known.has(id));
+    if (unknown.length > 0) {
+      return res.status(400).json({
+        error: `Not available to this API key: ${unknown.join(', ')}`,
+        available: catalog.map(m => m.id)
+      });
+    }
+
+    const pins = await persistPins({ opus, sonnet });
+    console.log(`[modelRegistry] pins updated by request: opus=${pins.opus} sonnet=${pins.sonnet}`);
+    res.json({ pins, comparison: comparePins(catalog) });
+  } catch (error) {
+    handleServerError(res, error, 'update model pins');
   }
 });
 

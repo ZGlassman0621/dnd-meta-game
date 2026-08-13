@@ -2,6 +2,52 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.183] - 2026-08-13 — Model updates: boot check, manual adopt
+
+Model pins become runtime state instead of source code. The install now finds out on its own when a newer Claude ships, and adopting it is a button rather than an edit-and-redeploy.
+
+### Boot check
+
+`logStalenessCheck()` runs fire-and-forget after the database comes up. It calls `GET /v1/models` — a metadata endpoint, no tokens, no per-call charge, which is what makes it affordable every boot — and logs one of:
+
+```
+[modelRegistry] pins are current: opus=claude-opus-5 sonnet=claude-sonnet-5
+[modelRegistry] a newer opus is available: pinned claude-opus-4-7, newest claude-opus-5.
+    Review the migration notes before adopting it — a new generation can change
+    request semantics. Update from the AI provider strip on the session setup screen.
+```
+
+Fire-and-forget matters: the server must not wait on Anthropic being reachable in order to start. `hydratePins()` **is** awaited, because a turn served with the wrong model is the thing this exists to prevent.
+
+### Manual adopt
+
+A **Models** button in the provider strip. It checks, then reports; if something newer exists it shows `pinned → newest` per family with an Update button beside it. Adopting writes to `_app_settings` and survives restarts.
+
+**Nothing adopts automatically, and that is the design, not a missing feature.** v1.0.182 is the argument: Claude 5 turned adaptive thinking on by default, which would have returned an empty narrative on every turn from a change no one reviewed. An auto-updater would have shipped exactly that. `comparePins` reports; a human with the release notes open decides.
+
+### Persistence and validation
+
+- `_app_settings` (migration 013, already preserved by `purge-gameplay-state.js` as installation config) stores `model_pin_opus` / `model_pin_sonnet`. No migration needed.
+- Every requested ID is validated against the live catalog **before** anything is written. A typo would otherwise persist happily and surface as a 404 mid-turn, after the session lock had been taken — a long way from its cause.
+- `POST /model-pins` accepts `{ opus?, sonnet?, reset? }`; `reset` clears storage and falls back to the shipped defaults.
+- `GET /model-catalog` returns `{ pins, defaults, catalog, comparison }` and is read-only. It answers with `502` rather than `500` when the failure is upstream — no API key, Anthropic unreachable — since that is not a bug here and the client shows the message verbatim.
+
+### `newestFor` reads order, never strings
+
+The catalog comes back newest-first and that ordering is load-bearing. `'claude-opus-4-8' < 'claude-opus-5'` alphabetically, so any implementation that sorted locally would call 4.8 the newest — silently, and only on a real upgrade. Family matching is on a hyphen-delimited segment (`-opus-`), so Fable and Haiku are never mistaken for a pinned family, and selecting one stays a deliberate act rather than something the update button can do by accident.
+
+### Tests
+
+New `tests/model-registry.test.js` (24 assertions): order-beats-string-comparison stated as an explicit assertion, family isolation, `comparePins` reporting without mutating, `setPins` refusing to blank a pin, the `_app_settings` round trip including that a second write updates rather than duplicating, and hydration surviving a dropped settings table without throwing. `llmHarness` gained `lastCall.body` so tests can assert on request parameters the model's behaviour depends on.
+
+### Verification
+
+Exercised against the running server rather than only unit-tested: bogus model rejected with the available list, empty request `400`, an older Opus pinned on purpose and reported stale, **the pin surviving a real process restart** (`pins loaded from settings: opus=claude-opus-4-7` followed by the staleness warning on the next boot), then reset back to Claude 5. Full suite **87/88 files green, 4771 assertions**; the 3 failures are the documented `integration.test.js` 410/404 mismatch. Lint byte-identical to baseline, client builds clean, no dead selectors in the stylesheet.
+
+### FUTURE_FEATURE — play on a previous model
+
+Recorded in `modelRegistry.js` next to the code it concerns. The plumbing is already there — `fetchCatalog()` returns every reachable model, `setPins` accepts any ID — and what is missing is product design, not wiring: pin scope (installation-wide today; per-campaign or per-session is a column and a decision about in-flight sessions), prompt-cache cost (caches are per-model, so alternating pays a cold write each switch), and request-shape drift in the other direction (pre-4.7 models need `budget_tokens` rather than adaptive thinking and accept `temperature`, which Claude 5 rejects — a real compatibility layer in `claude.js`, not a config value).
+
 ## [1.0.0.182] - 2026-08-13 — Claude 5: Opus 5 and Sonnet 5
 
 The gameplay model moves from Claude Opus 4.7 to **Claude Opus 5**, and the cost opt-down from Sonnet 4.6 to **Claude Sonnet 5**. Both were a full generation behind.

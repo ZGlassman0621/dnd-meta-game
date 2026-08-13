@@ -275,6 +275,73 @@
   padding: 0.3rem 0.55rem;
 }
 
+/* === Model update check ===============================================
+   Sits directly under the provider strip and only after an explicit check,
+   so it reads as the answer to a question the player just asked rather than
+   as a permanent piece of chrome. Uses `--danger` for the failure state —
+   promoted to a global token in v1.0.179, which is what makes it available
+   here without re-declaring it. */
+
+.session-setup .model-check {
+  padding: 0.8rem 0.9rem 0.9rem;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+  margin: -0.75rem 0 1.5rem;
+}
+.session-setup .model-check.bad {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  border-left-color: var(--danger);
+}
+.session-setup .model-check .msg {
+  display: block;
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.session-setup .model-check.bad .msg { color: var(--danger); }
+
+.session-setup .model-check .rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+}
+.session-setup .model-check .row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+}
+.session-setup .model-check .row .k {
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  min-width: 3.5rem;
+}
+/* Model IDs are identifiers, so they get the mono face — the point of showing
+   them is that the player can compare two strings character by character. */
+.session-setup .model-check .row .from,
+.session-setup .model-check .row .to {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+}
+.session-setup .model-check .row .from { color: var(--ink-3); }
+.session-setup .model-check .row .to { color: var(--ink); }
+.session-setup .model-check .row .arrow { color: var(--ink-3); }
+.session-setup .model-check .row .btn { margin-left: auto; }
+
 /* === Callouts (continuity, campaign plan) =============================
    The accent-left card idiom from `.campaigns-page .assign` / `.pipeline`. */
 

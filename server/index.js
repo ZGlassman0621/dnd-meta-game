@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { initDatabase } from './database.js';
+import { hydratePins, logStalenessCheck } from './services/modelRegistry.js';
 import characterRoutes from './routes/character.js';
 import nicknameRoutes from './routes/nickname.js';
 import adventureRoutes from './routes/adventure.js';
@@ -59,6 +60,17 @@ app.use(express.static(clientDistPath));
 
 // Initialize database (async for Turso cloud)
 await initDatabase();
+
+// Load any persisted model pins before the first request can be served —
+// awaited, because a turn served with the wrong model is the thing this exists
+// to prevent. It never throws: a missing pin falls back to the shipped default.
+await hydratePins();
+
+// Then ask Anthropic whether a newer model exists. Fire-and-forget on purpose:
+// it is a network call, and the server must not wait on Anthropic being
+// reachable in order to start. Logs only — adopting a new generation can change
+// request semantics, so it is never applied automatically.
+logStalenessCheck();
 
 // Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
 await initNarrativeSystems();
