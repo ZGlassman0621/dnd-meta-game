@@ -45,6 +45,19 @@
   --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 30px rgba(0,0,0,.04);
   --shadow-card: 0 1px 0 rgba(0,0,0,.02), 0 12px 40px rgba(0,0,0,.06);
 
+  /* Danger — promoted out of `.campaigns-page` in v1.0.179, when the session
+     setup screen became the second surface to reference it. Re-picked for
+     paper rather than carried over from the dark shell: #e74c3c scores 3.9:1
+     on #fcfcfa and is illegible; this is 6.4:1.
+
+     `--ok` deliberately did NOT come with it. It still has exactly one
+     consumer (`.campaigns-page`'s pipeline steps and loaded-note), and
+     promoting it alongside its neighbour just because the two read as a pair
+     is the pre-promotion this file's own rule exists to prevent. It moves
+     when a second surface needs it. */
+  --danger: #9c2f27;
+  --danger-soft: #f6ecea;
+
   /* Typography */
   --serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
   --sans: 'Inter', system-ui, -apple-system, sans-serif;

@@ -1,0 +1,680 @@
+/* ============================================================
+ * Session setup screen — converted to the editorial ("paper") aesthetic.
+ *
+ * Phase 4 of the UI unification. Third screen converted, after the dashboard
+ * shell (v1.0.177) and the Campaigns screen (v1.0.178).
+ *
+ * ── Scoping ──────────────────────────────────────────────────────────────
+ * Every selector is scoped under `.session-setup`, the root element of
+ * `SessionSetup.jsx`. Same reasoning as `campaigns.css`: `index.css` (the
+ * 4606-line dark shell that still owns DMSession, CharacterSheet and
+ * CompanionsPage) defines `.form-group` as a bare global class and styles
+ * `label`, `input`, `select`, `textarea`, `select option` and
+ * `select optgroup` by ELEMENT selector. Two classes (0,2,0) outrank a bare
+ * class (0,1,0) and an element (0,0,1), so this file wins without editing
+ * that file, and nothing here can reach an un-converted screen.
+ *
+ * ── Why the root class CHANGED, not just gained a prefix ─────────────────
+ * The old root was `.dm-session-container`, which is shared live with
+ * DMSession, PlayerJournalPage, SessionRewards and CampaignNotesPanel — all
+ * still dark. Keeping it and layering paper on top would have meant either
+ * restyling those four or fighting a dark card background under every rule
+ * here. So `SessionSetup.jsx` now roots on `.session-setup` alone. The
+ * consequence worth knowing: it also drops `.dm-session-container`'s
+ * `height: calc(100vh - 200px)` and `.dm-setup`'s `overflow-y: auto`, so the
+ * long setup form scrolls with the DOCUMENT instead of inside a fixed-height
+ * inner pane. That nested scrollbar was a symptom of the dark card, not a
+ * feature of the screen.
+ *
+ * Those two classes and ~15 others (`.party-preview`, `.character-preview`,
+ * `.setup-form`, `.campaign-module-*`, `.module-*`, `.campaign-length-options`,
+ * `.campaign-option`, `.npc-select*`, `.start-adventure-btn`) had no consumer
+ * outside SessionSetup, so they are now dead in `index.css`. They are left in
+ * place deliberately — index.css stays untouched for the whole conversion, and
+ * the dead blocks come out in one sweep at the end, where the deletion can be
+ * verified against a fully converted client rather than a half-converted one.
+ *
+ * ── Structural vocabulary is duplicated for the THIRD time ───────────────
+ * `.btn` / `.field` / `.label` / `.input` / `.select` / `.textarea` are
+ * re-declared here rather than shared. `campaigns.css` names the exact
+ * trigger this crosses: "when a THIRD screen needs this same `.btn`, that is
+ * the moment to lift the shared subset into a common stylesheet." That is
+ * now true — `.creator-v2`, `.campaigns-page` and `.session-setup` each hold
+ * a copy. Promoting it is a cross-screen refactor that would touch
+ * CampaignsPage in a commit whose job is SessionSetup, so it is deferred to
+ * its own change rather than smuggled into this one.
+ *
+ * ── Full-bleed ───────────────────────────────────────────────────────────
+ * Identical technique and identical trade-off to `.campaigns-page`; see that
+ * file's header for the full argument. `body` is still dark, `.shell-header`
+ * is a paper band over it, and a plain block here would sit as a paper column
+ * with a dark stripe between it and the band. `margin-top:-2.5rem` cancels
+ * the band's `margin-bottom`, `margin-bottom:-2rem` eats `.app`'s bottom
+ * padding, and `min-height:100vh` keeps a dark strip from showing under short
+ * content — at the cost of ~150px of overscroll on a sparse screen. Approved
+ * as the better of the two artefacts.
+ * ============================================================ */
+
+.session-setup {
+  /* Full-bleed paper, flush to the header band above. Mirrors `.campaigns-page`. */
+  margin: -2.5rem -50vw -2rem;
+  padding: 2.5rem calc(50vw - 600px + 2rem) 4rem;
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  min-height: 100vh;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.55;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (max-width: 1280px) {
+  /* Below `.app`'s 1200px content width the calc() inset would go negative. */
+  .session-setup { padding-left: 2rem; padding-right: 2rem; }
+}
+
+/* A setup form is a reading column, not a dashboard. It is capped at the
+   measure token and left-aligned, so its left edge lines up with the shell
+   header's title rather than centring independently of it. */
+.session-setup .page-head,
+.session-setup .party,
+.session-setup .setup { max-width: var(--content-w); }
+
+.session-setup ::selection { background: var(--selection); color: var(--ink); }
+.session-setup button { font: inherit; color: inherit; cursor: pointer; }
+.session-setup button:focus,
+.session-setup input:focus,
+.session-setup select:focus,
+.session-setup textarea:focus { outline: none; }
+
+/* === Page head ======================================================== */
+
+.session-setup .page-head {
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--rule);
+}
+.session-setup .page-head .tools {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+}
+.session-setup .page-head h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 2.25rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* === Buttons ==========================================================
+   Same shape language as `.campaigns-page .btn` and `.creator-v2 .btn`. */
+
+.session-setup .btn {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-2);
+  transition: color .12s, border-color .12s, background .12s;
+}
+.session-setup .btn:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-3); }
+
+.session-setup .btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg-card);
+}
+.session-setup .btn.primary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.session-setup .btn.sm { padding: 0.3rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.12em; }
+.session-setup .btn.lg { padding: 0.8rem 1.9rem; font-size: 0.78rem; letter-spacing: 0.16em; }
+.session-setup .btn.wide { width: 100%; }
+
+.session-setup .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* === Party preview ====================================================
+   Was two tinted cards (orange for the lead, blue for the second). The
+   tints were the dark shell's category colouring; on paper the two are
+   distinguished by order and by a hairline rule, and the second carries an
+   accent left border rather than a second hue. */
+
+.session-setup .party {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+.session-setup .party .who {
+  background: var(--bg-card);
+  padding: 1.1rem 1.25rem 1.2rem;
+}
+.session-setup .party .who .name {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.session-setup .party .who .build {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-top: 0.3rem;
+}
+.session-setup .party .who .hp {
+  font-family: var(--sans);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-top: 0.7rem;
+}
+.session-setup .party .who .hp .v {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  margin-left: 0.4rem;
+}
+
+/* === Provider strip ===================================================
+   The dark version tinted the whole strip purple for Claude and green for
+   Ollama. Provider identity is not a health signal, so the hue is dropped:
+   the strip is neutral chrome and the segmented control carries the one
+   piece of state that is actually actionable — which model is selected. */
+
+.session-setup .provider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.9rem;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  margin-bottom: 1.5rem;
+}
+.session-setup .provider .k {
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.session-setup .provider .v {
+  font-family: var(--serif);
+  font-size: 1rem;
+  color: var(--ink);
+  margin-left: 0.5rem;
+}
+.session-setup .provider .model {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin-left: 0.5rem;
+}
+.session-setup .provider .seg-group {
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+.session-setup .seg {
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--bg-card);
+  color: var(--ink-3);
+  transition: color .12s, border-color .12s, background .12s;
+}
+.session-setup .seg:hover { color: var(--ink); border-color: var(--ink-3); }
+.session-setup .seg.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg-card);
+}
+.session-setup .seg.glyph {
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  padding: 0.3rem 0.55rem;
+}
+
+/* === Callouts (continuity, campaign plan) =============================
+   The accent-left card idiom from `.campaigns-page .assign` / `.pipeline`. */
+
+.session-setup .callout {
+  padding: 1.25rem 1.4rem 1.4rem;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+  margin-bottom: 1.5rem;
+}
+.session-setup .callout h4 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.25rem;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0;
+}
+.session-setup .callout .sub {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin: 0.3rem 0 0;
+}
+.session-setup .callout .foot {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.92rem;
+  color: var(--ink-3);
+  margin: 0.9rem 0 0;
+  text-wrap: pretty;
+}
+
+/* A remembered summary is quoted narrative, so it is set as a pull quote
+   rather than as another tinted box. */
+.session-setup .quote {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  padding: 0 0 0 1rem;
+  margin: 0.9rem 0 0;
+  border-left: 2px solid var(--accent-2);
+  text-wrap: pretty;
+}
+
+/* Continue / New Adventure — a two-up choice, not two buttons. */
+.session-setup .choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+@media (max-width: 640px) {
+  .session-setup .choice { grid-template-columns: 1fr; }
+}
+.session-setup .choice .opt {
+  text-align: left;
+  padding: 0.8rem 0.95rem 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  transition: border-color .12s, background .12s;
+}
+.session-setup .choice .opt:hover { border-color: var(--ink-3); }
+.session-setup .choice .opt.on {
+  border-color: var(--rule);
+  border-left-color: var(--accent);
+  background: var(--bg);
+}
+.session-setup .choice .opt .n {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.session-setup .choice .opt.on .n { color: var(--accent); }
+.session-setup .choice .opt .d {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  margin-top: 0.25rem;
+}
+
+.session-setup .callout .btn.wide { margin-top: 0.75rem; }
+.session-setup > .setup > .btn.wide { margin-bottom: 1.5rem; }
+
+/* Campaign-plan themes */
+.session-setup .chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.session-setup .chip {
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+/* === Campaign summary (read-back when continuing) =====================
+   The k/v idiom from `.campaigns-page .info-grid`, single column because
+   several of its values are editable selects rather than static text. */
+
+.session-setup .summary {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+  padding: 1.25rem 1.4rem 1.4rem;
+  margin-bottom: 1.5rem;
+}
+.session-setup .summary .head {
+  font-family: var(--sans);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.session-setup .summary .row {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.session-setup .summary .row:last-child { border-bottom: none; padding-bottom: 0; }
+.session-setup .summary .row .k {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.3rem;
+}
+.session-setup .summary .row .v {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.session-setup .summary .row .v.quoted { font-style: italic; color: var(--ink-2); }
+
+/* === Forms ============================================================
+   Boxed fields, matching `.campaigns-page`. */
+
+.session-setup .field { margin-bottom: 1.6rem; }
+
+.session-setup .label {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0 0 0.5rem;
+}
+
+.session-setup .help {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-3);
+  margin: 0.4rem 0 0;
+  text-wrap: pretty;
+}
+.session-setup .help.lead { margin: -0.15rem 0 0.6rem; }
+
+.session-setup .input,
+.session-setup .select,
+.session-setup .textarea {
+  font-family: var(--serif);
+  font-size: 1rem;
+  width: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.5rem 0.7rem;
+  transition: border-color .12s;
+}
+/* `background` is restated, not inherited: index.css's
+   `input:focus, select:focus, textarea:focus` sets a translucent white
+   background, and winning only border-color would leave that painting over
+   paper on focus. */
+.session-setup .input:focus,
+.session-setup .select:focus,
+.session-setup .textarea:focus { border-color: var(--accent); background: var(--bg); }
+
+.session-setup .input::placeholder,
+.session-setup .textarea::placeholder { color: var(--ink-3); font-style: italic; }
+
+.session-setup .textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+.session-setup .textarea.spaced { margin-top: 0.5rem; }
+
+.session-setup .select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 9px) 55%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 1.9rem;
+}
+
+/* index.css paints native dropdown items dark by element selector; the popup
+   has to follow the field it belongs to. */
+.session-setup select option { background: var(--bg-card); color: var(--ink); }
+.session-setup select optgroup { background: var(--bg-card); color: var(--ink-3); font-style: normal; }
+
+/* index.css's `input, select, textarea { width: 100% }` catches radios and
+   checkboxes too — that is why the dark stylesheet carried a `width: auto`
+   override on every one of them. Same override, stated once. */
+.session-setup input[type="radio"],
+.session-setup input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* === Campaign module grid ============================================= */
+
+.session-setup .modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.5rem;
+}
+
+.session-setup .module {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.session-setup .module:hover { border-color: var(--rule); border-left-color: var(--ink-3); }
+.session-setup .module.on {
+  background: var(--bg-2);
+  border-color: var(--rule);
+  border-left-color: var(--accent);
+}
+
+/* `module.icon` is content from `campaignModules.js`, not decoration, so it
+   stays. The decorative emoji elsewhere on this screen did not. */
+.session-setup .module .icon { font-size: 1.15rem; line-height: 1.3; flex-shrink: 0; }
+.session-setup .module .body { flex: 1; min-width: 0; }
+.session-setup .module .n {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.session-setup .module.on .n { color: var(--accent); }
+.session-setup .module .lvl,
+.session-setup .module .yr {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-top: 0.25rem;
+}
+.session-setup .module .yr { font-style: italic; }
+
+.session-setup .module-note {
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+  margin-top: 0.75rem;
+}
+.session-setup .module-note .synopsis {
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+  text-wrap: pretty;
+}
+.session-setup .module-note .facts {
+  border-top: 1px solid var(--rule);
+  padding-top: 0.8rem;
+  margin-top: 0.8rem;
+}
+.session-setup .module-note .facts p {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  color: var(--ink-2);
+  margin: 0.25rem 0;
+}
+.session-setup .module-note .facts strong {
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-right: 0.4rem;
+}
+
+/* === Radio / checkbox lists =========================================== */
+
+.session-setup .options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.session-setup .option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  /* index.css styles bare `label` orange, block, 600, with a bottom margin. */
+  color: var(--ink);
+  font-weight: 400;
+  margin-bottom: 0;
+  transition: border-color .12s, background .12s;
+}
+.session-setup .option:hover { border-color: var(--rule); border-left-color: var(--ink-3); }
+.session-setup .option.on {
+  background: var(--bg-2);
+  border-color: var(--rule);
+  border-left-color: var(--accent);
+}
+.session-setup .option .n {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  color: var(--ink);
+}
+.session-setup .option.on .n { color: var(--accent); }
+.session-setup .option .d {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  margin-top: 0.2rem;
+}
+.session-setup .option .text { flex: 1; min-width: 0; }
+
+.session-setup .npcs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* === Alerts =========================================================== */
+
+.session-setup .alert {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 2px;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+}
+
+/* === Begin ============================================================ */
+
+.session-setup .begin {
+  margin-top: 2rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.session-setup .waiting {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--ink-3);
+  margin: 0;
+}

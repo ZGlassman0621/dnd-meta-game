@@ -80,20 +80,18 @@
 .campaigns-page select:focus,
 .campaigns-page textarea:focus { outline: none; }
 
-/* Semantic state colours.
+/* Semantic state colour.
  *
- * Kept as scoped custom properties rather than added to `design-tokens.css`:
- * the editorial palette has no success/danger hue, and inventing two global
- * tokens for one screen is exactly the pre-promotion creator-theme.css warns
- * against. When a second converted screen needs them, they promote.
+ * `--danger` / `--danger-soft` used to be declared here too. They were
+ * promoted to `design-tokens.css` in v1.0.179 on the documented trigger — the
+ * session setup screen became the second surface to reference them — and the
+ * values are unchanged by the move.
  *
- * Both are re-picked for paper, not carried over. The dark screen's #2ecc71
- * scores 1.9:1 on #fcfcfa and #e74c3c 3.9:1 — both illegible. These are
- * 5.5:1 and 6.4:1. */
+ * `--ok` stays scoped because this is still its only consumer. It is
+ * re-picked for paper, not carried over: the dark screen's #2ecc71 scores
+ * 1.9:1 on #fcfcfa and is illegible; this is 5.5:1. */
 .campaigns-page {
   --ok: #1f6f43;
-  --danger: #9c2f27;
-  --danger-soft: #f6ecea;
 }
 
 /* === Page head ======================================================== */

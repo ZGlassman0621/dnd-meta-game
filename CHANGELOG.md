@@ -2,6 +2,60 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.179] - 2026-08-12 — Session setup screen converted to paper
+
+Phase 4 of the UI unification. Third screen converted, after the dashboard shell and Campaigns.
+
+`SessionSetup.jsx` carried roughly forty inline `style={{…}}` objects — the dark-shell palette hardcoded per element, including a hand-rolled segmented control and four different tinted-card recipes. All of it is now `client/src/styles/session-setup.css`, reading from `design-tokens.css`. The component keeps **zero** style objects; every handler, conditional, `required` flag and disabled-predicate is unchanged. 706 → 566 lines, against a 681-line stylesheet.
+
+### The root class changed, and that is the load-bearing decision
+
+The previous root was `.dm-session-container`. That class is shared **live** with DMSession, PlayerJournalPage, SessionRewards and CampaignNotesPanel — all still dark. Keeping it would have meant either restyling those four in a commit scoped to one screen, or fighting a dark card background underneath every rule in the new file. So the component roots on `.session-setup` alone.
+
+Two consequences worth recording:
+
+- It drops `.dm-session-container`'s `height: calc(100vh - 200px)` and `.dm-setup`'s `overflow-y: auto`, so the long setup form now scrolls with the **document** instead of inside a fixed-height inner pane. That nested scrollbar was a symptom of the dark card, not a feature of the screen.
+- `.dm-session-header` / `.back-btn` / `.history-btn` / `.dm-error` are no longer referenced here, but they stay live for the other four components and are untouched.
+
+### Scoping
+
+Every selector requires a `.session-setup` ancestor. Verified in both directions this time, because the inbound direction is the one that bites:
+
+- **Outbound** — no rule in the new file can reach an un-converted screen. Confirmed against the built bundle, not just the source.
+- **Inbound** — `index.css` was grepped for bare-class selectors matching all 40 new class names (`.party`, `.provider`, `.callout`, `.option`, `.module`, `.summary`, `.chip`, `.field`, `.row`, `.head`, `.name`, `.k`, `.v`, …). **Zero collisions.** The only inbound reach is by element selector — `label`, `input`, `select`, `textarea`, `select option`, `select optgroup` — each explicitly overridden.
+
+One element override is easy to miss and carries a comment: index.css's `input, select, textarea { width: 100% }` catches radios and checkboxes too, which is why the dark stylesheet carried a `width: auto` patch on every one of them. It is now stated once, for both input types.
+
+### `--danger` promoted; `--ok` deliberately did not come with it
+
+`campaigns.css` held `--ok`, `--danger` and `--danger-soft` as scoped custom properties with an explicit promotion trigger: *"when a second converted screen needs them, they promote."* The session setup error alert is that second consumer, so `--danger` and `--danger-soft` move to `design-tokens.css` at unchanged values, and the scoped copies come out.
+
+`--ok` stayed behind. It still has exactly one consumer, and promoting it alongside its neighbour purely because the two read as a pair is the pre-promotion `creator-theme.css` warns against. Both files carry a comment explaining the asymmetry so it does not read as an oversight.
+
+### Re-tunes beyond a straight port
+
+- **The provider strip lost its hue.** It tinted itself purple for Claude and green for Ollama. Provider identity is not a health signal, so the strip is neutral chrome and the segmented control carries the one piece of state that is actually actionable — which model is selected.
+- **Decorative emoji are gone** (📜 📝 📍 📅 🎭 ⏱️ 👥 🗺️ 📋 🟣 🟢), replaced by the uppercase-sans `k`/`v` label idiom already used on Campaigns. `module.icon` **stays** — that one is content from `campaignModules.js`, not decoration.
+- Tinted selection fills became the accent-left-border idiom used by `.campaigns-page .entry`, and the remembered-session summary is set as a pull quote rather than as another tinted box.
+- A latent display bug went with the port: `character.race?.charAt(0).toUpperCase() + character.race?.slice(1)` evaluates to `undefined + undefined` → `NaN` and renders the literal text "NaN" for a character with no race or class. A `titleCase` helper returns `''` instead.
+
+### The structural-vocabulary trigger is now crossed — and deliberately not acted on
+
+`campaigns.css` documents the next promotion: *"when a THIRD screen needs this same `.btn`, that is the moment to lift the shared subset into a common stylesheet."* That is now true — `.creator-v2`, `.campaigns-page` and `.session-setup` each hold a copy of `.btn` / `.field` / `.label` / `.input` / `.select` / `.textarea`. Acting on it means editing CampaignsPage inside a commit whose job is SessionSetup, so it is deferred to its own change rather than smuggled into this one. Flagged here so the third copy is a recorded decision, not drift.
+
+### Dead CSS identified, not yet deleted
+
+27 classes in `index.css` now have zero consumers anywhere in `client/src` — `.dm-setup`, `.party-preview`, `.character-preview`, `.hp-display`, `.setup-form`, `.campaign-module-*`, `.module-*`, `.campaign-length-options`, `.campaign-option`, `.npc-select*`, `.start-adventure-btn` and friends. That is **lines 596–790 and 840–918**, roughly 274 lines, confirmed dead by an exhaustive grep over every `.js` and `.jsx` in the client.
+
+They are left in place on purpose. `index.css` stays untouched for the duration of the conversion so that "the dark screens render byte-identically" remains a checkable property at every phase boundary; the dead blocks come out in one sweep at the end, where the deletion can be verified against a fully converted client rather than a half-converted one.
+
+### Verification
+
+- Every selector in `session-setup.css` confirmed scoped, in source and in the **built** bundle. `.session-setup` is rendered by exactly one component.
+- `index.css` untouched. DMSession, CharacterSheet and CompanionsPage render byte-identically.
+- `--danger: #9c2f27` / `--danger-soft: #f6ecea` confirmed on `:root` in the built bundle, `--ok` confirmed still scoped to `.campaigns-page`.
+- Full suite **85/86 files green, 4733 assertions**; the 3 failures are the documented `integration.test.js` 410/404 mismatch, unchanged from v1.0.178. Client builds clean.
+
 ## [1.0.0.178] - 2026-08-12 — Campaigns screen converted to paper
 
 Phase 3 of the UI unification. Second screen converted, after the dashboard shell.

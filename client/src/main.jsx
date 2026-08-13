@@ -9,6 +9,7 @@ import './styles/creator-theme.css'
 // Converted surfaces last, so they win over the dark shell they replace.
 import './styles/shell.css'
 import './styles/campaigns.css'
+import './styles/session-setup.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
