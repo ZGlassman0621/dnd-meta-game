@@ -11,9 +11,8 @@ import { createDMSystemPrompt } from './dmPromptBuilder.js';
 /**
  * Start a new DM session - generates the opening scene
  */
-export async function startSession(character, sessionConfig, model, secondCharacter = null) {
-  const systemPrompt = createDMSystemPrompt(character, sessionConfig, secondCharacter);
-  const isTwoPlayer = !!secondCharacter;
+export async function startSession(character, sessionConfig, model) {
+  const systemPrompt = createDMSystemPrompt(character, sessionConfig);
 
   const char1Name = character.nickname || character.name.split(' ')[0];
 
@@ -151,9 +150,9 @@ ${lastSessionSummary}
 
 CRITICAL - HONOR SPECIFIC PLANS: If the summary mentions ANY specific plans, decisions, or timing the party made (like "agreed to leave at dawn", "planned to depart before sunrise", "decided to meet someone at midnight"), you MUST start the scene at EXACTLY that moment. Do NOT skip past their plans or change the timing they chose. The player made those decisions - respect them.
 
-Pick up the story from where it left off. Do NOT recap the entire previous session - just smoothly continue the narrative from the last situation. Do not have NPCs address the player character${isTwoPlayer ? 's' : ''} by name unless they already know them.${companionReminder}`;
+Pick up the story from where it left off. Do NOT recap the entire previous session - just smoothly continue the narrative from the last situation. Do not have NPCs address the player character by name unless they already know them.${companionReminder}`;
   } else {
-    openingPrompt = perspectivePrefix + (isTwoPlayer || hasCompanions
+    openingPrompt = perspectivePrefix + (hasCompanions
       ? `${campaignFoundationPrompt}Begin the adventure! Set the scene in ${locationDesc}. ${hookContext} Describe where the player is and what they observe. Present an engaging situation or hook. Do not have NPCs address the player characters by name yet.${companionReminder}`
       : `${campaignFoundationPrompt}Begin the adventure! Set the scene in ${locationDesc}. ${hookContext} Describe where the player is and what they observe. Present an engaging situation or hook. Do not have NPCs address the player character by name yet.`);
   }

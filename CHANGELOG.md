@@ -2,6 +2,51 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.181] - 2026-08-13 — Second player character removed
+
+Cut from the MVP on review, because the concept was wrong rather than merely unwanted. The session setup screen offered a field labelled "Second Player Character (Optional)" whose help text read "Add a companion to your adventure" — two different concepts on one control.
+
+It selected **another of your own characters** as a second human-controlled PC. Companions in this game are AI-controlled, live in their own system, and already appeared further down the same screen as "Include Custom NPCs". So the screen offered both and called the wrong one a companion. The second-PC half is gone; AI companions are untouched.
+
+### Removed
+
+- `SessionSetup.jsx` — the picker field, the `secondCharacter` lookup, and the second card in the party preview.
+- `DMSession.jsx` — `secondCharacterId` state, the `secondCharacterId` request field, the `"A & B"` action label, and the "What do you both do?" input placeholder.
+- `App.jsx` / `DMSession.jsx` — the `allCharacters` prop, which existed only to populate the picker.
+- `dmSession.js` — the request field, the second-character row fetch, its two blocking-session guards (active DM session / active time-based adventure), the `secondaryProgression` parallel fetch and its `sessionConfig` entry, and the `"A & B in Location"` session title.
+- `dmPromptBuilder.js` — the `secondCharacter` parameter, `char2`, `isTwoPlayer`, `playerDescription`, the `SECONDARY PLAYER CHARACTER` block, the secondary progression block, and the `TWO-PLAYER NOTE` prompt section.
+- `ollama.js` — the `secondCharacter` parameter and its `isTwoPlayer` pluralisation.
+- Three stale `createDMSystemPrompt(…, null)` third arguments in `server/test-prompt.js` and `tests/progression-prompt.test.js`.
+
+`createDMSystemPrompt` and `ollama.startSession` both lose their trailing parameter. All 30-odd call sites across `server/` and `tests/` were checked; no test asserted on any removed prompt text.
+
+### The database column stays
+
+`dm_sessions.second_character_id` is **not** dropped. It is created in migration 001 and recreated in 014, and CLAUDE.md's migration convention is additive — dropping a column in SQLite means a table rebuild, which is a materially riskier change than this one and belongs on its own. The column is now vestigial and permanently null: it came out of the `INSERT` column list rather than being written a literal null, and the one read path (`DELETE FROM dm_sessions WHERE (character_id = ? OR second_character_id = ?)`) is simplified to match on `character_id` alone.
+
+### Prompt-cache note
+
+`createDMSystemPrompt` builds the three-tier cached system prompt, and the removed `char2.staticText` / `char2.dynamicText` interpolations sat inside tiers 2 and 3. Both `CACHE_BREAK` markers were asserted present and unmoved after the edit, so the tier split is unchanged — but note this shortens tier 2 for every character, so the first turn after deploying re-writes the cache rather than reading it.
+
+### Dead CSS from v1.0.180 and v1.0.179, swept
+
+Two removals' worth of orphaned selectors came out of `session-setup.css` (−102 lines):
+
+- `.modules` / `.module` / `.module-note` and their children — dead since the module picker was deleted in v1.0.180. Should have gone with it; caught by a used-vs-declared audit of the stylesheet against the component.
+- `.input` — dead on arrival in v1.0.179. This screen has never had a free-text input, only selects and textareas; it was copied in with the shared structural vocabulary. The file header now says so explicitly, so it does not get re-added by reflex.
+
+The party-preview comment block described two tinted cards and a second-character accent border. That is now false, so it was rewritten rather than left to mislead — per CLAUDE.md rule 1.
+
+### Verification
+
+- Zero `secondCharacter` / `secondaryProgression` / `isTwoPlayer` references remain in `client/src` or `server/` outside the migrations that define the column.
+- The `INSERT INTO dm_sessions` statement was re-counted by hand after losing a column: 11 columns, 9 placeholders plus 2 literals, 9 bound parameters. This is the failure that would not show up at parse time.
+- Every edit asserted its target text existed exactly once before cutting; every touched server file re-checked with `node --check`.
+- Stylesheet re-audited programmatically for declared-but-unused selectors; the two remaining hits are comment prose, not rules.
+- `npm run lint` byte-identical to baseline (297 problems, 50 errors, 247 warnings). Full suite **85/86 files green, 4733 assertions** — the 3 failures are the documented `integration.test.js` 410/404 mismatch. Client builds clean.
+
+Net −180 lines.
+
 ## [1.0.0.180] - 2026-08-13 — Published campaign modules removed
 
 Cut from the MVP on review. The session setup screen offered 15 published D&D adventures — Curse of Strahd, Tomb of Annihilation, Rime of the Frostmaiden — as a 16-card picker. Every one of them is gone; a custom adventure is the only path.

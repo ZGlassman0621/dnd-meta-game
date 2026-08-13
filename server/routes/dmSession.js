@@ -461,7 +461,6 @@ router.post('/start', async (req, res) => {
   try {
     const {
       characterId,
-      secondCharacterId,
       startingLocation,
       era,
       arrivalHook,
@@ -564,35 +563,6 @@ router.post('/start', async (req, res) => {
         c.spell_slots_used = used;
       } catch (e) {
         console.error(`Error computing companion spell slots for ${c.id}:`, e);
-      }
-    }
-
-    // Get second character if specified
-    let secondCharacter = null;
-    if (secondCharacterId) {
-      secondCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [secondCharacterId]);
-
-      // Check if second character has any blocking sessions
-      const secondCharActive = await dbGet(`
-        SELECT id FROM dm_sessions
-        WHERE character_id = ? AND status = 'active'
-      `, [secondCharacterId]);
-
-      if (secondCharActive) {
-        return res.status(400).json({
-          error: 'Second character already has an active DM session'
-        });
-      }
-
-      const secondCharAdventure = await dbGet(`
-        SELECT id FROM adventures
-        WHERE character_id = ? AND (status = 'active' OR status = 'completed')
-      `, [secondCharacterId]);
-
-      if (secondCharAdventure) {
-        return res.status(400).json({
-          error: 'Second character is currently on a time-based adventure'
-        });
       }
     }
 
@@ -852,7 +822,6 @@ router.post('/start', async (req, res) => {
       chronicleSummariesResult,
       campaignRollupResult,
       progression,
-      secondaryProgression,
       nicknameResolutionsResult
     ] = await Promise.all([
       campaignId
@@ -875,9 +844,6 @@ router.post('/start', async (req, res) => {
         ? getCampaignRollup(campaignId, characterId).catch(e => { console.error('Error chronicle rollup:', e); return null; })
         : Promise.resolve(null),
       getCharacterProgression(characterId).catch(e => { console.error('Error progression primary:', e); return null; }),
-      secondCharacterId
-        ? getCharacterProgression(secondCharacterId).catch(e => { console.error('Error progression secondary:', e); return null; })
-        : Promise.resolve(null),
       (Array.isArray(customNpcs) && customNpcs.length > 0)
         ? resolveNicknamesForNpcBatch(characterId, customNpcs.map(n => n?.id).filter(Boolean)).catch(e => {
             console.error('Error resolving nicknames:', e); return null;
@@ -961,8 +927,7 @@ router.post('/start', async (req, res) => {
       partyBaseContext,
       notorietyContext,
       projectsContext,
-      progression,
-      secondaryProgression
+      progression
     };
 
     // Check which LLM provider is available (respects user preference)
@@ -977,7 +942,7 @@ router.post('/start', async (req, res) => {
     let result;
     if (provider === 'claude') {
       // Use Claude - build system prompt with Ollama's helper, then call Claude
-      const systemPrompt = ollama.createDMSystemPrompt(character, sessionConfig, secondCharacter);
+      const systemPrompt = ollama.createDMSystemPrompt(character, sessionConfig);
 
       // Build opening prompt (simplified version of what Ollama does internally)
       const charName = character.nickname || character.name.split(' ')[0];
@@ -1066,15 +1031,13 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
       };
     } else {
       // Use Ollama
-      result = await ollama.startSession(character, sessionConfig, model, secondCharacter);
+      result = await ollama.startSession(character, sessionConfig, model);
     }
 
     // Create the session in the database
     const locationName = startingLocation?.name || 'Unknown Location';
 
-    const title = secondCharacter
-      ? `${character.nickname || character.name} & ${secondCharacter.nickname || secondCharacter.name} in ${locationName}`
-      : `${character.nickname || character.name} in ${locationName}`;
+    const title = `${character.nickname || character.name} in ${locationName}`;
 
     // Get character's current in-game date for session tracking
     // Prioritize the selected era's year - the player explicitly chose this era for the session
@@ -1116,11 +1079,10 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
     const gameDate = dayToDate(gameStartDay, gameStartYear);
 
     const info = await dbRun(`
-      INSERT INTO dm_sessions (character_id, second_character_id, title, setting, tone, model, status, messages, start_time, session_config, game_start_day, game_start_year)
+      INSERT INTO dm_sessions (character_id, title, setting, tone, model, status, messages, start_time, session_config, game_start_day, game_start_year)
       VALUES (?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), ?, ?, ?)
     `, [
       characterId,
-      secondCharacterId || null,
       title,
       locationName,
       campaignLength || 'ongoing-saga',
@@ -3442,9 +3404,9 @@ router.delete('/character/:characterId/history', async (req, res) => {
     // Only delete completed sessions (not active ones)
     const result = await dbRun(`
       DELETE FROM dm_sessions
-      WHERE (character_id = ? OR second_character_id = ?)
+      WHERE character_id = ?
       AND status = 'completed'
-    `, [characterId, characterId]);
+    `, [characterId]);
 
     res.json({
       success: true,

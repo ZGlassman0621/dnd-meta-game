@@ -15,7 +15,6 @@ const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
 export default function SessionSetup({
   character,
-  allCharacters,
   onBack,
   // LLM status
   llmStatus,
@@ -32,8 +31,6 @@ export default function SessionSetup({
   sessionHistory,
   onShowHistory,
   // Setup state
-  secondCharacterId,
-  onSecondCharacterIdChange,
   startingLocation,
   onStartingLocationChange,
   era,
@@ -56,10 +53,6 @@ export default function SessionSetup({
   isLoading,
   error
 }) {
-  const secondCharacter = secondCharacterId
-    ? allCharacters?.find(c => c.id === secondCharacterId)
-    : null;
-
   return (
     <div className="session-setup">
       <div className="page-head">
@@ -84,18 +77,6 @@ export default function SessionSetup({
             HP<span className="v">{character.current_hp}/{character.max_hp}</span>
           </div>
         </div>
-
-        {secondCharacter && (
-          <div className="who">
-            <div className="name">{secondCharacter.nickname || secondCharacter.name}</div>
-            <div className="build">
-              Level {secondCharacter.level} {titleCase(secondCharacter.race)} {titleCase(secondCharacter.class)}
-            </div>
-            <div className="hp">
-              HP<span className="v">{secondCharacter.current_hp}/{secondCharacter.max_hp}</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {llmStatus === null ? (
@@ -322,28 +303,6 @@ export default function SessionSetup({
           {/* Hidden when continuing an existing campaign or when a campaign plan exists. */}
           {!(continueCampaign && campaignContext?.hasPreviousSessions) && !campaignContext?.campaignPlan && (
           <>
-          {allCharacters && allCharacters.length > 1 && (
-            <div className="field">
-              <label className="label">Second Player Character (Optional)</label>
-              <select
-                className="select"
-                value={secondCharacterId || ''}
-                onChange={(e) => onSecondCharacterIdChange(e.target.value ? parseInt(e.target.value) : null)}
-              >
-                <option value="">Solo Adventure</option>
-                {allCharacters
-                  .filter(c => c.id !== character.id)
-                  .map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.nickname || c.name} - Level {c.level} {c.race} {c.class}
-                    </option>
-                  ))
-                }
-              </select>
-              <p className="help">Add a companion to your adventure</p>
-            </div>
-          )}
-
             <div className="field">
               <label className="label">Where Are You Starting?</label>
               <select

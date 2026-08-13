@@ -342,7 +342,7 @@ console.log('\n=== Test 11: createDMSystemPrompt includes progression when suppl
     campaignNotes: '', characterMemories: '', usedNames: [],
     progression
   };
-  const prompt = createDMSystemPrompt(minimalChar, sessionContext, null);
+  const prompt = createDMSystemPrompt(minimalChar, sessionContext);
   assert(prompt.includes('CHARACTER PROGRESSION LAYER'), 'Progression section appears in full prompt');
   assert(prompt.includes('THEME: Soldier'), 'Theme renders');
   assert(prompt.includes('Military Rank'), 'Unlocked ability renders');
@@ -368,7 +368,7 @@ console.log('\n=== Test 12: createDMSystemPrompt works without progression ===\n
     campaignNotes: '', characterMemories: '', usedNames: [],
     // No progression provided — simulates a character with no theme selected
   };
-  const prompt = createDMSystemPrompt(minimalChar, sessionContext, null);
+  const prompt = createDMSystemPrompt(minimalChar, sessionContext);
   assert(!prompt.includes('CHARACTER PROGRESSION LAYER'), 'No progression section when progression absent');
   assert(prompt.length > 0, 'Prompt still builds successfully');
 }

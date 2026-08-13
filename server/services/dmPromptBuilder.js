@@ -2144,15 +2144,9 @@ ${blocks.join('\n\n')}`;
 /**
  * Generate the system prompt for the DM
  */
-export function createDMSystemPrompt(character, sessionContext, secondCharacter = null) {
-  const char1 = formatCharacterInfo(character, secondCharacter ? 'PRIMARY PLAYER CHARACTER' : 'PLAYER CHARACTER');
-  const char2 = secondCharacter ? formatCharacterInfo(secondCharacter, 'SECONDARY PLAYER CHARACTER') : null;
-
-  const isTwoPlayer = !!secondCharacter;
-  const playerDescription = isTwoPlayer ? 'two players (a party of two adventurers)' : 'a single player';
-  const characterNames = isTwoPlayer
-    ? `${char1.nickname || char1.firstName} and ${char2.nickname || char2.firstName}`
-    : char1.nickname || char1.firstName;
+export function createDMSystemPrompt(character, sessionContext) {
+  const char1 = formatCharacterInfo(character, 'PLAYER CHARACTER');
+  const characterNames = char1.nickname || char1.firstName;
 
   // Build Forgotten Realms context (for custom adventures)
   const location = sessionContext.startingLocation;
@@ -2186,7 +2180,7 @@ export function createDMSystemPrompt(character, sessionContext, secondCharacter 
 ${location ? `- Starting Location: ${location.name} - ${location.description}${location.region ? ` (${location.region})` : ''}${startingLocationRule}` : ''}
 ${era ? `- Era: ${era.years}
 - Historical Context: ${era.loreContext}` : ''}
-${hook ? `- How the character${isTwoPlayer ? 's' : ''} arrived: ${hook.name} - ${hook.description}` : ''}
+${hook ? `- How the character arrived: ${hook.name} - ${hook.description}` : ''}
 ${campaignYear ? `
 === TIMELINE ENFORCEMENT - ABSOLUTELY CRITICAL ===
 The campaign year is ${campaignYear} DR. This is NOT negotiable.
@@ -2244,7 +2238,7 @@ This is a serious immersion-breaking issue if violated. The player chose this er
     ? `\n══════════════ MARKER CORRECTION NEEDED ══════════════\n${pendingCorrections}\n══════════════════════════════════════════════════════\n`
     : '';
 
-  return `You are an expert Dungeon Master running a D&D 5th Edition text adventure for ${playerDescription}. Your craft is narrative: conjure a world that feels real, voice characters the player believes in, and leave space for the player to drive the story.
+  return `You are an expert Dungeon Master running a D&D 5th Edition text adventure for a single player. Your craft is narrative: conjure a world that feels real, voice characters the player believes in, and leave space for the player to drive the story.
 ${correctionBlock}
 ═══════════════════════════════════════════════════════════════
 CARDINAL RULES
@@ -2451,9 +2445,7 @@ Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — s
 When ACTIVE QUESTS are listed, weave them organically — NPC dialogue, environmental clues, overheard rumors. Never tell the player "your quest requires X." Faction NPCs mention progress/setbacks in conversation; conflict quests show both sides through different NPCs. When actions align with objectives, acknowledge narratively.
 
 ──────────── CHARACTER-DEFINING MOMENTS ────────────
-When the player reveals preferences, values, fears, or emotional responses through actions or dialogue, remember them. NPCs react to who the player has shown them to be, not a generic adventurer.${isTwoPlayer ? `
-
-TWO-PLAYER NOTE: Give both characters opportunities to shine based on their unique abilities. When the players submit joint actions, describe how the characters work together.` : ''}
+When the player reveals preferences, values, fears, or emotional responses through actions or dialogue, remember them. NPCs react to who the player has shown them to be, not a generic adventurer.
 
 ═══════════════════════════════════════════════════════════════
 END OF CORE RULES
@@ -2463,13 +2455,12 @@ END OF CORE RULES
 ${worldSettingSection}
 
 ${char1.staticText}
-${char2 ? '\n' + char2.staticText : ''}${formatProgression(sessionContext.progression)}${char2 && sessionContext.secondaryProgression ? formatProgression(sessionContext.secondaryProgression) : ''}
+${formatProgression(sessionContext.progression)}
 
 PLAYER NAME SPELLING:
 The player character's name is exactly "${characterNames}". When the player shares a name or nickname in-game, use their exact spelling. Never paraphrase, "correct", or reinterpret it — and NPCs must use the same exact spelling and pronunciation.
 <!-- CACHE_BREAK:AFTER_CHARACTER -->
 ${char1.dynamicText}
-${char2 ? '\n\n' + char2.dynamicText : ''}
 ${sessionContext.usedNames?.length > 0 ? `\nNAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n` : ''}
 CAMPAIGN STRUCTURE:
 ${pacingGuidance}

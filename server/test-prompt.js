@@ -47,7 +47,7 @@ async function runTest() {
   console.log('\n=== MULTI-NPC PROMPT TEST ===\n');
 
   // Build the system prompt (character, sessionContext, secondCharacter)
-  const systemPrompt = createDMSystemPrompt(testCharacter, testSessionContext, null);
+  const systemPrompt = createDMSystemPrompt(testCharacter, testSessionContext);
 
   // Determine which provider to use
   const usesClaude = claude.isClaudeAvailable();

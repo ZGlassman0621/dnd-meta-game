@@ -35,14 +35,18 @@
  * verified against a fully converted client rather than a half-converted one.
  *
  * ── Structural vocabulary is duplicated for the THIRD time ───────────────
- * `.btn` / `.field` / `.label` / `.input` / `.select` / `.textarea` are
- * re-declared here rather than shared. `campaigns.css` names the exact
- * trigger this crosses: "when a THIRD screen needs this same `.btn`, that is
- * the moment to lift the shared subset into a common stylesheet." That is
- * now true — `.creator-v2`, `.campaigns-page` and `.session-setup` each hold
- * a copy. Promoting it is a cross-screen refactor that would touch
- * CampaignsPage in a commit whose job is SessionSetup, so it is deferred to
- * its own change rather than smuggled into this one.
+ * `.btn` / `.field` / `.label` / `.select` / `.textarea` are re-declared here
+ * rather than shared. `campaigns.css` names the exact trigger this crosses:
+ * "when a THIRD screen needs this same `.btn`, that is the moment to lift the
+ * shared subset into a common stylesheet." That is now true — `.creator-v2`,
+ * `.campaigns-page` and `.session-setup` each hold a copy. Promoting it is a
+ * cross-screen refactor that would touch CampaignsPage in a commit whose job
+ * is this screen, so it is deferred to its own change rather than smuggled in.
+ *
+ * `.input` is deliberately NOT in that list: this screen has no free-text
+ * input, only selects and textareas. It was declared here in v1.0.179 and was
+ * dead on arrival; removed in v1.0.181. It returns with the shared subset if
+ * the promotion above ever happens.
  *
  * ── Full-bleed ───────────────────────────────────────────────────────────
  * Identical technique and identical trade-off to `.campaigns-page`; see that
@@ -150,10 +154,12 @@
 .session-setup .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* === Party preview ====================================================
-   Was two tinted cards (orange for the lead, blue for the second). The
-   tints were the dark shell's category colouring; on paper the two are
-   distinguished by order and by a hairline rule, and the second carries an
-   accent left border rather than a second hue. */
+   One card. It held two until v1.0.181 — a second tinted card for the
+   optional second player character, which was removed as a concept (the
+   party's other members are AI companions, and they are not player
+   characters). The grid stays rather than collapsing to a plain block: it
+   is what gives the single card its hairline frame, and `auto-fit` means it
+   still lays out correctly if the party ever grows again. */
 
 .session-setup .party {
   display: grid;
@@ -452,7 +458,6 @@
 }
 .session-setup .help.lead { margin: -0.15rem 0 0.6rem; }
 
-.session-setup .input,
 .session-setup .select,
 .session-setup .textarea {
   font-family: var(--serif);
@@ -469,11 +474,9 @@
    `input:focus, select:focus, textarea:focus` sets a translucent white
    background, and winning only border-color would leave that painting over
    paper on focus. */
-.session-setup .input:focus,
 .session-setup .select:focus,
 .session-setup .textarea:focus { border-color: var(--accent); background: var(--bg); }
 
-.session-setup .input::placeholder,
 .session-setup .textarea::placeholder { color: var(--ink-3); font-style: italic; }
 
 .session-setup .textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
@@ -504,93 +507,6 @@
   padding: 0;
   accent-color: var(--accent);
   flex-shrink: 0;
-}
-
-/* === Campaign module grid ============================================= */
-
-.session-setup .modules {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 0.5rem;
-}
-
-.session-setup .module {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
-  padding: 0.8rem 0.9rem;
-  background: var(--bg-card);
-  border: 1px solid var(--rule-soft);
-  border-left: 3px solid transparent;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: border-color .12s, background .12s;
-}
-.session-setup .module:hover { border-color: var(--rule); border-left-color: var(--ink-3); }
-.session-setup .module.on {
-  background: var(--bg-2);
-  border-color: var(--rule);
-  border-left-color: var(--accent);
-}
-
-/* `module.icon` is content from `campaignModules.js`, not decoration, so it
-   stays. The decorative emoji elsewhere on this screen did not. */
-.session-setup .module .icon { font-size: 1.15rem; line-height: 1.3; flex-shrink: 0; }
-.session-setup .module .body { flex: 1; min-width: 0; }
-.session-setup .module .n {
-  display: block;
-  font-family: var(--serif);
-  font-size: 1.02rem;
-  line-height: 1.25;
-  color: var(--ink);
-}
-.session-setup .module.on .n { color: var(--accent); }
-.session-setup .module .lvl,
-.session-setup .module .yr {
-  display: block;
-  font-family: var(--sans);
-  font-size: 0.66rem;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  margin-top: 0.25rem;
-}
-.session-setup .module .yr { font-style: italic; }
-
-.session-setup .module-note {
-  padding: 1rem 1.1rem 1.1rem;
-  background: var(--bg-2);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--accent);
-  border-radius: 2px;
-  margin-top: 0.75rem;
-}
-.session-setup .module-note .synopsis {
-  font-family: var(--serif);
-  font-size: 1rem;
-  line-height: 1.6;
-  color: var(--ink-2);
-  margin: 0;
-  text-wrap: pretty;
-}
-.session-setup .module-note .facts {
-  border-top: 1px solid var(--rule);
-  padding-top: 0.8rem;
-  margin-top: 0.8rem;
-}
-.session-setup .module-note .facts p {
-  font-family: var(--serif);
-  font-size: 0.95rem;
-  color: var(--ink-2);
-  margin: 0.25rem 0;
-}
-.session-setup .module-note .facts strong {
-  font-family: var(--sans);
-  font-size: 0.62rem;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  margin-right: 0.4rem;
 }
 
 /* === Radio / checkbox lists =========================================== */

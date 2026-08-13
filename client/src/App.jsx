@@ -433,7 +433,6 @@ function App() {
       ) : activeView === 'showDMSession' && selectedCharacter ? (
         <DMSession
           character={selectedCharacter}
-          allCharacters={characters}
           onBack={goHome}
           onCharacterUpdated={handleCharacterUpdated}
         />

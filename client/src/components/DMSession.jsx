@@ -24,7 +24,7 @@ import { useMerchantShop } from '../hooks/useMerchantShop';
 // Default model for D&D sessions (used when Ollama is the provider)
 const DEFAULT_MODEL = 'gpt-oss:20b';
 
-export default function DMSession({ character, allCharacters, onBack, onCharacterUpdated }) {
+export default function DMSession({ character, onBack, onCharacterUpdated }) {
   const [llmStatus, setLlmStatus] = useState(null);
   const [providerPreference, setProviderPreference] = useState('auto'); // 'auto' | 'claude' | 'ollama'
   // Sonnet vs Opus selector. Opus is the production default (v1.0.99 — see
@@ -48,12 +48,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   const [customArrivalHook, setCustomArrivalHook] = useState('');
   const [customConcepts, setCustomConcepts] = useState('');
   const [campaignLength, setCampaignLength] = useState('ongoing-saga');
-
-  // Second player character (optional)
-  const [secondCharacterId, setSecondCharacterId] = useState(null);
-  const secondCharacter = secondCharacterId
-    ? allCharacters?.find(c => c.id === secondCharacterId)
-    : null;
 
   // Custom NPCs for campaign
   const [availableNpcs, setAvailableNpcs] = useState([]);
@@ -646,7 +640,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           characterId: character.id,
-          secondCharacterId: secondCharacterId || null,
           // Custom adventure config
           startingLocation: locationData || null,
           era: eraData || null,
@@ -2990,9 +2983,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
             <div key={idx} className={`dm-message ${msg.type}`}>
               {msg.type === 'action' && (
                 <span className="action-label">
-                  {secondCharacter
-                    ? `${character.nickname || character.name} & ${secondCharacter.nickname || secondCharacter.name}`
-                    : character.nickname || character.name}:
+                  {character.nickname || character.name}:
                 </span>
               )}
               {msg.type === 'summary' && <span className="summary-label">Adventure Summary:</span>}
@@ -3115,7 +3106,7 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
                 }
               }
             }}
-            placeholder={secondCharacter ? "What do you both do? (Shift+Enter for new line)" : "What do you do? (Shift+Enter for new line)"}
+            placeholder="What do you do? (Shift+Enter for new line)"
             disabled={isLoading}
             autoFocus
             rows={3}
@@ -3136,7 +3127,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
   return (
     <SessionSetup
       character={character}
-      allCharacters={allCharacters}
       onBack={onBack}
       llmStatus={llmStatus}
       providerPreference={providerPreference}
@@ -3149,8 +3139,6 @@ export default function DMSession({ character, allCharacters, onBack, onCharacte
       onContinueCampaignChange={setContinueCampaign}
       sessionHistory={sessionHistory}
       onShowHistory={() => setShowHistory(true)}
-      secondCharacterId={secondCharacterId}
-      onSecondCharacterIdChange={setSecondCharacterId}
       startingLocation={startingLocation}
       onStartingLocationChange={setStartingLocation}
       era={era}
