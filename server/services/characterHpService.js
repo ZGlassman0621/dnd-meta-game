@@ -40,7 +40,7 @@ export async function applyHpChange(characterId, delta, reason = null) {
   if (!Number.isFinite(delta) || delta === 0) return null;
 
   const before = await dbGet(
-    'SELECT id, name, current_hp, max_hp, is_unconscious, is_dead, death_save_successes, death_save_failures FROM characters WHERE id = ?',
+    'SELECT id, name, current_hp, max_hp, COALESCE(temp_hp, 0) as temp_hp, is_unconscious, is_dead, death_save_successes, death_save_failures FROM characters WHERE id = ?',
     [characterId]
   );
   if (!before) return null;
@@ -53,19 +53,28 @@ export async function applyHpChange(characterId, delta, reason = null) {
       applied: false,
       reason: 'character_is_dead',
       currentHp: before.current_hp,
-      maxHp: before.max_hp
+      maxHp: before.max_hp,
+      tempHp: before.temp_hp || 0
     };
   }
 
+  const d = Math.trunc(delta);
+  // Temp HP (D&D 2024): damage hits temp HP first, then regular HP.
+  // Healing does not restore temp HP. Single atomic UPDATE.
+  // COALESCE handles NULL temp_hp (pre-migration rows or fixtures that don't set it).
   await dbRun(
     `UPDATE characters
-        SET current_hp = MAX(0, MIN(max_hp, current_hp + ?))
+        SET temp_hp = CASE WHEN ? < 0 THEN MAX(0, COALESCE(temp_hp, 0) + ?) ELSE COALESCE(temp_hp, 0) END,
+            current_hp = CASE
+              WHEN ? < 0 THEN MAX(0, current_hp - MAX(0, -? - COALESCE(temp_hp, 0)))
+              ELSE MAX(0, MIN(max_hp, current_hp + ?))
+            END
       WHERE id = ?`,
-    [Math.trunc(delta), characterId]
+    [d, d, d, d, d, characterId]
   );
 
   const after = await dbGet(
-    'SELECT current_hp, max_hp FROM characters WHERE id = ?',
+    'SELECT current_hp, max_hp, temp_hp FROM characters WHERE id = ?',
     [characterId]
   );
 
@@ -89,6 +98,19 @@ export async function applyHpChange(characterId, delta, reason = null) {
     );
   }
 
+  // Combat Pipeline #4: Concentration check on HP damage (not temp HP damage).
+  // Per D&D 2024: DC 10 or half HP damage taken, whichever is higher.
+  let concentrationCheck = null;
+  const hpDamage = before.current_hp - after.current_hp;
+  if (hpDamage > 0 && !droppedToZero) {
+    try {
+      const { checkConcentration } = await import('./concentrationService.js');
+      concentrationCheck = await checkConcentration(characterId, hpDamage);
+    } catch (e) {
+      console.error('[characterHpService] Concentration check failed:', e.message);
+    }
+  }
+
   return {
     type: 'hp_change',
     applied: true,
@@ -98,10 +120,31 @@ export async function applyHpChange(characterId, delta, reason = null) {
     previousHp: before.current_hp,
     currentHp: after.current_hp,
     maxHp: after.max_hp,
+    tempHp: after.temp_hp || 0,
+    previousTempHp: before.temp_hp || 0,
     droppedToZero,
     roseAboveZero,
-    isUnconscious: droppedToZero ? true : roseAboveZero ? false : Boolean(before.is_unconscious)
+    isUnconscious: droppedToZero ? true : roseAboveZero ? false : Boolean(before.is_unconscious),
+    concentrationCheck
   };
+}
+
+/**
+ * Grant temporary HP (D&D 2024: does not stack, take the higher).
+ * @param {number} characterId
+ * @param {number} amount - Must be positive.
+ * @returns {Promise<object|null>}
+ */
+export async function gainTempHp(characterId, amount) {
+  if (!characterId) return null;
+  const amt = Math.trunc(amount);
+  if (!Number.isFinite(amt) || amt <= 0) return null;
+  await dbRun(
+    `UPDATE characters SET temp_hp = MAX(COALESCE(temp_hp, 0), ?) WHERE id = ?`,
+    [amt, characterId]
+  );
+  const after = await dbGet('SELECT COALESCE(temp_hp, 0) as temp_hp FROM characters WHERE id = ?', [characterId]);
+  return { type: 'temp_hp', characterId, amount: amt, tempHp: after?.temp_hp || 0 };
 }
 
 /**
@@ -212,4 +255,6 @@ registerMarkerHandler('HP_CHANGE', async (parsed, context) => {
   return applyHpChange(context.characterId, delta, parsed?.reason || null);
 });
 
-export default { applyHpChange, rollDeathSave, getHpState };
+export default { applyHpChange, rollDeathSave, getHpState, gainTempHp };
+// Note: concentration checks hook in via dynamic import to avoid circular deps.
+// See applyHpChange return value: concentrationCheck field when damage breaks concentration.

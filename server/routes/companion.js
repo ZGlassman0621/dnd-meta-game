@@ -1374,6 +1374,20 @@ router.post('/:id/unequip', async (req, res) => {
   }
 });
 
+// ---- Retired Phase 8/9 endpoints (410 Gone) ----
+// give-item / take-item / merchant-transaction were retired in the M1
+// inventory unification: companion inventory now flows through the equip /
+// unequip routes and the party inventory system. These stubs exist so old
+// clients get an explicit "gone, update your client" instead of a bare 404.
+for (const retiredPath of ['give-item', 'take-item', 'merchant-transaction']) {
+  router.post(`/:id/${retiredPath}`, (req, res) => {
+    res.status(410).json({
+      error: `POST /api/companion/:id/${retiredPath} was retired; use the equip/unequip and party inventory endpoints instead`,
+      code: 'ENDPOINT_RETIRED'
+    });
+  });
+}
+
 // Dismiss companion - removes from party and makes NPC available for re-recruitment
 router.post('/:id/dismiss', async (req, res) => {
   try {

@@ -52,6 +52,30 @@ export function getModelLimits(model) {
 export const MAX_CHRONICLE_BUDGET = 20000;
 
 /**
+ * Render-time caps for append-only character text. campaign_notes and
+ * character_memories grow without bound on disk (by design — full history
+ * is kept); these bound only what the AI sees per session. Both logs
+ * append newest-last, so the tail is the highest-value slice.
+ */
+export const MAX_NOTES_TOKENS = 4000;
+export const MAX_MEMORIES_TOKENS = 2000;
+
+/**
+ * Slice the tail of a long text to a token budget, cutting at a line
+ * boundary so we never start mid-line. Prepends an omission marker when
+ * truncation occurs so the reader knows older entries exist but aren't shown.
+ */
+export function sliceTailByTokens(text, tokenBudget) {
+  if (!text) return '';
+  if (estimateTokens(text) <= tokenBudget) return text;
+  const maxChars = tokenBudget * 4;
+  let start = text.length - maxChars;
+  const newlineIdx = text.indexOf('\n', start);
+  if (newlineIdx !== -1) start = newlineIdx + 1;
+  return `[earlier entries omitted \u2014 showing the most recent ~${tokenBudget} tokens]\n` + text.slice(start);
+}
+
+/**
  * Calculate adaptive chronicle budget based on remaining context space
  *
  * @param {number} systemPromptTokens - Estimated tokens in system prompt
@@ -218,5 +242,9 @@ export default {
   getModelLimits,
   calculateChronicleBudget,
   shouldCompress,
-  compressMessageHistory
+  compressMessageHistory,
+  sliceTailByTokens,
+  MAX_CHRONICLE_BUDGET,
+  MAX_NOTES_TOKENS,
+  MAX_MEMORIES_TOKENS
 };

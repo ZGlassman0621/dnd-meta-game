@@ -243,7 +243,11 @@ console.log('\n=== Test 8: Session Start Config Wiring ===\n');
 
 {
   const routeSource = readSource('server/routes/dmSession.js');
-  assert(routeSource.includes("characterMemories: character.character_memories || ''"), 'Session config includes characterMemories');
+  // P1-C: memories are budget-sliced at render time (sliceTailByTokens)
+  // before reaching sessionConfig — assert the sliced wiring, not the
+  // old full-render form.
+  assert(routeSource.includes('sliceTailByTokens(character.character_memories'), 'Session config slices characterMemories via sliceTailByTokens');
+  assert(routeSource.includes('characterMemories,'), 'Session config includes characterMemories');
 }
 
 // ===== 9. API ENDPOINT =====

@@ -63,6 +63,25 @@ function assert(condition, message) {
   }
 }
 
+// ===== Per-section timing =====
+// Temporary instrumentation (2026-10-16): integration.test.js takes ~50s while
+// every other file finishes in <2s. Each group is timed; the slowest are
+// printed at the end so the bottleneck can be found and fixed.
+const sectionTimes = [];
+let sectionStart = 0;
+let sectionName = '';
+function beginSection(name) {
+  const now = Date.now();
+  if (sectionName) sectionTimes.push({ name: sectionName, ms: now - sectionStart });
+  sectionName = name;
+  sectionStart = now;
+  console.log(`\n=== ${name} ===`);
+}
+function endSections() {
+  if (sectionName) sectionTimes.push({ name: sectionName, ms: Date.now() - sectionStart });
+  sectionName = '';
+}
+
 function parseJSON(val) {
   if (typeof val === 'string') {
     try { return JSON.parse(val); } catch { return val; }
@@ -528,9 +547,13 @@ async function testMerchantIdempotent() {
 
 async function testMerchantBuy() {
   console.log('\n  -- Merchant Buy --');
-  // Reset character state
+  // Reset character state. The budget is deliberately generous: merchant
+  // inventory is randomly generated and inventory[0] can cost up to ~12kgp
+  // (rare armor x economy modifiers), so a tight 500gp budget made this test
+  // fail intermittently with "Not enough gold". The insufficient-gold path
+  // is covered separately by testMerchantInsufficientGold.
   await api('PUT', `/api/character/${testCharId}`, {
-    gold_gp: 500, gold_sp: 0, gold_cp: 0,
+    gold_gp: 100000, gold_sp: 0, gold_cp: 0,
     inventory: JSON.stringify([])
   });
 
@@ -559,7 +582,7 @@ async function testMerchantBuy() {
   assert(body.success === true, 'Transaction success');
   assert(Array.isArray(body.changes) && body.changes.length > 0, 'Has changes array');
   assert(body.changes[0].toLowerCase().includes('bought'), 'Change describes a purchase');
-  assert(body.newGold.gp < 500, `Gold decreased from 500 to ${body.newGold.gp}`);
+  assert(body.newGold.gp < 100000, `Gold decreased from 100000 to ${body.newGold.gp}`);
 
   // Verify item in character inventory via DB
   const dbChar = await dbGet('SELECT inventory FROM characters WHERE id = ?', [testCharId]);
@@ -3237,7 +3260,7 @@ async function runTests() {
     console.log('Starting test server...\n');
     await startServer();
 
-    console.log('\n=== Group 1: Character CRUD & Inventory ===');
+    beginSection('Group 1: Character CRUD & Inventory');
     await testCreateCharacter();
     await testGetCharacter();
     await testUpdateCharacter();
@@ -3246,21 +3269,21 @@ async function runTests() {
     await testDiscardItemNotFound();
     await testLongRest();
 
-    console.log('\n=== Group 2: Campaign Management ===');
+    beginSection('Group 2: Campaign Management');
     await testCreateCampaign();
     await testGetCampaign();
     await testAssignCharacter();
     await testCharacterCampaignLink();
     await testCampaignCharacters();
 
-    console.log('\n=== Group 3: DM Session Infrastructure ===');
+    beginSection('Group 3: DM Session Infrastructure');
     await testCampaignContext();
     await testItemRarityLookup();
     await testItemRarityUnknown();
     await testLlmStatus();
     await testSeasonalStartDay();
 
-    console.log('\n=== Group 4: Merchant System ===');
+    beginSection('Group 4: Merchant System');
     await seedTestSession();
     await testGenerateMerchantInventory();
     await testListMerchants();
@@ -3268,25 +3291,25 @@ async function runTests() {
     await testMerchantBuy();
     await testMerchantInsufficientGold();
 
-    console.log('\n=== Group 5: Side Panel Data Round-Trip ===');
+    beginSection('Group 5: Side Panel Data Round-Trip');
     await testSidePanelData();
 
-    console.log('\n=== Group 6: Player Journal ===');
+    beginSection('Group 6: Player Journal');
     await testJournalEndpoint();
     await testJournalNotFound();
     await testJournalNoCampaign();
 
-    console.log('\n=== Group 7: Rest Narrative & Conditions ===');
+    beginSection('Group 7: Rest Narrative & Conditions');
     await testRestNarrativeEndpoint();
     await testRestNarrativeNotFound();
     await testRestNarrativeBadRequest();
     await testMessageWithConditions();
 
-    console.log('\n=== Group 8: Edge Cases ===');
+    beginSection('Group 8: Edge Cases');
     await testNonexistentCharacter();
     await testHealthCheck();
 
-    console.log('\n=== Group 9: DM Mode (Party CRUD) ===');
+    beginSection('Group 9: DM Mode (Party CRUD)');
     await testDmModeListPartiesEmpty();
     await testDmModeCreatePartyDirect();
     await testDmModeGetParty();
@@ -3297,7 +3320,7 @@ async function runTests() {
     await testDmModeRetireParty();
     await testDmModeGetPartyNotFound();
 
-    console.log('\n=== Group 10: Progression System ===');
+    beginSection('Group 10: Progression System');
     await testProgressionListThemes();
     await testProgressionGetThemeById();
     await testProgressionGetThemeNotFound();
@@ -3317,7 +3340,7 @@ async function runTests() {
     await testLevelUpRejectsInvalidAncestryFeatId();
     await testCreateKnightInitializesMoralPath();
 
-    console.log('\n=== Group 11: Companion Progression (Phase 5.5) ===');
+    beginSection('Group 11: Companion Progression (Phase 5.5)');
     await testCompanionRecruitAutoAssignsThemeAndAncestryFeat();
     await testCompanionRaceNormalizationSkipsUnmapped();
     await testCompanionLevelUpTriggersThemeTierUnlock();
@@ -3325,7 +3348,7 @@ async function runTests() {
     await testCompanionProgressionEndpoint();
     await testCompanionLevelUpLazyBackfill();
 
-    console.log('\n=== Group 12: Companion Rest + Spell Slots (Phase 6) ===');
+    beginSection('Group 12: Companion Rest + Spell Slots (Phase 6)');
     await testCompanionSpellSlotsForCaster();
     await testCompanionSpellSlotsForNonCaster();
     await testCompanionUseAndRestoreSlot();
@@ -3335,7 +3358,7 @@ async function runTests() {
     await testCompanionShortRestWarlockSlots();
     await testCompanionSpellSlotRejectsNpcStatsCompanion();
 
-    console.log('\n=== Group 13: Companion Combat Safety (Phase 7) ===');
+    beginSection('Group 13: Companion Combat Safety (Phase 7)');
     await testCompanionConditionsInitialState();
     await testCompanionConditionAddRemove();
     await testCompanionExhaustionMutuallyExclusive();
@@ -3350,7 +3373,7 @@ async function runTests() {
     await testCompanionStabilizeEndpoint();
     await testCompanionLongRestResetsDeathSaves();
 
-    console.log('\n=== Group 14: Party Inventory + Equip/Unequip (M1) ===');
+    beginSection('Group 14: Party Inventory + Equip/Unequip (M1)');
     await testM1RetiredEndpointsReturn410();
     await testM1EquipItemFromPartyPool();
     await testM1EquipReturnsPreviousItemToPool();
@@ -3360,7 +3383,7 @@ async function runTests() {
     await testM1UnequipRejectsEmptySlot();
     await testM1RecruitStartsCompanionWithEmptyCarry();
 
-    console.log('\n=== Group 16: Companion Multiclass (Phase 10) ===');
+    beginSection('Group 16: Companion Multiclass (Phase 10)');
     await testCompanionRecruitSeedsClassLevels();
     await testCompanionLevelUpAdvancesPrimary();
     await testCompanionLevelUpMulticlassAdd();
@@ -3368,7 +3391,7 @@ async function runTests() {
     await testCompanionMulticlassSpellSlots();
     await testCompanionLevelUpInfoExposesClassLevels();
 
-    console.log('\n=== Group 17: Merchant Commissions (M2) ===');
+    beginSection('Group 17: Merchant Commissions (M2)');
     await testPlaceCommissionHappyPath();
     await testCommissionRejectsInsufficientDeposit();
     await testCommissionRejectsBadInput();
@@ -3378,7 +3401,7 @@ async function runTests() {
     await testCancelOrderForfeitsDeposit();
     await testListOrdersForCharacter();
 
-    console.log('\n=== Group 18: Merchant Bargaining / Haggle (M3) ===');
+    beginSection('Group 18: Merchant Bargaining / Haggle (M3)');
     await testHaggleHappyPath();
     await testHaggleFailure();
     await testHaggleCriticalFail();
@@ -3389,14 +3412,14 @@ async function runTests() {
     await testHaggleDiscountAppliesToTransaction();
     await testHaggleDiscountClampedServerSide();
 
-    console.log('\n=== Group 19: Merchant Relationships (M4) ===');
+    beginSection('Group 19: Merchant Relationships (M4)');
     await testRelationshipsEmptyByDefault();
     await testRelationshipAppearsAfterTransaction();
     await testRelationshipNotesUpsert();
     await testRelationshipFavoritesSortFirst();
     await testRelationshipRequiresCharacterId();
 
-    console.log('\n=== Group 20: Fortress Base Refactor (F1) ===');
+    beginSection('Group 20: Fortress Base Refactor (F1)');
     await testCreateBaseWithCategorySubtype();
     await testCreateBaseRejectsMismatch();
     await testMultipleBasesSupported();
@@ -3407,7 +3430,7 @@ async function runTests() {
     await testAvailableBuildingsEndpoint();
     await testRemoveBuildingStripsPerk();
 
-    console.log('\n=== Group 21: Base Garrison + Defense (F2) ===');
+    beginSection('Group 21: Base Garrison + Defense (F2)');
     await testSubtypeDefenseBonus();
     await testCompletedBuildingRaisesDefense();
     await testAssignAndUnassignOfficer();
@@ -3415,7 +3438,7 @@ async function runTests() {
     await testOfficerRejectsDuplicateAssignment();
     await testDemolishRemovesDefense();
 
-    console.log('\n=== Group 22: Base Threats / Raids / Sieges (F3) ===');
+    beginSection('Group 22: Base Threats / Raids / Sieges (F3)');
     await testListThreatsEmpty();
     await testCreateAndListThreat();
     await testDefendFlowTransitions();
@@ -3432,6 +3455,13 @@ async function runTests() {
   } finally {
     await cleanup();
     await stopServer();
+    endSections();
+    const slowest = [...sectionTimes].sort((a, b) => b.ms - a.ms).slice(0, 12);
+    const measured = sectionTimes.reduce((a, s) => a + s.ms, 0);
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`Slowest sections (of ${sectionTimes.length}, ${measured}ms measured):`);
+    for (const s of slowest) console.log(`  ${String(s.ms).padStart(6)}ms  ${s.name}`);
+    console.log(`${'='.repeat(50)}\n`);
     console.log(`\n${'='.repeat(50)}`);
     console.log(`Results: ${passed} passed, ${failed} failed`);
     console.log('='.repeat(50));

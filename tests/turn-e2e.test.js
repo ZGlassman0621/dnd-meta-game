@@ -147,7 +147,12 @@ async function run() {
     const afterBad = await readSession(f2.sessionId)
     const cfg = safeParse(afterBad.session_config, {})
     assert(!!cfg.pendingMarkerCorrections, 'a malformed marker stashes a correction on session_config')
-    assert(/HP_CHANGE/.test(cfg.pendingMarkerCorrections), 'the correction names the offending marker')
+    // P1-G: pendingMarkerCorrections is now an array of retry entries, not a
+    // plain string — check the entry text, which names the offending marker.
+    const pendingText = Array.isArray(cfg.pendingMarkerCorrections)
+      ? cfg.pendingMarkerCorrections.map(e => e.text).join('\n')
+      : cfg.pendingMarkerCorrections
+    assert(/HP_CHANGE/.test(pendingText), 'the correction names the offending marker')
 
     const hpUnchanged = await dbGet('SELECT current_hp FROM characters WHERE id = ?', [f2.characterId])
     assertEqual(hpUnchanged.current_hp, 30, 'a marker that fails validation drives no side effect')

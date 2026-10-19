@@ -124,19 +124,14 @@ export async function onStoryThreadResolved(thread, characterId, resolution) {
  * @returns {object} Narrative context to include in session
  */
 export async function getNarrativeContextForSession(characterId, campaignId = null) {
-  // Get pending items from narrative queue
-  const pendingItems = await narrativeQueueService.getPendingItems(
-    campaignId,
-    characterId,
-    { limit: 10 }
-  );
-
-  // Format for AI context
-  const narrativeContext = narrativeQueueService.formatForAIContext(pendingItems);
+  // formatForAIContext(characterId, limit) fetches the next pending batch
+  // (expiring stale items) and formats it for the prompt in one call.
+  const narrativeContext = await narrativeQueueService.formatForAIContext(characterId, 10);
+  const pendingItems = narrativeContext ? narrativeContext.items : [];
 
   return {
     narrativeQueueItems: pendingItems,
-    formattedContext: narrativeContext,
+    formattedContext: narrativeContext ? narrativeContext.formatted : null,
     itemCount: pendingItems.length
   };
 }

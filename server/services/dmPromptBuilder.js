@@ -9,6 +9,8 @@
 import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
 import { formatFactionStandingFragment } from './factionService.js';
 import { safeParse } from '../utils/safeParse.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
+import { renderFeatEffectsForPrompt } from '../data/featRegistry.js';
 
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
@@ -170,59 +172,15 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     weaponStr = `${qualityPrefix}${w.name} (+${w.attackBonus} to hit, ${w.damage} ${w.damageType})`;
   }
 
-  // Build feats section with mechanical effects for DM awareness
+  // Build feats section with mechanical effects for DM awareness.
+  // Feat effects come from the data-driven registry (server/data/featRegistry.js),
+  // which covers core 5e feats and homebrew rulesets (e.g., Manual of Martial Mastery).
   let featsSection = '';
   if (feats.length > 0) {
     featsSection = `\n- Feats: ${feats.join(', ')}`;
-    // Add important mechanical notes for common feats
-    const featEffects = [];
-    feats.forEach(feat => {
-      const featLower = feat.toLowerCase().replace(/_/g, ' ');
-      if (featLower.includes('dungeon delver')) {
-        featEffects.push('Dungeon Delver: Advantage on Perception/Investigation to detect secret doors; advantage on saves vs traps; resistance to trap damage');
-      }
-      if (featLower.includes('alert')) {
-        featEffects.push('Alert: +5 initiative; cannot be surprised; hidden creatures do not gain advantage');
-      }
-      if (featLower.includes('observant')) {
-        featEffects.push('Observant: +5 passive Perception and Investigation; can read lips');
-      }
-      if (featLower.includes('lucky')) {
-        featEffects.push('Lucky: 3 luck points to reroll d20s per long rest');
-      }
-      if (featLower.includes('sentinel')) {
-        featEffects.push('Sentinel: Opportunity attacks reduce speed to 0; can attack when ally is attacked');
-      }
-      if (featLower.includes('sharpshooter')) {
-        featEffects.push('Sharpshooter: No disadvantage at long range; ignore cover; can take -5 to hit for +10 damage');
-      }
-      if (featLower.includes('great weapon master')) {
-        featEffects.push('Great Weapon Master: Bonus action attack on crit/kill; can take -5 to hit for +10 damage');
-      }
-      if (featLower.includes('polearm master')) {
-        featEffects.push('Polearm Master: Bonus action d4 attack; opportunity attacks when enemies enter reach');
-      }
-      if (featLower.includes('war caster')) {
-        featEffects.push('War Caster: Advantage on concentration saves; can cast spells as opportunity attacks');
-      }
-      if (featLower.includes('mobile')) {
-        featEffects.push('Mobile: +10 speed; no opportunity attacks from creatures you attack');
-      }
-      if (featLower.includes('resilient')) {
-        featEffects.push('Resilient: Proficiency in one saving throw');
-      }
-      if (featLower.includes('skulker')) {
-        featEffects.push('Skulker: Can hide when lightly obscured; missed ranged attacks do not reveal position');
-      }
-      if (featLower.includes('mage slayer')) {
-        featEffects.push('Mage Slayer: Reaction attack when adjacent creature casts spell; targets have disadvantage on concentration');
-      }
-      if (featLower.includes('savage attacker')) {
-        featEffects.push('Savage Attacker: Reroll melee weapon damage once per turn');
-      }
-    });
-    if (featEffects.length > 0) {
-      featsSection += `\n  FEAT EFFECTS (apply these in relevant situations):\n  ${featEffects.join('\n  ')}`;
+    const rendered = renderFeatEffectsForPrompt(feats);
+    if (rendered) {
+      featsSection += `\n  ${rendered}`;
     }
   }
 
@@ -1773,15 +1731,24 @@ When roleplaying NPCs, differentiate them through speech patterns:
         }
       }
 
-      // Absence annotation — helps AI roleplay appropriate warmth/unfamiliarity
+      // Absence annotation — helps AI roleplay appropriate warmth/unfamiliarity.
+      // P4-E: the "may have cooled" / "may not remember well" qualifiers imply
+      // mechanical decay that only happens when NPC_AGING is on
+      // (processAbsenceEffects). With the flag off, stored dispositions never
+      // change, so those qualifiers would tell the AI things the DB
+      // contradicts. Gate them; the neutral day-count and last-seen stay.
       if (worldState.currentGameDay && r.last_interaction_game_day) {
         const daysAbsent = worldState.currentGameDay - r.last_interaction_game_day;
-        if (daysAbsent >= 30) {
-          parts.push(`  [ABSENCE: ${daysAbsent} days — may not remember player well]`);
-        } else if (daysAbsent >= 14) {
-          parts.push(`  [ABSENCE: ${daysAbsent} days — disposition may have cooled]`);
-        } else if (daysAbsent >= 7) {
-          parts.push(`  [ABSENCE: ${daysAbsent} days]`);
+        if (daysAbsent >= 7) {
+          let note = `  [ABSENCE: ${daysAbsent} days]`;
+          if (FEATURE_FLAGS.NPC_AGING) {
+            if (daysAbsent >= 30) {
+              note = `  [ABSENCE: ${daysAbsent} days — may not remember player well]`;
+            } else if (daysAbsent >= 14) {
+              note = `  [ABSENCE: ${daysAbsent} days — disposition may have cooled]`;
+            }
+          }
+          parts.push(note);
         }
         parts.push(`  Last seen: Day ${r.last_interaction_game_day}`);
       } else if (!r.last_interaction_game_day && r.times_met > 0) {
@@ -2011,19 +1978,19 @@ Custom commissions (crafted to order):
 Deposit 30-50% of total. Lead 3d (fine leather) / 7d (masterwork weapon) / 14d+ (plate or enchanted).`);
 
   blocks.push(`──────────── COMBAT ────────────
-Combat starts: [COMBAT_START: Enemies="Enemy 1, Boss Name"] — LAST sentence. System rolls initiative.
+Combat starts: [COMBAT_START: Enemies="Goblin (HP 7, AC 15, ATK +4, DMG 1d6+2), Orc (HP 15, AC 13, ATK +5, DMG 1d12+3)"] — LAST sentence. System rolls initiative and tracks enemy HP.
 Combat ends: [COMBAT_END] — LAST sentence.
 
 Per-turn flow:
 • Player's turn → describe battlefield, ask "What do you do?" → STOP.
 • Player declares attack → "Make an attack roll." → STOP. Player reports the number.
-• On hit → "Roll your [weapon] damage ([dice])." → STOP.
+• On hit → "Roll your [weapon] damage ([dice])." → STOP. Player reports damage → emit [ENEMY_DAMAGE: Enemy="Name" Amount=X] INLINE.
 • Spells with saves: you roll the target's save, announce pass/fail, then damage.
-• Enemy turns: you narrate + roll yourself + announce damage if hit.
+• Enemy turns: emit [ENEMY_ATTACK: Enemy="Name" Target="Player"] INLINE. The SYSTEM rolls the attack and damage — you narrate the result it returns. Never roll for enemies yourself.
 • HP milestones: "bloodied" (half), "barely standing" (near death).
 • Player at 0 HP → "You fall unconscious. At the start of your turn, make a death saving throw."
 
-Never roll for the player.`);
+Never roll for the player. Never roll for enemies — use [ENEMY_ATTACK].`);
 
   blocks.push(`──────────── LOOT & CONDITIONS ────────────
 [LOOT_DROP: Item="Item Name" Source="where/how"] — INLINE. 1-2 items per significant combat or discovery. Never for merchant purchases.

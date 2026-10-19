@@ -3,6 +3,7 @@ import db, { dbAll, dbGet, dbRun } from '../database.js';
 import * as questService from '../services/questService.js';
 import * as backstoryParserService from '../services/backstoryParserService.js';
 import { getCharacterRelationshipsWithNpcs } from '../services/npcRelationshipService.js';
+import * as campaignService from '../services/campaignService.js';
 import { getCharacterProgression } from '../services/progressionService.js';
 import { getCampaignLocations } from '../services/locationService.js';
 import { getCharacterStandings, getGoalsVisibleToCharacter } from '../services/factionService.js';
@@ -155,6 +156,24 @@ router.post('/', async (req, res) => {
       creation_phase = 'active'
     } = req.body;
 
+    // Campaign linkage: an explicit campaign_id in the body wins (validated
+    // below); otherwise default to the user's most recently updated active
+    // campaign. NULL campaign_id silently disables chronicles, the rollup,
+    // weather, and the world tick downstream — reassignment stays available
+    // via PUT /:id/campaign.
+    let campaign_id = req.body.campaign_id ?? null;
+    if (campaign_id) {
+      const campaign = await dbGet('SELECT id FROM campaigns WHERE id = ?', [campaign_id]);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+    } else {
+      const activeCampaigns = await campaignService.getActiveCampaigns(req.user?.id);
+      if (activeCampaigns.length > 0) {
+        campaign_id = activeCampaigns[0].id;
+      }
+    }
+
     const sql = `
       INSERT INTO characters (
         name, first_name, last_name, nickname, gender,
@@ -170,8 +189,8 @@ router.post('/', async (req, res) => {
         organizations, allies, enemies, backstory, other_notes,
         known_cantrips, known_spells, feats, languages, tool_proficiencies,
         keeper_texts, keeper_recitations, keeper_genre_domain,
-        creation_phase
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        creation_phase, campaign_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await dbRun(sql, [
@@ -188,7 +207,7 @@ router.post('/', async (req, res) => {
       organizations, allies, enemies, backstory, other_notes,
       known_cantrips, known_spells, feats, languages, tool_proficiencies,
       keeper_texts, keeper_recitations, keeper_genre_domain,
-      creation_phase
+      creation_phase, campaign_id
     ]);
 
     const characterId = result.lastInsertRowid;

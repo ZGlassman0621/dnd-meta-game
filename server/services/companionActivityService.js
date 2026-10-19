@@ -63,33 +63,41 @@ export async function sendOnActivity(companionId, data) {
   const durationDays = Math.max(1, Math.min(30, data.duration_days || 3));
   const objectives = Array.isArray(data.objectives) ? data.objectives : [];
 
-  // Create the activity record
-  const result = await dbRun(`
-    INSERT INTO companion_activities
-      (companion_id, character_id, campaign_id, activity_type, description, location, objectives,
-       start_game_day, expected_duration_days, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress')
-  `, [
-    companionId,
-    companion.recruited_by_character_id,
-    data.campaign_id || null,
-    data.activity_type,
-    data.description || null,
-    data.location || null,
-    JSON.stringify(objectives),
-    data.current_game_day,
-    durationDays
-  ]);
+  // CONSOLIDATED 2026-10-17: Write to entity_schedule (unified timeline)
+  // instead of companion_activities table. The details_json holds the
+  // companion-specific fields for the resolution logic.
+  const { scheduleActivity, getCurrentDay } = await import('./scheduleService.js');
+  const startDay = data.current_game_day || await getCurrentDay();
+  
+  const scheduled = await scheduleActivity({
+    entityType: 'companion',
+    entityId: companionId,
+    entityName: companion.npc_name || `Companion ${companionId}`,
+    activity: data.activity_type,
+    location: data.location || null,
+    destination: data.location || null,
+    durationDays,
+    details: {
+      companion_id: companionId,
+      character_id: companion.recruited_by_character_id,
+      campaign_id: data.campaign_id || null,
+      description: data.description || null,
+      objectives,
+      // Preserve start_day override if provided
+      _startDayOverride: data.current_game_day || null,
+    }
+  });
 
-  const activityId = result.lastInsertRowid;
+  if (!scheduled) throw new Error('Failed to schedule companion activity');
 
-  // Set companion status to 'away' and link activity
+  // Set companion status to 'away' and link schedule entry
+  // (Keep away_activity_id for back-compat; now points to entity_schedule.id)
   await dbRun(`
     UPDATE companions SET status = 'away', away_activity_id = ?
     WHERE id = ?
-  `, [activityId, companionId]);
+  `, [scheduled.scheduleId, companionId]);
 
-  return getActivityById(activityId);
+  return getActivityById(scheduled.scheduleId);
 }
 
 // ============================================================
@@ -100,20 +108,40 @@ export async function sendOnActivity(companionId, data) {
  * Get a single activity by ID.
  */
 export async function getActivityById(activityId) {
-  const activity = await dbGet(`
-    SELECT ca.*, n.name as companion_name, n.race as companion_race, n.occupation as companion_occupation
-    FROM companion_activities ca
-    JOIN companions c ON ca.companion_id = c.id
-    JOIN npcs n ON c.npc_id = n.id
-    WHERE ca.id = ?
+  // CONSOLIDATED 2026-10-17: Read from entity_schedule.
+  // Maps entity_schedule fields to the legacy companion_activities shape
+  // so callers (resolveActivity, etc.) don't break.
+  const row = await dbGet(`
+    SELECT es.*, n.name as companion_name, n.race as companion_race, n.occupation as companion_occupation
+    FROM entity_schedule es
+    LEFT JOIN companions c ON es.entity_id = c.id AND es.entity_type = 'companion'
+    LEFT JOIN npcs n ON c.npc_id = n.id
+    WHERE es.id = ?
   `, [activityId]);
 
-  if (activity) {
-    activity.objectives = JSON.parse(activity.objectives || '[]');
-    activity.outcomes = activity.outcomes ? JSON.parse(activity.outcomes) : null;
-  }
+  if (!row) return null;
 
-  return activity;
+  const details = JSON.parse(row.details_json || '{}');
+  // Map to legacy shape
+  return {
+    id: row.id,
+    companion_id: details.companion_id || row.entity_id,
+    character_id: details.character_id,
+    campaign_id: details.campaign_id,
+    activity_type: row.activity,
+    description: details.description,
+    location: row.location,
+    objectives: details.objectives || [],
+    start_game_day: row.start_day,
+    expected_duration_days: row.end_day - row.start_day,
+    status: row.status === 'active' ? 'in_progress' : row.status,
+    outcomes: details.outcomes || null,
+    reunion_narrative: details.reunion_narrative || null,
+    companion_name: row.companion_name,
+    // Preserve raw for new code
+    _scheduleRow: row,
+    _details: details,
+  };
 }
 
 /**
@@ -121,43 +149,62 @@ export async function getActivityById(activityId) {
  * Returns companion data joined with their active activity.
  */
 export async function getAwayCompanions(characterId) {
+  // CONSOLIDATED 2026-10-17: Query via entity_schedule.
   const rows = await dbAll(`
     SELECT c.id as companion_id, c.npc_id, c.away_activity_id,
            n.name, n.race, n.occupation,
-           ca.id as activity_id, ca.activity_type, ca.description, ca.location,
-           ca.objectives, ca.start_game_day, ca.expected_duration_days, ca.status as activity_status,
-           ca.outcomes, ca.reunion_narrative
+           es.id as activity_id, es.activity as activity_type,
+           es.location, es.start_day, es.end_day,
+           es.details_json
     FROM companions c
     JOIN npcs n ON c.npc_id = n.id
-    LEFT JOIN companion_activities ca ON c.away_activity_id = ca.id
+    LEFT JOIN entity_schedule es ON c.away_activity_id = es.id
     WHERE c.recruited_by_character_id = ? AND c.status = 'away'
   `, [characterId]);
 
-  return rows.map(r => ({
-    ...r,
-    objectives: JSON.parse(r.objectives || '[]'),
-    outcomes: r.outcomes ? JSON.parse(r.outcomes) : null
-  }));
+  return rows.map(r => {
+    const details = JSON.parse(r.details_json || '{}');
+    return {
+      ...r,
+      description: details.description,
+      objectives: details.objectives || [],
+      outcomes: details.outcomes || null,
+      reunion_narrative: details.reunion_narrative || null,
+      start_game_day: r.start_day,
+      expected_duration_days: r.end_day - r.start_day,
+    };
+  });
 }
 
 /**
  * Get all in-progress activities for a character.
  */
 export async function getActiveActivities(characterId) {
+  // CONSOLIDATED 2026-10-17: Query via entity_schedule.
   const rows = await dbAll(`
-    SELECT ca.*, n.name as companion_name, n.race as companion_race
-    FROM companion_activities ca
-    JOIN companions c ON ca.companion_id = c.id
-    JOIN npcs n ON c.npc_id = n.id
-    WHERE ca.character_id = ? AND ca.status = 'in_progress'
-    ORDER BY ca.start_game_day DESC
+    SELECT es.*, n.name as companion_name, n.race as companion_race,
+           json_extract(es.details_json, '$.character_id') as character_id
+    FROM entity_schedule es
+    LEFT JOIN companions c ON es.entity_id = c.id AND es.entity_type = 'companion'
+    LEFT JOIN npcs n ON c.npc_id = n.id
+    WHERE es.entity_type = 'companion'
+      AND es.status = 'active'
+      AND json_extract(es.details_json, '$.character_id') = ?
+    ORDER BY es.start_day DESC
   `, [characterId]);
 
-  return rows.map(r => ({
-    ...r,
-    objectives: JSON.parse(r.objectives || '[]'),
-    outcomes: r.outcomes ? JSON.parse(r.outcomes) : null
-  }));
+  return rows.map(r => {
+    const details = JSON.parse(r.details_json || '{}');
+    return {
+      id: r.id,
+      companion_id: details.companion_id,
+      activity_type: r.activity,
+      companion_name: r.companion_name,
+      objectives: details.objectives || [],
+      outcomes: details.outcomes || null,
+      start_game_day: r.start_day,
+    };
+  });
 }
 
 // ============================================================
@@ -172,11 +219,8 @@ export async function cancelActivity(activityId) {
   if (!activity) throw new Error(`Activity not found: ${activityId}`);
   if (activity.status !== 'in_progress') throw new Error(`Activity is not in progress`);
 
-  // Mark activity cancelled
-  await dbRun(`
-    UPDATE companion_activities SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `, [activityId]);
+  // CONSOLIDATED 2026-10-17: Update entity_schedule.
+  await dbRun(`UPDATE entity_schedule SET status = 'cancelled' WHERE id = ?`, [activityId]);
 
   // Return companion to active
   await dbRun(`
@@ -224,12 +268,16 @@ export async function recallCompanion(activityId, currentGameDay) {
 export async function checkAndResolveActivities(campaignId, currentGameDay) {
   if (!currentGameDay) return 0;
 
+  // CONSOLIDATED 2026-10-17: Query entity_schedule for due companion activities.
+  // The details_json.campaign_id filters by campaign.
   const activities = await dbAll(`
-    SELECT ca.id, ca.start_game_day, ca.expected_duration_days
-    FROM companion_activities ca
-    WHERE ca.campaign_id = ? AND ca.status = 'in_progress'
-      AND (ca.start_game_day + ca.expected_duration_days) <= ?
-  `, [campaignId, currentGameDay]);
+    SELECT es.id
+    FROM entity_schedule es
+    WHERE es.entity_type = 'companion'
+      AND es.status = 'active'
+      AND es.end_day <= ?
+      AND json_extract(es.details_json, '$.campaign_id') = ?
+  `, [currentGameDay, campaignId]);
 
   let resolved = 0;
   for (const activity of activities) {
@@ -280,16 +328,23 @@ export async function resolveActivity(activityId, currentGameDay, completionRati
   // Apply outcomes
   await applyOutcomes(activity, outcomes);
 
-  // Update activity record
+  // CONSOLIDATED 2026-10-17: Update entity_schedule instead of companion_activities.
+  // Outcomes stored in details_json for future reference.
+  const existingDetails = activity._details || {};
+  const newDetails = {
+    ...existingDetails,
+    outcomes,
+    reunion_narrative: outcomes.reunion_narrative || null,
+    actual_end_game_day: currentGameDay,
+    completion_ratio: completionRatio,
+  };
   await dbRun(`
-    UPDATE companion_activities SET
-      status = ?, actual_end_game_day = ?, outcomes = ?, reunion_narrative = ?, resolved_at = CURRENT_TIMESTAMP
+    UPDATE entity_schedule SET
+      status = ?, details_json = ?
     WHERE id = ?
   `, [
-    completionRatio >= 1.0 ? 'completed' : 'recalled',
-    currentGameDay,
-    JSON.stringify(outcomes),
-    outcomes.reunion_narrative || null,
+    'completed',
+    JSON.stringify(newDetails),
     activityId
   ]);
 

@@ -205,7 +205,13 @@ function generateEffectParameters(event, npc, effectType) {
   switch (effectType) {
     case 'disposition_shift': {
       const range = DISPOSITION_SHIFTS[event.event_type] || { min: -10, max: 5 };
-      const shift = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+      // A 0 shift is a no-op: applyNpcEffect skips it, but the effect row
+      // would still record "attitude shifted (+0)". Redraw so every
+      // disposition_shift effect actually moves the needle.
+      let shift = 0;
+      while (shift === 0) {
+        shift = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+      }
       return { shift, reason: `Affected by "${event.title}"` };
     }
 

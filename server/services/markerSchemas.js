@@ -126,6 +126,52 @@ export const MARKER_SCHEMAS = {
     fields: {}
   },
 
+  ENEMY_DAMAGE: {
+    position: 'inline',
+    fields: {
+      Enemy: { type: 'string', required: true },
+      Amount: { type: 'number', required: true }
+    }
+  },
+
+  ENEMY_ATTACK: {
+    position: 'inline',
+    fields: {
+      Enemy: { type: 'string', required: true },
+      Target: { type: 'string', required: false }
+    }
+  },
+
+  TURN_ADVANCE: {
+    position: 'inline',
+    fields: {}
+  },
+
+  SPELL_CAST: {
+    position: 'inline',
+    fields: {
+      Spell: { type: 'string', required: true },
+      Level: { type: 'number', required: false },
+      Target: { type: 'string', required: false }
+    }
+  },
+
+  OPPORTUNITY_ATTACK: {
+    position: 'inline',
+    fields: {
+      Attacker: { type: 'string', required: true },
+      Target: { type: 'string', required: true }
+    }
+  },
+
+  SET_COVER: {
+    position: 'inline',
+    fields: {
+      Target: { type: 'string', required: true },
+      Cover: { type: 'string', required: true }
+    }
+  },
+
   LOOT_DROP: {
     position: 'inline',
     fields: {

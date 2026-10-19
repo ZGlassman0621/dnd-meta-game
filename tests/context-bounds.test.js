@@ -1,11 +1,12 @@
 /**
  * Phase 1.1 — Halt Context Collapse
  *
- * Covers the three bounds that stop the DM system prompt growing without limit:
+ * Covers the four bounds that stop the DM system prompt growing without limit:
  *   1. getSessionSummariesForPrompt returns at most N chronicles, newest-N,
  *      still ordered oldest-first.
  *   2. calculateChronicleBudget is clamped by MAX_CHRONICLE_BUDGET.
  *   3. checkPromptSize classifies prompt sizes and never throws.
+ *   4. sliceTailByTokens caps campaign_notes / character_memories at render time.
  *
  * The ordering assertion is the load-bearing one: routes/dmSession.js treats the
  * LAST element as the most recent session. A future "optimisation" that drops
@@ -22,6 +23,10 @@ import {
   calculateChronicleBudget,
   getModelLimits,
   MAX_CHRONICLE_BUDGET,
+  sliceTailByTokens,
+  estimateTokens,
+  MAX_NOTES_TOKENS,
+  MAX_MEMORIES_TOKENS,
 } from '../server/utils/contextManager.js';
 import { opusModel } from '../server/services/modelRegistry.js';
 import { checkPromptSize } from '../server/services/aiCallLogger.js';
@@ -165,6 +170,40 @@ async function run() {
   }
   assert(!threw, 'guard never throws — instrumentation must not break gameplay');
   assertEqual(checkPromptSize('', 'test').tokens, 0, 'empty prompt is zero tokens');
+
+  // ============================================================
+  console.log('\n=== Test 4: notes/memories tail-slicing ===\n');
+  // ============================================================
+
+  // estimateTokens is chars/4, so build strings of a known token size.
+  const t2c = (t) => 'x'.repeat(t * 4);
+
+  assertEqual(sliceTailByTokens('', 100), '', 'empty string stays empty');
+  assertEqual(sliceTailByTokens(null, 100), '', 'null stays empty');
+  assertEqual(sliceTailByTokens(t2c(50), 100), t2c(50), 'under-budget text is returned unchanged');
+  assert(!sliceTailByTokens(t2c(50), 100).includes('omitted'), 'under-budget text carries no omission marker');
+
+  // Over budget: tail is kept, head is dropped, marker is prepended.
+  const sliced = sliceTailByTokens(t2c(1000), 100);
+  assert(sliced.startsWith('[earlier entries omitted'), 'truncated output carries the omission marker');
+  assert(sliced.endsWith('x'.repeat(400)), 'tail is preserved to the budget');
+  assert(estimateTokens(sliced) <= 150, `sliced output stays near the budget (got ${estimateTokens(sliced)} tokens)`);
+
+  // Cut happens at a line boundary, never mid-line.
+  const lines = Array.from({ length: 200 }, (_, i) => `line-${String(i).padStart(3, '0')}-` + 'y'.repeat(20)).join('\n');
+  const slicedLines = sliceTailByTokens(lines, 100);
+  const firstContentLine = slicedLines.slice(slicedLines.indexOf('\n') + 1).split('\n')[0];
+  assert(/^line-\d{3}-y+$/.test(firstContentLine), `slice starts at a full line boundary (got "${firstContentLine.slice(0, 30)}\u2026")`);
+
+  // Realistic shape: session-delimited notes keep the newest session.
+  const notes = '--- Session: One ---\n' + 'a'.repeat(4000) + '\n--- Session: Two ---\n' + 'b'.repeat(4000);
+  const slicedNotes = sliceTailByTokens(notes, 1100);
+  assert(slicedNotes.includes('Session: Two'), 'newest session section survives the slice');
+  assert(!slicedNotes.includes('Session: One'), 'oldest session section is dropped');
+
+  // The render-time caps exist and are sane.
+  assertEqual(MAX_NOTES_TOKENS, 4000, 'notes cap is 4000 tokens');
+  assertEqual(MAX_MEMORIES_TOKENS, 2000, 'memories cap is 2000 tokens');
 
   // ============================================================
   console.log('\n=== Cleanup ===\n');

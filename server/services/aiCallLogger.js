@@ -273,6 +273,58 @@ export async function annotateAiCallLog(logId, updates) {
   }
 }
 
+// ============================================================
+// Retention / pruning (migration 053 §2.4 — the "future work" archival job)
+// ============================================================
+
+/**
+ * Default retention window for full AI-call content, in days.
+ * Override with AI_CALL_LOG_RETENTION_DAYS (0 disables pruning).
+ */
+const AI_CALL_LOG_RETENTION_DAYS = Number(process.env.AI_CALL_LOG_RETENTION_DAYS || 30);
+
+/**
+ * Prune old ai_call_log rows' heavy content columns.
+ *
+ * The log stores full prompts + full conversation history per call, so it
+ * grows quadratically within a session and makes backups progressively more
+ * expensive. This keeps every row — timing, token counts, model identity,
+ * markers, purposes, the signal columns — but NULLs the bulky TEXT content
+ * for rows older than the retention window and stamps archived_at, which is
+ * what migration 053 added the column for.
+ *
+ * Never throws: like the rest of this module, pruning is best-effort
+ * instrumentation hygiene and must never break gameplay.
+ *
+ * @param {number} olderThanDays - prune rows older than this many days
+ * @returns {Promise<number>} number of rows pruned
+ */
+export async function pruneAiCallLog(olderThanDays = AI_CALL_LOG_RETENTION_DAYS) {
+  if (!olderThanDays || olderThanDays <= 0) return 0;
+  try {
+    const result = await dbRun(
+      `UPDATE ai_call_log
+       SET system_prompt = NULL,
+           user_message = NULL,
+           conversation_history = NULL,
+           response_text = NULL,
+           prompt_sections = NULL,
+           archived_at = CURRENT_TIMESTAMP
+       WHERE archived_at IS NULL
+         AND request_started_at < datetime('now', '-' || ? || ' days')`,
+      [olderThanDays]
+    );
+    const pruned = result.changes || 0;
+    if (pruned > 0) {
+      console.log(`[aiCallLogger] pruned content for ${pruned} ai_call_log row(s) older than ${olderThanDays}d`);
+    }
+    return pruned;
+  } catch (err) {
+    console.warn('[aiCallLogger] prune failed (non-fatal):', err?.message);
+    return 0;
+  }
+}
+
 /**
  * Variant of logAiCall that also returns the inserted log row id so
  * downstream marker-dispatch passes can amend the row via

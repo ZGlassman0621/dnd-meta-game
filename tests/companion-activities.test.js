@@ -200,8 +200,8 @@ async function runTests() {
     assert(result.success === true, 'cancelActivity returns success: true');
     assertEqual(result.companion_name, 'TEST_Elara Nightwhisper', 'Returns companion name');
 
-    // Verify activity status
-    const row = await dbGet('SELECT status FROM companion_activities WHERE id = ?', [activityId]);
+    // Verify activity status (CONSOLIDATED 2026-10-17: entity_schedule)
+    const row = await dbGet('SELECT status FROM entity_schedule WHERE id = ?', [activityId]);
     assertEqual(row.status, 'cancelled', 'Activity status changed to cancelled');
 
     // Verify companion returned to active
@@ -243,13 +243,14 @@ async function runTests() {
     assertEqual(compAfter.status, 'active', 'Companion 2 returned to active after recall');
     assertEqual(compAfter.away_activity_id, null, 'Companion 2 away_activity_id cleared after recall');
 
-    // Verify activity resolved as 'recalled' with partial outcomes
-    const actRow = await dbGet('SELECT status, outcomes FROM companion_activities WHERE id = ?', [scoutingActivityId]);
-    assertEqual(actRow.status, 'recalled', 'Activity status is recalled (not completed)');
-    assert(actRow.outcomes !== null, 'Activity has outcomes even though recalled early');
+    // Verify activity resolved with partial outcomes (CONSOLIDATED: entity_schedule, status='completed')
+    const actRow = await dbGet('SELECT status, details_json FROM entity_schedule WHERE id = ?', [scoutingActivityId]);
+    assertEqual(actRow.status, 'completed', 'Activity status is completed');
+    const _details = JSON.parse(actRow.details_json || '{}');
+    assert(_details.outcomes != null, 'Activity has outcomes even though recalled early');
 
     // Parse outcomes and verify partial completion
-    const outcomes = JSON.parse(actRow.outcomes);
+    const outcomes = _details.outcomes;
     assert(
       outcomes.success_level === 'partial' || outcomes.success_level === 'failed' || outcomes.success_level === 'mixed',
       `Recalled early outcomes success_level is partial/failed/mixed (got ${outcomes.success_level})`
@@ -330,7 +331,7 @@ async function cleanup() {
   // companions, then rows that companions pointed at. Some FKs don't
   // cascade (notably narrative_queue.related_companion_id), so we have
   // to clear them before the companions row goes away.
-  await dbRun("DELETE FROM companion_activities WHERE companion_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
+  await dbRun("DELETE FROM entity_schedule WHERE entity_type = 'companion' AND entity_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
   await dbRun("DELETE FROM companion_backstories WHERE companion_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
   await dbRun("DELETE FROM narrative_queue WHERE related_companion_id IN (SELECT id FROM companions WHERE recruited_by_character_id IN (SELECT id FROM characters WHERE name LIKE 'TEST_%'))");
   await dbRun("DELETE FROM narrative_queue WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE 'TEST_%')");

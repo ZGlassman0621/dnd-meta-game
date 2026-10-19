@@ -1090,7 +1090,8 @@ export async function appendCampaignNotes(characterId, existingNotes, newNotes, 
   const newNotesSection = `\n\n--- Session: ${sessionTitle} (${sessionDate.formatted}) ---\n${newNotes}`;
 
   let updatedNotes = existingNotes + newNotesSection;
-  // No cap — unlimited disk storage. Chronicle system handles what the AI sees.
+  // No cap on disk — full history is kept. sliceTailByTokens bounds what
+  // the AI sees at session start.
 
   await dbRun('UPDATE characters SET campaign_notes = ? WHERE id = ?', [updatedNotes, characterId]);
   return updatedNotes;
@@ -1195,7 +1196,8 @@ export async function updateCharacterMemories(characterId, existingMemories, ext
     }
   }
 
-  // No cap — unlimited disk storage. Chronicle system handles what the AI sees.
+  // No cap on disk — full history is kept. sliceTailByTokens bounds what
+  // the AI sees at session start.
 
   await dbRun('UPDATE characters SET character_memories = ? WHERE id = ?', [updated, characterId]);
   return updated;

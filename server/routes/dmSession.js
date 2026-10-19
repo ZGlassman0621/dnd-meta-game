@@ -3,7 +3,7 @@ import db, { dbAll, dbGet, dbRun } from '../database.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import ollama from '../services/ollama.js';
 import claude from '../services/claude.js';
-import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat } from '../services/aiCallLogger.js';
+import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat, pruneAiCallLog } from '../services/aiCallLogger.js';
 import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
 import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
@@ -41,6 +41,11 @@ import '../services/combatMarkerService.js';
 // without this import damage silently never applies.
 import '../services/characterHpService.js';
 import { getHpState, rollDeathSave } from '../services/characterHpService.js';
+import { reconcileTurn } from '../services/fictionMarkerReconciliation.js';
+// Structural #9: Fiction-marker reconciliation (strict both directions). Service
+// file deployed separately; import here wires it into the turn pipeline.
+import '../services/spellCastService.js';
+// Combat Pipeline #3: SPELL_CAST handler registration.
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
   // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
@@ -60,7 +65,7 @@ import {
   // (detectPromiseMade / PromiseFulfilled / NotorietyGain / NotorietyLoss)
   // migrated to handlers in consequenceService.js + notorietyService.js.
   // Legacy exports stay per "deprecate by hiding."
-  buildAnalysisPrompt, parseAnalysisResponse, calculateSessionRewards,
+  buildAnalysisPrompt, parseAnalysisResponse,
   calculateHPChange, calculateGameTimeAdvance,
   buildNotesExtractionPrompt, appendCampaignNotes,
   buildNpcExtractionPrompt, saveExtractedNpcs,
@@ -73,8 +78,9 @@ import { lookupItemByName } from '../data/merchantLootTables.js';
 // LOOT_DROP handler. No remaining usage in this file.
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
 import { safeParse } from '../utils/safeParse.js';
-import { validateDmMarkers, buildCorrectionMessage } from '../services/markerSchemas.js';
-import { verifyDmResponse, buildRuleCorrectionMessage } from '../services/ruleVerifiers.js';
+import { validateDmMarkers } from '../services/markerSchemas.js';
+import { verifyDmResponse } from '../services/ruleVerifiers.js';
+import { nextCorrectionEntries, renderCorrectionText } from '../services/markerCorrectionRetry.js';
 import { processResponseMarkers } from '../services/markerPipeline.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
 import { initTranscript, appendToTranscript, getTurnCount, getTranscript } from '../utils/sessionTranscript.js';
@@ -86,8 +92,9 @@ import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
 import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
 import { getAwayCompanions } from '../services/companionActivityService.js';
+import { endSession } from '../services/sessionEndService.js';
 import { processAbsenceEffects } from '../services/npcAgingService.js';
-import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget } from '../utils/contextManager.js';
+import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget, sliceTailByTokens, MAX_NOTES_TOKENS, MAX_MEMORIES_TOKENS } from '../utils/contextManager.js';
 import { handleServerError, conflict } from '../utils/errorHandler.js';
 import { acquireSessionLock, releaseSessionLock } from '../utils/sessionLocks.js';
 import { getWeather, getEffectiveTemperature, calculateGearWarmth, checkExposureEffects, hasShelter as checkHasShelter, formatWeatherForPrompt } from '../services/weatherService.js';
@@ -740,6 +747,12 @@ router.post('/start', async (req, res) => {
       }
     }
 
+    // P1-C: campaign_notes / character_memories grow without bound on disk.
+    // Slice to the recent tail at render time so session-start prompt size
+    // stays bounded no matter how long the campaign runs.
+    const campaignNotes = sliceTailByTokens(character.campaign_notes || '', MAX_NOTES_TOKENS);
+    const characterMemories = sliceTailByTokens(character.character_memories || '', MAX_MEMORIES_TOKENS);
+
     // Get story chronicle context (canon facts for AI prompt)
     let chronicleContext = '';
     if (character.campaign_id) {
@@ -756,7 +769,7 @@ router.post('/start', async (req, res) => {
         }
 
         // Calculate adaptive token budget
-        const estimatedPromptTokens = estimateTokens(JSON.stringify(worldState || '') + (character.campaign_notes || '') + (character.character_memories || ''));
+        const estimatedPromptTokens = estimateTokens(JSON.stringify(worldState || '') + campaignNotes + characterMemories);
         const chronicleBudget = calculateChronicleBudget(estimatedPromptTokens, 0, sonnetModel());
 
         const chronicleResult = await getRelevantContext(characterId, character.campaign_id, hints, chronicleBudget);
@@ -966,8 +979,8 @@ router.post('/start', async (req, res) => {
       pendingDowntimeNarratives: pendingNarratives,
       continueCampaign: continueCampaign || false,
       previousSessionSummaries: previousSessionSummaries || [],
-      campaignNotes: character.campaign_notes || '',
-      characterMemories: character.character_memories || '',
+      campaignNotes,
+      characterMemories,
       usedNames,
       storyThreadsContext,
       narrativeQueueContext,
@@ -1351,17 +1364,19 @@ router.post('/:sessionId/message', async (req, res) => {
       // Silent-fail — ledger is polish.
     }
 
-    // Marker correction injection: if the previous turn emitted a marker that
-    // failed schema validation, the failure was stashed on session_config.
-    // Surface it in the system prompt now so the AI can re-emit correctly.
-    // Stripped after the turn regardless of whether the AI acted on it — we
-    // don't want the same correction note accreting turn after turn. Player
-    // never sees any of this; it lives entirely in the system-prompt layer.
+    // Marker correction injection: if a previous turn emitted a marker that
+    // failed schema validation (or broke a response rule), the failure was
+    // stashed on session_config. Surface it in the system prompt now so the
+    // AI can re-emit correctly. Entries retry for a few turns (see
+    // markerCorrectionRetry.js) instead of being consumed unconditionally —
+    // but each entry still carries an attempt count, so the same note never
+    // accretes forever. Player never sees any of this; it lives entirely
+    // in the system-prompt layer.
     try {
       const cfg = safeParse(session.session_config, {});
-      const pendingCorrection = cfg.pendingMarkerCorrections;
-      if (pendingCorrection && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
-        const correctionBlock = `\n\n══════════════ MARKER CORRECTION NEEDED (from last turn) ══════════════\n${pendingCorrection}\n═══════════════════════════════════════════════════════════════════════\n`;
+      const correctionText = renderCorrectionText(cfg.pendingMarkerCorrections);
+      if (correctionText && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+        const correctionBlock = `\n\n══════════════ MARKER CORRECTION NEEDED (from last turn) ══════════════\n${correctionText}\n═══════════════════════════════════════════════════════════════════════\n`;
         augmentedMessages = [
           { ...augmentedMessages[0], content: augmentedMessages[0].content + correctionBlock },
           ...augmentedMessages.slice(1)
@@ -1558,13 +1573,13 @@ router.post('/:sessionId/message', async (req, res) => {
       console.error('[dm-session] transcript append failed (non-fatal):', err.message);
     }
 
-    // Validate every marker the AI emitted against its schema. Any failures
-    // (missing required fields, invalid enums, out-of-range numbers) get
-    // stashed on session_config so the NEXT turn's system prompt can ask the
-    // AI to re-emit. We also clear any previous-turn correction that was
-    // already served — either the AI acted on it and the new response will
-    // either include a corrected marker or not; either way, stale corrections
-    // shouldn't accrete. Both reads/writes are best-effort.
+    // Validate every marker the AI emitted against its schema. Failures
+    // (missing required fields, invalid enums, out-of-range numbers) and
+    // rule violations are stashed on session_config as correction entries so
+    // the NEXT turns' system prompts can ask the AI to re-emit. See
+    // services/markerCorrectionRetry.js — entries retry for a few turns
+    // (P1-G) instead of being consumed unconditionally, and clear once fixed
+    // or exhausted. Both reads/writes are best-effort.
     let validationSummary = null;  // captured for playtest logging below
     try {
       const validateResult = validateDmMarkers(result.narrative || '');
@@ -1573,25 +1588,29 @@ router.post('/:sessionId/message', async (req, res) => {
       const cfg = safeParse(session.session_config, {});
       const nextCfg = { ...cfg };
       const hadPriorCorrection = !!cfg.pendingMarkerCorrections;
-      // Consume any previously-surfaced correction from this turn.
-      delete nextCfg.pendingMarkerCorrections;
-      // Queue any new failures for next turn (schema + rule combined).
-      const combinedNotes = [];
       if (failures.length > 0) {
-        const msg = buildCorrectionMessage(failures);
-        if (msg) combinedNotes.push(msg);
         console.warn(`[marker-schema] ${failures.length} malformed marker(s) on session ${sessionId}:`, failures.map(f => `${f.schemaKey}(${f.errors.map(e => e.field).join(',')})`).join(', '));
       }
       if (ruleViolations.length > 0) {
-        const msg = buildRuleCorrectionMessage(ruleViolations);
-        if (msg) combinedNotes.push(msg);
         console.warn(`[rule-verify] ${ruleViolations.length} rule violation(s) on session ${sessionId}:`, ruleViolations.map(v => v.rule).join(', '));
       }
-      if (combinedNotes.length > 0) {
-        nextCfg.pendingMarkerCorrections = combinedNotes.join('\n');
+      const { entries, exhaustedKeys } = nextCorrectionEntries(
+        cfg.pendingMarkerCorrections, failures, ruleViolations,
+        { exhaustedKeys: cfg.correctionExhaustedKeys }
+      );
+      delete nextCfg.pendingMarkerCorrections;
+      delete nextCfg.correctionExhaustedKeys;
+      if (entries.length > 0) {
+        nextCfg.pendingMarkerCorrections = entries;
       }
-      // Only write if something actually changed.
-      if (cfg.pendingMarkerCorrections !== nextCfg.pendingMarkerCorrections) {
+      if (exhaustedKeys.length > 0) {
+        nextCfg.correctionExhaustedKeys = exhaustedKeys;
+      }
+      // Only write if something actually changed (deep compare — entries are
+      // objects now, so reference equality is useless).
+      const beforeJson = JSON.stringify({ p: cfg.pendingMarkerCorrections ?? null, e: cfg.correctionExhaustedKeys ?? null });
+      const afterJson = JSON.stringify({ p: nextCfg.pendingMarkerCorrections ?? null, e: nextCfg.correctionExhaustedKeys ?? null });
+      if (beforeJson !== afterJson) {
         await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(nextCfg), sessionId]);
       }
       // Capture summary for playtest logger
@@ -1601,7 +1620,7 @@ router.post('/:sessionId/message', async (req, res) => {
         markersMalformed: failures.length,
         ruleViolations: ruleViolations.length,
         correctionConsumed: hadPriorCorrection,
-        correctionQueued: combinedNotes.length > 0
+        correctionQueued: entries.length > 0
       };
     } catch (err) {
       console.error('[marker-schema] validation pass failed (non-fatal):', err.message);
@@ -1799,6 +1818,21 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[MYTHIC_SURGE:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[PROMISE_MADE:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[PROMISE_FULFILLED:[^\]]+\]\s*/gi, '').trim();
+
+    // Structural #9: Fiction-marker reconciliation (strict both directions).
+    // If narration claims damage without a marker, auto-apply it.
+    // If a marker was applied but not narrated, append a system note.
+    try {
+      const reconciliation = await reconcileTurn(cleanNarrative, pipelineResult.handlerResults || [], { characterId, sessionId });
+      for (const item of reconciliation.missingFiction) {
+        cleanNarrative += `\n\n${item.message}`;
+      }
+      if (reconciliation.autoApplied.length > 0 || reconciliation.missingFiction.length > 0) {
+        console.log(`[reconciliation] autoApplied=${reconciliation.autoApplied.length} missingFiction=${reconciliation.missingFiction.length}`);
+      }
+    } catch (e) {
+      console.error('[reconciliation] failed:', e.message);
+    }
 
     // SC-6.4b — merchant cluster handlers run inside the marker pipeline
     // (merchantService.js: MERCHANT_SHOP, MERCHANT_REFER; merchantOrderService.js:
@@ -2702,13 +2736,54 @@ router.post('/:sessionId/end', async (req, res) => {
     }
 
     // Check if anything meaningful happened
-    const totalActivity = rewardsAnalysis.combat + rewardsAnalysis.exploration +
-                          rewardsAnalysis.quests + rewardsAnalysis.discovery + rewardsAnalysis.social;
-    const meaningfulSession = totalActivity >= 2;
+    // v1.0 (2026-10-19): Session-end orchestrator supersedes the old XP system.
+    // The orchestrator runs: XP scoring (LLM) → downtime → domains (stub) →
+    // digest (stub) → deferred sweep. It is idempotent via session_end_runs.
+    //
+    // The route's AI analysis above (summary, rewardsAnalysis) is preserved
+    // for: session summary, game-time advance, and session event emission.
+    // Only the XP calculation is replaced.
+    const sessionNarrative = messages
+      .filter(m => m.role === 'assistant')
+      .map(m => typeof m.content === 'string' ? m.content : '')
+      .join('\n');
 
-    const rewards = !meaningfulSession
-      ? { xp: 0, gold: { cp: 0, sp: 0, gp: 0 }, loot: null, breakdown: null }
-      : calculateSessionRewards(character, durationHours, rewardsAnalysis);
+    const xpScorerCall = async (prompt) => {
+      const { provider: scorerProvider } = await getLLMProvider();
+      if (scorerProvider === 'claude') {
+        const systemMessage = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMessage?.content || '';
+        return await loggedChat(
+          { call_purpose: 'session_end_xp_scoring', prompt_builder: 'dmSession_route',
+            session_id: parseInt(sessionId) },
+          systemPrompt,
+          [{ role: 'user', content: prompt }]
+        );
+      }
+      return await ollama.chat([{ role: 'user', content: prompt }], session.model);
+    };
+
+    const orchResult = await endSession(sessionId, {
+      characterId: session.character_id,
+      campaignId: character.campaign_id,
+      sessionData: { narrative: sessionNarrative, characterLevel: character.level },
+      llmCall: xpScorerCall,
+      downtimeChoice: req.body.downtimeChoice || { path: 'clean' },
+    });
+
+    // Map orchestrator XP to the legacy rewards shape the client expects.
+    // Gold/loot are no longer awarded at session end (kill-loot handles it
+    // during play); XP comes from the LLM scorer.
+    const xpAwarded = orchResult.xp?.xpAwarded || 0;
+    const rewards = {
+      xp: xpAwarded,
+      gold: { cp: 0, sp: 0, gp: 0 },
+      loot: null,
+      breakdown: orchResult.xp?.breakdown || null,
+      leveledUp: orchResult.xp?.leveledUp || false,
+      newLevel: orchResult.xp?.newLevel,
+      downtime: orchResult.downtime || null,
+    };
 
     // Phase 3.2 — the session-end HP heuristic is retired. HP is now applied
     // per-turn from [HP_CHANGE] markers (characterHpService), so running
@@ -2779,6 +2854,10 @@ router.post('/:sessionId/end', async (req, res) => {
         console.error('[living-world] tick failed at session end (non-fatal):', e?.message);
       }
     }
+
+    // v1.0 (2026-10-19): Deferred sweep is now handled by the session-end
+    // orchestrator (endSession → sweep stage). Removed the inline sweep here
+    // to avoid double-running. The orchestrator's sweep is idempotent.
 
     // Extract campaign notes
     let extractedNotes = '';
@@ -3050,6 +3129,14 @@ router.post('/:sessionId/end', async (req, res) => {
         .then(({ main: runBackup }) => runBackup())
         .catch(err => console.error('[backup] session-end backup failed (non-fatal):', err?.message));
     }
+
+    // P1-D: prune old ai_call_log content (fire-and-forget, non-fatal). The
+    // log stores full prompts per call and grows quadratically within a
+    // session; without pruning, backups get progressively more expensive.
+    // Runs after res.json like the backup above — never delays session end.
+    pruneAiCallLog().catch(err =>
+      console.error('[aiCallLogger] session-end prune failed (non-fatal):', err?.message)
+    );
   } catch (error) {
     handleServerError(res, error, 'end DM session');
   }

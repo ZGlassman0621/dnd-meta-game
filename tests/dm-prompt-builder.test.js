@@ -376,6 +376,57 @@ console.log('\n=== Test 6: [ABSENCE] Annotation ===\n');
 }
 
 // ============================================================
+// 6b. [ABSENCE] qualifiers gated behind NPC_AGING (P4-E)
+// ============================================================
+console.log('\n=== Test 6b: [ABSENCE] qualifiers gated behind NPC_AGING ===\n');
+
+{
+  // NPC_AGING is off by default: long absences get the neutral day-count,
+  // NOT the decay-implying qualifiers — stored dispositions never change
+  // while the flag is off, so the qualifiers would contradict the DB.
+  const absentNpc = makeNpcRelationship({
+    npc_id: 70,
+    npc_name: 'P4E Longabsent',
+    disposition: 4,
+    last_interaction_game_day: 50 // 50 days absent at day 100
+  });
+  const midNpc = makeNpcRelationship({
+    npc_id: 71,
+    npc_name: 'P4E Midabsent',
+    disposition: 4,
+    last_interaction_game_day: 80 // 20 days absent at day 100
+  });
+
+  const build = () => createDMSystemPrompt(makeCharacter(), makeSessionContext({
+    worldState: {
+      npcRelationships: [absentNpc, midNpc],
+      npcEventEffects: [],
+      currentGameDay: 100,
+      factionStandings: [],
+      visibleEvents: [],
+      discoveredLocations: []
+    }
+  }));
+
+  delete process.env.FF_NPC_AGING;
+  const offPrompt = build();
+  assert(offPrompt.includes('[ABSENCE: 50 days]'), 'aging off: 50-day absence gets neutral annotation');
+  assert(!offPrompt.includes('may not remember player well'), 'aging off: no "may not remember" qualifier');
+  assert(!offPrompt.includes('disposition may have cooled'), 'aging off: no "may have cooled" qualifier');
+  assert(offPrompt.includes('[ABSENCE: 20 days]'), 'aging off: 20-day absence gets neutral annotation');
+
+  // With NPC_AGING on, the qualifiers return (the decay actually runs).
+  process.env.FF_NPC_AGING = 'true';
+  try {
+    const onPrompt = build();
+    assert(onPrompt.includes('[ABSENCE: 50 days — may not remember player well]'), 'aging on: 50-day absence gets memory qualifier');
+    assert(onPrompt.includes('[ABSENCE: 20 days — disposition may have cooled]'), 'aging on: 20-day absence gets cooled qualifier');
+  } finally {
+    delete process.env.FF_NPC_AGING;
+  }
+}
+
+// ============================================================
 // 7. [EVENT] inline annotation
 // ============================================================
 console.log('\n=== Test 7: [EVENT] Inline Annotation ===\n');
