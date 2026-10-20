@@ -17,12 +17,18 @@ import * as companionBackstoryService from '../services/companionBackstoryServic
 import { handleServerError } from '../utils/errorHandler.js';
 import { propagateNpcDeath, canRecruit } from '../services/npcLifecycleService.js';
 import { sendOnActivity, getAwayCompanions, getActivityById, recallCompanion } from '../services/companionActivityService.js';
+// Phase 0 (clock unification): activity start/resolution days come from the
+// unified world_clock (absolute scale — the one entity_schedule lives on),
+// never from characters.game_day (day-of-year scale). That mismatch WAS the
+// companion-activity clock split.
+import { getCurrentDay } from '../services/scheduleService.js';
 import {
   autoAssignCompanionTheme,
   autoSeedCompanionAncestryFeatTier1,
   computeCompanionProgressionDecisions,
   ensureCompanionProgressionInitialized
 } from '../services/progressionCompanionService.js';
+import { enrichNewCompanion } from '../services/companionInitiativeService.js';
 import { CONDITION_NAMES } from '../data/conditions.js';
 
 // Phase 10: parse `companion_class_levels` (multiclass breakdown) with a
@@ -255,6 +261,15 @@ router.post('/recruit', async (req, res) => {
       companion.race,
       companion.companion_level || 1
     );
+
+    // DM System Part 2 — Companion Engine seeding: mechanical hidden-agenda
+    // roll on the companion's NPC row, neutral relationship, starter goals,
+    // one private fact. Fire-and-forget: never blocks recruitment. Agenda
+    // content (when the rolled tier needs an LLM) completes via the
+    // session-start backfill in routes/dmSession.js.
+    enrichNewCompanion(companion.id, { background: companion.background_notes || '' }).catch(err => {
+      console.error('Error enriching new companion:', err);
+    });
 
     // Generate backstory for the companion (async, non-blocking)
     // This will also emit the companion_recruited event
@@ -1740,6 +1755,12 @@ router.post('/create-party-member', async (req, res) => {
     await autoAssignCompanionTheme(companion.id, companion.companion_class, companion.companion_level || 1);
     await autoSeedCompanionAncestryFeatTier1(companion.id, companion.race, companion.companion_level || 1);
 
+    // DM System Part 2 — Companion Engine seeding (see /recruit): mechanical
+    // hidden-agenda roll, relationship, goals, private fact. Fire-and-forget.
+    enrichNewCompanion(companion.id, { background: companion.background_notes || '' }).catch(err => {
+      console.error('Error enriching new companion:', err);
+    });
+
     res.status(201).json({
       message: `${name} has joined your party!`,
       companion
@@ -2045,7 +2066,7 @@ router.post('/:id/send-activity', async (req, res) => {
       objectives: req.body.objectives || [],
       duration_days: req.body.duration_days || 3,
       campaign_id: character?.campaign_id,
-      current_game_day: character?.game_day || 1
+      current_game_day: await getCurrentDay(character?.campaign_id ?? null)
     });
 
     res.json({
@@ -2075,8 +2096,8 @@ router.post('/activity/:activityId/recall', async (req, res) => {
       return res.status(404).json({ error: 'Activity not found' });
     }
 
-    const character = await dbGet('SELECT game_day FROM characters WHERE id = ?', [activity.character_id]);
-    const result = await recallCompanion(parseInt(req.params.activityId), character?.game_day || 1);
+    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [activity.character_id]);
+    const result = await recallCompanion(parseInt(req.params.activityId), await getCurrentDay(character?.campaign_id ?? null));
 
     res.json(result);
   } catch (error) {

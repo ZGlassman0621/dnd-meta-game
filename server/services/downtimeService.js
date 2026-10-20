@@ -88,10 +88,10 @@ export async function scheduleDowntime(assignments, pcId) {
   return { scheduled, protectEntityIds };
 }
 
-export async function shortSkip(days = 1) {
+export async function shortSkip(days = 1, campaignId = null) {
   const n = Math.max(1, Math.min(2, days));
-  await advanceDays(n);
-  const newDay = await getCurrentDay();
+  await advanceDays(n, { campaignId, reason: 'short_skip' });
+  const newDay = await getCurrentDay(campaignId);
   return {
     daysAdvanced: n, newDay,
     bridgePrompt: `Narrate a brief bridge: the party wraps up loose ends, travels, rests. ${n} game-day(s) pass. Keep it to 2-3 sentences.`,

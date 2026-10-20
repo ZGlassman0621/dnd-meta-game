@@ -2,6 +2,34 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.184] - 2026-10-20 — The DM system grows teeth: complexity, companions, capstone, one clock
+
+Four builds that share one idea: don't ask the AI to be a DM — build a DM system and let the AI operate its parts.
+
+### NPC complexity generator (migration 077)
+
+Shelter behavior — the AI's default to harmony, where every guard is just a guard and every redeemed cultist is genuinely redeemed — is now fought mechanically. `npcComplexityService` rolls a hidden-agenda tier at generation time (d100: 20% significant secret / 60% personal motive / 20% hiding nothing), so the system decides whether conflict exists and the AI only plays what was rolled. Tiers backfill on next appearance, companions roll at recruitment, the player never sees the tier, and a killed NPC's secret surfaces through consequences. The DM prompt carries a DM-only agenda block so the AI plays toward the secret without narrating it.
+
+### Companion engine (migration 078)
+
+Companions get personal goals, private knowledge (`what_they_know` — opaque to the player), a relationship track (trust/respect/friction), and a current task. `companionInitiativeService` triages readiness so companions act on their own initiative — addressed first, then task stimulus, passive expertise, goal intersection, private knowledge. New companions are enriched at recruitment (agenda roll + seed goal + seed fact) without hard-failing if the LLM is unavailable.
+
+### Capstone combat test + playable harness
+
+`tests/capstone-combat.test.js` drives the real marker pipeline end-to-end ("Goblin Ambush"): spell-slot accounting, concentration breaks, temp HP, cover math, reactions, death → loot with zero mid-combat XP, morale, and fiction↔marker reconciliation. `server/scripts/play-capstone.js` runs the same scenario interactively against the live server with an independent watcher process auditing the database between turns — the acceptance test to the capstone's regression gate.
+
+### Phase 0 — clock unification (migration 079)
+
+Three clocks became one. Recon found the real disease: `characters.game_day` is a Harptos day-of-year while `world_clock` counted absolute days, and the companion-activity split was those two scales colliding. `world_clock` is now per-campaign (plus a fallback row), each row carrying both scales in lockstep; it backfills from each campaign's most advanced character — the game picks up where it left off. All reads/writes go through `scheduleService` (`getClock` / `advanceDays` / `advanceHours` / `setClockDate`), which mirrors the date back onto characters, forward-only. The living-world tick's nine `MAX(game_day)` reads are now one clock read. DM-mode parties keep their own clock (separate mode, deliberately untouched).
+
+### Prompt + tests
+
+- The DM prompt now teaches `[SPELL_CAST]`, `[OPPORTUNITY_ATTACK]`, and `[SET_COVER]` — their handlers existed but were never documented to the model, so they could not fire in real play.
+- Migration discipline, learned the hard way in the 078 SQLITE_BUSY incident: migrations write through the runner's transaction only.
+- Suite: 113 test files. `tests/clock-unification.test.js` covers the migration (including a direct `up()` run against a rebuilt pre-079 clock), Harptos rollover, the forward-only mirror, campaign isolation, and schedule integration.
+- The full Manual of Martial Mastery is deployed: all 53 feats (16 fighting styles, 37 weapon masteries) replace the 5-feat subset in `server/data/` — the live five are identical in the full set, and `feat-registry.test.js` now asserts every one of the 53 resolves through the registry.
+- `killXpService.js` and `tests/kill-xp.test.js` are deleted. The service still awarded XP on kill, contradicting the 2026-10-16 decision that session-end scoring owns XP; the capstone now asserts that invariant directly (character XP unchanged mid-combat, death events never marked awarded).
+
 ## [1.0.0.183] - 2026-08-13 — Model updates: boot check, manual adopt
 
 Model pins become runtime state instead of source code. The install now finds out on its own when a newer Claude ships, and adopting it is a button rather than an edit-and-redeploy.

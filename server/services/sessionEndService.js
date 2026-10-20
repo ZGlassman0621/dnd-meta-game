@@ -51,7 +51,7 @@ async function runXpStage(sessionId, { characterId, sessionData, llmCall, db }) 
   }
 }
 
-async function runDowntimeStage(sessionId, { characterId, downtimeChoice, roster, spanDays }) {
+async function runDowntimeStage(sessionId, { characterId, campaignId, downtimeChoice, roster, spanDays }) {
   const existing = await stageStatus(sessionId, 'downtime');
   if (existing && existing.status === 'complete') return { skipped: true, ...JSON.parse(existing.detail_json || '{}') };
   await markStage(sessionId, 'downtime', 'started');
@@ -61,10 +61,10 @@ async function runDowntimeStage(sessionId, { characterId, downtimeChoice, roster
     if (choice === 'clean' || choice === 'skip' || (downtimeChoice?.text != null && isSkipResponse(downtimeChoice.text))) {
       detail = { path: 'clean', scheduled: 0 };
     } else if (choice === 'short') {
-      const res = await shortSkip(downtimeChoice?.days || 1);
+      const res = await shortSkip(downtimeChoice?.days || 1, campaignId);
       detail = { path: 'short', ...res };
     } else {
-      const startDay = await getCurrentDay();
+      const startDay = await getCurrentDay(campaignId);
       const assignments = parseDowntimeAssignments(downtimeChoice?.text || '', roster || [], spanDays || downtimeChoice?.spanDays || 0, startDay);
       const { scheduled, protectEntityIds } = await scheduleDowntime(assignments, characterId);
       detail = { path: 'full', scheduled, protectEntityIds, spanDays: spanDays || downtimeChoice?.spanDays || 0 };
@@ -106,7 +106,7 @@ async function runSweepStage(sessionId, { campaignId, characterId }) {
   if (existing && existing.status === 'complete') return { skipped: true, ...JSON.parse(existing.detail_json || '{}') };
   await markStage(sessionId, 'sweep', 'started');
   try {
-    const gameDay = await getCurrentDay();
+    const gameDay = await getCurrentDay(campaignId);
     const result = await sweepDeferredResolutions(campaignId, characterId, gameDay);
     await markStage(sessionId, 'sweep', 'complete', { ...result });
     return { status: 'complete', ...result };
@@ -123,7 +123,7 @@ export async function endSession(sessionId, options = {}) {
     downtimeChoice = { path: 'clean' }, roster = [], spanDays = 0, db = null } = options;
   // Pipeline order: XP → downtime → domains → digest → sweep.
   const xp = await runXpStage(sessionId, { characterId, sessionData, llmCall, db });
-  const downtime = await runDowntimeStage(sessionId, { characterId, downtimeChoice, roster, spanDays });
+  const downtime = await runDowntimeStage(sessionId, { characterId, campaignId, downtimeChoice, roster, spanDays });
   const domains = await runDomainsStage(sessionId);
   const digest = await runDigestStage(sessionId);
   const sweep = await runSweepStage(sessionId, { campaignId, characterId });

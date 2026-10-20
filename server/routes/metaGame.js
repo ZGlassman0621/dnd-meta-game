@@ -23,6 +23,7 @@ import {
   formatGameTime
 } from '../services/metaGame.js';
 import { processCharacterTimeAdvance, getCharacterWorldView } from '../services/livingWorldService.js';
+import { advanceHours } from '../services/scheduleService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -384,22 +385,16 @@ router.post('/advance-time/:characterId', async (req, res) => {
 
     const totalHours = (hours || 0) + (days || 0) * 24;
 
-    const character = await dbGet('SELECT game_day, game_year, game_hour FROM characters WHERE id = ?', [req.params.characterId]);
+    const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [req.params.characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
     }
 
-    const currentDay = character.game_day || 1;
-    const currentYear = character.game_year || 1492;
-    const currentHour = character.game_hour ?? 8;
-
-    const newTime = advanceGameTime(currentDay, currentYear, currentHour, totalHours);
-
-    await dbRun(`
-      UPDATE characters
-      SET game_day = ?, game_year = ?, game_hour = ?
-      WHERE id = ?
-    `, [newTime.day, newTime.year, newTime.hour, req.params.characterId]);
+    // Phase 0: advance the unified campaign clock; it mirrors the new
+    // date/time back onto the campaign's characters (game_day/game_year/
+    // game_hour). Replaces the old per-character read-compute-write.
+    const clockAfter = await advanceHours(totalHours, { campaignId: character.campaign_id ?? null, reason: 'meta_advance_time' });
+    const newTime = { day: clockAfter.dayOfYear, year: clockAfter.year, hour: clockAfter.hour };
 
     const newDate = dayToHarptosDate(newTime.day, newTime.year);
 

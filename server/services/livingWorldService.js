@@ -7,6 +7,7 @@ import * as questGenerator from './questGenerator.js';
 import * as questService from './questService.js';
 import * as narrativeQueueService from './narrativeQueueService.js';
 import { checkAndResolveActivities } from './companionActivityService.js';
+import { getClock } from './scheduleService.js';
 import { generateNpcMail } from './npcMailService.js';
 import { advanceWeather, getWeather } from './weatherService.js';
 import { processDayChange as processSurvivalDayChange } from './survivalService.js';
@@ -87,14 +88,17 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     }
   };
 
+  // Phase 0: ONE read of the unified clock for the whole tick. Each
+  // subsystem gets the scale its data lives on — dayOfYear for the
+  // Harptos-date consumers (weather, events, deadlines: the scale
+  // characters.game_day always carried), absolute day for entity_schedule
+  // comparisons (companion activities). Replaces nine MAX(game_day) reads.
+  const tickClock = await getClock(campaignId);
+
   try {
     // 0.5. Advance weather
     try {
-      const maxDayRow = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const currentGameDay = maxDayRow?.max_day || 1;
+      const currentGameDay = tickClock.dayOfYear;
       const season = getSeason(currentGameDay);
       const weatherResult = await advanceWeather(campaignId, gameDaysPassed * 24, currentGameDay, season);
       results.weather = weatherResult;
@@ -116,11 +120,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     // Phase 3.3 SC-7.7: world event tick now uses currentGameDay
     // (game-day clock) instead of gameDaysPassed (real-time delta).
     // Standardizes on the same clock as the rest of the codebase.
-    const worldEventGameDayRow = await dbGet(
-      'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-      [campaignId]
-    );
-    const worldEventCurrentGameDay = worldEventGameDayRow?.max_day || 0;
+    const worldEventCurrentGameDay = tickClock.dayOfYear;
     const eventResults = await worldEventService.processEventTick(campaignId, worldEventCurrentGameDay);
     results.event_results = eventResults;
 
@@ -132,11 +132,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 
     // 3.5. Check and resolve companion activities that have reached their duration
     try {
-      const maxDayRow = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const currentGameDay = maxDayRow?.max_day || 0;
+      const currentGameDay = tickClock.day;
       if (currentGameDay > 0) {
         const resolvedActivities = await checkAndResolveActivities(campaignId, currentGameDay);
         results.companion_activities_resolved = resolvedActivities;
@@ -155,11 +151,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       if (charRowBase) {
         const base = await partyBaseService.getBase(charRowBase.id, campaignId);
         if (base && base.status === 'active') {
-          const maxDayRowBase = await dbGet(
-            'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-            [campaignId]
-          );
-          const baseGameDay = maxDayRowBase?.max_day || 1;
+          const baseGameDay = tickClock.dayOfYear;
           const baseResults = await partyBaseService.processIncomeAndUpkeep(
             base.id, baseGameDay, gameDaysPassed
           );
@@ -173,11 +165,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
 
     // 3.75. Generate NPC mail
     try {
-      const maxDayRow2 = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const mailGameDay = maxDayRow2?.max_day || 0;
+      const mailGameDay = tickClock.dayOfYear;
       if (mailGameDay > 0) {
         // Get character for this campaign (solo game — one character per campaign)
         const charRow = await getPrimaryCharacter(campaignId);
@@ -199,11 +187,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     // 3.8. Process consequences (overdue promises, expired quests)
     try {
       const charRow2 = await getPrimaryCharacter(campaignId);
-      const maxDayRow3 = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const consequenceGameDay = maxDayRow3?.max_day || 0;
+      const consequenceGameDay = tickClock.dayOfYear;
       if (charRow2 && consequenceGameDay > 0) {
         const consequenceResults = await processConsequences(campaignId, charRow2.id, consequenceGameDay);
         results.consequences = consequenceResults;
@@ -219,11 +203,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     // 3.85. Notoriety decay and entanglement checks
     try {
       const charRowNotoriety = await getPrimaryCharacter(campaignId);
-      const maxDayRowNotoriety = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const notorietyGameDay = maxDayRowNotoriety?.max_day || 0;
+      const notorietyGameDay = tickClock.dayOfYear;
       if (charRowNotoriety && notorietyGameDay > 0) {
         const notorietyResults = await notorietyService.processNotorietyTick(
           campaignId, charRowNotoriety.id, notorietyGameDay
@@ -243,11 +223,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     //      the pickup next session.
     try {
       const charRowOrders = await getPrimaryCharacter(campaignId);
-      const maxDayRowOrders = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const ordersGameDay = maxDayRowOrders?.max_day || 0;
+      const ordersGameDay = tickClock.dayOfYear;
       if (charRowOrders && ordersGameDay > 0) {
         const readied = await processDueOrders(ordersGameDay);
         for (const o of readied) {
@@ -292,11 +268,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
     //       that hit their deadline for auto-resolution; expire any
     //       captured bases whose 14-day recapture window closed.
     try {
-      const maxDayRowThreat = await dbGet(
-        'SELECT MAX(game_day) as max_day FROM characters WHERE campaign_id = ?',
-        [campaignId]
-      );
-      const threatGameDay = maxDayRowThreat?.max_day || 0;
+      const threatGameDay = tickClock.dayOfYear;
       if (threatGameDay > 0) {
         const generated = await generateThreatsForCampaign(campaignId, threatGameDay);
         const dueIds = await markDueThreatsForResolution(campaignId, threatGameDay);

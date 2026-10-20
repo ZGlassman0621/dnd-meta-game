@@ -15,6 +15,7 @@ import { getActiveFactions } from '../services/factionService.js';
 // adjustDisposition / adjustTrust no longer imported — PROMISE_MADE +
 // PROMISE_FULFILLED handlers in consequenceService.js own those calls.
 import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from '../services/npcRelationshipService.js';
+import { ensureComplexityTier, ensureAgendaContent } from '../services/npcComplexityService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly } from '../services/merchantService.js';
@@ -77,6 +78,8 @@ import { lookupItemByName } from '../data/merchantLootTables.js';
 // SC-6.4b: getLootTableForLevel moved into lootDropService.js with the
 // LOOT_DROP handler. No remaining usage in this file.
 import { detectConditionChanges, formatConditionsForAI } from '../data/conditions.js';
+// Phase 0 (clock unification): all clock reads/writes go through scheduleService.
+import { advanceDays as advanceClockDays, setClockDate, getClock } from '../services/scheduleService.js';
 import { safeParse } from '../utils/safeParse.js';
 import { validateDmMarkers } from '../services/markerSchemas.js';
 import { verifyDmResponse } from '../services/ruleVerifiers.js';
@@ -739,7 +742,7 @@ router.post('/start', async (req, res) => {
           npcRelationships: npcRelationships || [],
           discoveredLocations: discoveredLocations || [],
           activeFactions: activeFactions || [],
-          currentGameDay: character.game_day || null,
+          currentGameDay: (await getClock(character.campaign_id ?? null)).dayOfYear,
           activeQuests: []
         };
       } catch (e) {
@@ -965,6 +968,52 @@ router.post('/start', async (req, res) => {
       : '';
     // ──────────── END PARALLEL CONTEXT ASSEMBLY ────────────
 
+    // DM System Part 1 — backfill-on-appearance (Zach 2026-10-19): NPCs that
+    // predate the complexity system get their tier rolled the next time they
+    // appear — the SYSTEM rolls, never the AI. Covers this session's custom
+    // NPCs plus active companions' NPC rows (companion agenda content
+    // deferred at recruitment completes here). Agenda fields are merged into
+    // the customNpc objects so buildAgendaPromptBlock can actually see them.
+    // Best-effort throughout: nothing here may block session start.
+    try {
+      const agendaLlmCall = async (prompt) => {
+        const { provider } = await getLLMProvider(providerPreference);
+        if (provider === 'claude') {
+          return await loggedChat(
+            { call_purpose: 'npc_agenda_backfill', prompt_builder: 'dmSession_route', session_id: null },
+            'You generate hidden agendas for NPCs in a D&D campaign. Respond with JSON only.',
+            [{ role: 'user', content: prompt }]
+          );
+        }
+        return await ollama.chat([{ role: 'user', content: prompt }], model);
+      };
+      const backfillIds = new Set();
+      for (const n of (Array.isArray(customNpcs) ? customNpcs : [])) {
+        if (n?.id) backfillIds.add(n.id);
+      }
+      for (const c of (companions || [])) {
+        if (c?.npc_id) backfillIds.add(c.npc_id);
+      }
+      for (const npcId of backfillIds) {
+        try {
+          await ensureComplexityTier(npcId);
+          await ensureAgendaContent(npcId, agendaLlmCall);
+        } catch (e) {
+          console.error(`[npc-complexity] backfill failed for npc ${npcId}:`, e?.message || e);
+        }
+      }
+      for (const n of (Array.isArray(customNpcs) ? customNpcs : [])) {
+        if (!n?.id) continue;
+        const fresh = await dbGet(
+          'SELECT complexity_tier, hidden_agenda, agenda_status, what_they_want_from_pc, disposition_json FROM npcs WHERE id = ?',
+          [n.id]
+        );
+        if (fresh) Object.assign(n, fresh);
+      }
+    } catch (e) {
+      console.error('[npc-complexity] backfill block failed:', e?.message || e);
+    }
+
     // Build session config with the custom Forgotten Realms context
     const sessionConfig = {
       startingLocation,
@@ -1147,6 +1196,16 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
       // Use character's year only if they have a non-default year (from previous sessions)
       gameStartYear = character.game_year;
     }
+    // Phase 0: sync the unified campaign clock to the session's start
+    // date, forward-only (era/flashback starts keep session-local dates
+    // and never drag the world clock backward).
+    try {
+      const cid = character.campaign_id ?? null;
+      const clk = await getClock(cid);
+      if (gameStartYear > clk.year || (gameStartYear === clk.year && gameStartDay >= clk.dayOfYear)) {
+        await setClockDate(cid, { dayOfYear: gameStartDay, year: gameStartYear });
+      }
+    } catch (e) { console.warn('[clock] session-start sync failed (non-fatal):', e.message); }
     const gameDate = dayToDate(gameStartDay, gameStartYear);
 
     const info = await dbRun(`
@@ -2523,11 +2582,11 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
         [session.character_id]
       );
       if (character) {
-        const newGameDay = (character.game_day || 1) + daysToAdd;
-        await dbRun(
-          'UPDATE characters SET game_day = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [newGameDay, character.id]
-        );
+        // Phase 0: advance the unified clock — it mirrors game_day onto
+        // the campaign's characters (the old direct write skipped year
+        // rollover entirely).
+        await advanceClockDays(daysToAdd, { campaignId: character.campaign_id ?? null, reason: 'adjust_date' }).catch(e =>
+          console.warn('adjust-date: clock advance failed:', e.message));
         // Fire a living-world tick for the elapsed days so weather,
         // moods, merchant orders, base threats, etc. advance too.
         // Best-effort: a tick failure shouldn't block the date change.
@@ -2799,7 +2858,35 @@ router.post('/:sessionId/end', async (req, res) => {
     // Advance game date
     const currentGameDay = session.game_start_day || character.game_day || 1;
     const currentGameYear = session.game_start_year || character.game_year || 1492;
-    const newGameDate = advanceTime(currentGameDay, currentGameYear, daysElapsed);
+    // Phase 0: the unified clock advances by the elapsed span (syncing to
+    // the session's start date first) and mirrors the date back onto the
+    // campaign's characters. The explicit UPDATE below stays as a belt to
+    // the mirror's braces — it preserves the exact legacy behavior for the
+    // session character; the mirror covers everyone else.
+    let newGameDate;
+    try {
+      // Sync the clock to the session's start date first, forward-only
+      // (an era/flashback session never drags the world clock backward).
+      // Campaign-less characters sync the FALLBACK clock — it is their
+      // clock; leaving it stale would stamp its date over the character's
+      // own below (caught by session-end-world-tick test 7).
+      const cid = character.campaign_id ?? null;
+      const clkBefore = await getClock(cid);
+      const sessionAtOrAhead = currentGameYear > clkBefore.year ||
+        (currentGameYear === clkBefore.year && currentGameDay >= clkBefore.dayOfYear);
+      if (sessionAtOrAhead) {
+        await setClockDate(cid, { dayOfYear: currentGameDay, year: currentGameYear });
+        const clockAfter = await advanceClockDays(daysElapsed, { campaignId: cid, reason: 'session_end' });
+        newGameDate = { day: clockAfter.dayOfYear, year: clockAfter.year };
+      } else {
+        // Flashback session: the world clock stays put; the character's
+        // date advances on session-local math, as it did pre-unification.
+        newGameDate = advanceTime(currentGameDay, currentGameYear, daysElapsed);
+      }
+    } catch (e) {
+      console.warn('[clock] session-end advance failed, falling back to legacy date math:', e.message);
+      newGameDate = advanceTime(currentGameDay, currentGameYear, daysElapsed);
+    }
 
     await dbRun('UPDATE characters SET game_day = ?, game_year = ? WHERE id = ?',
       [newGameDate.day, newGameDate.year, session.character_id]);
@@ -2815,10 +2902,10 @@ router.post('/:sessionId/end', async (req, res) => {
     // it moved. Ticking here means the world advances by the same span the
     // adventure consumed, with no UI involvement at all.
     //
-    // ORDERING IS LOAD-BEARING: this must run AFTER the characters.game_day
-    // UPDATE above. The tick derives its own clock from
-    // `MAX(game_day) FROM characters WHERE campaign_id = ?` for weather, world
-    // events, mail, consequences, notoriety, merchant orders and base threats.
+    // ORDERING IS LOAD-BEARING: this must run AFTER the clock advance
+    // above. Since Phase 0 the tick reads the unified world_clock
+    // (scheduleService.getClock) for weather, world events, mail,
+    // consequences, notoriety, merchant orders and base threats.
     // Ticking before the write would advance the world against the day the
     // session STARTED on, so every deadline would resolve one session late.
     //

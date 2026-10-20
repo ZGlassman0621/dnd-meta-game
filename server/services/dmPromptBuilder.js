@@ -11,6 +11,8 @@ import { formatFactionStandingFragment } from './factionService.js';
 import { safeParse } from '../utils/safeParse.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { renderFeatEffectsForPrompt } from '../data/featRegistry.js';
+import { buildAgendaPromptBlock } from './npcComplexityService.js';
+import { buildCompanionPromptBlock } from './companionPrompt.js';
 
 // Quality rank bonuses for equipment
 const QUALITY_BONUSES = {
@@ -448,6 +450,11 @@ function formatCustomNpcs(npcs, nicknameResolutions = null) {
     const contextLines = [];
     if (npc.motivation) contextLines.push(`  Motivation: ${npc.motivation}`);
     if (npc.secret) contextLines.push(`  Secret (reveal gradually if appropriate): ${npc.secret}`);
+    // DM-system Part 1: rolled complexity tier. The AI sees the hidden agenda
+    // but must NEVER reveal it directly — behavior only. Surface-tier NPCs
+    // and NPCs without agenda content render nothing here.
+    const agendaBlock = buildAgendaPromptBlock(npc);
+    if (agendaBlock) contextLines.push(agendaBlock);
     if (hasPalette && (npc.personality_trait_1 || npc.background_notes)) {
       // With a palette, personality + notes are about who the character is,
       // not how they sound. Fold them into a single Character Context block
@@ -810,7 +817,19 @@ function formatCompanions(companions, awayCompanions = []) {
       formatCompanionProgressionLines(companion.progression),
       formatCompanionSpellSlotsLine(companion.spell_slots_max, companion.spell_slots_used),
       formatCompanionActiveConditionsLine(companion.active_conditions),
-      formatCompanionDeathSavesLine(companion)
+      formatCompanionDeathSavesLine(companion),
+      // DM System Part 2 — Companion Engine standing block (DM-ONLY):
+      // private goals, held task, private knowledge, relationship trackers,
+      // and the act-on-your-own-turn behavioral rules. Renders header +
+      // rules even before the engine columns are populated.
+      (() => {
+        const block = buildCompanionPromptBlock({
+          ...companion,
+          class: companion.companion_class || companion.class,
+          personality: companion.personality_trait_1 || companion.personality,
+        });
+        return block || null;
+      })()
     ].filter(Boolean);
 
     return parts.join('\n');
@@ -1986,7 +2005,10 @@ Per-turn flow:
 • Player declares attack → "Make an attack roll." → STOP. Player reports the number.
 • On hit → "Roll your [weapon] damage ([dice])." → STOP. Player reports damage → emit [ENEMY_DAMAGE: Enemy="Name" Amount=X] INLINE.
 • Spells with saves: you roll the target's save, announce pass/fail, then damage.
+• Player casts a spell → emit [SPELL_CAST: Spell="Exact Name" Level=N] INLINE, where N is the slot level used (0 for cantrips). The system validates and decrements the slot, and starts concentration when the spell requires it. If the system reports no slots available, the spell fizzles — narrate that; never pretend it worked.
 • Enemy turns: emit [ENEMY_ATTACK: Enemy="Name" Target="Player"] INLINE. The SYSTEM rolls the attack and damage — you narrate the result it returns. Never roll for enemies yourself.
+• A combatant leaves another's reach → emit [OPPORTUNITY_ATTACK: Attacker="Name" Target="Name"] INLINE. It consumes the attacker's reaction (one per round); the system tracks this and rejects a second one — don't emit it twice for the same attacker in a round.
+• An enemy takes cover (cart, wall, doorway, rubble) → emit [SET_COVER: Target="Name" Cover="half"] INLINE. Cover values: half (+2 AC), three-quarters (+5 AC), full (cannot be targeted directly). Emit Cover="none" when they leave cover. The system applies the bonus — factor it into your narration of near-misses.
 • HP milestones: "bloodied" (half), "barely standing" (near death).
 • Player at 0 HP → "You fall unconscious. At the start of your turn, make a death saving throw."
 
