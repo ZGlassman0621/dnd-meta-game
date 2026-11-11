@@ -16,6 +16,10 @@ import { safeParse } from '../utils/safeParse.js';
 import { lookupItemByName } from '../data/merchantLootTables.js';
 import { getLootTableForLevel } from '../config/rewards.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
+// Loot wiring (R-02): magic items dropped by the DM arrive unidentified.
+import {
+  isMagicItem, stampDealtItem, loadLootState, saveLootState, recordDealt,
+} from './magicItemDiscoveryService.js';
 
 /**
  * LOOT_DROP handler. Multi-instance marker — pipeline dispatches the
@@ -33,7 +37,7 @@ import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 registerMarkerHandler('LOOT_DROP', async (parsed, context) => {
   if (!context?.characterId) return null;
   const character = await dbGet(
-    'SELECT id, level, inventory FROM characters WHERE id = ?',
+    'SELECT id, level, inventory, class_resources_json FROM characters WHERE id = ?',
     [context.characterId]
   );
   if (!character) return null;
@@ -43,10 +47,17 @@ registerMarkerHandler('LOOT_DROP', async (parsed, context) => {
   const lootTable = getLootTableForLevel(character.level);
   const isInLootTable = lootTable.includes(parsed.Item);
   const itemName = knownItem ? knownItem.name : parsed.Item;
+  // Loot wiring (R-02): a magic item dropped by the DM arrives
+  // unidentified. Mundane gear, and items stacking onto an existing
+  // stack, keep whatever discovery state the stack already has.
+  const isNewStack = !inventory.some(i => i.name.toLowerCase() === itemName.toLowerCase());
+  const magic = isMagicItem(knownItem) || isInLootTable;
 
   const existing = inventory.find(i => i.name.toLowerCase() === itemName.toLowerCase());
   if (existing) {
     existing.quantity = (existing.quantity || 1) + 1;
+  } else if (magic) {
+    inventory.push(stampDealtItem({ name: itemName, quantity: 1 }));
   } else {
     inventory.push({ name: itemName, quantity: 1 });
   }
@@ -55,11 +66,18 @@ registerMarkerHandler('LOOT_DROP', async (parsed, context) => {
     'UPDATE characters SET inventory = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [JSON.stringify(inventory), character.id]
   );
+  // Record the deal for the no-repeat rule (kill loot reads this list;
+  // a DM-chosen drop is never blocked by it, only recorded).
+  if (isNewStack) {
+    const lootState = await loadLootState('character', character.id);
+    await saveLootState('character', character.id, recordDealt(lootState, [itemName]));
+  }
 
   return {
     type: 'loot_drop',
     item: itemName,
     source: parsed.Source,
-    known: !!knownItem || isInLootTable
+    known: !!knownItem || isInLootTable,
+    identified: !(magic && isNewStack),
   };
 });

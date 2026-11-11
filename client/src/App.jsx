@@ -1,5 +1,4 @@
 import { useState, useEffect, lazy, Suspense, Component } from 'react'
-import CharacterManager from './components/CharacterManager'
 import AdventureManager from './components/AdventureManager'
 import ActiveAdventure from './components/ActiveAdventure'
 import AdventureHistory from './components/AdventureHistory'
@@ -40,6 +39,10 @@ const AIBehaviorDebugPage = lazy(() => import('./components/AIBehaviorDebugPage'
 // lazy) — the editorial styles/fonts are bundled globally and the
 // home flow is the user's first surface after login.
 import HomeFlow from './components/creator/HomeFlow.jsx'
+// Stage 6 edit mode — the sheet's "Edit in creator" entry opens the new
+// creator on the selected character. Direct import (same reason as
+// HomeFlow above); rendered full-screen while editCharacterId is set.
+import CreatorNextShell from './components/creator-next/CreatorNextShell.jsx'
 
 // Phase 3.5 — Settings overlay (per `settings/SETTINGS_DESIGN_BRIEF.md`).
 // Direct import; the overlay is small, mounted-on-demand, and reachable
@@ -93,13 +96,15 @@ function App() {
   // New Campaign form instead of an empty list. Cleared by navigateTo, so
   // visiting Campaigns later behaves normally (list first).
   const [pendingCampaignSetup, setPendingCampaignSetup] = useState(false)
+  // Stage 6 edit mode — the id of the character open in the creator
+  // from the sheet's "Edit in creator" entry. Null otherwise; the
+  // creator renders full-screen while set, on the existing row.
+  const [editCharacterId, setEditCharacterId] = useState(null)
 
   // v1.0.177 — the appbar links' inline dark styling moved into
   // `styles/shell.css` as `.shell-link`. Kept as classes rather than inline
   // objects so the converted shell reads from design tokens.
-  const [showCreationForm, setShowCreationForm] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
-  const [editCharacterInWizard, setEditCharacterInWizard] = useState(null)
   const [llmStatus, setLlmStatus] = useState(null)
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
@@ -251,12 +256,6 @@ function App() {
     checkActiveAdventure()
   }
 
-  const handleEditInWizard = (character) => {
-    setEditCharacterInWizard(character)
-    setActiveView(null)
-    setShowCreationForm(true)
-  }
-
   const handleShowLevelUp = (character) => {
     // Accept an optional character — if the caller is the character list, it
     // passes the character explicitly. If called from the sheet, selectedCharacter
@@ -283,14 +282,33 @@ function App() {
     )
   }
 
+  // Stage 6 edit mode (sheet → creator): the creator renders
+  // full-screen on the existing row while editCharacterId is set.
+  // Commit returns the edited row — refresh the local copy and land
+  // back on the sheet/dashboard for that character. Exit discards
+  // nothing (drafts autosave per stage) and returns the same way.
+  if (editCharacterId) {
+    return (
+      <CreatorNextShell
+        onExit={() => setEditCharacterId(null)}
+        resumeCharacterId={editCharacterId}
+        mode="edit"
+        onCommitted={(row) => {
+          if (row?.id) handleCharacterUpdated(row)
+          setEditCharacterId(null)
+        }}
+      />
+    )
+  }
+
   // Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) — when no
   // character is selected, render the new HomeFlow (editorial "Your
   // Characters" roster) as the live entry point. Replaces the old
-  // CharacterManager landing. When the player picks a character,
+  // roster landing. When the player picks a character,
   // selectedCharacter is set and the existing dashboard chrome takes
   // over below. The "← Your characters" button in the dashboard
   // header navigates back to HomeFlow by clearing selectedCharacter.
-  if (!selectedCharacter && !showCreationForm) {
+  if (!selectedCharacter) {
     return (
       <HomeFlow
         onSelectActive={(char) => setSelectedCharacter(char)}
@@ -427,8 +445,8 @@ function App() {
           character={selectedCharacter}
           onBack={goHome}
           onCharacterUpdated={handleCharacterUpdated}
-          onEditInWizard={handleEditInWizard}
           onLevelUp={handleShowLevelUp}
+          onEditInCreator={(character) => setEditCharacterId(character.id)}
         />
       ) : activeView === 'showDMSession' && selectedCharacter ? (
         <DMSession
@@ -573,7 +591,7 @@ function App() {
         />
       ) : (
         <>
-          {selectedCharacter && !showCreationForm && campaignPlanReady && (
+          {selectedCharacter && campaignPlanReady && (
             <div
               onClick={() => navigateTo('showDMSession')}
               style={{
@@ -608,33 +626,12 @@ function App() {
             </div>
           )}
 
-          {/*
-            Phase 2 chunk 5 batch 3 sub-checkpoint 2 — CharacterManager
-            is now hidden by default (HomeFlow handles the roster + new
-            character creation). Kept here only for the edit-existing-
-            character path: CharacterSheet's "Edit in Wizard" button
-            sets showCreationForm=true + editCharacterInWizard, which
-            triggers CharacterManager to render the legacy
-            CharacterCreationWizard in edit mode. The new
-            CharacterCreatorV2 doesn't yet support an
-            "edit existing" surface; that's a follow-up. Until then the
-            old wizard remains accessible for editing only.
-          */}
-          {showCreationForm && (
-            <CharacterManager
-              characters={characters}
-              selectedCharacter={selectedCharacter}
-              onSelectCharacter={setSelectedCharacter}
-              onCharacterCreated={handleCharacterCreated}
-              onCharacterUpdated={handleCharacterUpdated}
-              onCreationFormChange={setShowCreationForm}
-              editCharacterInWizard={editCharacterInWizard}
-              onClearEditCharacter={() => setEditCharacterInWizard(null)}
-              onShowLevelUp={handleShowLevelUp}
-            />
-          )}
+          {/* 2026-11-05 unhook: the old creators are gone. There is no
+            edit path at all until the new creator grows edit mode — the
+            CharacterSheet "Edit in Wizard" button and the CharacterManager
+            render that served it were removed with them. */}
 
-          {selectedCharacter && !showCreationForm && (
+          {selectedCharacter && (
             <div style={{
               marginTop: '2rem',
               display: 'grid',

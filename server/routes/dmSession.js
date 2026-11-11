@@ -16,6 +16,10 @@ import { getActiveFactions } from '../services/factionService.js';
 // PROMISE_FULFILLED handlers in consequenceService.js own those calls.
 import { getCharacterRelationshipsWithNpcs, getConversationsForCharacter } from '../services/npcRelationshipService.js';
 import { ensureComplexityTier, ensureAgendaContent } from '../services/npcComplexityService.js';
+import { dealSessionNpcs } from '../services/npcBankService.js';
+import { dealAvailableNames } from '../services/xanatharNameService.js';
+import { assignWorldId } from '../services/worldIdService.js';
+import { ensureNpcProfession } from '../services/npcProfessionService.js';
 import { getDiscoveredLocations } from '../services/locationService.js';
 import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { getMerchantInventory, getMerchantsByCampaign, restockMerchant, updateMerchantAfterTransaction, generateBuybackPrices, createMerchantOnTheFly } from '../services/merchantService.js';
@@ -27,6 +31,9 @@ import '../services/merchantOrderService.js';
 // SC-6.4b: lootDropService is new — registers the LOOT_DROP handler at
 // module load.
 import '../services/lootDropService.js';
+// Loot wiring (R-02): magicItemDiscoveryService registers the
+// ITEM_REVEAL_ONE / ITEM_IDENTIFY handlers at module load.
+import '../services/magicItemDiscoveryService.js';
 import {
   sonnetModel, getPins, getDefaultPins, persistPins, resetPins, fetchCatalog, comparePins
 } from '../services/modelRegistry.js';
@@ -37,6 +44,43 @@ import '../services/baseThreatService.js';
 // SC-6.4d: combatMarkerService is new — registers COMBAT_START + COMBAT_END
 // handlers at module load.
 import '../services/combatMarkerService.js';
+// Display casting (combined build with combat item 8): displayService
+// registers the DISPLAY + ENEMY_DISPLAY handlers at module load.
+import '../services/displayService.js';
+// Lair durability (migration 099): lairDurabilityService registers the
+// LAIR_CREATE / LAIR_DAMAGE / LAIR_STABILIZE / LAIR_HAZARD_ROLL handlers
+// at module load. Imported for its side effect, like the services above —
+// without this import the markers silently never run.
+import '../services/lairDurabilityService.js';
+// Scene layer wiring: sceneLinkService registers the SET_ROOM handler
+// at module load. Imported for its side effect, like the services above —
+// without this import the marker silently never runs.
+import '../services/sceneLinkService.js';
+// Dungeon generation wiring: dungeonGenerationService registers the
+// GENERATE_DUNGEON handler at module load. Imported for its side effect,
+// like the services above — without this import the marker silently
+// never runs.
+import '../services/dungeonGenerationService.js';
+// Time-evolution engine: timeEvolutionService registers the
+// EVOLVE_PLACE handler at module load. Imported for its side effect,
+// like the services above — without this import the marker silently
+// never runs.
+import '../services/timeEvolutionService.js';
+  // Family 8 — subclass markers (mechanics-hooks): registers the
+  // BEND_LUCK / TIDES_OF_CHAOS / PRESERVE_LIFE / TAMED_SURGE /
+  // TELEPATHIC_SPEECH / AWAKENED_MIND / HOUND_OF_ILL_OMEN /
+  // ACCURSED_SPECTER / FAITHFUL_SUMMONS handlers at module load.
+  // Imported for its side effect, like the services above — without
+  // this import the markers validate but silently never run.
+  // ATTUNE / UNATTUNE schemas exist in markerSchemas.js, but their
+  // handlers live in attunementService.js (attunement family) — see
+  // HANDOFF.md; do NOT import that file here until it lands.
+import '../services/subclassMarkerService.js';
+// General magic-item attunement (mechanics-hooks D10): attunementService
+// registers the ATTUNE / UNATTUNE handlers at module load. Imported for
+// its side effect, like the services above — without this import the
+// markers silently never run.
+import '../services/attunementService.js';
 // Phase 3.1: characterHpService registers the HP_CHANGE handler on the player
 // path at module load. Imported for its side effect, like the services above —
 // without this import damage silently never applies.
@@ -45,8 +89,27 @@ import { getHpState, rollDeathSave } from '../services/characterHpService.js';
 import { reconcileTurn } from '../services/fictionMarkerReconciliation.js';
 // Structural #9: Fiction-marker reconciliation (strict both directions). Service
 // file deployed separately; import here wires it into the turn pipeline.
-import '../services/spellCastService.js';
+import { getPendingSpellEffect, resolveReportedSpellEffect, formatSpellEffectBlock } from '../services/spellCastService.js';
 // Combat Pipeline #3: SPELL_CAST handler registration.
+// ROLL_REQUEST: non-combat check mechanics. The service registers its marker
+// handler at module load; the named imports drive the pending-roll flow in
+// the /message handler below.
+import { getPendingRoll, resolveReportedRoll, formatRollOutcomeBlock } from '../services/rollRequestService.js';
+// Perception pre-roll: importing the module registers the
+// PERCEPTION_PREROLL / PERCEPTION_USE marker handlers (see
+// markerPipeline.js — a handler service must be imported for
+// side effect in this route or it silently never runs).
+import { resolveBankRoll, formatPerceptionBankBlock, formatPerceptionUseBlock, formatActiveBankBlock } from '../services/perceptionPreRollService.js';
+import { getPendingAttack, resolveReportedAttack, formatAttackOutcomeBlock } from '../services/partyAttackService.js';
+import { getTurnState, advanceTurn } from '../services/combatTurnService.js';
+import { formatTurnStateBlock } from '../services/turnLedgerService.js';
+import { getCurrentEncounterSeq } from '../services/enemyCombatService.js';
+// REST / TIME_ADVANCE: rest + clock mechanics. The service registers its
+// marker handlers at module load; the named imports drive the next-turn
+// time-event injection in /message and the measured session-end span.
+import { formatTimeEventBlock, sessionEndDays } from '../services/restTimeService.js';
+import { getPartyConditions } from '../services/conditionService.js';
+import { ensureCompanionSheet } from '../services/companionSheetService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
   // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
@@ -67,7 +130,7 @@ import {
   // migrated to handlers in consequenceService.js + notorietyService.js.
   // Legacy exports stay per "deprecate by hiding."
   buildAnalysisPrompt, parseAnalysisResponse,
-  calculateHPChange, calculateGameTimeAdvance,
+  calculateHPChange,
   buildNotesExtractionPrompt, appendCampaignNotes,
   buildNpcExtractionPrompt, saveExtractedNpcs,
   buildMemoryExtractionPrompt, updateCharacterMemories,
@@ -527,7 +590,7 @@ router.get('/:sessionId', async (req, res) => {
 // Start a new DM session
 router.post('/start', async (req, res) => {
   try {
-    const {
+    let {
       characterId,
       startingLocation,
       era,
@@ -535,6 +598,7 @@ router.post('/start', async (req, res) => {
       customConcepts,
       campaignLength,
       customNpcs,
+      bankDeals = [],  // optional array of { profession, location } — NPC-bank handoff
       model,
       providerPreference,  // 'auto' | 'claude' | 'ollama'
       modelOverride,  // 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch override (v1.0.99+)
@@ -595,7 +659,7 @@ router.post('/start', async (req, res) => {
              c.armor_class, c.speed as companion_speed, c.subrace as companion_subrace, c.background as companion_background,
              n.name, n.nickname, n.race, n.gender, n.age, n.occupation,
              n.stat_block, n.cr, n.ac, n.hp, n.speed, n.ability_scores as npc_ability_scores,
-             n.skills as npc_skills, c.skill_proficiencies,
+             n.skills as npc_skills, c.skill_proficiencies, c.archetype_key,
              n.avatar, n.personality_trait_1, n.personality_trait_2, n.voice, n.mannerism,
              n.motivation, n.background_notes, n.relationship_to_party,
              cb.mood as companion_mood, cb.mood_cause as companion_mood_cause,
@@ -615,6 +679,16 @@ router.post('/start', async (req, res) => {
     for (const c of companions) {
       if (c.progression_type !== 'class_based') continue;
       try {
+        // Real character sheet: backfill generated ability scores + skill
+        // proficiencies for companions recruited before sheets existed
+        // (or with the old flat-10 placeholder). Refresh the in-memory row
+        // so THIS session's prompt renders the real sheet, not the stale one.
+        const sheet = await ensureCompanionSheet(c.id);
+        if (sheet?.generated) {
+          c.companion_ability_scores = JSON.stringify(sheet.abilityScores);
+          c.skill_proficiencies = JSON.stringify(sheet.skills);
+          if (sheet.archetypeKey) c.archetype_key = sheet.archetypeKey;
+        }
         await ensureCompanionProgressionInitialized(c.id);
         c.progression = await getCompanionProgression(c.id);
       } catch (e) {
@@ -690,6 +764,16 @@ router.post('/start', async (req, res) => {
     } catch (e) {
       console.error('Error extracting used names:', e);
       usedNames = [];
+    }
+
+    // Xanathar names: deal a hand of unused bank names for new NPCs.
+    // Best-effort: a failed deal never blocks session start.
+    let availableNames = [];
+    try {
+      availableNames = await dealAvailableNames({ usedNames, dbAll });
+    } catch (e) {
+      console.error('[xanathar-names] deal failed:', e?.message || e);
+      availableNames = [];
     }
 
     // Get active story threads to include in session context
@@ -794,6 +878,24 @@ router.post('/start', async (req, res) => {
         await syncDeathsFromCanonFacts(character.campaign_id);
       } catch (e) {
         console.error('Error syncing deaths from canon facts:', e);
+      }
+    }
+
+    // NPC-bank handoff: deal requested bank NPCs into this session's
+    // known people, before the prompt is built. Best-effort: a failed
+    // deal never blocks session start. Dealt rows join customNpcs, so
+    // the backfill, prompt, sessionConfig, and selectedNpcIds below all
+    // see them with no other route changes.
+    if (Array.isArray(bankDeals) && bankDeals.length) {
+      try {
+        const handoff = await dealSessionNpcs({ bankDeals, existingNpcs: customNpcs || [] });
+        if (Array.isArray(customNpcs)) {
+          customNpcs.push(...handoff.npcs.filter((n) => !(customNpcs || []).some((e) => e && e.id === n.id)));
+        } else {
+          customNpcs = handoff.npcs;
+        }
+      } catch (e) {
+        console.error('[npc-bank] handoff failed:', e?.message || e);
       }
     }
 
@@ -998,6 +1100,7 @@ router.post('/start', async (req, res) => {
         try {
           await ensureComplexityTier(npcId);
           await ensureAgendaContent(npcId, agendaLlmCall);
+          await ensureNpcProfession(npcId);
         } catch (e) {
           console.error(`[npc-complexity] backfill failed for npc ${npcId}:`, e?.message || e);
         }
@@ -1005,7 +1108,7 @@ router.post('/start', async (req, res) => {
       for (const n of (Array.isArray(customNpcs) ? customNpcs : [])) {
         if (!n?.id) continue;
         const fresh = await dbGet(
-          'SELECT complexity_tier, hidden_agenda, agenda_status, what_they_want_from_pc, disposition_json FROM npcs WHERE id = ?',
+          'SELECT complexity_tier, hidden_agenda, agenda_status, what_they_want_from_pc, disposition_json, profession_key, mastery_tier, archetype_key, gup_specific, gup_unique FROM npcs WHERE id = ?',
           [n.id]
         );
         if (fresh) Object.assign(n, fresh);
@@ -1031,6 +1134,7 @@ router.post('/start', async (req, res) => {
       campaignNotes,
       characterMemories,
       usedNames,
+      availableNames,
       storyThreadsContext,
       narrativeQueueContext,
       narrativeQueueItemIds,
@@ -1320,7 +1424,7 @@ router.post('/:sessionId/message', async (req, res) => {
     // modelOverride: 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch (v1.0.99+)
     // attackRoll / damage: Phase 4 hybrid combat. Optional whole numbers the
     // player rolled at their own table; see parsePlayerDiceInput.
-    const { action, providerPreference, modelOverride, leanPrompt, activeConditions, attackRoll, damage } = req.body;
+    const { action, providerPreference, modelOverride, leanPrompt, activeConditions, attackRoll, damage, checkRoll, checkRoll2 } = req.body;
 
     if (!action || !action.trim()) {
       return res.status(400).json({ error: 'Action is required' });
@@ -1336,7 +1440,7 @@ router.post('/:sessionId/message', async (req, res) => {
     const diceDirective = formatPlayerDiceDirective(dice.value);
     // What the model sees. `action` stays the clean, player-authored text and
     // is what gets persisted, transcribed, and echoed back to the client.
-    const actionForLlm = action + diceDirective;
+    let actionForLlm = action + diceDirective;
 
     // Get the session
     const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
@@ -1348,14 +1452,207 @@ router.post('/:sessionId/message', async (req, res) => {
       return res.status(400).json({ error: 'Session is not active' });
     }
 
+    // ROLL_REQUEST resolution: if the DM asked for a check last turn, the
+    // roll is pending on session_config. The player reports real dice —
+    // structured (checkRoll/checkRoll2 body fields, the same channel as
+    // attackRoll) or as a bare-number action. Resolve BEFORE the turn runs;
+    // the outcome is injected as a system fact further below. Best-effort:
+    // a failure here must never cost the player their turn.
+    let rollOutcome = null;
+    try {
+      const pendingRoll = await getPendingRoll(parseInt(sessionId));
+      if (pendingRoll) {
+        let reportedDice = null;
+        if (Number.isInteger(checkRoll) && checkRoll >= 1 && checkRoll <= 20) {
+          reportedDice = [checkRoll];
+          if (Number.isInteger(checkRoll2) && checkRoll2 >= 1 && checkRoll2 <= 20) {
+            reportedDice.push(checkRoll2);
+          }
+        } else {
+          const m = action.trim().match(/^(\d{1,2})(?:\s*(?:and|,|\+)\s*(\d{1,2}))?\s*$/);
+          if (m) {
+            const d1 = parseInt(m[1], 10);
+            const d2 = m[2] ? parseInt(m[2], 10) : null;
+            if (d1 >= 1 && d1 <= 20 && (d2 === null || (d2 >= 1 && d2 <= 20))) {
+              reportedDice = d2 === null ? [d1] : [d1, d2];
+            }
+          }
+        }
+        if (reportedDice) {
+          // Item 6: a pending save request may carry a pending spell
+          // effect (enemy save spell, retaliation, countered cast) —
+          // capture its key BEFORE resolving, since resolution clears
+          // the pending roll that carries it.
+          const pendingEffectKey = pendingRoll?.effectKey || null;
+          // Perception pre-roll: a pending BANK roll (the PC's door die)
+          // banks the number instead of judging it — no DC, no outcome.
+          // (A bank outcome carries no effectKey and kind 'skill', so the
+          // Item-6 effect block below is skipped for it, naturally.)
+          rollOutcome = pendingRoll.bank === 'perception'
+            ? await resolveBankRoll(parseInt(sessionId), reportedDice)
+            : await resolveReportedRoll(parseInt(sessionId), reportedDice);
+          if (rollOutcome) {
+            // Keep the in-memory session in sync — the post-turn
+            // session_config write parses this object and must not
+            // resurrect the just-cleared pending roll.
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+            // Item 6: apply the pending effect, or the PC's repeat
+            // save, on the reported roll. Best-effort: never costs
+            // the player their turn.
+            try {
+              const ess = await import('../services/enemySpellService.js');
+              if (pendingEffectKey) {
+                // Display casting: a pending display resolves here
+                // first; any other key falls through to item 8, then
+                // item 7, then item 6.
+                const { applyPendingDisplay } = await import('../services/displayService.js');
+                const displayHandled = await applyPendingDisplay(parseInt(sessionId), pendingEffectKey, rollOutcome);
+                if (!displayHandled) {
+                  // Combat item 8: a pending escape resolves here
+                  // next; any other key falls through to item 7, then
+                  // item 6.
+                  const { applyPendingEscape } = await import('../services/conditionService.js');
+                  const escapeHandled = await applyPendingEscape(parseInt(sessionId), pendingEffectKey, rollOutcome);
+                  if (!escapeHandled) {
+                    // Combat item 7: a pending trap save resolves here
+                    // next; any other key falls through to item 6.
+                    const dts = await import('../services/damageTableService.js');
+                    const trapHandled = await dts.applyPendingTrapSave(parseInt(sessionId), pendingEffectKey, rollOutcome);
+                    if (!trapHandled) {
+                      await ess.applyPendingSaveEffect(parseInt(sessionId), pendingEffectKey, rollOutcome);
+                    }
+                  }
+                }
+              } else if (rollOutcome.kind === 'save') {
+                await ess.resolvePcRepeatSave(parseInt(sessionId), rollOutcome);
+              }
+              const fresh2 = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+              if (fresh2) session.session_config = fresh2.session_config;
+            } catch (e) { console.warn('[spells] pending save effect failed (non-fatal):', e.message); }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[rolls] pending roll resolution failed (non-fatal):', err.message);
+    }
+
+    // ATTACK resolution (combat-real B2): a pending party attack from
+    // last turn resolves from the player's reported dice — the
+    // attackRoll/damage body fields, or a bare-number action (the same
+    // two channels as check rolls). When the engine consumes the dice,
+    // the narrative dice directive is stripped from what the model
+    // sees: the ATTACK RESULT block below carries the judged outcome,
+    // and the DM must not adjudicate the same dice a second time.
+    let attackOutcome = null;
+    try {
+      const pendingAttack = await getPendingAttack(parseInt(sessionId));
+      if (pendingAttack) {
+        let reportedDice = null;
+        if (Number.isInteger(dice.value.attackRoll)) {
+          reportedDice = [dice.value.attackRoll];
+        } else {
+          const m = action.trim().match(/^(\d{1,2})(?:\s*(?:and|,|\+)\s*(\d{1,2}))?\s*$/);
+          if (m) {
+            const d1 = parseInt(m[1], 10);
+            const d2 = m[2] ? parseInt(m[2], 10) : null;
+            if (d1 >= 1 && d1 <= 20 && (d2 === null || (d2 >= 1 && d2 <= 20))) {
+              reportedDice = d2 === null ? [d1] : [d1, d2];
+            }
+          }
+        }
+        if (reportedDice) {
+          attackOutcome = await resolveReportedAttack(parseInt(sessionId), session.character_id, reportedDice, dice.value.damage);
+          if (attackOutcome) {
+            actionForLlm = action;
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[attacks] pending attack resolution failed (non-fatal):', err.message);
+    }
+
+    // SPELL EFFECT resolution (spell-damage build): the player's
+    // reported damage/healing total for a pending spell effect from
+    // the cast turn. Channels: the damage body field, or a bare-number
+    // action (any positive total — spell damage isn't a d20). Runs
+    // after checks and attacks, which own their numbers first; when an
+    // attack resolved this turn, its damage field was the attack's.
+    try {
+      const pendingEffect = await getPendingSpellEffect(parseInt(sessionId));
+      // Item 6: a pending Backlash reduction owns the reported total
+      // when it is newer than any pending spell effect (both ride
+      // the same reported-total channel). When it consumes the total,
+      // the older spell effect waits for a later report.
+      let backlashConsumed = false;
+      if (!attackOutcome) {
+        const scfgB = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+        const backlash = scfgB.pendingBacklashReduction || null;
+        const backlashFirst = backlash && (!pendingEffect || (backlash.postedAt || 0) > (pendingEffect.postedAt || 0));
+        if (backlashFirst) {
+          let reportedTotal = null;
+          if (Number.isInteger(dice.value.damage)) reportedTotal = dice.value.damage;
+          else {
+            const m = action.trim().match(/^(\d{1,3})\s*$/);
+            if (m) reportedTotal = parseInt(m[1], 10);
+          }
+          if (reportedTotal !== null && reportedTotal >= 0) {
+            const essB = await import('../services/enemySpellService.js');
+            await essB.resolveBacklashReduction(parseInt(sessionId), reportedTotal);
+            backlashConsumed = true;
+            const freshB = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (freshB) session.session_config = freshB.session_config;
+          }
+        }
+      }
+      if (pendingEffect && !attackOutcome && !backlashConsumed) {
+        let reportedTotal = null;
+        if (Number.isInteger(dice.value.damage)) {
+          reportedTotal = dice.value.damage;
+        } else {
+          const m = action.trim().match(/^(\d{1,3})\s*$/);
+          if (m) reportedTotal = parseInt(m[1], 10);
+        }
+        if (reportedTotal !== null && reportedTotal >= 0) {
+          const effectOutcome = await resolveReportedSpellEffect(parseInt(sessionId), session.character_id, reportedTotal);
+          if (effectOutcome) {
+            actionForLlm = action;
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[spells] pending spell effect resolution failed (non-fatal):', err.message);
+    }
+
     const messages = safeParse(session.messages, []);
 
-    // Inject active conditions as context if any are present
-    if (activeConditions) {
-      const conditionNote = formatConditionsForAI(activeConditions.player, activeConditions.companions);
-      if (conditionNote) {
-        messages.push({ role: 'user', content: conditionNote });
+    // Inject active conditions as context (v1.0.190: the server's
+    // stored state is the authority — conditions persist across
+    // sessions and are mechanically enforced, so the note is built
+    // from the DB whenever the server has any. The client-supplied
+    // activeConditions remains only as a fallback for state the
+    // server has never seen.)
+    let conditionNote = null;
+    try {
+      const party = await getPartyConditions(session.character_id);
+      if (party.player.length > 0 || Object.keys(party.companions).length > 0) {
+        conditionNote = formatConditionsForAI(party.player, party.companions);
+        if (conditionNote) {
+          conditionNote += ' These are applied mechanically by the system (disadvantage, auto-failed saves, attack modifiers) — narrate their effects; do not apply them a second time.';
+        }
       }
+    } catch (err) {
+      console.warn('[conditions] server condition lookup failed (non-fatal):', err.message);
+    }
+    if (!conditionNote && activeConditions) {
+      conditionNote = formatConditionsForAI(activeConditions.player, activeConditions.companions);
+    }
+    if (conditionNote) {
+      messages.push({ role: 'user', content: conditionNote });
     }
 
     // Check which LLM provider is available (respects user preference)
@@ -1379,7 +1676,7 @@ router.post('/:sessionId/message', async (req, res) => {
     // every turn forever. Anchoring on whichever tail block comes first and
     // cutting from there rebuilds the suffix cleanly.
     const TURN_SUFFIX_RE =
-      /\n*══════════════════════════════════════════════════════════════\n(?:RECENTLY USED IMAGERY|CURRENT VITALS)[\s\S]*/;
+      /\n*══════════════════════════════════════════════════════════════\n(?:RECENTLY USED IMAGERY|CURRENT VITALS|PERCEPTION PRE-ROLL)[\s\S]*/;
 
     let augmentedMessages = messages;
     try {
@@ -1412,6 +1709,12 @@ router.post('/:sessionId/message', async (req, res) => {
       const ledgerBlock = formatRepetitionLedger(ledger);
       if (ledgerBlock) suffix += ledgerBlock;
 
+      // Perception pre-roll: the active dungeon's bank, re-appended fresh
+      // each turn like vitals and the ledger (stripped by TURN_SUFFIX_RE
+      // above). Lists who holds a number — never the numbers.
+      const bankBlock = await formatActiveBankBlock(parseInt(sessionId));
+      if (bankBlock) suffix += bankBlock;
+
       if (suffix && messages[0] && messages[0].role === 'system' && messages[0].content) {
         const cleaned = messages[0].content.replace(TURN_SUFFIX_RE, '');
         augmentedMessages = [
@@ -1443,6 +1746,140 @@ router.post('/:sessionId/message', async (req, res) => {
       }
     } catch (err) {
       // Silent-fail — correction is additive.
+    }
+
+    // ROLL RESULT injection: checks resolved by the system are facts the
+    // DM must narrate — the PC outcome resolved at the top of this turn,
+    // plus any companion/NPC/enemy outcomes the ROLL_REQUEST handler
+    // stashed on session_config last turn (consumed once, here).
+    try {
+      let rollBlock = rollOutcome
+        ? (rollOutcome.perceptionBank ? formatPerceptionBankBlock(rollOutcome) : formatRollOutcomeBlock(rollOutcome))
+        : '';
+      const freshCfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (Array.isArray(freshCfg.recentRolls) && freshCfg.recentRolls.length > 0) {
+        for (const r of freshCfg.recentRolls) rollBlock += r.perceptionUse ? formatPerceptionUseBlock(r) : formatRollOutcomeBlock(r);
+        delete freshCfg.recentRolls;
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(freshCfg), sessionId]);
+        session.session_config = JSON.stringify(freshCfg);
+      }
+      if (rollBlock && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+        augmentedMessages = [
+          { ...augmentedMessages[0], content: augmentedMessages[0].content + rollBlock },
+          ...augmentedMessages.slice(1)
+        ];
+      }
+    } catch (err) {
+      // Silent-fail — roll outcome injection is additive.
+    }
+
+    // TIME EVENT injection (v1.0.188): rests and time advances resolved by
+    // the REST / TIME_ADVANCE handlers last turn are facts the DM must
+    // narrate — consumed once from session_config, same pattern as rolls.
+    try {
+      const tcfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (Array.isArray(tcfg.recentTimeEvents) && tcfg.recentTimeEvents.length > 0) {
+        let timeBlock = '';
+        for (const evt of tcfg.recentTimeEvents) timeBlock += formatTimeEventBlock(evt);
+        delete tcfg.recentTimeEvents;
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(tcfg), sessionId]);
+        session.session_config = JSON.stringify(tcfg);
+        if (timeBlock && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+          augmentedMessages = [
+            { ...augmentedMessages[0], content: augmentedMessages[0].content + timeBlock },
+            ...augmentedMessages.slice(1)
+          ];
+        }
+      }
+    } catch (err) {
+      // Silent-fail — time event injection is additive.
+    }
+
+    // ATTACK RESULT injection (combat-real B2): party attacks resolved
+    // by the engine — the PC's at the top of this turn, companions'
+    // during last turn — are facts the DM narrates. Consumed once from
+    // session_config, same pattern as TIME EVENT.
+    try {
+      const acfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (Array.isArray(acfg.recentAttacks) && acfg.recentAttacks.length > 0) {
+        const attackBlock = formatAttackOutcomeBlock(acfg.recentAttacks);
+        delete acfg.recentAttacks;
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(acfg), sessionId]);
+        session.session_config = JSON.stringify(acfg);
+        if (attackBlock && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+          augmentedMessages = [
+            { ...augmentedMessages[0], content: augmentedMessages[0].content + '\n\n' + attackBlock },
+            ...augmentedMessages.slice(1)
+          ];
+        }
+      }
+    } catch (err) {
+      // Silent-fail — attack outcome injection is additive.
+    }
+
+    // SPELL EFFECT injection (spell-damage build): pending spell
+    // damage/healing asks and resolved spell effects are facts for
+    // the DM, same consume-once pattern as ATTACK RESULT.
+    try {
+      const scfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (Array.isArray(scfg.recentSpellEffects) && scfg.recentSpellEffects.length > 0) {
+        const spellBlock = formatSpellEffectBlock(scfg.recentSpellEffects);
+        delete scfg.recentSpellEffects;
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(scfg), sessionId]);
+        session.session_config = JSON.stringify(scfg);
+        if (spellBlock && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+          augmentedMessages = [
+            { ...augmentedMessages[0], content: augmentedMessages[0].content + '\n\n' + spellBlock },
+            ...augmentedMessages.slice(1)
+          ];
+        }
+      }
+    } catch (err) {
+      // Silent-fail — spell effect injection is additive.
+    }
+
+    // SPELL NOTICE injection (combat item 6): repeat-save asks,
+    // superseded effects, and expired counters are system facts for
+    // the DM — same consume-once pattern as the blocks above.
+    try {
+      const scfgN = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (Array.isArray(scfgN.pendingDmNotices) && scfgN.pendingDmNotices.length > 0) {
+        const noticeBlock = '[SPELL NOTICE — system facts for the DM. ' + scfgN.pendingDmNotices.join(' ') + ']';
+        delete scfgN.pendingDmNotices;
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(scfgN), sessionId]);
+        session.session_config = JSON.stringify(scfgN);
+        if (augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+          augmentedMessages = [
+            { ...augmentedMessages[0], content: augmentedMessages[0].content + '\n\n' + noticeBlock },
+            ...augmentedMessages.slice(1)
+          ];
+        }
+      }
+    } catch (err) {
+      // Silent-fail — notice injection is additive.
+    }
+
+    // COMBAT TURN STATE injection (combat item 3, Tier 1, Q1
+    // consequence): every DM prompt during combat carries whose turn
+    // it is and the order, so the DM emits ATTACK for the right
+    // combatant and TURN_ADVANCE at the right time. Additive and
+    // silent-fail like the ATTACK RESULT block above. After COMBAT_END
+    // the turn-state row is deleted (see below), so no stale block
+    // fires into post-combat prompts.
+    try {
+      const turnEncounterSeq = await getCurrentEncounterSeq(sessionId);
+      if (turnEncounterSeq) {
+        const turnState = await getTurnState(sessionId, turnEncounterSeq);
+        const turnBlock = turnState ? formatTurnStateBlock(turnState) : '';
+        if (turnBlock && augmentedMessages[0]?.role === 'system' && augmentedMessages[0]?.content) {
+          augmentedMessages = [
+            { ...augmentedMessages[0], content: augmentedMessages[0].content + '\n\n' + turnBlock },
+            ...augmentedMessages.slice(1)
+          ];
+        }
+      }
+    } catch (err) {
+      // Silent-fail — turn state injection is additive.
     }
 
     // Apply the rolling session summary (Follow-up #3). If this session has
@@ -1670,6 +2107,27 @@ router.post('/:sessionId/message', async (req, res) => {
       const beforeJson = JSON.stringify({ p: cfg.pendingMarkerCorrections ?? null, e: cfg.correctionExhaustedKeys ?? null });
       const afterJson = JSON.stringify({ p: nextCfg.pendingMarkerCorrections ?? null, e: nextCfg.correctionExhaustedKeys ?? null });
       if (beforeJson !== afterJson) {
+        // Preserve a pendingRoll the ROLL_REQUEST handler wrote to the DB
+        // during this turn's marker dispatch — nextCfg was built from the
+        // turn-start snapshot and would otherwise erase it.
+        try {
+          const freshCfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+          if (freshCfg.pendingRoll) nextCfg.pendingRoll = freshCfg.pendingRoll;
+          // Perception pre-roll: the bank key and any USE outcome the
+          // handler stashed must survive this rebuild too — nextCfg was
+          // built from the turn-start snapshot and would otherwise erase
+          // a dungeon banked (or a use resolved) during this turn.
+          if (freshCfg.activePerceptionDungeon) nextCfg.activePerceptionDungeon = freshCfg.activePerceptionDungeon;
+          if (freshCfg.recentRolls) nextCfg.recentRolls = freshCfg.recentRolls;
+          // F5 surfacing: the spell-cast hook outcomes stashed during
+          // this turn's dispatch (recentSpellEffects, the Life pending
+          // effect, and the Wild Magic offer record) must survive the
+          // same rebuild — otherwise a correction-change turn silently
+          // wipes the DM's next-turn spell facts before they are read.
+          if (freshCfg.recentSpellEffects) nextCfg.recentSpellEffects = freshCfg.recentSpellEffects;
+          if (freshCfg.pendingSpellEffect) nextCfg.pendingSpellEffect = freshCfg.pendingSpellEffect;
+          if (freshCfg.pendingWildMagicOffer) nextCfg.pendingWildMagicOffer = freshCfg.pendingWildMagicOffer;
+        } catch { /* best-effort — a lost pending roll can be re-asked */ }
         await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(nextCfg), sessionId]);
       }
       // Capture summary for playtest logger
@@ -1800,6 +2258,8 @@ router.post('/:sessionId/message', async (req, res) => {
           npcData.reason ? `Reason for joining: ${npcData.reason}. First encountered in session #${sessionId}.` : `First encountered in session #${sessionId}`
         ]);
 
+        // World ID (item 3, Tier 0): best-effort at creation.
+        try { await assignWorldId('npcs', insertResult.lastInsertRowid); } catch (e) { console.error('[dmSession] world ID assignment failed:', e.message); }
         // Fetch the newly created NPC
         npc = await dbGet('SELECT id, name, nickname, race, gender, occupation, avatar FROM npcs WHERE id = ?', [insertResult.lastInsertRowid]);
       }
@@ -1853,6 +2313,14 @@ router.post('/:sessionId/message', async (req, res) => {
     cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
     cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
+    // Rest consolidation (2026-11-07): [REST] / [TIME_ADVANCE] move
+    // the clock and apply the rest — the DM narrates the outcome
+    // from the system's next-turn note, so the raw markers must
+    // never reach the player as text. They were the only markers
+    // missing from this strip list; every rest-button press now
+    // routes through a turn whose narrative carries [REST].
+    cleanNarrative = cleanNarrative.replace(/\[REST(?::[^\]]+)?\]\s*/gi, '').trim();
+    cleanNarrative = cleanNarrative.replace(/\[TIME_ADVANCE(?::[^\]]+)?\]\s*/gi, '').trim();
     // Phase 3.1 — HP_CHANGE drives real damage now, so the marker must not
     // reach the player as raw text.
     cleanNarrative = cleanNarrative.replace(/\[HP_CHANGE:[^\]]+\]\s*/gi, '').trim();
@@ -1960,6 +2428,36 @@ router.post('/:sessionId/message', async (req, res) => {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
       } else if (hr.schemaKey === 'COMBAT_END') {
         combatEnd = true;
+      } else if (hr.schemaKey === 'TURN_ADVANCE' && hr.result.systemNote) {
+        // Item 3, Tier 1: the advance note was previously dropped here
+        // (only COMBAT_START/SET_COVER notes were pushed), so the DM
+        // never learned whose turn it now is.
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
+      }
+    }
+
+    // Item 3, Tier 1: COMBAT_END clears the turn-state row, so the
+    // per-message turn block stops firing after combat and a later
+    // combat starts from a clean ledger (initializeTurnOrder also
+    // resets it, but the row must not linger as stale state).
+    if (combatEnd) {
+      try {
+        const endSeq = await getCurrentEncounterSeq(sessionId);
+        if (endSeq) await dbRun('DELETE FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, endSeq]);
+      } catch { /* stale turn state is harmless; next combat re-inits */ }
+    }
+
+    // Phase B — SET_COVER failures must SURFACE (ruled 2026-10-29), not
+    // fail silently. The handler returns a systemNote only on a failed
+    // validation (feature missing / not cover / wrong tier / no feature
+    // named in a linked room); pushing it here puts it in the DM's
+    // context for the next turn, so the DM can tell the player the
+    // cover is not there and they need to move. Successful grants
+    // carry no systemNote and stay silent, as before.
+    for (const hr of pipelineResult.handlerResults) {
+      if (!hr.ok || !hr.result) continue;
+      if (hr.schemaKey === 'SET_COVER' && hr.result.systemNote) {
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
       }
     }
 
@@ -2093,7 +2591,21 @@ router.post('/:sessionId/message', async (req, res) => {
       hpChanges: pipelineResult.handlerResults
         .filter(hr => hr.ok && hr.schemaKey === 'HP_CHANGE' && hr.result?.applied)
         .map(hr => hr.result),
-      deathSave: deathSave || undefined
+      deathSave: deathSave || undefined,
+      // ROLL_REQUEST: this turn's check requests (a PC request is pending —
+      // the client prompts the player to roll real dice) and the outcome
+      // resolved from the player's reported dice at the top of this turn.
+      rollRequests: pipelineResult.handlerResults
+        .filter(hr => hr.ok && hr.schemaKey === 'ROLL_REQUEST' && hr.result?.success)
+        .map(hr => hr.result),
+      // F5 surfacing: this turn's spell casts, with the Life (life) and
+      // Wild Magic (wildMagic) hook results the cast returns — the
+      // client/session-facing half of the surfacing; the DM-prompt half
+      // rides the SPELL EFFECT block (recentSpellEffects).
+      spellCasts: pipelineResult.handlerResults
+        .filter(hr => hr.ok && hr.schemaKey === 'SPELL_CAST' && hr.result?.success)
+        .map(hr => hr.result),
+      rollOutcome: rollOutcome || undefined
     });
   } catch (error) {
     // Tagged-error mapping (set by claude.js in service/claude.js error path).
@@ -2708,6 +3220,26 @@ router.post('/:sessionId/rest-narrative', async (req, res) => {
 });
 
 // End a session - generates rewards based on session content
+// Combat item 3, Tier 1 (Q1 consequence): the tracker Next Turn button
+// used to advance local React state only, drifting from the server
+// turn order. This endpoint advances the server order and returns the
+// tracker shape the client already renders.
+router.post('/:sessionId/advance-turn', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const encounterSeq = req.body?.encounterSeq || await getCurrentEncounterSeq(sessionId);
+    if (!encounterSeq) return res.status(400).json({ error: 'No active encounter' });
+    const newState = await advanceTurn(sessionId, encounterSeq);
+    if (!newState) return res.status(400).json({ error: 'No turn order for this encounter' });
+    return res.json({ turnOrder: newState.turnOrder, currentTurn: newState.currentIndex, round: newState.round, encounterSeq });
+  } catch (e) {
+    console.error('[dmSession] advance-turn failed:', e.message);
+    return res.status(500).json({ error: 'Failed to advance the turn' });
+  }
+});
+
 router.post('/:sessionId/end', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -2853,38 +3385,57 @@ router.post('/:sessionId/end', async (req, res) => {
     // no longer called. It derived damage from an LLM 0-10 "combat" score and
     // carried a known bug where the quests branch discarded the damage branch.
     const hpChange = 0;
-    const daysElapsed = calculateGameTimeAdvance(rewardsAnalysis);
+    // Phase 1 (v1.0.188) — session-end time is MEASURED, not invented.
+    // [TIME_ADVANCE] and [REST] markers moved the world clock during play
+    // and accumulated the session's own elapsed hours on session_config;
+    // the span below is computed from those facts (restTimeService).
+    // calculateGameTimeAdvance — days derived from XP-analysis scores —
+    // is retired. A session whose DM never marked time advances 0 days:
+    // time that didn't pass in the fiction didn't pass.
+    const endCfg = safeParse(session.session_config, {});
+    const elapsedHours = Number(endCfg.elapsedHours) || 0;
+    let daysElapsed = 0;
 
     // Advance game date
     const currentGameDay = session.game_start_day || character.game_day || 1;
     const currentGameYear = session.game_start_year || character.game_year || 1492;
-    // Phase 0: the unified clock advances by the elapsed span (syncing to
-    // the session's start date first) and mirrors the date back onto the
-    // campaign's characters. The explicit UPDATE below stays as a belt to
-    // the mirror's braces — it preserves the exact legacy behavior for the
-    // session character; the mirror covers everyone else.
+    // The clock already stands where the markers left it (Phase 0 synced
+    // it to the session's start date at /start). The explicit UPDATE below
+    // stamps the final date onto the session character; scheduleService's
+    // mirror already covered the campaign's other characters on each
+    // in-session advance.
     let newGameDate;
     try {
-      // Sync the clock to the session's start date first, forward-only
-      // (an era/flashback session never drags the world clock backward).
-      // Campaign-less characters sync the FALLBACK clock — it is their
-      // clock; leaving it stale would stamp its date over the character's
-      // own below (caught by session-end-world-tick test 7).
       const cid = character.campaign_id ?? null;
       const clkBefore = await getClock(cid);
       const sessionAtOrAhead = currentGameYear > clkBefore.year ||
         (currentGameYear === clkBefore.year && currentGameDay >= clkBefore.dayOfYear);
-      if (sessionAtOrAhead) {
-        await setClockDate(cid, { dayOfYear: currentGameDay, year: currentGameYear });
-        const clockAfter = await advanceClockDays(daysElapsed, { campaignId: cid, reason: 'session_end' });
-        newGameDate = { day: clockAfter.dayOfYear, year: clockAfter.year };
+      // Flashback determination: if the rest/time service ran this
+      // session it recorded the start gap (and never moved the world
+      // clock for a flashback); if no marker fired, the legacy date
+      // comparison decides — the clock never moved, so a start date
+      // behind it means the session was dated in the past.
+      const gapAtStart = Number(endCfg.clockGapAtStart);
+      const isFlashback = Number.isFinite(gapAtStart) ? gapAtStart > 0 : !sessionAtOrAhead;
+      if (!isFlashback) {
+        daysElapsed = sessionEndDays({ startDay: currentGameDay, startYear: currentGameYear, clockDayOfYear: clkBefore.dayOfYear, clockYear: clkBefore.year });
+        // The character's date never moves backward: if the clock somehow
+        // ends behind the session's start (an unsynced clock — /start's
+        // sync normally prevents this), the session's own date stands.
+        const clockAtOrAhead = clkBefore.year > currentGameYear ||
+          (clkBefore.year === currentGameYear && clkBefore.dayOfYear >= currentGameDay);
+        newGameDate = clockAtOrAhead
+          ? { day: clkBefore.dayOfYear, year: clkBefore.year }
+          : { day: currentGameDay, year: currentGameYear };
       } else {
         // Flashback session: the world clock stays put; the character's
-        // date advances on session-local math, as it did pre-unification.
+        // date advances by the session's own accumulated elapsed time.
+        daysElapsed = sessionEndDays({ flashback: true, elapsedHours });
         newGameDate = advanceTime(currentGameDay, currentGameYear, daysElapsed);
       }
     } catch (e) {
-      console.warn('[clock] session-end advance failed, falling back to legacy date math:', e.message);
+      console.warn('[clock] session-end elapsed computation failed, falling back to session elapsed time:', e.message);
+      daysElapsed = Math.max(1, Math.ceil(elapsedHours / 24));
       newGameDate = advanceTime(currentGameDay, currentGameYear, daysElapsed);
     }
 
@@ -3760,6 +4311,8 @@ If no named NPCs appeared, respond with: NO_NPCS`;
           `First encountered in session: ${session.title}`
         ]);
 
+        // World ID (item 3, Tier 0): best-effort at creation.
+        try { await assignWorldId('npcs', result.lastInsertRowid); } catch (e) { console.error('[dmSession] world ID assignment failed:', e.message); }
         extractedNpcs.push({ id: Number(result.lastInsertRowid), name, race, occupation, existed: false });
       }
     }
@@ -3886,6 +4439,8 @@ If no named NPCs appeared, respond with: NO_NPCS`;
               `First encountered in session: ${fullSession.title}`
             ]);
 
+            // World ID (item 3, Tier 0): best-effort at creation.
+            try { await assignWorldId('npcs', result.lastInsertRowid); } catch (e) { console.error('[dmSession] world ID assignment failed:', e.message); }
             allExtracted.push({ id: Number(result.lastInsertRowid), name, race, occupation, fromSession: session.title });
           }
         }

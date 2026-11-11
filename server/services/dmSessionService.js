@@ -1041,13 +1041,10 @@ export function calculateHPChange(character, analysis) {
   return hpChange;
 }
 
-/**
- * Calculate in-game time advancement based on activity scores
- */
-export function calculateGameTimeAdvance(analysis) {
-  const activityLevel = (analysis.combat + analysis.exploration + analysis.quests + analysis.social) / 40;
-  return Math.max(1, Math.ceil(activityLevel * 3));
-}
+// calculateGameTimeAdvance was retired in v1.0.188 (Phase 1): session-end
+// time is no longer derived from activity scores. [TIME_ADVANCE] and [REST]
+// markers advance the world clock during play, and the /end route measures
+// the elapsed span from the clock itself (restTimeService.sessionEndDays).
 
 // ============================================================
 // CAMPAIGN NOTES EXTRACTION

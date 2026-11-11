@@ -1,4 +1,5 @@
 import express from 'express';
+import { applyDowntimeRest } from '../services/restTimeService.js'; // Job B (2026-11-08): downtime rests route through the DM rest path
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { handleServerError } from '../utils/errorHandler.js';
 import { advanceProject, getProjectStatus } from '../services/craftingService.js';
@@ -1670,11 +1671,22 @@ async function applyBenefits(character, benefits) {
     params.push(newXp);
   }
 
-  // Restore spell slots on long rest, or for warlocks on short rest
-  const characterClass = character.class?.toLowerCase();
-  if (benefits.longRest || (benefits.shortRest && characterClass === 'warlock')) {
-    updates.push("spell_slots_used = '{}'");
-    benefits.spellSlotsRestored = true;
+  // Rest effects live on the DM path now (Job B, 2026-11-08):
+  // applyDowntimeRest applies the DM long/short-rest effect set minus
+  // HP/clock — downtime keeps its own quality-scaled HP math above,
+  // and its time already elapsed in real time. The warlock check lives
+  // in the entry point now (isWarlockPrimary), not here. An interrupted
+  // rest sets neither longRest nor shortRest, so nothing is called.
+  // Best-effort, like the ration step in calculateBenefits: the HP /
+  // gold / XP write above must not fail with it.
+  if (benefits.longRest || benefits.shortRest) {
+    try {
+      const rest = await applyDowntimeRest({ characterId: character.id, type: benefits.longRest ? 'long' : 'short' });
+      if (rest.slotsRestored) benefits.spellSlotsRestored = true;
+      if (rest.arcaneRecoveryReset) benefits.arcaneRecoveryReset = true;
+    } catch (e) {
+      console.error('[downtime] applyDowntimeRest failed:', e.message);
+    }
   }
 
   if (updates.length > 0) {

@@ -20,11 +20,13 @@
  * the MVP needs one obvious way to make a character. Nothing about it is
  * broken — it is scope, not quality.
  *
- * With this false, HomeFlow skips PathChoiceScreen entirely and "Create New
- * Character" goes straight to the 8-step manual creator. The prelude routes
- * (`prelude.setup` / `prelude.arc` / `prelude.session`), their components, the
- * `/api/prelude` server routes and the resume-a-draft path all remain intact —
- * an in-flight prelude draft on an existing character still resumes, so
- * flipping this off cannot strand a character mid-wizard.
+ * With this false, the Prelude fork never appears. 2026-11-05 unhook:
+ * nothing on the client reads this flag any more — the old creators are
+ * deleted and the new creator is the only path; the flag is kept so the
+ * Prelude return can re-check it. The prelude routes (`prelude.arc` /
+ * `prelude.session`), their components, the `/api/prelude` server routes
+ * and the resume-a-draft path all remain intact — an in-flight prelude
+ * draft on an existing character still resumes, so flipping this off
+ * cannot strand a character mid-wizard.
  */
 export const PRELUDE_ENABLED = false;

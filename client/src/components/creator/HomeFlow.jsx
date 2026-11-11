@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import HomeScreenV2 from './HomeScreenV2.jsx'
-import PathChoiceScreen from './PathChoiceScreen.jsx'
-import { PRELUDE_ENABLED } from '../../config/mvpFeatures.js'
-import CharacterCreatorV2 from './CharacterCreatorV2.jsx'
-import PreludeCreatorV2 from './PreludeCreatorV2.jsx'
+import CreatorNextShell from '../creator-next/CreatorNextShell.jsx'
 import PreludeArcPreview from '../PreludeArcPreview.jsx'
 import PreludeSession from '../PreludeSession.jsx'
 import SettingsOverlay from '../settings/SettingsOverlay.jsx'
@@ -11,52 +8,63 @@ import SettingsOverlay from '../settings/SettingsOverlay.jsx'
 // Phase 4a SC-4a.4 — lazy-load the diagnostic page; only fetched when
 // the user clicks the AI Behavior appbar link.
 const AIBehaviorDebugPage = lazy(() => import('../AIBehaviorDebugPage.jsx'))
-import {
-  rehydrateManualCreatorState,
-  rehydrateHandoffCreatorState
-} from './creatorPersistence.js'
 
 /**
  * Phase 2 chunk 5 batch 3 sub-checkpoint 2 (5.L.6) — live home flow.
  *
- * Wraps HomeScreenV2 + PathChoiceScreen + CharacterCreatorV2 with real
- * `/api/character` data + a small state machine for the home → path →
- * creator chain.
+ * Wraps HomeScreenV2 + CreatorNextShell with real `/api/character` data
+ * + a small state machine for the home → creator chain.
  *
  * Replaces the `CharacterManager` render in App.jsx for the
  * no-character-selected case. When the player picks an active
  * character, this component invokes `onSelectActive(character)` so
  * App.jsx can set `selectedCharacter` and render the existing dashboard.
  *
- * State machine:
+ * State machine (2026-11-05 unhook: the new creator is the only path):
  *   route='home' (default)        — HomeScreenV2 with real characters
- *   route='path'                  — PathChoiceScreen (Prelude / Campaign)
- *   route='wizard.manual'         — CharacterCreatorV2 in manual mode (new)
- *   route='wizard.resume.manual'  — CharacterCreatorV2 with rehydrated 'creating' state
- *   route='wizard.resume.handoff' — CharacterCreatorV2 with rehydrated 'ready_for_primary' state
- *   route='prelude.setup'         — PreludeCreatorV2 (6-step structural wizard)
+ *   route='wizard.next'           — CreatorNextShell (new creator);
+ *                                  fresh create, or a 'creating' draft via
+ *                                  resumeCharacterId (see below)
  *   route='prelude.arc'           — PreludeArcPreview (Opus arc plan)
  *   route='prelude.session'       — PreludeSession (Sonnet play loop)
  *
  * Card click routing per spec §3.5:
  *   - Active card → calls onSelectActive (App.jsx renders dashboard)
- *   - 'creating' card → load character row, rehydrate manual state, open wizard
- *   - 'ready_for_primary' card → load character + handoff payload, rehydrate, open wizard
+ *   - 'creating' card → open the new creator on that row. The shell
+ *     trusts the local draft only when it belongs to this character;
+ *     otherwise Stage 1 starts blank on the same row (first save PUTs
+ *     it, so no orphan row). Server-row fields DO rehydrate now
+ *     (rehydrateFromServerCharacter: row + progression snapshot);
+ *     only the local-only fields (fighting style, subclass choices,
+ *     cantrips, generation method, base scores, choice picks) and the
+ *     derived Stage 4 lists still need the local mirror.
+ *   - 'ready_for_primary' card → Prelude handoff is not built in the
+ *     new creator yet; the roster shows an honest message, the row is
+ *     left untouched.
+ *   - 'prelude_setup' card → Prelude setup is not available in the new
+ *     creator yet; same honest message, row untouched.
  *   - 'prelude' card → resume PreludeSession on the existing character
  */
+// onCharacterCreated is App's handler (auto-select + campaign-setup
+// landing). Stage 6 commit does NOT call it — the plan says submit
+// does NOT start play, so HomeFlow's handleCommitted reloads the
+// roster and routes home instead (coordinator decision 2026-11-07,
+// reversible: call onCharacterCreated?.(character) in handleCommitted
+// to restore the auto-select + campaign-setup landing). App still
+// passes it; nothing here calls it on the commit path.
 export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   const [route, setRoute] = useState('home')
   const [characters, setCharacters] = useState([])
   const [loading, setLoading] = useState(true)
-  const [resumePayload, setResumePayload] = useState(null)
-  const [resumeState, setResumeState] = useState(null)
+  // The 'creating' row a roster click is resuming in the new creator.
+  // Passed to CreatorNextShell so it opens that row (and only that row's
+  // local draft). Null for a fresh create.
   const [resumeCharacterId, setResumeCharacterId] = useState(null)
+  // Creator mode: 'manual' (fresh create / draft resume) or 'edit'
+  // (an active character opened for editing — same wizard, existing
+  // row, Page 1 preservation rule on Review).
+  const [creatorMode, setCreatorMode] = useState('manual')
   const [preludeCharacter, setPreludeCharacter] = useState(null)
-  // v1.0.138 — resume state for the 6-step PreludeCreatorV2. Set when a
-  // 'prelude_setup' home card is clicked; cleared when the player starts
-  // a fresh Prelude or finishes the wizard.
-  const [preludeDraftState, setPreludeDraftState] = useState(null)
-  const [preludeDraftCharacterId, setPreludeDraftCharacterId] = useState(null)
   const [error, setError] = useState(null)
   // Phase 3.5 — Settings overlay open state. Scoped per-character; the
   // home appbar's `Settings` link picks the most-recently-updated active
@@ -90,8 +98,8 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
 
   const handleOpenCharacter = useCallback(async (uiCharacter) => {
     // The shape passed by HomeScreenV2 is the API row mapped through
-    // `mapCharacterForHome`. We need the raw API row for rehydration —
-    // refetch by id so we get all columns.
+    // `mapCharacterForHome`. We need the raw API row to confirm the
+    // character exists — refetch by id so we get all columns.
     if (uiCharacter.state === 'active') {
       // Find the raw row in our characters list
       const row = characters.find(c => c.id === uiCharacter.id)
@@ -99,9 +107,6 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       return
     }
 
-    // In-progress card — load full character record + (handoff only)
-    // its prelude_handoff_payload, then route to the wizard with
-    // rehydrated state.
     setError(null)
     try {
       const charRes = await fetch(`/api/character/${uiCharacter.id}`)
@@ -109,115 +114,77 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
       const character = await charRes.json()
 
       if (uiCharacter.state === 'prelude_setup') {
-        // Resume the new 6-step prelude wizard mid-flight (v1.0.138+).
-        // Fetch the stored wizard state from prelude_setup_data and hand
-        // it to PreludeCreatorV2 via initialState / initialCharacterId.
-        const draftRes = await fetch(`/api/prelude/setup/draft/${uiCharacter.id}`)
-        if (!draftRes.ok) throw new Error(`Could not load prelude draft #${uiCharacter.id}`)
-        const draft = await draftRes.json()
-        setPreludeDraftState(draft.state || null)
-        setPreludeDraftCharacterId(draft.id)
-        setRoute('prelude.setup')
+        // Prelude setup has no home in the new creator yet (no Prelude
+        // mode). Say so plainly and leave the row untouched — do not
+        // route anywhere a creator cannot finish.
+        setError('Prelude setup is not available in the new creator yet — this draft cannot be resumed until a Prelude mode is built.')
       } else if (uiCharacter.state === 'prelude') {
         // Resume the in-flight Prelude session on this character.
         setPreludeCharacter(character)
         setRoute('prelude.session')
       } else if (uiCharacter.state === 'ready_for_primary') {
-        const payloadRes = await fetch(`/api/prelude/${uiCharacter.id}/handoff-payload`)
-        const payload = payloadRes.ok ? await payloadRes.json() : null
-        setResumePayload(payload)
-        setResumeState(rehydrateHandoffCreatorState(character, payload))
-        setResumeCharacterId(character.id)
-        setRoute('wizard.resume.handoff')
+        // Prelude handoff is not built in the new creator yet. Say so
+        // plainly and leave the row (and its handoff payload) untouched.
+        setError('Prelude handoff is not built in the new creator yet — this character cannot step forward until handoff mode lands.')
       } else {
-        // 'creating' — manual rehydration (no payload)
-        setResumePayload(null)
-        setResumeState(rehydrateManualCreatorState(character))
+        // 'creating' — open the new creator on this row. The shell
+        // rehydrates the local draft only when it belongs to this
+        // character; otherwise Stage 1 starts blank on the same row.
         setResumeCharacterId(character.id)
-        setRoute('wizard.resume.manual')
+        setCreatorMode('manual')
+        setRoute('wizard.next')
       }
     } catch (err) {
       setError(err.message || 'Could not open character.')
     }
   }, [characters, onSelectActive])
 
-  // MVP: with the Prelude off there is only one path, so the fork screen is
-  // a dead click — go straight to the manual creator. See config/mvpFeatures.js.
+  // Create — the new creator is the only path. Fresh start: clear any
+  // draft-resume state from a prior card click.
   const handleNew = useCallback(() => {
-    if (!PRELUDE_ENABLED) {
-      setResumePayload(null)
-      setResumeState(null)
-      setResumeCharacterId(null)
-      setRoute('wizard.manual')
-      return
-    }
-    setRoute('path')
-  }, [])
-
-  const handlePickCampaign = useCallback(() => {
-    setResumePayload(null)
-    setResumeState(null)
     setResumeCharacterId(null)
-    setRoute('wizard.manual')
+    setCreatorMode('manual')
+    setRoute('wizard.next')
   }, [])
 
-  const handlePickPrelude = useCallback(() => {
-    // Fresh start — clear any draft-resume state from a prior card click
-    setPreludeCharacter(null)
-    setPreludeDraftState(null)
-    setPreludeDraftCharacterId(null)
-    setRoute('prelude.setup')
+  // Edit — an ACTIVE character opens in the creator in edit mode: the
+  // same wizard on the existing row, fields pre-filled via the
+  // existing rehydration path. Never a second row, never a reset to
+  // level 1 (the commit targets this id).
+  const handleEditCharacter = useCallback((uiCharacter) => {
+    setResumeCharacterId(uiCharacter.id)
+    setCreatorMode('edit')
+    setRoute('wizard.next')
   }, [])
 
-  const handlePreludeCreated = useCallback((char, opts = {}) => {
-    // Setup wizard finished: it created a character row in 'prelude'
-    // phase. Route into arc preview by default; into the session loop
-    // when the testing checkbox bypasses the preview.
-    if (opts.showArcPreview === false) {
-      setPreludeCharacter(char)
-      setRoute('prelude.session')
-    } else {
-      setPreludeCharacter(char)
-      setRoute('prelude.arc')
-    }
-  }, [])
+  // Commit — the character is active on the roster now. Refresh the
+  // roster so the new/edited card shows up, then return home. This
+  // deliberately does NOT call onCharacterCreated: the plan says
+  // submit does NOT start play — the player picks the character and
+  // starts an adventure from home.
+  const handleCommitted = useCallback(async () => {
+    setResumeCharacterId(null)
+    setCreatorMode('manual')
+    await loadCharacters()
+    setRoute('home')
+  }, [loadCharacters])
 
   const handlePreludeArcBegin = useCallback(() => {
     setRoute('prelude.session')
   }, [])
 
   const handlePreludeReturn = useCallback(async () => {
-    // Player exited from setup / arc preview / session. Refresh the
-    // roster so the new card (or the now-'ready_for_primary' card if
-    // [PRELUDE_END] fired) shows up, then return home.
+    // Player exited from arc preview / session. Refresh the roster so
+    // the new card (or the now-'ready_for_primary' card if [PRELUDE_END]
+    // fired) shows up, then return home.
     setPreludeCharacter(null)
-    setPreludeDraftState(null)
-    setPreludeDraftCharacterId(null)
     await loadCharacters()
     setRoute('home')
   }, [loadCharacters])
 
-  const handleSubmitSuccess = useCallback(async (result) => {
-    // Refresh the character list and route back to home; if the
-    // newly-active character can be picked up, hand it to App.jsx so
-    // the dashboard takes over.
-    await loadCharacters()
-    setResumePayload(null); setResumeState(null); setResumeCharacterId(null)
-    if (onCharacterCreated && result?.character_id) {
-      try {
-        const res = await fetch(`/api/character/${result.character_id}`)
-        if (res.ok) {
-          const character = await res.json()
-          onCharacterCreated(character)
-          return
-        }
-      } catch { /* fall through to home */ }
-    }
-    setRoute('home')
-  }, [loadCharacters, onCharacterCreated])
-
   const handleExitWizard = useCallback(() => {
-    setResumePayload(null); setResumeState(null); setResumeCharacterId(null)
+    setResumeCharacterId(null)
+    setCreatorMode('manual')
     setRoute('home')
   }, [])
 
@@ -249,7 +216,7 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
   // Phase 4a SC-4a.4 — AI Behavior debug page takes over full-screen when
   // open (same pattern as the wizard / prelude routes). Independent of
   // the dashboard activeView path (which doesn't reach here) so the link
-  // works from home or the path-choice screen alike.
+  // works from home alike.
   if (aiBehaviorOpen) {
     return (
       <Suspense fallback={<div style={{ padding: 32, color: '#999', fontFamily: 'monospace' }}>Loading AI Behavior debug page…</div>}>
@@ -261,53 +228,16 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
     )
   }
 
-  if (route === 'wizard.manual') {
+  // The new creator — the only creation path. Fresh create when
+  // resumeCharacterId is null; a 'creating' roster draft otherwise.
+  // Exit returns to the roster.
+  if (route === 'wizard.next') {
     return (
-      <CharacterCreatorV2
-        preludePayload={null}
-        persistProgress={true}
+      <CreatorNextShell
         onExit={handleExitWizard}
-        onSubmitSuccess={handleSubmitSuccess}
-      />
-    )
-  }
-  if (route === 'wizard.resume.manual') {
-    return (
-      <CharacterCreatorV2
-        preludePayload={null}
-        initialState={resumeState}
-        initialCharacterId={resumeCharacterId}
-        persistProgress={true}
-        onExit={handleExitWizard}
-        onSubmitSuccess={handleSubmitSuccess}
-      />
-    )
-  }
-  if (route === 'wizard.resume.handoff') {
-    return (
-      <CharacterCreatorV2
-        preludePayload={resumePayload}
-        initialState={resumeState}
-        initialCharacterId={resumeCharacterId}
-        persistProgress={true}
-        onExit={handleExitWizard}
-        onSubmitSuccess={handleSubmitSuccess}
-      />
-    )
-  }
-
-  if (route === 'prelude.setup') {
-    // v1.0.143 cutover: PreludeCreatorV2 (6-step structural redesign)
-    // is now the live path for the prelude entry. Resume from a draft
-    // card uses the same component with initialState + initialCharacterId.
-    // Legacy PreludeSetupWizard is retained but unwired per
-    // "deprecate by hiding nav, not deleting code."
-    return (
-      <PreludeCreatorV2
-        onCancel={handlePreludeReturn}
-        onPreludeCreated={handlePreludeCreated}
-        initialState={preludeDraftState}
-        initialCharacterId={preludeDraftCharacterId}
+        resumeCharacterId={resumeCharacterId}
+        onCommitted={handleCommitted}
+        mode={creatorMode}
       />
     )
   }
@@ -326,55 +256,6 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
         character={preludeCharacter}
         onBack={handlePreludeReturn}
       />
-    )
-  }
-
-  if (route === 'path') {
-    return (
-      <div className="creator-v2">
-        <div className="appbar">
-          <div className="brand">
-            D <span className="amp">&amp;</span> D
-            <span style={{ color: 'var(--ink-3)', fontStyle: 'normal', marginLeft: 6 }}>· Character Creator</span>
-          </div>
-          <div className="crumbs">A choice of beginnings</div>
-          <div className="spacer" />
-          <button
-            type="button"
-            className="nav-settings"
-            onClick={() => setAiBehaviorOpen(true)}
-            aria-label="AI Behavior debug"
-            title="Phase 4a diagnostic surface — captured prompts, signals, prompt-shape accounting"
-          >
-            <span className="glyph">◇</span>AI Behavior
-          </button>
-          {settingsCharacter && (
-            <button
-              type="button"
-              className="nav-settings"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Settings"
-            >
-              <span className="glyph">✦</span>Settings
-            </button>
-          )}
-        </div>
-        <div className="stage center">
-          <PathChoiceScreen
-            onPrelude={handlePickPrelude}
-            onCampaign={handlePickCampaign}
-            onBack={() => setRoute('home')}
-          />
-        </div>
-        {settingsOpen && settingsCharacter && (
-          <SettingsOverlay
-            character={settingsCharacter}
-            context="home"
-            onClose={() => setSettingsOpen(false)}
-            onSaved={handleSettingsSaved}
-          />
-        )}
-      </div>
     )
   }
 
@@ -432,6 +313,7 @@ export default function HomeFlow({ onSelectActive, onCharacterCreated }) {
             characters={characters.map(mapCharacterForHome)}
             onNew={handleNew}
             onOpenCharacter={handleOpenCharacter}
+            onEditCharacter={handleEditCharacter}
           />
         )}
       </div>

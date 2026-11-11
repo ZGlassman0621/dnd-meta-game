@@ -4,15 +4,15 @@ import { useEffect, useState } from 'react'
  * Post-setup arc preview.
  *
  * Renders the Opus-generated arc plan for a prelude-phase character and lets
- * the player re-roll once if it doesn't land. This is the bridge between the
- * setup wizard (PreludeSetupWizard) and gameplay (PreludeSession).
+ * the player re-roll once if it doesn't land. This is the bridge between
+ * Prelude setup and gameplay (PreludeSession).
  *
  * Phase 2 close-out (2026-05-03): editorial reskin per PM Medium-tier ruling.
  * Token swap from slate purple to `.creator-v2` editorial — second of two
  * surfaces in the prelude entry path that needed reskinning so the player
- * walking from HomeScreenV2 → PathChoiceScreen → PreludeSetupWizard →
- * PreludeArcPreview registers no visual seam at the transitions. PreludeSession
- * (the play loop) stays slate per scope ruling; parked.
+ * walking from Prelude setup → PreludeArcPreview registers no visual seam
+ * at the transition. PreludeSession (the play loop) stays slate per scope
+ * ruling; parked.
  *
  * Flow:
  *   1. Mount: try GET /api/prelude/:id/arc-plan. If 404, generate via

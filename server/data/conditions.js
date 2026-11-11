@@ -46,26 +46,35 @@ export function detectConditionChanges(text) {
 }
 
 /**
- * Format active conditions into a system note for AI context injection
+ * Format active conditions into a system note for AI context injection.
+ * 2024 exhaustion: the note also states the Speed reduction, since Speed
+ * is not tracked anywhere in the engine (display only).
  */
 export function formatConditionsForAI(playerConditions, companionConditions) {
   const parts = [];
 
+  const speedNote = (conds) => {
+    const ex = (conds || []).find(c => /^exhaustion_(\d)$/.test(c));
+    if (!ex) return '';
+    const lvl = Number(ex.split('_')[1]);
+    return ` (Speed reduced by ${5 * lvl} ft)`;
+  };
+
   if (playerConditions && playerConditions.length > 0) {
     const condNames = playerConditions.map(c => c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()));
-    parts.push(`Player is currently: ${condNames.join(', ')}`);
+    parts.push(`Player is currently: ${condNames.join(', ')}${speedNote(playerConditions)}`);
   }
 
   if (companionConditions) {
     for (const [name, conditions] of Object.entries(companionConditions)) {
       if (conditions && conditions.length > 0) {
         const condNames = conditions.map(c => c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()));
-        parts.push(`${name} is currently: ${condNames.join(', ')}`);
+        parts.push(`${name} is currently: ${condNames.join(', ')}${speedNote(conditions)}`);
       }
     }
   }
 
   if (parts.length === 0) return null;
 
-  return `[SYSTEM NOTE — Active conditions]: ${parts.join('. ')}. Reference these conditions mechanically (disadvantage, etc.) and narratively. Do not announce them — weave into the story.`;
+  return `[SYSTEM NOTE — Active conditions]: ${parts.join('. ')}. Reference these conditions mechanically (penalties, disadvantage, etc.) and narratively. Do not announce them — weave into the story.`;
 }

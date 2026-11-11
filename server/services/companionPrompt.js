@@ -14,6 +14,18 @@
  *    companions act now and on what focus, from assessReadiness triage.
  */
 
+import { getArchetype } from '../data/companionArchetypes.js';
+import { artificerPromptSection } from './artificerService.js';
+import { spellshotPromptSection } from './spellshotService.js';
+import { wardenPromptSection } from './wardenService.js';
+import { magusPromptSection, societyKeyForName, spellcastingAbilityForSociety } from './magusService.js';
+import { pugilistPromptSection } from './pugilistService.js';
+import { scholarPromptSection } from './scholarService.js';
+import { duelistPromptSection } from './duelistService.js';
+import { blackguardPromptSection } from './blackguardService.js';
+import { bloodHunterPromptSection } from './bloodHunterService.js';
+import { warlordPromptSection } from './warlordService.js';
+
 function parseJson(value, fallback = null) {
   if (value == null || value === '') return fallback;
   if (typeof value === 'object') return value;
@@ -41,6 +53,53 @@ export function buildCompanionPromptBlock(companion, opts = {}) {
     companion.alignment ? `Alignment: ${companion.alignment} (PRIVATE)` : null,
   ].filter(Boolean);
   if (personalityBits.length) lines.push(`Character: ${personalityBits.join(' | ')}`);
+
+  // Build archetype personification (2026-10-21): the companion's build
+  // is a personality. A stored archetype key wins; class-based
+  // companions without one play the class template. NPC-stat companions
+  // have no class build and are skipped by the lookup.
+  const arch = getArchetype(companion.class || companion.companion_class, companion.archetype_key || 'template');
+  if (arch) lines.push(`Build (private): ${arch.label} — ${arch.guidance}`);
+
+  // Artificer base class: the same state section the PC gets, from
+  // class_resources_json.artificer (migration 091 covers companions too).
+  if (String(companion.companion_class || companion.class || '').toLowerCase() === 'artificer') {
+    try {
+      const resources = parseJson(companion.class_resources_json, {}) || {};
+      const scores = parseJson(companion.companion_ability_scores, {}) || {};
+      const intMod = Math.floor((Number(scores.int ?? scores.intelligence ?? 10) - 10) / 2);
+      lines.push(artificerPromptSection(resources.artificer || null, { level: companion.companion_level || 1, intMod }));
+    } catch { /* a malformed resources blob never breaks the prompt */ }
+  }
+
+  // Overnight 7-class merge: same state section the PC gets, from
+  // class_resources_json.<class> (migration 091 covers companions too).
+  {
+    const cls = String(companion.companion_class || companion.class || '').toLowerCase();
+    if (['spellshot', 'warden', 'magus', 'pugilist', 'scholar', 'duelist', 'blackguard', 'blood_hunter', 'warlord'].includes(cls)) {
+      try {
+        const resources = parseJson(companion.class_resources_json, {}) || {};
+        const sub = resources[cls] || null;
+        const scores = parseJson(companion.companion_ability_scores, {}) || {};
+        const modOf = (a) => Math.floor((Number(scores[a] ?? scores[{ int: 'intelligence', wis: 'wisdom', cha: 'charisma' }[a]] ?? 10) - 10) / 2);
+        const lvl = companion.companion_level || 1;
+        const csub = companion.companion_subclass || companion.subclass || null;
+        if (cls === 'spellshot') lines.push(spellshotPromptSection(sub, { level: lvl, intMod: modOf('int'), name }));
+        else if (cls === 'warden') lines.push(wardenPromptSection(sub, { level: lvl, subclass: csub, alternateSet: sub?.alternateSet ?? null, name }));
+        else if (cls === 'magus') {
+          const key = societyKeyForName(csub) || societyKeyForName(sub?.society);
+          const ability = key ? spellcastingAbilityForSociety(key) : null;
+          lines.push(magusPromptSection(sub, { level: lvl, spellMod: ability ? modOf(ability) : undefined, society: key || undefined, name }));
+        }
+        else if (cls === 'pugilist') lines.push(pugilistPromptSection(sub, { level: lvl, club: sub?.club || null, chaMod: modOf('cha') }));
+        else if (cls === 'scholar') lines.push(scholarPromptSection(sub, { level: lvl, intMod: modOf('int'), name }));
+        else if (cls === 'duelist') lines.push(duelistPromptSection(sub, { level: lvl }));
+        else if (cls === 'blackguard') lines.push(blackguardPromptSection(sub, { level: lvl, chaMod: modOf('cha') }));
+        else if (cls === 'blood_hunter') lines.push(bloodHunterPromptSection(sub, { level: lvl, intMod: modOf('int'), name, subclass: csub }));
+        else if (cls === 'warlord') lines.push(warlordPromptSection(sub, { level: lvl, chaMod: modOf('cha'), name, subclass: csub }));
+      } catch { /* a malformed resources blob never breaks the prompt */ }
+    }
+  }
 
   const goals = parseJson(companion.personal_goals, []) || [];
   if (goals.length) {

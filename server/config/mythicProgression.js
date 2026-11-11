@@ -2593,8 +2593,8 @@ export const PIETY_DEITIES = {
       25: {
         threshold: 25,
         name: 'Fortune\'s Vault',
-        description: 'Once per long rest, cast Creation without a spell slot. Once per week, cast Magnificent Mansion (trade hall variant) without a spell slot.',
-        mechanicalEffect: 'Creation 1/long rest (no slot); Magnificent Mansion 1/week (no slot)'
+        description: 'Once per long rest, cast Creation without a spell slot. Once per week, cast Mordenkainen\'s Magnificent Mansion (trade hall variant) without a spell slot.',
+        mechanicalEffect: 'Creation 1/long rest (no slot); Mordenkainen\'s Magnificent Mansion 1/week (no slot)'
       },
       50: {
         threshold: 50,

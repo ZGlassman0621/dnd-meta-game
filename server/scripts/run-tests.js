@@ -113,6 +113,26 @@ function runOne(file) {
       // "=== ... ===", 8 print it bare between separator rows. Match both, or
       // the aggregate count silently under-reports.
       const summary = out.match(/Results: (\d+) passed, (\d+) failed/)
+      // FAILURE DETAIL used to print only the last 12 lines. That hid
+      // failures that happen early in a file — e.g. a schema-contract
+      // ✗ on line 5, whose tail showed only passing checks — so the
+      // pasted output did not contain the failing assert at all.
+      // Now: every failing line, with 2 lines of context each, then
+      // the tail. Capped so one noisy file cannot flood the run.
+      const lines = out.trim().split('\n')
+      const tail = lines.slice(-12)
+      const primary = (l) =>
+        /✗|FAIL:|AssertionError|Error\b|^\s*code: '/.test(l)
+      const keep = new Set()
+      lines.forEach((l, i) => {
+        if (!primary(l)) return
+        for (let j = Math.max(0, i - 2); j <= Math.min(lines.length - 1, i + 2); j++) keep.add(j)
+      })
+      const failureLines = [...keep].sort((a, b) => a - b).map((i) => lines[i]).slice(0, 60)
+      const detail =
+        failureLines.length > 0
+          ? [...failureLines, '--- tail ---', ...tail].join('\n')
+          : tail.join('\n')
       res({
         file,
         ms: Date.now() - started,
@@ -120,8 +140,7 @@ function runOne(file) {
         code,
         passed: summary ? Number(summary[1]) : null,
         failed: summary ? Number(summary[2]) : null,
-        // Keep the tail only — enough to diagnose, short enough to read.
-        tail: out.trim().split('\n').slice(-12).join('\n'),
+        detail,
       })
     })
   })
@@ -142,7 +161,7 @@ if (failures.length > 0) {
   console.log(`\n${'='.repeat(70)}\nFAILURE DETAIL\n${'='.repeat(70)}`)
   for (const f of failures) {
     console.log(`\n--- ${f.file}${f.timedOut ? ' (TIMED OUT)' : ''} ---`)
-    console.log(f.tail)
+    console.log(f.detail)
   }
 }
 

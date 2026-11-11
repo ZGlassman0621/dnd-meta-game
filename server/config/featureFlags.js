@@ -11,7 +11,7 @@
  * single value.
  *
  * MVP posture:
- *   ON   PROGRESSION_AWARDS, NPC_DEATH_SYNC, SESSION_END_BACKUP
+ *   ON   PROGRESSION_AWARDS, NPC_DEATH_SYNC, SESSION_END_BACKUP, COLD_EXPOSURE
  *   OFF  LIVING_WORLD_TICK, NPC_AGING, COMPANION_MOOD_DECAY,
  *        SURVIVAL_DAY_CHANGE, DEFERRED_RESOLUTION_ACTIONS
  *
@@ -68,6 +68,20 @@ export const FEATURE_FLAGS = {
    */
   get SURVIVAL_DAY_CHANGE() {
     return flag('FF_SURVIVAL_DAY_CHANGE', false);
+  },
+
+  /**
+   * Cold exposure (Frost Exhaustion / Cold Level, coldExposureService).
+   *
+   * ON by default per the Oct 28 build approval, on its OWN switch —
+   * cold is not hostage to SURVIVAL_DAY_CHANGE (OFF) or to the living
+   * world tick (OFF). FF_COLD_EXPOSURE=false disables it. The flag
+   * gates the TIME_ADVANCE / REST hook in restTimeService; the pure
+   * Cold Level math and the frost track itself are ungated so tests
+   * and DM-driven calls work without env setup.
+   */
+  get COLD_EXPOSURE() {
+    return flag('FF_COLD_EXPOSURE', true);
   },
 
   /**

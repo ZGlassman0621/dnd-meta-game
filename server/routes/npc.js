@@ -1,5 +1,6 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { assignWorldId } from '../services/worldIdService.js';
 import { handleServerError } from '../utils/errorHandler.js';
 
 const router = express.Router();
@@ -129,6 +130,11 @@ router.post('/', async (req, res) => {
       campaign_availability || 'available',
       avatar || null
     ]);
+
+    // World ID (item 3, Tier 0): best-effort at creation — a counter
+    // failure must never block creating an NPC; ensureWorldId at combat
+    // load repairs any row this misses.
+    try { await assignWorldId('npcs', result.lastInsertRowid); } catch (e) { console.error('[npc] world ID assignment failed:', e.message); }
 
     const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
 
@@ -393,6 +399,8 @@ router.post('/from-session', async (req, res) => {
       session_id ? `First encountered in session #${session_id}` : null
     ]);
 
+    // World ID (item 3, Tier 0): best-effort at creation; see POST '/'.
+    try { await assignWorldId('npcs', result.lastInsertRowid); } catch (e) { console.error('[npc] world ID assignment failed:', e.message); }
     const newNpc = await dbGet('SELECT * FROM npcs WHERE id = ?', [result.lastInsertRowid]);
     res.status(201).json({ npc: newNpc, existed: false });
   } catch (error) {

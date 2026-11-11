@@ -186,13 +186,28 @@ async function run() {
       'SELECT current_hp, is_unconscious, death_save_successes, death_save_failures FROM characters WHERE id = ?',
       [f3.characterId]
     )
-    assertEqual(dying.current_hp, 0, 'HP floors at 0, not 1 — the player can fall')
-    assertEqual(dying.is_unconscious, 1, 'falling to 0 HP sets unconscious')
     assert(!!dyingRes.body.deathSave, 'the system rolled a death save without being asked')
-    assert(
-      dyingRes.body.deathSave.successes + dyingRes.body.deathSave.failures === 1,
-      'exactly one death save was rolled for the turn'
-    )
+    // The death save is a real d20 the system rolls, so the asserts must
+    // model every outcome branch, not just the middle two (a nat-20 revive
+    // flaked this test 2026-10-21 — HP 1, conscious, 0 pips is CORRECT):
+    //   20    -> revived at 1 HP, conscious, pips reset to 0/0
+    //   10-19 -> one success pip, still down at 0 HP
+    //   2-9   -> one failure pip, still down at 0 HP
+    //   1     -> TWO failure pips, still down at 0 HP
+    const ds = dyingRes.body.deathSave
+    if (ds && ds.outcome === 'revived') {
+      assertEqual(dying.current_hp, 1, 'a nat-20 death save revives at 1 HP')
+      assertEqual(dying.is_unconscious, 0, 'a revived player is conscious')
+      assert(ds.successes + ds.failures === 0, 'revive resets the death-save pips')
+    } else {
+      assertEqual(dying.current_hp, 0, 'HP floors at 0, not 1 — the player can fall')
+      assertEqual(dying.is_unconscious, 1, 'falling to 0 HP sets unconscious')
+      const expectedPips = ds && ds.roll === 1 ? 2 : 1
+      assert(
+        !!ds && ds.successes + ds.failures === expectedPips,
+        'exactly one death save was rolled for the turn (a nat 1 counts as two failure pips)'
+      )
+    }
 
     // The AI is told the outcome so the next turn narrates from truth.
     const afterDying = await readSession(f3.sessionId)
@@ -234,14 +249,28 @@ async function run() {
     // session lock is genuinely held.
     let releaseFirstTurn
     const held = new Promise(resolve => { releaseFirstTurn = resolve })
+    let signalStubEntered
+    const stubEntered = new Promise(resolve => { signalStubEntered = resolve })
     llm.reply(async () => {
+      signalStubEntered()
       await held
       return 'You push the door open.'
     })
 
     const firstTurn = server.post(`/api/dm-session/${f5.sessionId}/message`, { action: 'I push the door.' })
-    // Give the first request time to acquire the lock and reach the stub.
-    await new Promise(resolve => setTimeout(resolve, 150))
+    // Wait for the SIGNAL that the first turn is inside the model call, not
+    // a fixed sleep: the harness records the call before running the
+    // responder, and the route takes the session lock before the call, so
+    // stub entry means the lock is genuinely held and callCount is final.
+    // The old 150ms sleep raced under full-suite load — if it expired
+    // before the first request arrived, the second turn could slip in
+    // first and the 409 asserts flaked (191 gate). Bounded at 10s so a
+    // genuine failure to arrive fails loudly instead of hanging.
+    const arrived = await Promise.race([
+      stubEntered.then(() => true),
+      new Promise(resolve => setTimeout(() => resolve(false), 10000)),
+    ])
+    assert(arrived, 'the first turn reached the model stub (session lock held) within 10s')
 
     const callsAtLock = llm.callCount
     const secondTurn = await server.post(`/api/dm-session/${f5.sessionId}/message`, { action: 'I push the door again.' })

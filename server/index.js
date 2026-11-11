@@ -36,6 +36,13 @@ import progressionRoutes from './routes/progression.js';
 import merchantRoutes from './routes/merchant.js';
 import preludeRoutes from './routes/prelude.js';
 import aiBehaviorRoutes from './routes/aiBehavior.js';
+import speciesRoutes from './routes/species.js';
+import mixedAncestryRoutes from './routes/mixedAncestry.js';
+import subclassesRoutes from './routes/subclasses.js';
+import themesRoutes from './routes/themes.js';
+import startingPackagesRoutes from './routes/startingPackages.js';
+import spellsRoutes from './routes/spells.js';
+import fightingStylesRoutes from './routes/fightingStyles.js';
 import currentPlayer from './middleware/currentPlayer.js';
 import { initNarrativeSystems } from './services/narrativeSystemsInit.js';
 
@@ -117,6 +124,13 @@ app.use('/api/progression', progressionRoutes);
 app.use('/api/merchant', merchantRoutes);
 app.use('/api/prelude', preludeRoutes);
 app.use('/api/ai-behavior', aiBehaviorRoutes);
+app.use('/api/species', speciesRoutes);
+app.use('/api/mixed-ancestry', mixedAncestryRoutes);
+app.use('/api/subclasses', subclassesRoutes);
+app.use('/api/themes', themesRoutes);
+app.use('/api/starting-packages', startingPackagesRoutes);
+app.use('/api/spells', spellsRoutes);
+app.use('/api/fighting-styles', fightingStylesRoutes);
 
 // Serve index.html for all non-API routes (SPA support)
 app.get('*', (req, res) => {

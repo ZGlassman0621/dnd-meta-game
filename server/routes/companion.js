@@ -1,5 +1,6 @@
 import express from 'express';
 import { dbAll, dbGet, dbRun } from '../database.js';
+import { assignWorldId } from '../services/worldIdService.js';
 import {
   HIT_DICE,
   PROFICIENCY_BONUS,
@@ -29,6 +30,8 @@ import {
   ensureCompanionProgressionInitialized
 } from '../services/progressionCompanionService.js';
 import { enrichNewCompanion } from '../services/companionInitiativeService.js';
+import { generateAbilityScores, defaultSkillProficiencies, isFlatSheet } from '../services/companionSheetService.js';
+import { getArchetype } from '../data/companionArchetypes.js';
 import { CONDITION_NAMES } from '../data/conditions.js';
 
 // Phase 10: parse `companion_class_levels` (multiclass breakdown) with a
@@ -177,17 +180,22 @@ router.post('/recruit', async (req, res) => {
     let companionMaxHp = null;
     let companionCurrentHp = null;
     let companionAbilityScores = null;
+    let recruitArchetype = null;
 
     if (progression_type === 'class_based' && companion_class) {
       // Start at character's level or specified level
       companionLevel = starting_level || character.level;
 
-      // Parse NPC ability scores or use defaults
-      const abilityScores = npc.ability_scores ? safeParse(npc.ability_scores, {
-        str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10
-      }) : {
-        str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10
-      };
+      // Real sheet at birth: the NPC's own ability scores when they are
+      // a real build; a flat/absent placeholder GENERATES instead.
+      // Since 2026-10-21 generation runs through the NPC's rolled build
+      // archetype when they have one — the person you met is the person
+      // who joins — and generated CON feeds the max HP computed below.
+      recruitArchetype = getArchetype(companion_class, npc.archetype_key);
+      const npcScores = npc.ability_scores ? safeParse(npc.ability_scores, null) : null;
+      const abilityScores = (npcScores && !isFlatSheet(npcScores))
+        ? npcScores
+        : generateAbilityScores(companion_class, recruitArchetype);
       companionAbilityScores = JSON.stringify(abilityScores);
 
       // Calculate HP based on class and level
@@ -220,8 +228,8 @@ router.post('/recruit', async (req, res) => {
         npc_id, recruited_by_character_id, recruited_session_id,
         progression_type, original_stats_snapshot,
         companion_class, companion_subclass, companion_level, companion_max_hp, companion_current_hp,
-        companion_ability_scores, companion_class_levels, notes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        companion_ability_scores, skill_proficiencies, companion_class_levels, notes, status, archetype_key
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
     `, [
       npc_id,
       recruited_by_character_id,
@@ -234,8 +242,10 @@ router.post('/recruit', async (req, res) => {
       companionMaxHp,
       companionCurrentHp,
       companionAbilityScores,
+      progression_type === 'class_based' ? JSON.stringify(defaultSkillProficiencies(companion_class, recruitArchetype)) : '[]',
       companionClassLevels,
-      notes
+      notes,
+      npc.archetype_key || null
     ]);
 
     // Fetch the created companion with NPC details
@@ -927,101 +937,6 @@ router.post('/:id/spell-slots/restore', async (req, res) => {
   }
 });
 
-// Rest a companion (long or short)
-router.post('/:id/rest', async (req, res) => {
-  try {
-    const { restType = 'long' } = req.body;
-    const companion = await dbGet('SELECT * FROM companions WHERE id = ?', [req.params.id]);
-    if (!companion) return res.status(404).json({ error: 'Companion not found' });
-
-    let healAmount = 0;
-    let newHp = companion.companion_current_hp;
-    let spellSlotsRestored = false;
-
-    if (restType === 'long') {
-      healAmount = (companion.companion_max_hp || 0) - (companion.companion_current_hp || 0);
-      newHp = companion.companion_max_hp;
-
-      // Phase 7: long rest clears most conditions (petrified persists) and
-      // decrements exhaustion by 1 per 5e rules; also resets death saves.
-      const currentConditions = safeParse(companion.active_conditions, []);
-      const newConditions = [];
-      for (const c of currentConditions) {
-        if (c === 'petrified') {
-          newConditions.push(c); // persists across rest
-        } else if (EXHAUSTION_KEYS.has(c)) {
-          const level = parseInt(c.split('_')[1], 10);
-          if (level > 1) newConditions.push(`exhaustion_${level - 1}`);
-          // exhaustion_1 → cleared
-        }
-        // all other conditions cleared
-      }
-
-      await dbRun(
-        `UPDATE companions
-         SET companion_current_hp = ?,
-             companion_spell_slots_used = '{}',
-             active_conditions = ?,
-             death_save_successes = 0,
-             death_save_failures = 0
-         WHERE id = ?`,
-        [newHp, JSON.stringify(newConditions), req.params.id]
-      );
-      spellSlotsRestored = true;
-    } else {
-      const missing = (companion.companion_max_hp || 0) - (companion.companion_current_hp || 0);
-      healAmount = Math.max(1, Math.floor(missing * 0.5));
-      newHp = Math.min(companion.companion_max_hp, (companion.companion_current_hp || 0) + healAmount);
-
-      // Phase 7: any HP gain above 0 resets death saves (5e rules)
-      const wasDown = (companion.companion_current_hp || 0) <= 0;
-      const savesReset = wasDown && newHp > 0;
-
-      const classKey = companion.companion_class?.toLowerCase();
-      if (classKey === 'warlock') {
-        await dbRun(
-          `UPDATE companions
-           SET companion_current_hp = ?,
-               companion_spell_slots_used = '{}',
-               death_save_successes = ${savesReset ? 0 : 'death_save_successes'},
-               death_save_failures  = ${savesReset ? 0 : 'death_save_failures'}
-           WHERE id = ?`,
-          [newHp, req.params.id]
-        );
-        spellSlotsRestored = true;
-      } else {
-        await dbRun(
-          `UPDATE companions
-           SET companion_current_hp = ?,
-               death_save_successes = ${savesReset ? 0 : 'death_save_successes'},
-               death_save_failures  = ${savesReset ? 0 : 'death_save_failures'}
-           WHERE id = ?`,
-          [newHp, req.params.id]
-        );
-      }
-    }
-
-    const updated = await dbGet(`
-      SELECT c.*, n.name, n.race, n.gender, n.avatar
-      FROM companions c JOIN npcs n ON c.npc_id = n.id
-      WHERE c.id = ?
-    `, [req.params.id]);
-
-    res.json({
-      success: true,
-      message: restType === 'long'
-        ? `${updated.name} completes a long rest. Restored ${healAmount} HP and all spell slots.`
-        : `${updated.name} completes a short rest. Restored ${healAmount} HP.${spellSlotsRestored ? ' Pact slots restored.' : ''}`,
-      companion: updated,
-      newHp,
-      hp_restored: healAmount,
-      spell_slots_restored: spellSlotsRestored
-    });
-  } catch (error) {
-    handleServerError(res, error, 'rest companion');
-  }
-});
-
 // ============================================================================
 // Phase 7: Combat Safety — Conditions + Death Saves
 //
@@ -1614,6 +1529,9 @@ router.post('/create-party-member', async (req, res) => {
       ]);
 
       npcId = npcResult.lastInsertRowid;
+      // World ID (item 3, Tier 0): best-effort at creation; ensureWorldId
+      // at combat load repairs any row this misses.
+      try { await assignWorldId('npcs', npcId); } catch (e) { console.error('[companion] world ID assignment failed:', e.message); }
     }
 
     // Calculate HP based on class and level

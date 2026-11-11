@@ -11,7 +11,7 @@
  * The rule, chosen deliberately (5e death saves):
  *   - HP is clamped to [0, max_hp].
  *   - Dropping to 0 sets is_unconscious and zeroes both death-save counters.
- *   - While at 0, each death save is a d20: 20 revives at 1 HP, 10+ is a
+ *   - While at 0, each death save is a d20: 20 revives at 1 HP, total (d20 + exhaustion penalty) of 10+ is a
  *     success, below 10 a failure, and a natural 1 counts as two failures.
  *     Three successes stabilise; three failures kill.
  *   - Rising above 0 clears unconsciousness and both counters.
@@ -21,6 +21,7 @@
 import { dbGet, dbRun } from '../database.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import { rollD20 } from '../utils/rng.js';
+import { getConditions, exhaustionPenalty } from './conditionService.js';
 
 /**
  * Apply an HP delta to a character.
@@ -163,6 +164,10 @@ export async function rollDeathSave(characterId) {
 
   const d20 = rollD20('player death save');
 
+  // 2024 exhaustion (ruled 2026-10-26): the penalty applies to the save
+  // total vs DC 10. Nat 20 revive / nat 1 double-fail stay die-based.
+  const penalty = exhaustionPenalty(await getConditions('player', characterId));
+
   let successes = c.death_save_successes || 0;
   let failures = c.death_save_failures || 0;
   let outcome;
@@ -177,15 +182,18 @@ export async function rollDeathSave(characterId) {
       [characterId]
     );
     return {
-      type: 'death_save', roll: d20, outcome: 'revived',
-      successes: 0, failures: 0, currentHp: 1, characterId, name: c.name
+      type: 'death_save', roll: d20, outcome: 'revived', penalty,
+      successes: 0, failures: 0, currentHp: 1, characterId, name: c.name,
+      // Same shape as other death-save returns; revive is its own
+      // outcome, neither died nor stabilized (3 successes at 0 HP).
+      died: false, stabilised: false
     };
   }
 
   if (d20 === 1) {
     failures += 2; // Natural 1 counts as two failures.
     outcome = 'critical_failure';
-  } else if (d20 >= 10) {
+  } else if (d20 + penalty >= 10) {
     successes += 1;
     outcome = 'success';
   } else {
@@ -211,6 +219,7 @@ export async function rollDeathSave(characterId) {
     characterId,
     name: c.name,
     roll: d20,
+    penalty,
     outcome: died ? 'died' : stabilised ? 'stabilised' : outcome,
     successes,
     failures,
@@ -247,12 +256,58 @@ export async function getHpState(characterId) {
 registerMarkerHandler('HP_CHANGE', async (parsed, context) => {
   if (!context?.characterId) return null;
 
+  // Combat item 7: a table cause (Fall/Trap/Hazard) replaces the
+  // declared delta — the engine rolls, the DM names the cause.
+  // Target= names a companion (Q5 symmetry); without it the PC takes
+  // it. A table field present beats delta (the table is authoritative).
+  // The flagged hazard path takes its amount from a negative delta
+  // (HP_CHANGE damage convention); a positive delta is no amount.
+  const { resolveTableCause, applyTableDamageToParty, resolveCompanionByName } = await import('./damageTableService.js');
+  const tableCause = resolveTableCause({
+    fall: parsed?.Fall, trap: parsed?.Trap, hazard: parsed?.Hazard,
+    severity: parsed?.Severity, type: parsed?.Type, save: parsed?.Save,
+    amount: (Number(parsed?.delta) < 0 ? -Number(parsed?.delta) : undefined),
+  });
+  if (tableCause?.refusal) {
+    return { type: 'party_damage', success: false, reason: tableCause.refusal.reason, remedy: tableCause.refusal.remedy };
+  }
+  if (tableCause) {
+    if (!context.sessionId) return null;
+    let target = { kind: 'player', id: context.characterId };
+    if (parsed?.Target) {
+      const comp = await resolveCompanionByName(context.characterId, parsed.Target);
+      if (!comp) return { type: 'party_damage', success: false, reason: `no active companion named "${parsed.Target}"` };
+      target = comp;
+    }
+    const { getCurrentEncounterSeq } = await import('./enemyCombatService.js');
+    const seq = await getCurrentEncounterSeq(context.sessionId).catch(() => 0);
+    return applyTableDamageToParty(context.sessionId, seq || 0, target, tableCause, context.characterId);
+  }
+
   const delta = Number(parsed?.delta);
   // The schema permits 0; only the prelude detector filtered it. A zero delta
   // is a no-op, not an error.
   if (!Number.isFinite(delta) || delta === 0) return null;
 
-  return applyHpChange(context.characterId, delta, parsed?.reason || null);
+  const res = await applyHpChange(context.characterId, delta, parsed?.reason || null);
+  // Item 6, Tier F2: declared damage writes the last-damage record,
+  // unattributed (no attacker, no type) — Absorb refuses it, but the
+  // record still stands for the other trio answers.
+  if (delta < 0 && res?.applied && context.sessionId) {
+    try {
+      const hpDamage = Math.max(0, (res.previousHp ?? 0) - (res.currentHp ?? 0));
+      if (hpDamage > 0) {
+        const { recordDamage } = await import('./lastDamageService.js');
+        const { getCurrentEncounterSeq } = await import('./enemyCombatService.js');
+        const seq = await getCurrentEncounterSeq(context.sessionId).catch(() => 0);
+        await recordDamage(context.sessionId, 'player', context.characterId, {
+          amount: hpDamage, type: null, attackerKind: null, attackerId: null,
+          attackerName: null, encounterSeq: seq || 0,
+        });
+      }
+    } catch { /* records never break HP changes */ }
+  }
+  return res;
 });
 
 export default { applyHpChange, rollDeathSave, getHpState, gainTempHp };

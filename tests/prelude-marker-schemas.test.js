@@ -78,14 +78,16 @@ console.log('\n=== CHAPTER_END: requires summary ===\n')
   assert(!missing.ok && missing.errors.some(e => e.field === 'summary'), 'missing summary → error')
 }
 
-console.log('\n=== HP_CHANGE: signed delta required ===\n')
+console.log('\n=== HP_CHANGE: signed delta parses, table fields stand alone ===\n')
 {
   const damage = parseMarkerBody('delta=-2 reason="caught a branch"', 'HP_CHANGE')
   assert(damage.ok && damage.data.delta === -2, 'negative delta parses')
   const heal = parseMarkerBody('delta=1', 'HP_CHANGE')
   assert(heal.ok && heal.data.delta === 1, 'positive delta parses (reason optional)')
-  const noDelta = parseMarkerBody('reason="fell"', 'HP_CHANGE')
-  assert(!noDelta.ok && noDelta.errors.some(e => e.field === 'delta'), 'missing delta → error')
+  const badDelta = parseMarkerBody('delta=abc reason="fell"', 'HP_CHANGE')
+  assert(!badDelta.ok && badDelta.errors.some(e => e.field === 'delta'), 'non-numeric delta → error')
+  const tableOnly = parseMarkerBody('Fall=30', 'HP_CHANGE')
+  assert(tableOnly.ok && tableOnly.data.Fall === 30, 'table field without delta parses (item 7)')
 }
 
 console.log('\n=== STAT_HINT: stat enum, magnitude bounded [1, 2] ===\n')
@@ -142,7 +144,7 @@ console.log('\n=== End-to-end: validateDmMarkers in narrative + buildCorrectionM
     The mentor takes you up the ridge. [AGE_ADVANCE: years=2] You are older now.
     [CANON_FACT: subject="Mira" category=npc fact="speaks Dwarvish"]
     [STAT_HINT: stat=spd magnitude=1 reason="ran the whole way"]
-    [HP_CHANGE: reason="scraped knee"]
+    [HP_CHANGE: delta=abc reason="scraped knee"]
   `
   const { validByKey, failures } = validateDmMarkers(narrative)
 

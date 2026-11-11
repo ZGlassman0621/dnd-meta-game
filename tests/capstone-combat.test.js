@@ -136,25 +136,19 @@ const pc2Id = await insertRow('characters', {
   inventory: JSON.stringify([]),
 });
 
-// Companion ally (full party member; mechanical-combat assertions for
-// companions land with the Q6 companion-combat surface — here the ally is
-// exercised through initiative + the enemy-attack companion HP path, which
-// already exist).
+// Companion ally (full party member). Exercised through initiative and
+// the enemy-attack companion HP path — group 6 reconciles companion HP
+// exactly, the way it does for the player.
 const allyNpcId = await insertRow('npcs', { name: allyName });
 const allyId = await insertRow('companions', {
   npc_id: allyNpcId,
   recruited_by_character_id: pcId,
   status: 'active',
   armor_class: 13,
-  current_hp: 12,
   companion_current_hp: 12,
   companion_max_hp: 12,
   companion_ability_scores: JSON.stringify({ dexterity: 12 }),
 });
-
-const compCols = await dbAll(`PRAGMA table_info(companions)`);
-const HAS_COMP_CURRENT_HP = compCols.some((c) => c.name === 'current_hp');
-console.log(`[test] companions.current_hp present: ${HAS_COMP_CURRENT_HP}`);
 
 const sessionId = await insertRow('dm_sessions', {
   character_id: pcId,
@@ -232,8 +226,16 @@ group('2. turn order cycles and wraps into round 2');
 // ---------------------------------------------------------------------------
 group('3. spell slots decrement, exhaustion fails, cantrips are free');
 {
+  // Item 6: the pipeline cast now gates on turn membership, and
+  // group 2 leaves the order at a random combatant — so this cast
+  // runs in a fresh session with no turn order (legacy ungated),
+  // keeping the slot asserts deterministic.
+  const freshSessionId = await insertRow('dm_sessions', {
+    character_id: pcId,
+    status: 'active',
+  });
   const res = await pipeline.processResponseMarkers(
-    '[SPELL_CAST: Spell="Magic Missile" Level=1]', CTX);
+    '[SPELL_CAST: Spell="Magic Missile" Level=1]', { ...CTX, sessionId: freshSessionId });
   const cast = res.handlerResults.find((h) => h.schemaKey === 'SPELL_CAST');
   assert(cast && cast.result?.success === true, 'SPELL_CAST via pipeline succeeds');
   assert(cast.result.slotConsumed === true && cast.result.slotsUsed === 1 && cast.result.slotsRemaining === 1,
@@ -315,10 +317,23 @@ group('6. enemy attacks roll server-side; cover adds to AC; HP pools reconcile')
 
   rng.clearRollLog();
 
+  // Combat item 5: an enemy gets one action per turn, so the four
+  // swings below cannot share one turn the way this group did
+  // before budgets existed. Each swing after the first gets a
+  // fresh turn first (a full 5-combatant cycle returns to the same
+  // current combatant next round; if the goblin was never the
+  // current combatant, its swings were off-turn and already
+  // resolved). Cover math, HP reconciliation, and the roll log
+  // — this group's actual subjects — are unchanged.
+  let swings = 0;
   async function attackAndReconcile(target, expectedAc, label) {
+    if (swings > 0) {
+      for (let i = 0; i < 5; i++) await turnSvc.advanceTurn(sessionId, SEQ);
+    }
+    swings++;
     const before = target.type === 'player'
       ? await pcPool()
-      : { pool: (await dbGet('SELECT current_hp FROM companions WHERE id = ?', [target.id])).current_hp };
+      : { pool: (await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [target.id])).companion_current_hp };
     const r = await enemySvc.resolveEnemyAttack(sessionId, SEQ, 'Goblin', target);
     assert(r && r.type === 'enemy_attack', `${label}: attack resolved`);
     assert(r.attackRoll >= 1 && r.attackRoll <= 20, `${label}: attack roll in 1..20`);
@@ -327,14 +342,19 @@ group('6. enemy attacks roll server-side; cover adds to AC; HP pools reconcile')
     const expectHit = r.isCrit || (!r.isFumble && r.totalToHit >= expectedAc);
     assert(r.hit === expectHit, `${label}: hit flag consistent with roll vs AC`);
     if (r.hit) {
-      assert(r.damage >= 3 && r.damage <= 8, `${label}: goblin damage in 1d6+2 range (got ${r.damage})`);
+      // Crits roll the damage dice twice (2d6+2 = 4..14) — the range
+      // must know, or ~3% of swings flake this assert on good behavior.
+      const maxDmg = r.isCrit ? 14 : 8;
+      assert(r.damage >= 3 && r.damage <= maxDmg, `${label}: goblin damage in ${r.isCrit ? '2d6+2 crit' : '1d6+2'} range (got ${r.damage})`);
     } else {
       assert(r.damage === 0, `${label}: miss deals 0`);
     }
     const after = target.type === 'player'
       ? await pcPool()
-      : { pool: (await dbGet('SELECT current_hp FROM companions WHERE id = ?', [target.id])).current_hp };
-    assert(after.pool === before.pool - (r.hit ? r.damage : 0),
+      : { pool: (await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [target.id])).companion_current_hp };
+    // HP pools floor at 0 (MAX(0, ...) in both writers) — a crit that
+    // overkills reconciles to 0, not to a negative pool.
+    assert(after.pool === Math.max(0, before.pool - (r.hit ? r.damage : 0)),
       `${label}: HP pool reconciles exactly (${before.pool} -> ${after.pool})`);
     return r;
   }
@@ -343,33 +363,11 @@ group('6. enemy attacks roll server-side; cover adds to AC; HP pools reconcile')
   await attackAndReconcile({ type: 'player', id: pcId, armorClass: 14, cover: 'half', name: 'Player' }, 16, 'attack vs half cover');
   await attackAndReconcile({ type: 'player', id: pcId, armorClass: 14, cover: 'three-quarters', name: 'Player' }, 19, 'attack vs three-quarters cover');
 
-  if (HAS_COMP_CURRENT_HP) {
-    await attackAndReconcile({ type: 'companion', id: allyId, armorClass: 13, name: allyName }, 13, 'attack vs companion');
-  } else {
-    // PINNED SLOT (design, per Q6): resolveEnemyAttack's companion branch
-    // writes companions.current_hp, a column that does not exist yet — the
-    // mechanical companion-combat surface is not built. Today the call
-    // throws on a hit (damage application) or silently no-ops on a miss.
-    // When the Q6 surface lands, this branch flips: the throw assertion
-    // below MUST be replaced with the full attackAndReconcile accounting
-    // used for the player above. A red test here after that build is the
-    // reminder to do it.
-    let threw = null;
-    let result = null;
-    try {
-      result = await enemySvc.resolveEnemyAttack(sessionId, SEQ, 'Goblin',
-        { type: 'companion', id: allyId, armorClass: 13, name: allyName });
-    } catch (e) {
-      threw = e;
-    }
-    if (threw) {
-      assert(/current_hp/.test(String(threw.message || threw)),
-        'PINNED: companion attack throws on missing companions.current_hp (Q6 surface pending)');
-    } else {
-      assert(result && result.hit === false,
-        'PINNED: companion attack missed, so the missing-column write never fired (Q6 surface pending)');
-    }
-  }
+  // Companions reconcile exactly like the player (v1.0.189: the enemy-
+  // attack branch writes companion_current_hp, the column that actually
+  // exists — the pinned throw/no-op behavior this block used to assert
+  // is gone, and companion HP is real now).
+  await attackAndReconcile({ type: 'companion', id: allyId, armorClass: 13, name: allyName }, 13, 'attack vs companion');
 
   const log = rng.getRollLog();
   const d20s = log.filter((e) => e.reason && e.reason.includes('enemy attack'));
@@ -393,6 +391,19 @@ group('7. reactions spend once per round and refresh on your turn');
   assert(r2 && r2.result?.success === false && r2.result?.reason === 'reaction_already_used',
     'second reaction in the same round is refused');
   assert((await reactSvc.hasReactionAvailable(sessionId, SEQ, allyName)) === false, 'reaction shows spent');
+
+  // B6 (v1.0.191): the opportunity attack now RESOLVES for real. The ally
+  // is an npc_stats companion (the companions schema default), so the
+  // swing is a genuine 1d6+2 — it can KILL a 7-HP goblin (~1 run in 7),
+  // and a kill leaves a death event plus a 'dead' status that an HP-only
+  // reset does not undo (group-8 flake, diagnosed 2026-10-21 with
+  // server/scripts/capstone-diag.js). Group 8 asserts exact HP/death
+  // math on these goblins, so erase ALL of the swing's side effects:
+  // HP, status, and any death event it recorded. Reaction bookkeeping
+  // is this group's subject; attack resolution has its own suite
+  // (combat-real.test.js).
+  await dbRun("UPDATE combat_enemies SET current_hp = max_hp, status = 'active' WHERE session_id = ? AND encounter_seq = ?", [sessionId, SEQ]);
+  await dbRun('DELETE FROM combat_death_events WHERE session_id = ? AND encounter_seq = ?', [sessionId, SEQ]);
 
   // Advance until the ally's turn comes up — their reaction refreshes.
   let refreshed = false;

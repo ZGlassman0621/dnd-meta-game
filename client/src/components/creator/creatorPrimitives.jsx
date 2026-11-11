@@ -20,8 +20,8 @@ const STEPS = [
 ]
 
 // Prelude setup — 6 steps per the structural-redesign spec (PM 2026-05-03).
-// Exported so PreludeCreatorV2 can pass it to <Stepper> while keeping the
-// 8-step primary default in place for CharacterCreatorV2.
+// Exported for a future Prelude wizard's <Stepper>; the primary creator
+// (CreatorNextShell) uses its own stage labels.
 export const PRELUDE_STEPS = [
   'Identity',
   'Ancestry',
@@ -58,9 +58,8 @@ export function Field({ label, help, children, className = '', locked = false, l
  * decides clicks are allowed. The Step 8 "Edit" affordance reuses this
  * pattern by calling setStep(targetIndex).
  *
- * `steps` defaults to the 8-step primary-creator labels (back-compat for
- * CharacterCreatorV2). PreludeCreatorV2 passes `PRELUDE_STEPS` for the
- * 6-step prelude wizard.
+ * `steps` defaults to the 8-step primary-creator labels. A Prelude wizard
+ * passes `PRELUDE_STEPS` for the 6-step prelude flow.
  */
 export function Stepper({ step, setStep, mode, steps = STEPS }) {
   return (

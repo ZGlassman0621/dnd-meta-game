@@ -22,6 +22,7 @@
 
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { rollCompanionAgenda } from './npcComplexityService.js';
+import { ensureCompanionSheet } from './companionSheetService.js';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -360,6 +361,15 @@ async function llmSeedFact(llmCall, background) {
 
 export async function enrichNewCompanion(companionId, opts = {}) {
   const { llmCall = null, background = '', seedFact = null } = opts;
+
+  // 0. Real character sheet — generate/backfill class-based ability
+  // scores + skill proficiencies (companionSheetService). Mechanical and
+  // deterministic; never overwrites a real sheet. Best-effort.
+  try {
+    await ensureCompanionSheet(companionId);
+  } catch (e) {
+    console.warn('[companionEngine] sheet generation failed (non-fatal):', e.message);
+  }
 
   // 1. Hidden agenda roll — mechanical.
   let agenda;

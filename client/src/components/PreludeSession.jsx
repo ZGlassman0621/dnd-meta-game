@@ -23,7 +23,7 @@ import PreludeThemeCommitCard from './PreludeThemeCommitCard'
  * emergence toasts, values tracker, chapter-promise UI.
  */
 // Shared text style for inline help/description copy. Mirrors the same
-// style in PreludeSetupWizard so the two surfaces feel consistent.
+// style the old Prelude setup wizard used so the two surfaces feel consistent.
 const descStyle = { fontSize: '0.75rem', color: '#9fa3a8', fontStyle: 'italic', marginTop: '0.2rem', lineHeight: 1.4 }
 
 export default function PreludeSession({ character, onBack }) {

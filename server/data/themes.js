@@ -11,13 +11,81 @@
  * Note: Knight of the Order tracks a separate 6-path moral state via the
  * knight_moral_paths table — the abilities listed here describe the "True Path"
  * baseline; path-contingent behaviors are handled at runtime.
+ *
+ * FROZEN DATA — ability_score_increase (2026-11-06, item 16,
+ * coordinator decision): each theme's +2/+1 ASI resolves live from
+ * this file via the stored theme (Stage 4's resolveThemeASI, the
+ * Stage 4 server validator's arithmetic, and progressionService) —
+ * it is deliberately NOT snapshotted onto the character row or the
+ * character_themes row, because the ASI is a property of the theme,
+ * not of the character, and a stored snapshot would be a second
+ * source of truth that drifts on theme change. The corollary is
+ * that ANY change to an ability_score_increase value in this file
+ * silently changes every existing character's scores: treat these
+ * values as frozen. An ASI change requires a migration-style note
+ * (what changed, why, which characters are affected), never a
+ * silent edit — and a guard test pins all 21 theme ASIs. If
+ * per-character ASI divergence is ever needed (e.g. a homebrew
+ * theme override), the fallback home is character_themes.path_data
+ * (already exists, write-only today, selected by progressionService).
  */
+
+// The Forgotten Realms home-city list (R2-11(g) FR default). Shared
+// by City Watch and Urchin — one list, no drift. A character from
+// outside the Forgotten Realms is NOT offered these cities: their
+// location options are their origin setting's REGIONS, resolved
+// client-side from the origin data (creation_choice_source:
+// 'origin_regions' on the entries below). The server passes the
+// flag + this FR list through toClientShape untouched.
+const FR_HOME_CITIES = [
+  { value: 'Waterdeep', label: 'Waterdeep', description: 'The City of Splendors — cosmopolitan, wealthy, and layered with political intrigue. The Waterdhavian Watch is disciplined, heavily regulated, and famous for its uniformed patrols through districts whose laws each twist a little differently.' },
+  { value: "Baldur's Gate", label: "Baldur's Gate", description: 'A sprawling port city divided between the wealthy Upper City and the rougher Lower City below. The Flaming Fist — mercenary company and de facto law — keeps a harsh, pragmatic peace among dockhands, sellswords, and Gondian priests.' },
+  { value: 'Neverwinter', label: 'Neverwinter', description: 'Rebuilt jewel of the Sword Coast, warmed by hot springs and scarred by cataclysm. The Neverwinter Guard walks streets still pocked with old damage, and half the city remembers when there was no law at all.' },
+  { value: 'Luskan', label: 'Luskan', description: 'A lawless northern pirate haven run by the five High Captains. "Watch" here is whatever a High Captain says it is — their thugs in surcoats, more protection racket than peacekeeping. You survived by knowing which crew to never cross.' },
+  { value: 'Silverymoon', label: 'Silverymoon', description: 'The Gem of the North — a city of scholars, bards, and diverse kin walking one peaceful street. The Knights in Silver guard Silverymoon with courtesy and blade alike, and their watchposts double as study halls.' },
+  { value: 'Mithral Hall', label: 'Mithral Hall', description: 'The great dwarven hold under the Spine of the World. Its watch is a clan-warrior rotation — axe and shield, stone-trained ears, and a keen sense for which disturbance is a drunk cousin and which is something worse coming up from below.' },
+  { value: 'Candlekeep', label: 'Candlekeep', description: 'The fortified library-city atop the cliffs of the Sea of Swords. The Watchers who guard it are part librarian, part warrior-monk — the rules are strict, the books irreplaceable, and every visitor is scrutinized.' },
+  { value: 'Menzoberranzan', label: 'Menzoberranzan', description: 'The great drow city deep in the Underdark. House-bound patrols keep a brittle, cruel peace under Lolth\'s priestesses; "law" bends to whichever noble is rising. You learned to read politics before you learned to walk.' },
+  { value: 'Calimport', label: 'Calimport', description: 'Sun-baked jewel of the southern coast — merchant palaces and labyrinthine slums side by side. The Pasha\'s watch is bought and sold like any other commodity; enforcement depends entirely on who you offended and how wealthy their family is.' },
+  { value: 'Athkatla', label: 'Athkatla', description: 'The City of Coin, heart of Amn. Every guard wears a Cowled Wizard\'s invisible leash — magic is licensed, crime is taxed, and the Council of Six hears all. You learned that gold rewrites most laws before sunrise.' }
+];
 
 export const THEMES = [
   // ============ BATCH 1: Core Archetypes ============
   {
     id: 'soldier',
+    origin_feat: 'savage_attacker',
+    ability_score_increase: { str: 2, con: 1 },
     name: 'Soldier',
+    creation_choice_label: 'Military Rank',
+    // Generic ladder (coordinator decision, reversible): the rank
+    // the character held. Stored as path_choice.
+    creation_choice_options: [
+      { value: 'private', label: 'Private', description: 'The lowest rank — you followed orders and held the line.' },
+      { value: 'corporal', label: 'Corporal', description: 'A junior leader — a small section answered to you.' },
+      { value: 'sergeant', label: 'Sergeant', description: 'You ran a squad day to day and kept it alive.' },
+      { value: 'lieutenant', label: 'Lieutenant', description: 'A junior officer — you held a commission and led a platoon.' },
+      { value: 'captain', label: 'Captain', description: 'You commanded a company and answered for it.' },
+      { value: 'major', label: 'Major', description: 'A senior officer — staff work and battalion command.' },
+      { value: 'colonel', label: 'Colonel', description: 'You commanded a regiment or a major post.' },
+      { value: 'general', label: 'General', description: 'The highest rank — you commanded armies and shaped campaigns.' }
+    ],
+    // Second field (R2-11(e)): active-duty status rides
+    // character_themes.path_data as JSON { active_duty: 'active' |
+    // 'veteran' } — the single-choice mechanism holds the rank
+    // (path_choice); path_data holds this. Served verbatim by
+    // toClientShape; Review requires a valid value (see
+    // validateCreatorNextStage6 §6). The tier-1 ability is also
+    // NAMED "Military Rank" — that is an ability, not this stored
+    // rank value.
+    creation_choice_second_field: {
+      key: 'active_duty',
+      label: 'Active Duty',
+      options: [
+        { value: 'active', label: 'Still in active duty', description: 'You still hold your enlistment or commission — your unit can call you back.' },
+        { value: 'veteran', label: 'No longer in active duty', description: 'Your service has ended — mustered out, retired, or discharged.' }
+      ]
+    },
     identity: 'Military discipline, leadership under pressure, tactical awareness. Institutional loyalty, unit cohesion, holding the line when everything goes wrong.',
     description: 'You served in an army, militia, or military order, learning discipline, tactics, and how to keep your head when everyone around you is losing theirs. The uniform has shaped you even in civilian life — you think in chains of command, you instinctively assess threats, and you remember the weight of orders both given and received.',
     signature_skill_1: 'Athletics',
@@ -33,6 +101,9 @@ export const THEMES = [
   },
   {
     id: 'sage',
+    origin_feat: 'magic_initiate',
+    origin_feat_spell_list: 'Wizard',
+    ability_score_increase: { int: 2, wis: 1 },
     name: 'Sage',
     identity: 'Scholar, researcher, keeper of institutional knowledge. Power from accumulated study and applied obscure knowledge.',
     description: 'Your life has been a long conversation with books. You spent years at a library, university, or monastery learning the answers to questions most people never think to ask, and the shape of your thinking now comes as much from what you have read as from what you have lived.',
@@ -49,6 +120,8 @@ export const THEMES = [
   },
   {
     id: 'criminal',
+    origin_feat: 'alert',
+    ability_score_increase: { dex: 2, int: 1 },
     name: 'Criminal',
     identity: 'Lawbreaker, survivor of the underworld, knows how shadows work and how to disappear when things go wrong.',
     description: 'You learned your trade in the underworld — a world of cant and code, of favors owed and debts collected in blood. Whether you were a thief, a smuggler, a thug for a local crime lord, or something worse, you know how the law bends around enough gold and how a city looks when you are trying not to be seen.',
@@ -65,6 +138,9 @@ export const THEMES = [
   },
   {
     id: 'acolyte',
+    origin_feat: 'magic_initiate',
+    origin_feat_spell_list: 'Cleric',
+    ability_score_increase: { wis: 2, int: 1 },
     name: 'Acolyte',
     identity: 'Temple-trained servant of a deity or faith. Power from devotion, ritual, and spiritual practice rather than divine spellcasting.',
     description: 'You grew up inside the walls of a temple, learning the rites, prayers, and sacred duties of your faith. Whether you rose through its ranks or left before taking final vows, the rhythms of liturgy and the weight of doctrine still shape your every decision.',
@@ -83,6 +159,8 @@ export const THEMES = [
   // ============ BATCH 2: Social Archetypes ============
   {
     id: 'charlatan',
+    origin_feat: 'skilled',
+    ability_score_increase: { cha: 2, dex: 1 },
     name: 'Charlatan',
     identity: 'Master of false identities, cons, and social manipulation. Power from becoming someone else so convincingly that reality bends around the lie.',
     description: 'You have always been a little too clever for honest work. You learned to read people the way others read books — their tells, their hungers, the lies they tell themselves — and you have lived off that reading ever since, one mark at a time.',
@@ -99,6 +177,8 @@ export const THEMES = [
   },
   {
     id: 'entertainer',
+    origin_feat: 'musician',
+    ability_score_increase: { cha: 2, dex: 1 },
     name: 'Entertainer',
     identity: 'A performer whose art moves people. Power through connection, spectacle, and the emotional control of audiences.',
     description: 'You made your name on a stage, a street corner, or a tavern\'s main hall, giving audiences something to remember. A song, a dance, a speech, a feat of daring — whatever your art, you have learned that people are moved by what moves you, and that an audience handled properly will forgive almost anything.',
@@ -115,6 +195,8 @@ export const THEMES = [
   },
   {
     id: 'noble',
+    origin_feat: 'skilled',
+    ability_score_increase: { cha: 2, int: 1 },
     name: 'Noble',
     identity: 'Born to privilege, trained in politics, accustomed to power. Command of authority, hierarchy, and political maneuvering.',
     description: 'You were born to a family of wealth, power, or title, and taught from infancy how to navigate the endless politics of people who mistake themselves for history. Whether your house still stands or has fallen into ruin, the manners, the bearing, and the assumption of command are part of you now.',
@@ -133,6 +215,9 @@ export const THEMES = [
   // ============ BATCH 3: Wilderness Archetypes ============
   {
     id: 'outlander',
+    origin_feat: 'magic_initiate',
+    origin_feat_spell_list: 'Druid',
+    ability_score_increase: { dex: 2, wis: 1 },
     name: 'Outlander',
     creation_choice_label: 'Chosen Biome',
     creation_choice_options: [
@@ -161,6 +246,8 @@ export const THEMES = [
   },
   {
     id: 'sailor',
+    origin_feat: 'tavern_brawler',
+    ability_score_increase: { str: 2, dex: 1 },
     name: 'Sailor',
     identity: 'A life lived on the water — shaped by the sea\'s rhythms, its dangers, and the particular loyalty that forms between people who depend on each other to survive.',
     description: 'Your home has been a ship\'s deck more than dry land — the shifting seas, the discipline of a crew, the knowledge that the ocean does not care whether you survive. You learned to trust the people who could keep you alive, and to recognize the ones who would not.',
@@ -177,6 +264,8 @@ export const THEMES = [
   },
   {
     id: 'far_traveler',
+    origin_feat: 'lucky',
+    ability_score_increase: { dex: 2, wis: 1 },
     name: 'Far Traveler',
     identity: 'From a distant land, fundamentally an outsider everywhere. Carries the wisdom of many cultures and the outsider\'s perspective that sees what locals miss.',
     description: 'You come from a distant land — another continent, a hidden valley, a realm on the other side of the world. Everywhere you go now you are a curiosity at best and a threat at worst, and you have learned to carry your difference like a traveling cloak.',
@@ -193,6 +282,8 @@ export const THEMES = [
   },
   {
     id: 'haunted_one',
+    origin_feat: 'alert',
+    ability_score_increase: { wis: 2, con: 1 },
     name: 'Haunted One',
     identity: 'Someone who has encountered true horror — not adventure-story danger, but something that fundamentally changed how they perceive reality. Turns trauma into a weapon.',
     description: 'Something happened to you that should not happen to anyone — you touched real horror, the kind that does not go away with sunrise. You still feel it at the edge of your vision, and you have learned to turn that lingering terror outward, to use it, because the alternative is to let it finish the job.',
@@ -211,7 +302,21 @@ export const THEMES = [
   // ============ BATCH 4: Specialist Archetypes ============
   {
     id: 'guild_artisan',
+    origin_feat: 'crafter',
+    ability_score_increase: { int: 2, dex: 1 },
     name: 'Guild Artisan',
+    creation_choice_label: 'Guild Trade',
+    // The five trades named in the description, plus Other — the
+    // description is the seed list ("potter, smith, mason,
+    // glassblower, tailor, or any of a dozen other trades").
+    creation_choice_options: [
+      { value: 'potter', label: 'Potter', description: 'Clay work — thrown vessels, tiles, and kiln-fired goods.' },
+      { value: 'smith', label: 'Smith', description: 'Forge work — blades, tools, horseshoes, and iron fittings.' },
+      { value: 'mason', label: 'Mason', description: 'Stone work — walls, arches, and dressed stone.' },
+      { value: 'glassblower', label: 'Glassblower', description: 'Glass work — vessels, panes, and blown ornaments.' },
+      { value: 'tailor', label: 'Tailor', description: 'Cloth work — cut garments, repairs, and fine tailoring.' },
+      { value: 'other', label: 'Other trade', description: 'A trade not listed here — the guild still claims you as its own.' }
+    ],
     identity: 'A craftsperson trained within a guild — embedded in a network of trade, reputation, and professional standards.',
     description: 'You trained as a craftsperson within a guild — potter, smith, mason, glassblower, tailor, or any of a dozen other trades — and that guild\'s network of masters, journeymen, and apprentices is still part of who you are. Your work carries a stamp and a reputation, and the guild\'s letter of introduction opens doors in cities you have never visited.',
     signature_skill_1: 'Persuasion',
@@ -227,6 +332,8 @@ export const THEMES = [
   },
   {
     id: 'clan_crafter',
+    origin_feat: 'crafter',
+    ability_score_increase: { str: 2, dex: 1 },
     name: 'Clan Crafter',
     identity: 'An artisan trained not by a guild but by a family or cultural tradition. Craft as heritage, not commerce.',
     description: 'You learned your craft not from a guild but from your family, your village, or your tradition. The techniques passed down to you are older than any guild\'s charter, and the work you produce carries something — a signature, a song, a piece of home — that no trained apprentice can copy.',
@@ -243,7 +350,16 @@ export const THEMES = [
   },
   {
     id: 'hermit',
+    origin_feat: 'healer',
+    ability_score_increase: { wis: 2, con: 1 },
     name: 'Hermit',
+    creation_choice_label: 'Region of Seclusion',
+    // Origin-following location (R2-11(g)): no FR city list — the
+    // options are the character's origin setting's REGIONS,
+    // resolved client-side from the origin data. The server passes
+    // the flag through and requires a non-empty pick at Review.
+    creation_choice_source: 'origin_regions',
+    creation_choice_options: null,
     identity: 'Someone who withdrew from society to seek truth in solitude. Power from inner revelation and mental fortress.',
     description: 'You withdrew from civilization for reasons that mattered to you — a spiritual calling, a grief, a question you could not answer with other people around. In your years of solitude, you discovered something: a piece of knowledge, a revelation, a thing the world needs to know, and now you carry it back out among people.',
     signature_skill_1: 'Medicine',
@@ -259,6 +375,8 @@ export const THEMES = [
   },
   {
     id: 'investigator',
+    origin_feat: 'alert',
+    ability_score_increase: { int: 2, wis: 1 },
     name: 'Investigator',
     identity: 'Professional solver of mysteries. Reads scenes, interviews witnesses, connects disparate facts. Power from observation and deduction.',
     description: 'You solved problems for a living — private commissions, city cases, mysteries the watch could not or would not touch. You learned to read a scene the way a sage reads a book, and you know that most people want the truth only until they have it.',
@@ -277,24 +395,24 @@ export const THEMES = [
   // ============ BATCH 5: Institutional Archetypes ============
   {
     id: 'city_watch',
+    origin_feat: 'alert',
+    ability_score_increase: { str: 2, wis: 1 },
     name: 'City Watch',
     creation_choice_label: 'Home City',
-    // The settlement this character patrolled. Drawn from the Forgotten Realms
-    // cities list so NPCs and the DM recognize it as canon. Non-human strongholds
-    // (Menzoberranzan, Mithral Hall) are included for unusual concepts — a drow
-    // City Watch or a dwarven clan guard both work narratively.
-    creation_choice_options: [
-      { value: 'Waterdeep', label: 'Waterdeep', description: 'The City of Splendors — cosmopolitan, wealthy, and layered with political intrigue. The Waterdhavian Watch is disciplined, heavily regulated, and famous for its uniformed patrols through districts whose laws each twist a little differently.' },
-      { value: "Baldur's Gate", label: "Baldur's Gate", description: 'A sprawling port city divided between the wealthy Upper City and the rougher Lower City below. The Flaming Fist — mercenary company and de facto law — keeps a harsh, pragmatic peace among dockhands, sellswords, and Gondian priests.' },
-      { value: 'Neverwinter', label: 'Neverwinter', description: 'Rebuilt jewel of the Sword Coast, warmed by hot springs and scarred by cataclysm. The Neverwinter Guard walks streets still pocked with old damage, and half the city remembers when there was no law at all.' },
-      { value: 'Luskan', label: 'Luskan', description: 'A lawless northern pirate haven run by the five High Captains. "Watch" here is whatever a High Captain says it is — their thugs in surcoats, more protection racket than peacekeeping. You survived by knowing which crew to never cross.' },
-      { value: 'Silverymoon', label: 'Silverymoon', description: 'The Gem of the North — a city of scholars, bards, and diverse kin walking one peaceful street. The Knights in Silver guard Silverymoon with courtesy and blade alike, and their watchposts double as study halls.' },
-      { value: 'Mithral Hall', label: 'Mithral Hall', description: 'The great dwarven hold under the Spine of the World. Its watch is a clan-warrior rotation — axe and shield, stone-trained ears, and a keen sense for which disturbance is a drunk cousin and which is something worse coming up from below.' },
-      { value: 'Candlekeep', label: 'Candlekeep', description: 'The fortified library-city atop the cliffs of the Sea of Swords. The Watchers who guard it are part librarian, part warrior-monk — the rules are strict, the books irreplaceable, and every visitor is scrutinized.' },
-      { value: 'Menzoberranzan', label: 'Menzoberranzan', description: 'The great drow city deep in the Underdark. House-bound patrols keep a brittle, cruel peace under Lolth\'s priestesses; "law" bends to whichever noble is rising. You learned to read politics before you learned to walk.' },
-      { value: 'Calimport', label: 'Calimport', description: 'Sun-baked jewel of the southern coast — merchant palaces and labyrinthine slums side by side. The Pasha\'s watch is bought and sold like any other commodity; enforcement depends entirely on who you offended and how wealthy their family is.' },
-      { value: 'Athkatla', label: 'Athkatla', description: 'The City of Coin, heart of Amn. Every guard wears a Cowled Wizard\'s invisible leash — magic is licensed, crime is taxed, and the Council of Six hears all. You learned that gold rewrites most laws before sunrise.' }
-    ],
+    // Origin-following location (R2-11(g)): the FR default list
+    // is FR_HOME_CITIES (shared with Urchin, above); a character
+    // from outside the Forgotten Realms is offered their origin
+    // setting's REGIONS instead (label "Home Region"), resolved
+    // client-side from the origin data. The server passes the flag
+    // + the FR list through toClientShape untouched, and Review
+    // requires a non-empty pick (see validateCreatorNextStage6 §6).
+    // The settlement this character patrolled. Drawn from the
+    // Forgotten Realms cities list so NPCs and the DM recognize it
+    // as canon. Non-human strongholds (Menzoberranzan, Mithral Hall)
+    // are included for unusual concepts — a drow City Watch or a
+    // dwarven clan guard both work narratively.
+    creation_choice_source: 'origin_regions',
+    creation_choice_options: FR_HOME_CITIES,
     identity: 'A civilian peacekeeper rooted in a specific settlement — deep community knowledge, informal networks, the authority of place.',
     description: 'You walked a specific beat for years, learning one settlement the way its residents never could — its alleys, its troublemakers, its quiet deals, its decent people. The watch made you a part of the city, and even if you have moved on, the city still knows you by name.',
     signature_skill_1: 'Athletics',
@@ -310,6 +428,8 @@ export const THEMES = [
   },
   {
     id: 'knight_of_the_order',
+    origin_feat: 'tough',
+    ability_score_increase: { str: 2, cha: 1 },
     name: 'Knight of the Order',
     creation_choice_label: 'Order Type',
     creation_choice_options: [
@@ -318,8 +438,8 @@ export const THEMES = [
       { value: 'scholarly', label: 'Scholarly Order', description: 'A philosophical brotherhood — Harpers-like, lorekeepers, monks of reason. The order prizes knowledge, discretion, and careful action over pageantry; you were taught to think before you struck.' },
       { value: 'secret', label: 'Secret Order', description: 'A hidden fellowship with hidden aims — occult, political, or older than any kingdom knows. Your oath is known to few outside it; your methods, fewer still. The order\'s hand moves in shadow, and so do you.' }
     ],
-    identity: 'A sworn member of a chivalric, religious, or philosophical order. Power from oath and institutional backing. Supports six branching moral paths: True / Reformer / Martyr / Complicit / Fallen / Redemption.',
-    description: 'You swore an oath to an order — chivalric, religious, philosophical, or martial — and that oath still shapes the person you are now. The order\'s code and the order\'s people stand behind you, for good or ill, and your choices are always made in their shadow.',
+    identity: 'A sworn knight of an order — chivalric, religious, scholarly, or secret. Your oath gives you shelter, standing, and allies wherever the order is known, and its code shapes every choice you make.',
+    description: 'You swore an oath to an order, and that oath still defines you. In play, the order\'s people shelter and feed you, its name opens doors and settles disputes, and its banner rallies your allies in battle — while breaking the code costs you that standing. Your moral path is tracked from True, and it can shift as your choices in play test the oath.',
     signature_skill_1: 'Persuasion',
     signature_skill_2: 'History',
     tags: ['oath', 'honor', 'authority', 'combat', 'cause'],
@@ -333,6 +453,8 @@ export const THEMES = [
   },
   {
     id: 'mercenary_veteran',
+    origin_feat: 'savage_attacker',
+    ability_score_increase: { con: 2, str: 1 },
     name: 'Mercenary Veteran',
     identity: 'A sellsword who has survived more battles than most. No loyalty except to the contract and their own survival.',
     description: 'You have fought other people\'s wars for coin longer than you care to count. You learned early that loyalty gets you killed and that contracts keep you alive, and the only battle you really care about is the next one — the one where you collect payment and walk away still breathing.',
@@ -349,6 +471,8 @@ export const THEMES = [
   },
   {
     id: 'urban_bounty_hunter',
+    origin_feat: 'alert',
+    ability_score_increase: { wis: 2, dex: 1 },
     name: 'Urban Bounty Hunter',
     identity: 'A hunter of people, not beasts. Operates through information, patience, and instinctive reads on human behavior in cities.',
     description: 'You hunt people through cities. Not beasts in wilds — people, in crowded streets and gambling dens and rented rooms where they thought they could disappear. You know how information moves, how fugitives act, and how to be the one patient enough to wait them out.',
@@ -367,7 +491,16 @@ export const THEMES = [
   // ============ BATCH 6: Outsider Archetypes ============
   {
     id: 'folk_hero',
+    origin_feat: 'tough',
+    ability_score_increase: { con: 2, str: 1 },
     name: 'Folk Hero',
+    creation_choice_label: 'Home Region',
+    // Origin-following location (R2-11(g)): no FR city list — the
+    // options are the character's origin setting's REGIONS,
+    // resolved client-side from the origin data. The server passes
+    // the flag through and requires a non-empty pick at Review.
+    creation_choice_source: 'origin_regions',
+    creation_choice_options: null,
     identity: 'A local legend born from a single brave act. Power from the love of the common folk — and their willingness to rise.',
     description: 'You did one brave thing, once, that other people still talk about. A bully you stood up to, a disaster you averted, a tyrant you shamed — whatever it was, the common folk of your home remember your name, and they will remember it again in whatever town or village you pass through next.',
     signature_skill_1: 'Animal Handling',
@@ -383,7 +516,16 @@ export const THEMES = [
   },
   {
     id: 'urchin',
+    origin_feat: 'lucky',
+    ability_score_increase: { dex: 2, cha: 1 },
     name: 'Urchin',
+    creation_choice_label: 'Home City',
+    // Same FR default list as City Watch (shared FR_HOME_CITIES
+    // above); non-FR origins resolve their setting's regions
+    // client-side — see the City Watch note. No FR city is ever
+    // presented to a non-FR character as local.
+    creation_choice_source: 'origin_regions',
+    creation_choice_options: FR_HOME_CITIES,
     identity: 'Survived the streets as a child — learned to be small, quick, underestimated, invisible. Power from being overlooked.',
     description: 'You grew up on the streets, learning to survive in the places adults barely noticed: the back alleys, the rooftops, the gaps between a city\'s official systems. You became small, quick, invisible — and that invisibility has served you longer than any formal education ever could.',
     signature_skill_1: 'Sleight of Hand',

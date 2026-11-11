@@ -33,6 +33,16 @@ import { processLivingWorldTick } from '../server/services/livingWorldService.js
 import { calculatePriceModifier } from '../server/services/consequenceService.js';
 import { calculateHaggleDC, resolveHaggle } from '../server/services/bargainingService.js';
 import { ENTANGLEMENT_THRESHOLDS } from '../server/config/partyBaseConfig.js';
+import { advanceDays } from '../server/services/scheduleService.js';
+
+// Scenario 1 drives a commission through the living-world tick, so this
+// suite opts the tick back in — it defaults OFF for the MVP (Phase 1.2
+// scale-back, pinned by feature-flags.test.js). Same opt-in as
+// living-world.test.js. Safe after the imports: FEATURE_FLAGS reads
+// process.env when the flag is *read*, not at module load. Without this,
+// the tick early-returns with step 'ALL' skipped, step 3.9 never runs,
+// and the due order stays 'pending' (scenario 1 fails while exiting 0).
+process.env.FF_LIVING_WORLD_TICK = 'true';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -235,7 +245,11 @@ async function scenario1() {
   detail(`Character now has ${charAfterDeposit.gold_gp}gp (90gp deposit deducted)`);
 
   step('Skip forward 7 game days (triggers living-world tick)');
-  await dbRun('UPDATE characters SET game_day = 8 WHERE id = ?', [testCharacter.id]);
+  // Advance the campaign clock, not just the character row: the tick
+  // reads the unified world_clock (dayOfYear), and advanceDays mirrors
+  // the new date onto the campaign's characters. A bare UPDATE of
+  // characters.game_day leaves the clock at day 1, so no order is due.
+  await advanceDays(7, { campaignId: testCampaign.id });
   const tickResult = await processLivingWorldTick(testCampaign.id, 7);
 
   const merchantOrderStep = tickResult.step_statuses.find(s => s.step === '3.9 merchant_orders');

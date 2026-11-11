@@ -4,8 +4,14 @@
  * Before this, `processLivingWorldTick` had no caller on the normal play path.
  * It ran only from two debug endpoints and the meta-game "advance time" screen,
  * so a player who never opened those screens played in a world frozen since
- * session one. Session end is now the driver: it is the moment the campaign
- * clock moves, and it moves by exactly `daysElapsed`.
+ * session one. Session end is now the driver of the tick.
+ *
+ * v1.0.188 (Phase 1): time itself no longer moves at session end — the
+ * [TIME_ADVANCE] / [REST] markers move the world clock during play, and
+ * session end MEASURES the span that passed (daysElapsed) and ticks the
+ * world by exactly that. These tests pass their days through
+ * advanceTimeForSession — the same service the markers call — and pin
+ * that the tick consumes the measured span.
  *
  * End-to-end over the stubbed-LLM harness, because session end makes five
  * sequential model calls before it ever reaches the tick.
@@ -20,6 +26,8 @@ import {
   seedTurnFixture,
   cleanupTurnFixture
 } from './helpers/llmHarness.js'
+import { advanceTimeForSession } from '../server/services/restTimeService.js'
+import { setClockDate } from '../server/services/scheduleService.js'
 
 let passed = 0
 let failed = 0
@@ -39,10 +47,10 @@ function assertEqual(actual, expected, message) {
 }
 
 /**
- * Session-end analysis response. All four scored dimensions at 10 give
- * activityLevel = 40/40 = 1, so calculateGameTimeAdvance returns
- * ceil(1 * 3) = 3 in-game days — a known, asserted-on value rather than
- * whatever the model felt like.
+ * Session-end analysis response. The scores drive XP only — since
+ * v1.0.188 they no longer manufacture time (calculateGameTimeAdvance is
+ * retired). The asserted 3 days come from passThreeDays below: time
+ * that actually passed in play, through the marker service.
  */
 const ANALYSIS = `SUMMARY: The party cleared the ridge and struck a bargain.
 COMBAT: 10
@@ -84,6 +92,26 @@ function scriptSessionEnd(llm) {
   llm.reply('[]')                     // 3. NPC extraction
   llm.reply('NO_NEW_MEMORIES')        // 4. character memory extraction
   llm.reply(CHRONICLE_JSON)           // 5. chronicle extraction
+}
+
+/**
+ * Pass three days inside the session, through the exact service the
+ * [TIME_ADVANCE] marker handler calls — the clock moves during play;
+ * session end only measures it.
+ */
+async function passThreeDays(fixture, clockCampaignId = fixture.campaignId) {
+  // seedTurnFixture inserts its session directly, bypassing /start — so
+  // the Phase 0 session-start clock sync that /start performs never
+  // happens, and the campaign clock would seed from the shared fallback
+  // clock at whatever date other suites left behind. Replicate the
+  // sync: a real session always starts with its clock at its start
+  // date (day 100 of 1492 for these fixtures). For the campaign-less
+  // fixture (test 7) the relevant clock is the fallback — pass null.
+  await setClockDate(clockCampaignId, { dayOfYear: 100, year: 1492 })
+  await advanceTimeForSession({
+    sessionId: fixture.sessionId, characterId: fixture.characterId,
+    hours: EXPECTED_DAYS * 24, reason: 'the road, and the nights on it'
+  })
 }
 
 const fixtures = []
@@ -128,11 +156,13 @@ async function run() {
     const before = await dbGet('SELECT game_day FROM characters WHERE id = ?', [f1.characterId])
     assertEqual(Number(before.game_day), 100, 'the character starts on game day 100')
 
+    await passThreeDays(f1)
+
     scriptSessionEnd(llm)
     const res = await endSession(server, f1)
 
     assertEqual(res.status, 200, 'the session ends cleanly')
-    assertEqual(res.body.daysElapsed, EXPECTED_DAYS, 'the analysis scores produced a 3-day advance')
+    assertEqual(res.body.daysElapsed, EXPECTED_DAYS, 'the time that passed in play produced a 3-day span')
 
     const after = await dbGet('SELECT game_day FROM characters WHERE id = ?', [f1.characterId])
     assertEqual(Number(after.game_day), 103, 'the character clock advanced by exactly daysElapsed')
@@ -238,6 +268,8 @@ async function run() {
     const f2 = await seedTurnFixture(dbRun, { prefix: 'TEST_TICK_2', playerTurns: 2 })
     fixtures.push(f2)
 
+    await passThreeDays(f2)
+
     scriptSessionEnd(llm)
     const offRes = await endSession(server, f2)
 
@@ -281,6 +313,8 @@ async function run() {
     const f3 = await seedTurnFixture(dbRun, { prefix: 'TEST_TICK_3', playerTurns: 2 })
     fixtures.push(f3)
     await dbRun('UPDATE characters SET campaign_id = NULL WHERE id = ?', [f3.characterId])
+
+    await passThreeDays(f3, null)
 
     scriptSessionEnd(llm)
     const orphanRes = await endSession(server, f3)

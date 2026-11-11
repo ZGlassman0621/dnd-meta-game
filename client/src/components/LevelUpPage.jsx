@@ -3,28 +3,50 @@ import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
 import { STANDARD_TEXTS, RARE_TEXTS, RECITATIONS, SUBCLASS_TEXTS } from '../data/keeperTexts.js'
+import { SPELLBOOK_START_SIZE } from './spellbookHelpers.js'
 
-const ALL_CLASSES = [
-  'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
-  'Fighter', 'Keeper', 'Monk', 'Paladin', 'Ranger', 'Rogue',
-  'Sorcerer', 'Warlock', 'Wizard'
-]
+// Multiclass list (2026-11-08, prerequisites removed — all classes
+// multiclass freely): every class key in classes.json, alphabetical
+// by display name. Deferred classes (magus / blackguard / scholar —
+// pcCreatable: false in classes.json) stay listed but disabled
+// below; the server's POST /level-up guard is the enforcement, and
+// the flag rides classes.json, the same source the creator picker
+// reads. Keys, not display names: the server lowercases the submitted
+// class to match its own keys, so 'Blood Hunter' would arrive as
+// 'blood hunter' and match nothing — the submitted `class` stays the
+// capitalized key ('Blood_hunter', the server's own convention) and
+// the pretty name rides `displayName` for the render only.
+const ALL_CLASSES = Object.keys(classesData)
+  .sort((a, b) => (classesData[a]?.name || a).localeCompare(classesData[b]?.name || b))
 
+// Hit dice (2026-11-08, multiclass removal): all 23, server values
+// (levelProgression HIT_DICE). The old 14-entry map defaulted the
+// other nine to 8 — wrong for warden 10, scholar 6, duelist 10,
+// blackguard 10, blood_hunter 10 — a real HP bug on a multiclass take.
 const HIT_DICE = {
   artificer: 8,
   barbarian: 12,
   bard: 8,
+  blood_hunter: 10,
   cleric: 8,
   druid: 8,
+  duelist: 10,
   fighter: 10,
   keeper: 8,
+  magus: 8,
   monk: 8,
   paladin: 10,
+  pugilist: 8,
   ranger: 10,
   rogue: 8,
+  scholar: 6,
   sorcerer: 6,
+  spellshot: 8,
   warlock: 8,
-  wizard: 6
+  warden: 10,
+  warlord: 8,
+  wizard: 6,
+  blackguard: 10
 }
 
 function LevelUpPage({ character, onLevelUp, onBack }) {
@@ -53,6 +75,10 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   // Spell selection state (for spells step)
   const [selectedNewCantrips, setSelectedNewCantrips] = useState([])
   const [selectedNewSpells, setSelectedNewSpells] = useState([])
+  // V3 (2026-11-08): a multiclass wizard may start with an EMPTY
+  // spellbook — no spells picked now, spells copied in later from
+  // spellbooks found in play. The server accepts an explicit [].
+  const [startEmptyBook, setStartEmptyBook] = useState(false)
   const [swapSpell, setSwapSpell] = useState(null) // { old: string, new: string }
   const [showSwapPanel, setShowSwapPanel] = useState(false)
   const [spellFilterLevel, setSpellFilterLevel] = useState('all')
@@ -82,6 +108,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
       setAsiDistribution({ str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 })
       setSelectedNewCantrips([])
       setSelectedNewSpells([])
+      setStartEmptyBook(false)
       setSwapSpell(null)
       setShowSwapPanel(false)
       setSpellFilterLevel('all')
@@ -115,23 +142,30 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
     return mod >= 0 ? `+${mod}` : mod.toString()
   }
 
-  // Build all multiclass options (ignoring prerequisites)
+  // Build all multiclass options (2026-11-08: prerequisites removed —
+  // every class is offered, no ability-score gate). Deferred classes
+  // ride pcCreatable false from classes.json and render disabled.
   const getAllMulticlassOptions = () => {
     if (!levelUpInfo) return []
 
     const existingClassNames = levelUpInfo.classLevels.map(c => c.class.toLowerCase())
     const conMod = Math.floor((currentAbilityScores.con - 10) / 2)
 
-    return ALL_CLASSES.filter(className => !existingClassNames.includes(className.toLowerCase()))
-      .map(className => {
-        const classKey = className.toLowerCase()
+    return ALL_CLASSES.filter(classKey => !existingClassNames.includes(classKey))
+      .map(classKey => {
+        const className = classKey.charAt(0).toUpperCase() + classKey.slice(1)
         const hitDie = HIT_DICE[classKey] || 8
+        const pcCreatable = classesData[classKey]?.pcCreatable !== false
+        const pcCreatableNote = classesData[classKey]?.pcCreatableNote || null
         const classInfo = classesData[classKey]
         const subclassLevel = classInfo?.subclassLevel || 3
 
         return {
           type: 'multiclass',
           class: className,
+          displayName: classesData[classKey]?.name || className,
+          pcCreatable,
+          pcCreatableNote,
           currentLevel: 0,
           newLevel: 1,
           subclass: null,
@@ -140,7 +174,14 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
             needsSubclass: subclassLevel === 1,
             needsASI: false,
             newCantrips: 0,
-            newSpellsKnown: 0
+            // Multiclass-into-wizard starts a 1st-level wizard's book:
+            // 6 spells (settled 2026-11-07 — the same 6 a wizard made
+            // from scratch starts with). The server caps the seed at
+            // 6 and refuses an empty one; the picker below requires
+            // all 6 before Review, the same shape as the in-class +2
+            // picker. Every other multiclass takes 0 here — their
+            // counts come from the level-up envelope, not this list.
+            newSpellsKnown: className.toLowerCase() === 'wizard' ? SPELLBOOK_START_SIZE : 0
           },
           hpGain: {
             hitDie,
@@ -424,6 +465,13 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
       }
       if (selectedNewSpells.length > 0) {
         body.newSpells = selectedNewSpells
+      } else if (startEmptyBook && selectedClassOption.type === 'multiclass' && isWizard(selectedClassOption.class)) {
+        // V3 (2026-11-08): an empty multiclass seed is allowed —
+        // the wizard starts with an empty book and copies spells in
+        // from found spellbooks in play. Sent as an explicit [],
+        // which the server accepts; an absent key would be the same
+        // shape, but explicit says what the player chose.
+        body.newSpells = []
       }
       if (swapSpell && swapSpell.old && swapSpell.new) {
         body.swapSpell = swapSpell
@@ -490,7 +538,20 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
   const existingClassOptions = levelUpInfo?.classOptions?.filter(o => o.type === 'existing') || []
   const allMulticlassOptions = getAllMulticlassOptions()
+  // Gray-out (2026-11-08, MVP scope): deferred classes stay listed
+  // but disabled on this PC surface only — same pattern as the
+  // deferred subclasses below. A disabled card has no hover title
+  // in most browsers, so the note rides the line under the grid.
+  const deferredMulticlassOptions = allMulticlassOptions.filter(o => o.pcCreatable === false)
   const activeChoices = selectedClassOption?.choices || {}
+  // Gray-out (2026-11-08, MVP scope): subclasses flagged pcCreatable: false
+  // in classes.json stay listed but disabled on this PC surface only.
+  // CompanionEditor reads the same list and ignores the flag, so the
+  // companion surface stays open. A disabled <option> has no hover
+  // title in most browsers, so the note rides the line under the select.
+  const deferredSubclassOptions = selectedClassOption
+    ? getSubclassOptions(selectedClassOption.class).filter(s => s.pcCreatable === false)
+    : []
   const activeHpGain = selectedClassOption?.hpGain || {}
   const activeNewFeatures = selectedClassOption?.newFeatures || []
 
@@ -602,15 +663,23 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 {allMulticlassOptions.map((option, idx) => (
                   <div
                     key={idx}
-                    className="class-option multiclass"
-                    onClick={() => handleClassSelect(option)}
+                    className={`class-option multiclass${option.pcCreatable === false ? ' deferred' : ''}`}
+                    onClick={option.pcCreatable === false ? undefined : () => handleClassSelect(option)}
+                    title={option.class.toLowerCase() === 'wizard'
+                      ? `Start a wizard's spellbook: you will pick ${option.choices.newSpellsKnown} first-level Wizard spells on the next step — a 1st-level wizard's book holds ${option.choices.newSpellsKnown} spells — or start with an empty book and copy spells in from spellbooks you find in play.`
+                      : undefined}
                   >
-                    <span className="class-name">{option.class}</span>
+                    <span className="class-name">{option.displayName || option.class}</span>
                     <span className="class-hit-die">d{option.hpGain.hitDie} hit die</span>
                     <span className="hp-gain">+{option.hpGain.average} HP avg</span>
                   </div>
                 ))}
               </div>
+              {deferredMulticlassOptions.length > 0 && (
+                <p className="section-note">
+                  {deferredMulticlassOptions.map(o => o.displayName || o.class).join(', ')} {deferredMulticlassOptions.length > 1 ? 'are' : 'is'} not available for player characters yet — {deferredMulticlassOptions[0].pcCreatableNote || 'Coming after the MVP.'}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -738,11 +807,16 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 >
                   <option value="">Select a subclass...</option>
                   {getSubclassOptions(selectedClassOption.class).map(subclass => (
-                    <option key={subclass.name} value={subclass.name}>
+                    <option key={subclass.name} value={subclass.name} disabled={subclass.pcCreatable === false}>
                       {subclass.name}
                     </option>
                   ))}
                 </select>
+                {deferredSubclassOptions.length > 0 && (
+                  <p className="subclass-note">
+                    {deferredSubclassOptions.map(s => s.name).join(' and ')} {deferredSubclassOptions.length > 1 ? 'are' : 'is'} not available for player characters yet — {deferredSubclassOptions[0].pcCreatableNote || 'Coming after the MVP.'}
+                  </p>
+                )}
                 {selectedSubclass && (
                   <p className="subclass-description">
                     {getSubclassOptions(selectedClassOption.class).find(s => s.name === selectedSubclass)?.description}
@@ -1555,6 +1629,23 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                     : `Choose ${activeChoices.newSpellsKnown} new spell${activeChoices.newSpellsKnown > 1 ? 's' : ''} from the ${selectedClassOption.class} spell list.`}
                 </p>
 
+                {/* V3 (2026-11-08): a multiclass wizard may start
+                    with an EMPTY spellbook — no spells picked now,
+                    spells copied in later from spellbooks found in
+                    play. The wizard cannot prepare wizard spells
+                    until the book holds some. */}
+                {isWizard(selectedClassOption.class) && selectedClassOption.type === 'multiclass' && (
+                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', color: '#ccc', fontSize: '0.9rem', marginBottom: '0.75rem', cursor: 'pointer' }} title="Start with an empty spellbook — pick no spells now. Your wizard cannot prepare wizard spells until spells are copied in from spellbooks you find in play.">
+                    <input type="checkbox" checked={startEmptyBook} onChange={(e) => { setStartEmptyBook(e.target.checked); if (e.target.checked) setSelectedNewSpells([]) }} style={{ marginTop: '0.2rem' }} />
+                    <span>Start with an empty spellbook — pick no spells now</span>
+                  </label>
+                )}
+                {startEmptyBook && selectedClassOption.type === 'multiclass' && isWizard(selectedClassOption.class) && (
+                  <p style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                    Starting with an empty spellbook — copy spells in from spellbooks you find in play. You cannot prepare wizard spells until the book holds some.
+                  </p>
+                )}
+
                 {/* Selected spells */}
                 {selectedNewSpells.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -1574,7 +1665,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 )}
 
                 {/* Filters */}
-                {selectedNewSpells.length < activeChoices.newSpellsKnown && (
+                {!startEmptyBook && selectedNewSpells.length < activeChoices.newSpellsKnown && (
                   <>
                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                       {['all', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'].map(lvl => {
@@ -1767,7 +1858,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                 onClick={handleProceedToReview}
                 disabled={
                   (activeChoices.newCantrips > 0 && selectedNewCantrips.length < activeChoices.newCantrips) ||
-                  (activeChoices.newSpellsKnown > 0 && selectedNewSpells.length < activeChoices.newSpellsKnown) ||
+                  ((activeChoices.newSpellsKnown > 0 && selectedNewSpells.length < activeChoices.newSpellsKnown) && !startEmptyBook) ||
                   (swapSpell && !swapSpell.new)
                 }
               >
@@ -2041,9 +2132,19 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                   })()}
 
                   {/* Spells Summary */}
-                  {(selectedNewCantrips.length > 0 || selectedNewSpells.length > 0 || swapSpell) && (
+                  {(selectedNewCantrips.length > 0 || selectedNewSpells.length > 0 || swapSpell || startEmptyBook) && (
                     <div className="review-card">
                       <h3>Spells</h3>
+                      {startEmptyBook && (
+                        <>
+                          <h4 style={{ color: '#a855f7', margin: '0.5rem 0 0.25rem', fontSize: '0.9rem' }}>
+                            Spellbook
+                          </h4>
+                          <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                            Starts empty — no spells picked. Copy spells in from spellbooks you find in play.
+                          </p>
+                        </>
+                      )}
                       {selectedNewCantrips.length > 0 && (
                         <>
                           <h4 style={{ color: '#60a5fa', margin: '0.5rem 0 0.25rem', fontSize: '0.9rem' }}>

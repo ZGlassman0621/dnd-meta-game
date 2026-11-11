@@ -164,6 +164,31 @@ export const LANGUAGES = {
   "Thieves\' Cant": 'A coded mix of dialect, jargon, and hand signs used by rogues and criminal networks.'
 };
 
+/**
+ * Species language grants carry a choice as a placeholder string
+ * ("One extra language of your choice" — human, half-elf), not a
+ * language: the picker on Stage 1 resolves it, and the derived
+ * Stage 4 list must never carry the placeholder as if it were a
+ * language. These three helpers are the one place that knows the
+ * placeholder shape, so Stage 1 and Stage 4 cannot drift apart.
+ */
+const CHOICE_LANGUAGE_RE = /of your choice/i;
+
+/** True when a language-grant string is a choice placeholder, not a language. */
+export function isChoiceLanguage(value) {
+  return CHOICE_LANGUAGE_RE.test(String(value || ''));
+}
+
+/** The granted languages minus any "of your choice" placeholders. */
+export function concreteLanguages(languages) {
+  return (languages || []).filter(l => !isChoiceLanguage(l));
+}
+
+/** How many "one extra language of your choice" slots a grant promises. */
+export function languageChoiceCount(languages) {
+  return (languages || []).filter(l => isChoiceLanguage(l)).length;
+}
+
 // --- Damage types ----------------------------------------------------------
 
 export const DAMAGE_TYPES = {

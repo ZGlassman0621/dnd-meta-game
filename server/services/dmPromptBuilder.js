@@ -6,39 +6,36 @@
  * Extracted from ollama.js for maintainability.
  */
 
+import { parseSpellbookState, wizardLevelFromClassLevels, SPELLBOOK_MATERIALS } from './spellbookService.js';
 import { formatLoyaltyForPrompt } from './companionBackstoryService.js';
 import { formatFactionStandingFragment } from './factionService.js';
 import { safeParse } from '../utils/safeParse.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { renderFeatEffectsForPrompt } from '../data/featRegistry.js';
+import { buildSubclassPromptSection } from './subclassService.js';
 import { buildAgendaPromptBlock } from './npcComplexityService.js';
+import { buildProfessionPromptLine } from './npcProfessionService.js';
 import { buildCompanionPromptBlock } from './companionPrompt.js';
+import { calculateCombatStats } from './combatStatsService.js';
+import { artificerPromptSection } from './artificerService.js';
+import { spellshotPromptSection } from './spellshotService.js';
+import { wardenPromptSection } from './wardenService.js';
+import { magusPromptSection, societyKeyForName, spellcastingAbilityForSociety } from './magusService.js';
+import { pugilistPromptSection } from './pugilistService.js';
+import { scholarPromptSection } from './scholarService.js';
+import { duelistPromptSection } from './duelistService.js';
+import { blackguardPromptSection } from './blackguardService.js';
+import { bloodHunterPromptSection } from './bloodHunterService.js';
+import { warlordPromptSection } from './warlordService.js';
+import { formatSpeciesLine, formatOriginLine } from './speciesService.js';
+// Loot wiring (R-02): the prompt never names an unidentified magic item.
+import { discoveryPromptSection, discoveryStateOf, DISCOVERY_IDENTIFIED } from './magicItemDiscoveryService.js';
+import { lookupItemByName } from '../data/merchantLootTables.js';
+import { formatMixedAncestryLine } from './mixedAncestryService.js';
 
-// Quality rank bonuses for equipment
-const QUALITY_BONUSES = {
-  poor: { weapon: -1, armor: -1 },
-  common: { weapon: 0, armor: 0 },
-  fine: { weapon: 0, armor: 0 },
-  masterwork: { weapon: 1, armor: 0 },
-  exceptional: { weapon: 1, armor: 1 },
-  legendary: { weapon: 2, armor: 1 }
-};
-
-// Armor base AC values
-const ARMOR_DATA = {
-  'Padded': { baseAC: 11, type: 'light' },
-  'Leather': { baseAC: 11, type: 'light' },
-  'Studded Leather': { baseAC: 12, type: 'light' },
-  'Hide': { baseAC: 12, type: 'medium', maxDex: 2 },
-  'Chain Shirt': { baseAC: 13, type: 'medium', maxDex: 2 },
-  'Scale Mail': { baseAC: 14, type: 'medium', maxDex: 2 },
-  'Breastplate': { baseAC: 14, type: 'medium', maxDex: 2 },
-  'Half Plate': { baseAC: 15, type: 'medium', maxDex: 2 },
-  'Ring Mail': { baseAC: 14, type: 'heavy' },
-  'Chain Mail': { baseAC: 16, type: 'heavy' },
-  'Splint': { baseAC: 17, type: 'heavy' },
-  'Plate': { baseAC: 18, type: 'heavy' }
-};
+// QUALITY_BONUSES, ARMOR_DATA and calculateCombatStats moved to
+// combatStatsService.js (v1.0.191, combat-real B1) — one combat-stats
+// truth shared by this prompt (display) and combat (authority).
 
 // Companion mood RP guidance for the DM
 const MOOD_RP_GUIDANCE = {
@@ -54,67 +51,7 @@ const MOOD_RP_GUIDANCE = {
   exhausted: 'slow, unfocused, asking for rest, making mistakes'
 };
 
-/**
- * Calculate combat stats from character equipment
- */
-function calculateCombatStats(character) {
-  const abilities = typeof character.ability_scores === 'string'
-    ? JSON.parse(character.ability_scores || '{}')
-    : (character.ability_scores || {});
-
-  const equipment = typeof character.equipment === 'string'
-    ? JSON.parse(character.equipment || '{}')
-    : (character.equipment || {});
-
-  const dexMod = Math.floor(((abilities.dex || 10) - 10) / 2);
-  const strMod = Math.floor(((abilities.str || 10) - 10) / 2);
-  const profBonus = Math.ceil((character.level || 1) / 4) + 1;
-
-  // Calculate AC
-  let ac = 10 + dexMod; // Base unarmored AC
-  const equippedArmor = equipment.armor;
-  if (equippedArmor) {
-    const armorInfo = ARMOR_DATA[equippedArmor.name] || equippedArmor;
-    if (armorInfo.type === 'heavy' || armorInfo.armorType === 'heavy') {
-      ac = armorInfo.baseAC;
-    } else if (armorInfo.type === 'medium' || armorInfo.armorType === 'medium') {
-      const cappedDex = Math.min(dexMod, armorInfo.maxDex || armorInfo.maxDexBonus || 2);
-      ac = armorInfo.baseAC + cappedDex;
-    } else {
-      ac = armorInfo.baseAC + dexMod;
-    }
-    // Quality bonus
-    const quality = equippedArmor.quality || 'common';
-    ac += QUALITY_BONUSES[quality]?.armor || 0;
-  }
-
-  // Shield bonus
-  if (equipment.offHand?.acBonus) {
-    ac += equipment.offHand.acBonus;
-  }
-
-  // Calculate weapon stats
-  let weaponInfo = null;
-  const weapon = equipment.mainHand;
-  if (weapon) {
-    const isFinesse = weapon.properties?.includes('finesse');
-    const isRanged = weapon.rangeType === 'ranged';
-    let abilityMod = isFinesse ? Math.max(strMod, dexMod) : (isRanged ? dexMod : strMod);
-    const qualityBonus = QUALITY_BONUSES[weapon.quality || 'common']?.weapon || 0;
-    const attackBonus = abilityMod + profBonus + qualityBonus;
-    const damageBonus = abilityMod >= 0 ? `+${abilityMod}` : abilityMod;
-
-    weaponInfo = {
-      name: weapon.name,
-      quality: weapon.quality || 'common',
-      attackBonus: attackBonus,
-      damage: `${weapon.damage || '1d4'}${damageBonus}`,
-      damageType: weapon.damageType || 'bludgeoning'
-    };
-  }
-
-  return { ac, weapon: weaponInfo };
-}
+// calculateCombatStats now lives in combatStatsService.js (imported above).
 
 /**
  * Format a character's info for the system prompt
@@ -190,15 +127,79 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
   let spellSection = '';
   const hasSpells = knownCantrips.length > 0 || knownSpells.length > 0 || preparedSpells.length > 0;
   if (hasSpells) {
+    // Wizard levels (2026-11-08 follow-ups, D1): the spellbook
+    // lines gate on wizard LEVELS, not on the primary class — a
+    // fighter-primary wizard has a book the DM must see. The
+    // derivation is the server's single-class-fallback shape
+    // (wizardLevelFromClassLevels + primary-wizard fallback); null
+    // means no wizard levels at all.
+    const wizLevel = wizardLevelFromClassLevels(character.class_levels)
+      ?? (String(character.class || '').toLowerCase() === 'wizard' ? Number(character.level) || 1 : null);
     const spellParts = [];
     if (knownCantrips.length > 0) {
       spellParts.push(`Cantrips: ${knownCantrips.join(', ')}`);
     }
     if (knownSpells.length > 0) {
-      spellParts.push(`Known Spells: ${knownSpells.join(', ')}`);
+      // Wizard spellbook (2026-11-07): the book lives in
+      // known_spells — label it as the book, not "known spells".
+      if (wizLevel != null) {
+        spellParts.push(`Spellbook (${knownSpells.length}): ${knownSpells.join(', ')}`);
+      } else {
+        spellParts.push(`Known Spells: ${knownSpells.join(', ')}`);
+      }
     }
     if (preparedSpells.length > 0) {
       spellParts.push(`Prepared Spells: ${preparedSpells.join(', ')}`);
+    }
+    if (wizLevel != null) {
+      // Always-prepared picks + lost-book state, from
+      // spellbook_json (migration 111).
+      const wizState = parseSpellbookState(character.spellbook_json);
+      // (Always-prepared picks print from the gated
+      // mastery/signature lists below, not a merged list.)
+      if (wizState.mastery.length > 0 && wizLevel >= 18) {
+        spellParts.push(`Spell Mastery (always prepared): ${wizState.mastery.join(', ')}`);
+      }
+      if (wizState.signature.length > 0 && wizLevel >= 20) {
+        spellParts.push(`Signature Spells (always prepared): ${wizState.signature.join(', ')}`);
+      }
+      if ((wizState.mastery.length > 0 && wizLevel < 18) || (wizState.signature.length > 0 && wizLevel < 20)) {
+        // Picks stored below their level gate are inert — say so
+        // rather than printing them as prepared.
+        spellParts.push('Spell Mastery / Signature Spells: picks stored, below their level gate');
+      }
+      if (wizState.status === 'lost') {
+        spellParts.push('Spellbook: LOST — prepared spells cannot be changed until the spellbook is recovered or replaced');
+      }
+      // Backup book + replacement marker (2026-11-07): the DM needs
+      // to know a second book exists, and whether the book in hand
+      // is a replacement rather than the original.
+      if (wizState.backup && wizState.backup.length > 0) {
+        spellParts.push(`Backup spellbook (${wizState.backup.length}): ${wizState.backup.join(', ')}`);
+      }
+      if (wizState.replaced === 'prepared') {
+        spellParts.push('Spellbook: REPLACED — re-transcribed from prepared spells');
+      } else if (wizState.replaced === 'backup') {
+        spellParts.push('Spellbook: REPLACED — restored from the backup spellbook');
+      }
+      // Blank book (V5, 2026-11-08; table labels, 2026-11-08
+      // follow-ups, D6): what the book in hand is made of and what
+      // its blank pages cost, as recorded by the replace route when
+      // the book was made. A stored table KEY prints its label;
+      // anything else prints verbatim (legacy free-text rows already
+      // in the wild). Prints whenever the values are stored —
+      // including while a subset replacement is still in progress
+      // (the book exists; it is just incomplete) — so the DM sees
+      // the book's price and materials without a REPLACED line yet.
+      if (wizState.bookCost != null || wizState.bookMaterials) {
+        const bookBits = [];
+        if (wizState.bookMaterials) {
+          const materialEntry = SPELLBOOK_MATERIALS[wizState.bookMaterials];
+          bookBits.push(materialEntry ? materialEntry.label : wizState.bookMaterials);
+        }
+        if (wizState.bookCost != null) bookBits.push(`${wizState.bookCost} gp`);
+        spellParts.push(`Spellbook materials: ${bookBits.join(', ')}`);
+      }
     }
     spellSection = `\n- Spellcasting: ${spellParts.join('; ')}`;
   }
@@ -262,6 +263,15 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     `- First Name: ${firstName}${nickname ? `\n- Nickname: ${nickname} (only close friends or those the character has shared this with would use it)` : ''}`,
     `- Gender: ${character.gender || 'unspecified'} - USE ${pronouns.toUpperCase()} PRONOUNS FOR THIS CHARACTER`,
     `- Race: ${character.race}${character.subrace ? ` (${character.subrace})` : ''}`,
+    formatSpeciesLine(character.race, character.subrace, character.size)
+      ? `- ${formatSpeciesLine(character.race, character.subrace, character.size)}`
+      : null,
+    formatMixedAncestryLine(character.mixed_ancestry_json)
+      ? `- ${formatMixedAncestryLine(character.mixed_ancestry_json)}`
+      : null,
+    formatOriginLine(character.origin_setting, character.origin_region, character.origin_explanation, character.race)
+      ? `- ${formatOriginLine(character.origin_setting, character.origin_region, character.origin_explanation, character.race)}`
+      : null,
     `- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}`,
     `- Level: ${character.level}`,
     `- Background: ${character.background || 'Unknown'}`,
@@ -292,14 +302,69 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     character.backstory ? `- Backstory: ${character.backstory}` : null
   ].filter(Boolean);
 
+  // Artificer base class: dynamic state (uses, created items, attunement)
+  // belongs in dynamicText, not the cached static block — it changes in play.
+  let artificerSection = '';
+  if (String(character.class || '').toLowerCase() === 'artificer') {
+    try {
+      const resources = typeof character.class_resources_json === 'string' ? JSON.parse(character.class_resources_json || '{}') : (character.class_resources_json || {});
+      const intMod = Math.floor(((abilities?.int ?? 10) - 10) / 2);
+      artificerSection = artificerPromptSection(resources.artificer || null, { level: character.level || 1, intMod });
+    } catch { /* a malformed resources blob never breaks the prompt */ }
+  }
+
+  // Overnight 7-class merge: same pattern as the artificer section above —
+  // dynamic state belongs in dynamicText, not the cached static block.
+  let newClassSection = '';
+  {
+    const cls = String(character.class || '').toLowerCase();
+    if (['spellshot', 'warden', 'magus', 'pugilist', 'scholar', 'duelist', 'blackguard', 'blood_hunter', 'warlord'].includes(cls)) {
+      try {
+        const resources = typeof character.class_resources_json === 'string' ? JSON.parse(character.class_resources_json || '{}') : (character.class_resources_json || {});
+        const sub = resources[cls] || null;
+        const modOf = (a) => Math.floor(((abilities?.[a] ?? 10) - 10) / 2);
+        const lvl = character.level || 1;
+        const name = character.name || null;
+        if (cls === 'spellshot') newClassSection = spellshotPromptSection(sub, { level: lvl, intMod: modOf('int'), name });
+        else if (cls === 'warden') newClassSection = wardenPromptSection(sub, { level: lvl, subclass: character.subclass || null, alternateSet: sub?.alternateSet ?? null, name });
+        else if (cls === 'magus') {
+          const key = societyKeyForName(character.subclass) || societyKeyForName(sub?.society);
+          const ability = key ? spellcastingAbilityForSociety(key) : null;
+          newClassSection = magusPromptSection(sub, { level: lvl, spellMod: ability ? modOf(ability) : undefined, society: key || undefined, name });
+        }
+        else if (cls === 'pugilist') newClassSection = pugilistPromptSection(sub, { level: lvl, club: sub?.club || null, chaMod: modOf('cha') });
+        else if (cls === 'scholar') newClassSection = scholarPromptSection(sub, { level: lvl, intMod: modOf('int'), name });
+        else if (cls === 'duelist') newClassSection = duelistPromptSection(sub, { level: lvl });
+        else if (cls === 'blackguard') newClassSection = blackguardPromptSection(sub, { level: lvl, chaMod: modOf('cha') });
+        else if (cls === 'blood_hunter') newClassSection = bloodHunterPromptSection(sub, { level: lvl, intMod: modOf('int'), name, subclass: character.subclass || null });
+        else if (cls === 'warlord') newClassSection = warlordPromptSection(sub, { level: lvl, chaMod: modOf('cha'), name, subclass: character.subclass || null });
+      } catch { /* a malformed resources blob never breaks the prompt */ }
+    }
+  }
+
+  // Loot wiring (R-02): unidentified magic items are described, never
+  // named. Same try/catch shape as the class sections above.
+  let discoverySection = '';
+  try {
+    discoverySection = discoveryPromptSection(inventory, (name) => {
+      try { return lookupItemByName(name) || null; } catch { return null; }
+    });
+  } catch { /* a malformed inventory never breaks the prompt */ }
+
   const stateLines = [
     `${label} — CURRENT STATE (live values, may change during play):`,
     `- HP: ${character.current_hp}/${character.max_hp}`,
     `- Armor Class: ${ac}`,
     `- Weapon: ${weaponStr}`,
-    `- Key Equipment: ${inventory.slice(0, 5).map(i => i.name || i).join(', ') || 'Basic adventuring gear'}`,
+    `- Key Equipment: ${inventory.slice(0, 5).map(i => discoveryStateOf(i) === DISCOVERY_IDENTIFIED ? (i.name || i) : 'an unidentified item').join(', ') || 'Basic adventuring gear'}`,
     `- Current Location: ${character.current_location || 'Unknown'}`,
-    `- Current Quest: ${character.current_quest || 'None'}`
+    `- Current Quest: ${character.current_quest || 'None'}`,
+    ...(artificerSection ? [artificerSection] : []),
+    ...(newClassSection ? [newClassSection] : []),
+    // Loot wiring (R-02): unidentified magic items are listed WITHOUT
+    // their names (describe, never name). Malformed inventory never
+    // breaks the prompt — same try/catch shape as the class sections.
+    ...(discoverySection ? [discoverySection] : []),
   ];
 
   return {
@@ -439,10 +504,18 @@ function formatCustomNpcs(npcs, nicknameResolutions = null) {
     const identityLines = [
       `- ${npc.name}${roleNote}${roleDescription}`,
       `  Race: ${npc.race}${npc.age ? ` (${npc.age})` : ''}, Gender: ${npc.gender || 'unspecified'}`,
+      formatSpeciesLine(npc.race, null)
+        ? `  ${formatSpeciesLine(npc.race, null)}`
+        : null,
+      formatOriginLine(npc.origin_setting, npc.origin_region, npc.origin_explanation, npc.race)
+        ? `  ${formatOriginLine(npc.origin_setting, npc.origin_region, npc.origin_explanation, npc.race)}`
+        : null,
       npc.nickname ? `  Private Nickname: "${npc.nickname}" (ONLY use if the NPC explicitly shares it with the player - introduce them by their full name first)` : null,
       namingLine,
       npc.occupation ? `  OCCUPATION: ${npc.occupation} - THIS DEFINES WHAT THEY DO. A book dealer sells books. A blacksmith forges weapons. DO NOT make them into something else.` : null,
       npc.occupation_category ? `  Occupation Type: ${npc.occupation_category}` : null,
+      npc.distinguishing_features ? `  Appearance: ${npc.distinguishing_features}` : null,
+      npc.profession_key ? buildProfessionPromptLine(npc) : null,
       npc.current_location ? `  Location: ${npc.current_location}` : null,
       `  Relationship to Player: ${relationship}`
     ].filter(Boolean);
@@ -582,7 +655,9 @@ export function formatCompanionActiveConditionsLine(activeConditions) {
   const display = arr.map(k =>
     String(k).replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
   );
-  return `  Active conditions: ${display.join(', ')}`;
+  const exKey = arr.find(k => /^exhaustion_[1-6]$/.test(String(k)));
+  const speedNote = exKey ? ` — Speed reduced by ${5 * Number(String(exKey).split('_')[1])} ft` : '';
+  return `  Active conditions: ${display.join(', ')}${speedNote}`;
 }
 
 /**
@@ -651,6 +726,21 @@ export function formatCompanionProgressionLines(progression) {
     }
   }
 
+  // Origin feat (Stage 3) — the theme's fixed feat, granted at creation.
+  if (progression.origin_feat) {
+    const o = progression.origin_feat;
+    parts.push(`  Origin feat: ${o.feat_name}${o.selected_at_level ? ` (L${o.selected_at_level})` : ''}: ${o.effect || ''}`);
+    if (o.choices_data) parts.push(`    Choices: ${JSON.stringify(o.choices_data)}`);
+  }
+
+  // Versatile feat (item 19, human) — the standalone 2024 pick; it
+  // stacks with the theme feat and is always a different feat.
+  if (progression.versatile_feat) {
+    const v = progression.versatile_feat;
+    parts.push(`  Versatile feat (Human): ${v.feat_name}${v.selected_at_level ? ` (L${v.selected_at_level})` : ''}: ${v.effect || ''}`);
+    if (v.choices_data) parts.push(`    Choices: ${JSON.stringify(v.choices_data)}`);
+  }
+
   return parts.join('\n');
 }
 
@@ -684,6 +774,19 @@ function formatCompanions(companions, awayCompanions = []) {
       statsLine = `${classLine}
   HP: ${companion.companion_current_hp}/${companion.companion_max_hp}
   Abilities: STR ${abilityScores.str}, DEX ${abilityScores.dex}, CON ${abilityScores.con}, INT ${abilityScores.int}, WIS ${abilityScores.wis}, CHA ${abilityScores.cha}`;
+
+      // Skill modifiers from the real sheet (same math as the player's) —
+      // the DM sees what this companion is actually good at, and
+      // ROLL_REQUEST resolves their checks with these exact numbers.
+      const skillNames = typeof companion.skill_proficiencies === 'string'
+        ? (() => { try { return JSON.parse(companion.skill_proficiencies || '[]'); } catch { return []; } })()
+        : (companion.skill_proficiencies || []);
+      if (Array.isArray(skillNames) && skillNames.length > 0) {
+        const mods = computeSkillModifiers(abilityScores, skillNames, companion.companion_level || 1);
+        if (mods.length > 0) {
+          statsLine += `\n  Skills: ${mods.join(', ')} (Passive Perception ${computePassivePerception(abilityScores, skillNames, companion.companion_level || 1)})`;
+        }
+      }
     } else {
       const originalStats = companion.original_stats_snapshot
         ? JSON.parse(companion.original_stats_snapshot)
@@ -782,6 +885,9 @@ function formatCompanions(companions, awayCompanions = []) {
       `- ${companion.name}${companion.nickname ? ` "${companion.nickname}"` : ''} (Companion)`,
       `  Gender: ${companion.gender || 'unspecified'} - USE ${pronouns.toUpperCase()} PRONOUNS`,
       `  Race: ${companion.companion_subrace ? `${companion.companion_subrace} ` : ''}${companion.race}${companion.age ? `, Age: ${companion.age}` : ''}`,
+      formatSpeciesLine(companion.race, companion.companion_subrace)
+        ? `  ${formatSpeciesLine(companion.race, companion.companion_subrace)}`
+        : null,
       backgroundName ? `  Background: ${backgroundName}` : null,
       companion.alignment ? `  Alignment: ${companion.alignment}` : null,
       companion.faith ? `  Faith/Deity: ${companion.faith}` : null,
@@ -1190,6 +1296,25 @@ export function formatProgression(progression) {
     }
   }
 
+  // Origin feat (Stage 3) — the theme's fixed feat, granted at creation.
+  if (progression.origin_feat) {
+    const o = progression.origin_feat;
+    parts.push(`\nOrigin feat: ${o.feat_name}${o.selected_at_level ? ` (L${o.selected_at_level})` : ''}: ${o.effect || ''}`);
+    if (o.choices_data) {
+      parts.push(`  Choices: ${JSON.stringify(o.choices_data)}`);
+    }
+  }
+
+  // Versatile feat (item 19, human) — the standalone 2024 pick; it
+  // stacks with the theme feat and is always a different feat.
+  if (progression.versatile_feat) {
+    const v = progression.versatile_feat;
+    parts.push(`\nVersatile feat (Human): ${v.feat_name}${v.selected_at_level ? ` (L${v.selected_at_level})` : ''}: ${v.effect || ''}`);
+    if (v.choices_data) {
+      parts.push(`  Choices: ${JSON.stringify(v.choices_data)}`);
+    }
+  }
+
   // Knight moral path (narrative-critical for Knight-themed characters)
   if (progression.knight_moral_path) {
     parts.push(`\nKNIGHT MORAL PATH: ${progression.knight_moral_path.current_path.toUpperCase()}`);
@@ -1251,6 +1376,10 @@ export function formatProgression(progression) {
   parts.push('\nIntegrate the progression layer naturally — let the character FEEL their theme through NPC responses, environmental description, and scene framing. Do NOT narrate the character using abilities they have not unlocked. Do NOT force theme references in every scene — weave them where they fit.');
 
   return parts.join('\n');
+}
+
+export function formatSubclassPromptSection(character, companions = []) {
+  return buildSubclassPromptSection(character, companions);
 }
 
 function formatCampaignPlan(planSummary) {
@@ -1973,7 +2102,7 @@ Do not roll, do not announce the result, and do not decide whether they live.
 `;
 }
 
-function formatMechanicalMarkers(sessionContext) {
+function formatMechanicalMarkers(sessionContext, character) {
   const blocks = [];
 
   // --- Always-on markers (merchant, combat, loot, conditions, promises,
@@ -2002,25 +2131,75 @@ Combat ends: [COMBAT_END] — LAST sentence.
 
 Per-turn flow:
 • Player's turn → describe battlefield, ask "What do you do?" → STOP.
-• Player declares attack → "Make an attack roll." → STOP. Player reports the number.
-• On hit → "Roll your [weapon] damage ([dice])." → STOP. Player reports damage → emit [ENEMY_DAMAGE: Enemy="Name" Amount=X] INLINE.
-• Spells with saves: you roll the target's save, announce pass/fail, then damage.
-• Player casts a spell → emit [SPELL_CAST: Spell="Exact Name" Level=N] INLINE, where N is the slot level used (0 for cantrips). The system validates and decrements the slot, and starts concentration when the spell requires it. If the system reports no slots available, the spell fizzles — narrate that; never pretend it worked.
+• ANY party attack → emit [ATTACK: Attacker="Player" Target="Goblin"] INLINE — Attacker= a companion's name for their attacks; add Spell="Fire Bolt" for a spell attack (the system knows the spell's damage dice; add Damage= only for a homebrew spell it doesn't know). The engine judges the swing: for the PLAYER it waits for their real dice (ask for the attack roll, then STOP — the judged outcome returns as an ATTACK RESULT fact at the start of your next turn; narrate exactly that). Companion attacks resolve immediately and likewise return as facts. NEVER decide whether an attack hits, never invent its damage, and never use ENEMY_DAMAGE for an attack roll. One ATTACK marker per swing.
+• Weapon rules the engine enforces (combat item 1): a weapon's mastery property works ONLY if that weapon is on the attacker's mastered list — set it with [MASTERY_SET: Target="Lyra" Weapons="Longsword, Warhammer"] (the list changes on a long rest, by the book). Ammunition is spent from inventory and an attack at zero ammo is REFUSED — narrate the refusal, never pretend it fired; spent ammo is recovered by scavenging in the looting scene, never automatically. Thrown attacks: add Thrown="true" (the weapon must have the thrown property; distance is checked against its range — beyond short range is disadvantaged, beyond long range is refused). Off-hand attacks: add Hand="off" (Light weapons in both hands, no ability modifier to that damage, once per turn). After a Cleave hit, the follow-up is [ATTACK: Attacker="Name" Target="Second Goblin" Cleave="true"] — it must target a second creature within 5 feet of the first and within reach — the engine checks both distances and refuses a follow-up that fails either; it is not a free pick.
+• Class features the engine enforces (combat item 2): Sneak Attack (rogue, finesse or ranged weapon, advantage or an ally within 5 ft of the target, once per turn — add Ally="true" when an ally is within 5 ft; the engine adds the dice for companions and tells the player what to roll for the PC). Rage (barbarian — enter with [RAGE: Target="Name"], end with [RAGE: Target="Name" End="true"]; uses are tracked, damage bonus applies while raging (damage resistance is not wired yet)). Divine Smite (paladin — add Smite="2" for the slot level to a melee ATTACK, plus SmiteFiend="true" vs fiends and undead; the slot is spent only on a hit; at L11 Improved Divine Smite adds 1d8 radiant automatically). Fighting styles from the feat list apply automatically (Archery +2 ranged, Defense +1 AC in armor, Dueling +2 one-handed, Thrown +2, Two-Weapon Fighting restores the off-hand modifier, Great Weapon Fighting floors damage dice at 3). Bardic Inspiration: grant with [INSPIRATION: Target="Name" Bard="Name"] (uses tracked, die by bard level); the holder spends it with [INSPIRATION: Target="Name" Spend="true"]. Second Wind (fighter): [SECOND_WIND: Target="Name"] heals 1d10 + fighter level (2 uses, +1 on a short rest). Action Surge (fighter, combat item 3): [ACTION_SURGE: Target="Name"] spends one use and grants one more action this turn (1 use, 2 at L17, restored on a short rest). Bonus action (combat item 3, Tier 2): one per turn — an off-hand attack, Rage entry, a Bardic Inspiration grant, Second Wind, a Divine Smite cast, and a Bonus="true" attack (GWM crit/kill, Polearm Master) each spend it; a second bonus spend in the same turn is refused. A mastered Nick off-hand weapon makes the off-hand attack part of the Attack action instead, spending no bonus action. Combat actions (combat item 3, Tier 3): [DODGE: Target="Name"] makes attacks against the dodger roll at disadvantage until their next turn (dodging creatures roll Dexterity saves with advantage — the engine adds it to save requests); [DISENGAGE: Target="Name"] means opportunity attacks against them are refused until their next turn; [HELP: Helper="Name" Target="Goblin" Ally="Name"] gives the named ally advantage on their next attack against that target (the helper must be within 5 ft of the target — farther Help is refused); [HIDE: Target="Name"] hides them — a DC 15 Stealth check (pass the player's rolled total as Stealth="17", plus StealthDie="1" or "20" when the die was a natural 1 or 20; otherwise the system rolls); the total is the DC to find them, and an enemy whose passive Perception meets it spots them at once. A hidden creature's next attack is advantaged, attacks against them are disadvantaged, and hidden ends when they attack, cast a verbal spell, are found, or you clear it with [HIDE: Target="Name" End="true"]. Find a hidden creature with [SEARCH: Searcher="Name" Target="Goblin"] — a Perception check against their Stealth total (Perception="19" for a player-rolled total); success finds them; [READY: Target="Name" Action="shoot the goblin" Trigger="when it comes through the door"] stores the action, and it fires when you emit the attack with Ready="true" (spending their reaction, even off-turn). Enemies use the same moves: an enemy's readied attack fires with [ENEMY_ATTACK: Enemy="Goblin" Target="Player" Ready="true"], and a hidden enemy's next attack is advantaged, and monsters can help each other the same way ([HELP: Helper="Goblin" Target="Player" Ally="Orc"] — helper and ally must be on the same side, target on the opposite side). Readied spells: [READY: Target="Lyra" Action="Cast Fireball" Spell="Fireball" Level=3 Trigger="goblins bunch up"] spends the slot now and holds the spell with concentration (ending any concentration already held); release with [SPELL_CAST: Spell="Fireball" Target="Goblins" Ready="true"] on a reaction — the release must name the held spell at its held level, and a broken concentration fizzles it. Readied Dodge, Disengage, Help, and Hide fire the same way, with Ready="true" on their marker and no extra cost. Party members can take Dodge, Disengage, and Hide as a bonus action with Bonus="true" instead (Cunning Action, Patient Defense); enemies charge their bonus action the same way on attacks and Dashes (Bonus="true"), and a second bonus spend in the same turn is refused. Enemy Dodge, Disengage, Hide, Help, and Ready stay free in v1 (no bonus charge). Movement (combat item 4): the fight is areas, not squares — declare them at fight start with [ZONES: Zones="bridge,treeline" Edges="bridge-treeline:30" Places="Tester:bridge,Goblin:treeline"] (edges are foot distances; add :difficult for difficult terrain, which costs double to walk; zone names cannot contain ',', ':' or '-'). Move with [MOVE: Target="Name" To="treeline"] — the cost comes off that turn's movement budget (speed, doubled by Dash), and moving farther than the budget allows is refused; moving to an undeclared area creates it when you add Distance="40". Dash with [DASH: Target="Name"] (Bonus="true" spends the bonus action, the Cunning Action bridge). Melee attacks are refused beyond reach (reach weapons reach 10 ft); ranged and thrown attacks are disadvantaged beyond short range and refused beyond long range; a ranged attack with a hostile creature in your area is disadvantaged. When a move leaves an enemy's reach, the MOVE result names who is provoked — resolve each with [OPPORTUNITY_ATTACK: Attacker="Name" Target="Name"] (Disengage avoids all of them). Enemy action economy (combat item 5): enemies get one action, one bonus action, and one reaction per turn, like the party. A second attack on the same turn is refused unless it is part of a declared multiattack: declare the pattern at the start of the enemy's turn with [MULTIATTACK: Enemy="Ogre" Attacks="Slam,Slam"] and fire each swing with [ENEMY_ATTACK: Enemy="Ogre" Target="Player" Multiattack="true"] (each swing resolves with that action's own stats when the creature is in the bestiary, otherwise its listed attack). Legendary creatures get 3 legendary actions per round (or the total you set with LegendaryTotal="4"), spent at the end of another creature's turn: [ENEMY_ATTACK: Enemy="Dragon" Target="Player" Legendary="true" Cost="2"] or [LEGENDARY_SPEND: Enemy="Dragon" Cost="1" Effect="wing buffet"] for non-attacks; the budget refreshes at the start of the dragon's own turn, and legendary actions are refused on its own turn and while incapacitated. A lair acts once per round, never the same effect twice in a row: [LAIR_ACTION: Lair="Dragon's Lair" Effect="stalactites fall"]. Spellcasting (combat item 6): enemy casts resolve — name the targets with [ENEMY_CAST: Enemy="Archmage" Spell="Fireball" Level=3 Targets="Lyra,Goblin"] (one name per target; repeat a name for extra Magic Missile darts), and the engine rolls saves and damage from the spell catalog (companions and enemies roll here; the player rolls their save when asked and the damage follows). A save spell needs a DC: bestiary casters use their statblock DC, otherwise add Dc="17" — without one the cast is refused, never invented. Attack-roll spells use the bestiary attack bonus or AtkBonus="9"; cantrips scale by the creature's CR unless you add CasterLevel="11". Spells outside the catalog stay tracked-only (slot spent, effect yours to narrate). Set slots with [ENEMY_SLOTS: Enemy="Archmage" Slots="1:4,2:3"] (bestiary casters seed from their statblock on first cast). Party casts charge the turn's budgets: a bonus-action spell spends the bonus action, an action spell spends the action, and a bonus-action spell and a leveled action spell never share a turn (Action Surge is the only way to cast two leveled action spells); name extra targets with Targets="GobA,GobB" (Hold Person gains one target per slot above 2nd). Reaction spells declare with Reaction="true": Counterspell goes in the SAME message as the enemy cast it answers (it resolves first; the countered caster saves Constitution against your DC or the cast fizzles with its slot spent), Shield adds +5 AC until the start of your next turn, and Absorb Elements, Hellish Rebuke, and Backlash answer the latest hit in the NEXT message after the damage (only the latest hit can be answered). One pending player save at a time — resolve it before casting another save spell at the player. When a repeat-save notice arrives, ask for the roll with a save request at the end of that creature's turn. A cast spends the enemy's action (or its bonus with Bonus="true", or legendary with Legendary="true"); an attack uses at most one of Multiattack, Legendary, or Bonus. Only the current combatant acts on their turn; emit [TURN_ADVANCE] when their turn ends. Lay on Hands (paladin): [LAY_ON_HANDS: Target="Name" Amount="5"] from a pool of paladin level × 5, replenished on a long rest. Conditions (combat item 8): Incapacitated means no actions or reactions — attacks, spells, bonus actions, Dodge, Disengage, Help, Hide, Ready, opportunity attacks, and readied firing are all refused, and concentration breaks the moment it lands; movement is still allowed. Grappled sets speed to 0 and is escaped with [ESCAPE: Target="Name" Skill="Athletics"] (or Acrobatics; the escapee chooses) against 8 + the grappler's Strength modifier + proficiency bonus, or a Dc="14" you declare when the grappler is not on record; one escape attempt per turn. Apply grappled with [CONDITION_ADD: Target="Name" Condition="grappled" Grappler="Ogre"], and charmed with Charmer="Name" — without the source the marker is refused, because the engine cannot enforce "cannot attack the charmer" or compute an escape DC without it. A charmed creature cannot attack the charmer or target them with harmful spells (healing and buffs are fine). Deafened creatures automatically fail hearing checks — tag the request [ROLL_REQUEST: Skill="Perception" DC=15 Looks="listening for the patrol" Hearing="true"]. Display casting: aim a spell at a spot instead of a creature to deliberately miss as a show of power — [DISPLAY: Spell="Fireball" Target="floor beside GobA" Beside="GobA"] costs the slot and the action like a real cast and can be counterspelled. Beside= names the creature the spot sits beside (the mishap splash target; without it there is no splash). The player rolls placement: a bare d20 for a plain display, or with Intimidate="true" and Dc="14" the roll IS the Intimidation check (one roll, not two). A natural 1 mishandles behind the scenes and a natural 20 surges the same way — the engine rolls among what the room actually holds (a splash onto the Beside creature, a strike on a room feature with an effect following the spell type, or a harmless fizzle; a surge may click open a secret the room actually holds), never a fixed result and never anything the room does not hold. Where no room is linked to the fight, declare the candidates with Features="haybale:flammable, trough:water". Artificer (base class): prepared Int casting with tools as focus; plans known and created items come from the Artificer section in the character block. At a Long Rest, learn plans with [ARTIFICER_LEARN_PLAN: Plan="Bag of Holding"] (generic plans need Detail="item name"), then create with [ARTIFICER_CREATE: Plans="Bag of Holding, Weapon, +1" Tools="true"] — Tools="true" means Tinker's Tools in hand; add Attune="true" to attune instantly to created items. Attunement is a hard cap (3, then 4 at 10, 5 at 14, 6 at 18) counting created and other items together; an attunement at cap is refused, never silently dropped — unattune first with [ARTIFICER_UNATTUNE: Item="name"]. Tinker's Magic creates a mundane item from the printed list with [ARTIFICER_TINKER: Item="Rope" Tools="true"]. Flash of Genius is a Reaction AFTER a failure is known: [ARTIFICER_FLASH: Target="Name" Total="13" DC="15"] spends a use only when the Int bonus flips the failure. Tool Expertise (level 6+) doubles the proficiency bonus on tool checks — apply it to the reported total, never silently. Magic Item Tinker (level 6+): [ARTIFICER_CHARGE: Item="name" Slot="2"] restores charges, [ARTIFICER_DRAIN: Item="name"] once per Long Rest trades a created item for a slot (Common 1, Uncommon/Rare 2; unattested rarity is refused), [ARTIFICER_TRANSMUTE: Item="name" Plan="Wand of Web"] once per Long Rest. Spell-Storing Item (level 11+): [ARTIFICER_STORE: Spell="Cure Wounds" Level="1" CastTime="1 action" MaterialConsumed="false"] — the material question must be answered explicitly, never guessed. Homunculus Servant obeys with NO action required and acts right after you; summon with [ARTIFICER_HOMUNCULUS: Slot="2" AttackBonus="5"]. Soul of Artifice (level 20): when an artificer would drop to 0 HP but was not killed outright, [ARTIFICER_CHEAT_DEATH] sacrifices Uncommon/Rare created items for 20 HP each. Every artificer comes from Eberron (Khorvaire) and needs an explanation for how they reached the Forgotten Realms — if the character block says the explanation is not yet recorded, ask for it in play and record it with [ARTIFICER_ORIGIN: Explanation="..."]
+• Spells with saves → emit [SPELL_CAST: Spell="Fireball" Level=3 Target="Goblin"] INLINE — one marker per target. The SYSTEM rolls the target's save against the caster's real DC. Never roll a save yourself, and never declare the spell's damage with ENEMY_DAMAGE — damage is handled under the next bullet.
+• Anyone casts a spell → emit [SPELL_CAST: Spell="Exact Name" Level=N] INLINE, where N is the slot level used (0 for cantrips). Add Caster="Lyra" when a companion casts — her slots and concentration are tracked exactly like the player's. The system validates and decrements the slot, and starts concentration when the spell requires it. If the system reports no slots available, the spell fizzles — narrate that; never pretend it worked.
+• Spell DAMAGE and HEALING belong to the system — it knows every spell's true dice. When the PLAYER casts a damage or healing spell, the cast leaves a pending total: end your turn by telling the player exactly what to roll (e.g. "Roll 8d6 for the Fireball", "Roll 2d8+3 for Cure Wounds") and STOP. They report one number; the system applies it — full on a failed save, half (or none, per the spell) on a made one — and the outcome returns as a SPELL EFFECT fact. Companions' spell damage and healing resolve on their own and also return as facts. NEVER invent a damage or healing number, and never apply a spell's damage with ENEMY_DAMAGE or its healing with HP_CHANGE — those markers are for non-spell effects now (traps, falls, potions).
+• Damage tables (combat item 7): falls, traps, and hazards roll in the engine, never declared amounts. A fall: [ENEMY_DAMAGE: Enemy="Goblin" Fall=30] or [HP_CHANGE: Fall=30] for the player (feet fallen; the engine rolls 1d6 per 10 feet, max 20d6, bludgeoning, no save). A sprung trap: [ENEMY_DAMAGE: Enemy="Goblin" Trap="dangerous"] or [HP_CHANGE: Trap="dangerous"] (tiers setback 1d10, dangerous 3d10, deadly 6d10, save DCs 11/13/16; the engine rolls a Dexterity save, fail takes full, success takes half; add Save="avoid" for success takes none, Save="none" for no save; add Type="fire" when the trap damage is not bludgeoning). A hazard: [ENEMY_DAMAGE: Enemy="Goblin" Hazard="fire" Severity="moderate"] (severities minor 1d6, moderate 3d6, major 6d6; fire, acid, poison, lightning). A trap with no tier, or a fall with no distance, is refused, never invented. A hazard with no table entry keeps a declared Amount= but the result is flagged as declared, never silent. Cold damage uses the cold system, not these tables. For a companion, add Target="Lyra" to HP_CHANGE. When a trap asks the player for a Dexterity save, ask for the roll and STOP — the damage follows the reported save.
 • Enemy turns: emit [ENEMY_ATTACK: Enemy="Name" Target="Player"] INLINE. The SYSTEM rolls the attack and damage — you narrate the result it returns. Never roll for enemies yourself.
-• A combatant leaves another's reach → emit [OPPORTUNITY_ATTACK: Attacker="Name" Target="Name"] INLINE. It consumes the attacker's reaction (one per round); the system tracks this and rejects a second one — don't emit it twice for the same attacker in a round.
-• An enemy takes cover (cart, wall, doorway, rubble) → emit [SET_COVER: Target="Name" Cover="half"] INLINE. Cover values: half (+2 AC), three-quarters (+5 AC), full (cannot be targeted directly). Emit Cover="none" when they leave cover. The system applies the bonus — factor it into your narration of near-misses.
+• A combatant leaves another's reach → emit [OPPORTUNITY_ATTACK: Attacker="Name" Target="Name"] INLINE. It consumes the attacker's reaction (one per round); the system tracks this, rejects a second one, and resolves the attack for real — narrate the outcome it returns.
+• Any combatant takes cover → emit [SET_COVER: Target="Name" Cover="half"] INLINE — enemies AND party members alike. Cover values: half (+2 AC), three-quarters (+5 AC), full (cannot be targeted directly). Emit Cover="none" when they leave cover. The system applies the bonus to real attack rolls — factor it into your narration of near-misses. In a scene room (a dungeon room with a stored feature list), cover MUST come from a feature actually in that room: add Feature="<exact feature name>" with the tier that feature gives, e.g. [SET_COVER: Target="Goblin" Cover="half" Feature="Toppled pillar"]. If no feature in the room gives cover, do NOT invent one — say so plainly, so the player knows to move. A named feature that is not in the room, or a tier the feature does not give, is NOT granted, and the system will tell you so next turn.
+• Conditions work on enemies too: [CONDITION_ADD: Target="Goblin" Condition="Blinded"] — a blinded enemy really swings at disadvantage; a prone one really is easier to hit. The engine applies it; never apply it twice in narration.
 • HP milestones: "bloodied" (half), "barely standing" (near death).
 • Player at 0 HP → "You fall unconscious. At the start of your turn, make a death saving throw."
 
-Never roll for the player. Never roll for enemies — use [ENEMY_ATTACK].`);
+Never roll for the player. Never roll for enemies — use [ENEMY_ATTACK]. Never judge a party attack — use [ATTACK].`);
+
+  blocks.push(`──────────── CHECKS & SAVES (ROLL_REQUEST) ────────────
+Outside combat, when an action's outcome is genuinely uncertain AND the stakes matter, do not decide the result — request a roll:
+[ROLL_REQUEST: Skill="Sleight of Hand" DC=15 Looks="a masterfully crafted lock, its pins gleaming with oil"] — INLINE, then STOP. End your turn there.
+
+• Exactly one of Skill= / Ability= / Save=. The DC is a hidden number: NEVER state it, hint at it numerically, or confirm it afterward.
+• Looks= is REQUIRED — a short descriptive gauge of the difficulty woven into your narration, so the character's intuition can read the challenge. The bands below are a CALIBRATION GUIDE, not a script: vary the phrasing, flavor it to the obstacle in front of you, never repeat the same description twice.
+  DC 5 — barely an obstacle ("a latch a child could lift", "a slope more muddy than steep")
+  DC 10 — straightforward ("a plain iron lock, honestly made", "a calm, readable face")
+  DC 15 — difficult ("a well-made lock, tight and oiled", "a guarded expression, practiced")
+  DC 20 — very difficult ("a masterfully crafted lock, pins like needlework", "a cliff of wet, sheer stone")
+  DC 25 — nearly impossible ("a lock that belongs in a vault in Waterdeep", "a lie told to a god")
+  DC 30 — beyond mortal craft. Reserve for the legendary.
+• The PLAYER rolls real dice and reports the number; the system applies their true modifier and returns the outcome as a system note at the start of the next turn. Narrate ONLY what that note says happened. Never invent a result while a roll is pending.
+• Actor="Lyra" — or any companion, NPC, or enemy name — the system rolls for them immediately. Describe the attempt, emit the marker, and do NOT narrate whether it worked: the outcome returns as a system note at the start of your next turn, and you narrate it then. Enemies attempting skills (disarming a trap, sneaking past a sleeper) roll like anyone else and CAN fail.
+• Advantage="reason" / Disadvantage="reason" when circumstances clearly help or hinder (a companion's steadying hand, rain-slick stone). The player reports both dice; the system takes the right one.
+• Helping with a check: [HELP_CHECK: Helper="Lyra" Ally="Player" Skill="Perception"] — the ally gets advantage on their next matching ability check, and the system spends it. Leave the skill off for the next check of any kind. Use this instead of Advantage="..." for help, so it is tracked and spent rather than narrated; never grant help twice. HELP_CHECK never applies to saving throws.
+• Natural 1 ALWAYS fails — completely, often comically, usually with a consequence you must attach. Natural 20 ALWAYS succeeds — often miraculously, with something beyond the ask going right. The system note tells you when a critical happened; honor it fully — never soften a critical failure or inflate an ordinary success into one.
+• Do NOT request a roll for what a character would simply know or trivially do (earned knowledge is passive), nor for the truly impossible — refuse in fiction instead. One request at a time: ask, stop, wait.`);
+
+  blocks.push(`──────────── PERCEPTION PRE-ROLL (BANKED) ────────────
+When the party ENTERS a dungeon, bank one Perception roll per character FIRST — before anything hidden happens:
+[PERCEPTION_PREROLL: Dungeon="Sunless Citadel"] — INLINE, then ask the player to roll one d20 and STOP. The system banks the player's number and rolls the companions' numbers itself. Use the dungeon's name as the party knows it; a new dungeon means a fresh bank.
+
+While a bank is active, NEVER ask for a Perception roll for something hidden — that question IS the tell. When the party reaches a hidden thing, read the stored number in secret instead:
+[PERCEPTION_USE: Target="Lyra" Trigger="trap" DC=13] — INLINE. The system judges the stored number against the DC and returns the outcome as a system note next turn; narrate ONLY what that note says happened.
+• Triggers — all three hidden-layer checks: trap, secret_door, stealthed_enemy. Nothing else uses the bank.
+• Target= the party member best positioned to notice (usually the one in front, or the highest passive Perception — the prompt lists passives).
+• DC= the real DC of the hidden thing: a trap's detectDc from the room (setback 11, dangerous 13, deadly 16); a secret door is DC 15; a stealthed enemy's DC is its Stealth total.
+• The system takes the higher of the banked roll or passive Perception, and replaces the used number with a fresh roll silently.
+• NEVER state or hint at any banked number, and never say when one is read. The player knows their own banked number (they rolled it at the door) — nothing else about the bank is theirs to know.
+• Active searching is different: when the PLAYER declares "I search" or "I look for traps", that is a deliberate action — use SEARCH or a normal ROLL_REQUEST, not the bank.`);
+
+  blocks.push(`──────────── RESTS & TIME (REST / TIME_ADVANCE) ────────────
+Time does not pass unless the system moves the clock — and the clock moves only when you emit a marker. Narration alone advances nothing.
+
+[TIME_ADVANCE: Hours=6 Reason="the road north"] — INLINE whenever the fiction skips an uneventful span: travel, waiting, research, crafting, a watch rotation. Whole hours, or Days=2 for long journeys. If the party rides for two days, the clock moves two days.
+
+[REST: Type=long] — the party sleeps / camps for the night. [REST: Type=short] — a breather of about an hour. No Actor= rests the whole party (player character + companions); Actor="Lyra" rests one person.
+• A long rest takes 8 hours: HP to full, spell slots restored, half of spent hit dice regained. A short rest takes 1 hour and heals ONLY through hit dice; warlocks also regain their pact slots.
+• A long rest also clears a companion's conditions (except petrified — that never clears by resting) and resets their death saves.
+• Dice=2 on a short rest when the fiction names how many hit dice someone spends ("I spend two hit dice"). Omit Dice= and the system spends sensibly on its own, until about half health.
+• NEVER narrate HP regained, slots restored, dice spent, or hours passed yourself. Emit the marker; the system's note at the start of the next turn states exactly what happened, and you narrate only that.
+• Conversation and combat rounds are minutes — do not advance the clock for them.`);
 
   blocks.push(`──────────── LOOT & CONDITIONS ────────────
-[LOOT_DROP: Item="Item Name" Source="where/how"] — INLINE. 1-2 items per significant combat or discovery. Never for merchant purchases.
+[LOOT_DROP: Item="Item Name" Source="where/how"] — INLINE. 1-2 items per significant combat or discovery. Never for merchant purchases. Magic items arrive UNIDENTIFIED (R-02): describe them with the senses, never name them. First use in a fight shows one thing — [ITEM_REVEAL_ONE: Target="Name" Item="Item Name"]; a short rest focused on the item unlocks the rest — [ITEM_IDENTIFY: Target="Name" Item="Item Name"]. Cursed items stay hidden until attuned.
 
 [CONDITION_ADD: Target="Player" Condition="frightened"] — INLINE. Target="<Companion Name>" for companions.
 [CONDITION_REMOVE: Target="Player" Condition="poisoned"] — INLINE.
 
 Valid conditions: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion_1 through exhaustion_6.
+
+Conditions are recorded and ENFORCED by the system — disadvantage, auto-failed saves, and attack modifiers are applied mechanically. Narrate the outcome; never apply a condition's penalty a second time, and never declare a condition over without CONDITION_REMOVE. A long rest reduces exhaustion by one level on its own; you don't remove it.
 
 Describe conditions physically (pale and stumbling if poisoned, trembling if frightened).`);
 
@@ -2055,7 +2234,7 @@ Both required. Wait for answer.`);
   // investigation/stealth-class action verb.
 
   blocks.push(`──────────── NPC NAMING & APPEARANCE ────────────
-Every NPC must have a unique name within this campaign. Once a name appears, it's off-limits forever — see "NAMES ALREADY USED" later in the prompt.
+Every NPC must have a unique name within this campaign. Once a name appears, it's off-limits forever — see "NAMES ALREADY USED" later in the prompt. For a new NPC, pick a name from NAMES AVAILABLE FOR NEW NPCS later in the prompt; do not invent a name while that list has a fitting name.
 
 Avoid overused: Marcus, Elena, Lyra, Aldric, Garrett, Marta, Alaric, Liora, Elara, Cedric, Viktor, Thorne, Crane, Blackwood, Darkhollow, Nightshade, Stormwind, Ravencrest.
 
@@ -2107,6 +2286,20 @@ Scale: 5 minor / 10 moderate / 15 serious / 25 major / 40 extreme.
 High notoriety → suspicious NPCs, aggressive guards, nervous contacts, higher prices.`);
   }
 
+  // F5 surfacing — Wild Magic report marker, only when the player is a
+  // Wild Magic sorcerer (the offer fires for PC casters only;
+  // companion sorcerers roll their own d20). The SPELL EFFECT block
+  // teaches the exact syntax again at the moment an offer is made;
+  // this line teaches the marker before the first offer so the DM
+  // recognises it. Multiclass Wild Magic (sorcerer levels under
+  // another primary class) is not detected here — the offer-time
+  // instruction still covers it.
+  if (String(character?.class || '').toLowerCase() === 'sorcerer'
+    && String(character?.subclass || '').toLowerCase() === 'wild magic sorcery') {
+    blocks.push(`──────────── WILD MAGIC (Wild Magic sorcerer) ────────────
+After you cast a Sorcerer spell with a spell slot, the engine may offer a Wild Magic Surge roll — the SPELL EFFECT fact tells you when. Ask the player to roll a d20 and report it, then emit [WILD_MAGIC_REPORT: D20=<roll>] INLINE. On a 20, ask for a d100 as well and emit [WILD_MAGIC_REPORT: D20=20 D100=<roll>]. Tides of Chaos skips the d20: the fact asks for a d100 directly — emit [WILD_MAGIC_REPORT: D100=<roll>] (Controlled Chaos: two d100s, [WILD_MAGIC_REPORT: D100=<first> D100Second=<second> Choice=<1 or 2>]). The surge row returns as a SPELL EFFECT fact — narrate exactly that.`);
+  }
+
   if (sessionContext.partyBaseContext) {
     blocks.push(`──────────── BASE THREATS (party has a base) ────────────
 The PARTY BASES section may show "⚔️ UNDER THREAT" lines — real in-world events. The player can ride back to defend or let the server auto-resolve.
@@ -2133,6 +2326,16 @@ ${blocks.join('\n\n')}`;
 /**
  * Generate the system prompt for the DM
  */
+export function formatAvailableNames(availableNames) {
+  if (!availableNames || availableNames.length === 0) return '';
+  const lines = availableNames.map((e) => {
+    const full = typeof e === 'string' ? e : e.fullName;
+    const label = typeof e === 'string' ? 'Xanathar name' : (e.label || 'Xanathar name');
+    return `- ${full} (${label})`;
+  });
+  return `\nNAMES AVAILABLE FOR NEW NPCS (pick from this list; do not invent a name while a fitting name remains):\n${lines.join('\n')}\nA name from this list becomes that NPC's name once you introduce them; never give the same name to a different NPC.\n`;
+}
+
 export function createDMSystemPrompt(character, sessionContext) {
   const char1 = formatCharacterInfo(character, 'PLAYER CHARACTER');
   const characterNames = char1.nickname || char1.firstName;
@@ -2426,7 +2629,7 @@ WRONG (vague threat without a source):
 RIGHT (specific and engageable):
 > At the far end of the alley, a silhouette shifts behind a stack of crates. A boot scrapes wet stone.
 
-${formatMemoryHierarchy()}${formatPlayerHpRules()}${formatMechanicalMarkers(sessionContext)}
+${formatMemoryHierarchy()}${formatPlayerHpRules()}${formatMechanicalMarkers(sessionContext, character)}
 
 ──────────── STORY MEMORY & QUEST WEAVING ────────────
 Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
@@ -2444,14 +2647,14 @@ END OF CORE RULES
 ${worldSettingSection}
 
 ${char1.staticText}
-${formatProgression(sessionContext.progression)}
+${formatProgression(sessionContext.progression)}${formatSubclassPromptSection(character, sessionContext.companions)}
 
 PLAYER NAME SPELLING:
 The player character's name is exactly "${characterNames}". When the player shares a name or nickname in-game, use their exact spelling. Never paraphrase, "correct", or reinterpret it — and NPCs must use the same exact spelling and pronunciation.
 <!-- CACHE_BREAK:AFTER_CHARACTER -->
 ${char1.dynamicText}
 ${sessionContext.usedNames?.length > 0 ? `\nNAMES ALREADY USED IN THIS CAMPAIGN (never reuse): ${sessionContext.usedNames.join(', ')}\n` : ''}
-CAMPAIGN STRUCTURE:
+${formatAvailableNames(sessionContext.availableNames)}CAMPAIGN STRUCTURE:
 ${pacingGuidance}
 ${formatCustomConcepts(customConcepts)}${formatCustomNpcs(customNpcs, nicknameResolutions)}${formatCompanions(sessionContext.companions, sessionContext.awayCompanions)}${formatPendingNarratives(sessionContext.pendingDowntimeNarratives)}${formatPreviousSessionSummaries(sessionContext.previousSessionSummaries, sessionContext.continueCampaign, sessionContext.chronicleSummaries, sessionContext.campaignRollup)}${formatCharacterMemories(sessionContext.characterMemories)}${formatCampaignNotes(sessionContext.campaignNotes)}${formatCampaignPlan(sessionContext.campaignPlanSummary)}${formatWorldStateSnapshot(sessionContext.worldState)}${sessionContext.storyThreadsContext ? '\n\n' + sessionContext.storyThreadsContext : ''}${sessionContext.narrativeQueueContext ? '\n\n' + sessionContext.narrativeQueueContext : ''}${sessionContext.chronicleContext ? '\n\n' + sessionContext.chronicleContext : ''}${sessionContext.weatherContext ? '\n\n' + sessionContext.weatherContext : ''}${sessionContext.survivalContext ? '\n\n' + sessionContext.survivalContext : ''}${sessionContext.craftingContext ? '\n\n' + sessionContext.craftingContext : ''}${sessionContext.mythicContext ? '\n\n' + sessionContext.mythicContext : ''}${sessionContext.pietyContext ? '\n\n' + sessionContext.pietyContext : ''}${sessionContext.partyBaseContext ? '\n\n' + sessionContext.partyBaseContext : ''}${sessionContext.notorietyContext ? '\n\n' + sessionContext.notorietyContext : ''}${sessionContext.projectsContext ? '\n\n' + sessionContext.projectsContext : ''}
 

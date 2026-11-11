@@ -16,9 +16,8 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [loadingLevelUp, setLoadingLevelUp] = useState(false)
   const [error, setError] = useState(null)
-  // Phase 6: spell slot + rest state
+  // Phase 6: spell slot state
   const [spellSlots, setSpellSlots] = useState(null)
-  const [resting, setResting] = useState(false)
   // Phase 7: conditions + death saves
   const [activeConditions, setActiveConditions] = useState([])
   const [deathSaves, setDeathSaves] = useState({ successes: 0, failures: 0, at_zero_hp: false })
@@ -31,6 +30,9 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
 
   const isClassBased = companion.progression_type === 'class_based'
 
+  // Spell slots re-read whenever the companion row changes (including
+  // HP — a DM rest that heals or restores slots reaches this sheet as
+  // a new companion prop, so the slots refresh with it).
   useEffect(() => {
     let cancelled = false
     if (!isClassBased || !companion.id) {
@@ -42,7 +44,7 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
       .then(data => { if (!cancelled) setSpellSlots(data) })
       .catch(() => { if (!cancelled) setSpellSlots(null) })
     return () => { cancelled = true }
-  }, [companion.id, isClassBased, companion.companion_level])
+  }, [companion.id, isClassBased, companion.companion_level, companion.companion_current_hp])
 
   const refetchSpellSlots = async () => {
     if (!isClassBased) return
@@ -213,35 +215,6 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
       setError(err.message)
     } finally {
       setEquipping(false)
-    }
-  }
-
-  const handleRest = async (restType) => {
-    setResting(true)
-    setError(null)
-    try {
-      const r = await fetch(`/api/companion/${companion.id}/rest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restType })
-      })
-      const data = await r.json()
-      if (!r.ok) throw new Error(data.error || 'Failed to rest')
-      await refetchSpellSlots()
-      // Phase 7: rest may have cleared conditions / reset death saves
-      try {
-        const [cRes, dRes] = await Promise.all([
-          fetch(`/api/companion/${companion.id}/conditions`).then(r => r.ok ? r.json() : null),
-          fetch(`/api/companion/${companion.id}/death-saves`).then(r => r.ok ? r.json() : null)
-        ])
-        if (cRes?.conditions) setActiveConditions(cRes.conditions)
-        if (dRes) setDeathSaves(dRes)
-      } catch {}
-      if (onUpdate) onUpdate()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setResting(false)
     }
   }
 
@@ -777,29 +750,9 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
             </button>
           )}
 
-          {isClassBased && (
-            <button
-              className="button"
-              onClick={() => handleRest('long')}
-              disabled={resting}
-              style={{ flex: 1, background: '#16a085' }}
-              title="Restore full HP and all spell slots"
-            >
-              {resting ? 'Resting...' : 'Long Rest'}
-            </button>
-          )}
-
-          {isClassBased && (
-            <button
-              className="button"
-              onClick={() => handleRest('short')}
-              disabled={resting}
-              style={{ flex: 1, background: '#2980b9' }}
-              title="Restore 50% missing HP (+pact slots for warlocks)"
-            >
-              {resting ? 'Resting...' : 'Short Rest'}
-            </button>
-          )}
+          {/* No rest buttons here: rests are the DM's now (DM session) —
+              companions rest with the party, and a DM rest heals through
+              hit dice on a short rest / fully on a long rest. */}
 
           {!isClassBased && (
             <button

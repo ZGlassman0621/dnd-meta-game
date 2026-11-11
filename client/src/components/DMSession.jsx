@@ -518,84 +518,80 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
     }
   };
 
+  // Rest consolidation (2026-11-07): ONE rest system — the DM's.
+  // These buttons are the player's trigger for the DM's narration, in
+  // the player-facing session view (the DM is the AI; there is no
+  // human-DM UI). They send a rest action as an ordinary DM turn:
+  // the DM narrates the rest and emits [REST: Type=short|long], and
+  // the marker pipeline applies it (short: HP through hit dice only,
+  // warlock pact slots; long: HP + slots full, half the spent hit
+  // dice back, exhaustion −1; the clock advances 1h / 8h). The old
+  // POST /api/character/rest/:id route is deleted — there is no
+  // separate mechanical rest call any more.
+  //
+  // Deliberately NOT carried over from the old button:
+  // - No date bump. The DM path advances the clock, so the old
+  //   adjustGameDate(1) on long rest would double-advance it.
+  //   The game-date display is re-read from the session instead.
+  // - No separate rest-narrative POST. The DM's /message reply IS
+  //   the rest narrative — a second AI rest description would
+  //   double-narrate the same rest and append a duplicate turn to
+  //   session history. The route stays on the server, untouched;
+  //   only this call goes. Reversal: re-add the block below.
+  // Kept: long-rest condition clearing on local state only (the DM
+  // path reduces exhaustion server-side and clears nothing else;
+  // this only changes what the next DM message is told via
+  // activeConditions). Caveat, recorded in the client notes: the
+  // /message response carries no rest result, so the clearing fires
+  // when the DM turn completes even if the DM declined the rest in
+  // fiction (no [REST] marker). The DM prompt tells the DM to emit
+  // [REST] when the player rests, so the normal case applies it.
   const takeRest = async (restType) => {
+    if (!activeSession?.id || isLoading) return;
     console.log('takeRest called:', restType, 'character.id:', character?.id);
+    const action = restType === 'long'
+      ? 'We settle in for a long rest (8 hours) — make camp, sleep, and recover fully.'
+      : 'I take a short rest (1 hour) to catch my breath and tend my wounds.';
+    const ok = await sendAction(null, action);
+    if (!ok) return;
+    // The rest applied server-side in the DM's turn (if the DM
+    // emitted the [REST] marker): refresh HP / slots / date from the
+    // server instead of trusting the old mechanical result.
     try {
-      const response = await fetch(`/api/character/rest/${character.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restType })
+      const charRes = await fetch(`/api/character/${character.id}`);
+      if (charRes.ok) {
+        const updated = await charRes.json();
+        if (onCharacterUpdated) onCharacterUpdated(updated);
+      }
+    } catch (e) {
+      console.warn('Refresh character after rest failed:', e.message);
+    }
+    fetchSpellSlots();
+    try {
+      const sessionRes = await fetch(`/api/dm-session/active/${character.id}`);
+      const sessionData = await sessionRes.json();
+      if (sessionData.session?.gameDate) {
+        setGameDate(sessionData.session.gameDate);
+      }
+    } catch (e) {
+      console.warn('Refresh game date after rest failed:', e.message);
+    }
+    // Auto-clear conditions on a long rest (local state only).
+    if (restType === 'long') {
+      setPlayerConditions(prev => {
+        const cleared = getConditionsToClear('long_rest', prev);
+        const remaining = prev.filter(c => !cleared.includes(c));
+        return reduceExhaustion(remaining);
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Rest API error:', response.status, errorText);
-        setError(`Rest failed: ${response.status}`);
-        return;
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        // Update character HP
-        if (onCharacterUpdated && data.newHp !== undefined) {
-          onCharacterUpdated({ ...character, current_hp: data.newHp });
+      setCompanionConditions(prev => {
+        const updated = {};
+        for (const [name, conds] of Object.entries(prev)) {
+          const cleared = getConditionsToClear('long_rest', conds);
+          const remaining = conds.filter(c => !cleared.includes(c));
+          updated[name] = reduceExhaustion(remaining);
         }
-        // Refresh spell slots (they may have been restored)
-        fetchSpellSlots();
-        // Long rest advances the calendar by 1 day
-        if (restType === 'long' && activeSession?.id) {
-          adjustGameDate(1);
-        }
-        // Auto-clear conditions on rest
-        if (restType === 'long') {
-          setPlayerConditions(prev => {
-            const cleared = getConditionsToClear('long_rest', prev);
-            const remaining = prev.filter(c => !cleared.includes(c));
-            return reduceExhaustion(remaining);
-          });
-          setCompanionConditions(prev => {
-            const updated = {};
-            for (const [name, conds] of Object.entries(prev)) {
-              const cleared = getConditionsToClear('long_rest', conds);
-              const remaining = conds.filter(c => !cleared.includes(c));
-              updated[name] = reduceExhaustion(remaining);
-            }
-            return updated;
-          });
-        }
-        // Show mechanical result immediately
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `*${data.message}*`
-        }]);
-
-        // Async: request AI-generated rest narrative
-        if (activeSession?.id) {
-          const charName = character.nickname || character.name;
-          try {
-            const narrativeRes = await fetch(`/api/dm-session/${activeSession.id}/rest-narrative`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ restType, characterName: charName, mechanicalResult: data.message })
-            });
-            const narrativeData = await narrativeRes.json();
-            if (narrativeData.narrative) {
-              setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: narrativeData.narrative
-              }]);
-            }
-          } catch (narrativeErr) {
-            // Fallback: mechanical result already shown, no need for error
-            console.log('Rest narrative unavailable:', narrativeErr.message);
-          }
-        }
-      } else {
-        setError(data.error || 'Failed to rest');
-      }
-    } catch (err) {
-      console.error('Rest error:', err);
-      setError('Failed to complete rest: ' + err.message);
+        return updated;
+      });
     }
   };
 
@@ -614,27 +610,6 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
           : [...current, condKey];
         return { ...prev, [companionName]: updated };
       });
-    }
-  };
-
-  const adjustGameDate = async (daysToAdd) => {
-    if (!activeSession?.id || !gameDate) return;
-    try {
-      const response = await fetch(`/api/dm-session/${activeSession.id}/adjust-date`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daysToAdd })
-      });
-      if (!response.ok) {
-        throw new Error('Failed to adjust date');
-      }
-      const data = await response.json();
-      if (data.gameDate) {
-        setGameDate(data.gameDate);
-      }
-    } catch (err) {
-      console.error('Date adjustment error:', err);
-      setError('Failed to adjust date');
     }
   };
 
@@ -759,24 +734,33 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
   };
 
   // Old single-session prelude (startPrelude, PreludeSetup flow) removed in
-  // v1.0.44. The prelude-forward character creator lives in CharacterManager
-  // via PreludeSetupWizard + PreludeArcPreview and doesn't run inside a
-  // DMSession at all.
+  // v1.0.44. Prelude character creation lived in the old creators
+  // (deleted in the 2026-11-05 unhook; the new creator has no Prelude
+  // mode yet) and doesn't run inside a DMSession at all.
 
-  const sendAction = async (e) => {
-    e.preventDefault();
-    if (!inputAction.trim() || isLoading) return;
+  // Sends one player action to the DM as an ordinary turn
+  // (POST /api/dm-session/:id/message). `actionOverride` lets a UI
+  // button send a canned action — the rest buttons use it — without
+  // touching the player's typed input or dice: an override sends no
+  // dice and neither clears nor restores the input box. Returns true
+  // when the turn completed, false when it failed or was refused.
+  const sendAction = async (e, actionOverride) => {
+    e?.preventDefault?.();
+    const action = (actionOverride ?? inputAction).trim();
+    if (!action || isLoading) return false;
 
-    const action = inputAction.trim();
     // Empty means "no roll this turn", not zero. Send null so the server can
     // tell the difference; anything else goes through as typed and is
-    // validated there rather than silently coerced here.
-    const attackRoll = attackRollInput.trim() === '' ? null : attackRollInput.trim();
-    const damage = damageInput.trim() === '' ? null : damageInput.trim();
+    // validated there rather than silently coerced here. A canned action
+    // (rest buttons) never carries dice.
+    const attackRoll = actionOverride ? null : (attackRollInput.trim() === '' ? null : attackRollInput.trim());
+    const damage = actionOverride ? null : (damageInput.trim() === '' ? null : damageInput.trim());
 
-    setInputAction('');
-    setAttackRollInput('');
-    setDamageInput('');
+    if (!actionOverride) {
+      setInputAction('');
+      setAttackRollInput('');
+      setDamageInput('');
+    }
     setIsLoading(true);
     setError('');
 
@@ -834,7 +818,8 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
         // happened, so hand the player everything they typed back rather than
         // making them retype an action and re-read their dice.
         if (response.status === 409 || response.status === 400) {
-          setInputAction(action);
+          // A canned action was never in the input box: nothing to restore.
+          if (!actionOverride) setInputAction(action);
           if (attackRoll !== null) setAttackRollInput(attackRoll);
           if (damage !== null) setDamageInput(damage);
           setMessages(prev => prev.slice(0, -1));
@@ -943,22 +928,36 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
         fetchWeatherSurvival();
       }
 
+      return true;
     } catch (err) {
       setError(err.message);
       // Remove the action on error
       setMessages(prev => prev.slice(0, -1));
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const advanceTurn = () => {
-    setCombatState(prev => {
-      if (!prev) return null;
-      const nextTurn = (prev.currentTurn + 1) % prev.turnOrder.length;
-      const nextRound = nextTurn === 0 ? prev.round + 1 : prev.round;
-      return { ...prev, currentTurn: nextTurn, round: nextRound };
-    });
+  // Item 3, Tier 1: Next Turn advances the SERVER turn order (the
+  // ledger, reactions, and Slow expiry all key off it) and the tracker
+  // follows the server's answer. On failure the tracker does not move:
+  // a local advance would re-introduce the drift this wiring removes.
+  const advanceTurn = async () => {
+    if (!combatState || !activeSession?.id) return;
+    try {
+      const response = await fetch(`/api/dm-session/${activeSession.id}/advance-turn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ encounterSeq: combatState.encounterSeq })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to advance the turn');
+      setCombatState(prev => ({ ...prev, turnOrder: data.turnOrder, currentTurn: data.currentTurn, round: data.round, encounterSeq: data.encounterSeq }));
+    } catch (err) {
+      console.error('Advance turn failed:', err.message);
+      setError(`Could not advance the turn on the server — the tracker was not moved. (${err.message})`);
+    }
   };
 
   const endCombat = () => setCombatState(null);
@@ -2253,7 +2252,7 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
                 alignItems: 'center',
                 gap: '0.25rem'
               }}
-              title="Take a short rest (1 hour) - Recover HP using Hit Dice"
+              title="Ask the DM for a short rest (1 hour) — the DM narrates it and applies it: HP back through hit dice, warlock pact slots restored"
             >
               <span>⏰</span>
               <span>Short Rest</span>
@@ -2273,7 +2272,7 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
                 alignItems: 'center',
                 gap: '0.25rem'
               }}
-              title="Take a long rest (8 hours) - Recover all HP and spell slots"
+              title="Ask the DM for a long rest (8 hours) — the DM narrates it and applies it: HP and spell slots restored, half your spent hit dice back, exhaustion down one"
             >
               <span>🌙</span>
               <span>Long Rest</span>

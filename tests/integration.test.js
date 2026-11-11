@@ -38,6 +38,7 @@ import dmModeRoutes from '../server/routes/dmMode.js';
 import progressionRoutes from '../server/routes/progression.js';
 import merchantRoutes from '../server/routes/merchant.js';
 import partyBaseRoutes from '../server/routes/partyBase.js';
+import { applyRest } from '../server/services/restTimeService.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
@@ -316,24 +317,35 @@ async function testDiscardItemNotFound() {
 }
 
 async function testLongRest() {
-  console.log('\n  -- Long Rest --');
+  console.log('\n  -- Long Rest (DM path — the sheet rest route is gone, rest consolidation 2026-11-07) --');
   // Set up damaged state with used spell slots
   await api('PUT', `/api/character/${testCharId}`, {
     current_hp: 20,
     spell_slots_used: JSON.stringify({ 1: 2, 2: 1, 3: 0 })
   });
 
-  const { status, body } = await api('POST', `/api/character/rest/${testCharId}`, {
-    restType: 'long'
-  });
+  // The old route is gone: a POST to it must fail, not rest.
+  const gone = await api('POST', `/api/character/rest/${testCharId}`, { restType: 'long' });
+  assert(gone.status === 404, `POST /api/character/rest/:id is gone (got ${gone.status})`);
+  const stillHurt = await dbGet('SELECT current_hp FROM characters WHERE id = ?', [testCharId]);
+  assert(stillHurt.current_hp === 20, 'the failed POST left HP untouched');
 
-  assert(status === 200, 'Rest returns 200');
-  assert(body.success === true, 'Success is true');
-  assert(body.newHp === 38, 'HP fully restored to 38');
-  assert(body.spell_slots_restored === true, 'Spell slots restored flag is true');
+  // The one rest system: the DM path, called directly like
+  // rest-time.test.js does (no session exists yet at this point in
+  // the run, so sessionId is null — the clock still advances).
+  const fbRow = await dbGet('SELECT id FROM world_clock WHERE campaign_id IS NULL ORDER BY id LIMIT 1');
+  if (!fbRow) {
+    await dbRun('INSERT INTO world_clock (campaign_id, current_day, current_day_of_year, current_year, current_hour) VALUES (NULL, 1, 1, 1492, 8)');
+  }
+  const result = await applyRest({ sessionId: null, characterId: testCharId, type: 'long' });
+  assert(result.success === true, 'DM long rest succeeds');
+  const pcDetail = result.event.results.find((r) => r.kind === 'pc');
+  assert(pcDetail && pcDetail.rested === true, 'PC rested');
+  assert(pcDetail.hpTo === 38, 'HP fully restored to 38');
 
   // Verify DB directly
-  const dbChar = await dbGet('SELECT spell_slots_used FROM characters WHERE id = ?', [testCharId]);
+  const dbChar = await dbGet('SELECT current_hp, spell_slots_used FROM characters WHERE id = ?', [testCharId]);
+  assert(dbChar.current_hp === 38, 'DB current_hp fully restored to 38');
   assert(dbChar.spell_slots_used === '{}', 'DB spell_slots_used reset to empty');
 }
 
@@ -1124,9 +1136,14 @@ async function testProgressionNoSynergyForNonResonantPair() {
 }
 
 async function testLevelUpRequiresSubclassForMulticlass() {
-  console.log('\n  -- Level-up: multiclassing into a L1-subclass class without subclass returns 422 --');
-  // Create a Fighter at L1 with enough XP to level up (300 xp)
-  const { body: created } = await api('POST', '/api/character', {
+  console.log('\n  -- Level-up: multiclass subclass gate follows 2024 levels --');
+  // 2024 rule (subclass-level audit + level-up fix, 2026-11-05): every class
+  // chooses its subclass at 3rd level except magus/scholar (1st, own books)
+  // and keeper (6th). Multiclassing into a 3rd-level class at class level 1
+  // needs NO subclass; multiclassing into a 1st-level class without one is
+  // refused with 422. (The old version of this group multiclassed into
+  // Cleric at L1 and expected 422 — the 2014 rule. Cleric is 3rd in 2024.)
+  const fighterBody = {
     name: 'TEST_MulticlassValidation',
     first_name: 'TEST',
     class: 'Fighter',
@@ -1150,34 +1167,64 @@ async function testLevelUpRequiresSubclassForMulticlass() {
     backstory: 'TEST',
     gender: 'female',
     alignment: 'Neutral'
-  });
-  const id = created.id;
+  };
 
-  // Attempt to multiclass into Cleric (which requires a subclass at L1) without passing one
-  const { status, body } = await api('POST', `/api/character/level-up/${id}`, {
+  // --- Part 1: Cleric at class level 1 needs NO subclass (2024: domain at 3rd) ---
+  const { body: clericChar } = await api('POST', '/api/character', { ...fighterBody, name: 'TEST_MulticlassCleric' });
+  const clericId = clericChar.id;
+  const clericUp = await api('POST', `/api/character/level-up/${clericId}`, {
     selectedClass: 'Cleric',
+    hpRoll: 'average'
+    // NOTE: deliberately omit `subclass` — none is required at Cleric 1
+  });
+  assert(clericUp.status === 200, `Multiclass into Cleric at L1 without subclass succeeds (got ${clericUp.status})`);
+  const clericLevels = clericUp.body.levelUpSummary?.classLevels || [];
+  const clericEntry = clericLevels.find(c => String(c.class).toLowerCase() === 'cleric');
+  assert(clericEntry && clericEntry.level === 1, 'Cleric entry added at level 1');
+  assert(clericEntry && (clericEntry.subclass === null || clericEntry.subclass === undefined), 'Cleric entry carries no subclass yet');
+  const { body: clericCheck } = await api('GET', `/api/character/${clericId}`);
+  assert(clericCheck.level === 2, `Level is 2 after Cleric multiclass (got ${clericCheck.level})`);
+  assert(clericCheck.class === 'Fighter', `Primary class stays Fighter (got ${clericCheck.class})`);
+  const clericRow = await dbGet('SELECT class_levels FROM characters WHERE id = ?', [clericId]);
+  const clericStored = parseJSON(clericRow.class_levels);
+  const clericStoredEntry = clericStored.find(c => String(c.class).toLowerCase() === 'cleric');
+  assert(clericStoredEntry && clericStoredEntry.subclass === null, 'Persisted Cleric entry has no subclass');
+  await dbRun('DELETE FROM characters WHERE id = ?', [clericId]);
+
+  // --- Part 2: Scholar at class level 1 is GRAYED OUT for the MVP
+  // (2026-11-08): the class guard fires first — 400 naming the class,
+  // not the 422 subclass gate — with or without a subclass.
+  const { body: scholarChar } = await api('POST', '/api/character', { ...fighterBody, name: 'TEST_MulticlassScholar' });
+  const scholarId = scholarChar.id;
+  const { status, body } = await api('POST', `/api/character/level-up/${scholarId}`, {
+    selectedClass: 'Scholar',
     hpRoll: 'average'
     // NOTE: deliberately omit `subclass`
   });
-  assert(status === 422, `Returns 422 (got ${status})`);
-  assert(body.error && body.error.includes('Subclass selection required'), 'Error message mentions subclass requirement');
-  assert(body.targetClass === 'Cleric', 'Error payload includes targetClass');
-  assert(body.newClassLevel === 1, 'Error payload includes newClassLevel');
+  assert(status === 400, `Returns 400 (got ${status})`);
+  assert(body.error && body.error.includes('Class Scholar is not available for player characters yet'), 'Error message names the grayed-out class');
 
   // Verify character was NOT mutated (still L1 Fighter)
-  const { body: check } = await api('GET', `/api/character/${id}`);
+  const { body: check } = await api('GET', `/api/character/${scholarId}`);
   assert(check.level === 1, `Level unchanged after failed level-up (got ${check.level})`);
   assert(check.class === 'Fighter', `Class unchanged after failed level-up (got ${check.class})`);
 
-  // Now retry WITH a subclass — should succeed
-  const retry = await api('POST', `/api/character/level-up/${id}`, {
-    selectedClass: 'Cleric',
-    subclass: 'Life Domain',
+  // Retry WITH a subclass — still refused: the class guard fires
+  // before any subclass check.
+  const retry = await api('POST', `/api/character/level-up/${scholarId}`, {
+    selectedClass: 'Scholar',
+    subclass: 'Ritualist',
     hpRoll: 'average'
   });
-  assert(retry.status === 200, `Retry with subclass succeeds (got ${retry.status})`);
-
-  await dbRun('DELETE FROM characters WHERE id = ?', [id]);
+  assert(retry.status === 400, `Retry with subclass still refuses 400 (got ${retry.status})`);
+  assert(retry.body.error && retry.body.error.includes('Class Scholar is not available for player characters yet'),
+    'Retry refusal names the grayed-out class');
+  const { body: checkRetry } = await api('GET', `/api/character/${scholarId}`);
+  assert(checkRetry.level === 1, `Level unchanged after refused retry (got ${checkRetry.level})`);
+  const retryRow = await dbGet('SELECT class_levels FROM characters WHERE id = ?', [scholarId]);
+  const retryStored = parseJSON(retryRow.class_levels) || [];
+  assert(!retryStored.some(c => String(c.class).toLowerCase() === 'scholar'), 'No Scholar entry stored after refused retry');
+  await dbRun('DELETE FROM characters WHERE id = ?', [scholarId]);
 }
 
 async function testLevelUpFeatInsteadOfASI() {
@@ -1782,30 +1829,50 @@ async function testCompanionLongRest() {
   await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
   // Damage the companion
   await dbRun('UPDATE companions SET companion_current_hp = 1 WHERE id = ?', [companionId]);
+  const before = await dbGet('SELECT companion_max_hp FROM companions WHERE id = ?', [companionId]);
+  const npc = await dbGet('SELECT name FROM npcs WHERE id = ?', [npcId]);
 
-  const restRes = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
-  assert(restRes.status === 200, `Long rest returns 200 (got ${restRes.status})`);
-  assert(restRes.body.spell_slots_restored === true, 'Long rest reports slots restored');
-  assert(restRes.body.newHp === restRes.body.companion.companion_max_hp, 'HP restored to max');
+  // Job B (2026-11-08): the companion rest route is deleted; the DM
+  // path (applyRest) owns companion rests now.
+  const restRes = await applyRest({ sessionId: null, characterId: testCharId, type: 'long', actor: npc.name });
+  assert(restRes.success === true, 'DM long rest succeeds');
+  const detail = restRes.event.results.find((x) => x.kind === 'companion');
+  assert(detail?.rested === true, 'the companion rested');
+  assert(detail?.slotsRestored === true, 'Long rest reports slots restored');
+  assert(detail?.hpTo === before.companion_max_hp, 'HP restored to max');
 
   const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
   assert(Object.keys(statusRes.body.used || {}).every(k => statusRes.body.used[k] === 0 || !statusRes.body.used[k]),
     'All slot usage cleared after long rest');
 
+  // The deleted route is really gone.
+  const gone = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
+  assert(gone.status === 404, `Deleted companion rest route returns 404 (got ${gone.status})`);
+
   await cleanupTestCompanion(companionId, npcId);
 }
 
 async function testCompanionShortRestHealsButKeepsSlots() {
-  console.log('\n  -- Short rest heals 50% HP but keeps non-warlock slots used --');
+  console.log('\n  -- Short rest heals via hit dice but keeps non-warlock slots used --');
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Cleric', 3);
 
   await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 1 });
-  await dbRun('UPDATE companions SET companion_current_hp = 10, companion_max_hp = 30 WHERE id = ?', [companionId]);
+  await dbRun('UPDATE companions SET companion_current_hp = 10, companion_max_hp = 30, companion_hit_dice = ?, companion_hit_dice_used = ? WHERE id = ?',
+    [JSON.stringify({ d8: 3 }), '{}', companionId]);
+  const npc = await dbGet('SELECT name FROM npcs WHERE id = ?', [npcId]);
 
-  const restRes = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'short' });
-  assert(restRes.status === 200, 'Short rest returns 200');
-  assert(restRes.body.newHp === 20, `Short rest heals 50% of missing 20 → newHp=20 (got ${restRes.body.newHp})`);
-  assert(restRes.body.spell_slots_restored === false, 'Non-warlock does not restore slots on short rest');
+  // Job B (2026-11-08): the old route's flat 50% heal is gone by
+  // design — a DM short rest heals ONLY via hit dice. Cleric L3,
+  // d8 pool x3, CON +2, auto-spend stops at half max (15): the first
+  // die heals 3-10 (HP 13-20), a second fires only below 15, so the
+  // new HP is deterministically in [13, 30].
+  const restRes = await applyRest({ sessionId: null, characterId: testCharId, type: 'short', actor: npc.name });
+  assert(restRes.success === true, 'DM short rest succeeds');
+  const detail = restRes.event.results.find((x) => x.kind === 'companion');
+  assert(detail?.rested === true, 'the companion rested');
+  assert(detail?.hpTo >= 13 && detail?.hpTo <= 30, `Short rest heals via hit dice to 13-30 (got ${detail?.hpTo})`);
+  assert((detail?.diceSpent || 0) >= 1, 'Short rest spent at least one hit die');
+  assert(detail?.slotsRestored === false, 'Non-warlock does not restore slots on short rest');
 
   const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
   assert(statusRes.body.used['1'] === 1, 'Cleric still has 1 used L1 slot after short rest');
@@ -1818,9 +1885,14 @@ async function testCompanionShortRestWarlockSlots() {
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Warlock', 3);
 
   await api('POST', `/api/companion/${companionId}/spell-slots/use`, { level: 2 });
-  const restRes = await api('POST', `/api/companion/${companionId}/rest`, { restType: 'short' });
-  assert(restRes.status === 200, 'Warlock short rest returns 200');
-  assert(restRes.body.spell_slots_restored === true, 'Warlock reports slots restored on short rest');
+  const npc = await dbGet('SELECT name FROM npcs WHERE id = ?', [npcId]);
+
+  // Job B (2026-11-08): the companion rest route is deleted; the DM
+  // path (applyRest) owns companion rests now.
+  const restRes = await applyRest({ sessionId: null, characterId: testCharId, type: 'short', actor: npc.name });
+  assert(restRes.success === true, 'Warlock short rest succeeds');
+  const detail = restRes.event.results.find((x) => x.kind === 'companion');
+  assert(detail?.slotsRestored === true, 'Warlock reports slots restored on short rest');
 
   const statusRes = await api('GET', `/api/companion/${companionId}/spell-slots`);
   assert(!statusRes.body.used || Object.keys(statusRes.body.used).length === 0 || statusRes.body.used['2'] === 0,
@@ -1918,7 +1990,11 @@ async function testCompanionLongRestClearsConditionsAndDecrementsExhaustion() {
   await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'exhaustion_3' });
   await api('POST', `/api/companion/${companionId}/conditions/add`, { condition: 'petrified' });
 
-  await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
+  // Job B (2026-11-08): the companion rest route is deleted — this
+  // group is the SPEC for the port, re-pointed at the DM path.
+  const npc = await dbGet('SELECT name FROM npcs WHERE id = ?', [npcId]);
+  const restRes = await applyRest({ sessionId: null, characterId: testCharId, type: 'long', actor: npc.name });
+  assert(restRes.success === true, 'DM long rest succeeds');
 
   const res = await api('GET', `/api/companion/${companionId}/conditions`);
   assert(!res.body.conditions.includes('poisoned'), 'poisoned cleared by long rest');
@@ -2018,7 +2094,11 @@ async function testCompanionLongRestResetsDeathSaves() {
     'UPDATE companions SET death_save_successes = 2, death_save_failures = 1 WHERE id = ?',
     [companionId]
   );
-  await api('POST', `/api/companion/${companionId}/rest`, { restType: 'long' });
+  // Job B (2026-11-08): the companion rest route is deleted — this
+  // group is the SPEC for the port, re-pointed at the DM path.
+  const npc = await dbGet('SELECT name FROM npcs WHERE id = ?', [npcId]);
+  const restRes = await applyRest({ sessionId: null, characterId: testCharId, type: 'long', actor: npc.name });
+  assert(restRes.success === true, 'DM long rest succeeds');
   const c = await dbGet('SELECT death_save_successes, death_save_failures FROM companions WHERE id = ?', [companionId]);
   assert(c.death_save_successes === 0 && c.death_save_failures === 0, 'Long rest clears both tallies');
   await cleanupTestCompanion(companionId, npcId);

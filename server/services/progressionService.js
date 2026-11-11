@@ -15,6 +15,7 @@
  */
 
 import { dbAll, dbGet } from '../database.js';
+import { getFeatEffect } from '../data/featRegistry.js';
 
 function safeJsonParse(v) {
   if (v == null) return null;
@@ -30,7 +31,7 @@ function safeJsonParse(v) {
  */
 export async function getCharacterProgression(characterId) {
   const character = await dbGet(
-    'SELECT id, class, subclass, level FROM characters WHERE id = ?',
+    'SELECT id, class, subclass, pact, level FROM characters WHERE id = ?',
     [characterId]
   );
   if (!character) return null;
@@ -64,8 +65,17 @@ export async function getCharacterProgression(characterId) {
     );
   }
 
+  // Creator test-notes item 5 (2026-11-09): the snapshot used to carry
+  // the ancestry feat NAME + list only, never the picker's feat id —
+  // so a resumed creator had to re-resolve the id by exact name-match
+  // through the ancestry-feats endpoint. That match is fragile by
+  // design (any seed rename breaks every resumed draft's feat), and
+  // it is the only thing standing between a persisted pick and the
+  // "Still needed: Ancestry feat" line. The id IS stored
+  // (character_ancestry_feats.feat_id) — expose it here so the resume
+  // can resolve by id when stored, with the name-match as fallback.
   const ancestryFeatRows = await dbAll(
-    `SELECT caf.tier, caf.selected_at_level, caf.narrative_delivery, caf.choices_data,
+    `SELECT caf.feat_id, caf.tier, caf.selected_at_level, caf.narrative_delivery, caf.choices_data,
             af.list_id, af.feat_name, af.description, af.mechanics, af.flavor_text, af.choices
      FROM character_ancestry_feats caf
      JOIN ancestry_feats af ON caf.feat_id = af.id
@@ -78,6 +88,56 @@ export async function getCharacterProgression(characterId) {
     choices: row.choices ? safeJsonParse(row.choices) : null,
     choices_data: row.choices_data ? safeJsonParse(row.choices_data) : null
   }));
+
+  // Stage 3 origin feats (migration 107 theme slot, migration 109
+  // versatile slot) — the theme's fixed feat, granted at creation,
+  // plus the human Versatile pick when one was taken. The effect
+  // resolves through featRegistry (the single source of truth for
+  // feat text), mirroring how the ancestry block above carries its
+  // own description/mechanics. The character `feats` JSON column is
+  // NOT read here — this table is the single source of truth for the
+  // grant, mirroring ancestry. Rows without a slot (pre-109 DBs)
+  // read as theme rows; the SELECT below throws on a pre-109 table
+  // and the fallback re-reads without the slot column.
+  let originFeat = null;
+  let versatileFeat = null;
+  const buildOriginFeat = (row) => {
+    const featEntry = getFeatEffect(row.feat_key);
+    return {
+      feat_key: row.feat_key,
+      feat_name: featEntry?.name || row.feat_key,
+      effect: featEntry?.effect || null,
+      choices_data: row.choices_json ? safeJsonParse(row.choices_json) : null,
+      selected_at_level: row.selected_at_level,
+    };
+  };
+  try {
+    const originFeatRows = await dbAll(
+      `SELECT feat_key, choices_json, selected_at_level, selected_at, slot
+       FROM character_origin_feats WHERE character_id = ?`,
+      [characterId]
+    );
+    for (const row of originFeatRows || []) {
+      if (row.slot === 'versatile') versatileFeat = buildOriginFeat(row);
+      else originFeat = buildOriginFeat(row);
+    }
+  } catch (e) {
+    // character_origin_feats may not exist on a DB that predates
+    // migration 107 — the snapshot stays valid without the block.
+    // A pre-109 table (no slot column) falls back to the single-row
+    // theme read.
+    try {
+      const originFeatRow = await dbGet(
+        `SELECT feat_key, choices_json, selected_at_level, selected_at
+         FROM character_origin_feats WHERE character_id = ?`,
+        [characterId]
+      );
+      if (originFeatRow) originFeat = buildOriginFeat(originFeatRow);
+    } catch {
+      originFeat = null;
+    }
+    versatileFeat = null;
+  }
 
   const knightPath = await dbGet(
     `SELECT current_path, last_path_change_reason
@@ -123,6 +183,10 @@ export async function getCharacterProgression(characterId) {
       id: character.id,
       class: character.class,
       subclass: character.subclass,
+      // Warlock pact (creator test-notes item 11, migration 113) —
+      // the chosen Pact ('blade' | 'chain' | 'tome'), null when the
+      // character is not a warlock or has not picked one yet.
+      pact: character.pact ?? null,
       level: character.level
     },
     theme: themeRow
@@ -134,6 +198,8 @@ export async function getCharacterProgression(characterId) {
     theme_all_tiers: themeAllTiers,
     theme_unlocks: unlocks,
     ancestry_feats: ancestryFeats,
+    origin_feat: originFeat,
+    versatile_feat: versatileFeat,
     knight_moral_path: knightPath || null,
     subclass_theme_synergy: subclassThemeSynergy,
     mythic_theme_amplification: mythicThemeAmplification

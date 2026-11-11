@@ -2,6 +2,142 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.193] - 2026-10-21 — The full spell catalog: 542 spells from the 2024 PHB + official expansions, every one with its save, condition, and numbers
+
+Design: spell-catalog-design.md (Zach, 2026-10-21: "Pull all the spells from the 2024 PHB, and look at official expansions"). The catalog held 47 spells and nothing above 5th level; every other spell in the game was DM-invented. Now it holds the whole list. Descriptions are fresh-worded prose (1–3 sentences, imagery + mechanical gist) — no verbatim book text. Third-party spells found during authoring (Arcana Unleashed and similar) were deliberately excluded; they belong to a later custom_spells pass.
+
+### Added
+- `server/data/spellCatalogData.js` (new): 542 entries — 49 cantrips, 82/90/78/57/63/49/29/23/22 by level 1–9 — each carrying level, school, cast time, range, components, duration, concentration, ritual, class list, source, save ability and applied condition where the spell has them. Plus 206 damage/healing effects. Sources beyond the PHB: Xanathar, Tasha, Fizban, Explorer's Guide to Wildemount (dunamancy), Heroes of Faerûn, Spelljammer, Strixhaven, Book of Many Things, Acquisitions Incorporated, Lost Laboratory of Kwalish, Planescape, Rime of the Frostmaiden, Guildmaster's Guide to Ravnica, Tal'Dorei Reborn.
+- spellEffectSpec: flat-amount spells (Heal 70, Mass Heal 700, Guardian of Faith flat 20, Power Word Heal full) and multi-term dice pools (Chaos Bolt 2d8+1d6, Ice Storm 2d8+4d6 — an upcast grows only the term whose die matches the upcast die; cantrip scaling multiplies every term).
+- spellCastService: flat-amount spells apply at cast for the PC exactly as for companions (nothing to roll); companion effect rolls resolve multi-term pools term by term.
+- partyAttackService: parseDamageSpec / rollDamageFor handle multi-term pools (a crit doubles every term); spell attack profiles carry the full dice expression.
+- tests/spell-catalog.test.js (new, 33 asserts): per-level scale floors, field completeness for all 542 entries, derived-save agreement, every effect resolving to a sane spec, and spot checks on the famous and the corrected.
+
+### Changed
+- spellCatalog.js is now the logic module only: SPELL_CATALOG and SPELL_EFFECTS alias the data file, and SPELL_SAVES is DERIVED from the entries' save fields — the hand-maintained 17-spell map retired; all 234 save spells resolve through spellSaveAbility unchanged.
+- 81 entries carry appliesCondition — the data Gap 2 (save → applied condition) will consume.
+
+### Corrected (2024 values superseding v1.0.192's hand data)
+- Inflict Wounds is the 2024 redesign — a Constitution save spell, 3d10 necrotic, half on success (192 modeled the old attack-roll 2d10). It now pends and saves through the save-spell path automatically.
+- Cure Wounds upcast is +2d8 per slot, not +1d8 (spell-damage test updated: slot 2 = 4d8). Vicious Mockery deals 1d6, not 1d4. Chill Touch is 1d10 and a melee Touch spell, not 1d8 at range.
+- Thunderwave is 2d8 thunder (caught at assembly — a transcription had carried Thunderous Smite's 2d6 into both the effect and the description).
+- Sleep is the 2024 rework (Wisdom save, condition, no hit-point pool); Counterspell is a Constitution save; Spiritual Weapon requires concentration.
+
+## [1.0.0.192] - 2026-10-21 — Spell damage & healing are real: the catalog owns every spell's dice; the player rolls their own totals; companions resolve at cast
+
+### Added
+- spellCatalog SPELL_EFFECTS + spellEffectSpec: damage/healing dice for the catalog's damage and healing spells (2024 SRD values), with upcast scaling per slot level and cantrip scaling tiers at caster levels 5/11/17. Eldritch Blast beams are modeled as scaled dice; Scorching Ray's damage is per ray. Sleep, Hex, Hunter's Mark, and the raise spells intentionally carry no entry (pools, riders, returns-to-1-HP).
+- spellCastService spell effects: a PC cast of a damage/healing spell records a PENDING effect on the session (multi-target casts share one pending). The player reports one rolled total; resolveReportedSpellEffect applies full / half / none per the saves rolled at cast time — enemies through the shared kill follow-up (death, loot, morale), healing through the HP pipeline, capped at max. Companion casts roll and apply immediately at cast. SPELL EFFECT fact block (pending asks + resolved outcomes) injected into the next turn like ATTACK RESULT; the /message route resolves reported totals after checks and attacks (damage field or bare-number message).
+- ATTACK spell profiles read the catalog by default — Damage= is now only an override for spells without catalog data.
+
+### Changed
+- dmPromptBuilder combat block: the DM never declares spell damage or healing (ENEMY_DAMAGE / HP_CHANGE are for non-spell effects now); for the player's spells it states the exact dice to roll and stops.
+
+### Fixed
+- B5's spell-save outcomes now carry the `check` field the ROLL RESULT renderer expects (spell saves rendered as "undefined check").
+
+## [1.0.0.191] - 2026-10-21 — Combat, made real: party attacks, enemy conditions, companion casting, enemy saves, real opportunity attacks
+
+Design: combat-real-design.md (full inventory + builds B1–B6; Zach, 2026-10-21: "run the entire combat design, all of it"; test gate, then an end audit against the doc). Combat was asymmetric: everything enemies did was server-resolved, almost everything the party did in a fight was the DM's say-so. This build closes the asymmetry — and fixes four degraded pieces the inventory found hiding inside systems that looked done.
+
+- **B1 — one combat-stats truth (closes Q9 for combat).** `calculateCombatStats` + ARMOR_DATA + QUALITY_BONUSES moved from dmPromptBuilder into `combatStatsService.js`; the prompt imports it for display, combat uses it for authority. ENEMY_ATTACK's PC target AC is now the equipment-derived AC (the armor_class column is only the no-equipment fallback). Name-only companion weapons resolve through a canonical WEAPON_DATA table. Degraded piece #1: COMBAT_START initiative read `ability_scores.dexterity` (full-name key) while every sheet stores short keys — every initiative modifier was silently +0; now real DEX modifiers for PC and companions. (The moved math also no longer produces NaN AC for unrecognized name-only armor.)
+- **B2 — party attack resolution (`partyAttackService.js`, new ATTACK marker).** The PC's attack creates a pending attack: the player reports real dice (attackRoll/damage fields or a bare-number message), the system judges hit/crit vs the enemy's real AC + cover, and the route strips the old narrative dice directive so the DM cannot adjudicate the same dice twice. Companions resolve immediately, server-rolled from their true sheets. Advantage/disadvantage is COMPUTED from both sides' conditions (new `conditionAttackEffects` attacker profile), never declared. Damage flows through the new shared `applyPartyDamageToEnemy` (death events, kill loot, morale). Degraded piece #2: the old inline kill follow-up read `morale.fled`, a field checkMorale never returns — enemies fled but the note never surfaced; the shared helper reads breakChecks. The party rally buff (+1) is consumed by party attacks at last. SET_COVER now works for party members too (encounter state in combat_turn_state.party_cover_json, migration 084), and resolveEnemyAttack reads it. ENEMY_DAMAGE remains for no-attack-roll damage (spell damage after a save, traps, falls).
+- **B3 — enemy conditions (migration 084).** combat_enemies.active_conditions; CONDITION_ADD/REMOVE resolve enemy targets (player → companion → enemy). A blinded/poisoned/frightened/prone/restrained enemy attacks at disadvantage; party attacks against prone/blinded/restrained enemies gain advantage — same 190 profiles, both directions.
+- **B4 — companion spellcasting.** SPELL_CAST Caster= consumes the companion's own slots (max from levelProgression, the endpoints' math), refuses npc_stats casters, and tracks companion concentration (companions.concentrating_on, migration 084; concentrationService companion functions; enemy-attack damage triggers the companion's CON save from their sheet, proficiency included).
+- **B5 — enemy saves vs spells.** SPELL_CAST Target= on a save-based spell (spellCatalog SPELL_SAVES) rolls the enemy's save server-side against the caster's true spell save DC (combatStatsService.spellProfileFor). DEX saves use the bestiary dex_mod; other saves use a stated challenge-based estimate (the data carries nothing better — visible in the code). Enemy conditions apply: paralyzed auto-fails STR/DEX saves, restrained rolls DEX at disadvantage. Outcomes stash with the roll facts and log to roll_log.
+- **B6 — opportunity attacks resolve.** The always-succeeds MVP stub is gone: enemy attackers resolve through resolveEnemyAttack, companions through the party resolver, the PC through a pending attack. The reaction is still spent exactly once.
+- Prompt: the COMBAT block now teaches ATTACK / Caster= / Target= / party + enemy cover / enemy conditions and forbids DM-judged hits and saves; the old hybrid "report damage, emit ENEMY_DAMAGE" flow is retired for attacks.
+- Tests: new tests/combat-real.test.js (12 groups). Capstone group 7 updated: the OA now lands a real swing, so the group resets enemy HP for group 8's exact math.
+- Explicitly deferred (in the design doc): companion death-save automation in combat flow, movement/range state, spell-damage automation for save spells, morale save modifiers.
+
+## [1.0.0.190] - 2026-10-21 — Conditions are real: persisted on the server, enforced where the math lives
+
+Design: pc-conditions-design.md, Option B (Zach's call, 2026-10-21). Until now the PC's conditions lived in the client and were re-sent every turn; the server formatted them into a note asking the DM to honor disadvantage, and the DM's CONDITION_ADD/REMOVE markers were handed back in the response payload for the client to apply. Nothing persisted, nothing was enforced — a poison that outlived the session evaporated.
+
+- Migration 083: characters.active_conditions (the mirror of the companion column, 030). New conditionService owns BOTH tables' reads/writes — vocabulary (the CONDITION_ADD schema enum), key normalization, and the exhaustion-exclusivity rule the companion endpoints pioneered now live in one place.
+- CONDITION_ADD / CONDITION_REMOVE are real pipeline handlers: Target="Player" or a companion's name writes the database; an unknown target fails cleanly so the DM can correct it. The legacy regex detection + response payload stay for client compatibility; the server is the source of truth, and the /message conditions note is built from the DB (the client field is only a fallback for state the server has never seen).
+- Enforcement (the point of the build): a poisoned, frightened, or exhausted (1+) PC's pending roll is created at disadvantage by the resolver — the player still rolls their real dice; opposite marker/condition states cancel per 5e algebra. Paralyzed, stunned, unconscious, or petrified actors AUTO-FAIL Strength and Dexterity saves — logged, and surfaced to the DM as fact, with no dice requested. Companions get the identical treatment through rollForNpc. Restrained bites DEX saves; exhaustion 3+ bites all saves.
+- Combat: enemy attacks against prone/blinded/restrained/incapacitated targets roll with advantage; against invisible targets, with disadvantage; both together cancel. (Stated approximation: prone grants attackers advantage regardless of range — enemy attacks carry no range flag; cover already handles ranged defense through AC.)
+- Long rest steps exhaustion down one level for the PC and every resting companion (the recovery deferred from v1.0.188), and the rest fact-block states the new level.
+- The seam is pinned by test: the 'unconscious' CONDITION never touches is_unconscious or the death-save counters — a sleep spell cannot start death saves.
+- NOT in this build (stated): the exhaustion ladder's top end (level 4 max-HP halving, level 6 death — Option C, its own pass); companion/enemy attack-roll disadvantage for the ATTACKER's own conditions (companion attacks have no server roll in v1.0 — checks and saves are the resolver's surface); enemy conditions; round-based durations.
+
+## [1.0.0.189] - 2026-10-21 — Bugfix: enemy attacks on companions actually land now
+
+A latent bug from the combat pipeline, documented since 2026-10-20 and pinned in the capstone suite: resolveEnemyAttack's companion branch wrote damage to companions.current_hp — a column that does not exist (companions store HP in companion_current_hp). The UPDATE threw, the marker handler swallowed the throw, and in live play an enemy could hit a companion squarely and nothing happened: no damage, no death saves, no stakes.
+
+- enemyCombatService: the companion branch now writes and reads companion_current_hp. Companions have no temp-HP column, so the direct write is the complete path — parity with the player branch, which routes through characterHpService for temp absorption.
+- tests/capstone-combat.test.js group 6: the pin flips, as its own text instructed — the conditional throw/no-op assertions are replaced with the full attackAndReconcile HP accounting used for the player (attack roll, cover AC, damage range, exact pool reconciliation), and the helper's companion reads use the real column.
+
+## [1.0.0.188] - 2026-10-21 — Time is real: [REST] and [TIME_ADVANCE], and the end of invented days
+
+Until now, two of the oldest fictions in the system were pure narrative. Time never passed during play at all — at session end, calculateGameTimeAdvance invented 1–3 days from the session's XP-analysis scores and jumped the clock by that. Rests had no server mechanics anywhere: the client's rest button computed the effects itself and the server only wrote atmosphere prose around a result it never verified. Both are now system facts the DM operates, in the ROLL_REQUEST pattern.
+
+### Time advance (restTimeService)
+
+- The DM emits [TIME_ADVANCE: Hours=6] (or Days=) whenever the fiction skips an uneventful span — travel, waiting, research, crafting. The world clock advances through scheduleService, the session accumulates its own elapsed hours, and the outcome returns next turn as a system fact ("TIME PASSED: 6 hours. It is now day 142, hour 19 — dusk") that the DM narrates from, never invents.
+- Flashback sessions (the prologue shape: session dated behind the world clock) accumulate elapsed time without moving the world clock. The gap is detected once, at the first marker, and recorded on the session; session end reads the same record.
+
+### Rests (migration 082, restTimeService)
+
+- [REST: Type=long] takes 8 hours on the clock and applies the full 5e recovery per actor: HP to full, spell slots restored, temp HP cleared, concentration broken, and half the actor's total hit dice regained (minimum 1) — the spent-dice tracking (hit_dice_used / companion_hit_dice_used) is new in migration 082; the pools it mirrors have existed since the schema and migration 029, waiting for this consumer. [REST: Type=short] takes 1 hour and heals only through hit dice; warlocks regain pact slots.
+- Hit-dice policy (Zach's decision, 2026-10-21): Dice= when the fiction names a count ("I spend two hit dice"), honored exactly; otherwise the system auto-spends until the actor reaches half max HP or runs out of dice. Dice roll server-side at roll + CON modifier, and the outcome note reports every die.
+- Scope: no Actor= rests the whole party (PC + active companions, per Q6); Actor= names one person. An actor at 0 HP gains no benefit. Companion hit-dice pools compute from class + level when the (never-populated) stored pool is empty. Not in v1: the one-long-rest-per-24-hours limit, and exhaustion recovery (it lands with the conditions build).
+- The DM prompt gains a RESTS & TIME block beside CHECKS & SAVES: emit markers for skipped spans and rests, and never narrate recovery or elapsed time yourself.
+
+### Retirement: calculateGameTimeAdvance is deleted
+
+- Session end now MEASURES time: the elapsed span is the distance between the session's start date and the world clock as the markers left it (flashbacks use their accumulated elapsed hours, legacy floor of 1 day). The living-world tick consumes the measured span exactly as before — the world-tick suite now passes its days through the real marker service and pins the same invariants against it. A session whose DM never marks time advances zero days. Time that didn't pass in the fiction didn't pass.
+
+Tests: `tests/rest-time.test.js` (dice policy, regain math, measured-span math, clock/elapsed integration, party + solo + 0-HP rests, the heuristic's absence pinned in source) and the updated `tests/session-end-world-tick.test.js`.
+
+## [1.0.0.187] - 2026-10-21 — Trades are mechanics: professions, mastery tiers, and build archetypes
+
+Designed with Zach 2026-10-21 from the tabletop NPC-design literature (MageGate's five-part formula, the DM Lair, Modular Realms, the GUP method, the NPC-follower research). The sources optimize for a human DM's prep time — stat blocks, not sheets; five bullets, not backstories. This app's premise removes that constraint, so we took their personification layer wholesale and kept the mechanical layer deep. The core move: an NPC's TRADE is their identity and their competence — not a character class. Class builds belong to adventuring stock and to companions.
+
+### Professions and mastery (migration 081, npcProfessionService, professions catalog)
+
+- Every NPC gets a profession packet at first appearance, rolled by the system alongside the complexity tier (same session-start backfill loop, same never-the-AI doctrine): a profession resolved from their occupation text against a 62-entry catalog (seeded from the 459 historic professions list), a mastery tier — apprentice / journeyman / master / legend at 25/50/20/5 — and a GUP packet (one concrete sensory detail, one distinguishing aspect; the Purpose slot was already the agenda system). Occupations that match nothing fall back to a category signature, then to no packet at all.
+- Profession drives NPC rolls: the roll resolver checks trade coverage before its CR default. A covered check uses tier proficiency (+2/+3/+4/+6) plus a dominant-ability bonus — the same ability+proficiency shape as PC math, so a master blacksmith's Athletics is +6, not a generic +2. Trades never grant saving throws, and uncovered checks fall through to the old paths untouched.
+- Mastery is also personification: the DM's NPC block now carries the trade line — tier, covered checks, the GUP aspect and detail — because a master is someone the town points you to.
+
+### Build archetypes (companionArchetypes, companionSheetService)
+
+- Each class now has weighted build archetypes: the template (~50%) plus off-center builds — the INT rogue (The Locksmith Scholar), the STR wizard (The Laborer-Scholar), the DEX warlock (The Shadowblade), the CON rogue (The Survivor), and 40+ more across all 13 classes. Every build carries personification guidance the DM plays; the companion prompt block renders it as a private Build line.
+- Archetypes roll at first appearance for adventuring-stock NPCs (sellswords, hedge wizards, tomb robbers — professions flagged adventuring in the catalog) and are stored as a key. Recruitment copies the key, and the sheet generates FROM it — the person you met is the person who joins, and their generated CON feeds max HP at birth. Companions created without an NPC roll their archetype the first time a sheet generates; the key persists, so ASIs never flip a build's identity.
+- The current roster is untouched: existing companions keep their sheets (they're the template half of the distribution by design). A test pins every template archetype to the sheet service's own generation tables, so the two sources can never drift apart.
+
+Tests: `tests/profession-archetype.test.js` — migration shape, catalog + archetype integrity (canonical skills, weight sums, the template drift pin), the appearance packet (idempotent, adventuring archetype, packet-less fallback), resolver competence in the real pipeline, and sheets generated from stored archetypes.
+
+## [1.0.0.186] - 2026-10-20 — Companions get real builds
+
+Follow-up to 1.0.185, same night. Correction to that entry's framing first: companions never lacked the sheet COLUMNS — companion_ability_scores, skill_proficiencies, companion_class and companion_level have existed since the initial schema. The real gaps were population and use: a class-based recruit whose NPC had no ability scores got a mannequin sheet (flat 10s everywhere), the recruit INSERT never set skill_proficiencies at all, and the new roll resolver never read the sheet. Fixed:
+
+### Companion sheets (companionSheetService)
+
+- `companionSheetService` generates a real build when one is missing: the standard array (15/14/13/12/10/8) assigned by class ability priorities, plus class skill proficiencies at 5e counts (rogue 4, ranger 3, most others 2). Deterministic — the same class always produces the same build.
+- Recruit route: class-based recruits now GENERATE a sheet when the NPC has no ability scores (before HP is computed, so CON feeds max HP correctly), and the INSERT persists class skill proficiencies.
+- `ensureCompanionSheet` backfills existing companions — wired into enrichNewCompanion (creation), the session-start companion loop (which also refreshes the in-memory row so the same session's prompt renders the real sheet), and lazily on a companion's first roll. It only generates for absent or flat-10-placeholder sheets with no chosen skills; a real sheet, or one with player-picked skills, is never overwritten. It never touches HP.
+- The roll resolver's companion branch now computes modifiers from the companion's actual sheet with the exact math the PC uses (computePcModifier) — Lyra's Stealth is her DEX + her proficiency, not a CR guess. npc_stats companions keep their stat block (CR-scaled).
+- The DM prompt's companion block now renders skill modifiers and passive Perception from the sheet, mirroring the player character's display.
+
+Tests: `tests/companion-sheet.test.js` — generation pins, backfill semantics (idempotent, non-destructive, deliberate-build guard), and resolver parity including lazy generation on first roll.
+
+## [1.0.0.185] - 2026-10-20 — Every actor rolls: non-combat checks get mechanics
+
+Combat had dice; everything else had prose. Skill modifiers and passive Perception were computed for the DM prompt and never used — the DM saw "Stealth +7" and free-narrated whether you were sneaky. That gap is now closed with the [ROLL_REQUEST] system (design decided with Zach, 2026-10-20; `roll-request-design.md`).
+
+### Roll requests (migration 080, rollRequestService)
+
+- The DM emits `[ROLL_REQUEST: Skill="Sleight of Hand" DC=15 Looks="..."]` and stops. The DC is a hidden number, never stated; difficulty reaches the player only as descriptive language in the narration, calibrated by a phrase↔band guide in the prompt (a pool to vary from, never a script).
+- The player rolls REAL dice and reports the number (structured `checkRoll`/`checkRoll2` body fields, or a bare-number message). The system applies the true sheet modifier — ability scores and proficiencies finally gate outcomes — judges against the DC, and injects the result next turn as a system fact the DM must narrate.
+- Crits are law: a natural 1 NEVER succeeds (complete, often comical failure, with a consequence the DM must attach); a natural 20 always succeeds (often miraculously, beyond the ask). Crits judge the taken die under advantage/disadvantage; the player reports both dice and the system takes the right one.
+- Companions, NPCs, and enemies roll server-side through the same resolver — one actor model for everyone. An enemy disarming the party's traps rolls against the trap-setter's recorded result; enemies can fail, and can crit. NPC outcomes are stashed and surfaced to the DM as next-turn system facts, so the DM narrates attempts and learns results, never chooses them.
+- Passive scores work as a silent floor (`checkPassive`), and every resolution lands in the new `roll_log` table permanently — a nat-1 consequence is fiction state the next session inherits, and the future adjudication ledger reads from here.
+- Saving-throw proficiencies use canonical class defaults (characters store none); bestiary actors use their real DEX modifier for DEX checks, other NPC checks use a CR-scaled competence default.
+
+Tests: `tests/roll-request.test.js` — 9 groups covering pure resolution (crits, taken die), sheet math, the pending lifecycle, server-roll invariants, passives, and pipeline integration.
+
 ## [1.0.0.184] - 2026-10-20 — The DM system grows teeth: complexity, companions, capstone, one clock
 
 Four builds that share one idea: don't ask the AI to be a DM — build a DM system and let the AI operate its parts.
