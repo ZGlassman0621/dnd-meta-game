@@ -345,8 +345,13 @@ group('R2-11(b)-(g) generic path choice, origin regions, Soldier second field');
 {
   // The path-choice select renders creation_choice generically — no
   // per-theme switch: the new server entries (b)-(f) render through it.
-  ok(stage3.includes('theme?.creation_choice_options'), 'Stage 3 reads the served creation_choice_options');
-  ok(stage3.includes('theme?.creation_choice_label'), 'Stage 3 reads the served creation_choice_label');
+  // Creation-solidification (2026-11-12): the location options/label
+  // resolve in the shared themeLocation.js helper (also used by the
+  // shell's stale-pick clear); Stage 3 renders what it returns.
+  const themeLocationSrc = readRepo('client/src/components/creator-next/themeLocation.js');
+  ok(stage3.includes('themeLocationOptions(theme, state)'), 'Stage 3 resolves location options through the shared helper');
+  ok(themeLocationSrc.includes('theme?.creation_choice_options'), 'Stage 3 reads the served creation_choice_options (via themeLocation.js)');
+  ok(themeLocationSrc.includes('theme?.creation_choice_label'), 'Stage 3 reads the served creation_choice_label (via themeLocation.js)');
   ok(stage3.includes('locationOptions.map'), 'Stage 3 renders the resolved location options');
   // Origin regions (g): the real region data, resolved client-side.
   const eberron = regionsForSetting('Eberron');
@@ -359,9 +364,9 @@ group('R2-11(b)-(g) generic path choice, origin regions, Soldier second field');
   ok(isOutsideFR('Eberron') === true, 'isOutsideFR: Eberron is outside the Realms');
   ok(isOutsideFR('Forgotten Realms') === false, 'isOutsideFR: the Realms are not outside the Realms');
   ok(isOutsideFR('') === true, 'isOutsideFR: an unset origin counts as outside (served list kept)');
-  ok(stage3.includes("creation_choice_source === 'origin_regions'"), 'Stage 3 keys the region resolution on creation_choice_source');
-  ok(stage3.includes("&& originSetting && isOutsideFR(originSetting)"), 'Stage 3 offers regions exactly to non-FR origins (never FR cities as local)');
-  ok(stage3.includes("'Home Region'"), 'a non-FR origin labels the field "Home Region"');
+  ok(themeLocationSrc.includes("creation_choice_source === 'origin_regions'"), 'Stage 3 keys the region resolution on creation_choice_source (via themeLocation.js)');
+  ok(themeLocationSrc.includes("&& originSetting && isOutsideFR(originSetting)"), 'Stage 3 offers regions exactly to non-FR origins (never FR cities as local)');
+  ok(themeLocationSrc.includes("'Home Region'"), 'a non-FR origin labels the field "Home Region"');
   // Soldier second field (e): the SERVER shape — creation_choice_second_field
   // { key, label, options } — bound to path_data as a JSON string.
   // The old client-side two-part shape is struck (seam fix, 2026-11-09).

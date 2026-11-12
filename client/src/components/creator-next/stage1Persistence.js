@@ -2,6 +2,19 @@ import { findSpeciesEntry, resolveOriginSetting } from './speciesAdapter.js'
 import { concreteLanguages, languageChoiceCount } from '../../data/references.js'
 import { mixedAncestrySaveRecord } from './mixedAncestry.js'
 
+// Warlock pact: the Stage 2 picker holds the display name ('Pact of
+// the Blade'); the server column (migration 113) stores the key.
+const PACT_KEYS = ['blade', 'chain', 'tome']
+export function pactKeyFromName(name) {
+  if (!name || typeof name !== 'string') return null
+  const key = name.trim().toLowerCase().replace(/^pact of the\s+/, '')
+  return PACT_KEYS.includes(key) ? key : null
+}
+export function pactNameFromKey(key) {
+  const k = typeof key === 'string' ? key.trim().toLowerCase() : ''
+  return PACT_KEYS.includes(k) ? `Pact of the ${k.charAt(0).toUpperCase()}${k.slice(1)}` : null
+}
+
 /**
  * Stage 1 draft persistence — creator-next.
  *
@@ -106,12 +119,22 @@ export function buildStage1ProgressBody(state, themes = null) {
   if (Array.isArray(state.knownCantrips) && state.knownCantrips.length) {
     body.known_cantrips = JSON.stringify(state.knownCantrips)
   }
-  // Warlock pact (creator test-notes #11): a plain string, truthy-
-  // gated like fighting_style. The server column is the server
-  // worker's part (migration 113) — until it exists a PUT drops
-  // this silently and the local mirror is the draft home, same as
-  // the other validation-only picks above.
-  if (state.pactBoon) body.pact_boon = state.pactBoon
+  // Warlock pact (creator test-notes #11, migration 113): the server
+  // column is `pact` and stores the lowercase key ('blade' | 'chain' |
+  // 'tome'). The picker holds the display name ('Pact of the Blade').
+  // Creation-solidification (2026-11-12, fix-as-you-find): this used to
+  // send `pact_boon` with the display name — a key the server never
+  // reads — so the pick was never persisted and never resumed.
+  {
+    const pactKey = pactKeyFromName(state.pactBoon)
+    if (pactKey) body.pact = pactKey
+  }
+  // Creation-solidification item 5 (migration 114): the SUBCLASS
+  // origin explanation (outside-FR subclasses). Truthy-gated like
+  // origin_explanation.
+  if (state.subclassOriginExplanation && String(state.subclassOriginExplanation).trim()) {
+    body.subclass_origin_explanation = String(state.subclassOriginExplanation).trim()
+  }
   const originSetting = resolveOriginSetting(state.origin_setting, state.origin_setting_custom)
   if (originSetting) body.origin_setting = originSetting
   if (state.origin_region) body.origin_region = state.origin_region
@@ -296,6 +319,9 @@ export function blankStage1State() {
     // same state.faith Stage 5 collects): both start empty, never
     // silently defaulted.
     pactBoon: '',
+    // Subclass origin explanation (creation-solidification item 5,
+    // migration 114) — required for an outside-FR subclass.
+    subclassOriginExplanation: '',
     // Stage 3 (Past & Path) — starts empty, never silently defaulted.
     // Picking a theme sets themeId + originFeat and resets the rest.
     // themePathData is the second path choice (Soldier active-duty,
@@ -533,7 +559,11 @@ export function rehydrateStateFromServerRow(row, progression, speciesEntries = n
     // absent, never defaulted. Faith likewise: it is saved as a
     // plain string column but was never rehydrated, so a god picked
     // on Stage 2 vanished on a mirror-less resume.
-    if (row.pact_boon) patch.pactBoon = row.pact_boon
+    if (row.pact) {
+      const pactName = pactNameFromKey(row.pact)
+      if (pactName) patch.pactBoon = pactName
+    }
+    if (row.subclass_origin_explanation) patch.subclassOriginExplanation = row.subclass_origin_explanation
     if (row.faith) patch.faith = row.faith
     const storedChoices = parseStoredJson(row.subclass_choices_json)
     if (storedChoices && typeof storedChoices === 'object' && !Array.isArray(storedChoices)

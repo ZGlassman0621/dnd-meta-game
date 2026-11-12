@@ -190,9 +190,13 @@ group('#11 pact picker on Stage 2 (warlock)');
   ok(stage2.includes("value={state.pactBoon || ''}"), 'the picker binds state.pactBoon');
   ok(blankStage1State().pactBoon === '', 'blank state carries pactBoon: "" (never defaulted)');
   const body = buildStage1ProgressBody({ pactBoon: 'Pact of the Blade' });
-  ok(body.pact_boon === 'Pact of the Blade', 'the save body sends pact_boon');
-  const patch = rehydrateStateFromServerRow({ pact_boon: 'Pact of the Chain' }, null);
-  ok(patch.pactBoon === 'Pact of the Chain', 'rehydration reads pact_boon back into state.pactBoon');
+  // Creation-solidification (2026-11-12): the server column is `pact`
+  // (migration 113) and stores the key — the old `pact_boon` body key
+  // was never read, so the pick never persisted. The body now sends
+  // the key; rehydration maps the stored key back to the display name.
+  ok(body.pact === 'blade' && body.pact_boon === undefined, 'the save body sends the pact key as `pact`');
+  const patch = rehydrateStateFromServerRow({ pact: 'chain' }, null);
+  ok(patch.pactBoon === 'Pact of the Chain', 'rehydration reads the stored pact key back into state.pactBoon');
   const faithPatch = rehydrateStateFromServerRow({ faith: 'Tymora' }, null);
   ok(faithPatch.faith === 'Tymora', 'rehydration reads faith back (Stage 2 god pick survives a mirror-less resume)');
 }

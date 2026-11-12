@@ -238,6 +238,52 @@ group('(d) A save omitting the id leaves the persisted feat standing');
     `the persisted feat still stands after the omitting PUT (got ${tier1?.feat_name} / ${tier1?.feat_id})`);
 }
 
+// (e) Creation-solidification item 2 (2026-11-12): the RE-PICK path
+// for a draft like #1203 — saved with no ancestry-feat row. The player
+// picks again on Stage 1; the next draft save (PUT) must persist the
+// side-table row, the snapshot must carry the id, and the REAL client
+// resume (rehydrateFromServerCharacter) must restore the pick so the
+// 'Ancestry feat' line clears. No pick is invented: the test draft
+// starts empty and only the explicit re-pick fills it.
+group('(e) Re-pick on a draft with no persisted row persists across resume');
+{
+  const created = await postCharacter({
+    name: 'T5 Re-pick', ...dwarfClericBody(),
+    base_scores: DWARF_BASE, ability_scores: J(DWARF_FINAL),
+    skills: J(['Athletics', 'Intimidation', 'Religion']),
+    languages: J(['Common', 'Dwarvish']),
+    prepared_spells: J(DWARF_PREPARED),
+  });
+  check(created.status === 201, `#1203-shaped draft (no feat) creates 201 (got ${created.status})`);
+  const charId = created.json?.id;
+  const before = await db.dbGet('SELECT COUNT(*) AS n FROM character_ancestry_feats WHERE character_id = ?', [charId]);
+  check(Number(before?.n) === 0, `the draft starts with no ancestry-feat row (got ${before?.n})`);
+
+  // The re-pick: a Stage 1 save carrying the chosen id.
+  const repick = await putCharacter(charId, { creator: MARKER, race: 'dwarf', subrace: 'Hill Dwarf', ancestry_feat_id: stoutId });
+  check(repick.status === 200, `re-pick PUT persists 200 (got ${repick.status}: ${JSON.stringify(repick.json?.error || '')})`);
+  const sideRow = await db.dbGet('SELECT feat_id, tier FROM character_ancestry_feats WHERE character_id = ?', [charId]);
+  check(Number(sideRow?.feat_id) === Number(stoutId) && Number(sideRow?.tier) === 1,
+    `the side-table row is present after the re-pick save (got ${JSON.stringify(sideRow)})`);
+
+  // The real client resume, with its relative fetches pointed at this server.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, opts) => realFetch(typeof url === 'string' && url.startsWith('/') ? `${base}${url}` : url, opts);
+  let resumed = null;
+  try {
+    const { rehydrateFromServerCharacter } = await import(fromRepo('client/src/components/creator-next/stage1Persistence.js'));
+    resumed = await rehydrateFromServerCharacter(charId);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  check(resumed?.restored === true, `the client resume restores the draft (got ${JSON.stringify(resumed?.restored)})`);
+  check(Number(resumed?.patch?.ancestry_feat_id) === Number(stoutId),
+    `the resumed draft carries the re-picked feat id (got ${JSON.stringify(resumed?.patch?.ancestry_feat_id)})`);
+  const v = validateStage1({ race: 'dwarf', subrace: 'Hill Dwarf', ancestry_feat_id: resumed?.patch?.ancestry_feat_id ?? null }, { featListAvailable: true });
+  check(!v.needed.includes('Ancestry feat'),
+    `after resume, Stage 1 no longer lists 'Ancestry feat' (needed: ${v.needed.join(', ')})`);
+}
+
 server.close();
 console.log(`=== Results: ${passed} passed, ${failed} failed ===`);
 process.exit(failed ? 1 : 0);

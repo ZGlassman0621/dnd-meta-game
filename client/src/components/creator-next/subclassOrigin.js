@@ -32,3 +32,15 @@ export function subclassOriginSuffix(entry) {
     : ''
   return ` · origin ${setting}${region} — an origin explanation is required for how its holder came to be in the Forgotten Realms`
 }
+
+/**
+ * Creation-solidification item 5 (2026-11-12): true when the picked
+ * subclass needs a SUBCLASS origin explanation — the same rule as the
+ * server's subclassService.isOutsideFr (anything not Forgotten Realms,
+ * a null origin included, fail-closed). Stage 2 shows the explanation
+ * field when this is true; Review and the server commit both require
+ * it. Pure function of the registry entry.
+ */
+export function subclassNeedsOriginExplanation(entry) {
+  return !!entry && entry.origin_setting !== 'Forgotten Realms'
+}

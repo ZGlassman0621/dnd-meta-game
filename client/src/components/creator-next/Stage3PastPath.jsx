@@ -2,10 +2,10 @@ import { useMemo } from 'react'
 import Tip from './Tooltip.jsx'
 import spellsData from '../../data/spells.json' with { type: 'json' }
 import { THEME_GOLD_MODIFIERS } from '../../data/themeGoldModifiers.js'
-import { regionsForSetting } from '../../data/originSettings.js'
+import { themeLocationOptions } from './themeLocation.js'
 import { resolveChoiceOptions, isHeldOption } from './choiceOptions.js'
 import { versatileThemeConflict } from './mixedAncestry.js'
-import { deferredNoteFor, isDeferredSpecies, isOutsideFR, resolveOriginSetting } from './speciesAdapter.js'
+import { deferredNoteFor, isDeferredSpecies } from './speciesAdapter.js'
 
 /**
  * Creator-next Stage 3 — Past & Path (2026-11-06).
@@ -193,7 +193,6 @@ export default function Stage3PastPath({ state, set, themes = null, speciesEntry
   const themeAbilities = theme ? [...(theme.abilities || [])].sort((a, b) => (a?.tier ?? 0) - (b?.tier ?? 0)) : []
   const asiText = theme ? formatAsi(theme.ability_score_increase ?? theme.ability_score_increases) : ''
   const goldText = theme ? formatGoldModifier(theme.id) : ''
-  const creationOptions = theme?.creation_choice_options || []
   // Soldier second field (R2-11e, SERVER shape): creation_choice_second_field
   // { key, label, options } — the old client-side two-part shape is struck;
   // the server serves the second field this way (themes.js) and Review
@@ -208,16 +207,8 @@ export default function Stage3PastPath({ state, set, themes = null, speciesEntry
   // character ("Home Region") — never FR cities as if they were
   // local. FR origins (or an unset origin, or a setting with no
   // region list) keep the theme's served list and label ("Home City").
-  const originSetting = resolveOriginSetting(state.origin_setting, state.origin_setting_custom)
-  const originRegions = theme?.creation_choice_source === 'origin_regions' && originSetting && isOutsideFR(originSetting)
-    ? regionsForSetting(originSetting)
-    : []
-  const locationOptions = originRegions.length > 0
-    ? originRegions.map(r => ({ value: r.name, label: r.name, description: r.description || '' }))
-    : creationOptions
-  const locationLabel = originRegions.length > 0
-    ? 'Home Region'
-    : (theme?.creation_choice_label || 'Path choice')
+  // Shared with the shell's stale-pick clear (themeLocation.js).
+  const { options: locationOptions, label: locationLabel } = themeLocationOptions(theme, state)
   const spellList = theme ? spellListOf(theme) : ''
 
   // The Versatile duplicate rule (R2-5): the theme feat must differ

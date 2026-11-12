@@ -441,7 +441,10 @@ group('(f) human fighter / Traveler\'s Tongue');
     theme_path_choice: 'sergeant', theme_path_data: { active_duty: 'active' },
     generation_method: 'point_buy', base_scores: FIGHTER_BASE, ability_scores: FIGHTER_FINAL,
     skills: ['Athletics', 'Intimidation', 'Perception', 'Survival'],
-    languages: ['Common', 'Elvish', 'Dwarvish'],
+    // + 'Giant': the Human species' extra-language pick (R2-15 count
+    // rule, creation-solidification 2026-11-12) — Elvish/Dwarvish are
+    // Traveler's Tongue's own picks and do not count toward it.
+    languages: ['Common', 'Elvish', 'Dwarvish', 'Giant'],
     known_cantrips: [],
     ancestry_feat_id: TRAVELERS_TONGUE_ID,
     ancestry_feat_choices: { languages: ['Elvish', 'Dwarvish'] },
@@ -603,7 +606,9 @@ group('(h) versatile slot fixes');
     versatile_feat: 'magic_initiate', versatile_feat_choices: MI_CHOICES,
     generation_method: 'point_buy', base_scores: WIZ_BASE, ability_scores: WIZ_FINAL,
     skills: ['Athletics', 'Intimidation', 'Arcana', 'History'],
-    languages: ['Common'],
+    // + 'Giant': the Human species' extra-language pick (R2-15 count
+    // rule, creation-solidification 2026-11-12).
+    languages: ['Common', 'Giant'],
     // Spellbook (2026-11-07): 6 L1 wizard spells, none of them the
     // granted 'magic missile' — the prepared 3 are a subset of it.
     known_spells: ['shield', 'mage armor', 'sleep', 'burning hands', 'chromatic orb', 'grease'],
@@ -644,7 +649,9 @@ group('(h) versatile slot fixes');
     versatile_feat: 'skilled', versatile_feat_choices: ['Investigation', 'Medicine', 'Nature'],
     generation_method: 'point_buy', base_scores: FIGHTER_BASE, ability_scores: FIGHTER_FINAL,
     skills: ['Athletics', 'Intimidation', 'Investigation', 'Medicine', 'Nature', 'Perception', 'Survival'],
-    languages: ['Common'],
+    // + 'Giant': the Human species' extra-language pick (R2-15 count
+    // rule, creation-solidification 2026-11-12).
+    languages: ['Common', 'Giant'],
     known_cantrips: [],
     ancestry_feat_id: JACK_ID,
     ...STORY,
@@ -749,7 +756,9 @@ group('(k) half-elf ability-choice picks');
     theme_path_choice: 'sergeant', theme_path_data: { active_duty: 'active' },
     generation_method: 'point_buy', base_scores: HALF_BASE, ability_scores: HALF_FINAL,
     skills: ['Athletics', 'Intimidation', 'Performance', 'Persuasion', 'Deception'],
-    languages: ['Common', 'Elvish'],
+    // + 'Giant': the Half-Elf species' extra-language pick (R2-15
+    // count rule, creation-solidification 2026-11-12).
+    languages: ['Common', 'Elvish', 'Giant'],
     prepared_spells: ['cure wounds', 'dissonant whispers', 'healing word', 'faerie fire'],
     known_cantrips: ['Vicious Mockery', 'Prestidigitation'],
     ancestry_feat_id: HALF_ELF_NO_CHOICE_ID,
@@ -800,8 +809,15 @@ group('(l) warlord L1 subclass');
   const warlordGold = computeGoldFork('warlord', 'soldier', 0).gold;
   check((await readCharacter(id))?.gold_gp === warlordGold, `warlord gold fork derives ${warlordGold}`);
   await expectCommitRefusal(id, { subclass_choices: { bogus_key: 'x' } }, 'subclassChoices.bogus_key', 'unknown subclass choice key');
-  const committed = await commitCharacter(id, warlordDraft({ subclass: 'commander' }));
+  // Creation-solidification item 5 (2026-11-12): Warlord presences are
+  // KibblesTasty (setting-neutral) — outside the Forgotten Realms — so
+  // validateSelection (now wired at commit) requires the SUBCLASS
+  // origin explanation; refused without it, named.
+  await expectCommitRefusal(id, { subclass: 'commander' }, 'subclassOriginExplanation', 'outside-FR subclass without its origin explanation');
+  const committed = await commitCharacter(id, warlordDraft({ subclass: 'commander', subclass_origin_explanation: 'Drilled by a sellsword captain who learned it far beyond the Sword Coast.' }));
   check(committed.status === 200, `warlord commit is 200 (got ${committed.status}: ${errOf(committed)})`);
+  check((await readCharacter(id))?.subclass_origin_explanation === 'Drilled by a sellsword captain who learned it far beyond the Sword Coast.',
+    'the subclass origin explanation persists via commit');
   check((await readCharacter(id))?.subclass === 'commander', 'warlord commit keeps the subclass');
 }
 
@@ -1024,7 +1040,10 @@ group('(q) fighting-style level gate + membership');
     theme_path_choice: 'sergeant', theme_path_data: { active_duty: 'active' },
     generation_method: 'point_buy', base_scores: Q_BASE, ability_scores: Q_FINAL,
     skills: MARTIAL_SKILLS[cls],
-    languages: ['Common', 'Elvish', 'Dwarvish'],
+    // + 'Giant': the Human species' extra-language pick (R2-15 count
+    // rule, creation-solidification 2026-11-12) — Elvish/Dwarvish are
+    // Traveler's Tongue's own picks and do not count toward it.
+    languages: ['Common', 'Elvish', 'Dwarvish', 'Giant'],
     known_cantrips: [],
     ...(cls === 'paladin' ? { prepared_spells: PALADIN_PREPARED } : {}),
     ...(cls === 'ranger' ? { prepared_spells: RANGER_PREPARED } : {}),
@@ -1170,7 +1189,10 @@ group('(r) PUT allowlist persists fighting style + subclass choices');
     base_scores: { str: 15, dex: 13, con: 14, int: 10, wis: 12, cha: 8 },
     ability_scores: { str: 17, dex: 13, con: 15, int: 10, wis: 12, cha: 8 },
     skills: ['Athletics', 'Intimidation', 'Perception', 'Survival'],
-    languages: ['Common', 'Elvish', 'Dwarvish'],
+    // + 'Giant': the Human species' extra-language pick (R2-15 count
+    // rule, creation-solidification 2026-11-12) — Elvish/Dwarvish are
+    // Traveler's Tongue's own picks and do not count toward it.
+    languages: ['Common', 'Elvish', 'Dwarvish', 'Giant'],
     known_cantrips: [],
     ancestry_feat_id: TRAVELERS_TONGUE_ID,
     ancestry_feat_choices: { languages: ['Elvish', 'Dwarvish'] },

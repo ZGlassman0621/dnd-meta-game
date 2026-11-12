@@ -1059,7 +1059,9 @@ group('(k) commit refusal for a bookless wizard draft');
       theme_path_choice: 'sergeant', theme_path_data: { active_duty: 'active' },
       generation_method: 'point_buy', base_scores: WIZ_BASE, ability_scores: WIZ_FINAL,
       skills: ['Athletics', 'Intimidation', 'Arcana', 'History'],
-      languages: ['Common'],
+      // + 'Giant': the Human species' extra-language pick (R2-15
+      // count rule, creation-solidification 2026-11-12).
+      languages: ['Common', 'Giant'],
       prepared_spells: ['shield', 'mage armor', 'sleep'],
       known_cantrips: ['Fire Bolt', 'Ray of Frost', 'Mage Hand'],
       ancestry_feat_id: JACK_ID,

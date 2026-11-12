@@ -1,4 +1,5 @@
 import { isOutsideFR, resolveOriginSetting } from './speciesAdapter.js'
+import { languageChoiceCount } from '../../data/references.js'
 import { isMixedAncestry, validateMixedAncestryClient, versatileThemeConflict } from './mixedAncestry.js'
 
 /**
@@ -72,6 +73,19 @@ export function validateStage1(state, { featListAvailable = true, mixedTables = 
   if (!state.first_name?.trim()) needed.push('First name')
   if (!state.gender) needed.push('Gender')
   if (featListAvailable && !state.ancestry_feat_id) needed.push('Ancestry feat')
+
+  // R2-15 count rule (creation-solidification item 3, Zach 2026-11-10):
+  // a species promising "one extra language of your choice" (Human,
+  // Half-Elf, ...) must have that pick made. Listed as NEEDED, not
+  // blocking — Stage 1 still advances; Review refuses to commit until
+  // the pick is made (validateReview reuses this list). Mixed ancestry
+  // offers no species language slots, so it is never counted here.
+  if (!mixed && speciesEntry) {
+    const slots = languageChoiceCount(speciesEntry.languages || [])
+    const picked = (Array.isArray(state.languageChoices) ? state.languageChoices : [])
+      .filter(v => v != null && String(v).trim() !== '').length
+    if (slots > picked) needed.push(slots - picked === 1 ? 'Extra language' : `Extra languages (${slots - picked} more)`)
+  }
 
   return { blocking, needed, canAdvance: blocking.length === 0 }
 }

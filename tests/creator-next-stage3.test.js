@@ -667,9 +667,14 @@ group('(g) creation sub-choice themes — outlander / city_watch / knight');
   // guard is the resolved locationOptions (origin regions when they
   // apply, else creationOptions) — same behavior, renamed render
   // variables. The pinned pre-R2-11g spellings are gone.
-  check(stage3.includes('theme?.creation_choice_label'), 'Stage 3 renders the creation_choice_label');
-  check(stage3.includes('theme?.creation_choice_options') || stage3.includes('creation_choice_options'),
-    'Stage 3 reads creation_choice_options');
+  // Creation-solidification (2026-11-12): the label + options resolve
+  // in the shared themeLocation.js helper (also used by the shell's
+  // stale-pick clear); Stage 3 renders what it returns.
+  const themeLocation = readRepo('client/src/components/creator-next/themeLocation.js');
+  check(stage3.includes('themeLocationOptions(theme, state)') && themeLocation.includes('theme?.creation_choice_label'),
+    'Stage 3 renders the creation_choice_label (via themeLocationOptions)');
+  check(themeLocation.includes('theme?.creation_choice_options'),
+    'Stage 3 reads creation_choice_options (via themeLocationOptions)');
   check(stage3.includes('locationOptions.length > 0'), 'Stage 3 shows the sub-choice picker only when options exist');
   check(stage3.includes('stage3-path-choice'), 'Stage 3 sub-choice select has its own id');
 }

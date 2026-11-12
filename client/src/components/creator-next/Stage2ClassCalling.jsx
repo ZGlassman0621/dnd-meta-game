@@ -3,7 +3,7 @@ import Tip from './Tooltip.jsx'
 import classesData from '../../data/classes.json'
 import deitiesData from '../../data/deities.json'
 import { deferredNoteFor, isDeferredSpecies, resolveOriginSetting } from './speciesAdapter.js'
-import { subclassOriginSuffix } from './subclassOrigin.js'
+import { subclassOriginSuffix, subclassNeedsOriginExplanation } from './subclassOrigin.js'
 
 /**
  * Creator-next Stage 2 — Class & Calling (2026-11-04, overnight build).
@@ -447,7 +447,7 @@ export default function Stage2ClassCalling({
   const pickClass = (id) => {
     prevGrantedRef.current = []
     update({
-      classId: id, subclassName: '', fightingStyle: '', subclassChoices: {}, knownCantrips: [],
+      classId: id, subclassName: '', fightingStyle: '', subclassChoices: {}, knownCantrips: [], subclassOriginExplanation: '',
       // The pact belongs to the warlock — a class change drops it.
       // Faith is NOT cleared: it is the shared Stage 5 field, and a
       // cleric who becomes a fighter keeps their god.
@@ -456,7 +456,9 @@ export default function Stage2ClassCalling({
   }
   const pickSubclass = (name) => {
     prevGrantedRef.current = []
-    update({ subclassName: name, subclassChoices: {}, knownCantrips: [] })
+    // A new subclass is a new tradition — its origin explanation is
+    // written for the old one, so it clears with the pick.
+    update({ subclassName: name, subclassChoices: {}, knownCantrips: [], subclassOriginExplanation: '' })
   }
   const setChoice = (key, value) => update({
     subclassChoices: { ...(state.subclassChoices || {}), [key]: value }
@@ -546,6 +548,23 @@ export default function Stage2ClassCalling({
           {subclassEntry.description ? ` — ${subclassEntry.description}` : ''}
           {subclassOriginSuffix(subclassEntry)}
         </div>
+      )}
+      {subclassNeedsOriginExplanation(subclassEntry) && (
+        <>
+          <label style={labelStyle} htmlFor="stage2-subclass-origin">
+            Subclass origin
+            <Tip text="This subclass comes from outside the Forgotten Realms. In a sentence or two, say how its tradition reached your character here — a teacher who crossed over, a book, a patron, a pact. The DM reads it. Required before you can commit; pick a Forgotten Realms subclass instead if you'd rather not." />
+          </label>
+          <textarea
+            id="stage2-subclass-origin"
+            className="input"
+            value={state.subclassOriginExplanation || ''}
+            onChange={e => update({ subclassOriginExplanation: e.target.value })}
+            maxLength={500}
+            rows={3}
+            placeholder={`How did the ${subclassEntry.name} tradition reach your character in the Forgotten Realms?`}
+          />
+        </>
       )}
 
       {(classId === 'cleric' || classId === 'paladin') && (

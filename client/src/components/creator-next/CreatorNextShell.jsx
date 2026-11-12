@@ -11,6 +11,7 @@ import Stage6ReviewCommit from './Stage6ReviewCommit.jsx'
 import { validateStage1 } from './stage1Validation.js'
 import { isMagicInitiateOriginFeat, mergeRehydratedPatch, rehydrateFromServerCharacter, saveStage1Progress, saveStage1LocalDraft, loadStage1LocalDraft, buildStage1ProgressBody, resolveOpeningDraft } from './stage1Persistence.js'
 import { fetchMixedAncestryTables, versatileThemeConflict } from './mixedAncestry.js'
+import { isStaleThemePathChoice } from './themeLocation.js'
 
 /**
  * Creator-next shell — Stages 1–6 built (2026-11-07).
@@ -274,6 +275,22 @@ export default function CreatorNextShell({ onExit, resumeCharacterId = null, onC
       .catch((err) => { console.warn('[creator] /api/themes unreachable:', err?.message || err) })
     return () => { live = false }
   }, [])
+
+  // Stale theme location pick (creation-solidification item 1,
+  // 2026-11-12): a location choice ("Home City" / "Home Region")
+  // depends on the Stage 1 origin. When the player changes origin
+  // after picking, the stored pick is no longer one of the legal
+  // options — the select showed blank and Review/server refused it.
+  // Clear it here (same rule Stage 3 renders, themeLocation.js), so
+  // Review asks for a fresh pick instead of carrying a dead one. Runs
+  // only when themes are loaded; a pick that is still legal is kept.
+  useEffect(() => {
+    if (!Array.isArray(themes) || !state?.themeId || !state?.themePathChoice) return
+    const theme = themes.find(t => t.id === state.themeId)
+    if (theme && isStaleThemePathChoice(theme, state)) {
+      setState(prev => (prev.themePathChoice === state.themePathChoice ? { ...prev, themePathChoice: '' } : prev))
+    }
+  }, [themes, state?.themeId, state?.themePathChoice, state?.origin_setting, state?.origin_setting_custom])
 
   // Magic Initiate cantrips (item 15): the single source of truth is
   // character_origin_feats.choices_json.cantrips, which Stage 3 picks

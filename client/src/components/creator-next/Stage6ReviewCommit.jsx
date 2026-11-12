@@ -6,6 +6,7 @@ import { cantripsKnownFor, knownCountFor, preparedCountFor, spellcastingAbilityF
 import { validateStage1 } from './stage1Validation.js'
 import { isOutsideFR, resolveOriginSetting } from './speciesAdapter.js'
 import { isMixedAncestry, mixedAncestrySaveRecord } from './mixedAncestry.js'
+import { subclassNeedsOriginExplanation } from './subclassOrigin.js'
 import { SPELLBOOK_START_SIZE } from '../spellbookHelpers.js'
 import {
   ABILITIES, LEVEL_1_CAP, abilityModifier, finalForAbility,
@@ -379,6 +380,16 @@ export function validateReview(state, ctx = {}) {
       : (state.classId === 'paladin' || state.classId === 'ranger') ? 2 : null
     const offersFightingStyle = styleLevel != null
       && classLevelFor(state.classId, characterLevel, classLevels) >= styleLevel
+    // Subclass origin (creation-solidification item 5 — mirrors the
+    // server commit rule): an outside-FR subclass needs its origin
+    // explanation, written on Stage 2 under the subclass picker.
+    if (state.subclassName && subclassesByClass) {
+      const subs = subclassesByClass[state.classId] || []
+      const subEntry = subs.find(s => s.name === state.subclassName) || null
+      if (subclassNeedsOriginExplanation(subEntry) && !String(state.subclassOriginExplanation || '').trim()) {
+        push(1, 'subclassOriginExplanation', `Stage 2 — Subclass origin is still needed. ${subEntry.name} comes from outside the Forgotten Realms — explain how its tradition reached your character, or pick a Forgotten Realms subclass.`)
+      }
+    }
     if (offersFightingStyle && !state.fightingStyle) {
       push(1, 'fightingStyle', `Stage 2 — Fighting style is still needed. ${cls?.name || prettify(state.classId)} picks a fighting style at level ${styleLevel} — pick one on Stage 2 before committing.`)
     }
@@ -484,6 +495,12 @@ export function validateReview(state, ctx = {}) {
 /** Map a server refusal to the stage its jump button should target. */
 export function stageForServerError(message) {
   const m = String(message || '').toLowerCase()
+  // Creation-solidification (2026-11-12): two refusals whose words
+  // would match the wrong stage below — the subclass origin lives on
+  // Stage 2 (its message says "origin"), the species extra-language
+  // pick on Stage 1 (its message says "language").
+  if (/subclassoriginexplanation/.test(m)) return 1
+  if (/extra language/.test(m)) return 0
   if (/species|origin|ancestry|mixed|versatile|size/.test(m)) return 0
   if (/class|subclass|fighting|cantrip/.test(m)) return 1
   if (/theme|origin feat|path choice/.test(m)) return 2

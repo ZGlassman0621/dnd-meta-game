@@ -2319,6 +2319,27 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
               </section>
             )}
 
+            {/* Fighting Style (creation-solidification item 6): the
+                styles in the character's feats list (where the commit
+                writes the creator pick and the engine reads it), with
+                the stored creator pick as a fallback for a row that
+                predates the commit write. */}
+            {(() => {
+              const featList = parseJson(character.feats, [])
+              const styles = (Array.isArray(featList) ? featList : [])
+                .filter(f => f && typeof f === 'object' && f.category === 'fighting_style')
+                .map(f => f.name || f.key)
+                .filter(Boolean)
+              if (styles.length === 0 && character.fighting_style) styles.push(character.fighting_style)
+              if (styles.length === 0) return null
+              return (
+                <section className="sheet-section">
+                  <h3>Fighting Style</h3>
+                  <p>{[...new Set(styles)].join(', ')}</p>
+                </section>
+              )
+            })()}
+
             {/* Subclass Features */}
             {character.subclass && subclassFeatures.length > 0 && (
               <section className="sheet-section subclass-section">
@@ -2386,7 +2407,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                 <section className="sheet-section">
                   <h3 style={{ color: '#8b5cf6' }}>
                     Theme: {progression.theme.theme_name}
-                    {progression.theme.path_choice && (
+                    {!Array.isArray(progression.theme.choices) && progression.theme.path_choice && (
                       <span style={{
                         marginLeft: '0.75rem', fontSize: '0.85em', color: '#a78bfa'
                       }}>
@@ -2394,6 +2415,17 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                       </span>
                     )}
                   </h3>
+                  {/* Creation-solidification item 1: the player's stored
+                      theme choices, labelled, as answered at creation. */}
+                  {Array.isArray(progression.theme.choices) && progression.theme.choices.length > 0 && (
+                    <p style={{ fontSize: '0.9em', marginBottom: '0.5rem' }}>
+                      {progression.theme.choices.map(c => (
+                        <span key={c.key} style={{ marginRight: '1rem' }}>
+                          <strong>{c.label}:</strong> {c.value}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   <p style={{ fontStyle: 'italic', opacity: 0.9, marginBottom: '0.5rem' }}>
                     {progression.theme.identity}
                   </p>

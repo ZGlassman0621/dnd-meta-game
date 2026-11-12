@@ -59,6 +59,54 @@ export function originFeatFor(theme) {
 }
 
 /**
+ * The player's stored theme creation choices as display lines —
+ * creation-solidification item 1. Reads character_themes.path_choice
+ * (the single choice: Soldier rank, guild trade, region, city, ...)
+ * and path_data (the Soldier's second field, { active_duty }) exactly
+ * as stored. The registry option's label is used when the stored
+ * value matches an option ('sergeant' -> 'Sergeant'); otherwise the
+ * stored value is printed verbatim (origin-region choices carry no
+ * fixed option list). Never re-asks, never rewrites, never invents:
+ * a theme with no creation choice, or nothing stored, returns [].
+ *
+ * @returns {Array<{ key: string, label: string, value: string }>}
+ */
+export function themeChoiceLines(themeId, pathChoice, pathData) {
+  const entry = resolveTheme(themeId);
+  if (!entry) return [];
+  const lines = [];
+  const optionLabel = (options, value) => {
+    const hit = Array.isArray(options)
+      ? options.find(o => o && String(o.value).toLowerCase() === String(value).toLowerCase())
+      : null;
+    return hit?.label || String(value);
+  };
+  if (entry.creation_choice_label && pathChoice != null && String(pathChoice).trim()) {
+    lines.push({
+      key: 'path_choice',
+      label: entry.creation_choice_label,
+      value: optionLabel(entry.creation_choice_options, String(pathChoice).trim()),
+    });
+  }
+  const second = entry.creation_choice_second_field;
+  if (second?.key && pathData != null) {
+    let data = pathData;
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch { data = null; }
+    }
+    const raw = data && typeof data === 'object' ? data[second.key] : null;
+    if (raw != null && String(raw).trim()) {
+      lines.push({
+        key: second.key,
+        label: second.label || second.key,
+        value: optionLabel(second.options, String(raw).trim()),
+      });
+    }
+  }
+  return lines;
+}
+
+/**
  * Client shape for /api/themes and the creator shell — the registry
  * fields the Stage 3 picker renders, plus the resolved feat name +
  * effect so the client never has to look the feat up itself.

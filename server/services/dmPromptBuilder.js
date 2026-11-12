@@ -273,6 +273,12 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
       ? `- ${formatOriginLine(character.origin_setting, character.origin_region, character.origin_explanation, character.race)}`
       : null,
     `- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}`,
+    // Creation-solidification item 5 (migration 114): how an
+    // outside-FR subclass's tradition reached the character — the
+    // player's own words, canon for the DM.
+    character.subclass && character.subclass_origin_explanation && String(character.subclass_origin_explanation).trim()
+      ? `- Subclass origin (the player's explanation of how the ${character.subclass} tradition reached them in the Forgotten Realms — canon): ${String(character.subclass_origin_explanation).trim()}`
+      : null,
     `- Level: ${character.level}`,
     `- Background: ${character.background || 'Unknown'}`,
     `- Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}`,
@@ -1263,7 +1269,20 @@ export function formatProgression(progression) {
 
   const parts = [];
   parts.push('\n\nCHARACTER PROGRESSION LAYER:');
-  parts.push(`THEME: ${progression.theme.theme_name}${progression.theme.path_choice ? ` (${progression.theme.path_choice})` : ''}`);
+  // Creation-solidification item 1: the player's stored theme
+  // choices print labelled ("Military Rank: Sergeant; Active Duty:
+  // Still in active duty") from progression.theme.choices. A snapshot
+  // without the choices array (older callers) keeps the bare
+  // path_choice suffix it always had.
+  const themeChoices = Array.isArray(progression.theme.choices) ? progression.theme.choices : null;
+  if (themeChoices) {
+    parts.push(`THEME: ${progression.theme.theme_name}`);
+    if (themeChoices.length > 0) {
+      parts.push(`Theme choices (the player's answers at creation — treat as canon): ${themeChoices.map(c => `${c.label}: ${c.value}`).join('; ')}`);
+    }
+  } else {
+    parts.push(`THEME: ${progression.theme.theme_name}${progression.theme.path_choice ? ` (${progression.theme.path_choice})` : ''}`);
+  }
   if (progression.theme.identity) {
     parts.push(`Identity: ${progression.theme.identity}`);
   }

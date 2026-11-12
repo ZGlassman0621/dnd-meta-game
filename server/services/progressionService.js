@@ -16,6 +16,7 @@
 
 import { dbAll, dbGet } from '../database.js';
 import { getFeatEffect } from '../data/featRegistry.js';
+import { themeChoiceLines } from './themeService.js';
 
 function safeJsonParse(v) {
   if (v == null) return null;
@@ -192,7 +193,11 @@ export async function getCharacterProgression(characterId) {
     theme: themeRow
       ? {
           ...themeRow,
-          tags: themeRow.tags ? JSON.parse(themeRow.tags) : []
+          tags: themeRow.tags ? JSON.parse(themeRow.tags) : [],
+          // Creation-solidification item 1: the stored theme choices
+          // (path_choice + path_data) as labelled display lines, read
+          // by the character sheet and the DM prompt.
+          choices: themeChoiceLines(themeRow.theme_id, themeRow.path_choice, themeRow.path_data)
         }
       : null,
     theme_all_tiers: themeAllTiers,

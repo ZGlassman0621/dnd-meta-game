@@ -78,7 +78,7 @@ import { advanceTimeForSession } from '../services/restTimeService.js';
 import { MULTICLASS_GRANT, MAGUS_SOCIETIES, SOCIETY_NAMES } from '../services/magusService.js';
 import { MULTICLASS_GRANT as SCHOLAR_MULTICLASS_GRANT } from '../services/scholarService.js';
 import { MULTICLASS_GRANT as PUGILIST_MULTICLASS_GRANT } from '../services/pugilistService.js';
-import { getSubclass, isSubclassPcCreatable, MVP_DEFERRED_SUBCLASS_NOTE, artificerSubclassSpellsAtLevel, blackguardViceSpellsAtLevel, paladinOathSpellsAtLevel, sorcererSubclassSpellsAtLevel, bardSubclassSpellsAtLevel, eldritchKnightSpellsAtLevel, arcaneTricksterSpellsAtLevel, profaneSoulArcanaSpellsAtLevel, clericDomainSpellsAtLevel, druidCircleSpellsAtLevel, parseSubclassChoices, validateChoice, validateChoiceList } from '../services/subclassService.js';
+import { getSubclass, isSubclassPcCreatable, MVP_DEFERRED_SUBCLASS_NOTE, validateSelection, isOutsideFr, formatSubclassOrigin, artificerSubclassSpellsAtLevel, blackguardViceSpellsAtLevel, paladinOathSpellsAtLevel, sorcererSubclassSpellsAtLevel, bardSubclassSpellsAtLevel, eldritchKnightSpellsAtLevel, arcaneTricksterSpellsAtLevel, profaneSoulArcanaSpellsAtLevel, clericDomainSpellsAtLevel, druidCircleSpellsAtLevel, parseSubclassChoices, validateChoice, validateChoiceList } from '../services/subclassService.js';
 import { resolveCantrips, isCatalogCantrip } from '../services/cantripResolutionService.js';
 import { CLASS_CHASSIS } from '../data/classChassis.js';
 import { ANCESTRY_FEATS } from '../data/ancestryFeats.js';
@@ -1579,10 +1579,11 @@ function stage5MergeEquipment(existingRaw, armorName, shieldName) {
 //     a non-zero max_hp on PUT.
 //   - AC: from the resolved package — armor base + Dex (light full,
 //     medium max +2, heavy flat) + shield +2; no armor in the
-//     package -> 10 + Dex. A gold fork on POST (fresh row, no
-//     equipment yet) also derives 10 + Dex; a gold fork on PUT
-//     leaves armor_class alone (the row may carry a stored
-//     package's armor).
+//     package -> 10 + Dex. A gold fork clears package-written
+//     armor/shield and derives 10 + Dex when no armor or shield
+//     remains; a non-package armor/shield leaves armor_class alone.
+//   - Gold fork inventory (creation-solidification item 4): earlier
+//     package items are dropped; a wizard gets a Spellbook row.
 //   - Speed: walkSpeedFor(species, variant) (registry-first) when
 //     it resolves; the armor Str rule applies on top (speed −10
 //     when the package armor's Str req is unmet).
@@ -1644,10 +1645,34 @@ export function deriveCreatorNextStage5(body = {}, ctx = {}, opts = {}) {
     } else if (typeof fork === 'number') {
       out.goldGp = fork;
     }
-    // A gold fork on a fresh POST row (no equipment yet) also derives
-    // 10 + Dex; on PUT the row may carry a stored package's armor,
-    // so armor_class is left alone.
+    // A gold fork on a fresh POST row (no equipment yet) derives
+    // 10 + Dex; on PUT, AC follows the equipment merge below.
     if (opts.isPost) out.armorClass = 10 + dexMod;
+    // Creation-solidification item 4 (2026-11-12): the gold fork used
+    // to write no inventory at all, so (a) a wizard who took gold
+    // instead of a package had no physical Spellbook — the package
+    // path grants one (startingPackages.js) and the spellbook system
+    // (loss / replace / backup) keys off that inventory row — and
+    // (b) package gear saved earlier in the draft stayed in the
+    // inventory after switching to gold (gear AND gold). The gold
+    // fork now runs the same merge as the package path: earlier
+    // creator-package items are dropped, and a wizard gets the
+    // Spellbook row (same shape as the package / replacement rows).
+    const goldItems = cls === 'wizard'
+      ? [{ name: 'Spellbook', quantity: 1, equipped: false, source: 'stage5-package' }]
+      : [];
+    const goldInv = stage5MergeInventory(body.inventory ?? row?.inventory ?? null, goldItems);
+    if (goldInv != null) out.inventory = goldInv;
+    // Same for the equipment slots: package-written armor / shield
+    // are cleared (a non-package item is never touched). With no
+    // armor or shield left, AC is 10 + Dex — the same derive the
+    // fresh-POST gold fork always used; otherwise AC is left alone.
+    const goldEq = stage5MergeEquipment(body.equipment ?? row?.equipment ?? null, null, null);
+    if (goldEq != null) {
+      out.equipment = goldEq;
+      const eqObj = safeParse(goldEq, {});
+      if (!eqObj?.armor && !eqObj?.offHand) out.armorClass = 10 + dexMod;
+    }
     return out;
   }
   // 'packages': resolve the picks. A missing package id, malformed
@@ -1684,6 +1709,14 @@ export function deriveCreatorNextStage5(body = {}, ctx = {}, opts = {}) {
     }
   }
   if (shieldName) ac += 2;
+  // Defense fighting style (creation-solidification item 6): +1 AC
+  // while wearing armor — the same rule combatStatsService applies
+  // in play (defenseAcBonus). The stored armor_class is what the
+  // sheet shows, so the creator's derive must include it too.
+  {
+    const styleRaw = body.fighting_style ?? body.fightingStyle ?? row?.fighting_style ?? null;
+    if (armorName && typeof styleRaw === 'string' && normalizeFeatName(styleRaw) === normalizeFeatName('Defense')) ac += 1;
+  }
   out.armorClass = ac;
   // Armor Str rule: an unmet requirement costs 10 speed.
   if (armorName && out.speed != null) {
@@ -2447,6 +2480,32 @@ export async function validateCreatorNextStage6(merged = {}, ctx = {}) {
       const entry = getSubclass(cls, subclass);
       errors.push(`subclassId: Subclass ${entry?.name || subclass} is not available for player characters yet — ${MVP_DEFERRED_SUBCLASS_NOTE}`);
     }
+    // Creation-solidification item 5 (2026-11-12): the registry's own
+    // selection rules, enforced at commit (validateSelection had no
+    // callers — displayed, never enforced). The level is the stored
+    // row's (1 for a fresh draft; an edit-mode commit keeps its real
+    // level, so a level-5 character's level-3 subclass passes). An
+    // outside-FR subclass needs the SUBCLASS origin explanation
+    // (migration 114), not the character's origin explanation.
+    if (subclass && isClassPcCreatable(cls) && isSubclassPcCreatable(cls, subclass)) {
+      const selLevel = Number(row?.level) || 1;
+      const subOrigin = merged.subclass_origin_explanation ?? merged.subclassOriginExplanation ?? null;
+      const sel = validateSelection({ className: cls, subclassName: subclass, level: selLevel, originExplanation: subOrigin });
+      if (!sel.found) {
+        errors.push(`subclassId: '${subclass}' is not a ${displayClassName(cls)} subclass — pick one from the list`);
+      } else {
+        const entry = getSubclass(cls, subclass);
+        // The Stage 2 check above already refuses a subclass sent at
+        // level 1 for a class that chooses later — no duplicate line.
+        const stage2Covers = selLevel === 1 && SUBCLASS_LEVELS[cls] !== 1;
+        if (!stage2Covers && selLevel < Number(entry?.selectionLevel || 0)) {
+          errors.push(`subclassId: ${entry.name} is chosen at ${displayClassName(cls)} level ${entry.selectionLevel} (this character is level ${selLevel}) — leave the subclass empty until then`);
+        }
+        if (isOutsideFr(entry) && !nonEmpty(subOrigin)) {
+          errors.push(`subclassOriginExplanation: ${entry.name} comes from ${formatSubclassOrigin(entry)} — explain on Stage 2 how its tradition reached your character in the Forgotten Realms, or pick a Forgotten Realms subclass`);
+        }
+      }
+    }
   }
 
   // --- 6. Theme. ---
@@ -2733,6 +2792,26 @@ export async function validateCreatorNextStage6(merged = {}, ctx = {}) {
   if (languages !== null) {
     for (const s of needLanguage) {
       if (!languagesLower.has(s.toLowerCase())) errors.push(`languages: must include the feat-granted language '${s}'`);
+    }
+  }
+  // R2-15 count rule (creation-solidification item 3, Zach 2026-11-10):
+  // a species whose languages promise "one extra language of your
+  // choice" (Human, Half-Elf, ...) must carry that many languages
+  // BEYOND its concrete grants and any feat-granted languages. Same
+  // placeholder count the client picker uses (one slot per "of your
+  // choice" entry). Mixed ancestry offers no species slots — skipped.
+  if (languages !== null && speciesResolved?.entry && !mixedStarted) {
+    const speciesLangs = Array.isArray(speciesResolved.entry.languages) ? speciesResolved.entry.languages : [];
+    const isChoice = (l) => /of your choice/i.test(String(l || ''));
+    const slots = speciesLangs.filter(isChoice).length;
+    if (slots > 0) {
+      const concrete = new Set(speciesLangs.filter((l) => !isChoice(l)).map((l) => stage4NormListName(l)));
+      const extras = [...languagesLower].filter((l) => !concrete.has(l) && !needLanguage.has(l));
+      if (extras.length < slots) {
+        const speciesName = speciesResolved.entry.name || race;
+        const missing = slots - extras.length;
+        errors.push(`languages: ${speciesName} grants ${slots === 1 ? 'one extra language' : `${slots} extra languages`} of your choice — ${missing === 1 ? 'pick it' : `pick ${missing} more`} on Stage 1 (Extra language) before committing`);
+      }
     }
   }
   if (toolsList !== null) {
@@ -3168,6 +3247,8 @@ router.post('/', async (req, res) => {
       origin_setting = null,
       origin_region = null,
       origin_explanation = null,
+      // Creation-solidification item 5 (migration 114).
+      subclass_origin_explanation = null,
       // Phase 2 chunk 5 batch 3 checkpoint 2 — manual-mode creator.
       // 'creating' is set at Step 1 advance for partial-creation rows
       // that the player can resume later; 'active' is set at Step 8
@@ -3413,6 +3494,7 @@ router.post('/', async (req, res) => {
     if (origin_setting != null) { originUpdates.push('origin_setting = ?'); originValues.push(origin_setting); }
     if (origin_region != null) { originUpdates.push('origin_region = ?'); originValues.push(origin_region); }
     if (origin_explanation != null) { originUpdates.push('origin_explanation = ?'); originValues.push(origin_explanation); }
+    if (subclass_origin_explanation != null) { originUpdates.push('subclass_origin_explanation = ?'); originValues.push(subclass_origin_explanation); }
     if (originUpdates.length > 0) {
       await dbRun(`UPDATE characters SET ${originUpdates.join(', ')} WHERE id = ?`, [...originValues, characterId]);
     }
@@ -4526,6 +4608,9 @@ router.put('/:id', async (req, res) => {
       // Creator-next Stage 1 (migration 105) — origin facts, so Stage 1
       // draft PUTs persist instead of being silently dropped.
       'origin_setting', 'origin_region', 'origin_explanation',
+      // Creation-solidification item 5 (migration 114) — the SUBCLASS's
+      // origin explanation (outside-FR subclasses, validateSelection).
+      'subclass_origin_explanation',
       // Phase 3.3 SC-7.6.5 (v1.0.162) — player-tunable survival intensity
       // per spec §3.3.10. Validated against the four-value enum below;
       // invalid values silently fall back (skip the update) so client
@@ -4824,6 +4909,7 @@ function buildCommitMergedBody(row, stage4Ctx, effectiveMixed, body, forgoOn, mi
     'ability_scores', 'expertise', 'fighting_style',
     'distinguishing_features',
     'origin_setting', 'origin_region', 'origin_explanation',
+    'subclass_origin_explanation',
   ];
   for (const f of rowFields) {
     if (row[f] != null) merged[f] = row[f];
@@ -4995,6 +5081,7 @@ router.post('/:id/commit', async (req, res) => {
       'personality_traits', 'ideals', 'bonds', 'flaws',
       'organizations', 'allies', 'enemies', 'backstory', 'other_notes',
       'avatar', 'origin_setting', 'origin_region', 'origin_explanation',
+      'subclass_origin_explanation',
       'distinguishing_features',
     ];
     for (const column of scalarFields) {
@@ -5107,6 +5194,38 @@ router.post('/:id/commit', async (req, res) => {
         1,
         merged.ancestry_feat_choices ?? null
       );
+    }
+    // --- Fighting style -> feats (creation-solidification item 6). ---
+    // The creator stores the pick in characters.fighting_style, but
+    // every consumer — attack bonuses (partyAttackService via
+    // classFeatureService.fightingStyleAdjustments), Defense AC
+    // (combatStatsService.defenseAcBonus), the DM prompt's feat block
+    // (renderFeatEffectsForPrompt) — reads the `feats` list. One
+    // mechanism: the commit writes the style into `feats` as the
+    // registry entry, tagged source 'creator-fighting-style' so an
+    // edit-mode re-commit REPLACES the creator's style instead of
+    // stacking a second one. Styles from any other source (level-up
+    // feats, manual entries) are never touched. The commit validator
+    // above already refused an unknown style name.
+    {
+      const styleRaw = merged.fighting_style ?? merged.fightingStyle ?? null;
+      const styleName = typeof styleRaw === 'string' ? styleRaw.trim() : '';
+      const featRow = await dbGet('SELECT feats FROM characters WHERE id = ?', [characterId]);
+      const existingFeats = safeParse(featRow?.feats, []);
+      const baseFeats = (Array.isArray(existingFeats) ? existingFeats : [])
+        .filter((f) => !(f && typeof f === 'object' && f.source === 'creator-fighting-style'));
+      let nextFeats = baseFeats;
+      if (styleName) {
+        const want = normalizeFeatName(styleName);
+        const entry = listFightingStyleFeats().find((s) => normalizeFeatName(s.key) === want || normalizeFeatName(s.name) === want);
+        if (entry) {
+          nextFeats = [...baseFeats, { key: entry.key, name: entry.name, category: 'fighting_style', source: 'creator-fighting-style', acquiredAtLevel: 1 }];
+        }
+      }
+      const changed = JSON.stringify(nextFeats) !== JSON.stringify(Array.isArray(existingFeats) ? existingFeats : []);
+      if (changed) {
+        await dbRun('UPDATE characters SET feats = ? WHERE id = ?', [JSON.stringify(nextFeats), characterId]);
+      }
     }
     // --- Forgo clearing + stale versatile clearing. ---
     if (forgoOn) {

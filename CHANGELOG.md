@@ -2,6 +2,22 @@
 
 All notable changes to the D&D Meta Game project will be documented in this file.
 
+## [1.0.0.194] - 2026-11-12 — Creation solidification: creation choices stick
+
+Brief: docs/pm/creation-solidification/BRIEF.md; report: docs/pm/creation-solidification/REPORT.md. (Versions between 1.0.0.193 and this entry — the creator rounds 1 + 2 — were not recorded here; `client/package.json` had drifted to 1.0.183 and is re-aligned to 1.0.194.)
+
+### Added
+- Theme choices downstream: `themeService.themeChoiceLines` turns `character_themes.path_choice` + `path_data` into labelled lines ("Military Rank: Sergeant", "Active Duty: Still in active duty"); the progression snapshot carries them as `theme.choices`; the DM prompt and the character sheet print them.
+- R2-15: a species' promised extra language (Human, Half-Elf, …) is a Stage 1 "needed" item (Review blocks the commit) and a server commit rule (languages beyond the species' concrete grants and feat-granted picks must cover the promise).
+- Migration 114 `characters.subclass_origin_explanation`; Stage 2 collects it for an outside-Forgotten-Realms subclass; `subclassService.validateSelection` is now enforced at commit (selection level from the stored row; outside-FR origin explanation required, named refusal with the legal alternative); the DM prompt prints it.
+- Fighting Style: the commit writes the creator's style into `feats` (source `creator-fighting-style`, replaced on re-commit), so Archery/Dueling/Defense/etc. reach the attack engine, Defense's +1 AC reaches the stored AC, and the style shows on the sheet and in the DM prompt's feat block.
+- tests/creation-solidification.test.js (new); creator-test-notes-5 group (e) (draft re-pick persists across resume).
+
+### Fixed
+- Gold-fork wizard now owns a physical Spellbook; switching a draft from a gear package to gold drops the package gear and armor (AC falls back to 10 + Dex) instead of keeping gear and gold.
+- A theme location pick (Home City / Home Region) left stale by an origin change is cleared (shared `themeLocation.js` rule).
+- Warlock pact: the creator sent `pact_boon` with the display name, which the server never read — the pick was never saved or resumed. It now sends the `pact` key and resumes from it.
+
 ## [1.0.0.193] - 2026-10-21 — The full spell catalog: 542 spells from the 2024 PHB + official expansions, every one with its save, condition, and numbers
 
 Design: spell-catalog-design.md (Zach, 2026-10-21: "Pull all the spells from the 2024 PHB, and look at official expansions"). The catalog held 47 spells and nothing above 5th level; every other spell in the game was DM-invented. Now it holds the whole list. Descriptions are fresh-worded prose (1–3 sentences, imagery + mechanical gist) — no verbatim book text. Third-party spells found during authoring (Arcana Unleashed and similar) were deliberately excluded; they belong to a later custom_spells pass.
