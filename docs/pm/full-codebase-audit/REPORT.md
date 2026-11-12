@@ -45,10 +45,10 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 - In play: a player who clicks Play instead of New Campaign gets an adventure with no chronicle. Leave and come back, and the DM has no record of past sessions. Shops fail. Their rests and travel advance the date on every other character.
 - Fix job: guarantee a campaign at commit (auto-create or attach), or block Play until one exists. Hand the persistence half to the return-loop suite job.
 
-**S2. Damage taken while at 0 HP does nothing, so a downed player can't be killed by attacks.**
+**S2. Damage taken while at 0 HP does nothing, so a downed player can't be killed by attacks.** *(Zach 2026-11-12: no massive-damage instant death, "we're always doing death saves". Whether a hit while downed counts as a failed save is still open, Q3b.)*
 - Evidence: `server/services/characterHpService.js:62-100`. Damage clamps HP at 0. The only counter changes are on dropping to 0 (reset) or rising above 0. Searching `server/services` and `server/routes` finds no other place that adds a failure on damage (failures only increase on rolled saves, `:193-200`), and no massive-damage rule anywhere.
 - In play: 2024 rules say damage at 0 HP is one death-save failure (two on a critical hit), and damage that leaves at least your HP maximum remaining kills outright. Here a downed player can be stabbed repeatedly with no effect, and an overwhelming hit only knocks them unconscious. The rolled saves themselves are correct: nat 1 counts two failures, nat 20 gives 1 HP (`:175-200`).
-- Fix job: on a negative `HP_CHANGE` at 0 HP, add one failure (two for a crit, which needs a crit flag on the marker), and apply massive damage on the drop. Companion path: not verified (the companion route only rolls saves, `server/routes/companion.js:1075-1110`), so check it in the same job.
+- Fix job, if Q3b is yes: on a negative `HP_CHANGE` at 0 HP, add one failure (two for a crit, which needs a crit flag on the marker). Do not build massive damage (Zach 2026-11-12). If Q3b is no, S2 closes as working as intended. Companion path: not verified (the companion route only rolls saves, `server/routes/companion.js:1075-1110`), so check it in the same job.
 
 **S3. The Fighting Style picked in the creator does nothing: not in combat, not on the sheet, not in the DM prompt.**
 - Evidence: the creator saves the pick to the `fighting_style` column only (`server/routes/character.js:5058-5062` commit, `:4549` PUT, client `stage1Persistence.js:102`). The engine reads styles from the `feats` list: attack bonuses at `server/services/partyAttackService.js:355` via `classFeatureService.js:179`, and Defense AC at `server/services/combatStatsService.js:242`. Nothing in `server/services`, `dmPromptBuilder.js` or `CharacterSheet.jsx` reads `fighting_style` (searched). Level-up has no Fighting Style handling at all (no match in `character.js:6482-7788` or the level-up page).
@@ -71,15 +71,23 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 - In play: dungeons and scene rooms never generate from play, cold weather never bites, and features like Wild Magic's Tides of Chaos, Bend Luck, Preserve Life and Heroic Inspiration rerolls never resolve mechanically. The DM narrates them freehand at best. The subclass and artificer part is a **possible class-audit overlap**, the same shape as the known `learnPlan` example.
 - Fix job: add each marker's instruction to the DM prompt (the mechanical-markers section, or the per-feature subclass prompt lines), with a prompt-contains test per marker. Attunement (`ATTUNE` / `UNATTUNE`) is already taught via `attunementService.js:217` and needs no fix.
 
-**H2. A long rest gives back only half your Hit Dice, which is the 2014 rule.** *(needs Zach's book check, Q1)*
+**H2. A long rest gives back only half your Hit Dice, which is the 2014 rule.** *(CONFIRMED by Zach 2026-11-12: a long rest regains all spent Hit Point Dice.)*
 - Evidence: `server/services/restTimeService.js:166-181` ("recover half your total dice, minimum 1"). Used for the player (`:378`), companions (`:603`) and downtime rests (`:814`).
 - In play: as I read the 2024 PHB, a long rest regains **all** spent Hit Point Dice. Under this code a player who spends dice across a few days runs dry faster than the book allows.
 - Fix job: regain all spent dice on all three paths, and update `tests/rest-time.test.js`.
 
-**H3. Prepared-spell caps for Bard, Cleric, Druid and Wizard use the 2014 formula (ability modifier + level), not the 2024 class tables.** *(needs book values, Q2; possible class-audit overlap)*
+**H3. Prepared-spell caps for Bard, Cleric, Druid and Wizard use the 2014 formula (ability modifier + level), not the 2024 class tables.** *(CONFIRMED 2026-11-12 from photos of Zach's 2024 PHB class tables; possible class-audit overlap.)*
+- Book values (2024 PHB, Chapter 3, "Prepared Spells" column of each class's Features table, read from Zach's photos 2026-11-12; Cleric table on p. 70):
+
+  | Level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | Bard, Cleric, Druid | 4 | 5 | 6 | 7 | 9 | 10 | 11 | 12 | 14 | 15 | 16 | 16 | 17 | 17 | 18 | 18 | 19 | 20 | 21 | 22 |
+  | Wizard | 4 | 5 | 6 | 7 | 9 | 10 | 11 | 12 | 14 | 15 | 16 | 16 | 17 | 18 | 19 | 21 | 22 | 23 | 24 | 25 |
+
+  Example of the error: a Cleric with +1 Wisdom at level 1 should prepare 4, and the game allows 2. A level 20 Cleric with +5 Wisdom should prepare 22, and the game allows 25.
 - Evidence: `server/services/bardService.js:54`, `clericService.js:29`, `druidService.js:33`, `wizardService.js:54`. The comments in bard and wizard call this "2024 PHB formula". The client mirrors it at `client/src/components/CharacterSheet.jsx:740-744`. By contrast Paladin (`paladinService.js:49-57`), Ranger, Warlock and Sorcerer already use the 2024 Prepared Spells column, and the sorcerer comment notes the column "does not equal Cha mod + level" (`CharacterSheet.jsx:762-766`). The codebase is half-migrated.
 - In play: the number of spells these four classes can prepare is wrong against the book at many level and stat combinations, sometimes too many and sometimes too few. The server and sheet agree with each other, so nothing looks broken.
-- Fix job: move these four to table lookups on both sides, using values from Zach's book. I am not supplying the numbers from memory. Artificer's modifier + half-level is a recorded Zach ruling (`artificerService.js:112-118`) and is not flagged.
+- Fix job: move these four to table lookups on both sides (server services + `CharacterSheet.jsx`), using the book values above. Artificer's modifier + half-level is a recorded Zach ruling (`artificerService.js:112-118`) and is not flagged.
 
 **H4. A Spellshot (a playable MVP class) gets no spell section on the sheet, and the sheet's "Known Spells" section can never render for anyone.**
 - Evidence: Spellshot's `spellcasting.spellsKnown` in `client/src/data/classes.json` is a per-level list of numbers. The sheet only shows a spell section when that value is the text `'All prepared'` / `'Spellbook'` (`CharacterSheet.jsx:785-790`, section at `:2764`) or `'Limited known'` (`:793-795`, section at `:3740`). `'Limited known'` appears nowhere in the data (searched), so this is the brief's known example and it is still present. Spellshot isn't deferred (`server/services/classValidationService.js:67` defers only magus, blackguard, scholar). The server does gate Spellshot spells (`spellSelectionService.js:104-107`). Warden's casting subclasses look likely to have the same gap, since Warden has no `spellcasting` block, but I haven't verified it.
@@ -135,9 +143,9 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 
 1. **S1 (campaign at creation).** This is the biggest blast radius, and the return-loop suite needs it fixed first. It's a small job: attach or create a campaign at commit, or gate Play.
 2. **S3 (Fighting Style), folded into creation-solidification.** It's the same "make creation choices stick" goal and the same files (`character.js` commit, sheet, prompt). Consider adding M1 too, if the wire-it-in call stands.
-3. **S2 (damage at 0 HP and massive damage).** A small, self-contained HP-service job with tests.
+3. **S2 (damage at 0 HP), only if Zach answers yes to Q3b.** A small, self-contained HP-service job with tests. No massive damage.
 4. **H1 (teach the AI its markers).** Prompt-only edits plus prompt-contains tests. Dungeon, scene and cold first, then the class-feature markers (reconcile with the class audit).
-5. **H2 + H3 as one "2024 rules corrections" job,** once Zach supplies the book values (Q1, Q2).
+5. **H2 + H3 as one "2024 rules corrections" job.** It's unblocked: Zach confirmed the Hit Dice rule and supplied the table values (2026-11-12).
 6. **H4 (Spellshot / Warden sheet spells).** Reconcile with the class audit first.
 7. **Lower items (L1-L6) as one cleanup job.** Delete legacy and dead code after the next gate. None of it blocks play.
 
@@ -159,11 +167,18 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 
 ## Needs Zach's decision
 
-**Q1. Long-rest Hit Dice (from your 2024 Player's Handbook).** When a character finishes a Long Rest, do they regain *all* spent Hit Point Dice, or *half*? The code gives back half (`restTimeService.js:170-181`). I believe the 2024 book says all, but I can't see the book. Please check the Rules Glossary entry "Long Rest" and give the page. This decides H2.
+**Answered by Zach, 2026-11-12:**
+- **Q1 (long-rest Hit Dice):** a long rest regains **all** spent Hit Point Dice. H2 is confirmed.
+- **Q2 (prepared spells):** Zach supplied photos of the Bard, Cleric, Druid and Wizard Features tables from his 2024 PHB. The values are recorded under H3, and H3 is confirmed.
+- **Q3 (massive damage):** **no.** "We're always doing death saves." A single huge hit never kills outright, so massive damage is not built.
 
-**Q2. Prepared Spells numbers for Bard, Cleric, Druid and Wizard (from your 2024 Player's Handbook).** Each of those four class tables has a "Prepared Spells" column. The fix job needs the 20 numbers per class (levels 1-20), read from the book. Today the code uses "ability modifier + level" for these four classes, while Paladin, Ranger, Warlock and Sorcerer already use their tables. I won't fill these in from memory (no invented data). This decides H3.
+**Still open:**
 
-**Q3. Damage while at 0 HP (from your 2024 Player's Handbook).** Please confirm the rule the fix should follow. As I understand it, damage taken at 0 HP is one death-save failure, a critical hit is two, and damage that leaves at least your HP maximum remaining after hitting 0 kills outright. The page reference would let the fix cite it. Today the code applies none of this (`characterHpService.js:62-100`). This decides S2.
+**Q3b. A hit on a character who is already down.** When a character is already at 0 HP, unconscious and making death saves, and an enemy hits them again, does that hit count as a failed death save (two failures if it's a critical hit)?
+- **Yes:** enemies attacking a downed character push them toward death, as in the 2024 book. S2 becomes a small fix job.
+- **No:** a downed character only risks death through their own death-save rolls. That's how the game works today (`characterHpService.js:62-100`), so S2 closes with no change.
+
+Zach's earlier answer ("we're always doing death saves") rules out instant death but doesn't settle this part.
 
 ## Verification evidence
 
