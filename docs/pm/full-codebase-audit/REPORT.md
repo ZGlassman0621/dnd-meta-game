@@ -45,10 +45,10 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 - In play: a player who clicks Play instead of New Campaign gets an adventure with no chronicle. Leave and come back, and the DM has no record of past sessions. Shops fail. Their rests and travel advance the date on every other character.
 - Fix job: guarantee a campaign at commit (auto-create or attach), or block Play until one exists. Hand the persistence half to the return-loop suite job.
 
-**S2. Damage taken while at 0 HP does nothing, so a downed player can't be killed by attacks.** *(Zach 2026-11-12: no massive-damage instant death, "we're always doing death saves". Whether a hit while downed counts as a failed save is still open, Q3b.)*
+**S2. Damage taken while at 0 HP does nothing, so a downed player can't be killed by attacks.** *(CONFIRMED by Zach 2026-11-12: any damage at 0 HP is one failed death save, and a critical hit is two, the same in the 2014 and 2024 rules. No massive-damage instant death: "we're always doing death saves".)*
 - Evidence: `server/services/characterHpService.js:62-100`. Damage clamps HP at 0. The only counter changes are on dropping to 0 (reset) or rising above 0. Searching `server/services` and `server/routes` finds no other place that adds a failure on damage (failures only increase on rolled saves, `:193-200`), and no massive-damage rule anywhere.
 - In play: 2024 rules say damage at 0 HP is one death-save failure (two on a critical hit), and damage that leaves at least your HP maximum remaining kills outright. Here a downed player can be stabbed repeatedly with no effect, and an overwhelming hit only knocks them unconscious. The rolled saves themselves are correct: nat 1 counts two failures, nat 20 gives 1 HP (`:175-200`).
-- Fix job, if Q3b is yes: on a negative `HP_CHANGE` at 0 HP, add one failure (two for a crit, which needs a crit flag on the marker). Do not build massive damage (Zach 2026-11-12). If Q3b is no, S2 closes as working as intended. Companion path: not verified (the companion route only rolls saves, `server/routes/companion.js:1075-1110`), so check it in the same job.
+- Fix job: on a negative `HP_CHANGE` at 0 HP, add one failure (two for a crit, which needs a crit flag on the marker and a prompt instruction to set it). Three failures kill as usual. Do not build massive damage (Zach 2026-11-12). Companion path: not verified (the companion route only rolls saves, `server/routes/companion.js:1075-1110`), so check it in the same job.
 
 **S3. The Fighting Style picked in the creator does nothing: not in combat, not on the sheet, not in the DM prompt.**
 - Evidence: the creator saves the pick to the `fighting_style` column only (`server/routes/character.js:5058-5062` commit, `:4549` PUT, client `stage1Persistence.js:102`). The engine reads styles from the `feats` list: attack bonuses at `server/services/partyAttackService.js:355` via `classFeatureService.js:179`, and Defense AC at `server/services/combatStatsService.js:242`. Nothing in `server/services`, `dmPromptBuilder.js` or `CharacterSheet.jsx` reads `fighting_style` (searched). Level-up has no Fighting Style handling at all (no match in `character.js:6482-7788` or the level-up page).
@@ -143,7 +143,7 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 
 1. **S1 (campaign at creation).** This is the biggest blast radius, and the return-loop suite needs it fixed first. It's a small job: attach or create a campaign at commit, or gate Play.
 2. **S3 (Fighting Style), folded into creation-solidification.** It's the same "make creation choices stick" goal and the same files (`character.js` commit, sheet, prompt). Consider adding M1 too, if the wire-it-in call stands.
-3. **S2 (damage at 0 HP), only if Zach answers yes to Q3b.** A small, self-contained HP-service job with tests. No massive damage.
+3. **S2 (damage at 0 HP).** A small, self-contained HP-service job with tests: one failure per hit, two on a crit, no massive damage.
 4. **H1 (teach the AI its markers).** Prompt-only edits plus prompt-contains tests. Dungeon, scene and cold first, then the class-feature markers (reconcile with the class audit).
 5. **H2 + H3 as one "2024 rules corrections" job.** It's unblocked: Zach confirmed the Hit Dice rule and supplied the table values (2026-11-12).
 6. **H4 (Spellshot / Warden sheet spells).** Reconcile with the class audit first.
@@ -172,13 +172,9 @@ Severity key: **Severe** means a player can reach it in MVP play and it breaks a
 - **Q2 (prepared spells):** Zach supplied photos of the Bard, Cleric, Druid and Wizard Features tables from his 2024 PHB. The values are recorded under H3, and H3 is confirmed.
 - **Q3 (massive damage):** **no.** "We're always doing death saves." A single huge hit never kills outright, so massive damage is not built.
 
-**Still open:**
+- **Q3b (a hit on a downed character):** **yes.** Any damage taken at 0 HP is one failed death save, and a critical hit is two, the same in the 2014 and 2024 rules. S2 is confirmed.
 
-**Q3b. A hit on a character who is already down.** When a character is already at 0 HP, unconscious and making death saves, and an enemy hits them again, does that hit count as a failed death save (two failures if it's a critical hit)?
-- **Yes:** enemies attacking a downed character push them toward death, as in the 2024 book. S2 becomes a small fix job.
-- **No:** a downed character only risks death through their own death-save rolls. That's how the game works today (`characterHpService.js:62-100`), so S2 closes with no change.
-
-Zach's earlier answer ("we're always doing death saves") rules out instant death but doesn't settle this part.
+**Still open:** nothing. Every question in this report is answered.
 
 ## Verification evidence
 
