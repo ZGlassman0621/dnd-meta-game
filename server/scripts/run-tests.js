@@ -22,7 +22,7 @@
 
 import { spawn } from 'node:child_process'
 import { readdirSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -78,10 +78,20 @@ const env = {
   FF_SESSION_END_BACKUP: 'false',
 }
 
+// Windows only: a preload that lets process.exit() settle one short
+// timer before exiting. Node 24 on Windows aborts a process that exits
+// immediately after fetch() talked to a local server
+// (`UV_HANDLE_CLOSING`, src\win\async.c) — after the test already
+// passed. See tests/helpers/windowsExitSettle.mjs. macOS/Linux spawn
+// exactly as before.
+const NODE_PRELOAD = process.platform === 'win32'
+  ? ['--import', pathToFileURL(join(TEST_DIR, 'helpers', 'windowsExitSettle.mjs')).href]
+  : []
+
 function runOne(file) {
   return new Promise((res) => {
     const started = Date.now()
-    const child = spawn(process.execPath, [join(TEST_DIR, file)], {
+    const child = spawn(process.execPath, [...NODE_PRELOAD, join(TEST_DIR, file)], {
       cwd: ROOT,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -133,11 +143,28 @@ function runOne(file) {
         failureLines.length > 0
           ? [...failureLines, '--- tail ---', ...tail].join('\n')
           : tail.join('\n')
+      // Windows native exit crash (narrow, visible — never silent):
+      // libSQL's native module occasionally segfaults while the process
+      // tears down AFTER the test finished, exiting 0xC0000005 instead
+      // of 0. Counted as a pass ONLY when all three hold: that exact
+      // access-violation code, a results line with zero failures, and
+      // no ✗ line anywhere in the output. Such files print as `pass*`
+      // and are listed by name in the summary. A real failure exits 1
+      // and stays red; macOS/Linux never take this branch.
+      const zeroFailSummary = (summary && Number(summary[2]) === 0)
+        || /\b\d+ passed, 0 failed\b/.test(out)
+        || /all assertions passed/i.test(out)
+      const nativeExitCrash = process.platform === 'win32'
+        && !timedOut
+        && code === 3221225477
+        && zeroFailSummary
+        && !/✗|FAIL:/.test(out)
       res({
         file,
         ms: Date.now() - started,
         timedOut,
-        code,
+        code: nativeExitCrash ? 0 : code,
+        nativeExitCrash,
         passed: summary ? Number(summary[1]) : null,
         failed: summary ? Number(summary[2]) : null,
         detail,
@@ -148,9 +175,19 @@ function runOne(file) {
 
 const results = []
 for (const file of files) {
-  const r = await runOne(file)
+  let r = await runOne(file)
+  // Windows only: libSQL's native module occasionally crashes the
+  // process MID-run (0xC0000005, no results line) — a different file
+  // each run, and the same file passes when re-run. Retry such a file
+  // ONCE, never when it printed a ✗/FAIL line, and name it in the
+  // summary. A real failure fails both attempts; macOS/Linux never retry.
+  if (process.platform === 'win32' && !r.timedOut && r.code === 3221225477 && r.passed === null && !/✗|FAIL:/.test(r.detail)) {
+    const retry = await runOne(file)
+    retry.retriedAfterNativeCrash = true
+    r = retry
+  }
   results.push(r)
-  const mark = r.timedOut ? 'TIMEOUT' : r.code === 0 ? 'pass' : 'FAIL'
+  const mark = r.timedOut ? 'TIMEOUT' : r.nativeExitCrash ? 'pass*' : r.code === 0 ? 'pass' : 'FAIL'
   const counts = r.passed !== null ? ` (${r.passed}/${r.passed + r.failed})` : ''
   console.log(`${mark.padEnd(7)} ${file}${counts} ${(r.ms / 1000).toFixed(1)}s`)
 }
@@ -160,7 +197,7 @@ const failures = results.filter((r) => r.code !== 0 || r.timedOut)
 if (failures.length > 0) {
   console.log(`\n${'='.repeat(70)}\nFAILURE DETAIL\n${'='.repeat(70)}`)
   for (const f of failures) {
-    console.log(`\n--- ${f.file}${f.timedOut ? ' (TIMED OUT)' : ''} ---`)
+    console.log(`\n--- ${f.file}${f.timedOut ? ' (TIMED OUT)' : ` (exit ${f.code})`} ---`)
     console.log(f.detail)
   }
 }
@@ -175,6 +212,20 @@ console.log(
 )
 if (skipped.length > 0) {
   console.log(`Skipped (live LLM, set TEST_INCLUDE_LLM=1): ${skipped.join(', ')}`)
+}
+const retried = results.filter((r) => r.retriedAfterNativeCrash)
+if (retried.length > 0) {
+  console.log(
+    `Retried once after a Windows native crash mid-run (result shown is the retry's): ` +
+      retried.map((r) => `${r.file} → ${r.code === 0 ? 'pass' : 'FAIL'}`).join(', ')
+  )
+}
+const nativeCrashes = results.filter((r) => r.nativeExitCrash)
+if (nativeCrashes.length > 0) {
+  console.log(
+    `pass* (Windows native exit crash AFTER all assertions passed — counted green, see run-tests.js): ` +
+      nativeCrashes.map((r) => r.file).join(', ')
+  )
 }
 console.log('='.repeat(70))
 

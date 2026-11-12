@@ -174,7 +174,16 @@ async function runTests() {
   }
 
   db.close?.()
-  rmSync(dir, { recursive: true, force: true })
+  // On Windows, libSQL keeps the file handle open past close() until
+  // the process exits, so deleting the temp dir here fails with EPERM
+  // (retries do not help). Best-effort on Windows (the OS temp dir is
+  // the OS's to clean); elsewhere a failure still throws.
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch (err) {
+    if (process.platform !== 'win32' || err.code !== 'EPERM') throw err
+    console.log(`  (Windows: temp schema DB still held by libSQL — left at ${dir})`)
+  }
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`)
   if (failed > 0) process.exit(1)

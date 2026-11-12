@@ -1079,6 +1079,8 @@ group('(k) Bundled Stage 4 client logic (real esbuild bundle)');
   ].join('\n'));
   function findEsbuild() {
     const cands = [
+      // Windows: .bin/esbuild is a shell shim execFileSync cannot run — use the real binary.
+      ...(process.platform === 'win32' ? [path.join(origCwd, 'client', 'node_modules', '@esbuild', `win32-${process.arch}`, 'esbuild.exe')] : []),
       path.join(origCwd, 'client', 'node_modules', '.bin', 'esbuild'),
       path.join(origCwd, 'node_modules', '.bin', 'esbuild'),
     ];
@@ -1238,6 +1240,8 @@ group('(l) Wizard spellbook: two-list picker (Stage 4)');
   ].join('\n'));
   function findEsbuildL() {
     const cands = [
+      // Windows: .bin/esbuild is a shell shim execFileSync cannot run — use the real binary.
+      ...(process.platform === 'win32' ? [path.join(origCwd, 'client', 'node_modules', '@esbuild', `win32-${process.arch}`, 'esbuild.exe')] : []),
       path.join(origCwd, 'client', 'node_modules', '.bin', 'esbuild'),
       path.join(origCwd, 'node_modules', '.bin', 'esbuild'),
     ];

@@ -31,12 +31,14 @@
 // the test's shape.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const catalog = await import(path.join(ROOT, 'server/data/spellCatalogData.js'));
-const logic = await import(path.join(ROOT, 'server/data/spellCatalog.js'));
-const selection = await import(path.join(ROOT, 'server/services/spellSelectionService.js'));
+// file:// URLs, not bare paths: on Windows a bare absolute path
+// ('E:\...') is rejected by the ESM loader (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+const catalog = await import(pathToFileURL(path.join(ROOT, 'server/data/spellCatalogData.js')).href);
+const logic = await import(pathToFileURL(path.join(ROOT, 'server/data/spellCatalog.js')).href);
+const selection = await import(pathToFileURL(path.join(ROOT, 'server/services/spellSelectionService.js')).href);
 
 let passed = 0;
 let failed = 0;

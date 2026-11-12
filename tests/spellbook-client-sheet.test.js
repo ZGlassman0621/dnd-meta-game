@@ -644,6 +644,8 @@ group('(d) Sheet Spellbook section (static pins + real bundle)');
   ].join('\n'));
   function findEsbuild() {
     const cands = [
+      // Windows: .bin/esbuild is a shell shim execFileSync cannot run — use the real binary.
+      ...(process.platform === 'win32' ? [path.join(repoRoot, 'client', 'node_modules', '@esbuild', `win32-${process.arch}`, 'esbuild.exe')] : []),
       path.join(repoRoot, 'client', 'node_modules', '.bin', 'esbuild'),
       path.join(repoRoot, 'node_modules', '.bin', 'esbuild'),
     ];
@@ -841,6 +843,8 @@ group('(f) LevelUpPage multiclass-into-wizard seed picker caps at 6');
   ].join('\n'));
   function findEsbuildF() {
     const cands = [
+      // Windows: .bin/esbuild is a shell shim execFileSync cannot run — use the real binary.
+      ...(process.platform === 'win32' ? [path.join(repoRoot, 'client', 'node_modules', '@esbuild', `win32-${process.arch}`, 'esbuild.exe')] : []),
       path.join(repoRoot, 'client', 'node_modules', '.bin', 'esbuild'),
       path.join(repoRoot, 'node_modules', '.bin', 'esbuild'),
     ];
@@ -1150,6 +1154,8 @@ group('(g) Arcane Recovery client: budget + bank + picker + sheet surface');
   ].join('\n'));
   function findEsbuildG() {
     const cands = [
+      // Windows: .bin/esbuild is a shell shim execFileSync cannot run — use the real binary.
+      ...(process.platform === 'win32' ? [path.join(repoRoot, 'client', 'node_modules', '@esbuild', `win32-${process.arch}`, 'esbuild.exe')] : []),
       path.join(repoRoot, 'client', 'node_modules', '.bin', 'esbuild'),
       path.join(repoRoot, 'node_modules', '.bin', 'esbuild'),
     ];

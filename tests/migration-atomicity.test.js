@@ -128,7 +128,17 @@ async function run() {
   console.log('\n=== Cleanup ===\n');
   // ============================================================
   db.close?.();
-  rmSync(DB_FILE, { force: true });
+  // On Windows, libSQL keeps the file handle open past close() until
+  // the process exits, so deleting it here fails with EPERM (retries
+  // do not help). It is a throwaway file under the runner's scratch
+  // dir, which the runner wipes at the start of every run — so on
+  // Windows the delete is best-effort; elsewhere a failure still throws.
+  try {
+    rmSync(DB_FILE, { force: true });
+  } catch (err) {
+    if (process.platform !== 'win32' || err.code !== 'EPERM') throw err;
+    console.log('  (Windows: throwaway database still held by libSQL — left for the runner to wipe)');
+  }
   assert(true, 'throwaway database removed');
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);

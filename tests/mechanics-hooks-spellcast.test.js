@@ -266,7 +266,12 @@ group('3. Life — companion cast: real math (Disciple added, dice maxed)');
   // 2024 Cure Wounds is 2d8 + mod: 2d8 + 3 (WIS) + 3 (Disciple, 2 + slot 1) = 8..22.
   assert(cast.effect?.total >= 8 && cast.effect?.total <= 22, `companion Cure Wounds total in 8..22 (got ${cast.effect?.total})`);
   assert(cast.effect?.life?.discipleBonus === 3, 'companion outcome records Disciple +3');
-  assert(cast.effect?.applied === cast.effect?.total, 'Lyra had room (5/24), so applied equals total');
+  // Lyra is at 5/24, so she has room for 19 — but the total runs to 22.
+  // Both branches: a total of 19 or less applies in full; 20–22 (2d8
+  // of 14–16, ~9% of casts) is clamped at max HP. (This assert used to
+  // expect applied === total always, and failed on those high rolls.)
+  assert(cast.effect?.applied === Math.min(cast.effect?.total, 24 - 5),
+    `Lyra (5/24) is healed by min(total, 19) (total ${cast.effect?.total}, applied ${cast.effect?.applied})`);
   const lyra = await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [lyraId]);
   assert(lyra.companion_current_hp === 5 + cast.effect.applied, 'Lyra HP moved by the applied amount');
 

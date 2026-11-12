@@ -1,0 +1,6 @@
+# Line endings: the repository stores LF, and every checkout uses LF —
+# on Windows too, whatever core.autocrlf says. Several tests compare
+# exact source text (snippet / mutation checks); a Windows checkout with
+# CRLF made them fail on the PC while passing on the Mac. Git detects
+# binary files itself (text=auto), so images are untouched.
+* text=auto eol=lf

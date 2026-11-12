@@ -111,6 +111,8 @@ fs.writeFileSync(stubPath, [
 
 function findEsbuild() {
   const cands = [
+    // Windows: .bin/esbuild is a shell shim execFileSync cannot run — use the real binary.
+    ...(process.platform === 'win32' ? [path.join(repoRoot, 'client', 'node_modules', '@esbuild', `win32-${process.arch}`, 'esbuild.exe')] : []),
     path.join(repoRoot, 'client', 'node_modules', '.bin', 'esbuild'),
     path.join(repoRoot, 'node_modules', '.bin', 'esbuild'),
   ];
