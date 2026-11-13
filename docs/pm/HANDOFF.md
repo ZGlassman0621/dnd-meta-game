@@ -6,7 +6,7 @@
 
 **Where things live:**
 - Repo: `~/Documents/DnD Meta Game/` on the Mac, live branch `phase-4-hybrid-combat` (main is stale since June 2026 — never use it). Claude Code works on the PC copy of the repo; the two copies stay in sync via GitHub (Zach keeps both updated).
-- Briefs + reports: `docs/pm/<job-slug>/` in the repo — `BRIEF.md` (PM writes) and `REPORT.md` (Claude Code writes).
+- Briefs: `docs/pm/<job-slug>/BRIEF.md` (PM writes). Reports: all in one folder, `docs/pm/reports/<job-slug>-REPORT.md` (Claude Code writes), so Zach knows exactly which file to carry back (Zach, 2026-11-12).
 - This handoff doc: `docs/pm/HANDOFF.md` in the repo (copy in Muse's workspace as `claude-code-handoff.md`).
 - The PM's live state note stays in Muse's workspace (`current-build-state.md`). Each brief carries the settled decisions its job needs — do not go hunting for them elsewhere.
 
@@ -18,13 +18,13 @@
 2. **Claude Code pulls the latest on the live branch first** (`git pull origin phase-4-hybrid-combat`), so it builds on the newest code. Then it reads the brief + this handoff doc, then the files the brief names. If the brief is unclear or contradicts the live build, stop and say so in the report — do not guess past it.
 3. **Claude Code implements** on the live branch, in small targeted edits (see §4).
 4. **Claude Code runs the full test suite itself** (`npm test` in the repo on the PC) and iterates until it is green — or until it hits a genuine blocker, which it reports instead of working around.
-5. **Claude Code writes the report** (`docs/pm/<job-slug>/REPORT.md`) in the format in §3, and pushes the work to GitHub so it reaches the Mac (Zach keeps the Mac copy synced).
+5. **Claude Code writes the report** (`docs/pm/reports/<job-slug>-REPORT.md`) in the format in §3, and pushes the work to GitHub so it reaches the Mac (Zach keeps the Mac copy synced).
 6. **Zach carries the report back to Muse.** The PM reads it, verifies it against the brief, and tells Zach what's next and when to run the gate.
 7. **Zach runs the gate** (his full `npm test` on the Mac). Green closes the job. Red goes back to step 1 with a fix brief.
 
 **One job at a time.** One migration sequence, one serial gate, no parallel edits to the same file. A second job starts only when the first is built + pushed, or the PM explicitly says otherwise.
 
-**No chat reporting.** The report file IS the report. Do not rely on a chat message to carry status — write it to REPORT.md, where the PM will read it. If a build goes quiet for more than an hour, update REPORT.md with where it stands.
+**No chat reporting.** The report file IS the report. Do not rely on a chat message to carry status — write it to the report file, where the PM will read it. If a build goes quiet for more than an hour, update the report with where it stands.
 
 ## 2. The brief (what the PM owes the builder)
 
@@ -76,7 +76,7 @@ These are lessons paid for in failed gates. Follow them on every job.
 
 ## 5. When blocked
 
-Stop. Write in REPORT.md: what blocks you, what you already tried (with the evidence), and exactly what you need — a decision, a document, a value from Zach's physical book. Do not work around a blocker by inventing data, weakening a test, or silently dropping scope. A blocked report is a good report; a guessed build is not.
+Stop. Write in the report (`docs/pm/reports/<job-slug>-REPORT.md`): what blocks you, what you already tried (with the evidence), and exactly what you need — a decision, a document, a value from Zach's physical book. Do not work around a blocker by inventing data, weakening a test, or silently dropping scope. A blocked report is a good report; a guessed build is not.
 
 ## 6. Templates
 
@@ -110,7 +110,7 @@ Stop. Write in REPORT.md: what blocks you, what you already tried (with the evid
 <§3 format, plus anything job-specific the PM needs back.>
 ```
 
-### Report template (copy into `docs/pm/<job-slug>/REPORT.md`)
+### Report template (copy into `docs/pm/reports/<job-slug>-REPORT.md`)
 
 ```markdown
 # Report — <job slug>: <title>
@@ -147,6 +147,6 @@ Per-suite counts for touched suites. Exact failures, if any.>
 ## 7. Setup — CONFIRMED 2026-11-10 (Zach)
 
 - Claude Code is installed on Zach's PC. Zach couriers briefs from Muse to Claude Code and carries Claude Code's reports back to Muse.
-- Briefs and reports live in the repo under `docs/pm/<job-slug>/`. Claude Code writes REPORT.md there; Zach carries it back.
+- Briefs live in the repo under `docs/pm/<job-slug>/`. Reports live together in `docs/pm/reports/`, one `<job-slug>-REPORT.md` per job; Claude Code writes it there and Zach carries it back.
 - Repo sync CONFIRMED 2026-11-10 (Zach): the project lives on GitHub; Zach keeps the Mac and PC copies in sync. Claude Code pushes to GitHub; Zach pulls to the Mac for the gate test.
 - Git remote (recorded 2026-11-11, from Zach): `https://github.com/ZGlassman0621/dnd-meta-game.git`. A pull needs no URL — the clone stores it under `origin`. A FRESH clone: `git clone https://github.com/ZGlassman0621/dnd-meta-game.git`, then `git checkout phase-4-hybrid-combat` (the live branch — do not stay on main, stale since June 2026).

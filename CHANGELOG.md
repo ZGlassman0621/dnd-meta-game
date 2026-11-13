@@ -4,7 +4,7 @@ All notable changes to the D&D Meta Game project will be documented in this file
 
 ## [1.0.0.194] - 2026-11-12 — Creation solidification: creation choices stick
 
-Brief: docs/pm/creation-solidification/BRIEF.md; report: docs/pm/creation-solidification/REPORT.md. (Versions between 1.0.0.193 and this entry — the creator rounds 1 + 2 — were not recorded here; `client/package.json` had drifted to 1.0.183 and is re-aligned to 1.0.194.)
+Brief: docs/pm/creation-solidification/BRIEF.md; report: docs/pm/reports/creation-solidification-REPORT.md. (Versions between 1.0.0.193 and this entry — the creator rounds 1 + 2 — were not recorded here; `client/package.json` had drifted to 1.0.183 and is re-aligned to 1.0.194.)
 
 ### Added
 - Theme choices downstream: `themeService.themeChoiceLines` turns `character_themes.path_choice` + `path_data` into labelled lines ("Military Rank: Sergeant", "Active Duty: Still in active duty"); the progression snapshot carries them as `theme.choices`; the DM prompt and the character sheet print them.

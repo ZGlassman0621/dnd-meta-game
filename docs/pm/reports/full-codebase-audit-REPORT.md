@@ -19,7 +19,7 @@ All new. They are documentation only, with no code, data or tests:
 
 | File | Status | Size |
 |---|---|---|
-| `docs/pm/full-codebase-audit/REPORT.md` | new (this report) | see Verification evidence |
+| `docs/pm/reports/full-codebase-audit-REPORT.md` | new (this report; moved here from `docs/pm/full-codebase-audit/REPORT.md` 2026-11-12) | see Verification evidence |
 | `docs/pm/full-codebase-audit/BRIEF.md` | new: the brief as handed over, placed where its Setup section says | see Verification evidence |
 | `docs/pm/HANDOFF.md` | new: the handoff doc, placed where its "Where things live" section says | see Verification evidence |
 

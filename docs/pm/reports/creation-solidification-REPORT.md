@@ -30,7 +30,7 @@ Commit and hashes are under Verification evidence. Sizes are in bytes, Unix line
 | `client/src/components/creator-next/themeLocation.js` | new | 2,020 |
 | `tests/creation-solidification.test.js` | new | 26,875 |
 | `docs/pm/creation-solidification/BRIEF.md` | new (brief as handed over) | 10,907 |
-| `docs/pm/creation-solidification/REPORT.md` | new (this report) | — |
+| `docs/pm/reports/creation-solidification-REPORT.md` | new (this report; moved here from `docs/pm/creation-solidification/REPORT.md` 2026-11-12) | — |
 | `server/routes/character.js` | edited | 430,930 |
 | `server/services/themeService.js` | edited | 6,449 |
 | `server/services/progressionService.js` | edited | 8,263 |
