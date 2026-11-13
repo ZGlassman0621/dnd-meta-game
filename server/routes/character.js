@@ -78,7 +78,7 @@ import { advanceTimeForSession } from '../services/restTimeService.js';
 import { MULTICLASS_GRANT, MAGUS_SOCIETIES, SOCIETY_NAMES } from '../services/magusService.js';
 import { MULTICLASS_GRANT as SCHOLAR_MULTICLASS_GRANT } from '../services/scholarService.js';
 import { MULTICLASS_GRANT as PUGILIST_MULTICLASS_GRANT } from '../services/pugilistService.js';
-import { getSubclass, isSubclassPcCreatable, MVP_DEFERRED_SUBCLASS_NOTE, validateSelection, isOutsideFr, formatSubclassOrigin, artificerSubclassSpellsAtLevel, blackguardViceSpellsAtLevel, paladinOathSpellsAtLevel, sorcererSubclassSpellsAtLevel, bardSubclassSpellsAtLevel, eldritchKnightSpellsAtLevel, arcaneTricksterSpellsAtLevel, profaneSoulArcanaSpellsAtLevel, clericDomainSpellsAtLevel, druidCircleSpellsAtLevel, parseSubclassChoices, validateChoice, validateChoiceList } from '../services/subclassService.js';
+import { getSubclass, isSubclassPcCreatable, MVP_DEFERRED_SUBCLASS_NOTE, validateSelection, artificerSubclassSpellsAtLevel, blackguardViceSpellsAtLevel, paladinOathSpellsAtLevel, sorcererSubclassSpellsAtLevel, bardSubclassSpellsAtLevel, eldritchKnightSpellsAtLevel, arcaneTricksterSpellsAtLevel, profaneSoulArcanaSpellsAtLevel, clericDomainSpellsAtLevel, druidCircleSpellsAtLevel, parseSubclassChoices, validateChoice, validateChoiceList } from '../services/subclassService.js';
 import { resolveCantrips, isCatalogCantrip } from '../services/cantripResolutionService.js';
 import { CLASS_CHASSIS } from '../data/classChassis.js';
 import { ANCESTRY_FEATS } from '../data/ancestryFeats.js';
@@ -2484,13 +2484,14 @@ export async function validateCreatorNextStage6(merged = {}, ctx = {}) {
     // selection rules, enforced at commit (validateSelection had no
     // callers — displayed, never enforced). The level is the stored
     // row's (1 for a fresh draft; an edit-mode commit keeps its real
-    // level, so a level-5 character's level-3 subclass passes). An
-    // outside-FR subclass needs the SUBCLASS origin explanation
-    // (migration 114), not the character's origin explanation.
+    // level, so a level-5 character's level-3 subclass passes). Only
+    // the found + level halves are enforced: Zach's ruling 2026-11-12,
+    // "a class is a class" — no subclass, from any setting, needs an
+    // origin explanation, so validateSelection's origin reason is
+    // ignored here.
     if (subclass && isClassPcCreatable(cls) && isSubclassPcCreatable(cls, subclass)) {
       const selLevel = Number(row?.level) || 1;
-      const subOrigin = merged.subclass_origin_explanation ?? merged.subclassOriginExplanation ?? null;
-      const sel = validateSelection({ className: cls, subclassName: subclass, level: selLevel, originExplanation: subOrigin });
+      const sel = validateSelection({ className: cls, subclassName: subclass, level: selLevel });
       if (!sel.found) {
         errors.push(`subclassId: '${subclass}' is not a ${displayClassName(cls)} subclass — pick one from the list`);
       } else {
@@ -2500,9 +2501,6 @@ export async function validateCreatorNextStage6(merged = {}, ctx = {}) {
         const stage2Covers = selLevel === 1 && SUBCLASS_LEVELS[cls] !== 1;
         if (!stage2Covers && selLevel < Number(entry?.selectionLevel || 0)) {
           errors.push(`subclassId: ${entry.name} is chosen at ${displayClassName(cls)} level ${entry.selectionLevel} (this character is level ${selLevel}) — leave the subclass empty until then`);
-        }
-        if (isOutsideFr(entry) && !nonEmpty(subOrigin)) {
-          errors.push(`subclassOriginExplanation: ${entry.name} comes from ${formatSubclassOrigin(entry)} — explain on Stage 2 how its tradition reached your character in the Forgotten Realms, or pick a Forgotten Realms subclass`);
         }
       }
     }

@@ -11,9 +11,10 @@
 //       Review (client validateStage1 'needed') and at commit (server).
 //   (4) Gold-fork physical Spellbook — a wizard on the gold fork gets a
 //       Spellbook row; switching package -> gold drops package gear.
-//   (5) validateSelection wired at commit — subclass origin
-//       explanation (migration 114) required for an outside-FR
-//       subclass; the selection level uses the stored row's level.
+//   (5) validateSelection wired at commit — the selection level uses
+//       the stored row's level. No subclass needs an origin explanation
+//       (Zach's ruling 2026-11-12, "a class is a class"); migration 114's
+//       column is kept, inert, and its save/resume plumbing still works.
 //       Plus the sibling fix: the warlock pact now persists (`pact`).
 //   (6) Fighting Style -> feats at commit: Defense +1 AC (stored and
 //       in play), Archery +2, listed in the DM prompt's feat block;
@@ -60,7 +61,6 @@ const { getSubclass } = await import(fromRepo('server/services/subclassService.j
 // Real client modules.
 const { validateStage1 } = await import(fromRepo('client/src/components/creator-next/stage1Validation.js'));
 const { themeLocationOptions, isStaleThemePathChoice } = await import(fromRepo('client/src/components/creator-next/themeLocation.js'));
-const { subclassNeedsOriginExplanation } = await import(fromRepo('client/src/components/creator-next/subclassOrigin.js'));
 const { buildStage1ProgressBody, rehydrateStateFromServerRow, pactKeyFromName, pactNameFromKey } =
   await import(fromRepo('client/src/components/creator-next/stage1Persistence.js'));
 
@@ -262,23 +262,17 @@ group('(5) subclass selection rules at commit; pact persists');
   const l1 = await validateCreatorNextStage6({ class: 'fighter', subclass: 'Champion' }, { row: { level: 1 } });
   const subLines = l1.errors.filter((e) => e.startsWith('subclassId'));
   check(subLines.length === 1, `a level-1 fighter with a subclass gets ONE subclass line, not two (got ${JSON.stringify(subLines)})`);
-  // Outside-FR at a legal level, no explanation -> named refusal.
+  // Outside-FR at a legal level, no explanation -> commits (Zach's ruling 2026-11-12).
   const subService = await import(fromRepo('server/services/subclassService.js'));
   const outsideFr = subService.listSubclasses('fighter').find((s) => s.origin_setting !== 'Forgotten Realms' && Number(s.selectionLevel) === 3
     && subService.isSubclassPcCreatable('fighter', s.name));
   check(!!outsideFr, 'a creatable outside-FR level-3 fighter subclass exists (fixture premise)');
   const noExp = await validateCreatorNextStage6({ class: 'fighter', subclass: outsideFr.name }, { row: { level: 5 } });
-  check(noExp.errors.some((e) => e.startsWith('subclassOriginExplanation') && e.includes(outsideFr.name) && e.includes('Forgotten Realms subclass')),
-    `an outside-FR subclass without an explanation is refused, named, with the legal alternative (got ${noExp.errors.filter((e) => e.startsWith('subclass')).join(' | ')})`);
-  const withExp = await validateCreatorNextStage6({ class: 'fighter', subclass: outsideFr.name, subclass_origin_explanation: 'Taught by a traveller from afar.' }, { row: { level: 5 } });
-  check(!withExp.errors.some((e) => e.startsWith('subclassOriginExplanation')), 'with an explanation it passes');
-  const fr = await validateCreatorNextStage6({ class: 'fighter', subclass: 'Champion' }, { row: { level: 5 } });
-  check(!fr.errors.some((e) => e.startsWith('subclassOriginExplanation')), 'a Forgotten Realms subclass never needs one');
+  const originErrs = noExp.errors.filter((e) => /subclassOriginExplanation|origin explanation|Forgotten Realms subclass/i.test(e));
+  check(originErrs.length === 0,
+    `an outside-FR subclass with no explanation raises no origin error (got ${originErrs.join(' | ')})`);
 
-  // Client: the helper mirrors isOutsideFr; save + resume carry the field.
-  check(subclassNeedsOriginExplanation(outsideFr) === true && subclassNeedsOriginExplanation(champion) === false
-    && subclassNeedsOriginExplanation({ origin_setting: null }) === true && subclassNeedsOriginExplanation(null) === false,
-    'subclassNeedsOriginExplanation mirrors the server rule (null origin fails closed)');
+  // Client: save + resume still carry the (now optional, inert) field.
   const body = buildStage1ProgressBody({ subclassOriginExplanation: '  Taught by a traveller.  ', pactBoon: 'Pact of the Tome' });
   check(body.subclass_origin_explanation === 'Taught by a traveller.', `the save body carries the trimmed explanation (got ${JSON.stringify(body.subclass_origin_explanation)})`);
   check(body.pact === 'tome' && body.pact_boon === undefined, `the save body sends the pact KEY under 'pact' (got pact=${body.pact}, pact_boon=${body.pact_boon})`);
@@ -295,13 +289,16 @@ group('(5) subclass selection rules at commit; pact persists');
   const put = await call('PUT', `/api/character/${wl.json?.id}`, { ...buildStage1ProgressBody({ pactBoon: 'Pact of the Chain' }), class: 'warlock' });
   check(put.status === 200, `the client save body PUT is 200 (got ${put.status}: ${errOf(put)})`);
   check((await readRow(wl.json?.id))?.pact === 'chain', 'the warlock pact persists from the creator save body');
-  // The Review + Stage 2 wiring (static guards — .jsx).
+  // The requirement is gone from Review and Stage 2 (static guards — .jsx).
   const review = readRepo('client/src/components/creator-next/Stage6ReviewCommit.jsx');
-  check(review.includes("push(1, 'subclassOriginExplanation'"), 'Review lists a missing subclass origin on Stage 2');
-  check(review.includes('/subclassoriginexplanation/.test(m)) return 1'), 'a server subclass-origin refusal jumps to Stage 2');
+  check(!review.includes("'subclassOriginExplanation'") && !review.includes('subclassNeedsOriginExplanation'),
+    'Review no longer asks for a subclass origin');
   const stage2 = readRepo('client/src/components/creator-next/Stage2ClassCalling.jsx');
-  check(stage2.includes('subclassNeedsOriginExplanation(subclassEntry)') && stage2.includes('stage2-subclass-origin'),
-    'Stage 2 shows the explanation field for an outside-FR subclass');
+  check(!stage2.includes('stage2-subclass-origin') && !stage2.includes('subclassNeedsOriginExplanation'),
+    'Stage 2 no longer shows a subclass origin box');
+  const { subclassOriginSuffix } = await import(fromRepo('client/src/components/creator-next/subclassOrigin.js'));
+  check(subclassOriginSuffix(outsideFr) === ` · origin ${outsideFr.origin_setting}${outsideFr.origin_region && outsideFr.origin_region !== outsideFr.origin_setting ? ` (${outsideFr.origin_region})` : ''}`,
+    `the Stage 2 origin note is informational, no "required" claim (got ${JSON.stringify(subclassOriginSuffix(outsideFr))})`);
 }
 
 // ===========================================================================

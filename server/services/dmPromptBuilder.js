@@ -273,12 +273,6 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
       ? `- ${formatOriginLine(character.origin_setting, character.origin_region, character.origin_explanation, character.race)}`
       : null,
     `- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}`,
-    // Creation-solidification item 5 (migration 114): how an
-    // outside-FR subclass's tradition reached the character — the
-    // player's own words, canon for the DM.
-    character.subclass && character.subclass_origin_explanation && String(character.subclass_origin_explanation).trim()
-      ? `- Subclass origin (the player's explanation of how the ${character.subclass} tradition reached them in the Forgotten Realms — canon): ${String(character.subclass_origin_explanation).trim()}`
-      : null,
     `- Level: ${character.level}`,
     `- Background: ${character.background || 'Unknown'}`,
     `- Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}`,

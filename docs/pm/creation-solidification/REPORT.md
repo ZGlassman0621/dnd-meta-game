@@ -13,7 +13,7 @@
 6. The Fighting Style picked in the creator actually works.
 
 **Differences from the brief:** none that block. Four things the brief didn't anticipate:
-- **Item 5 lands mostly on Warlords.** At level 1, the only subclasses a player chooses are the 8 Warlord "Presences", and the registry lists all 8 as outside the Forgotten Realms ("KibblesTasty, setting-neutral"). Wiring the rule means every new Warlord must write a subclass origin explanation. I built it as the brief states and flagged it for your veto below.
+- **Item 5 lands mostly on Warlords.** At level 1, the only subclasses a player chooses are the 8 Warlord "Presences", and the registry lists all 8 as outside the Forgotten Realms ("KibblesTasty, setting-neutral"). Wiring the rule meant every new Warlord had to write a subclass origin explanation. I built it as the brief stated and flagged it. **Zach ruled on 2026-11-12: "a class is a class."** No subclass, from any setting, needs an origin explanation. The requirement is now removed (see the follow-up commit under Verification evidence).
 - **Draft #1203 itself isn't on this PC.** This PC has no database and no `.env`, so the draft is only in your Mac's database. I proved the re-pick path on an equivalent draft (the brief allows this). #1203 needs a quick check on the Mac (see How to verify).
 - **Sibling defect fixed (fix-as-you-find-it):** the warlock Pact pick was never saved, the same "creation choice doesn't stick" problem. Details under item 5.
 - **This PC can't produce an all-green run, for Windows-only reasons** that are unrelated to this job. Details under Test results. Your Mac run is the gate.
@@ -72,11 +72,11 @@ Commit and hashes are under Verification evidence. Sizes are in bytes, Unix line
 - A wizard who takes gold instead of a gear package now has a Spellbook in their inventory. A package wizard is unchanged (still exactly one book).
 - Sibling fix: switching a draft from a gear package to gold used to keep the package's gear *and* give the gold. Package gear and package armor are now dropped. AC falls back to 10 + Dex, and items from other sources are kept.
 
-**5. Subclass rules enforced at commit: BUILT.**
-- A subclass from outside the Forgotten Realms needs an origin explanation. Stage 2 shows a "Subclass origin" box under the picker for those subclasses.
-- Review and the server both refuse a commit without it. The refusal names the subclass, where it's from, and the legal alternative ("or pick a Forgotten Realms subclass"). The explanation reaches the DM prompt.
-- Selection level uses the character's real level, so an edited level-5 character with a level-3 subclass passes. A level-1 draft that sends a level-3 subclass gets one refusal line, not two.
-- New column: `characters.subclass_origin_explanation` (**migration 114**).
+**5. Subclass rules enforced at commit: BUILT, then narrowed by Zach's ruling.**
+- *As first built:* a subclass from outside the Forgotten Realms needed an origin explanation, through a Stage 2 "Subclass origin" box, a Review check, a server refusal and a DM-prompt line.
+- *After Zach's ruling (2026-11-12, "a class is a class"):* the box, the Review check, the server refusal and the DM-prompt line are removed. A Warlord, or any outside-Realms subclass, commits with no explanation. The Stage 2 note under a subclass still says where it comes from (" · origin Eberron (Khorvaire)") but no longer says an explanation is required. That note was already false before this job.
+- **Still enforced:** the subclass must exist, and its selection level uses the character's real level. So an edited level-5 character with a level-3 subclass passes, and a level-1 draft that sends a level-3 subclass gets one refusal line, not two.
+- The column `characters.subclass_origin_explanation` (**migration 114**) stays, unused. Its save, resume and commit plumbing still works but no stage fills it, and nothing prints it. It's kept for the proposed "calling" field below. Dropping a column would need its own migration.
 - **Sibling fix:** the creator sent the warlock Pact as `pact_boon` ("Pact of the Blade"), a field the server never reads, so the pick was never saved or resumed. It now sends the stored key (`pact: 'blade'`) and resumes from it.
 
 **6. Fighting Style works: BUILT.**
@@ -108,7 +108,7 @@ Commit and hashes are under Verification evidence. Sizes are in bytes, Unix line
   - Client build (`npx vite build`): succeeds.
 - **Existing tests updated, all to the new rules, none loosened:**
   - Human / Half-Elf test characters gained their extra language ("Giant").
-  - The Warlord test now checks the refusal first, then commits with an explanation.
+  - The Warlord test first checked the refusal and then committed with an explanation. After Zach's ruling, it commits with no explanation.
   - Two tests that pinned the broken `pact_boon` field now check the `pact` key.
   - Three source-text checks followed the location logic into `themeLocation.js`, and still require Stage 3 to use it.
 - **To run the client-bundle suites on Windows**, I copied `esbuild.exe` into `client/node_modules/.bin/`. That folder is untracked, so nothing in the repo changed.
@@ -126,18 +126,36 @@ I can't measure it from inside the session. `/usage` in Claude Code shows standi
 
 ## Decisions made (reversible, for veto)
 1. **Fighting Style mechanism: written into `feats` at commit.** The other option was teaching the engine to read the `fighting_style` column. Reason: every consumer (attacks, AC, prompt) already reads `feats`, and level-up feats live there too. Reversal: delete the commit block and read the column in three places, about half a day.
-2. **Subclass explanation is a new column (migration 114), not stored in the subclass choices.** Reason: the subclass choices are validated against each subclass's declared keys and would refuse it. Reversal: the column is additive and stays inert if unused.
+2. **Subclass explanation is a new column (migration 114), not stored in the subclass choices.** Reason: the subclass choices are validated against each subclass's declared keys and would refuse it. After Zach's ruling the column is unused but kept, because the proposed "calling" field below can reuse it as is. Reversal: the column is additive and inert.
 3. **Gold fork clears earlier package gear and armor.** This goes slightly beyond "add a Spellbook", but taking gold *instead of* a package shouldn't keep both. Reversal: a few lines.
 4. **Pact fix included (fix-as-you-find-it).** Same defect type, same files.
 5. **The extra-language pick is "needed", not "blocking", on Stage 1.** The player can move on and Review stops the commit, matching how the ancestry feat already works. Reversal: one word.
 6. **Version bumped to 1.0.194 in both package files, with a CHANGELOG entry** (CLAUDE.md rule 5). The client had drifted to 1.0.183 and was re-aligned.
 
 ## Needs Zach's decision
-**Q1. Should every new Warlord have to write a subclass origin explanation?** The brief's rule is that a subclass from outside the Forgotten Realms needs one, and it's now enforced. In the registry, all 8 Warlord subclasses are marked as from "KibblesTasty (setting-neutral)", meaning homebrew written for no particular world, which counts as outside the Realms. Warlord picks its subclass at level 1, so every new Warlord now sees a "Subclass origin" box and can't commit without filling it. The other options:
+None open.
+
+**Q1 — RESOLVED by Zach, 2026-11-12: "No, a class is a class. It's just part of the character as a whole."** Zach confirmed that this covers every subclass, not just Warlords. The requirement is removed (item 5 above). This reverses the creator plan's §12 rule that "an outside-FR subclass needs an origin explanation". The character's own origin explanation (Stage 1, for a character from outside the Realms) is unchanged.
+
+The question as originally put:
+**Q1. Should every new Warlord have to write a subclass origin explanation?** The brief's rule is that a subclass from outside the Forgotten Realms needs one, and it was enforced. In the registry, all 8 Warlord subclasses are marked as from "KibblesTasty (setting-neutral)", meaning homebrew written for no particular world, which counts as outside the Realms. Warlord picks its subclass at level 1, so every new Warlord now sees a "Subclass origin" box and can't commit without filling it. The other options:
 - **(a) Keep it:** every Warlord explains.
 - **(b) Exempt "setting-neutral" subclasses:** a one-line change, about 15 minutes with tests.
 
 No other class picks a subclass at level 1, so today this affects only Warlords.
+
+## For Muse: proposed next brief
+These came out of Zach's ruling. They aren't built, and are written up so Muse can scope them as briefs.
+
+**1. Optional "calling" question on Stage 5 (Gear & Story).** Zach's idea (2026-11-12): let *every* player say why their character has their class and subclass ("that could be a fun thing to ask players for regardless").
+- *Where:* Stage 5's Story section, next to personality traits, ideals, bonds, flaws and backstory.
+- *Optional,* like the other Story fields. A blank answer prints nothing.
+- *Builder's suggested wording, for Muse/Zach to settle:* label "Your calling: why this class (and subclass)?", placeholder "What drew you to this path? Who taught you, or what happened?"
+- *Reach:* the DM prompt (as the player's words, canon) and the character sheet, next to the backstory.
+- *Cheap:* migration 114's `subclass_origin_explanation` column and its save, resume and commit plumbing already exist and are unused, so no new migration is needed. Muse should decide whether the column name ("subclass origin") is close enough or worth a rename migration.
+- *Watch:* today, changing class or subclass on Stage 2 clears that state field. A "calling" answer on Stage 5 probably shouldn't be wiped that way.
+
+**2. Cleanup: the registry's own origin rule.** `subclassService.validateSelection` still treats an outside-Realms subclass with no explanation as "incomplete". The creator now ignores that half, so nothing enforces it. About 9 subclass test files (`subclass-scanned1`–`5`, `subclass-tier0`, `subclass-artificer`, `warlord-subclasses`) and comments in three data files (`fighter.js`, `spellshot.js`, `warden.js`) still describe the rule. Under CLAUDE.md rule 2 (delete outright) it should come out. That's a mechanical sweep across many files, so I left it for a brief rather than widening this change.
 
 ## How to verify
 - **Gate:** on the Mac, `git pull origin phase-4-hybrid-combat`, then `npm test`. Migration 114 applies itself on first run.
@@ -147,6 +165,14 @@ No other class picks a subclass at level 1, so today this affects only Warlords.
   3. **Draft #1203:** resume it from the character list. Stage 1 shows the ancestry feat as still needed with the picker empty. Pick one, continue, then reload and resume again. The feat should still be picked.
   4. **Language:** create a Human and skip "Extra language" on Stage 1. Review lists "Stage 1 — Extra language is still needed". Pick one and Review clears it.
   5. **Spellbook:** create a Wizard and choose Gold on Stage 5. After commit, the inventory holds a Spellbook.
-  6. **Subclass origin:** create a Warlord and pick any Presence. A "Subclass origin" box appears under it, Review blocks until it's filled, and it commits once filled.
+  6. **Subclass origin (after Zach's ruling):** create a Warlord and pick any Presence. The description reads "… · origin KibblesTasty (setting-neutral)", with no "required" wording and no "Subclass origin" box. Review raises nothing about it, and the character commits.
   7. **Fighting Style:** create a level-1 Fighter with Defense and gear package A (Chain Mail). The sheet AC is 17, and Features lists "Fighting Style: Defense".
   8. **Pact:** create a Warlock, pick Pact of the Chain, continue, then reload and resume. The pact is still picked.
+
+## Verification evidence
+- **Original build:** commit `6464cc2` ("Creation solidification: creation choices stick (v1.0.194)") on `phase-4-hybrid-combat`.
+- **Follow-up for Zach's ruling (2026-11-12):** the commit that carries this revision of the report. A report can't contain its own commit hash, so the hash and this file's SHA-256 are in the handoff message.
+  - Server: `server/routes/character.js` drops the subclass-origin refusal and stops passing an explanation to `validateSelection`; `server/services/dmPromptBuilder.js` drops the "Subclass origin" line.
+  - Client: `Stage2ClassCalling.jsx` (box removed), `Stage6ReviewCommit.jsx` (Review check and error routing removed), `subclassOrigin.js` (`subclassNeedsOriginExplanation` deleted; the note loses its "required" wording), `stage1Persistence.js` (comments only).
+  - Tests: `creation-solidification` (group 5 rewritten to the new rule: 72/0), `creator-next-stage6-commit` (the Warlord commits without an explanation: 368/0), `creator-test-notes-1-client` (suffix strings), all green individually. Client build succeeds.
+  - **Full `npm test` on the PC after the follow-up:** Files **247/247 green**, assertions **19,556 passed, 0 failed**. That's 6 fewer than the 19,562 in the windows-test-portability run, because the 3 + 3 removed refusal checks in `creation-solidification` and `creator-next-stage6-commit` are gone. Windows-only notes from the runner: `human-2024` and `paladin-l1-cap` were retried once after a native crash and passed; `item-1a-picks-ammo-thrown-offhand` and `magic-item-discovery` counted as `pass*`. Zach's Mac run remains the gate; not claimed.

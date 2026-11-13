@@ -809,15 +809,11 @@ group('(l) warlord L1 subclass');
   const warlordGold = computeGoldFork('warlord', 'soldier', 0).gold;
   check((await readCharacter(id))?.gold_gp === warlordGold, `warlord gold fork derives ${warlordGold}`);
   await expectCommitRefusal(id, { subclass_choices: { bogus_key: 'x' } }, 'subclassChoices.bogus_key', 'unknown subclass choice key');
-  // Creation-solidification item 5 (2026-11-12): Warlord presences are
-  // KibblesTasty (setting-neutral) — outside the Forgotten Realms — so
-  // validateSelection (now wired at commit) requires the SUBCLASS
-  // origin explanation; refused without it, named.
-  await expectCommitRefusal(id, { subclass: 'commander' }, 'subclassOriginExplanation', 'outside-FR subclass without its origin explanation');
-  const committed = await commitCharacter(id, warlordDraft({ subclass: 'commander', subclass_origin_explanation: 'Drilled by a sellsword captain who learned it far beyond the Sword Coast.' }));
-  check(committed.status === 200, `warlord commit is 200 (got ${committed.status}: ${errOf(committed)})`);
-  check((await readCharacter(id))?.subclass_origin_explanation === 'Drilled by a sellsword captain who learned it far beyond the Sword Coast.',
-    'the subclass origin explanation persists via commit');
+  // Zach's ruling 2026-11-12 ("a class is a class"): Warlord presences
+  // are KibblesTasty (setting-neutral), outside the Forgotten Realms,
+  // and still commit with NO subclass origin explanation.
+  const committed = await commitCharacter(id, warlordDraft({ subclass: 'commander' }));
+  check(committed.status === 200, `warlord commit with no subclass origin explanation is 200 (got ${committed.status}: ${errOf(committed)})`);
   check((await readCharacter(id))?.subclass === 'commander', 'warlord commit keeps the subclass');
 }
 

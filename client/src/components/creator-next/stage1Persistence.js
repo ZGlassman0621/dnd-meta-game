@@ -129,9 +129,9 @@ export function buildStage1ProgressBody(state, themes = null) {
     const pactKey = pactKeyFromName(state.pactBoon)
     if (pactKey) body.pact = pactKey
   }
-  // Creation-solidification item 5 (migration 114): the SUBCLASS
-  // origin explanation (outside-FR subclasses). Truthy-gated like
-  // origin_explanation.
+  // Creation-solidification item 5 (migration 114): optional free text
+  // about the subclass; no stage sets it since Zach's 2026-11-12
+  // ruling. Truthy-gated like origin_explanation.
   if (state.subclassOriginExplanation && String(state.subclassOriginExplanation).trim()) {
     body.subclass_origin_explanation = String(state.subclassOriginExplanation).trim()
   }
@@ -320,7 +320,9 @@ export function blankStage1State() {
     // silently defaulted.
     pactBoon: '',
     // Subclass origin explanation (creation-solidification item 5,
-    // migration 114) — required for an outside-FR subclass.
+    // migration 114). Optional and currently unset by any stage —
+    // Zach's ruling 2026-11-12 dropped the requirement; kept for the
+    // proposed "calling" field (see the creation-solidification REPORT).
     subclassOriginExplanation: '',
     // Stage 3 (Past & Path) — starts empty, never silently defaulted.
     // Picking a theme sets themeId + originFeat and resets the rest.

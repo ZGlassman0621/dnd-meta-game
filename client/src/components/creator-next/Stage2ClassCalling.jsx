@@ -3,7 +3,7 @@ import Tip from './Tooltip.jsx'
 import classesData from '../../data/classes.json'
 import deitiesData from '../../data/deities.json'
 import { deferredNoteFor, isDeferredSpecies, resolveOriginSetting } from './speciesAdapter.js'
-import { subclassOriginSuffix, subclassNeedsOriginExplanation } from './subclassOrigin.js'
+import { subclassOriginSuffix } from './subclassOrigin.js'
 
 /**
  * Creator-next Stage 2 — Class & Calling (2026-11-04, overnight build).
@@ -90,10 +90,10 @@ import { subclassOriginSuffix, subclassNeedsOriginExplanation } from './subclass
  *   corrected in the 2024-accuracy audit, 2026-11-05); picking it
  *   here is choosing a calling, not claiming its features at level 1.
  * - Subclass origin suffix (creator test-notes #12 follow-up): a
- *   non-FR/null-origin subclass shows ' · origin <setting> — an
- *   origin explanation is required …' after its description, via
- *   subclassOriginSuffix (./subclassOrigin.js) — the requirement is
- *   otherwise invisible at pick time. FR entries show no suffix.
+ *   non-FR/null-origin subclass shows ' · origin <setting>' after its
+ *   description, via subclassOriginSuffix (./subclassOrigin.js) —
+ *   informational only; no subclass needs an origin explanation
+ *   (Zach's ruling 2026-11-12). FR entries show no suffix.
  *
  * State keys (draft state in the shell): classId, subclassName,
  * fightingStyle, subclassChoices { choiceKey: value | [values] },
@@ -548,23 +548,6 @@ export default function Stage2ClassCalling({
           {subclassEntry.description ? ` — ${subclassEntry.description}` : ''}
           {subclassOriginSuffix(subclassEntry)}
         </div>
-      )}
-      {subclassNeedsOriginExplanation(subclassEntry) && (
-        <>
-          <label style={labelStyle} htmlFor="stage2-subclass-origin">
-            Subclass origin
-            <Tip text="This subclass comes from outside the Forgotten Realms. In a sentence or two, say how its tradition reached your character here — a teacher who crossed over, a book, a patron, a pact. The DM reads it. Required before you can commit; pick a Forgotten Realms subclass instead if you'd rather not." />
-          </label>
-          <textarea
-            id="stage2-subclass-origin"
-            className="input"
-            value={state.subclassOriginExplanation || ''}
-            onChange={e => update({ subclassOriginExplanation: e.target.value })}
-            maxLength={500}
-            rows={3}
-            placeholder={`How did the ${subclassEntry.name} tradition reach your character in the Forgotten Realms?`}
-          />
-        </>
       )}
 
       {(classId === 'cleric' || classId === 'paladin') && (

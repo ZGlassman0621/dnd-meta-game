@@ -271,13 +271,13 @@ group('#12 subclass description + follow-up origin suffix');
   ok(stage2.includes("takes effect at level {cls?.subclassLevel"), 'the name + level line stays when no description is present');
   // Behavioral pins on the real helper (no logic re-implemented):
   ok(subclassOriginSuffix({ origin_setting: 'Forgotten Realms' }) === '', 'FR entry: no suffix');
-  ok(subclassOriginSuffix({ origin_setting: null }) === ' · origin unspecified setting — an origin explanation is required for how its holder came to be in the Forgotten Realms',
+  ok(subclassOriginSuffix({ origin_setting: null }) === ' · origin unspecified setting',
     'null origin: suffix reads "unspecified setting"');
-  ok(subclassOriginSuffix({}) === ' · origin unspecified setting — an origin explanation is required for how its holder came to be in the Forgotten Realms',
+  ok(subclassOriginSuffix({}) === ' · origin unspecified setting',
     'missing origin field: same null treatment (fail-closed, like isOutsideFr)');
-  ok(subclassOriginSuffix({ origin_setting: 'Eberron', origin_region: 'Khorvaire' }) === ' · origin Eberron (Khorvaire) — an origin explanation is required for how its holder came to be in the Forgotten Realms',
+  ok(subclassOriginSuffix({ origin_setting: 'Eberron', origin_region: 'Khorvaire' }) === ' · origin Eberron (Khorvaire)',
     'named non-FR origin: setting + region');
-  ok(subclassOriginSuffix({ origin_setting: 'KibblesTasty (setting-neutral)', origin_region: 'KibblesTasty (setting-neutral)' }) === ' · origin KibblesTasty (setting-neutral) — an origin explanation is required for how its holder came to be in the Forgotten Realms',
+  ok(subclassOriginSuffix({ origin_setting: 'KibblesTasty (setting-neutral)', origin_region: 'KibblesTasty (setting-neutral)' }) === ' · origin KibblesTasty (setting-neutral)',
     'region equal to setting is not repeated (Warlord doubling fixed)');
   ok(subclassOriginSuffix(null) === '', 'null entry: no suffix, never throws');
 }
