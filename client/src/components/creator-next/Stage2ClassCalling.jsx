@@ -4,6 +4,7 @@ import classesData from '../../data/classes.json'
 import deitiesData from '../../data/deities.json'
 import { deferredNoteFor, isDeferredSpecies, resolveOriginSetting } from './speciesAdapter.js'
 import { subclassOriginSuffix } from './subclassOrigin.js'
+import { shortSpellBlurb } from './spellBlurb.js'
 
 /**
  * Creator-next Stage 2 — Class & Calling (2026-11-04, overnight build).
@@ -190,20 +191,6 @@ function prettify(id) {
 /** Spell-key form: the catalog key is the lowercase name ('fire bolt'). */
 function spellKeyOf(name) {
   return String(name || '').toLowerCase().trim().replace(/\s+/g, ' ')
-}
-
-/**
- * One-line summary of a spell for a picker row: the first sentence of the
- * book description, cut at a word boundary if still long. Never invents
- * text; returns '' when the spell has no description.
- */
-export function shortSpellBlurb(text, max = 170) {
-  const t = String(text || '').replace(/\s+/g, ' ').trim()
-  if (!t) return ''
-  const m = t.match(/^.*?[.!?](?=\s|$)/)
-  const first = m ? m[0] : t
-  if (first.length <= max) return first
-  return first.slice(0, max).replace(/\s+\S*$/, '') + '…'
 }
 
 export default function Stage2ClassCalling({

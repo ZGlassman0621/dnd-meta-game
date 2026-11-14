@@ -254,7 +254,7 @@ group('Subclass picker only for level-1 classes (polish note 6 + 2024 audit)');
   ok(!stage2Src.includes('quickBuild'), 'no Quick Build auto-fill remains in Stage 2 (creator test-notes #9)');
 }
 
-group('cantrip picker rows (layout + short descriptions)');
+group('spell picker rows (layout + short descriptions)');
 {
   const stage2Src = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage2ClassCalling.jsx'), 'utf8');
   // Checkboxes must reset the global `input { width: 100% }` rule, or the label is pushed to the far right.
@@ -264,8 +264,15 @@ group('cantrip picker rows (layout + short descriptions)');
   const row = stage2Src.slice(rowStart, rowEnd);
   ok(rowStart > 0 && !row.includes('<Tip'), 'a cantrip row has no tooltip; the description renders under the name');
   ok(row.includes('{blurb}'), 'the cantrip row renders the short description');
-  // Run the REAL helper (extracted from the component source) against the real cantrip data.
-  const fnSrc = stage2Src.slice(stage2Src.indexOf('export function shortSpellBlurb'), stage2Src.indexOf('export default function Stage2ClassCalling'));
+  // Stage 4's known / spellbook / prepared rows must read the same way.
+  const stage4Src = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage4AbilitiesSkillsSpells.jsx'), 'utf8');
+  ok(stage2Src.includes("from './spellBlurb.js'") && stage4Src.includes("from './spellBlurb.js'"), 'Stage 2 cantrips and Stage 4 spells share one blurb helper');
+  ok(/const checkInputStyle = \{[^}]*width: 'auto'[^}]*padding: 0/.test(stage4Src), 'Stage 4 checkboxes also reset the global input width and padding');
+  const rowSrc = stage4Src.slice(stage4Src.indexOf('function SpellPickRow'), stage4Src.indexOf('function prettify'));
+  ok(rowSrc.includes('shortSpellBlurb(spell.description)') && !rowSrc.includes('<Tip'), 'Stage 4 spell rows show the short description under the name, no tooltip');
+  ok((stage4Src.match(/<SpellPickRow /g) || []).length === 3, 'known, spellbook and prepared pickers all use the shared row');
+  // Run the REAL helper (the shared module's own text) against the real cantrip and level-1 data.
+  const fnSrc = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/spellBlurb.js'), 'utf8');
   const shortSpellBlurb = new Function(fnSrc.replace('export function', 'function') + '\nreturn shortSpellBlurb')();
   ok(shortSpellBlurb('') === '' && shortSpellBlurb(undefined) === '', 'no description gives an empty blurb, never an invented one');
   ok(shortSpellBlurb('You hurl a bubble of acid. Two creatures take damage.') === 'You hurl a bubble of acid.', 'blurb is the first sentence');
@@ -277,6 +284,10 @@ group('cantrip picker rows (layout + short descriptions)');
   ok(all.length > 50, `real cantrip data loaded (${all.length} entries)`);
   ok(all.every(c => c.description && shortSpellBlurb(c.description).length > 0 && shortSpellBlurb(c.description).length <= 171), 'every real cantrip yields a non-empty blurb of at most 171 characters');
   ok(all.every(c => c.description.startsWith(shortSpellBlurb(c.description).replace(/…$/, ''))), 'every blurb is a verbatim prefix of the book description');
+  const level1 = JSON.parse(fs.readFileSync(path.join(REPO, 'client/src/data/spells/spells-1st.json'), 'utf8'));
+  ok(level1.length > 40, `real level-1 spell data loaded (${level1.length} entries)`);
+  ok(level1.every(c => c.description && shortSpellBlurb(c.description).length > 0 && shortSpellBlurb(c.description).length <= 171), 'every real level-1 spell yields a non-empty blurb of at most 171 characters');
+  ok(level1.every(c => c.description.replace(/\s+/g, ' ').trim().startsWith(shortSpellBlurb(c.description).replace(/…$/, ''))), 'every level-1 blurb is a verbatim prefix of the book description');
 }
 
 console.log(`\ncreator-next-stage2: ${passed} passed, ${failed} failed`);

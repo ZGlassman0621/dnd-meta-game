@@ -3,6 +3,7 @@ import Tip from './Tooltip.jsx'
 import classesData from '../../data/classes.json'
 import { ABILITY_SCORES, SKILLS, TOOLS, LANGUAGES, concreteLanguages, skillKey } from '../../data/references.js'
 import { isHeldOption } from './choiceOptions.js'
+import { shortSpellBlurb } from './spellBlurb.js'
 import { deferredNoteFor, isDeferredSpecies, resolveSpeciesGrants } from './speciesAdapter.js'
 import { isMagicInitiateOriginFeat } from './stage1Persistence.js'
 import { bundledSpellData, knownCountFor, loadCachedSpellData, preparedCountFor, preparedCountRuleText, saveCachedSpellData, spellbookSizeFor, spellcastingAbilityForClass } from './spellCatalogFallback.js'
@@ -125,6 +126,29 @@ export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
 export const LEVEL_1_CAP = 18
 const ABILITY_FULL = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' }
 const ABILITY_SHORT = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wis', cha: 'Cha' }
+
+/**
+ * One spell row, shared by the known / spellbook / prepared pickers so they
+ * read exactly like the Stage 2 cantrip picker: a checkbox beside the spell
+ * name, and the first sentence of the book description under it. The
+ * checkbox resets the global `input { width: 100% }` rule (inputStyle).
+ */
+function SpellPickRow({ spell, held, checked, onToggle, inputStyle, note }) {
+  const blurb = shortSpellBlurb(spell.description)
+  return (
+    <div style={{ margin: '10px 0', opacity: held ? 0.55 : 1 }}>
+      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, margin: 0, fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 600, color: 'inherit' }}>
+        <input type="checkbox" style={inputStyle} disabled={held} checked={checked} onChange={onToggle} />
+        <span>
+          {held ? `${spell.name} — already granted` : spell.name}
+          {note ? <span style={{ fontWeight: 400, opacity: 0.75 }}> {note}</span> : null}
+          {spell.school ? <span style={{ fontWeight: 400, opacity: 0.75 }}> ({spell.school})</span> : null}
+        </span>
+      </label>
+      {blurb ? <div className="help" style={{ fontStyle: 'normal', margin: '2px 0 0 26px' }}>{blurb}</div> : null}
+    </div>
+  )
+}
 
 function prettify(id) {
   if (!id) return ''
@@ -846,14 +870,12 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
   }
   const labelStyle = { display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '18px 0 6px' }
   const checkStyle = { display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }
-  // One shared checkbox-row style (creator test-notes #13/#18/#19):
-  // a flex row keeps the checkbox on the same horizontal plane as
-  // its name, in every picker on this stage. The checkbox never
-  // shrinks. Spell rows (name + school + block description) use the
-  // flex-start variant with the text in a wrapper, so a tall row
-  // never centers its checkbox against two lines of text.
-  const checkStyleTop = { display: 'flex', alignItems: 'flex-start', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }
-  const checkInputStyle = { flex: '0 0 auto' }
+  // One shared checkbox-row style (creator test-notes #13/#18/#19): a flex row keeps
+  // the checkbox on the same horizontal plane as its name, in every picker on this
+  // stage, and the checkbox never shrinks. Spell rows use SpellPickRow (above).
+  // width/padding/margin reset: index.css has a global `input { width: 100%;
+  // padding: .75rem }` that otherwise stretches a bare checkbox across its row.
+  const checkInputStyle = { flex: '0 0 auto', width: 'auto', padding: 0, margin: 0 }
   const primarySet = new Set((cls?.primaryAbility || []).map(a => String(a).toLowerCase()))
   const knownSpells = Array.isArray(state.known_spells) ? state.known_spells : []
   const preparedSpells = Array.isArray(state.prepared_spells) ? state.prepared_spells : []
@@ -1261,14 +1283,8 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 const held = isHeldOption(s.name, [...grantedSpellNames])
                 const checked = knownSpells.includes(s.key)
                 return (
-                  <label key={s.key} style={{ ...checkStyleTop, opacity: held ? 0.55 : 1 }}>
-                    <input type="checkbox" style={checkInputStyle} disabled={held} checked={checked} onChange={() => toggleSpell('known_spells', s.key, knownCount)} />
-                    <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                      {held ? `${s.name} — already granted` : s.name}
-                      {s.school ? <span style={{ opacity: 0.75 }}> ({s.school})</span> : null}
-                      {s.description ? <span style={{ display: 'block', opacity: 0.75, fontSize: 14 }}>{s.description}</span> : null}
-                    </span>
-                  </label>
+                  <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
+                    onToggle={() => toggleSpell('known_spells', s.key, knownCount)} />
                 )
               })}
             </div>
@@ -1290,15 +1306,9 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 const checked = knownSpells.includes(s.key)
                 const isPrepared = preparedSpells.includes(s.key)
                 return (
-                  <label key={s.key} style={{ ...checkStyleTop, opacity: held ? 0.55 : 1 }}>
-                    <input type="checkbox" style={checkInputStyle} disabled={held} checked={checked} onChange={() => toggleBookSpell(s.key)} />
-                    <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                      {held ? `${s.name} — already granted` : s.name}
-                      {isPrepared ? <span style={{ opacity: 0.75 }}> — prepared ✓</span> : null}
-                      {s.school ? <span style={{ opacity: 0.75 }}> ({s.school})</span> : null}
-                      {s.description ? <span style={{ display: 'block', opacity: 0.75, fontSize: 14 }}>{s.description}</span> : null}
-                    </span>
-                  </label>
+                  <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
+                    note={isPrepared ? '— prepared ✓' : ''}
+                    onToggle={() => toggleBookSpell(s.key)} />
                 )
               })}
             </div>
@@ -1338,14 +1348,8 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 const held = isHeldOption(s.name, [...grantedSpellNames])
                 const checked = preparedSpells.includes(s.key)
                 return (
-                  <label key={s.key} style={{ ...checkStyleTop, opacity: held ? 0.55 : 1 }}>
-                    <input type="checkbox" style={checkInputStyle} disabled={held} checked={checked} onChange={() => toggleSpell('prepared_spells', s.key, preparedCount)} />
-                    <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                      {held ? `${s.name} — already granted` : s.name}
-                      {s.school ? <span style={{ opacity: 0.75 }}> ({s.school})</span> : null}
-                      {s.description ? <span style={{ display: 'block', opacity: 0.75, fontSize: 14 }}>{s.description}</span> : null}
-                    </span>
-                  </label>
+                  <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
+                    onToggle={() => toggleSpell('prepared_spells', s.key, preparedCount)} />
                 )
               })}
             </div>
