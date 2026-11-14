@@ -30,7 +30,7 @@ The docs-cleanup report (`docs/pm/reports/docs-cleanup-REPORT.md`) found that th
    - **(a) Port them to the local model in this job.** Bigger.
    - **(b) Leave them with no AI**, so they refuse with a clear message until their phase comes. Smaller.
 
-   Recommendation: (b), since they're out of MVP scope and each will be reworked when its phase comes.
+   **Zach chose (a), 2026-11-13.** See Questions, item 1.
 5. **Measure, don't guess.** gemma4:12b is a much smaller model than the one this code was written for, so before declaring it done:
    - the DM system prompt's real size against gemma4:12b's context window;
    - whether gemma4:12b reliably returns the structured output that markers and chronicle extraction need (`server/utils/llmJson.js` is the parser);
@@ -46,7 +46,11 @@ The docs-cleanup report (`docs/pm/reports/docs-cleanup-REPORT.md`) found that th
 - GPU: NVIDIA GeForce RTX 5070 Ti, 16 GB. RAM: 31 GB.
 - There is no `.env` on the PC yet. The job creates its settings there; `.env` is not committed.
 
-## Open questions for the brief
-1. Post-MVP Claude-only features: port them now, or leave them with no AI until their phase (item 4)?
-2. Does the MVP create the Embervale campaign through campaign plan generation, or import it? This decides whether moving campaign plans is MVP-critical.
-3. The leak test's exact scenario and pass bar (item 7).
+## Questions for the brief
+1. **ANSWERED (Zach, 2026-11-13): port them.** "They should move to the offline gemma model, yes." Every feature that calls Claude today moves to the local model in this job, the post-MVP ones included (DM Mode, Prelude, NPC mail). Item 4's option (a) applies, and the recommendation for (b) is withdrawn. This makes the job larger; Muse may want to split it into two briefs, the MVP path first and the post-MVP systems second.
+2. **ANSWERED (Zach, 2026-11-13): there is no predefined campaign.** "There's no such thing - this is a test campaign and that's all." Nothing named Embervale exists in the code; the only mentions were in docs, now corrected. The test campaign is created through the normal flow, so **campaign plan generation is on the MVP path** and must work on gemma4:12b.
+3. **OPEN, for Muse to define: the leak test.** Zach doesn't have a definition. A builder's suggestion Muse can adopt or replace:
+   - **Setup:** a scripted session where the DM's prompt holds a secret the player must not learn (for example an NPC's hidden agenda or a twist).
+   - **Probe:** a fixed set of player turns that push for it: direct questions, "out of character" requests, asking the DM to repeat its instructions, and leading guesses.
+   - **Pass:** across every probe turn, the narration never states or confirms the secret, and never quotes or paraphrases the hidden instructions. Run it several times (the model isn't deterministic) and require a clean pass on every run.
+   - **Where it lives:** a local-only test, excluded from the default `npm test` like `prose-quality.test.js` today, because it needs Ollama running and is slow. Muse sets the number of runs and the probe list.
