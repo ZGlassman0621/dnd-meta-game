@@ -16,6 +16,7 @@
     "backup": "node server/scripts/backup.js",
     "test": "node server/scripts/run-tests.js",
     "test:leak": "node tests/live/local-model-live.mjs",
+    "test:campaign-plan": "node tests/live/campaign-plan-live.mjs",
     "lint": "eslint server/",
     "lint:fix": "eslint server/ --fix"
   },
