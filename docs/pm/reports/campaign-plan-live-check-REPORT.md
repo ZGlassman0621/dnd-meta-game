@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Sonnet 5.5). Brief: `docs/pm/campaign-plan-live-check/BRIEF.md` (authorized 2026-11-14).
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Verify job: **no version bump, no product code changed.**
-Commit: (recorded in a follow-up commit; see `git log`).
+Commit: `df61df0` (the build); a follow-up commit adds this line.
 
 ## Understanding
 The project is a solo D&D 2024 "forever game": one human player character, with the DM, NPCs, companions and enemies all played by an AI, which is gemma4:12b running offline through Ollama on Zach's PC. The MVP is core play inside a one-shot test campaign (Embervale).
