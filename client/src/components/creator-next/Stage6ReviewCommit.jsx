@@ -12,6 +12,12 @@ import {
   resolveSpeciesASI, resolveThemeASI, scoresComplete
 } from './Stage4AbilitiesSkillsSpells.jsx'
 import { computedGold, deriveLevel1Stats, goldOptionBaseline, normalizePackageData } from './Stage5GearStory.jsx'
+import { themeLocationOptions } from './themeLocation.js'
+import spellCatalog from '../../data/spellCatalog.generated.json'
+
+import { grantedCantripText as grantedCantripTextFor, packageItemLines } from './reviewText.js'
+
+const grantedCantripText = (note) => grantedCantripTextFor(note, spellCatalog.spells)
 
 /**
  * Creator-next Stage 6 — Review & Commit (2026-11-07).
@@ -405,7 +411,9 @@ export function validateReview(state, ctx = {}) {
     if (!forgo && !state.originFeat) {
       push(2, 'originFeat', 'Stage 3 — Origin feat is still needed. The theme fixes it — pick a theme with its feat on Stage 3.')
     }
-    if (Array.isArray(theme?.creation_choice_options) && theme.creation_choice_options.length && !state.themePathChoice) {
+    // Uses the same option rule Stage 3 renders, so a theme whose list comes from the origin's
+    // regions (Folk Hero, Hermit) is required here too, not only at the server.
+    if (theme && themeLocationOptions(theme, state).options.length > 0 && !state.themePathChoice) {
       push(2, 'themePathChoice', `Stage 3 — ${theme.creation_choice_label || 'Path choice'} is still needed. Pick one on Stage 3 before committing.`)
     }
   }
@@ -790,7 +798,7 @@ export default function Stage6ReviewCommit({
         {breakdown.complete ? (
           <>
             <table style={{ borderCollapse: 'collapse', fontFamily: 'var(--serif)', fontSize: 15 }}>
-              <thead><tr>{['Ability', 'Base', 'Species', 'Choice', 'Theme', 'Final', 'Mod'].map(h => (
+              <thead><tr>{['Ability', 'Base', 'Species', ...(breakdown.rows.some(r => r.choice) ? ['Your pick'] : []), 'Theme', 'Final', 'Mod'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '4px 12px 4px 0', borderBottom: '1px solid var(--rule)' }}>{h}</th>
               ))}</tr></thead>
               <tbody>
@@ -799,7 +807,7 @@ export default function Stage6ReviewCommit({
                     <td style={{ padding: '4px 12px 4px 0' }}>{r.name}</td>
                     <td style={{ padding: '4px 12px 4px 0' }}>{r.base ?? '—'}</td>
                     <td style={{ padding: '4px 12px 4px 0' }}>{r.species ? `+${r.species}` : '—'}</td>
-                    <td style={{ padding: '4px 12px 4px 0' }}>{r.choice ? `+${r.choice}` : '—'}</td>
+                    {breakdown.rows.some(x => x.choice) && <td style={{ padding: '4px 12px 4px 0' }}>{r.choice ? `+${r.choice}` : '—'}</td>}
                     <td style={{ padding: '4px 12px 4px 0' }}>{r.theme ? `+${r.theme}` : '—'}</td>
                     <td style={{ padding: '4px 12px 4px 0' }}><strong>{r.final ?? '—'}</strong>{r.clamped ? ' (clamped at 18)' : ''}</td>
                     <td style={{ padding: '4px 12px 4px 0' }}>{fmtMod(r.mod)}</td>
@@ -813,7 +821,7 @@ export default function Stage6ReviewCommit({
               </div>
             )}
             <div className="help" style={{ fontStyle: 'normal', marginTop: 8 }}>
-              Method: {state.generation_method || 'point_buy'}. Origin feats grant no ability increase in 2024, so there is no feat line.
+              Method: {({ point_buy: 'Point Buy', standard_array: 'Standard Array', manual: 'Manual entry' })[state.generation_method || 'point_buy'] || 'Custom'}.
             </div>
           </>
         ) : (
@@ -846,7 +854,10 @@ export default function Stage6ReviewCommit({
         {traitList.length ? (
           <ul style={{ margin: 0, paddingLeft: '1.1em', fontFamily: 'var(--serif)', fontSize: 15, lineHeight: 1.6 }}>
             {traitList.map((t, i) => (
-              <li key={i}><strong>{t.name}</strong>{t.note ? ` — ${t.note}` : ''}</li>
+              <li key={i}>
+                <strong>{t.name}</strong>{t.note ? ` — ${t.note}` : ''}
+                {grantedCantripText(t.note) ? <div style={{ fontSize: 14, color: 'var(--ink-2)' }}>{grantedCantripText(t.note)}</div> : null}
+              </li>
             ))}
           </ul>
         ) : (
@@ -868,9 +879,6 @@ export default function Stage6ReviewCommit({
           <div>Languages: {(state.languages || []).length ? state.languages.join(', ') : '—'}</div>
           <div>Skills: {(state.skills || []).length ? state.skills.map(prettify).join(', ') : '—'}</div>
           <div>Tools: {(state.tool_proficiencies || []).length ? state.tool_proficiencies.join(', ') : '—'}</div>
-          <div className="help" style={{ fontStyle: 'normal', marginTop: 6 }}>
-            Species languages: {(speciesEntry?.languages || []).length ? speciesEntry.languages.join(', ') : 'no languages listed'}. A language already known can never be re-picked as a “new” language.
-          </div>
         </div>
       </Section>
 
@@ -951,15 +959,15 @@ export default function Stage6ReviewCommit({
         <div style={{ fontFamily: 'var(--serif)', fontSize: 15, lineHeight: 1.6 }}>
           {state.gear_choice === 'packages' && (
             <>
-              <div>Equipment packages — package {state.package_id || '—'}</div>
-              <div>
-                Package picks: {state.package_picks && Object.keys(state.package_picks).length
-                  ? Object.entries(state.package_picks).map(([k, v]) => `${prettify(k)}: ${Array.isArray(v) ? v.join(', ') : JSON.stringify(v)}`).join('; ')
-                  : 'defaults'}
-              </div>
-              <div className="help" style={{ fontStyle: 'normal', marginTop: 6 }}>
-                The server resolves these picks into inventory, equipment, and gold at submit.
-              </div>
+              <div>Starting equipment — Package {state.package_id || '—'}</div>
+              {(() => {
+                const lines = packageItemLines(packageData, state.package_id, state.package_picks)
+                return lines.length > 0 ? (
+                  <ul style={{ margin: '4px 0 0', paddingLeft: '1.1em' }}>
+                    {lines.map((l, i) => <li key={i}>{l}</li>)}
+                  </ul>
+                ) : null
+              })()}
             </>
           )}
           {state.gear_choice === 'gold' && (

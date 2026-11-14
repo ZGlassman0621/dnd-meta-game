@@ -48,6 +48,13 @@ function prettifyFeatId(id) {
   return String(id).split(/[_-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
+// The Human Versatile feat block calls prettify() for its spell-list names. Every other stage
+// defines its own copy; Stage 1 never did, so choosing Magic Initiate there threw a
+// ReferenceError and blanked the whole screen.
+function prettify(id) {
+  return prettifyFeatId(id)
+}
+
 // Mirrors V2 Step 2's helper (same ancestry-feat list mapping, same
 // two special cases): aasimar splits by subrace, drow lives at top
 // level rather than under elf. Returns '' when not yet disambiguated.

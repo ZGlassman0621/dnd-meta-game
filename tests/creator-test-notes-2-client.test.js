@@ -241,7 +241,8 @@ group('R2-6 internal-line sweep — named removals + rewrites');
   ok(stage4.includes("Theme increase: ${formatAsi(themeASI) || 'not listed yet'}"), 'Stage 4 theme-increase phrasing rewritten');
   ok(stage4.includes('No signature skills listed for this theme yet.'), 'Stage 4 signature-skills phrasing rewritten');
   ok(stage4.includes("Languages: {speciesLanguages.length ? speciesLanguages.join(', ') : 'no languages listed'}"), 'Stage 4 languages phrasing rewritten');
-  ok(stage6.includes("no languages listed'}. A language already known"), 'Stage 6 species-languages phrasing rewritten');
+  // Zach, 2026-11-14: the Review's "Species languages … can never be re-picked" note is internal and was removed.
+  ok(!stage6.includes('A language already known') && !stage6.includes('Species languages:'), 'Stage 6 carries no internal species-languages note');
   // No "Start the server / npm run dev" instruction reaches the player.
   ok(!stage2.includes('Start the server') && !stage5.includes('Start the server') && !shell.includes('Start the server'), 'no "Start the server" instruction in any creator stage');
   ok(!stage2.includes('npm run dev') && !stage5.includes('npm run dev') && !shell.includes('npm run dev'), 'no "npm run dev" instruction in any creator stage');
