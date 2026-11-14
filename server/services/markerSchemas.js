@@ -11,7 +11,7 @@
  *
  * Problem the migration solved: markers used to be documented in prose
  * inside the DM system prompt, parsed ad-hoc by regex at each call site,
- * and silently dropped on malformed emission. When Sonnet typo'd a field
+ * and silently dropped on malformed emission. When the model typo'd a field
  * or omitted a required key, the side effect never fired. Over long
  * campaigns these silent drops accumulated: promises untracked, notoriety
  * lost, canon facts missing. The player never knew; the AI never knew either.
@@ -28,7 +28,7 @@
  *      registerHandler() at module load.
  *   4. **Correction loop**: validation failures are RECORDED, not
  *      swallowed — stored on session_config.pendingMarkerCorrections so
- *      the next turn's prompt injects a [SYSTEM NOTE] asking Sonnet to
+ *      the next turn's prompt injects a [SYSTEM NOTE] asking the model to
  *      re-emit correctly. That note is INVISIBLE to the player but gives
  *      the AI a concrete correction target.
  *
@@ -48,7 +48,7 @@
  *      (e.g., ADD_ITEM consumed by MERCHANT_SHOP handler)
  *
  * This shape will become tool-use definitions directly when the
- * migration to Anthropic tool-use lands — no rewrite required.
+ * migration to native tool-use lands — no rewrite required.
  */
 
 /**

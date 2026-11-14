@@ -2,13 +2,13 @@
  * Prelude canon facts service.
  *
  * v1.0.60. A running ledger of canonical truths the AI has established
- * during prelude play. Injected into every Sonnet prompt as ground truth so
+ * during prelude play. Injected into every the model prompt as ground truth so
  * context drift (forgotten ages, invented weapon training, wandering
  * relationships) can't take hold.
  *
  * Consumed by:
  *   - preludeSessionService.sendMessage — processes [CANON_FACT] and
- *     [CANON_FACT_RETIRE] markers from Sonnet responses
+ *     [CANON_FACT_RETIRE] markers from the model responses
  *   - preludeArcPromptBuilder.createPreludeSystemPrompt — injects the
  *     active-fact block before sending the next turn
  *   - PreludeSession.jsx Setup panel — surfaces the ledger to the player
@@ -94,7 +94,7 @@ export async function getActiveCanonFacts(characterId) {
 
 /**
  * Build the CANON FACTS prompt block — a structured, grouped bullet list
- * that Sonnet sees every turn. Empty string when no facts yet.
+ * that the model sees every turn. Empty string when no facts yet.
  *
  * Format is intentionally terse. Each fact is one bullet. Subjects are
  * grouped together. Categories separate sections. Designed to be scanned

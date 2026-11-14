@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 /**
  * Post-setup arc preview.
  *
- * Renders the Opus-generated arc plan for a prelude-phase character and lets
+ * Renders the AI-generated arc plan for a prelude-phase character and lets
  * the player re-roll once if it doesn't land. This is the bridge between
  * Prelude setup and gameplay (PreludeSession).
  *
@@ -119,7 +119,7 @@ export default function PreludeArcPreview({ character, onReturn, onBegin }) {
           <div className="frame" style={{ textAlign: 'center', paddingTop: 80 }}>
             <h1 className="h-step">Shaping the arc…</h1>
             <p className="lede" style={{ marginTop: 16, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
-              Opus is drawing the thread of {characterDisplayName}'s childhood. Typical: 45–90 seconds.
+              The AI is drawing the thread of {characterDisplayName}'s childhood. Typical: 45–90 seconds.
             </p>
             <p style={{ marginTop: 32, fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--ink-3)', letterSpacing: '0.06em' }}>
               {elapsed}s elapsed
@@ -573,7 +573,7 @@ export default function PreludeArcPreview({ character, onReturn, onBegin }) {
               type="button"
               className="btn primary lg"
               onClick={onBegin || onReturn}
-              title="Opens the first session. Opus writes the opening scene; Sonnet runs the gameplay."
+              title="Opens the first session. The DM writes the opening scene and runs the play."
             >
               Begin the Prelude →
             </button>

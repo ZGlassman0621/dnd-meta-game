@@ -1,9 +1,9 @@
 import express from 'express';
 import db, { dbAll, dbGet, dbRun } from '../database.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
-import ollama from '../services/ollama.js';
-import claude from '../services/claude.js';
-import { wrapClaudeCallWithId, annotateAiCallLog, loggedChat, pruneAiCallLog } from '../services/aiCallLogger.js';
+import llm from '../services/llm.js';
+import { modelFor } from '../services/localModels.js';
+import { wrapLlmCallWithId, annotateAiCallLog, loggedChat, pruneAiCallLog } from '../services/aiCallLogger.js';
 import { dayToDate, advanceTime, getSeason, getTimeOfDay } from '../config/harptos.js';
 import { XP_THRESHOLDS, getSpellSlots } from '../config/levelProgression.js';
 import { formatThreadsForAI } from '../services/storyThreads.js';
@@ -34,9 +34,6 @@ import '../services/lootDropService.js';
 // Loot wiring (R-02): magicItemDiscoveryService registers the
 // ITEM_REVEAL_ONE / ITEM_IDENTIFY handlers at module load.
 import '../services/magicItemDiscoveryService.js';
-import {
-  sonnetModel, getPins, getDefaultPins, persistPins, resetPins, fetchCatalog, comparePins
-} from '../services/modelRegistry.js';
 // SC-6.4d: recordPlayerDefenseOutcome no longer imported — BASE_DEFENSE_RESULT
 // handler in baseThreatService.js owns the call. Loading the module fires
 // the module-level registerMarkerHandler registration.
@@ -169,7 +166,7 @@ import { formatCraftingForPrompt } from '../services/craftingService.js';
 // (Loading these services also fires their module-level
 // registerMarkerHandler() calls — survival/weather/crafting handlers
 // wire up at server boot regardless of import order.)
-import { formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK, parsePlayerDiceInput, formatPlayerDiceDirective } from '../services/dmPromptBuilder.js';
+import { createDMSystemPrompt, formatMythicForPrompt, applyLeanTransforms, detectObservationVerbs, OBSERVATION_AS_CHECK_BLOCK, parsePlayerDiceInput, formatPlayerDiceDirective } from '../services/dmPromptBuilder.js';
 // SC-6.4d: recordTrial / useMythicPower / advanceTier / findLegendaryItemByName /
 // advanceItemState no longer imported — MYTHIC_TRIAL / ITEM_AWAKEN / MYTHIC_SURGE
 // handlers in mythicService.js own the calls.
@@ -247,129 +244,21 @@ function pickSeasonalStartDay(campaignDescription, startingLocationName) {
   return possibleDays[Math.floor(Math.random() * possibleDays.length)];
 }
 
-// Helper to determine which LLM provider to use
-async function getLLMProvider(preference = 'auto') {
-  // If user explicitly requested a specific provider, try that first
-  if (preference === 'ollama') {
-    const ollamaStatus = await ollama.checkOllamaStatus();
-    if (ollamaStatus.available) {
-      return { provider: 'ollama', status: ollamaStatus };
-    }
-    return { provider: null, status: { available: false, error: 'Ollama is not running. Start Ollama to use local AI.' } };
-  }
-
-  if (preference === 'claude') {
-    if (claude.isClaudeAvailable()) {
-      const status = await claude.checkClaudeStatus();
-      if (status.available) {
-        return { provider: 'claude', status };
-      }
-    }
-    return { provider: null, status: { available: false, error: 'Claude API not available. Check your ANTHROPIC_API_KEY.' } };
-  }
-
-  // Auto mode: try Claude first, then Ollama fallback
-  if (claude.isClaudeAvailable()) {
-    const status = await claude.checkClaudeStatus();
-    if (status.available) {
-      return { provider: 'claude', status };
-    }
-    console.log('Claude unavailable, checking Ollama fallback...');
-  }
-
-  const ollamaStatus = await ollama.checkOllamaStatus();
-  if (ollamaStatus.available) {
-    return { provider: 'ollama', status: ollamaStatus };
-  }
-
-  const claudeConfigured = claude.isClaudeAvailable();
-  const errorMsg = claudeConfigured
-    ? 'Claude API unavailable (no internet?) and Ollama not running. Start Ollama for offline mode.'
-    : 'No LLM provider available. Set ANTHROPIC_API_KEY for Claude or install Ollama for local AI.';
-
-  return { provider: null, status: { available: false, error: errorMsg } };
-}
-
-// Check LLM status (prefers Claude, falls back to Ollama)
+// Local AI status: is Ollama reachable, and is every role's model installed?
+// The game has one provider — the local model (localModels.js / llm.js).
 router.get('/llm-status', async (req, res) => {
   try {
-    const preference = req.query.preference || 'auto';
-    const { provider, status } = await getLLMProvider(preference);
-    res.json({ ...status, provider });
-  } catch (error) {
-    handleServerError(res, error, 'check LLM status');
-  }
-});
-
-/**
- * Which models this API key can reach, and whether our pins are the newest.
- *
- * Read-only and side-effect free — it never adopts anything. Adopting a new
- * generation can change request semantics, so it stays a decision a human makes
- * after reading the release notes. `POST /model-pins` is the deliberate act.
- */
-router.get('/model-catalog', async (req, res) => {
-  try {
-    const catalog = await fetchCatalog();
-    res.json({ pins: getPins(), defaults: getDefaultPins(), catalog, comparison: comparePins(catalog) });
-  } catch (error) {
-    // A 502 rather than a 500: the failure is upstream (no key, Anthropic
-    // unreachable), not a bug here, and the client shows the message verbatim.
-    res.status(502).json({ error: error.message });
-  }
-});
-
-/**
- * Adopt model pins. `{ opus?, sonnet?, reset? }`.
- *
- * Every requested ID is validated against the live catalog before anything is
- * written. A typo would otherwise persist happily and surface as a 404 on the
- * next gameplay turn — a long way from its cause, and after the session lock
- * has already been taken.
- */
-router.post('/model-pins', async (req, res) => {
-  try {
-    const { opus, sonnet, reset } = req.body || {};
-
-    if (reset) {
-      return res.json({ pins: await resetPins(), reset: true });
-    }
-    if (!opus && !sonnet) {
-      return res.status(400).json({ error: 'Provide at least one of `opus` or `sonnet`, or `reset: true`.' });
-    }
-
-    const catalog = await fetchCatalog();
-    const known = new Set(catalog.map(m => m.id));
-    const unknown = [opus, sonnet].filter(id => id && !known.has(id));
-    if (unknown.length > 0) {
-      return res.status(400).json({
-        error: `Not available to this API key: ${unknown.join(', ')}`,
-        available: catalog.map(m => m.id)
-      });
-    }
-
-    const pins = await persistPins({ opus, sonnet });
-    console.log(`[modelRegistry] pins updated by request: opus=${pins.opus} sonnet=${pins.sonnet}`);
-    res.json({ pins, comparison: comparePins(catalog) });
-  } catch (error) {
-    handleServerError(res, error, 'update model pins');
-  }
-});
-
-// Check Ollama status (legacy endpoint)
-router.get('/ollama-status', async (req, res) => {
-  try {
-    const status = await ollama.checkOllamaStatus();
+    const status = await llm.checkStatus();
     res.json(status);
   } catch (error) {
-    handleServerError(res, error, 'check Ollama status');
+    handleServerError(res, error, 'check local AI status');
   }
 });
 
-// List available models
+// Installed Ollama models (for the settings display).
 router.get('/models', async (req, res) => {
   try {
-    const models = await ollama.listModels();
+    const models = await llm.listModels();
     res.json({ models });
   } catch (error) {
     handleServerError(res, error, 'list models');
@@ -599,9 +488,6 @@ router.post('/start', async (req, res) => {
       campaignLength,
       customNpcs,
       bankDeals = [],  // optional array of { profession, location } — NPC-bank handoff
-      model,
-      providerPreference,  // 'auto' | 'claude' | 'ollama'
-      modelOverride,  // 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch override (v1.0.99+)
       leanPrompt,  // boolean — diagnostic override, strips MECHANICAL MARKERS + softens HARD STOPS for prose-quality testing
       continueCampaign,  // If true, pull config from last session
       previousSessionSummaries  // Array of summaries to include in context
@@ -857,7 +743,7 @@ router.post('/start', async (req, res) => {
 
         // Calculate adaptive token budget
         const estimatedPromptTokens = estimateTokens(JSON.stringify(worldState || '') + campaignNotes + characterMemories);
-        const chronicleBudget = calculateChronicleBudget(estimatedPromptTokens, 0, sonnetModel());
+        const chronicleBudget = calculateChronicleBudget(estimatedPromptTokens, 0);
 
         const chronicleResult = await getRelevantContext(characterId, character.campaign_id, hints, chronicleBudget);
         chronicleContext = chronicleResult.context || '';
@@ -1078,17 +964,12 @@ router.post('/start', async (req, res) => {
     // the customNpc objects so buildAgendaPromptBlock can actually see them.
     // Best-effort throughout: nothing here may block session start.
     try {
-      const agendaLlmCall = async (prompt) => {
-        const { provider } = await getLLMProvider(providerPreference);
-        if (provider === 'claude') {
-          return await loggedChat(
-            { call_purpose: 'npc_agenda_backfill', prompt_builder: 'dmSession_route', session_id: null },
-            'You generate hidden agendas for NPCs in a D&D campaign. Respond with JSON only.',
-            [{ role: 'user', content: prompt }]
-          );
-        }
-        return await ollama.chat([{ role: 'user', content: prompt }], model);
-      };
+      const agendaLlmCall = async (prompt) => loggedChat(
+        { call_purpose: 'npc_agenda_backfill', prompt_builder: 'dmSession_route', session_id: null },
+        'You generate hidden agendas for NPCs in a D&D campaign. Respond with JSON only.',
+        [{ role: 'user', content: prompt }],
+        3, 'generation'
+      );
       const backfillIds = new Set();
       for (const n of (Array.isArray(customNpcs) ? customNpcs : [])) {
         if (n?.id) backfillIds.add(n.id);
@@ -1154,19 +1035,18 @@ router.post('/start', async (req, res) => {
       progression
     };
 
-    // Check which LLM provider is available (respects user preference)
-    const { provider, status: llmStatus } = await getLLMProvider(providerPreference);
-    if (!provider) {
+    // The local model must be reachable, with its model installed.
+    const llmStatus = await llm.checkStatus();
+    if (!llmStatus.available) {
       return res.status(503).json({
-        error: 'No LLM provider available',
+        error: 'Local AI not available',
         details: llmStatus.error
       });
     }
 
     let result;
-    if (provider === 'claude') {
-      // Use Claude - build system prompt with Ollama's helper, then call Claude
-      const systemPrompt = ollama.createDMSystemPrompt(character, sessionConfig);
+    {
+      const systemPrompt = createDMSystemPrompt(character, sessionConfig);
 
       // Build opening prompt (simplified version of what Ollama does internally)
       const charName = character.nickname || character.name.split(' ')[0];
@@ -1213,12 +1093,6 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
         }
       }
 
-      // v1.0.99: Opus is now the default for all DM session turns (decision logged
-      // in DECISION_LOG under "Opus as production default for main DM session
-      // continuations"). The body param `modelOverride` accepts 'sonnet' as the
-      // escape-hatch signal. 'opus' is also accepted (no-op since it's the default).
-      const modelChoice = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
-
       // Lean prompt: strips MECHANICAL MARKERS + softens Cardinal Rule 2.
       // Applied per-call only — the FULL prompt is what we store in messages[0]
       // so toggling lean off later restores all rules.
@@ -1227,7 +1101,7 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
       // Phase 4a SC-4a.1 — wrap with the call logger. session_id isn't
       // known yet (the dm_sessions row gets inserted right after this
       // call; turn_number = 0 for the opening turn).
-      const wrappedStart = await wrapClaudeCallWithId(
+      const wrappedStart = await wrapLlmCallWithId(
         {
           character_id: character?.id,
           campaign_id: character?.campaign_id,
@@ -1236,26 +1110,23 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
           call_purpose: 'session_start',
           system_prompt: apiSystemPrompt,
           user_message: openingPrompt,
-          metadata: { model_choice: modelChoice, lean_prompt: !!leanPrompt }
+          metadata: { lean_prompt: !!leanPrompt }
         },
-        (chatOptions) => claude.startSession(apiSystemPrompt, openingPrompt, modelChoice, chatOptions)
+        (chatOptions) => llm.startSession(apiSystemPrompt, openingPrompt, 'dm', chatOptions)
       );
-      const claudeResult = wrappedStart.result;
+      const startResult = wrappedStart.result;
       const __sessionStartLogId = wrappedStart.logId;
       // Restore the full prompt as the persisted system message regardless
       // of which variant we sent to the API this turn.
-      if (claudeResult.messages?.[0]?.role === 'system') {
-        claudeResult.messages[0] = { role: 'system', content: systemPrompt };
+      if (startResult.messages?.[0]?.role === 'system') {
+        startResult.messages[0] = { role: 'system', content: systemPrompt };
       }
       result = {
         systemPrompt,
-        openingNarrative: claudeResult.response,
-        model: claudeResult.model,
-        messages: claudeResult.messages
+        openingNarrative: startResult.response,
+        model: startResult.model,
+        messages: startResult.messages
       };
-    } else {
-      // Use Ollama
-      result = await ollama.startSession(character, sessionConfig, model);
     }
 
     // Create the session in the database
@@ -1314,13 +1185,13 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
 
     const info = await dbRun(`
       INSERT INTO dm_sessions (character_id, title, setting, tone, model, status, messages, start_time, session_config, game_start_day, game_start_year)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'), ?, ?, ?)
     `, [
       characterId,
       title,
       locationName,
       campaignLength || 'ongoing-saga',
-      model || process.env.OLLAMA_MODEL || 'gpt-oss:20b',
+      result.model,
       JSON.stringify(result.messages),
       JSON.stringify(sessionConfig),
       gameStartDay,
@@ -1421,10 +1292,9 @@ router.post('/:sessionId/message', async (req, res) => {
 
   try {
     const { sessionId } = req.params;
-    // modelOverride: 'opus' | 'sonnet' | null — Opus is the default; 'sonnet' is the escape-hatch (v1.0.99+)
     // attackRoll / damage: Phase 4 hybrid combat. Optional whole numbers the
     // player rolled at their own table; see parsePlayerDiceInput.
-    const { action, providerPreference, modelOverride, leanPrompt, activeConditions, attackRoll, damage, checkRoll, checkRoll2 } = req.body;
+    const { action, leanPrompt, activeConditions, attackRoll, damage, checkRoll, checkRoll2 } = req.body;
 
     if (!action || !action.trim()) {
       return res.status(400).json({ error: 'Action is required' });
@@ -1655,10 +1525,10 @@ router.post('/:sessionId/message', async (req, res) => {
       messages.push({ role: 'user', content: conditionNote });
     }
 
-    // Check which LLM provider is available (respects user preference)
-    const { provider } = await getLLMProvider(providerPreference);
-    if (!provider) {
-      return res.status(503).json({ error: 'No LLM provider available' });
+    // The local model must be reachable, with its model installed.
+    const llmStatus = await llm.checkStatus();
+    if (!llmStatus.available) {
+      return res.status(503).json({ error: 'Local AI not available', details: llmStatus.error });
     }
 
     // Pillar 5: inject the repetition ledger into the system prompt so the DM
@@ -1903,13 +1773,12 @@ router.post('/:sessionId/message', async (req, res) => {
     // Reactive context-window compression as a safety net. With rolling
     // summaries in place this should rarely fire — but we keep it for
     // cases where summarization lags behind (e.g. rapid-fire turns).
-    const modelForCompression = provider === 'claude' ? sonnetModel() : (session.model || process.env.OLLAMA_MODEL || 'gpt-oss:20b');
-    const compressionCheck = shouldCompress(messagesToSend, modelForCompression);
+    const compressionCheck = shouldCompress(messagesToSend);
 
     if (compressionCheck.needsCompression) {
       console.log(`Context compression triggered (${compressionCheck.urgency}): ${compressionCheck.totalTokens} estimated tokens`);
       try {
-        messagesToSend = await compressMessageHistory(messagesToSend, parseInt(sessionId), modelForCompression);
+        messagesToSend = await compressMessageHistory(messagesToSend, parseInt(sessionId));
         console.log(`Compressed to ${messagesToSend.length} messages`);
       } catch (compressError) {
         console.error('Context compression failed, using full history:', compressError.message);
@@ -1917,22 +1786,16 @@ router.post('/:sessionId/message', async (req, res) => {
     }
 
     let result;
-    // Phase 4a SC-4a.1 — `__aiLogId` set when this turn ran through the
-    // logged Claude path; null for Ollama or if logging persistence failed.
-    // Threaded into the marker-dispatch annotation below.
+    // Phase 4a SC-4a.1 — `__aiLogId` is the ai_call_log row for this turn
+    // (null if logging persistence failed). Threaded into the marker-dispatch
+    // annotation below.
     let __aiLogId = null;
-    if (provider === 'claude') {
-      // Use Claude - extract system prompt from messages
-      // v1.0.99: Opus is the default for all DM session turns. Body param
-      // `modelOverride` accepts 'sonnet' as the escape-hatch signal; 'opus' is
-      // also accepted as a no-op. See DECISION_LOG under "Opus as production
-      // default for main DM session continuations".
+    {
       // leanPrompt=true strips MECHANICAL MARKERS for this call;
       //   we restore the full prompt to messages[0] before persisting so the toggle is reversible.
       // v1.0.101 (H7): when the player's action commits to a perception/
       //   investigation/stealth-class verb, append OBSERVATION_AS_CHECK_BLOCK
-      //   to the system prompt for this turn only. The block is appended in
-      //   tier 3 territory (uncached) so cache stays valid; we restore the
+      //   to the system prompt for this turn only. We restore the
       //   un-injected systemPrompt to messages[0] before persisting so the
       //   block doesn't accumulate across turns.
       const systemMessage = messagesToSend.find(m => m.role === 'system');
@@ -1940,13 +1803,12 @@ router.post('/:sessionId/message', async (req, res) => {
       const apiSystemPromptBase = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
       const observationVerbInjection = detectObservationVerbs(action) ? OBSERVATION_AS_CHECK_BLOCK : '';
       const apiSystemPrompt = apiSystemPromptBase + observationVerbInjection;
-      const turnModel = modelOverride === 'sonnet' ? 'sonnet' : 'opus';
-      // Phase 4a SC-4a.1 — wrap with the call logger. wrapClaudeCallWithId
+      // Phase 4a SC-4a.1 — wrap with the call logger. wrapLlmCallWithId
       // returns { result: <continueSession return>, logId } so the marker
       // dispatch pass below can amend the row with markers_detected,
       // marker_failures, triggered_correction_loop. logId is null when
       // logging persistence fails (best-effort; never blocks gameplay).
-      const wrapped = await wrapClaudeCallWithId(
+      const wrapped = await wrapLlmCallWithId(
         {
           character_id: session.character_id,
           campaign_id: session.campaign_id,
@@ -1959,29 +1821,25 @@ router.post('/:sessionId/message', async (req, res) => {
           user_message: actionForLlm,
           conversation_history: messagesToSend.filter(m => m.role !== 'system'),
           metadata: {
-            model_choice: turnModel,
             lean_prompt: !!leanPrompt,
             observation_verb_injected: !!observationVerbInjection,
             player_dice: diceDirective ? dice.value : null
           }
         },
-        (chatOptions) => claude.continueSession(
-          apiSystemPrompt, messagesToSend, actionForLlm, turnModel,
+        (chatOptions) => llm.continueSession(
+          apiSystemPrompt, messagesToSend, actionForLlm, 'dm',
           { ...chatOptions, sessionId }
         )
       );
-      const claudeResult = wrapped.result;
+      const turnResult = wrapped.result;
       __aiLogId = wrapped.logId;  // threaded into the marker-dispatch annotation below
-      if (claudeResult.messages?.[0]?.role === 'system') {
-        claudeResult.messages[0] = { role: 'system', content: systemPrompt };
+      if (turnResult.messages?.[0]?.role === 'system') {
+        turnResult.messages[0] = { role: 'system', content: systemPrompt };
       }
       result = {
-        narrative: claudeResult.response,
-        messages: claudeResult.messages
+        narrative: turnResult.response,
+        messages: turnResult.messages
       };
-    } else {
-      // Use Ollama
-      result = await ollama.continueSession(messagesToSend, actionForLlm, session.model);
     }
 
     // Strip the dice directive back out of the history about to be persisted.
@@ -2608,30 +2466,14 @@ router.post('/:sessionId/message', async (req, res) => {
       rollOutcome: rollOutcome || undefined
     });
   } catch (error) {
-    // Tagged-error mapping (set by claude.js in service/claude.js error path).
-    // Each tag → distinct user-facing message + appropriate HTTP status.
-    // Player input is preserved client-side; retry works for retryable cases.
-    if (error?.message?.startsWith('OVERLOADED:')) {
+    // Tagged errors from llm.js: the local model is not reachable, or its
+    // model is not installed. 503 with the fix in plain words; the player's
+    // input is preserved client-side and a resend works once Ollama is up.
+    if (error?.message?.startsWith('LOCAL_MODEL_UNAVAILABLE:') || error?.message?.startsWith('LOCAL_MODEL_MISSING:')) {
       return res.status(503).json({
-        error: 'AI temporarily overloaded',
-        message: 'Anthropic\'s API is temporarily at capacity. Your input has been preserved — please send again in a moment.',
+        error: 'Local AI not available',
+        message: `${error.message.replace(/^LOCAL_MODEL_[A-Z]+: /, '')} Your input has been preserved — send it again once it's running.`,
         retryable: true
-      });
-    }
-    if (error?.message?.startsWith('RATE_LIMITED:')) {
-      return res.status(503).json({
-        error: 'AI rate limit hit',
-        message: 'Claude\'s rate limit was hit even after retries. Wait ~30 seconds and try again. If this happens repeatedly, you may have an unusually high request rate or your account tier may need review.',
-        retryable: true
-      });
-    }
-    if (error?.message?.startsWith('AUTH_FAILURE:')) {
-      // 503 (not 401) on the route — the failure is between us and Anthropic,
-      // not between the user and us. Authenticated user, broken upstream auth.
-      return res.status(503).json({
-        error: 'AI authentication or billing issue',
-        message: 'Claude API authentication or billing problem — the API key may be invalid, revoked, or your Anthropic account may need attention. Check console.anthropic.com → Settings → Billing and Settings → API Keys. The session is paused until this is resolved.',
-        retryable: false
       });
     }
     handleServerError(res, error, 'process DM session message');
@@ -3178,32 +3020,16 @@ router.post('/:sessionId/rest-narrative', async (req, res) => {
 
     const restPrompt = `You are a D&D dungeon master. ${characterName} takes a ${restType} rest. Write a brief atmospheric rest description (2-3 sentences) based on the current location and recent events. Do NOT include any dialogue for ${characterName} — only describe the scene, atmosphere, and the passage of time. Do NOT include mechanical effects (HP restored, spell slots, etc.) — those are handled separately. Keep it immersive and contextual.${mechanicalResult ? `\n\nMechanical result (for your awareness only, do NOT repeat this): ${mechanicalResult}` : ''}`;
 
-    // Try to get AI narrative
-    const { provider } = await getLLMProvider();
+    // Try to get AI narrative (local model, DM role). Best-effort: if the
+    // model is unavailable the rest still applies, just without narration.
     let narrative = null;
-
-    if (provider === 'claude') {
-      try {
-        const result = await loggedChat(
-          { call_purpose: 'dm_rest_check', prompt_builder: 'dmSession_route' },
-          restPrompt, recentMessages, 1, 'sonnet', 200
-        );
-        narrative = result;
-      } catch (err) {
-        console.error('Rest narrative AI error (Claude):', err.message);
-      }
-    } else if (provider === 'ollama') {
-      try {
-        const ollamaMessages = [
-          { role: 'system', content: restPrompt },
-          ...recentMessages,
-          { role: 'user', content: `*${characterName} takes a ${restType} rest*` }
-        ];
-        const result = await ollama.continueSession(ollamaMessages, `*${characterName} takes a ${restType} rest*`, session.model);
-        narrative = result?.narrative;
-      } catch (err) {
-        console.error('Rest narrative AI error (Ollama):', err.message);
-      }
+    try {
+      narrative = await loggedChat(
+        { call_purpose: 'dm_rest_check', prompt_builder: 'dmSession_route' },
+        restPrompt, recentMessages, 1, 'dm', 200
+      );
+    } catch (err) {
+      console.error('Rest narrative AI error:', err.message);
     }
 
     // Append rest messages to session history so AI remembers the rest happened
@@ -3296,28 +3122,17 @@ router.post('/:sessionId/end', async (req, res) => {
         `${character.gold_gp || 0} gp, ${character.gold_sp || 0} sp, ${character.gold_cp || 0} cp`
       );
 
-      const { provider } = await getLLMProvider();
-
-      let analysisResponse;
-      if (provider === 'claude') {
-        const systemMessage = messages.find(m => m.role === 'system');
-        const systemPrompt = systemMessage?.content || '';
-        const analysisMessages = [
-          ...messages.filter(m => m.role !== 'system'),
-          { role: 'user', content: analysisPrompt }
-        ];
-        analysisResponse = await loggedChat(
-          { call_purpose: 'dm_session_analysis', prompt_builder: 'dmSession_route',
-            session_id: parseInt(req.params.sessionId) },
-          systemPrompt, analysisMessages
-        );
-      } else {
-        const analysisMessages = [
-          ...messages,
-          { role: 'user', content: analysisPrompt }
-        ];
-        analysisResponse = await ollama.chat(analysisMessages, session.model);
-      }
+      const systemMessage = messages.find(m => m.role === 'system');
+      const systemPrompt = systemMessage?.content || '';
+      const analysisMessages = [
+        ...messages.filter(m => m.role !== 'system'),
+        { role: 'user', content: analysisPrompt }
+      ];
+      const analysisResponse = await loggedChat(
+        { call_purpose: 'dm_session_analysis', prompt_builder: 'dmSession_route',
+          session_id: parseInt(req.params.sessionId) },
+        systemPrompt, analysisMessages, 3, 'extraction'
+      );
 
       ({ summary, rewardsAnalysis } = parseAnalysisResponse(analysisResponse));
     } catch (e) {
@@ -3340,18 +3155,15 @@ router.post('/:sessionId/end', async (req, res) => {
       .join('\n');
 
     const xpScorerCall = async (prompt) => {
-      const { provider: scorerProvider } = await getLLMProvider();
-      if (scorerProvider === 'claude') {
-        const systemMessage = messages.find(m => m.role === 'system');
-        const systemPrompt = systemMessage?.content || '';
-        return await loggedChat(
-          { call_purpose: 'session_end_xp_scoring', prompt_builder: 'dmSession_route',
-            session_id: parseInt(sessionId) },
-          systemPrompt,
-          [{ role: 'user', content: prompt }]
-        );
-      }
-      return await ollama.chat([{ role: 'user', content: prompt }], session.model);
+      const systemMessage = messages.find(m => m.role === 'system');
+      const systemPrompt = systemMessage?.content || '';
+      return await loggedChat(
+        { call_purpose: 'session_end_xp_scoring', prompt_builder: 'dmSession_route',
+          session_id: parseInt(sessionId) },
+        systemPrompt,
+        [{ role: 'user', content: prompt }],
+        3, 'extraction'
+      );
     };
 
     const orchResult = await endSession(sessionId, {
@@ -3500,28 +3312,20 @@ router.post('/:sessionId/end', async (req, res) => {
     // Extract campaign notes
     let extractedNotes = '';
     try {
-      const { provider } = await getLLMProvider();
-      if (provider && playerActionCount > 0) {
+      if (playerActionCount > 0) {
         const extractionPrompt = buildNotesExtractionPrompt();
-        let notesResponse;
-        if (provider === 'claude') {
-          const systemMessage = messages.find(m => m.role === 'system');
-          const systemPrompt = systemMessage?.content || '';
-          notesResponse = await loggedChat(
-            { call_purpose: 'dm_session_notes_extract', prompt_builder: 'dmSession_route',
-              session_id: parseInt(req.params.sessionId) },
-            systemPrompt,
-            [
-              ...messages.filter(m => m.role !== 'system'),
-              { role: 'user', content: extractionPrompt }
-            ]
-          );
-        } else {
-          notesResponse = await ollama.chat([
-            ...messages,
+        const systemMessage = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMessage?.content || '';
+        const notesResponse = await loggedChat(
+          { call_purpose: 'dm_session_notes_extract', prompt_builder: 'dmSession_route',
+            session_id: parseInt(req.params.sessionId) },
+          systemPrompt,
+          [
+            ...messages.filter(m => m.role !== 'system'),
             { role: 'user', content: extractionPrompt }
-          ], session.model);
-        }
+          ],
+          3, 'extraction'
+        );
 
         extractedNotes = notesResponse.trim();
 
@@ -3539,28 +3343,20 @@ router.post('/:sessionId/end', async (req, res) => {
     // Extract NPCs
     let extractedNpcs = [];
     try {
-      const { provider } = await getLLMProvider();
-      if (provider && playerActionCount > 0) {
+      if (playerActionCount > 0) {
         const npcExtractionPrompt = buildNpcExtractionPrompt();
-        let npcResponse;
-        if (provider === 'claude') {
-          const systemMessage = messages.find(m => m.role === 'system');
-          const systemPrompt = systemMessage?.content || '';
-          npcResponse = await loggedChat(
-            { call_purpose: 'dm_session_npc_extract', prompt_builder: 'dmSession_route',
-              session_id: parseInt(req.params.sessionId) },
-            systemPrompt,
-            [
-              ...messages.filter(m => m.role !== 'system'),
-              { role: 'user', content: npcExtractionPrompt }
-            ]
-          );
-        } else {
-          npcResponse = await ollama.chat([
-            ...messages,
+        const systemMessage = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMessage?.content || '';
+        const npcResponse = await loggedChat(
+          { call_purpose: 'dm_session_npc_extract', prompt_builder: 'dmSession_route',
+            session_id: parseInt(req.params.sessionId) },
+          systemPrompt,
+          [
+            ...messages.filter(m => m.role !== 'system'),
             { role: 'user', content: npcExtractionPrompt }
-          ], session.model);
-        }
+          ],
+          3, 'extraction'
+        );
 
         extractedNpcs = await saveExtractedNpcs(npcResponse, session.title);
       }
@@ -3570,29 +3366,21 @@ router.post('/:sessionId/end', async (req, res) => {
 
     // Extract character personality memories
     try {
-      const { provider: memProvider } = await getLLMProvider();
-      if (memProvider && playerActionCount > 0) {
+      if (playerActionCount > 0) {
         const memoryPrompt = buildMemoryExtractionPrompt(character.character_memories || '');
-        let memoryResponse;
-        if (memProvider === 'claude') {
-          const systemMessage = messages.find(m => m.role === 'system');
-          const systemPrompt = systemMessage?.content || '';
-          memoryResponse = await loggedChat(
-            { call_purpose: 'dm_session_memory_extract', prompt_builder: 'dmSession_route',
-              session_id: parseInt(req.params.sessionId),
-              character_id: character?.id },
-            systemPrompt,
-            [
-              ...messages.filter(m => m.role !== 'system'),
-              { role: 'user', content: memoryPrompt }
-            ]
-          );
-        } else {
-          memoryResponse = await ollama.chat([
-            ...messages,
+        const systemMessage = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMessage?.content || '';
+        const memoryResponse = await loggedChat(
+          { call_purpose: 'dm_session_memory_extract', prompt_builder: 'dmSession_route',
+            session_id: parseInt(req.params.sessionId),
+            character_id: character?.id },
+          systemPrompt,
+          [
+            ...messages.filter(m => m.role !== 'system'),
             { role: 'user', content: memoryPrompt }
-          ], session.model);
-        }
+          ],
+          3, 'extraction'
+        );
 
         const trimmedMemory = memoryResponse.trim();
         if (trimmedMemory && !trimmedMemory.includes('NO_NEW_MEMORIES') && trimmedMemory.length > 10) {
@@ -3941,34 +3729,21 @@ router.post('/:sessionId/resume', async (req, res) => {
     let recap = session.recap;
     if (!recap && messages.length > 3) {
       try {
-        const { provider } = await getLLMProvider();
+        const recapPrompt = `The player is returning to a paused adventure. Write a brief "Previously on..." style recap (2-3 sentences max) summarizing what has happened so far in this adventure. Write in past tense. Be dramatic but concise. Do NOT include any meta-commentary.`;
+        const systemMessage = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMessage?.content || '';
+        const recapMessages = [
+          ...messages.filter(m => m.role !== 'system'),
+          { role: 'user', content: recapPrompt }
+        ];
+        recap = await loggedChat(
+          { call_purpose: 'dm_session_recap', prompt_builder: 'dmSession_route',
+            session_id: parseInt(req.params.sessionId) },
+          systemPrompt, recapMessages, 3, 'summary'
+        );
 
-        if (provider) {
-          const recapPrompt = `The player is returning to a paused adventure. Write a brief "Previously on..." style recap (2-3 sentences max) summarizing what has happened so far in this adventure. Write in past tense. Be dramatic but concise. Do NOT include any meta-commentary.`;
-
-          if (provider === 'claude') {
-            const systemMessage = messages.find(m => m.role === 'system');
-            const systemPrompt = systemMessage?.content || '';
-            const recapMessages = [
-              ...messages.filter(m => m.role !== 'system'),
-              { role: 'user', content: recapPrompt }
-            ];
-            recap = await loggedChat(
-              { call_purpose: 'dm_session_recap', prompt_builder: 'dmSession_route',
-                session_id: parseInt(req.params.sessionId) },
-              systemPrompt, recapMessages
-            );
-          } else {
-            const recapMessages = [
-              ...messages,
-              { role: 'user', content: recapPrompt }
-            ];
-            recap = await ollama.chat(recapMessages, session.model);
-          }
-
-          // Save the recap so we don't regenerate it each time
-          await dbRun('UPDATE dm_sessions SET recap = ? WHERE id = ?', [recap, sessionId]);
-        }
+        // Save the recap so we don't regenerate it each time
+        await dbRun('UPDATE dm_sessions SET recap = ? WHERE id = ?', [recap, sessionId]);
       } catch (e) {
         console.error('Could not generate recap:', e);
         // Continue without recap
@@ -4215,10 +3990,10 @@ router.post('/:sessionId/extract-npcs', async (req, res) => {
       return res.json({ extracted: [], message: 'Session too short to extract NPCs' });
     }
 
-    // Check which LLM provider is available
-    const { provider } = await getLLMProvider();
-    if (!provider) {
-      return res.status(503).json({ error: 'No LLM provider available' });
+    // The local model must be reachable, with its model installed.
+    const llmStatus = await llm.checkStatus();
+    if (!llmStatus.available) {
+      return res.status(503).json({ error: 'Local AI not available', details: llmStatus.error });
     }
 
     const npcExtractionPrompt = `List ALL named NPCs (non-player characters) who appeared in this session. For each NPC, provide their details in this EXACT format, one per line:
@@ -4234,26 +4009,17 @@ Rules:
 
 If no named NPCs appeared, respond with: NO_NPCS`;
 
-    let npcResponse;
-    if (provider === 'claude') {
-      const systemMessage = messages.find(m => m.role === 'system');
-      const systemPrompt = systemMessage?.content || '';
-      const npcMessages = [
-        ...messages.filter(m => m.role !== 'system'),
-        { role: 'user', content: npcExtractionPrompt }
-      ];
-      npcResponse = await loggedChat(
-        { call_purpose: 'dm_session_npc_codex_extract', prompt_builder: 'dmSession_route',
-          session_id: parseInt(req.params.sessionId) },
-        systemPrompt, npcMessages
-      );
-    } else {
-      const npcMessages = [
-        ...messages,
-        { role: 'user', content: npcExtractionPrompt }
-      ];
-      npcResponse = await ollama.chat(npcMessages, session.model);
-    }
+    const systemMessage = messages.find(m => m.role === 'system');
+    const systemPrompt = systemMessage?.content || '';
+    const npcMessages = [
+      ...messages.filter(m => m.role !== 'system'),
+      { role: 'user', content: npcExtractionPrompt }
+    ];
+    const npcResponse = await loggedChat(
+      { call_purpose: 'dm_session_npc_codex_extract', prompt_builder: 'dmSession_route',
+        session_id: parseInt(req.params.sessionId) },
+      systemPrompt, npcMessages, 3, 'extraction'
+    );
 
     const extractedNpcs = [];
 
@@ -4354,8 +4120,8 @@ router.post('/character/:characterId/extract-all-npcs', async (req, res) => {
 
         if (messages.length < 3) continue;
 
-        const { provider } = await getLLMProvider();
-        if (!provider) continue;
+        const llmStatus = await llm.checkStatus();
+        if (!llmStatus.available) continue;
 
         const npcExtractionPrompt = `List ALL named NPCs (non-player characters) who appeared in this session. For each NPC, provide their details in this EXACT format, one per line:
 
@@ -4370,26 +4136,17 @@ Rules:
 
 If no named NPCs appeared, respond with: NO_NPCS`;
 
-        let npcResponse;
-        if (provider === 'claude') {
-          const systemMessage = messages.find(m => m.role === 'system');
-          const systemPrompt = systemMessage?.content || '';
-          const npcMessages = [
-            ...messages.filter(m => m.role !== 'system'),
-            { role: 'user', content: npcExtractionPrompt }
-          ];
-          npcResponse = await loggedChat(
-            { call_purpose: 'dm_session_npc_extract_alt', prompt_builder: 'dmSession_route',
-              session_id: parseInt(req.params.sessionId) },
-            systemPrompt, npcMessages
-          );
-        } else {
-          const npcMessages = [
-            ...messages,
-            { role: 'user', content: npcExtractionPrompt }
-          ];
-          npcResponse = await ollama.chat(npcMessages, fullSession.model);
-        }
+        const systemMessage = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMessage?.content || '';
+        const npcMessages = [
+          ...messages.filter(m => m.role !== 'system'),
+          { role: 'user', content: npcExtractionPrompt }
+        ];
+        const npcResponse = await loggedChat(
+          { call_purpose: 'dm_session_npc_extract_alt', prompt_builder: 'dmSession_route',
+            session_id: parseInt(req.params.sessionId) },
+          systemPrompt, npcMessages, 3, 'extraction'
+        );
 
         if (npcResponse && !npcResponse.includes('NO_NPCS')) {
           const npcLines = npcResponse.split('\n').filter(line => line.startsWith('NPC:'));

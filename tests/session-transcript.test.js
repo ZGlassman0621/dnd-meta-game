@@ -26,7 +26,7 @@ async function createTestSession(opts = {}) {
   const { messages = '[]' } = opts;
   const result = await dbRun(
     `INSERT INTO dm_sessions (character_id, title, model, status, messages, start_time, session_config, session_type)
-     VALUES (NULL, 'TEST_transcript_helper', 'sonnet', 'active', ?, datetime('now'), '{}', 'dm_mode')`,
+     VALUES (NULL, 'TEST_transcript_helper', 'TEST_model', 'active', ?, datetime('now'), '{}', 'dm_mode')`,
     [messages]
   );
   return Number(result.lastInsertRowid);

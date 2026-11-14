@@ -20,7 +20,7 @@
  *   1. Load session.messages and session.rolling_summary fields.
  *   2. If shouldRoll() returns true, fire-and-forget rollSummary().
  *   3. rollSummary() takes the next ROLL_CHUNK_SIZE of not-yet-summarized
- *      messages, sends them + the existing summary to Sonnet, asks for an
+ *      messages, sends them + the existing summary to the model, asks for an
  *      updated summary, and writes the result back to dm_sessions.
  *
  * Flow when assembling the NEXT prompt:
@@ -29,13 +29,12 @@
  *      "[PREVIOUS SCENES — SUMMARY]" user message, then include only the
  *      kept-verbatim tail.
  *
- * Never blocks: the Sonnet summarization call runs after the player's turn
+ * Never blocks: the model summarization call runs after the player's turn
  * completes. If the call fails, the session continues unchanged and we try
  * again next turn.
  */
 
 import { dbGet, dbRun } from '../database.js';
-import * as claude from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 
 // Tunable constants. Chosen conservatively — err toward keeping more context
@@ -63,7 +62,7 @@ export function shouldRoll(session, messages) {
 }
 
 /**
- * Build the Sonnet prompt that produces (or updates) the rolling summary.
+ * Build the model prompt that produces (or updates) the rolling summary.
  * Uses a compact template — the model knows the format and we want a low-
  * cost generation call.
  *
@@ -90,7 +89,7 @@ function buildSummaryPrompt(existingSummary, newMessages, sessionType = 'player'
     : '';
 
   if (sessionType === 'prelude_arc') {
-    return `You are maintaining a rolling summary for a D&D prelude arc — a character's childhood played across 5 sessions (Ch1: 1, Ch2: 1, Ch3: 2, Ch4: 1). Your output is read ONLY by the AI DM (Sonnet), never by the player. Be dense, factual, and weighted toward what matters for CHARACTER DEVELOPMENT.
+    return `You are maintaining a rolling summary for a D&D prelude arc — a character's childhood played across 5 sessions (Ch1: 1, Ch2: 1, Ch3: 2, Ch4: 1). Your output is read ONLY by the AI DM, never by the player. Be dense, factual, and weighted toward what matters for CHARACTER DEVELOPMENT.
 
 ${priorBlock}NEW EXCHANGES TO INTEGRATE:
 ${transcript}
@@ -142,7 +141,6 @@ Write only the updated summary. No preamble, no commentary.`;
 export async function rollSummary(sessionId, session, messages) {
   if (!sessionId || !Array.isArray(messages)) return null;
   if (!shouldRoll(session, messages)) return null;
-  if (!claude.isClaudeAvailable()) return null; // Ollama fallback is too noisy for summarization
 
   try {
     const prevThroughIdx = Number.isInteger(session?.rolling_summary_through_index)
@@ -176,7 +174,7 @@ export async function rollSummary(sessionId, session, messages) {
       systemPrompt,
       [{ role: 'user', content: userPrompt }],
       2,       // retries — summarization isn't critical, keep retry budget small
-      'sonnet',
+      'summary',
       1500     // max_tokens — plenty for a ~600-word summary
     );
 

@@ -12,7 +12,7 @@
  * builder annotation is a future ship if accuracy proves insufficient.
  *
  * Token counting uses a cheap character-based estimate (≈ chars/4 for
- * Claude/GPT-family tokenizers). Where the API returns actual token
+ * common model tokenizers). Where the API returns actual token
  * counts (in `data.usage`), captured per-call those land in dedicated
  * `input_tokens`/`output_tokens` columns; this estimator is for the
  * pre-API breakdown stored in `prompt_sections`.
@@ -25,7 +25,7 @@ import { safeParse } from '../utils/safeParse.js';
 // Tokenization estimate (heuristic)
 // ============================================================
 //
-// Real Claude tokenizer averages ~4 chars/token for English prose, lower
+// A typical tokenizer averages ~4 chars/token for English prose, lower
 // (~2-3 chars/token) for code/structured text, higher (~5+) for very
 // repetitive or whitespace-heavy text. This estimator is good enough for
 // the section-relative-share question Phase 4 asks; exact counts come

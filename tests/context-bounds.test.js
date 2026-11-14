@@ -28,7 +28,7 @@ import {
   MAX_NOTES_TOKENS,
   MAX_MEMORIES_TOKENS,
 } from '../server/utils/contextManager.js';
-import { opusModel } from '../server/services/modelRegistry.js';
+import { contextWindow } from '../server/services/localModels.js';
 import { checkPromptSize } from '../server/services/aiCallLogger.js';
 
 let passed = 0;
@@ -132,24 +132,25 @@ async function run() {
   console.log('\n=== Test 2: chronicle budget is clamped ===\n');
   // ============================================================
 
-  // The real call site passes a few hundred tokens against the Claude safe
-  // budget, which without the cap would yield hundreds of thousands.
-  const claudeModel = opusModel();
-  const { safeBudget } = getModelLimits(claudeModel);
-  const generous = calculateChronicleBudget(500, 0, claudeModel);
+  // Limits come from the local model's window (OLLAMA_NUM_CTX, default
+  // 65,536), not a per-model table. Read the live values rather than literals.
+  const { contextWindow: window, safeBudget } = getModelLimits();
+  assertEqual(window, contextWindow(), 'the context window is the one sent to Ollama (num_ctx)');
+  assertEqual(safeBudget, Math.floor(window * 0.85), 'the safe budget is 85% of the window');
+
+  // A near-empty prompt at the default window would yield ~22k without the
+  // cap; the cap is what bounds it.
+  const generous = calculateChronicleBudget(500, 0);
   assert(generous <= MAX_CHRONICLE_BUDGET, `budget is capped at ${MAX_CHRONICLE_BUDGET} (got ${generous})`);
-  assertEqual(generous, MAX_CHRONICLE_BUDGET, 'a near-empty prompt saturates to exactly the cap');
 
-  // "Nearly full" is derived from the model's own safe budget rather than
-  // hardcoded. It was 179000 against a stated 180k window; v1.0.182 corrected
-  // the Claude window to 1M, which left the literal asserting nothing.
-  const squeezed = calculateChronicleBudget(safeBudget - 1000, 0, claudeModel);
+  // A real DM prompt (~13k tokens, measured 2026-11-13) still leaves a
+  // sizeable chronicle budget at the default window.
+  const typical = calculateChronicleBudget(13000, 0);
+  assert(typical > 2000 && typical <= MAX_CHRONICLE_BUDGET, `a ~13k-token prompt gets a real chronicle budget (got ${typical})`);
+
+  // "Nearly full" is derived from the safe budget rather than hardcoded.
+  const squeezed = calculateChronicleBudget(safeBudget - 1000, 0);
   assertEqual(squeezed, 2000, 'a nearly-full context falls back to the 2000 floor');
-
-  // Small local models must not be handed a Claude-sized budget.
-  const local = calculateChronicleBudget(500, 0, 'gemma-3-27b');
-  assert(local < MAX_CHRONICLE_BUDGET, `small-context model gets a smaller budget (got ${local})`);
-  assert(local >= 2000, 'small-context model still gets at least the floor');
 
   // ============================================================
   console.log('\n=== Test 3: prompt size guard ===\n');
@@ -158,9 +159,12 @@ async function run() {
   // estimateTokens is chars/4, so build strings of a known token size.
   const tokensToChars = (t) => 'x'.repeat(t * 4);
 
+  // Thresholds follow the local window: warn at half, error at three quarters
+  // (32,768 / 49,152 at the default 65,536).
+  const win = contextWindow();
   assertEqual(checkPromptSize(tokensToChars(1000), 'test').level, 'ok', 'small prompt is ok');
-  assertEqual(checkPromptSize(tokensToChars(70000), 'test').level, 'warn', 'a 70k prompt warns');
-  assertEqual(checkPromptSize(tokensToChars(120000), 'test').level, 'error', 'a 120k prompt errors');
+  assertEqual(checkPromptSize(tokensToChars(Math.floor(win * 0.6)), 'test').level, 'warn', 'a prompt at 60% of the window warns');
+  assertEqual(checkPromptSize(tokensToChars(Math.floor(win * 0.8)), 'test').level, 'error', 'a prompt at 80% of the window errors');
 
   let threw = false;
   try {

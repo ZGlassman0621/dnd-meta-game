@@ -18,8 +18,9 @@ import { generateCoachingTip, DC_REFERENCE } from '../services/dmCoachingService
 import { generateDMModeChronicle, getChroniclesForParty, extractRelationshipEvolution } from '../services/dmModeChronicleService.js';
 import { syncNpcsFromChronicle, syncPlotThreadsFromChronicle, extractNpcVoiceNotes, getNpcsForParty, updateNpc, createNpc, deleteNpc, getPlotThreadsForParty, updatePlotThreadStatus, updatePlotThreadTags, createManualPlotThread } from '../services/dmModeNpcService.js';
 import { getPrep, getPrepItem, createPrep, updatePrep, archivePrep, deletePrep, duplicatePrep, getPrepCounts, reorderPrep } from '../services/dmModePrepService.js';
-import * as claude from '../services/claude.js';
-import { wrapClaudeCall, loggedChat } from '../services/aiCallLogger.js';
+import * as llm from '../services/llm.js';
+import { modelFor } from '../services/localModels.js';
+import { wrapLlmCall, loggedChat } from '../services/aiCallLogger.js';
 
 const router = express.Router();
 
@@ -203,13 +204,12 @@ router.post('/start', async (req, res) => {
       openingPrompt = `The party reconvenes after their last adventure. What is everyone doing? React to your current situation.`;
     }
 
-    // Call AI — Opus for first session, Sonnet for continuations
-    const modelChoice = isFirstSession ? 'opus' : 'sonnet';
+    // Call the local model (DM role). If Ollama is down the error reaches the
+    // route's catch — no canned stand-in opening.
     let openingNarrative;
-
-    if (claude.isClaudeAvailable()) {
+    {
       // Phase 4a SC-4a.1 — wrap with the call logger.
-      const result = await wrapClaudeCall(
+      const result = await wrapLlmCall(
         {
           campaign_id: party.campaign_id,
           turn_number: 0,
@@ -217,13 +217,11 @@ router.post('/start', async (req, res) => {
           call_purpose: 'dm_mode_session_start',
           system_prompt: systemPrompt,
           user_message: openingPrompt,
-          metadata: { partyId, modelChoice, isFirstSession }
+          metadata: { partyId, isFirstSession }
         },
-        (chatOptions) => claude.startSession(systemPrompt, openingPrompt, modelChoice, chatOptions)
+        (chatOptions) => llm.startSession(systemPrompt, openingPrompt, 'dm', chatOptions)
       );
       openingNarrative = result.response;
-    } else {
-      openingNarrative = `**${characters[0]?.name || 'Character 1'}:** *looks around at the group* "So. We're really doing this."\n\n**${characters[1]?.name || 'Character 2'}:** "Apparently. Try not to get us killed."\n\n*The party waits for the DM to set the scene.*`;
     }
 
     // Clean markers from opening
@@ -245,7 +243,7 @@ router.post('/start', async (req, res) => {
         sessionTitle,
         party.setting,
         party.tone,
-        modelChoice,
+        modelFor('dm'),
         JSON.stringify(messages),
         partyId,
         JSON.stringify({ partyId, level: party.level, isFirstSession })
@@ -304,9 +302,9 @@ router.post('/:sessionId/message', async (req, res) => {
 
     // Call AI
     let narrative;
-    if (claude.isClaudeAvailable()) {
+    {
       // Phase 4a SC-4a.1 — wrap with the call logger.
-      const result = await wrapClaudeCall(
+      const result = await wrapLlmCall(
         {
           campaign_id: session?.campaign_id,
           session_id: parseInt(sessionId),
@@ -317,11 +315,9 @@ router.post('/:sessionId/message', async (req, res) => {
           user_message: aiInput,
           conversation_history: messages.filter(m => m.role !== 'system')
         },
-        (chatOptions) => claude.continueSession(systemPrompt, messages, aiInput, 'sonnet', chatOptions)
+        (chatOptions) => llm.continueSession(systemPrompt, messages, aiInput, 'dm', chatOptions)
       );
       narrative = result.response;
-    } else {
-      return res.status(503).json({ error: 'No AI provider available' });
     }
 
     // Detect markers (skip for OOC — no game actions)
@@ -409,9 +405,9 @@ router.post('/:sessionId/roll-result', async (req, res) => {
 
     // Get AI reaction to the resolved roll
     let narrative;
-    if (claude.isClaudeAvailable()) {
+    {
       // Phase 4a SC-4a.1 — wrap with the call logger.
-      const result = await wrapClaudeCall(
+      const result = await wrapLlmCall(
         {
           campaign_id: session?.campaign_id,
           session_id: parseInt(sessionId),
@@ -423,11 +419,9 @@ router.post('/:sessionId/roll-result', async (req, res) => {
           conversation_history: messages.filter(m => m.role !== 'system'),
           metadata: { rollType, rollResult, dc, success }
         },
-        (chatOptions) => claude.continueSession(systemPrompt, messages, rollNote, 'sonnet', chatOptions)
+        (chatOptions) => llm.continueSession(systemPrompt, messages, rollNote, 'dm', chatOptions)
       );
       narrative = result.response;
-    } else {
-      return res.status(503).json({ error: 'No AI provider available' });
     }
 
     const cleanedNarrative = cleanDMModeNarrative(narrative);
@@ -650,7 +644,7 @@ router.post('/:sessionId/end', async (req, res) => {
     let summary = 'Session ended with no summary.';
 
     // Generate summary if there was meaningful activity
-    if (userMessages.length > 1 && claude.isClaudeAvailable()) {
+    if (userMessages.length > 1) {
       try {
         const summaryPrompt = `Summarize this D&D session from the players' perspective in 3-5 sentences. Focus on key events, decisions made, conflicts encountered, and any character development moments. Write in past tense.`;
 
@@ -662,7 +656,7 @@ router.post('/:sessionId/end', async (req, res) => {
             session_id: parseInt(sessionId) },
           'You summarize D&D sessions concisely. Return only the summary text, no formatting.',
           [{ role: 'user', content: `${summaryPrompt}\n\nSession transcript:\n${contextStr}` }],
-          2, 'sonnet', 500
+          2, 'summary', 500
         );
       } catch (e) {
         console.error('Summary generation failed:', e.message);
@@ -677,7 +671,7 @@ router.post('/:sessionId/end', async (req, res) => {
 
     // Generate structured chronicle (non-blocking — don't fail session end)
     let chronicleResult = null;
-    if (claude.isClaudeAvailable() && userMessages.length > 1) {
+    if (userMessages.length > 1) {
       try {
         chronicleResult = await generateDMModeChronicle(parseInt(sessionId), session.dm_mode_party_id);
         if (chronicleResult) {

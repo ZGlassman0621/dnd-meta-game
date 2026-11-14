@@ -1,6 +1,6 @@
 {
   "name": "dnd-meta-game",
-  "version": "1.0.194",
+  "version": "1.0.195",
   "description": "D&D Meta Game - AI-powered solo D&D campaign management system",
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "migrate-to-cloud": "node server/scripts/migrate-to-turso.js",
     "backup": "node server/scripts/backup.js",
     "test": "node server/scripts/run-tests.js",
+    "test:leak": "node tests/live/local-model-live.mjs",
     "lint": "eslint server/",
     "lint:fix": "eslint server/ --fix"
   },

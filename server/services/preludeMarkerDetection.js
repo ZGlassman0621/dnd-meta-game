@@ -12,7 +12,7 @@
  * transition markers ([DEPARTURE] / [PRELUDE_END]) land in later phases.
  *
  * Design notes:
- *   - Parsers are regex-based and forgiving — Sonnet sometimes drops a
+ *   - Parsers are regex-based and forgiving — the model sometimes drops a
  *     closing bracket or swaps single/double quotes.
  *   - `extractAll(regex, text)` collects every match from a response (one
  *     response can emit multiple [NPC_CANON] markers).
@@ -135,7 +135,7 @@ export function detectHpChanges(text) {
 
 /**
  * Detect [CHAPTER_PROMISE: theme="..." question="..."] marker. Only
- * expected at the opening of chapter 3 and chapter 4 — Sonnet surfaces
+ * expected at the opening of chapter 3 and chapter 4 — the model surfaces
  * the chapter's thematic throughline and invites confirmation/redirect.
  * Returns { theme, question } or null.
  */
@@ -227,7 +227,7 @@ function extractField(fields, field) {
 // Phase 3 — emergence marker detection
 // ---------------------------------------------------------------------------
 //
-// Six emergence-hint markers. Sonnet fires them when the player's played
+// Six emergence-hint markers. the model fires them when the player's played
 // behavior has demonstrated something mechanically meaningful — a stat
 // pressure, a skill affinity, a class/theme/ancestry alignment, or a value
 // shift. The server records the hint, applies caps, and the UI shows an
@@ -501,7 +501,7 @@ export function detectPreludeMarkers(text) {
  *   - Inherited DM markers the AI may also emit inside prelude sessions
  *     ([COMBAT_START], [COMBAT_END], [LOOT_DROP], etc.) — the prelude
  *     doesn't wire these into the combat tracker yet (Phase 2b-ii), but
- *     Sonnet will emit them when the system prompt says to, and they
+ *     the model will emit them when the system prompt says to, and they
  *     shouldn't leak into the displayed narrative.
  *
  * As a safety net, any remaining [ALL_CAPS_TOKEN: …] or [ALL_CAPS_TOKEN]

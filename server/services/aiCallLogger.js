@@ -19,6 +19,7 @@
 
 import { dbRun } from '../database.js';
 import { computePromptSections, estimateTokens } from './promptShapeAccounting.js';
+import { contextWindow } from './localModels.js';
 
 // ============================================================
 // System-prompt size guard
@@ -28,18 +29,24 @@ import { computePromptSections, estimateTokens } from './promptShapeAccounting.j
  * Thresholds for the assembled system prompt, in estimated tokens.
  *
  * These live here rather than at session start because every AI call — session
- * start, each gameplay turn, both the Claude and Ollama paths — funnels through
- * this module with the full prompt already in hand. A check at session start
- * alone would miss the per-turn growth from the repetition ledger and the
- * marker-correction block, which append to the prompt as a session runs.
+ * start, each gameplay turn — funnels through this module with the full prompt
+ * already in hand. A check at session start alone would miss the per-turn
+ * growth from the repetition ledger and the marker-correction block, which
+ * append to the prompt as a session runs.
  *
- * Override with DM_PROMPT_WARN_TOKENS / DM_PROMPT_ERROR_TOKENS. Keep ERROR well
- * under the smallest context window in play: small local models (gemma, llama,
- * mistral) are treated as a 8k window / 6k safe budget in utils/contextManager.js,
- * so a prompt sized for Claude will not fit them at all.
+ * Re-based on the local model's real context window (localModels.js
+ * contextWindow(), default 65,536) in the local-model-only job: WARN at half
+ * the window, ERROR at three quarters — past that, the system prompt is
+ * crowding out the conversation and the reply. (The old 60k / 100k defaults
+ * were sized for a 1M-token cloud window and sat at or past the local window.)
+ * Override with DM_PROMPT_WARN_TOKENS / DM_PROMPT_ERROR_TOKENS.
  */
-const PROMPT_WARN_TOKENS = Number(process.env.DM_PROMPT_WARN_TOKENS || 60000);
-const PROMPT_ERROR_TOKENS = Number(process.env.DM_PROMPT_ERROR_TOKENS || 100000);
+function promptWarnTokens() {
+  return Number(process.env.DM_PROMPT_WARN_TOKENS) || Math.floor(contextWindow() * 0.5);
+}
+function promptErrorTokens() {
+  return Number(process.env.DM_PROMPT_ERROR_TOKENS) || Math.floor(contextWindow() * 0.75);
+}
 
 /**
  * Log loudly when the assembled system prompt crosses a size threshold.
@@ -58,18 +65,18 @@ export function checkPromptSize(systemPrompt, callPurpose = 'unknown') {
   const tokens = estimateTokens(systemPrompt);
   let level = 'ok';
 
-  if (tokens >= PROMPT_ERROR_TOKENS) {
+  if (tokens >= promptErrorTokens()) {
     level = 'error';
     console.error(
       `[promptSize] ERROR: system prompt for "${callPurpose}" is ~${tokens} tokens, ` +
-        `over the ${PROMPT_ERROR_TOKENS} ceiling. Context growth is no longer bounded — ` +
+        `over the ${promptErrorTokens()} ceiling. Context growth is no longer bounded — ` +
         `check chronicle summary count, canon-fact budget, and per-turn prompt appends.`
     );
-  } else if (tokens >= PROMPT_WARN_TOKENS) {
+  } else if (tokens >= promptWarnTokens()) {
     level = 'warn';
     console.warn(
       `[promptSize] WARN: system prompt for "${callPurpose}" is ~${tokens} tokens ` +
-        `(warn at ${PROMPT_WARN_TOKENS}, error at ${PROMPT_ERROR_TOKENS}).`
+        `(warn at ${promptWarnTokens()}, error at ${promptErrorTokens()}).`
     );
   }
 
@@ -154,10 +161,11 @@ export async function logAiCall(opts, callFn) {
   const latency_ms = finishedAt - startedAt;
 
   // Caller may pass usage/model details in opts.api_response_meta to
-  // capture token counts when known (some callers receive raw API responses).
-  // Alternately the caller's callFn may have populated opts.__capturedMeta
-  // via the onApiMeta hook in claude.chat. Phase 4a SC-4a.1 — see
-  // `wrapClaudeCall` below for the standard wiring helper.
+  // capture token counts when known. Alternately the caller's callFn may
+  // have populated opts.__capturedMeta via the onApiMeta hook in llm.chat
+  // — see `wrapLlmCall` below for the standard wiring helper. The model
+  // goes in model_id; the role (dm / summary / extraction / generation)
+  // goes in metadata.role.
   const meta = opts.api_response_meta || opts.__capturedMeta;
   const apiMeta = meta?.usage ? {
     model: meta.model,
@@ -166,6 +174,7 @@ export async function logAiCall(opts, callFn) {
     cache_read_input_tokens: meta.usage.cache_read_input_tokens,
     cache_creation_input_tokens: meta.usage.cache_creation_input_tokens
   } : (meta || {});
+  const metadataOut = withRole(opts.metadata, meta);
 
   // Compute prompt-shape breakdown synchronously — heuristic regex on the
   // system prompt; cheap relative to the AI call we just made. Stored as
@@ -223,7 +232,7 @@ export async function logAiCall(opts, callFn) {
         opts.marker_failures ? JSON.stringify(opts.marker_failures) : null,
         opts.triggered_correction_loop ? 1 : 0,
         opts.rule_violations ? JSON.stringify(opts.rule_violations) : null,
-        opts.metadata ? JSON.stringify(opts.metadata) : null
+        metadataOut ? JSON.stringify(metadataOut) : null
       ]
     );
   } catch (logErr) {
@@ -421,6 +430,7 @@ export async function logAiCallWithId(opts, callFn) {
     cache_read_input_tokens: meta.usage.cache_read_input_tokens,
     cache_creation_input_tokens: meta.usage.cache_creation_input_tokens
   } : (meta || {});
+  const metadataOut = withRole(opts.metadata, meta);
 
   if (logId != null) {
     try {
@@ -429,7 +439,8 @@ export async function logAiCallWithId(opts, callFn) {
          SET response_received_at = ?, latency_ms = ?,
              model_id = ?, input_tokens = ?, output_tokens = ?,
              cache_read_input_tokens = ?, cache_creation_input_tokens = ?,
-             response_text = ?, response_status = ?, response_error = ?
+             response_text = ?, response_status = ?, response_error = ?,
+             metadata = ?
          WHERE id = ?`,
         [
           finishedIso,
@@ -442,6 +453,7 @@ export async function logAiCallWithId(opts, callFn) {
           response_text,
           response_status,
           response_error,
+          metadataOut ? JSON.stringify(metadataOut) : null,
           logId
         ]
       );
@@ -454,63 +466,65 @@ export async function logAiCallWithId(opts, callFn) {
   return { result, logId };
 }
 
+/** Merge the call's role (from llm.chat's onApiMeta) into the metadata JSON. */
+function withRole(metadata, meta) {
+  if (!meta?.role) return metadata;
+  return { ...(metadata && typeof metadata === 'object' ? metadata : {}), role: meta.role };
+}
+
 /**
  * Convenience wrapper for the most common pattern: caller wants to invoke
- * a `claude.*` function (chat / continueSession / startSession) AND have
+ * an `llm.*` function (chat / continueSession / startSession) AND have
  * the call logged with onApiMeta token capture wired automatically.
  *
  * Usage:
  *
- *   const result = await wrapClaudeCall(
+ *   const result = await wrapLlmCall(
  *     { character_id, session_id, call_purpose: 'gameplay_turn',
  *       prompt_builder: 'dmPromptBuilder',
  *       system_prompt, user_message, conversation_history },
- *     (chatOptions) => claude.continueSession(systemPrompt, messages, action,
- *                                             modelChoice, chatOptions)
+ *     (chatOptions) => llm.continueSession(systemPrompt, messages, action,
+ *                                          'dm', chatOptions)
  *   );
  *
- * The caller's claudeFn receives a `chatOptions` argument that already
- * has `onApiMeta` set; the caller spreads it through to `chat()`. This
- * is the only way to capture token counts (the API meta isn't returned
- * to the caller through `continueSession`/`startSession`'s public shape).
+ * The caller's fn receives a `chatOptions` argument that already has
+ * `onApiMeta` set; the caller passes it through to `chat()`. That is how
+ * the model, role and token counts reach the log row.
  *
- * Returns whatever the claudeFn returns. Logging is best-effort and
- * never propagates errors from the persistence layer to the caller.
+ * Returns whatever fn returns. Logging is best-effort and never propagates
+ * errors from the persistence layer to the caller.
  */
-export async function wrapClaudeCall(opts, claudeFn) {
-  // Provide an onApiMeta callback that captures into opts so logAiCall
-  // can read it after the call completes.
+export async function wrapLlmCall(opts, fn) {
   const wrappedOpts = { ...opts };
   const chatOptions = {
     onApiMeta: (meta) => { wrappedOpts.__capturedMeta = meta; }
-    // Caller may add sessionId / etc. by merging this into their own opts
   };
-  return logAiCall(wrappedOpts, () => claudeFn(chatOptions));
+  return logAiCall(wrappedOpts, () => fn(chatOptions));
 }
 
 /**
- * Variant of wrapClaudeCall that also returns the inserted log row id.
+ * Variant of wrapLlmCall that also returns the inserted log row id.
  * Callers thread the id to a downstream `annotateAiCallLog(logId, ...)`
  * after marker-pipeline / rule-verifier work completes.
  */
-export async function wrapClaudeCallWithId(opts, claudeFn) {
+export async function wrapLlmCallWithId(opts, fn) {
   const wrappedOpts = { ...opts };
   const chatOptions = {
     onApiMeta: (meta) => { wrappedOpts.__capturedMeta = meta; }
   };
-  return logAiCallWithId(wrappedOpts, () => claudeFn(chatOptions));
+  return logAiCallWithId(wrappedOpts, () => fn(chatOptions));
 }
 
 /**
- * Drop-in replacement for `chat(...)` that records the call to
+ * Drop-in replacement for `llm.chat(...)` that records the call to
  * `ai_call_log`. Generator-style call sites (campaign plan, NPC voice,
  * quest generation, etc.) pass a small `callContext` object as the first
  * argument; the rest of the args are forwarded to `chat()` unchanged.
  *
- * Signature mirrors `chat()`:
- *   chat(systemPrompt, messages, maxRetries, modelChoice, maxTokens, rawResponse, options)
+ *   chat(systemPrompt, messages, maxRetries, role, maxTokens, rawResponse, options)
+ *   loggedChat(callContext, systemPrompt, messages, maxRetries, role, maxTokens, rawResponse, options)
  *
- *   loggedChat(callContext, systemPrompt, messages, maxRetries, modelChoice, maxTokens, rawResponse, options)
+ * `role` is 'dm' | 'summary' | 'extraction' | 'generation' (localModels.js).
  *
  * `callContext` shape:
  *   { call_purpose, character_id?, campaign_id?, session_id?, turn_number?,
@@ -518,16 +532,15 @@ export async function wrapClaudeCallWithId(opts, claudeFn) {
  *
  * The helper extracts the last user message from `messages` for the
  * `user_message` column, persists the full message array to
- * `conversation_history`, and wires `onApiMeta` into `options` so
- * token counts are captured automatically. Callers that need the inserted
- * row id can use `wrapClaudeCallWithId` directly.
+ * `conversation_history`, and wires `onApiMeta` into `options` so the
+ * model, role and token counts are captured. Callers that need the inserted
+ * row id can use `wrapLlmCallWithId` directly.
  */
-export async function loggedChat(callContext, systemPrompt, messages, maxRetries = 3, modelChoice = null, maxTokens = 2000, rawResponse = false, options = {}) {
-  // Defensive — caller may have omitted callContext (treat as raw chat call).
-  // Imported lazily to avoid circular import (aiCallLogger ← claude ← aiCallLogger).
-  const { chat } = await import('./claude.js');
+export async function loggedChat(callContext, systemPrompt, messages, maxRetries = 3, role = 'dm', maxTokens = 2000, rawResponse = false, options = {}) {
+  // Imported lazily so this logger stays importable without the client.
+  const { chat } = await import('./llm.js');
   if (!callContext || typeof callContext !== 'object' || !callContext.call_purpose) {
-    return chat(systemPrompt, messages, maxRetries, modelChoice, maxTokens, rawResponse, options);
+    return chat(systemPrompt, messages, maxRetries, role, maxTokens, rawResponse, options);
   }
 
   const lastUserMsg = Array.isArray(messages)
@@ -552,5 +565,5 @@ export async function loggedChat(callContext, systemPrompt, messages, maxRetries
     onApiMeta: (meta) => { wrappedOpts.__capturedMeta = meta; }
   };
 
-  return logAiCall(wrappedOpts, () => chat(systemPrompt, messages, maxRetries, modelChoice, maxTokens, rawResponse, mergedOptions));
+  return logAiCall(wrappedOpts, () => chat(systemPrompt, messages, maxRetries, role, maxTokens, rawResponse, mergedOptions));
 }

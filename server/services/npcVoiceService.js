@@ -2,8 +2,8 @@
  * NPC Voice Palette Service
  *
  * Generates structured voice hints for NPCs so the DM prompt can surface
- * age-appropriate, register-specific dialogue cues. Uses Opus (high-quality,
- * one-time cost per NPC) rather than Sonnet — the palette is reused across
+ * age-appropriate, register-specific dialogue cues. Generated once per NPC
+ * (generation role) — the palette is reused across
  * every future conversation with this NPC, so the quality difference matters.
  *
  * Triggers:
@@ -13,7 +13,7 @@
  *   MINOR_LATER: generated on-demand once the NPC crosses 3 player interactions.
  *     A chance encounter stays voice-paletteless; a recurring contact gets one.
  *
- * Cost model: Opus call per palette, ~400-600 output tokens + ~600 prompt
+ * Cost model: the model call per palette, ~400-600 output tokens + ~600 prompt
  * tokens. We cache the result on `npcs.voice_palette` as JSON and never
  * regenerate unless the NPC is substantially enriched (new age, occupation,
  * backstory — none of which happen in normal play).
@@ -30,7 +30,6 @@
  */
 
 import { dbGet, dbRun } from '../database.js';
-import * as claude from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 
@@ -69,7 +68,7 @@ export function isNpcImportant(npc) {
 }
 
 /**
- * Build the Opus prompt for voice palette generation.
+ * Build the model prompt for voice palette generation.
  * Kept compact (~600 tokens) so the per-NPC cost stays low.
  */
 function buildVoicePrompt(npc) {
@@ -132,12 +131,6 @@ export async function generateVoicePalette(npcId) {
       }
     }
 
-    if (!claude.isClaudeAvailable()) {
-      // Ollama fallback is possible but the quality is usually too low for
-      // this specific task. Skip for now — Opus is always preferred.
-      return null;
-    }
-
     const systemPrompt = 'You are a precise assistant that outputs JSON only, with no explanations.';
     const userPrompt = buildVoicePrompt(npc);
 
@@ -146,11 +139,11 @@ export async function generateVoicePalette(npcId) {
       systemPrompt,
       [{ role: 'user', content: userPrompt }],
       2,      // retries
-      'opus', // force Opus for quality
+      'generation',
       800     // maxTokens
     );
 
-    const text = typeof response === 'string' ? response : (response?.content || '');
+    const text = typeof response === 'string' ? response : '';
     const palette = tryExtractLLMJson(text);
     if (!palette) {
       console.warn(`[voicePalette] Could not extract JSON for NPC ${npcId}`);

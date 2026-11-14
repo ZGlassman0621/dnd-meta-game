@@ -25,8 +25,8 @@ const AIBehaviorDebugPage = lazy(() => import('../AIBehaviorDebugPage.jsx'))
  *   route='wizard.next'           — CreatorNextShell (new creator);
  *                                  fresh create, or a 'creating' draft via
  *                                  resumeCharacterId (see below)
- *   route='prelude.arc'           — PreludeArcPreview (Opus arc plan)
- *   route='prelude.session'       — PreludeSession (Sonnet play loop)
+ *   route='prelude.arc'           — PreludeArcPreview (AI arc plan)
+ *   route='prelude.session'       — PreludeSession (DM play loop)
  *
  * Card click routing per spec §3.5:
  *   - Active card → calls onSelectActive (App.jsx renders dashboard)

@@ -194,7 +194,7 @@ console.log('\n=== Rule 6 CARVE-OUT — NPC-directed tasks route to roll prompt 
     p.includes('TRIGGER PHRASES THAT SIGNAL A ROLL PROMPT'),
     'Rule 6 has an explicit trigger-phrase list'
   );
-  // The specific phrases that Sonnet missed in play-test
+  // The specific phrases that the model missed in play-test
   assert(
     p.includes('Read it to me') || p.includes('"Read it to me."'),
     'trigger list covers "Read it to me"'

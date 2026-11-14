@@ -1,18 +1,18 @@
 /**
  * Prelude Arc prompt builder.
  *
- * Phase 2b-i. Generates the system prompt Sonnet plays within during
+ * Phase 2b-i. Generates the system prompt the model plays within during
  * prelude-arc sessions. The arc plan (from Phase 2a / preludeArcService) is
- * REFERENCE, not a rail — Sonnet honours the beats but flexes around the
+ * REFERENCE, not a rail — the model honours the beats but flexes around the
  * player's actual choices.
  *
  * This is NOT the same as `preludeArcService.buildArcSystemPrompt` — that
- * one is for Opus to *generate* an arc plan. This one is for Sonnet to
+ * one is for the model to *generate* an arc plan. This one is for the model to
  * *play* within an already-generated plan.
  *
  * Two entry points:
  *   createPreludeSystemPrompt(character, setup, arcPlan, runtime)
- *       The system prompt injected into every Sonnet call for this session.
+ *       The system prompt injected into every the model call for this session.
  *   createPreludeOpeningPrompt(character, setup, arcPlan, runtime)
  *       The user-role "opening" message that starts the first session.
  *       For resumed sessions, use createPreludeResumePrompt instead.
@@ -49,11 +49,11 @@ function getChapterAges(race) {
  * Step 5 of the rebuilt PreludeCreatorV2. Stored on the character row
  * (eye_color / hair_color / skin_color / physical_build).
  *
- * v1.0.140: Sonnet needs to know these so it can describe the character
+ * v1.0.140: the model needs to know these so it can describe the character
  * truthfully without inventing markers. Without this block, the narrator
  * has to make up eye/hair/skin every time the PC is described, which
  * means the player's Step 5 picks would silently never matter in
- * gameplay (only the testing-only arc preview surfaced them via Opus's
+ * gameplay (only the testing-only arc preview surfaced them via the model's
  * input prompt).
  *
  * Returns '' when no appearance fields are set so the prompt stays clean
@@ -110,7 +110,7 @@ function formatChapter(chapterKey, arc) {
 
 /**
  * Build a flat bullet list of canonical home-world locals + tensions
- * + threats + mentor for Sonnet to reference.
+ * + threats + mentor for the model to reference.
  */
 function formatHomeWorld(hw) {
   if (!hw || typeof hw !== 'object') return '(no home-world data on file)';
@@ -228,7 +228,7 @@ function engagementModeBlock(chapter, age, committedTheme = null, themeDeparture
 
    REAL COMBAT. Bodies matter. Wounds leave marks. The PC can be hurt. The PC can hurt others. Violence has weight and consequence — not casual, not softened.
 
-   Chapter opens with CHAPTER_PROMISE (rule 22) — Sonnet asks the player what this chapter is about and lets them confirm, redirect, or see-where-it-goes.
+   Chapter opens with CHAPTER_PROMISE (rule 22) — the DM asks the player what this chapter is about and lets them confirm, redirect, or see-where-it-goes.
 
    ⚑ THEME COMMITMENT CEREMONY (v1.0.77) — AT CH3 WRAP-UP.
    AFTER the irreversible-act lands — the act is done, consequences are visible — emit [THEME_COMMITMENT_OFFERED]. The server will compute the authoritative offer (leading theme from chapter-weighted trajectory + 3 alternatives + "choose your own") and the UI will render a lightweight in-line commitment card. No wildcard slot, no defer — Phase 2 simplified the ceremony per Phase 1 Decision 3.
@@ -587,7 +587,7 @@ ${engagementModeBlock(runtime.chapter, runtime.age, runtime.committedTheme, runt
     Critical directive — DO NOT SOFTEN CONSEQUENCES BECAUSE THE PROTAGONIST IS YOUNG. The protagonist's age affects what they understand and how they feel, not what the world is willing to do to them. A coming-of-age story in this world can include real loss, real fear, and real moral weight — and the best ones do. (This directive is from paragraph two of the TONE block. It supersedes any prior "age-appropriate" rule that read as "kid-friendly content"; the TONE block is the authoritative version.)
     NEVER drift toward generic literary fantasy. The world is real and full of wonder; honor both registers. Don't choose between them — the wonder doesn't make the mundane less true; the mundane doesn't make the wonder less wondrous.
 
-15. WORLD RULES = FAERÛN. This is a medieval-fantasy setting. Technology, culture, and vocabulary must fit. Banned anachronisms (common Sonnet drift):
+15. WORLD RULES = FAERÛN. This is a medieval-fantasy setting. Technology, culture, and vocabulary must fit. Banned anachronisms (common model drift):
    - NO TRAINS, rails, railways. Caravans move by wagon, ox, horse, or foot. A shipment is "a wagon train" at most — never a literal train.
    - NO GUNS, firearms, cannons, or gunpowder (unless the player's setup established a gunpowder-aware setting, which none currently do).
    - NO MODERN TECH: no photos, telephones, cars, radios, computers, clocks (clocks exist as bells / sundials / candlemarks), "minutes" as precise units, kilometers, or "miles per hour."
@@ -850,7 +850,7 @@ Use ${pronouns} pronouns whenever a third party refers to you (which should be r
 
 /**
  * Build the MARKERS block. Recency position — appears near end of prompt
- * so Sonnet sees it close to generation.
+ * so the model sees it close to generation.
  */
 function markersBlock() {
   return `MARKERS you emit when appropriate (the server parses these and updates state):
@@ -1077,7 +1077,7 @@ ${parentLines}
     "${originFreeform}"
     ⚠ HONOR THIS. When the free-text describes an origin specific that conflicts with a curated answer above (e.g. it specifies a different family configuration, a different home, a different formative event), the free-text WINS. The curated answers were a starting point; this free text is the player's own fill-in-the-gaps and the AI must build the arc around it.` : ''}
 
-HOME WORLD (Opus-generated, reference for this session):
+HOME WORLD (generated at setup, reference for this session):
 ${formatHomeWorld(arcPlan?.home_world)}
 
 CURRENT CHAPTER (${runtime.chapter} of 3 — life stage: ${ages['ch' + runtime.chapter] || '?'}):
@@ -1130,7 +1130,7 @@ FINAL REMINDER (read this every turn):
 }
 
 /**
- * First-session opening prompt. Asks Sonnet to write an opening scene
+ * First-session opening prompt. Asks the model to write an opening scene
  * grounded in Chapter 1's theme and the home-world context.
  *
  * Opening scenes are LONGER than normal turns — the player is entering a

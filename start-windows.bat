@@ -16,16 +16,13 @@ if not exist ".env" (
     copy .env.example .env >nul
     echo.
     echo  -----------------------------------------------
-    echo  You need an Anthropic API key to use the AI DM.
-    echo  Get one at: https://console.anthropic.com
+    echo  The AI DM runs on this PC through Ollama.
+    echo  1. Install Ollama from https://ollama.com
+    echo  2. In a terminal, run: ollama pull gemma4:12b
+    echo  No API key or internet connection is needed to play.
     echo  -----------------------------------------------
     echo.
-    echo  Opening .env in Notepad...
-    echo  Add your API key after ANTHROPIC_API_KEY=
-    echo  Then save and close Notepad.
-    echo.
-    notepad .env
-    echo  After saving your API key, press any key to start...
+    echo  Press any key to start...
     pause >nul
 )
 

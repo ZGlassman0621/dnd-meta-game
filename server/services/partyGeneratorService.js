@@ -1,9 +1,8 @@
 /**
- * Party Generator Service — Generates 4 distinct AI-controlled player characters using Opus.
+ * Party Generator Service — Generates 4 distinct AI-controlled player characters with the local model.
  * Each party has diverse classes, alignments, voices, and built-in inter-party tensions.
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 
@@ -145,15 +144,11 @@ function parsePartyResponse(response) {
 }
 
 /**
- * Generate a party of 4 diverse D&D characters using Opus.
+ * Generate a party of 4 diverse D&D characters (generation role).
  * @param {Object} config - { setting, tone, level }
  * @returns {Object} - { party_name, party_concept, characters: [...], tensions: [...] }
  */
 export async function generateParty(config = {}) {
-  if (!isClaudeAvailable()) {
-    throw new Error('Claude API not available — ANTHROPIC_API_KEY not set');
-  }
-
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildGenerationPrompt(config);
 
@@ -162,7 +157,7 @@ export async function generateParty(config = {}) {
     systemPrompt,
     [{ role: 'user', content: userPrompt }],
     3,       // maxRetries
-    'opus',  // model
+    'generation',
     12000,   // maxTokens (4 full character sheets)
     true     // rawResponse (JSON)
   );

@@ -7,7 +7,7 @@
  *
  * Three application paths converge here:
  *   1. Per-turn `[BOND_SHIFT]` markers (was lines 295-329 in routes/dmMode.js)
- *   2. Session-end Sonnet extraction (`dmModeChronicleService.extractRelationshipEvolution`)
+ *   2. Session-end the model extraction (`dmModeChronicleService.extractRelationshipEvolution`)
  *   3. Manual DM adjustment (`PUT /api/dm-mode/party/:partyId/relationship`)
  *
  * All three paths converge on the abstraction's clamp-to-range logic via
@@ -193,7 +193,7 @@ export function mutateRelationshipScalars(rel, warmthDelta, trustDelta, reason, 
  *
  * Call shape mirrors the legacy inline application:
  *   - warmthDelta / trustDelta are signed deltas (-N to apply DOWN)
- *   - reason: free-text from the AI marker / Sonnet extraction / DM note
+ *   - reason: free-text from the AI marker / the model extraction / DM note
  *   - sessionLabel: number for in-session shifts, string ('dm') for manual
  *
  * Returns the updated `{ warmth, trust, history }` for the caller, or

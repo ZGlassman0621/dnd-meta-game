@@ -1,12 +1,10 @@
 /**
  * Quest Generator Service
  *
- * Generates structured quests using AI (Claude primary, Ollama fallback).
+ * Generates structured quests using AI (the local model).
  * Creates main quests (5 stages), side quests (2-3 stages), and one-time quests.
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
-import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { REQUIREMENT_TYPES } from '../config/eventTypes.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
@@ -514,40 +512,17 @@ Return ONLY valid JSON:
 // ============================================================
 
 /**
- * Generate content using Claude (primary) or Ollama (fallback)
+ * Generate content with the local model
  */
 async function generateWithAI(prompt) {
-  // Try Claude first
-  if (isClaudeAvailable()) {
-    try {
-      const response = await loggedChat(
-        { call_purpose: 'quest_gen', prompt_builder: 'questGenerator' },
-        'You are a D&D quest designer. Return ONLY valid JSON, no explanation or markdown.',
-        [{ role: 'user', content: prompt }],
-        3, 'opus'
-      );
-      return response;
-    } catch (error) {
-      console.error('Claude quest generation failed:', error.message);
-      // Fall through to Ollama
-    }
-  }
-
-  // Try Ollama as fallback
-  const ollamaStatus = await checkOllamaStatus();
-  if (ollamaStatus.available) {
-    try {
-      const response = await ollamaChat([
-        { role: 'system', content: 'You are a D&D quest designer. Return ONLY valid JSON, no explanation or markdown.' },
-        { role: 'user', content: prompt }
-      ]);
-      return response;
-    } catch (error) {
-      console.error('Ollama quest generation failed:', error.message);
-    }
-  }
-
-  throw new Error('No AI provider available for quest generation');
+  // Local model (generation role). Errors propagate: the caller reports a
+  // failed quest generation rather than inventing content.
+  return loggedChat(
+    { call_purpose: 'quest_gen', prompt_builder: 'questGenerator' },
+    'You are a D&D quest designer. Return ONLY valid JSON, no explanation or markdown.',
+    [{ role: 'user', content: prompt }],
+    3, 'generation'
+  );
 }
 
 /**

@@ -130,7 +130,7 @@ function normalizeQuotes(text) {
  * Counts straight `"` characters before `index`. Odd count ⇒ inside a
  * quote. This is a simple, stateless pass; it doesn't understand
  * escaped quotes (rare in narrative prose) or markdown/HTML quote
- * substitutes. Good enough for the patterns Sonnet/Opus actually emit.
+ * substitutes. Good enough for the patterns the model actually emit.
  *
  * Example of the false-positive this prevents:
  *   `"You will not speak of this. Not to Moira — " he said, "— who ..."`

@@ -188,7 +188,7 @@ router.get('/:id/plan', async (req, res) => {
   }
 });
 
-// POST /api/campaign/:id/plan/generate - Generate a new campaign plan with Opus
+// POST /api/campaign/:id/plan/generate - Generate a new campaign plan with the model
 router.post('/:id/plan/generate', async (req, res) => {
   try {
     const { character_id } = req.body;

@@ -3,11 +3,11 @@
  *
  * Phase 2 chunk 2. Triggered when [PRELUDE_END] fires during a Prelude
  * session. Aggregates the Prelude's accumulated state, generates the
- * biography seed (Opus call), persists it, and flips
+ * biography seed (model call), persists it, and flips
  * `creation_phase` from `'prelude'` to `'ready_for_primary'`.
  *
  * What "transition" produces:
- *  1. `character_biography` seed entries (from migration 048) — Opus-
+ *  1. `character_biography` seed entries (from migration 048) — model-
  *     generated appendable timestamped paragraphs in the voice of the
  *     adult character looking back, with allowed gentle distortion.
  *     Replaces the v1.0.73 single-blob backstory output with the living
@@ -48,7 +48,6 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { chat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { getPreludeCharacter } from './preludeService.js';
@@ -525,12 +524,12 @@ function composeName(first, last) {
 }
 
 // ---------------------------------------------------------------------------
-// Biography seed generation (Opus call)
+// Biography seed generation (model call)
 // ---------------------------------------------------------------------------
 
 /**
  * Generate 4-6 appendable biography entries from the Prelude state.
- * Opus call; output is timestamped paragraphs in the voice of the adult
+ * the model call; output is timestamped paragraphs in the voice of the adult
  * character looking back, with allowed gentle distortion.
  *
  * Entries are appendable across the main campaign (later phases append
@@ -543,7 +542,7 @@ async function generateBiographyEntries(character, setup, ctx) {
   const raw = await loggedChat(
     { call_purpose: 'prelude_handoff_biography_gen', prompt_builder: 'preludeTransitionService',
       character_id: character?.id, campaign_id: character?.campaign_id },
-    sysPrompt, [{ role: 'user', content: userPrompt }], 3, 'opus', 4096, true
+    sysPrompt, [{ role: 'user', content: userPrompt }], 3, 'generation', 4096, true
   );
   const parsed = extractLLMJson(raw);
 
@@ -635,7 +634,7 @@ Write 4-6 entries. JSON only.`;
 
 // ---------------------------------------------------------------------------
 // Test-only exports — internal helpers exposed for unit testing without
-// requiring DB + Opus round-trip. Not part of the public API.
+// requiring DB + the model round-trip. Not part of the public API.
 // ---------------------------------------------------------------------------
 
 export const __testkit__buildHandoffPayload = buildHandoffPayload;

@@ -8,7 +8,6 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { chat, isClaudeAvailable } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 
 // ============================================================
@@ -289,8 +288,6 @@ If no NPCs had distinctive voice characteristics this session, return: { "npc_vo
  * Called non-blocking at session end.
  */
 export async function extractNpcVoiceNotes(sessionId, partyId) {
-  if (!isClaudeAvailable()) return null;
-
   const session = await dbGet('SELECT messages FROM dm_sessions WHERE id = ?', [sessionId]);
   if (!session) return null;
 
@@ -317,7 +314,7 @@ export async function extractNpcVoiceNotes(sessionId, partyId) {
       VOICE_PROMPT,
       [{ role: 'user', content: input }],
       2,
-      'sonnet',
+      'extraction',
       1500,
       true
     );

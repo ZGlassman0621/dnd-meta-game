@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { initDatabase } from './database.js';
-import { hydratePins, logStalenessCheck } from './services/modelRegistry.js';
+import { checkStatus as checkLocalModel } from './services/llm.js';
 import characterRoutes from './routes/character.js';
 import nicknameRoutes from './routes/nickname.js';
 import adventureRoutes from './routes/adventure.js';
@@ -68,16 +68,16 @@ app.use(express.static(clientDistPath));
 // Initialize database (async for Turso cloud)
 await initDatabase();
 
-// Load any persisted model pins before the first request can be served —
-// awaited, because a turn served with the wrong model is the thing this exists
-// to prevent. It never throws: a missing pin falls back to the shipped default.
-await hydratePins();
-
-// Then ask Anthropic whether a newer model exists. Fire-and-forget on purpose:
-// it is a network call, and the server must not wait on Anthropic being
-// reachable in order to start. Logs only — adopting a new generation can change
-// request semantics, so it is never applied automatically.
-logStalenessCheck();
+// Report whether the local model is ready. Fire-and-forget: the server must
+// start even when Ollama isn't running yet (the player can start it later;
+// every AI call re-checks). Logs only.
+checkLocalModel().then((status) => {
+  if (status.available) {
+    console.log(`[llm] Ollama ready at ${status.url} — roles: ${Object.entries(status.role_models).map(([r, m]) => `${r}=${m}`).join(', ')}; context window ${status.context_window}`);
+  } else {
+    console.warn(`[llm] Local AI not ready: ${status.error}`);
+  }
+}).catch(() => {});
 
 // Initialize narrative systems (event handlers for quests, companions, achievements, etc.)
 await initNarrativeSystems();

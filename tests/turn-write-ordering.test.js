@@ -8,7 +8,7 @@
  * WHY THIS TEST IS STRUCTURAL RATHER THAN BEHAVIOURAL
  * ---------------------------------------------------
  * Exercising the real handler end-to-end needs a stubbed LLM: the route calls
- * out to Claude/Ollama mid-handler, and the repo has no injection point or mock
+ * out to the model mid-handler, and the repo has no injection point or mock
  * harness for that. The one existing route-level test
  * (tests/integration.test.js) asserts `status in {200, 503, 500}`, so it goes
  * green precisely when no LLM is configured — it cannot detect a regression

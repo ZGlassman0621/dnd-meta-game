@@ -50,7 +50,7 @@ The companion's "self" is composed from several persistent layers, loaded into e
 The base companion record (`companions` table) plus per-table extensions for theme, ancestry feat, multiclass, spell slots, hit dice, conditions, and death saves. This is the literal D&D character sheet. See migrations 028–031 for the progression schema.
 
 ### Backstory (narrative ground)
-`companion_backstories` stores origin location, formative event, personal goal, secrets, and unresolved threads. This is the slow-changing layer — it's set at recruit time (often Opus-generated) and only grows by appending threads or revealing secrets.
+`companion_backstories` stores origin location, formative event, personal goal, secrets, and unresolved threads. This is the slow-changing layer — it's set at recruit time (often AI-generated) and only grows by appending threads or revealing secrets.
 
 ### Loyalty (relationship score)
 A 0–100 score per companion. Adjusted by player choices, fulfilled or broken promises, activity outcomes, and dramatic events. Loyalty is labeled in the prompt — `devoted` (90+), `loyal` (75+), `trusted` (50+), `uncertain` (25+), `distrustful` (10+), `hostile` (<10) — so the AI DM can register what the score *means* without needing to interpret a raw number.
@@ -72,7 +72,7 @@ NPC voice / personality / mannerism / motivation / appearance / age description 
 
 A companion does not have to be on-screen at all times. The Activities system lets the player send an active companion away on an independent task: `training`, `scouting`, `personal_quest`, `guarding`, `researching`, `shopping`, `socializing`, or `resting`. The companion's status flips to `away`, an `companion_activities` row tracks the assignment, and the world tick checks for completion based on game-day elapsed.
 
-When the activity resolves, the AI generates a structured outcome (today's code uses Claude when an API key is set and a non-AI fallback otherwise, in `companionActivityService.js`; the decided model is gemma4:12b via Ollama, and the code hasn't moved yet) — success level, story summary, reunion narrative, mood change, loyalty change, XP, items found, injuries, story development. Personality is fed in: a cautious companion may succeed at scouting but fumble at socializing; a brave one may take risks during training. A meaningful reunion narrative is queued for the next session, so the companion comes back with a story.
+When the activity resolves, the AI generates a structured outcome (the local model's generation role, in `companionActivityService.js`, with non-AI fallback outcomes if Ollama is unreachable) — success level, story summary, reunion narrative, mood change, loyalty change, XP, items found, injuries, story development. Personality is fed in: a cautious companion may succeed at scouting but fumble at socializing; a brave one may take risks during training. A meaningful reunion narrative is queued for the next session, so the companion comes back with a story.
 
 The player can `recall` an activity early (partial outcomes scaled by completion ratio) or `cancel` it (companion returns clean, no outcomes). Activities below 20% completion auto-cancel rather than partially resolve.
 
@@ -158,8 +158,8 @@ The `[RECIPE_GIFT]` marker fires when a companion (or NPC) gifts the player a re
 Implementation lives across:
 
 - `server/services/companionBackstoryService.js` — backstory CRUD, loyalty, secrets, threads, mood
-- `server/services/companionBackstoryGenerator.js` — AI generation at recruit time (Claude when a key is set, Ollama otherwise)
-- `server/services/companionActivityService.js` — Activities lifecycle + AI outcome generation (Claude when a key is set, a non-AI fallback otherwise)
+- `server/services/companionBackstoryGenerator.js` — AI generation at recruit time (local model, generation role)
+- `server/services/companionActivityService.js` — Activities lifecycle + AI outcome generation (local model; non-AI fallback if Ollama is unreachable)
 - `server/services/companionTriggerChecker.js` — event-driven thread activation
 - `server/services/progressionCompanionService.js` — auto theme + ancestry feat selection
 - `server/migrations/001` (companions, companion_backstories), `004` (mood), `006` (activities), `028` (theme + ancestry feat), `029` (rest + spell slots), `030` (combat safety), `031` (multiclass), `032` (party inventory merge)

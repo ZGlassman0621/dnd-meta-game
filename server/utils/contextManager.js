@@ -7,8 +7,8 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { chat } from '../services/claude.js';
 import { loggedChat } from '../services/aiCallLogger.js';
+import { contextWindow } from '../services/localModels.js';
 
 /**
  * Rough token estimation (chars / 4)
@@ -21,31 +21,35 @@ export function estimateTokens(text) {
 }
 
 /**
- * Get model-specific context limits
- * @param {string} model - Model identifier
+ * Share of the context window the prompt + history may use. The rest is
+ * headroom for the reply (the DM turn ceiling is 4,000 tokens) and for the
+ * chars/4 estimate running low on some text.
+ */
+export const SAFE_BUDGET_SHARE = 0.85;
+
+/**
+ * Context limits for the local model, from the window actually sent to Ollama
+ * (localModels.contextWindow(): OLLAMA_NUM_CTX, default 65,536 — measured to
+ * fit the default model fully on the GPU of the builder PC, 2026-11-13).
+ *
+ * Re-based in the local-model-only job. The old numbers assumed a 1M-token
+ * cloud window (900,000 safe) and treated any "gemma" model as an 8,192 window —
+ * both wrong for the default local model, whose limit is 262,144 and whose working
+ * window is whatever num_ctx says. Every role runs at the same window, so this
+ * takes no model argument.
  * @returns {{ contextWindow: number, safeBudget: number }}
  */
-export function getModelLimits(model) {
-  if (model && model.includes('gemma')) {
-    return { contextWindow: 8192, safeBudget: 6000 };
-  }
-  if (model && (model.includes('llama') || model.includes('mistral'))) {
-    return { contextWindow: 8192, safeBudget: 6000 };
-  }
-  // Claude Opus/Sonnet — 1M context on every currently-pinned model.
-  // Was stated as 200K until v1.0.182, which understated the budget; in
-  // practice MAX_CHRONICLE_BUDGET caps the output either way, so this is a
-  // correctness fix to the number rather than a behaviour change.
-  return { contextWindow: 1000000, safeBudget: 900000 };
+export function getModelLimits() {
+  const window = contextWindow();
+  return { contextWindow: window, safeBudget: Math.floor(window * SAFE_BUDGET_SHARE) };
 }
 
 /**
  * Hard ceiling on canon-fact context, regardless of how much room appears free.
  *
  * Without this the function is fed only a few hundred tokens of input (world
- * state + notes + memories) and so hands back ~67,000 tokens of budget on a
- * 180k safeBudget — a number large enough that canon facts alone could crowd
- * out the rest of the prompt. The caller's estimate being incomplete stops
+ * state + notes + memories) and so could hand back a budget large enough that
+ * canon facts alone crowd out the rest of the prompt. The caller's estimate being incomplete stops
  * mattering once the output itself is bounded, which is why this cap exists
  * rather than a more precise input measurement.
  */
@@ -80,11 +84,10 @@ export function sliceTailByTokens(text, tokenBudget) {
  *
  * @param {number} systemPromptTokens - Estimated tokens in system prompt
  * @param {number} conversationTokens - Estimated tokens in message history
- * @param {string} model - Model identifier
  * @returns {number} Token budget for chronicle context, between 2000 and MAX_CHRONICLE_BUDGET
  */
-export function calculateChronicleBudget(systemPromptTokens, conversationTokens, model) {
-  const { safeBudget } = getModelLimits(model);
+export function calculateChronicleBudget(systemPromptTokens, conversationTokens) {
+  const { safeBudget } = getModelLimits();
   const responseBuffer = 10000; // Reserve for AI response
 
   const remaining = safeBudget - systemPromptTokens - conversationTokens - responseBuffer;
@@ -93,8 +96,8 @@ export function calculateChronicleBudget(systemPromptTokens, conversationTokens,
     return 2000; // Minimum guaranteed budget
   }
 
-  // Use 40% of remaining space, then clamp. Small-context local models (gemma,
-  // llama, mistral) land near the 2000 floor; Claude-class models hit the cap.
+  // Use 40% of remaining space, then clamp. At the default 65,536 window and a
+  // ~13k-token DM prompt this lands around 13k — under the 20k cap.
   const budget = Math.floor(remaining * 0.4);
   return Math.min(MAX_CHRONICLE_BUDGET, Math.max(2000, budget));
 }
@@ -103,11 +106,10 @@ export function calculateChronicleBudget(systemPromptTokens, conversationTokens,
  * Check if message history needs compression
  *
  * @param {Array} messages - Message array
- * @param {string} model - Model identifier
  * @returns {{ needsCompression: boolean, urgency: string|null, totalTokens: number }}
  */
-export function shouldCompress(messages, model) {
-  const { safeBudget } = getModelLimits(model);
+export function shouldCompress(messages) {
+  const { safeBudget } = getModelLimits();
 
   let totalTokens = 0;
   for (const msg of messages) {
@@ -136,10 +138,9 @@ export function shouldCompress(messages, model) {
  *
  * @param {Array} messages - Full message array
  * @param {number} sessionId - Session ID for storing summaries
- * @param {string} model - Model being used (for API calls)
  * @returns {Array} Compressed message array
  */
-export async function compressMessageHistory(messages, sessionId, model) {
+export async function compressMessageHistory(messages, sessionId) {
   // Separate system messages and conversation messages
   const systemMessages = messages.filter(m => m.role === 'system');
   const conversationMessages = messages.filter(m => m.role !== 'system');
@@ -168,7 +169,7 @@ export async function compressMessageHistory(messages, sessionId, model) {
     summaryText = existingSummary.summary;
   } else {
     // Generate new summary via AI
-    summaryText = await generateMessageSummary(oldMessages, model);
+    summaryText = await generateMessageSummary(oldMessages);
 
     // Store for future reuse
     const tokenEstimate = estimateTokens(summaryText);
@@ -198,10 +199,9 @@ export async function compressMessageHistory(messages, sessionId, model) {
 /**
  * Generate a compressed summary of older messages
  * @param {Array} messages - Messages to summarize
- * @param {string} model - Model to use for summarization
  * @returns {string} Compressed summary
  */
-async function generateMessageSummary(messages, model) {
+async function generateMessageSummary(messages) {
   const transcript = messages
     .map(m => `${m.role === 'user' ? 'PLAYER' : 'DM'}: ${m.content}`)
     .join('\n\n');
@@ -229,7 +229,7 @@ Write as a factual recap, not as narrative. Focus on information the DM needs to
     summaryPrompt,
     [{ role: 'user', content: input }],
     2, // fewer retries for background task
-    model === 'opus' ? 'sonnet' : 'sonnet', // Always use Sonnet for compression
+    'summary',
     1500,
     true // raw response
   );
@@ -244,6 +244,7 @@ export default {
   shouldCompress,
   compressMessageHistory,
   sliceTailByTokens,
+  SAFE_BUDGET_SHARE,
   MAX_CHRONICLE_BUDGET,
   MAX_NOTES_TOKENS,
   MAX_MEMORIES_TOKENS

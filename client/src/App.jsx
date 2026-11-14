@@ -109,19 +109,6 @@ function App() {
   const [campaignPlanReady, setCampaignPlanReady] = useState(false)
   const [hasStartedAdventure, setHasStartedAdventure] = useState(false)
 
-  // Sonnet vs Opus selector. Opus is the production default (v1.0.99 — see
-  // DECISION_LOG "Opus as production default for main DM session continuations").
-  // The toggle is now an opt-down to Sonnet, not an opt-up to Opus. Persisted
-  // in localStorage as `dndUseSonnet` ('1' = use Sonnet override, '0' or absent
-  // = use Opus default). Shared with DMSession's in-session pill via the same key.
-  const [useSonnet, setUseSonnet] = useState(() => {
-    try { return localStorage.getItem('dndUseSonnet') === '1' } catch { return false }
-  })
-  const updateUseSonnet = (next) => {
-    setUseSonnet(next)
-    try { localStorage.setItem('dndUseSonnet', next ? '1' : '0') } catch {}
-  }
-
   // (Lean Prompt UI toggle was removed in v1.0.100 per the "Retire Lean
   // Prompt toggle as production direction" decision in DECISION_LOG. The
   // underlying applyLeanTransforms() post-processor remains wired in
@@ -365,52 +352,29 @@ function App() {
         <h1>D&D Meta Game</h1>
         <p className="subtitle">Adventure awaits while you're away</p>
         {llmStatus && (() => {
-          // When Claude is available, the pill becomes a clickable Sonnet/Opus
-          // toggle. Opus is the production default (v1.0.99); the toggle now
-          // selects Sonnet as an opt-down. Any non-Claude case stays a plain
-          // status indicator.
-          const isClickable = llmStatus.available && llmStatus.provider === 'claude'
-          // v1.0.177 — chrome (shape, type, spacing) moved to `.shell-status`;
+          // Local AI status pill. The game runs on one local model (Ollama);
+          // the pill shows whether it is ready and which model the DM uses.
+          // v1.0.177 — chrome (shape, type, spacing) lives in `.shell-status`;
           // only the state colours stay inline, because they are state rather
-          // than theme. Re-tuned for the paper band: the previous values were
-          // picked against a near-black background, and #ff8c00 / #a78bfa on
-          // #fcfcfa fail contrast badly.
+          // than theme.
+          const dmModel = llmStatus.role_models?.dm
           const accent = !llmStatus.available
             ? { bg: 'rgba(192, 57, 43, 0.08)', border: 'rgba(192, 57, 43, 0.35)', text: '#a5291d', dot: '🔴', label: 'AI Offline' }
-            : isClickable && useSonnet
-              ? { bg: 'rgba(109, 67, 200, 0.08)', border: 'rgba(109, 67, 200, 0.35)', text: '#5b37a8', dot: '🟣', label: 'Sonnet' }
-              : isClickable
-                ? { bg: 'rgba(178, 97, 0, 0.09)', border: 'rgba(178, 97, 0, 0.35)', text: '#8f4e00', dot: '🟠', label: 'Opus' }
-                : { bg: 'rgba(30, 122, 69, 0.08)', border: 'rgba(30, 122, 69, 0.35)', text: '#186139', dot: '🟢', label: 'Ollama' }
+            : { bg: 'rgba(30, 122, 69, 0.08)', border: 'rgba(30, 122, 69, 0.35)', text: '#186139', dot: '🟢', label: dmModel || 'Local AI' }
           const baseStyle = {
             background: accent.bg,
             border: `1px solid ${accent.border}`,
             color: accent.text,
-            cursor: isClickable ? 'pointer' : 'default'
+            cursor: 'default'
           }
-          const tooltip = isClickable
-            ? (useSonnet
-              ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (the production default).'
-              : 'Using Opus (production default — better prose at ~$1.50/hour). Click to opt down to Sonnet.')
-            : undefined
-          const inner = (
-            <>
+          const tooltip = llmStatus.available
+            ? `Local AI ready (Ollama). DM model: ${dmModel || 'unknown'}.`
+            : (llmStatus.error || 'Local AI not available. Start Ollama, then reload.')
+          return (
+            <div className="shell-status" style={baseStyle} title={tooltip}>
               <span style={{ fontSize: '0.8rem' }}>{accent.dot}</span>
               <span>{accent.label}</span>
-            </>
-          )
-          return isClickable ? (
-            <button
-              type="button"
-              className="shell-status"
-              onClick={() => updateUseSonnet(!useSonnet)}
-              title={tooltip}
-              style={baseStyle}
-            >
-              {inner}
-            </button>
-          ) : (
-            <div className="shell-status" style={baseStyle} title={tooltip}>{inner}</div>
+            </div>
           )
         })()}
 

@@ -81,7 +81,7 @@ export function getDepartureTypeForTheme(themeId) {
  * trajectory tally (chapter-weighted) as primary signal; falls back to
  * talent/care patterns for a wildcard option when the trajectory is thin.
  *
- * Returns a shape the Sonnet prompt can embed directly into a
+ * Returns a shape the model prompt can embed directly into a
  * [THEME_COMMITMENT_OFFERED] marker AND a UI card can render:
  *   {
  *     leading: 'soldier',
@@ -126,7 +126,7 @@ export async function buildThemeOffer(characterId) {
   // chunk 1 stops using it.
   const wildcard = null;
 
-  // Short reason strings — brief, not full narratives. Sonnet should
+  // Short reason strings — brief, not full narratives. the model should
   // expand these in the marker text for richness.
   const reason = buildSummaryReason(sorted);
 

@@ -3,14 +3,13 @@
  *
  * Manages companion independent experiences when they're sent away on activities.
  * Companions can train, scout, guard, research, etc. while separated from the party.
- * Activities resolve via Opus AI when sufficient game days have passed.
+ * Activities resolve via the local model when sufficient game days have passed.
  *
  * Activity types: training, scouting, personal_quest, guarding, researching, shopping, socializing, resting
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { adjustLoyalty, setMood } from './companionBackstoryService.js';
 import { emit } from './eventEmitter.js';
 import { GAME_EVENTS } from '../config/eventTypes.js';
@@ -297,7 +296,7 @@ export async function checkAndResolveActivities(campaignId, currentGameDay) {
 }
 
 /**
- * Resolve a companion activity — generates outcomes via Opus AI and applies them.
+ * Resolve a companion activity — generates outcomes via the local model and applies them.
  *
  * @param {number} activityId
  * @param {number} currentGameDay
@@ -317,13 +316,10 @@ export async function resolveActivity(activityId, currentGameDay, completionRati
     WHERE cb.companion_id = ?
   `, [activity.companion_id]);
 
-  // Generate outcomes via AI
-  let outcomes;
-  if (isClaudeAvailable()) {
-    outcomes = await generateOutcomesViaAI(activity, backstory, completionRatio);
-  } else {
-    outcomes = generateFallbackOutcomes(activity, completionRatio);
-  }
+  // Generate outcomes with the local model. generateOutcomesViaAI falls back
+  // to the non-AI outcomes itself if Ollama is unreachable or the reply
+  // doesn't parse — the activity always resolves.
+  const outcomes = await generateOutcomesViaAI(activity, backstory, completionRatio);
 
   // Apply outcomes
   await applyOutcomes(activity, outcomes);
@@ -436,10 +432,10 @@ Return ONLY valid JSON:
       { call_purpose: 'companion_activity_gen', prompt_builder: 'companionActivityService' },
       'You are a D&D narrative outcome generator. Return ONLY valid JSON, no markdown or explanation.',
       [{ role: 'user', content: prompt }],
-      2, 'opus'
+      1, 'generation'
     );
 
-    const text = typeof response === 'string' ? response : response?.content?.[0]?.text || '';
+    const text = typeof response === 'string' ? response : '';
     const parsed = tryExtractLLMJson(text);
     if (parsed) return parsed;
   } catch (e) {

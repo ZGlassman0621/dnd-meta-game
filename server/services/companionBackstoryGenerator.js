@@ -1,12 +1,10 @@
 /**
  * Companion Backstory Generator Service
  *
- * Generates rich backstories for companions using AI (Claude primary, Ollama fallback).
+ * Generates rich backstories for companions using AI (the local model).
  * Creates origin stories, unresolved threads, secrets, and loyalty triggers.
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
-import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { randomUUID } from 'crypto';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
@@ -203,36 +201,14 @@ Return ONLY valid JSON:
 // ============================================================
 
 async function generateWithAI(prompt) {
-  // Try Claude first
-  if (isClaudeAvailable()) {
-    try {
-      const response = await loggedChat(
-        { call_purpose: 'companion_backstory_gen', prompt_builder: 'companionBackstoryGenerator' },
-        'You are a D&D backstory writer. Return ONLY valid JSON, no explanation or markdown.',
-        [{ role: 'user', content: prompt }],
-        3, 'opus'
-      );
-      return response;
-    } catch (error) {
-      console.error('Claude backstory generation failed:', error.message);
-    }
-  }
-
-  // Try Ollama as fallback
-  const ollamaStatus = await checkOllamaStatus();
-  if (ollamaStatus.available) {
-    try {
-      const response = await ollamaChat([
-        { role: 'system', content: 'You are a D&D backstory writer. Return ONLY valid JSON, no explanation or markdown.' },
-        { role: 'user', content: prompt }
-      ]);
-      return response;
-    } catch (error) {
-      console.error('Ollama backstory generation failed:', error.message);
-    }
-  }
-
-  throw new Error('No AI provider available for backstory generation');
+  // Local model (generation role). Errors propagate: the caller reports a
+  // failed backstory generation rather than inventing content.
+  return loggedChat(
+    { call_purpose: 'companion_backstory_gen', prompt_builder: 'companionBackstoryGenerator' },
+    'You are a D&D backstory writer. Return ONLY valid JSON, no explanation or markdown.',
+    [{ role: 'user', content: prompt }],
+    3, 'generation'
+  );
 }
 
 // ============================================================

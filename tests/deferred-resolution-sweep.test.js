@@ -12,15 +12,14 @@
  * expires, narrative items queued for each, idempotency, not-past-due rows
  * untouched, and missing-args safety.
  *
- * NOTE: resolveActivity uses the AI when ANTHROPIC_API_KEY is set — the key
- * is cleared for this file so the deterministic fallback path is exercised.
+ * NOTE: resolveActivity asks the local model first; the test runner points
+ * OLLAMA_URL at a dead port, so that call fails at once and the
+ * deterministic non-AI fallback outcomes are what this file exercises.
  */
 
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';
 import { sweepDeferredResolutions } from '../server/services/deferredResolutionSweep.js';
 
-const savedKey = process.env.ANTHROPIC_API_KEY;
-delete process.env.ANTHROPIC_API_KEY;
 
 let passed = 0;
 let failed = 0;
@@ -155,7 +154,6 @@ async function run() {
   const left = await dbGet(`SELECT COUNT(*) AS n FROM campaigns WHERE id IN (${ids.campaigns.join(',')})`);
   assertEqual(left.n, 0, 'test fixtures removed');
 
-  if (savedKey !== undefined) process.env.ANTHROPIC_API_KEY = savedKey;
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
   if (failed > 0) process.exit(1);
 }

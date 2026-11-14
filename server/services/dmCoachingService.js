@@ -1,9 +1,8 @@
 /**
- * DM Coaching Service — Provides contextual tips for new DMs using Sonnet.
+ * DM Coaching Service — Provides contextual tips for new DMs, from the local model.
  * Analyzes current session state and offers suggestions for pacing, encounters, and character hooks.
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
 
@@ -25,10 +24,6 @@ Return ONLY valid JSON: { "sceneTip": "...", "encounterSuggestion": "...", "char
  * @returns {Object} - { sceneTip, encounterSuggestion, characterHook }
  */
 export async function generateCoachingTip(recentMessages, partyData) {
-  if (!isClaudeAvailable()) {
-    return getOfflineTip(partyData);
-  }
-
   const charSummaries = partyData.map(c =>
     `${c.name} (${c.race} ${c.class}, ${c.alignment}): Motivation="${c.motivation}" Secret="${c.secret}" Fear="${c.fear}" Flaw="${c.flaws}"`
   ).join('\n');
@@ -54,7 +49,7 @@ Analyze this and provide coaching tips. What should the DM do next? What charact
       COACHING_SYSTEM_PROMPT,
       [{ role: 'user', content: userPrompt }],
       2,        // maxRetries
-      'sonnet', // model (fast + cheap)
+      'generation',
       500,      // maxTokens
       true      // rawResponse
     );

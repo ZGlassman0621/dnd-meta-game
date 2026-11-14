@@ -2,7 +2,7 @@
  * Phase 2 chunk 2 — preludeTransitionService + handoff marker detection.
  *
  * Pure-logic tests against detection. The full executeTransition() round-
- * trip touches DB + Opus and is exercised by integration runs; this file
+ * trip touches DB + model and is exercised by integration runs; this file
  * locks down the cheap edges that protect against regressions.
  */
 

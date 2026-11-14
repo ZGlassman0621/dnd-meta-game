@@ -3,7 +3,7 @@
  *
  * This is the test CLAUDE.md called "the highest-value testing work
  * outstanding": `POST /:sessionId/message` driven through a real HTTP request,
- * against a real database, with only the Anthropic transport replaced. No
+ * against a real database, with only the model transport (Ollama) replaced. No
  * billed API calls, and no source-text assertions — every claim here is about
  * observed behaviour.
  *
@@ -17,7 +17,7 @@
 
 import { initDatabase, dbRun, dbGet } from '../server/database.js'
 import { safeParse } from '../server/utils/safeParse.js'
-import { opusModel } from '../server/services/modelRegistry.js'
+import { modelFor, contextWindow } from '../server/services/localModels.js'
 import {
   installLlmStub,
   restoreLlm,
@@ -106,20 +106,22 @@ async function run() {
     console.log('\n=== Test 2: what the model actually received ===\n')
     // ============================================================
 
-    assertEqual(llm.callCount, 1, 'exactly one Anthropic call was made for one turn')
+    assertEqual(llm.callCount, 1, 'exactly one model call was made for one turn')
     const call = llm.lastCall
-    // Asserted against the registry, not a literal. The point of this check is
-    // "a gameplay turn uses the Opus pin", which stays true across a model
-    // bump; hardcoding the ID made it fail on the v1.0.182 bump for no reason.
-    assertEqual(call.model, opusModel(), 'a gameplay turn uses the Opus pin')
+    // Asserted against the registry, not a literal: "a gameplay turn uses the
+    // DM role's model" stays true across a model change.
+    assertEqual(call.model, modelFor('dm'), 'a gameplay turn uses the DM role model')
+    assertEqual(call.numCtx, contextWindow(), 'every call sends the context window (num_ctx) — Ollama would otherwise truncate the prompt')
     assert(/CURRENT VITALS/.test(call.system), 'the live vitals block was injected into the system prompt')
     assert(/Hit points: 30\/30/.test(call.system), 'vitals reflect pre-turn HP, read fresh from the database')
     assertEqual(call.lastUserMessage, 'I raise my shield and charge the ogre.', 'the player action was the final user turn')
-    assert(
-      !call.messages.some(m => m.role === 'system'),
-      'the system prompt travels in the system parameter, not the message array'
+    assertEqual(
+      call.body.messages.filter(m => m.role === 'system').length, 1,
+      'the system prompt travels exactly once, as the first (system) message'
     )
-    assert(llm.statusProbes >= 1, 'provider availability was probed via count_tokens, not a billed call')
+    assertEqual(call.body.messages[0].role, 'system', 'the system message leads the request')
+    assert(!/CACHE_BREAK/.test(call.system), 'the old prompt-cache markers are stripped before sending')
+    assert(llm.statusProbes >= 1, 'local-model availability was probed via /api/tags')
 
     // ============================================================
     console.log('\n=== Test 3: vitals track state across turns ===\n')
@@ -223,13 +225,14 @@ async function run() {
     const f4 = await freshFixture({ prefix: 'TEST_E2E_4' })
     const beforeFail = await readSession(f4.sessionId)
 
-    // 401 is the one error class claude.js treats as non-retryable, so this
-    // returns immediately instead of burning ~60s of real backoff.
-    llm.reply({ status: 401, error: 'invalid x-api-key' })
+    // Ollama answers 404 when the model isn't installed; llm.js tags it
+    // LOCAL_MODEL_MISSING and does not retry, so this returns at once.
+    llm.reply({ status: 404, error: 'model not found' })
     const failRes = await server.post(`/api/dm-session/${f4.sessionId}/message`, { action: 'I speak to the guard.' })
 
-    assertEqual(failRes.status, 503, 'an upstream auth failure surfaces as 503, not 401 — the user is authenticated')
-    assertEqual(failRes.body.retryable, false, 'an auth failure is reported as non-retryable')
+    assertEqual(failRes.status, 503, 'a missing local model surfaces as 503 with a plain-words fix')
+    assertEqual(failRes.body.retryable, true, 'the player can resend once the model is installed')
+    assert(/ollama pull/.test(failRes.body.message || ''), `the message names the fix (got: ${failRes.body.message})`)
 
     const afterFail = await readSession(f4.sessionId)
     assertEqual(
@@ -305,7 +308,7 @@ async function run() {
     // ============================================================
 
     // The cost-safety guarantee has to be verified, not assumed. In strict mode
-    // an unscripted Anthropic request raises rather than reaching the network,
+    // an unscripted model request raises rather than reaching the network,
     // so a test that forgets to script a call fails loudly instead of silently
     // billing. (The turn handler swallows it into a 500 — the point is that no
     // request left the process.)

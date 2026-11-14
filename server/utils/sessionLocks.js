@@ -26,7 +26,7 @@ const inFlight = new Map();
 
 /**
  * How long a lock may be held before it is presumed abandoned.
- * Comfortably longer than the slowest realistic turn: a long Opus response with
+ * Comfortably longer than the slowest realistic turn: a long the model response with
  * retries can run into the low minutes, and expiring a live turn would let the
  * duplicate through — the exact thing this exists to stop.
  */

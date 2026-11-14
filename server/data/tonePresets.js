@@ -205,7 +205,7 @@ export const TONE_PRESET_LIST = [
 ];
 
 /**
- * Build the tone block injected into the Sonnet/Opus system prompt. Returns
+ * Build the tone block injected into the model system prompt. Returns
  * a formatted multi-line string for exactly ONE preset. Unknown preset
  * values fall back to a conservative placeholder so the prompt doesn't
  * blow up.
@@ -252,10 +252,10 @@ ${preset.bible.exemplars.map(ex => `  ${ex}`).join('\n\n')}`;
 
 /**
  * Compact short-form — just label + description. Used by the arc-plan
- * generator (Opus) so Opus shapes the home world in-register at setup time.
- * We don't feed Opus the full bible because (a) the arc plan is JSON-
+ * generator (the model) so the model shapes the home world in-register at setup time.
+ * We don't feed the model the full bible because (a) the arc plan is JSON-
  * structured and we don't want register-bibles contaminating the output
- * schema, and (b) Opus only needs broad tone direction for world shaping.
+ * schema, and (b) the model only needs broad tone direction for world shaping.
  */
 export function buildTonePresetShortBlock(presetValue) {
   const preset = TONE_PRESETS[presetValue];

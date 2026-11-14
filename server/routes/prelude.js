@@ -145,7 +145,7 @@ router.get('/:characterId', async (req, res) => {
 
 /**
  * POST /api/prelude/:characterId/arc-plan
- * Generate the arc plan for a prelude character. Uses Opus; ~1-2k tokens out.
+ * Generate the arc plan for a prelude character (local model, generation role).
  * Initial generation (no existing plan) or explicit re-roll when the
  * `?regenerate=1` query param is set. Returns the parsed arc plan.
  */
@@ -240,7 +240,7 @@ router.get('/sessions/:sessionId', async (req, res) => {
   try {
     const payload = await getResumePayload(req.params.sessionId);
     // Strip markers from assistant messages for display — the server needs
-    // the raw text for Sonnet's context, but the UI only wants clean narrative.
+    // the raw text for the DM's context, but the UI only wants clean narrative.
     const cleanedMessages = payload.messages.map(m =>
       m.role === 'assistant'
         ? { ...m, content: stripPreludeMarkers(m.content) }
@@ -255,24 +255,21 @@ router.get('/sessions/:sessionId', async (req, res) => {
 
 /**
  * POST /api/prelude/sessions/:sessionId/message
- * Send a player action, get Sonnet's response. Processes markers server-side
+ * Send a player action, get the DM's response. Processes markers server-side
  * and returns { response (markers stripped), runtime, sessionEnded, markers }.
  */
 router.post('/sessions/:sessionId/message', async (req, res) => {
   try {
-    const { action, model } = req.body || {};
+    const { action } = req.body || {};
     if (!action || typeof action !== 'string' || !action.trim()) {
       return validationError(res, 'action is required');
     }
-    const modelOverride = (model === 'sonnet' || model === 'opus' || model === 'auto') ? model : null;
-    const result = await sendPreludeMessage(req.params.sessionId, action.trim(), modelOverride);
+    const result = await sendPreludeMessage(req.params.sessionId, action.trim());
     res.json({
       response: stripPreludeMarkers(result.response),
       runtime: result.runtime,
       sessionEnded: result.sessionEnded,
       model: result.model,
-      resolvedModel: result.resolvedModel,
-      resolveReason: result.resolveReason,
       // markers carries the processed marker events the UI wants to surface
       // (HP changes, chapter advance, chapter promise, recap on pause, etc.).
       markers: result.markers
@@ -281,15 +278,14 @@ router.post('/sessions/:sessionId/message', async (req, res) => {
     const msg = err?.message || '';
     if (msg.includes('not found')) return notFound(res, 'Prelude session');
     if (msg.includes('already completed')) return validationError(res, msg);
-    // Anthropic 529 — surface as 503 with a clear retryable message so the
-    // UI can show "AI temporarily overloaded — retry in a moment" instead
-    // of leaking the raw provider error. Player's input is preserved on
-    // the client (rolled back from the optimistic add); a manual retry
-    // works once the API recovers.
-    if (msg.startsWith('OVERLOADED:')) {
+    // Local model not reachable / not installed (tagged by llm.js) — a 503
+    // with the fix in plain words. The player's input is preserved on the
+    // client (rolled back from the optimistic add); a manual retry works
+    // once Ollama is up.
+    if (msg.startsWith('LOCAL_MODEL_UNAVAILABLE:') || msg.startsWith('LOCAL_MODEL_MISSING:')) {
       return res.status(503).json({
-        error: 'AI temporarily overloaded',
-        message: 'Anthropic\'s API is temporarily at capacity. Your input has been preserved — please send again in a moment.',
+        error: 'Local AI not available',
+        message: `${msg.replace(/^LOCAL_MODEL_[A-Z]+: /, '')} Your input has been preserved — send it again once it's running.`,
         retryable: true
       });
     }
@@ -492,7 +488,7 @@ router.get('/:characterId/handoff-payload', async (req, res) => {
  *
  * Manually trigger the Prelude → Primary transition for a character.
  * Normally fires automatically when [PRELUDE_END] is detected in a
- * Sonnet response; this endpoint exists for recovery + testing flows
+ * DM response; this endpoint exists for recovery + testing flows
  * (the player got stuck on a session that didn't fire the marker;
  * QA wants to force the transition without playing through).
  *

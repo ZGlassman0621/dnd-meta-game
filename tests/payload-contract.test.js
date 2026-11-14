@@ -2,7 +2,7 @@
  * Phase 2 chunk 5.B — handoff payload contract (§8.2.1) shape verification.
  *
  * Pure-shape tests against `buildHandoffPayload` via a thin re-export.
- * Avoids end-to-end Opus + DB round trip; exercises projection logic only.
+ * Avoids end-to-end model + DB round trip; exercises projection logic only.
  *
  * The producer is internal to preludeTransitionService.js; we test it by
  * importing the module and invoking the (default exported testkit). For

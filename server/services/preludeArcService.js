@@ -1,7 +1,7 @@
 /**
  * Prelude arc plan service.
  *
- * Generates the Opus-produced structured arc plan that Sonnet will play
+ * Generates the model-produced structured arc plan that the model will play
  * within during the prelude sessions. Phase 2 chunk 3 reframe: 3-chapter
  * structure (Phase 1 Decision 2), locked tone description (Decision 3
  * sub-deliverable), authority_figure + origin_freeform setup fields
@@ -34,14 +34,13 @@
  * no longer populated for new preludes (additive-only schema; harmless
  * to leave). Same for tone_tags / tone_reflection columns.
  *
- * The arc plan is REFERENCE, not a rail. Sonnet plays within it and
+ * The arc plan is REFERENCE, not a rail. the model plays within it and
  * player choices flex the beats.
  *
  * One re-roll allowed per character (hard cap).
  */
 
 import { dbGet, dbRun } from '../database.js';
-import { chat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { getPreludeCharacter } from './preludeService.js';
@@ -51,7 +50,7 @@ import {
   REGIONS
 } from './preludeSetupLabels.js';
 import { buildLockedToneBlock } from '../data/preludeToneDescription.js';
-import { opusModel } from './modelRegistry.js';
+import { modelFor } from './localModels.js';
 import { findSiblingOption, findAuthorityFigure } from '../data/preludeWizardEnums.js';
 
 // Re-roll cap. Keep this low to avoid "shopping" behaviour where the player
@@ -67,7 +66,7 @@ const MAX_REGENERATIONS = 1;
  * Race-aware chapter age ranges. Each chapter represents a life stage, not a
  * fixed Earth-year range — an elf in Chapter 1 is biologically 25, not 5.
  *
- * Opus already knows these lifespans; we surface the ranges explicitly so the
+ * the model already knows these lifespans; we surface the ranges explicitly so the
  * prompt never drifts toward "5-year-old assassination-attempt" scenarios
  * when the character is a dwarf.
  */
@@ -97,8 +96,8 @@ function getChapterAges(race) {
 }
 
 /**
- * Build the Opus system prompt for arc-plan generation. Primacy block lays
- * out the rules Opus must honour; recency block at the end reinforces them.
+ * Build the model system prompt for arc-plan generation. Primacy block lays
+ * out the rules the model must honour; recency block at the end reinforces them.
  *
  * Phase 2 chunk 3: 3-chapter shape, locked tone description, authority_figure
  * shapes the home world, origin_freeform overrides curated answers when present.
@@ -110,7 +109,7 @@ function buildArcSystemPrompt(setup, race) {
   const isMentor = setup.authority_figure === 'mentor';
   const isCaptor = setup.authority_figure === 'captor';
 
-  return `You are a master D&D storyteller designing the structured arc for one character's childhood through young-adulthood. The arc spans 4 play sessions across THREE age brackets — Ch1: 1 session, Ch2: 1 session (with one intra-session age jump), Ch3: 2 sessions (DECIDE + COMMIT in one chapter). Life stages, not fixed Earth-year ranges — interpret per the character's race. Another AI (Sonnet) plays within your arc, so give them a cohesive spine with beginning, middle, and end that honours the player's setup.
+  return `You are a master D&D storyteller designing the structured arc for one character's childhood through young-adulthood. The arc spans 4 play sessions across THREE age brackets — Ch1: 1 session, Ch2: 1 session (with one intra-session age jump), Ch3: 2 sessions (DECIDE + COMMIT in one chapter). Life stages, not fixed Earth-year ranges — interpret per the character's race. Another AI (the session DM) plays within your arc, so give them a cohesive spine with beginning, middle, and end that honours the player's setup.
 
 ${buildLockedToneBlock()}
 
@@ -154,19 +153,19 @@ ${(setup.origin_freeform || '').trim() ? `   ⚠ Q10 ORIGIN FREE-TEXT — HONOR 
 
    **Chapter 2 — LEARN (+ training combat enters). Target: 1 session, with one intra-session [AGE_ADVANCE].**
      The PC is in adolescence (${ages.ch2}). The world widens beyond the home.
-     ⚠ Sonnet will fire one [AGE_ADVANCE] mid-session to split Ch2 into two halves with different ages and emotional registers (e.g., 11-13 then 13-15). Your Ch2 arc should provide texture for BOTH halves — early-Ch2 beats (just-after-childhood) and late-Ch2 beats (almost-adolescent). The intra-session jump lets consequences from the first half land in the second.
+     ⚠ The session DM will fire one [AGE_ADVANCE] mid-session to split Ch2 into two halves with different ages and emotional registers (e.g., 11-13 then 13-15). Your Ch2 arc should provide texture for BOTH halves — early-Ch2 beats (just-after-childhood) and late-Ch2 beats (almost-adolescent). The intra-session jump lets consequences from the first half land in the second.
      YES beats: injustice-seen, first-friend-made-outside-family, skill-learned-from-elder, opinion-formed, loyalty-tested (small-scale), first SCHOOLYARD / TRAINING-SWORD COMBAT (survivable, bruises-not-scars). First secret kept or told. First lie attempted.
      Choices get more consequential within relationships and personal code — not yet plot-shaping.
      intra_age_jump_seed: 1 sentence — what changes between the early and late Ch2 halves. Required.
      chapter_end_moment: a "first-rupture" — a bigger event the PC can't fix but has to understand.
 
    **Chapter 3 — THRESHOLD (DECIDE → COMMIT, three weight-bearing beats). Target: 2 sessions (Ch3a + Ch3b).**
-     The PC is at threshold (${ages.ch3}). Real agency, real consequences. THREE distinct beats land in Ch3, each with its own scene weight — Sonnet must NOT compress them into one paragraph or one scene:
+     The PC is at threshold (${ages.ch3}). Real agency, real consequences. THREE distinct beats land in Ch3, each with its own scene weight — the session DM must NOT compress them into one paragraph or one scene:
        (i)   IRREVERSIBLE ACT — Ch3a builds toward this. A choice with real cost that the PC cannot undo. Bodies matter; wounds leave marks; the PC can hurt others, the PC can be hurt. Describe the SHAPE of the act (the SITUATION the PC walks into) without naming the theme — the act has to land BEFORE the theme commitment ceremony, so the player ratifies their identity by what they just did, not by an abstract list pick.
        (ii)  THEME COMMITMENT CEREMONY — surfaces in the AFTERMATH of the irreversible act. The server emits [THEME_COMMITMENT_OFFERED] and the UI renders a lightweight in-line commitment card (leading theme + 3 alternatives + "choose your own"). No wildcard slot, no defer.
-       (iii) DEPARTURE — flows from the committed theme. Sonnet writes the departure tone and reason driven by the player's commit, picking from your departure_seed.plausible_shapes (or honoring an "Other" choice).
+       (iii) DEPARTURE — flows from the committed theme. The session DM writes the departure tone and reason driven by the player's commit, picking from your departure_seed.plausible_shapes (or honoring an "Other" choice).
      REAL COMBAT in this chapter. Real stakes.
-     chapter_promise_prompt: 1-2 sentences Sonnet will use to open Ch3 and invite the player to confirm/redirect.
+     chapter_promise_prompt: 1-2 sentences the session DM will use to open Ch3 and invite the player to confirm/redirect.
      irreversible_act_shape: 1-2 sentences describing the SITUATION the PC walks into for the act. Describe pressure, not answer. Do NOT name a theme; the act lands before the lens is chosen.
      theme_commitment_handoff: 1 sentence describing the AFTERMATH state the [THEME_COMMITMENT_OFFERED] will surface in.
      departure_seed: see below.
@@ -199,14 +198,14 @@ OUTPUT FORMAT. Return a SINGLE JSON object. No prose before or after. No markdow
     "theme": "1 sentence (life stage: ${ages.ch2})",
     "beats": [ { "title": "short", "description": "1-2 sentences" } ],
     "intra_age_jump_seed": "1 sentence — what changes between early-Ch2 and late-Ch2 halves",
-    "chapter_promise_prompt": "1-2 sentences Sonnet uses to open Ch2",
+    "chapter_promise_prompt": "1-2 sentences the session DM uses to open Ch2",
     "chapter_end_moment": "1 sentence (a first-rupture)",
     "seeded_emergences": [ { "kind": "stat|skill|class|theme|ancestry", "target": "specific", "narrative_anchor": "which beat" } ]
   },
   "chapter_3_arc": {
     "theme": "1 sentence (life stage: ${ages.ch3})",
     "beats": [ { "title": "short", "description": "1-2 sentences" } ],
-    "chapter_promise_prompt": "1-2 sentences Sonnet uses to open Ch3",
+    "chapter_promise_prompt": "1-2 sentences the session DM uses to open Ch3",
     "irreversible_act_shape": "1-2 sentences — the SITUATION (no theme-naming)",
     "theme_commitment_handoff": "1 sentence — the aftermath state",
     "departure_seed": {
@@ -246,7 +245,7 @@ FINAL REMINDER:
 - **Authority figure shapes Ch1-2 NPCs.** Mentor → seeded mentor_possibility + at least one establishing beat. Captor → captivity arc. Etc.
 - **Q10 free-text origin overrides curated answers when conflicting.** Honor it.
 - **Departure is a SEED, not a verdict.** plausible_shapes = 3-4 varied options; the player's committed theme drives the final type.
-- **Three Ch3 beats (irreversible_act → theme_commitment → departure) get distinct scene weight.** The arc plan describes their shape; Sonnet plays them as separate beats.
+- **Three Ch3 beats (irreversible_act → theme_commitment → departure) get distinct scene weight.** The arc plan describes their shape; the session DM plays them as separate beats.
 - Tight prose. Short sentences.
 - Output JSON only. No markdown. No preamble. No epilogue.`;
 }
@@ -375,7 +374,7 @@ export async function getArcPlan(characterId) {
 }
 
 /**
- * Validate that a parsed plan has the shape we need. Opus usually complies
+ * Validate that a parsed plan has the shape we need. the model usually complies
  * with the format prompt but we defend against shape drift.
  *
  * Phase 2 chunk 3: validates the 3-chapter shape. departure_seed lives on
@@ -422,7 +421,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
     }
   }
 
-  // Build prompts + call Opus
+  // Build prompts + call the model
   const systemPrompt = buildArcSystemPrompt(setup, character.race);
   const userPrompt = buildArcUserPrompt(character, setup);
 
@@ -432,7 +431,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
   //
   // Retry policy: if the first response fails JSON extract or shape
   // validation, send one corrective follow-up that quotes the offending
-  // response back at Opus and asks for a clean re-emission. This catches
+  // response back at the model and asks for a clean re-emission. This catches
   // the common failure modes (multi-block output, mid-string newlines,
   // shape drift on tough tone combos) without shopping indefinitely.
   const MAX_PARSE_ATTEMPTS = 2;
@@ -443,7 +442,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
   for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
     const raw = await loggedChat(
       { call_purpose: 'prelude_arc_plan_gen', prompt_builder: 'preludeArcService', metadata: { attempt } },
-      systemPrompt, messages, 3, 'opus', 8192, true
+      systemPrompt, messages, 3, 'generation', 8192, true
     );
     lastRaw = raw;
     try {
@@ -502,7 +501,7 @@ export async function generateArcPlan(characterId, { isRegeneration = false } = 
       regenerate_count = ?`,
     [
       characterId,
-      opusModel(),
+      modelFor('generation'),
       null,                // tone_tags (legacy)
       null,                // tone_reflection (legacy)
       serializeField(parsed.home_world),

@@ -2,10 +2,10 @@
  * Server-side mirror of the curated label/description text used on the
  * client setup wizard. The client source of truth is
  * `client/src/data/preludeSetup.js`. We mirror a subset here so the
- * server can enrich Opus prompts with the same flavor text the player saw
+ * server can enrich the model prompts with the same flavor text the player saw
  * when picking — without the server needing to import client code.
  *
- * Keep these in sync with the client file. If they drift, Opus will still
+ * Keep these in sync with the client file. If they drift, the model will still
  * work on raw `value` strings — but prompts will lose the descriptive
  * context that helps shape the arc.
  */

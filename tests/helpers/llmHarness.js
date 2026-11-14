@@ -1,39 +1,38 @@
 /**
- * Stubbed-LLM harness — end-to-end turn testing without billed API calls.
+ * Stubbed-LLM harness — end-to-end testing of AI paths with no live model.
  *
- * CLAUDE.md lists "no stubbed-LLM harness" as the biggest structural gap: the
- * turn handler in `routes/dmSession.js` could not be tested end to end, so
- * `tests/turn-write-ordering.test.js` had to assert on the handler's *source
- * text* rather than its behaviour. This module closes that gap.
+ * The game's AI runs on a local model through Ollama (server/services/llm.js).
+ * This harness lets the turn loop, chronicles and extraction be tested end to
+ * end without Ollama running, without a network, and with deterministic
+ * replies.
  *
  * ─── Why the seam is `globalThis.fetch` ───────────────────────────────────
  *
- * Every Anthropic request in this codebase bottoms out in a bare `fetch(...)`
- * inside `services/claude.js`. `fetch` is a global binding resolved at call
+ * Every model request in this codebase bottoms out in a bare `fetch(...)`
+ * inside `services/llm.js`. `fetch` is a global binding resolved at call
  * time, so replacing `globalThis.fetch` intercepts those calls even though
- * `claude.js` was imported long before. That buys three things a module mock
+ * `llm.js` was imported long before. That buys three things a module mock
  * would not:
  *
  *   1. **Zero production code changes.** No injectable transport, no
  *      `if (process.env.NODE_ENV === 'test')` branch in a gameplay path. The
  *      code under test is byte-identical to the code that ships.
- *   2. **The real `claude.js` runs.** `buildSystemParam`'s three-tier cache
- *      splitting, the status-class retry triage, `cleanupResponse`, the
- *      tagged-error prefixes (`OVERLOADED:` / `AUTH_FAILURE:` / …) — all of it
- *      executes. A module-level mock of `claude.chat` would skip precisely the
- *      logic most likely to break.
+ *   2. **The real `llm.js` runs.** Request building (system message first,
+ *      cache markers stripped, `num_ctx` always sent), the streamed-reply
+ *      parser, `cleanupResponse`, the tagged errors — all of it executes. A
+ *      module-level mock of `llm.chat` would skip precisely the logic most
+ *      likely to break.
  *   3. **Request assertions.** Tests can inspect what was actually sent — that
  *      the CURRENT VITALS block reached the system prompt, that a marker
  *      correction was injected, that lean transforms stripped what they should.
  *
- * Cost safety is structural rather than conventional: the stub intercepts
- * *every* `api.anthropic.com` request and never forwards one, so a test cannot
- * spend money even with a live `ANTHROPIC_API_KEY` in the environment. It
- * throws on an un-stubbed Anthropic path rather than falling through.
- *
- * Ollama's `:11434` endpoint is intercepted too, reporting "running but model
- * not installed". Without that, `getLLMProvider`'s auto-fallback would probe a
- * real Ollama daemon and results would differ between developer machines.
+ * What is intercepted: any request to the configured Ollama address
+ * (`OLLAMA_URL` — the test runner points it at a dead loopback port) or to
+ * Ollama's default `:11434`:
+ *   - `GET  /api/tags` → every model the configured roles need, so
+ *     `llm.checkStatus()` reports available. Pass `{ ollamaDown: true }` to
+ *     simulate Ollama not running.
+ *   - `POST /api/chat` → the next scripted reply, as one line of Ollama NDJSON.
  * Everything else — notably the test's own request to the ephemeral Express
  * server — passes straight through to the captured real `fetch`.
  *
@@ -46,19 +45,16 @@
  *   ...
  *   await server.close(); restoreLlm()
  *
- * ─── One caveat worth knowing ─────────────────────────────────────────────
- *
- * `claude.js` retries 429/529/503/500 with real `setTimeout` backoff (up to
- * ~60s for a 529). Do not script those statuses unless the test is prepared to
- * wait. Use 401 to exercise the error path — it is classified non-retryable and
- * returns immediately.
+ * Error path: `llm.reply({ status: 500, error: 'boom' })` makes Ollama answer
+ * HTTP 500; `llm.js` does not retry model errors, so the failure surfaces at
+ * once.
  */
 
 import express from 'express'
 import { once } from 'node:events'
+import { requiredModels, modelFor } from '../../server/services/localModels.js'
 
-const ANTHROPIC_HOST = 'api.anthropic.com'
-const OLLAMA_PORT = ':11434'
+const OLLAMA_DEFAULT_PORT = ':11434'
 
 /** Captured before patching so passthrough can never recurse into the stub. */
 const REAL_FETCH = globalThis.fetch
@@ -78,84 +74,52 @@ function jsonResponse(body, status = 200) {
   })
 }
 
-/**
- * Normalise `claude.js`'s `system` parameter for assertions.
- *
- * It sends either a plain string or an array of content blocks (the prompt
- * cache tiers). Tests almost always want "did this text reach the model",
- * which should not depend on which form the cache-splitting logic chose, so we
- * expose both: `system` (flattened) and `systemBlocks` (raw).
- */
-function flattenSystem(system) {
-  if (typeof system === 'string') return system
-  if (Array.isArray(system)) return system.map(b => b?.text || '').join('\n\n')
-  return ''
+function isOllamaUrl(url) {
+  const configured = process.env.OLLAMA_URL
+  return (configured && url.startsWith(configured)) || url.includes(OLLAMA_DEFAULT_PORT)
 }
 
 /**
- * Turn a scripted responder into an HTTP Response.
+ * Turn a scripted responder into an Ollama /api/chat HTTP Response.
  *
  * Accepted responder return values:
- *   'narrative text'                       → 200, that text as the assistant turn
- *   { text, stopReason, usage, model }     → 200, with those fields
- *   { status: 401, error: 'message' }      → that HTTP status (error path testing)
+ *   'narrative text'                         → 200, that text as the reply
+ *   { text, stopReason, usage, model }       → 200, with those fields
+ *                                              (stopReason 'length' = cut off)
+ *   { status: 500, error: 'message' }        → that HTTP status (error path)
  */
 function toResponse(value, requestBody) {
   const spec = typeof value === 'string' ? { text: value } : (value || {})
 
   if (spec.status && spec.status !== 200) {
-    return jsonResponse(
-      { type: 'error', error: { type: 'stub_error', message: spec.error || `HTTP ${spec.status}` } },
-      spec.status
-    )
+    return jsonResponse({ error: spec.error || `HTTP ${spec.status}` }, spec.status)
   }
 
-  // A thinking block LEADS the content array, because that is what the real
-  // API returns: adaptive thinking is on by default on Claude 5 models, so
-  // `content[0]` is a thinking block whose `.text` is undefined.
-  //
-  // This is not decoration. Until v1.0.182 the stub emitted a text block first,
-  // and `claude.js` read the narrative as `content[0].text`. Every test in the
-  // suite passed while the real API would have returned an empty narrative for
-  // every single turn. Emitting the true shape here is what makes the suite
-  // able to catch that class of bug at all.
-  //
-  // Pass `thinking: false` to simulate a thinking-disabled response.
-  const blocks = []
-  if (spec.thinking !== false) {
-    blocks.push({ type: 'thinking', thinking: spec.thinking || '' })
+  const line = {
+    model: spec.model || requestBody?.model || modelFor('dm'),
+    created_at: new Date(0).toISOString(),
+    message: { role: 'assistant', content: spec.text ?? '' },
+    done: true,
+    done_reason: spec.stopReason || 'stop',
+    prompt_eval_count: spec.usage?.input_tokens ?? 100,
+    eval_count: spec.usage?.output_tokens ?? 50
   }
-  blocks.push({ type: 'text', text: spec.text ?? '' })
-
-  return jsonResponse({
-    id: 'msg_stub',
-    type: 'message',
-    role: 'assistant',
-    model: spec.model || requestBody?.model || 'claude-opus-5',
-    content: blocks,
-    stop_reason: spec.stopReason || 'end_turn',
-    usage: {
-      input_tokens: 100,
-      output_tokens: 50,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 0,
-      ...(spec.usage || {})
-    }
+  return new Response(JSON.stringify(line) + '\n', {
+    status: 200,
+    headers: { 'content-type': 'application/x-ndjson' }
   })
 }
 
 /**
- * Replace `globalThis.fetch` with the Anthropic/Ollama-intercepting stub.
- *
- * Sets a placeholder `ANTHROPIC_API_KEY` when none is present, because
- * `claude.isClaudeAvailable()` gates the whole Claude branch on it. An existing
- * real key is left alone — it cannot be used, since no request escapes.
+ * Replace `globalThis.fetch` with the Ollama-intercepting stub.
  *
  * @param {object}  [opts]
  * @param {boolean} [opts.strict=true]  throw when the queue is exhausted rather
  *                                      than serving `opts.fallback`. Keeps a
  *                                      test honest about how many calls it made.
  * @param {string}  [opts.fallback]     response used when `strict` is false.
+ * @param {boolean} [opts.ollamaDown]   /api/tags and /api/chat refuse, as if
+ *                                      Ollama were not running.
  */
 export function installLlmStub(opts = {}) {
   if (active) throw new Error('installLlmStub: a stub is already installed — call restoreLlm() first')
@@ -163,30 +127,33 @@ export function installLlmStub(opts = {}) {
   const state = {
     strict: opts.strict !== false,
     fallback: opts.fallback ?? 'The scene continues.',
-    /** Scripted `/v1/messages` responders, consumed in order. */
+    ollamaDown: !!opts.ollamaDown,
+    /** Scripted `/api/chat` responders, consumed in order. */
     queue: [],
-    /** Every intercepted `/v1/messages` call, in order. */
+    /** Every intercepted `/api/chat` call, in order. */
     calls: [],
-    /** Count of `/v1/messages/count_tokens` probes (the availability check). */
+    /** Count of `/api/tags` probes (the availability check). */
     statusProbes: 0
   }
 
   async function stubFetch(input, init) {
     const url = urlOf(input)
 
-    if (url.includes(OLLAMA_PORT)) {
-      // "Running, but the configured model is not installed" → available:false.
-      // Deterministic regardless of whether the developer runs Ollama locally.
-      return jsonResponse({ models: [] })
-    }
-
-    if (!url.includes(ANTHROPIC_HOST)) {
+    if (!isOllamaUrl(url)) {
       return REAL_FETCH(input, init)
     }
 
-    if (url.includes('/count_tokens')) {
+    if (state.ollamaDown) {
+      throw new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } })
+    }
+
+    if (url.includes('/api/tags')) {
       state.statusProbes++
-      return jsonResponse({ input_tokens: 12 })
+      return jsonResponse({ models: requiredModels().map((name) => ({ name, model: name })) })
+    }
+
+    if (!url.includes('/api/chat')) {
+      throw new Error(`llmHarness: unexpected Ollama endpoint ${url}`)
     }
 
     let body = {}
@@ -194,27 +161,24 @@ export function installLlmStub(opts = {}) {
       body = JSON.parse(init?.body || '{}')
     } catch {
       // A malformed body is worth surfacing rather than swallowing — it would
-      // mean claude.js built a request the real API would also reject.
-      throw new Error('llmHarness: intercepted an Anthropic request with unparseable JSON body')
+      // mean llm.js built a request Ollama would also reject.
+      throw new Error('llmHarness: intercepted an Ollama request with unparseable JSON body')
     }
 
+    const all = body.messages || []
+    const messages = all.filter((m) => m.role !== 'system')
     const call = {
       url,
-      /**
-       * The raw parsed request body. The named fields below cover the common
-       * assertions; `body` is here for everything else — `thinking`,
-       * `output_config.effort`, and anything a future model generation adds.
-       * Without it, a test cannot check that the request carries the parameters
-       * the model's behaviour depends on.
-       */
+      /** The raw parsed request body — options, think, keep_alive, etc. */
       body,
       model: body.model,
-      maxTokens: body.max_tokens,
-      system: flattenSystem(body.system),
-      systemBlocks: Array.isArray(body.system) ? body.system : null,
-      messages: body.messages || [],
+      maxTokens: body.options?.num_predict,
+      numCtx: body.options?.num_ctx,
+      /** The system message's text (the DM prompt). */
+      system: all.find((m) => m.role === 'system')?.content || '',
+      messages,
       /** Last user turn — the player action for a gameplay turn. */
-      lastUserMessage: [...(body.messages || [])].reverse().find(m => m.role === 'user')?.content || ''
+      lastUserMessage: [...messages].reverse().find((m) => m.role === 'user')?.content || ''
     }
     state.calls.push(call)
 
@@ -222,7 +186,7 @@ export function installLlmStub(opts = {}) {
     if (responder === undefined) {
       if (state.strict) {
         throw new Error(
-          `llmHarness: unscripted Anthropic call #${state.calls.length} ` +
+          `llmHarness: unscripted model call #${state.calls.length} ` +
           `(purpose looks like: "${String(call.lastUserMessage).slice(0, 80)}…"). ` +
           'Script it with llm.reply(...) or construct the stub with { strict: false }.'
         )
@@ -235,7 +199,6 @@ export function installLlmStub(opts = {}) {
   }
 
   globalThis.fetch = stubFetch
-  if (!process.env.ANTHROPIC_API_KEY) process.env.ANTHROPIC_API_KEY = 'test-key-not-used'
 
   active = {
     /** Queue one response. String, spec object, or `(call) => string|spec`. */
@@ -285,10 +248,9 @@ export function restoreLlm() {
  * Boot the DM-session router on an ephemeral port.
  *
  * Deliberately NOT `server/index.js`: that module calls `app.listen(3000)` at
- * import time (colliding with a running dev server) and mounts `authMiddleware`
- * over every `/api` route. This builds the minimal app the turn loop needs —
- * same router, same JSON body limit, no auth — so a test exercises the handler
- * rather than the login flow.
+ * import time (colliding with a running dev server). This builds the minimal
+ * app the turn loop needs — same router, same JSON body limit — so a test
+ * exercises the handler.
  *
  * `initNarrativeSystems()` is likewise not called. It registers cross-service
  * event listeners that only fire on the session-end path; leaving them out
@@ -392,11 +354,12 @@ export async function seedTurnFixture(dbRun, opts = {}) {
     `INSERT INTO dm_sessions
        (character_id, title, status, messages, model,
         game_start_day, game_start_year)
-     VALUES (?, ?, 'active', ?, 'claude-opus-4-7', ?, ?)`,
+     VALUES (?, ?, 'active', ?, ?, ?, ?)`,
     [
       characterId,
       `${prefix} Session`,
       JSON.stringify(messages),
+      modelFor('dm'),
       100,
       1492
     ]

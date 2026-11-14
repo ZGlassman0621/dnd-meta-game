@@ -5,7 +5,7 @@
 **Roles:** Muse is the project manager. Claude Code builds. Zach decides and gates. The PM guide (`pm-guide.md`, in Muse's workspace) states the overarching goals, systems, and MVP — this document states how a single job moves between PM and builder.
 
 **Where things live:**
-- Repo: the PC copy is the live one (`E:\DnD Meta Game\dnd-meta-game`), live branch `phase-4-hybrid-combat` (main is stale since June 2026 — never use it). Staging is PC-only (Zach, 2026-11-12: no longer staging on the Mac); the Mac copy is backup/sync only. The two copies stay in sync via GitHub (Zach keeps both updated).
+- Repo: the PC copy is the only working copy (`E:\DnD Meta Game\dnd-meta-game`), live branch `phase-4-hybrid-combat` (main is stale since June 2026 — never use it). The Mac copy is not a working copy and is not used (Zach, 2026-11-13).
 - Briefs: `docs/pm/<job-slug>/BRIEF.md` (PM writes). Reports: all in one folder, `docs/pm/reports/<job-slug>-REPORT.md` (Claude Code writes), so Zach knows exactly which file to carry back (Zach, 2026-11-12).
 - This handoff doc: `docs/pm/HANDOFF.md` in the repo (copy in Muse's workspace as `claude-code-handoff.md`).
 - The PM's live state note stays in Muse's workspace (`current-build-state.md`). Each brief carries the settled decisions its job needs — do not go hunting for them elsewhere.
@@ -149,5 +149,5 @@ Per-suite counts for touched suites. Exact failures, if any.>
 
 - Claude Code is installed on Zach's PC. Zach couriers briefs from Muse to Claude Code and carries Claude Code's reports back to Muse.
 - Briefs live in the repo under `docs/pm/<job-slug>/`. Reports live together in `docs/pm/reports/`, one `<job-slug>-REPORT.md` per job; Claude Code writes it there and Zach carries it back.
-- Repo sync CONFIRMED 2026-11-10 (Zach): the project lives on GitHub; Zach keeps the Mac and PC copies in sync. Claude Code pushes to GitHub; Zach gates on the PC. The Mac copy is backup only (Zach, 2026-11-12: no longer staging on the Mac).
+- Repo CONFIRMED 2026-11-10 (Zach): the project lives on GitHub. The PC copy is the only working copy (Zach, 2026-11-13); the Mac copy is not a working copy and is not used. Claude Code pushes to GitHub; Zach gates on the PC.
 - Git remote (recorded 2026-11-11, from Zach): `https://github.com/ZGlassman0621/dnd-meta-game.git`. A pull needs no URL — the clone stores it under `origin`. A FRESH clone: `git clone https://github.com/ZGlassman0621/dnd-meta-game.git`, then `git checkout phase-4-hybrid-combat` (the live branch — do not stay on main, stale since June 2026).

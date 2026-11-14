@@ -1,12 +1,10 @@
 /**
  * Location Generator Service
  *
- * Generates locations for a region using AI (Claude primary, Ollama fallback).
+ * Generates locations for a region using AI (the local model).
  * Creates settlements, dungeons, points of interest, and connections between them.
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
-import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
 
@@ -243,36 +241,14 @@ Return ONLY valid JSON:
 // ============================================================
 
 async function generateWithAI(prompt) {
-  // Try Claude first
-  if (isClaudeAvailable()) {
-    try {
-      const response = await loggedChat(
-        { call_purpose: 'location_gen', prompt_builder: 'locationGenerator' },
-        'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.',
-        [{ role: 'user', content: prompt }],
-        3, 'opus'
-      );
-      return response;
-    } catch (error) {
-      console.error('Claude location generation failed:', error.message);
-    }
-  }
-
-  // Try Ollama as fallback
-  const ollamaStatus = await checkOllamaStatus();
-  if (ollamaStatus.available) {
-    try {
-      const response = await ollamaChat([
-        { role: 'system', content: 'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.' },
-        { role: 'user', content: prompt }
-      ]);
-      return response;
-    } catch (error) {
-      console.error('Ollama location generation failed:', error.message);
-    }
-  }
-
-  throw new Error('No AI provider available for location generation');
+  // Local model (generation role). Errors propagate: the caller reports a
+  // failed location generation rather than inventing content.
+  return loggedChat(
+    { call_purpose: 'location_gen', prompt_builder: 'locationGenerator' },
+    'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.',
+    [{ role: 'user', content: prompt }],
+    3, 'generation'
+  );
 }
 
 // ============================================================
@@ -281,7 +257,7 @@ async function generateWithAI(prompt) {
 
 function parseLocationsResponse(response, context) {
   try {
-    // Opus may emit either a bare [...] array or a {...} object wrapping it.
+    // the model may emit either a bare [...] array or a {...} object wrapping it.
     let parsed;
     try { parsed = extractLLMJson(response, { expect: 'array' }); }
     catch { parsed = extractLLMJson(response); }

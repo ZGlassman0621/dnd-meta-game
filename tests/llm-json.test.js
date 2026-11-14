@@ -1,7 +1,7 @@
 /**
  * Tests for server/utils/llmJson.js — the shared LLM JSON extractor that
  * replaces the ad-hoc parsers across services. These guard the cases
- * that actually show up in production: multi-block Opus responses, code
+ * that actually show up in production: multi-block model responses, code
  * fences, braces inside string values, and trailing commas.
  */
 
@@ -64,7 +64,7 @@ console.log('\n=== extractLLMJson: multi-block merge (the original bug) ===\n');
 
 test('Two sequential objects are shallow-merged', () => {
   // This is the exact failure mode that broke arc-plan generation —
-  // Opus emitted tone_reflection separately from the main body.
+  // The model emitted tone_reflection separately from the main body.
   const raw = '{"tone_reflection": "hopeful"}\n{"home_world": {"description": "a place"}}';
   assert.deepEqual(extractLLMJson(raw), {
     tone_reflection: 'hopeful',

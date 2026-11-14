@@ -10,7 +10,7 @@
 
 ## What this is
 
-A **single-player D&D 5e campaign management system with an AI Dungeon Master**. You play, the AI runs the world. Built as a desktop web app (React + Express + SQLite, Claude Opus + Sonnet for AI).
+A **single-player D&D 5e campaign management system with an AI Dungeon Master**. You play, the AI runs the world. Built as a desktop web app (React + Express + SQLite, with a local model through Ollama — gemma4:12b — for AI).
 
 It supports two inverted modes:
 
@@ -31,7 +31,7 @@ That framing is not decorative. It's a strategic anchor. It means:
 
 - **Durability matters more than polish.** A feature that works for a thousand sessions is more valuable than a beautiful one that breaks after fifty.
 - **AI memory and context are the central engineering problem.** A single character should be playable for *years* without the AI losing the lore, the relationships, or the canon.
-- **No external dependencies that could disappear.** Ollama fallback exists for exactly this reason — if Claude's API isn't reachable, the game still runs locally.
+- **No external dependencies that could disappear.** The AI runs locally through Ollama, so the game never depends on a cloud service being reachable.
 - **Solo means solo.** Multiplayer would dilute the architecture. It's not coming. (Specific "never" lines below.)
 
 The secondary why: the user has never played tabletop D&D with others. He's loved D&D-flavored RPGs his whole life (KOTOR, Baldur's Gate 3, Elder Scrolls), but the rules complexity kept him from joining a real game. **This is also his way to learn D&D itself** — Player Mode is the safe-space tutorial, and DM Mode is where he can practice running a game without the social commitment.
@@ -68,7 +68,7 @@ These are the lenses that should shape "what should we build next" and "how shou
 1a. **The 2024 book wins on conflict.** Where the rules text and anything else disagree, the 2024 D&D rules are right. Homebrew stays separate from book rules and is marked as homebrew.
 1b. **Don't guess; never invent data** (Zach, 2026-11-07). No invented spell numbers, lists, prices, counts or endpoints. A gap is stated plainly as a gap, along with what would resolve it.
 2. **Don't remove systems — hide or mark them inactive.** Even when something seems unused, keep the option to come back. The user's words; durable feedback from earlier in the project.
-3. **Runs locally.** The decided DM model is gemma4:12b, offline through Ollama on the player's own PC (Zach, 2026-11-10), so play doesn't depend on a paid API or an internet connection. Prompt size still matters: a smaller local model has a smaller context window. Some code still calls Claude; see `LLM_SETUP.md`.
+3. **Runs locally.** The whole game runs on gemma4:12b, offline through Ollama on the player's own PC (Zach, 2026-11-10; no cloud model anywhere in the game, Zach 2026-11-13), so play doesn't depend on a paid API or an internet connection. Prompt size still matters: a smaller local model has a smaller context window. See `LLM_SETUP.md`.
 4. **No half-finished implementations.** From `CLAUDE.md`: "Three similar lines is better than a premature abstraction." Don't add features for hypothetical futures. Either ship it complete or don't ship it.
 5. **Hi-fi designs over wireframes for handoff.** When designs come in for implementation (via Claude Design or otherwise), expect them at hi-fi level. Wireframes leave too much interpretation to the implementer; hi-fi locks the visual language.
 

@@ -4,12 +4,10 @@
  * Generates dynamic content for the living world:
  * - Faction goals
  * - World events
- * Uses AI (Claude primary, Ollama fallback).
+ * Uses AI (the local model).
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { extractLLMJson } from '../utils/llmJson.js';
-import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { loggedChat } from './aiCallLogger.js';
 
 // ============================================================
@@ -359,40 +357,17 @@ function parseWorldEventResponse(response, context) {
 // ============================================================
 
 /**
- * Generate content using Claude (primary) or Ollama (fallback)
+ * Generate content with the local model
  */
 async function generateWithAI(prompt) {
-  // Try Claude first
-  if (isClaudeAvailable()) {
-    try {
-      const response = await loggedChat(
-        { call_purpose: 'living_world_gen', prompt_builder: 'livingWorldGenerator' },
-        'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.',
-        [{ role: 'user', content: prompt }],
-        3, 'opus'
-      );
-      return response;
-    } catch (error) {
-      console.error('Claude living world generation failed:', error.message);
-      // Fall through to Ollama
-    }
-  }
-
-  // Try Ollama as fallback
-  const ollamaStatus = await checkOllamaStatus();
-  if (ollamaStatus.available) {
-    try {
-      const response = await ollamaChat([
-        { role: 'system', content: 'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.' },
-        { role: 'user', content: prompt }
-      ]);
-      return response;
-    } catch (error) {
-      console.error('Ollama living world generation failed:', error.message);
-    }
-  }
-
-  throw new Error('No AI provider available for living world generation');
+  // Local model (generation role). Errors propagate: the caller reports a
+  // failed living world generation rather than inventing content.
+  return loggedChat(
+    { call_purpose: 'living_world_gen', prompt_builder: 'livingWorldGenerator' },
+    'You are a D&D world builder. Return ONLY valid JSON, no explanation or markdown.',
+    [{ role: 'user', content: prompt }],
+    3, 'generation'
+  );
 }
 
 export default {

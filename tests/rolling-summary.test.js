@@ -1,9 +1,9 @@
 /**
- * Rolling-summary unit tests (no Claude API calls).
+ * Rolling-summary unit tests (no live model calls).
  *
  * Exercises the pure functions — shouldRoll and applyToMessages —
  * with a range of session shapes. The actual summarization is tested
- * separately (it requires a live Sonnet call and a real session).
+ * separately (it requires a live model call and a real session).
  */
 
 import {

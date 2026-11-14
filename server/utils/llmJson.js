@@ -1,7 +1,7 @@
 /**
  * Robust JSON extraction from LLM responses.
  *
- * LLMs (Opus especially) don't always honour "respond with a single JSON
+ * LLMs (the model especially) don't always honour "respond with a single JSON
  * object, no preamble" perfectly. We've seen:
  *   • JSON wrapped in ```json fences
  *   • Preamble prose before the JSON ("Here's the plan:")

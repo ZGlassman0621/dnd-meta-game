@@ -6,8 +6,8 @@
  * "epic fantasy in a lived-in world" anchored in Faerûn. The 16-tag
  * combinable system and the 4-preset selector are both deferred to
  * v2.0.0+; until then, this is the authoritative tone signal injected
- * into both the arc-plan generator (Opus) and the per-turn play prompt
- * (Sonnet).
+ * into both the arc-plan generator (the model) and the per-turn play prompt
+ * (the model).
  *
  * Folding the shelter-behavior corrective into paragraph 2 (rather than
  * leaving it as a separate Cardinal Rule) elevates it to tone-setting
@@ -32,7 +32,7 @@ Beats this tone reaches for. Quiet scenes that earn their weight before the loud
 /**
  * Build the TONE block for injection into prompts. Returns a header line
  * (so the caller can locate the block in cache traces) plus the locked
- * description. Both Opus arc-plan generation and Sonnet per-turn prompts
+ * description. Both the model arc-plan generation and the model per-turn prompts
  * inject this block at the position previously occupied by tone-tag
  * injection.
  */

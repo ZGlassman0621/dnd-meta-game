@@ -15,7 +15,7 @@ D&D Meta Game: a solo D&D 2024 campaign game with an AI Dungeon Master.
 - **Frontend**: React 18 + Vite (SPA at `client/`)
 - **Backend**: Node.js + Express, ES modules (`server/`)
 - **Database**: SQLite via `@libsql/client` — Turso cloud when `TURSO_DATABASE_URL` is set, local `file:local.db` otherwise
-- **AI**: the decided DM model is **gemma4:12b, run offline through Ollama on Zach's PC** (Zach, 2026-11-10; its acceptance check is a secret-holding leak test, and per-role models are still open). **The code has not caught up yet:** it prefers Claude when `ANTHROPIC_API_KEY` is set and falls back to Ollama otherwise. See **Which model runs** below.
+- **AI**: a local model through **Ollama on the player's PC** — gemma4:12b by default (Zach, 2026-11-10). No part of the game calls a cloud model or needs an API key (Zach, 2026-11-13: "The only Claude on the system is you building it"). See **Which model runs** below.
 
 Conventions: ES modules only, no TypeScript. React function components with hooks, inline styles, no CSS framework. Parameterized `?` SQL. JSON stored in TEXT columns. REST routes at `/api/<resource>`.
 
@@ -48,13 +48,13 @@ The suite runs against a throwaway SQLite file — **never** the live database. 
 - Add or update tests for any non-trivial change.
 - Run the full suite before finishing. Compare against the known-failing set below.
 - Build the client when you touch `client/`.
-- `prose-quality.test.js` is excluded by default — it makes **billed** Anthropic API calls. Opt in with `TEST_INCLUDE_LLM=1`.
+- No file in `npm test` calls a live model. The runner points `OLLAMA_URL` at a dead loopback port (`http://127.0.0.1:9`), so a call no stub catches fails in milliseconds. The one live-model check, the leak test, runs separately: `npm run test:leak`.
 
 **Known failing: none.** The full suite ran 247/247 files green on the PC on 2026-11-12 (`docs/pm/reports/windows-test-portability-REPORT.md`, `docs/pm/reports/creation-solidification-REPORT.md`). On Windows the runner names any file it counted as `pass*` or retried once after libSQL's native `0xC0000005` crash; see `server/scripts/run-tests.js`. macOS/Linux never take those branches.
 
 **No test needs a running dev server.** `campaign-import.test.js` and `integration.test.js` each build their own Express app on port 3001.
 
-**Testing anything that calls an LLM** — use `tests/helpers/llmHarness.js`. `installLlmStub()` swaps `globalThis.fetch`, so it intercepts every `api.anthropic.com` request without touching production code, and the real `claude.js` still runs (cache-tier splitting, retry triage, error tagging). `startTurnServer()` mounts the DM router on an ephemeral port — never import `server/index.js` in a test, it calls `app.listen(3000)` at import time. Cost safety is structural: no request escapes, and in the default strict mode an unscripted call throws instead of reaching the network. Don't script `429`/`529`/`503`/`500` — `claude.js` retries those with real backoff, up to ~60s; use `401` for the error path.
+**Testing anything that calls an LLM** — use `tests/helpers/llmHarness.js`. `installLlmStub()` swaps `globalThis.fetch`, so it intercepts every Ollama request (`/api/tags`, `/api/chat`) without touching production code, and the real `llm.js` still runs (request building, the streamed-reply parser, error tagging). `startTurnServer()` mounts the DM router on an ephemeral port — never import `server/index.js` in a test, it calls `app.listen(3000)` at import time. In the default strict mode an unscripted model call throws. `installLlmStub({ ollamaDown: true })` simulates Ollama not running; use `{ status: 404 }` for a missing model (tagged `LOCAL_MODEL_MISSING`, not retried).
 
 ### 4. Feature flags, not commented-out code
 Subsystems are switched off via `server/config/featureFlags.js`. Flags are **getters** that read `process.env` at access time — that is deliberate, and it is what lets a test opt back into a subsystem after imports are hoisted:
@@ -118,7 +118,7 @@ All defaults live in `server/config/featureFlags.js`.
 
 Two tests cover this path, and they cover different things:
 
-- `tests/turn-e2e.test.js` drives the real route over HTTP against a real database with only the Anthropic transport stubbed (`tests/helpers/llmHarness.js`). It asserts on behaviour: markers apply, the player-facing narrative is marker-free while stored history keeps markers intact, a malformed marker queues then consumes a correction, 0 HP triggers a system-rolled death save, a failed LLM call writes nothing, and a concurrent POST gets `409` before the model is called.
+- `tests/turn-e2e.test.js` drives the real route over HTTP against a real database with only the model transport (Ollama) stubbed (`tests/helpers/llmHarness.js`). It asserts on behaviour: markers apply, the player-facing narrative is marker-free while stored history keeps markers intact, a malformed marker queues then consumes a correction, 0 HP triggers a system-rolled death save, a failed LLM call writes nothing, and a concurrent POST gets `409` before the model is called.
 - `tests/turn-write-ordering.test.js` still enforces steps 4–7 **structurally**, and is not redundant: on the happy path both orderings produce identical output, so no behavioural test can see the difference.
 
 **Do not wrap marker dispatch in `db.transaction('write')`.** libSQL transactions are connection-scoped while all 26 handlers write through `dbRun` on the outer client, so it would roll back nothing while taking a `BEGIN IMMEDIATE` lock that the handlers then contend against — and `markerPipeline` swallows handler errors into `{ok:false}`, so the failure would surface as a `200` with a saved narrative and no effects. Real turn atomicity needs an `AsyncLocalStorage`-backed ambient executor in `server/database.js`; that is its own project.
@@ -129,30 +129,17 @@ Two tests cover this path, and they cover different things:
 
 Schemas without handlers are a legitimate end state — validation alone provides correction-loop feedback. Malformed markers queue a correction on `session_config` that is injected into the next turn.
 
-### Which model runs
+### Which model runs — `server/services/localModels.js`, `server/services/llm.js`
 
-**Decided vs. live.** The decided DM model is gemma4:12b, offline via Ollama on Zach's PC (Zach, 2026-11-10). Moving the code to it is open work; nothing in `server/` names gemma4 as a default yet. What the code does today:
-- **Gameplay sessions** pick a provider in `getLLMProvider()` (`server/routes/dmSession.js`). With the player's preference on auto, it uses Claude if `ANTHROPIC_API_KEY` is set and Claude answers, and Ollama otherwise. The Ollama model is `OLLAMA_MODEL`, default `gpt-oss:20b` (`server/services/llmClient.js`, `server/routes/dmSession.js`), at `OLLAMA_URL`, default `http://localhost:11434`. So running gemma4:12b today means no Anthropic key plus `OLLAMA_MODEL=gemma4:12b`.
-- **Some features are Claude-only** and do nothing useful without a key, for example DM Mode's AI calls (`server/routes/dmMode.js` guards on `claude.isClaudeAvailable()`).
-- There is no cloud fallback pool in the code.
+**Every AI call names a role, never a model.** `localModels.js` maps the four roles — `dm`, `summary`, `extraction`, `generation` — to models, all defaulting to gemma4:12b and overridable in `.env` (`OLLAMA_MODEL`, `OLLAMA_MODEL_<ROLE>`). It is the only place in `server/` that names a model; accessors read `process.env` at call time, like the feature flags. An unknown role throws.
 
-The Claude-specific sections below (the model registry and the Claude 5 request contract) describe the Claude path that still exists in the code. They are not the decided production model.
+**Every call goes through `llm.js`** to Ollama's `/api/chat`: `chat(systemPrompt, messages, maxRetries, role, maxTokens, rawResponse, options)`, plus `startSession` / `continueSession` / `generateSessionSummary` / `checkStatus`. Through `aiCallLogger.js` (`loggedChat`, `wrapLlmCall`, `wrapLlmCallWithId`) every call lands in `ai_call_log` with its model, role (`metadata.role`) and token counts. Things the request depends on — break one and the failure is quiet:
 
-#### The Claude model registry — `server/services/modelRegistry.js`
+1. **`num_ctx` is sent on every call** (`OLLAMA_NUM_CTX`, default 65,536 — measured to keep gemma4:12b 100% on a 16 GB GPU). Without it Ollama uses its own small default window and silently drops the start of a long prompt, which is where the DM rules live. `contextManager.js` budgets and the `checkPromptSize` thresholds derive from the same window.
+2. **`num_predict` bounds the reply** (`DM_MAX_TOKENS`, default 4,000 for a DM turn). A reply cut off there (`done_reason: 'length'`) loses the markers at its end; `llm.js` logs it.
+3. **The reply is streamed** and accumulated, so a long generation never hits Node's 300-second header wait. Thinking is off (`OLLAMA_THINK`); any inline `<think>` block is stripped before the player sees text.
 
-**Every Claude model ID in `server/` resolves through `opusModel()` / `sonnetModel()`.** A grep for `claude-opus-` or `claude-sonnet-` under `server/` should find them only in that file: the two `DEFAULT_*_MODEL` constants, plus one explanatory comment. It is a registry rather than two constants because the IDs had already drifted into four other call sites, two of which were a generation stale by the time anyone noticed.
-
-Accessors are **synchronous** — `claude.chat()` is on the per-turn hot path and must not await a database read to learn what to call. Pins live in a module-level cache: `hydratePins()` fills it from `_app_settings` at boot, `persistPins()` writes through. Tests never hydrate, so they get the compiled-in defaults; nothing here needs a reachable database.
-
-**Staleness is reported, never applied.** `logStalenessCheck()` runs fire-and-forget at boot and logs when a newer model exists; the UI has a manual check-and-adopt in the provider strip. This is deliberate: a new generation can change request semantics, and adopting one silently is how you ship a broken turn loop. See the Claude 5 notes below for what that looked like in practice.
-
-#### The Claude 5 request contract — `server/services/claude.js`
-
-When the Claude path runs, the code depends on three things about the current Claude models. Break any of them and the failure is quiet.
-
-1. **Adaptive thinking is on by default.** Omitting `thinking` does not disable it. The response is `content: [{type:'thinking'}, {type:'text'}]`, so the reader **collects text blocks** — indexing `content[0].text` yields `undefined` and returns an empty narrative for every turn, with a `200` and `stop_reason: end_turn`. `tests/helpers/llmHarness.js` emits a leading thinking block for exactly this reason; a stub that leads with text lets this bug pass the whole suite.
-2. **`max_tokens` bounds thinking + response text together.** Gameplay runs at 16000 (`DM_MAX_TOKENS`). A truncated turn loses the markers at the end of the response, so effects the narrative already described never apply.
-3. **Thinking stays enabled rather than `disabled`.** With it off, these models can leak `<thinking>` tags into visible output, and this app renders the narrative straight to the player. `output_config.effort` (`DM_EFFORT`, default `low`) is the cost/latency dial instead.
+Failures are tagged: `LOCAL_MODEL_UNAVAILABLE:` (Ollama unreachable; connection errors retry with short backoff) and `LOCAL_MODEL_MISSING:` (model not installed; not retried). The turn route maps both to a 503 that names the fix and keeps the player's input. The DM prompt still carries the `<!-- CACHE_BREAK:... -->` markers from the old prompt-cache design; `llm.js` strips them before sending.
 
 ### HP and death — `server/services/characterHpService.js`
 
@@ -219,7 +206,7 @@ There is no sign-in. The account system (register, bcrypt, JWT, per-request Bear
 
 **Infrastructure** — `server/index.js`, `server/database.js`, `server/migrationRunner.js`, `server/config/featureFlags.js`, `server/middleware/currentPlayer.js`, `server/utils/{rng,sessionLocks,contextManager,llmJson,safeParse,errorHandler}.js`, `server/scripts/{backup,run-tests}.js`
 
-**Session & prompt** — `server/routes/dmSession.js`, `server/services/{dmPromptBuilder,dmSessionService,markerSchemas,markerPipeline,characterHpService,combatMarkerService,aiCallLogger,claude,modelRegistry}.js`
+**Session & prompt** — `server/routes/dmSession.js`, `server/services/{dmPromptBuilder,dmSessionService,markerSchemas,markerPipeline,characterHpService,combatMarkerService,aiCallLogger,llm,localModels}.js`
 
 **World & story** — `storyChronicleService.js`, `livingWorldService.js`, `campaignPlanService.js`, `questService.js`, `consequenceService.js`, `narrativeQueueService.js`, the `npc*Service.js` family
 

@@ -9,7 +9,6 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { chat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
 import { mutateRelationshipScalars } from './dmModeBondShiftService.js';
@@ -128,7 +127,7 @@ export async function generateDMModeChronicle(sessionId, partyId) {
       CHRONICLE_PROMPT,
       [{ role: 'user', content: input }],
       2,
-      'sonnet',
+      'extraction',
       4000,
       true // raw response for JSON
     );
@@ -341,7 +340,7 @@ export async function extractRelationshipEvolution(sessionId, partyId) {
       prompt,
       [{ role: 'user', content: input }],
       2,
-      'sonnet',
+      'extraction',
       2000,
       true
     );
@@ -368,7 +367,7 @@ export async function extractRelationshipEvolution(sessionId, partyId) {
     // chronicle-side — they're not part of the bond-shift abstraction.
     //
     // Per-path delta clamp to [-2, +2] preserved here (session-end
-    // extraction is tighter than per-turn AI markers — Sonnet can be
+    // extraction is tighter than per-turn AI markers — the model can be
     // chatty about deltas).
     let shiftCount = 0;
     for (const shift of (result.relationship_shifts || [])) {

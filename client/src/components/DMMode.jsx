@@ -827,7 +827,7 @@ export default function DMMode({ onBack }) {
                   fontSize: '0.9rem'
                 }}
               >
-                {generating ? 'Generating with Opus...' : 'Generate Party'}
+                {generating ? 'Generating...' : 'Generate Party'}
               </button>
               <button
                 onClick={() => setShowGenerateForm(false)}
@@ -847,7 +847,7 @@ export default function DMMode({ onBack }) {
 
             {generating && (
               <div style={{ marginTop: '1rem', color: '#e67e22', fontSize: '0.85rem' }}>
-                Opus is crafting 4 unique characters with interlocking backstories and genuine tensions. This takes about 30-60 seconds...
+                The AI is crafting 4 unique characters with interlocking backstories and genuine tensions. This takes about 30-60 seconds...
               </div>
             )}
           </div>

@@ -58,16 +58,6 @@ export default function PreludeSession({ character, onBack }) {
   const [values, setValues] = useState([])
   // Canon facts moved to PreludeLorePanel (v1.0.75 → fully migrated). The
   // panel fetches its own data via /canon-facts when it opens.
-  // v1.0.141 — Opus is the prelude gameplay default per PM ruling
-  // 2026-05-03 (generalizes the v1.0.99 main DM session decision).
-  // The Auto / Sonnet toggle that lived in this header is hidden in
-  // v1.0.141 (state preserved for backward-compat with sessions whose
-  // model_preference was stored as 'auto' or 'sonnet' before the flip).
-  // Initial useState default flipped from 'auto' → 'opus' so the local
-  // value matches the server before the first roundtrip completes.
-  const [model, setModel] = useState('opus')
-  const [resolvedModel, setResolvedModel] = useState('opus')
-  const [resolveReason, setResolveReason] = useState(null)
   const scrollerRef = useRef(null)
 
   // Fetch emerging values whenever the Setup panel opens, or after a player
@@ -119,7 +109,6 @@ export default function PreludeSession({ character, onBack }) {
           setLastCliffhanger(full.lastCliffhanger || null)
           setSessionRecap(full.lastSessionRecap || null)
           setSessionEnded(full.status === 'paused')
-          if (full.model === 'sonnet' || full.model === 'opus' || full.model === 'auto') setModel(full.model)
           return
         }
         // No active session → start a new one
@@ -133,7 +122,6 @@ export default function PreludeSession({ character, onBack }) {
         setSessionId(started.sessionId)
         setMessages([{ role: 'assistant', content: started.opening }])
         setRuntime(started.runtime)
-        if (started.model === 'sonnet' || started.model === 'opus' || started.model === 'auto') setModel(started.model)
       } catch (e) {
         if (!cancelled) setError(e.message)
       } finally {
@@ -163,7 +151,7 @@ export default function PreludeSession({ character, onBack }) {
       const resp = await fetch(`/api/prelude/sessions/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: a, model })
+        body: JSON.stringify({ action: a })
       })
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
@@ -238,9 +226,6 @@ export default function PreludeSession({ character, onBack }) {
       }))
 
       if (data.runtime) setRuntime(data.runtime)
-      if (data.model === 'sonnet' || data.model === 'opus' || data.model === 'auto') setModel(data.model)
-      if (data.resolvedModel === 'sonnet' || data.resolvedModel === 'opus') setResolvedModel(data.resolvedModel)
-      setResolveReason(data.resolveReason || null)
       if (data.sessionEnded) {
         setSessionEnded(true)
         if (data.markers?.cliffhanger) setLastCliffhanger(data.markers.cliffhanger)
@@ -335,7 +320,7 @@ export default function PreludeSession({ character, onBack }) {
       }
       setSessionEnded(false)
       // Clear the cliffhanger from the UI — the prompt builder already
-      // injects it into the next Sonnet call via session_config.lastCliffhanger,
+      // injects it into the next DM call via session_config.lastCliffhanger,
       // so we don't need to show it as a banner anymore.
       // v1.0.78 — reset session highlights accumulator for the new
       // play-session. The wrap-up screen for the upcoming session starts
@@ -384,7 +369,7 @@ export default function PreludeSession({ character, onBack }) {
       <div className="container" style={{ maxWidth: '860px', margin: '0 auto', textAlign: 'center', padding: '3rem 1rem' }}>
         <h2 style={{ color: '#a78bfa', margin: 0 }}>Opening the scene…</h2>
         <p style={{ color: '#bbb', marginTop: '0.5rem' }}>
-          Opus is setting the stage for {character.nickname || character.first_name || character.name}. Typical: 30-60 seconds, or up to 2 minutes if the arc plan is being generated at the same time.
+          The DM is setting the stage for {character.nickname || character.first_name || character.name}. Typical: 30-60 seconds, or up to 2 minutes if the arc plan is being generated at the same time.
         </p>
         <p style={{ color: '#c4b5fd', marginTop: '0.75rem', fontSize: '1.1rem', fontFamily: 'monospace' }}>
           {elapsed}s elapsed
@@ -464,14 +449,6 @@ export default function PreludeSession({ character, onBack }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {/* v1.0.141: Auto toggle hidden — Opus is the gameplay default
-              per PM ruling. Old auto/sonnet toggle would misrepresent
-              state now (checkbox-off used to mean "Sonnet always" but
-              the server-side default is no longer auto, so an unchecked
-              box would suggest Sonnet while the user is actually in Opus).
-              State preserved for back-compat with stored sessions; UI
-              affordance retired. Players who want Sonnet can opt down
-              via session config (no UI surface as of this version). */}
           {(() => {
             // v1.0.82 — compact uniform button styling
             const btn = (bg, border, color, extra = {}) => ({

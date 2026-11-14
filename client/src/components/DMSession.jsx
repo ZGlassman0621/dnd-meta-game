@@ -22,22 +22,9 @@ import { CONDITIONS, getConditionsToClear, reduceExhaustion } from '../data/cond
 import { useMerchantShop } from '../hooks/useMerchantShop';
 
 // Default model for D&D sessions (used when Ollama is the provider)
-const DEFAULT_MODEL = 'gpt-oss:20b';
 
 export default function DMSession({ character, onBack, onCharacterUpdated }) {
   const [llmStatus, setLlmStatus] = useState(null);
-  const [providerPreference, setProviderPreference] = useState('auto'); // 'auto' | 'claude' | 'ollama'
-  // Sonnet vs Opus selector. Opus is the production default (v1.0.99 — see
-  // DECISION_LOG "Opus as production default for main DM session continuations").
-  // The toggle is now an opt-down to Sonnet. Persisted in localStorage as
-  // `dndUseSonnet` so the choice survives reload.
-  const [useSonnet, setUseSonnet] = useState(() => {
-    try { return localStorage.getItem('dndUseSonnet') === '1'; } catch { return false; }
-  });
-  const updateUseSonnet = (next) => {
-    setUseSonnet(next);
-    try { localStorage.setItem('dndUseSonnet', next ? '1' : '0'); } catch {}
-  };
 
   // Campaign module selection
 
@@ -362,61 +349,13 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const checkLLMStatus = async (pref) => {
+  const checkLLMStatus = async () => {
     try {
-      const p = pref || providerPreference;
-      const response = await fetch(`/api/dm-session/llm-status?preference=${p}`);
+      const response = await fetch('/api/dm-session/llm-status');
       const data = await response.json();
       setLlmStatus(data);
     } catch (err) {
       setLlmStatus({ available: false, error: err.message });
-    }
-  };
-
-  // ── Model updates ──────────────────────────────────────────────────────
-  //
-  // Checking is manual and adopting is manual, deliberately. A new Claude
-  // generation can change request semantics — Claude 5 turning adaptive
-  // thinking on by default would have emptied every narrative — so nothing here
-  // ever applies an update on its own. The server logs a staleness warning at
-  // boot; this is the affordance that acts on it.
-  //
-  // `modelCheck` is one of: null (never checked), { checking: true },
-  // { error }, or { pins, comparison, catalog }.
-  const [modelCheck, setModelCheck] = useState(null);
-
-  const checkModelUpdates = async () => {
-    setModelCheck({ checking: true });
-    try {
-      const response = await fetch('/api/dm-session/model-catalog');
-      const data = await response.json();
-      setModelCheck(response.ok ? data : { error: data.error || `HTTP ${response.status}` });
-    } catch (err) {
-      setModelCheck({ error: err.message });
-    }
-  };
-
-  const applyModelUpdate = async (next) => {
-    setModelCheck(prev => ({ ...prev, applying: true }));
-    try {
-      const response = await fetch('/api/dm-session/model-pins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next)
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setModelCheck(prev => ({ ...prev, applying: false, error: data.error || `HTTP ${response.status}` }));
-        return;
-      }
-      // Re-read the status so the provider strip's label reflects the new pin
-      // immediately. Without this the strip keeps naming the old model until
-      // the next mount, which is exactly the stale-label bug this screen just
-      // stopped having.
-      await checkLLMStatus();
-      setModelCheck({ ...data, applied: true });
-    } catch (err) {
-      setModelCheck(prev => ({ ...prev, applying: false, error: err.message }));
     }
   };
 
@@ -669,10 +608,6 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
           customConcepts: customConcepts.trim() || null,
           campaignLength,
           customNpcs: selectedNpcs,
-          model: DEFAULT_MODEL,
-          providerPreference,
-          // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
-          modelOverride: useSonnet ? 'sonnet' : null,
           // Lean prompt — diagnostic-only path (UI toggle was retired in v1.0.100;
           // see DECISION_LOG "Retire Lean Prompt toggle as production direction").
           // Read fresh from localStorage so a developer can still trigger lean by
@@ -782,9 +717,6 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
           // null on any non-attack turn, which is most of them.
           attackRoll,
           damage,
-          providerPreference,
-          // Opus is the server-side default (v1.0.99); send 'sonnet' only when the user opts down.
-          modelOverride: useSonnet ? 'sonnet' : null,
           // Lean prompt — diagnostic-only (UI toggle retired v1.0.100). Read
           // fresh from localStorage so `dndLeanPrompt=1` in browser console
           // still triggers lean for prompt-design experiments. See /start
@@ -1631,21 +1563,16 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
         </div>
 
         <div className="ollama-error">
-          <h3>No AI Provider Available</h3>
+          <h3>Local AI Not Available</h3>
           <p>{llmStatus.error}</p>
           <div className="ollama-instructions">
-            <h4>To use the AI DM, you need one of these options:</h4>
-            <p><strong>Option 1: Claude API (Recommended)</strong></p>
+            <h4>The AI DM runs on your PC through Ollama:</h4>
             <ol>
-              <li>Get an API key from <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></li>
-              <li>Add <code>ANTHROPIC_API_KEY=your-key</code> to your .env file</li>
-              <li>Restart the server</li>
-            </ol>
-            <p style={{ marginTop: '1rem' }}><strong>Option 2: Ollama (Local/Free)</strong></p>
-            <ol>
-              <li>Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer">ollama.ai</a></li>
+              <li>Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener noreferrer">ollama.com</a> if it isn't installed</li>
               <li>Start Ollama (it runs in the background)</li>
-              <li>Pull a model: <code>ollama pull gpt-oss:20b</code></li>
+              {llmStatus.role_models?.dm && (
+                <li>Install the DM's model: <code>ollama pull {llmStatus.role_models.dm}</code></li>
+              )}
             </ol>
           </div>
           <button onClick={checkLLMStatus} className="retry-btn">
@@ -2162,34 +2089,6 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
                 </span>
               )}
             </div>
-          )}
-
-          {/* Model toggle chip — Opus is the production default (v1.0.99).
-              Click to opt down to Sonnet for the next turn. Only shown when
-              Claude is the active provider. */}
-          {llmStatus?.provider === 'claude' && (
-            <button
-              onClick={() => updateUseSonnet(!useSonnet)}
-              title={useSonnet
-                ? 'Using Sonnet (cheaper, thinner prose). Click to switch back to Opus (production default).'
-                : 'Using Opus (production default). Click to opt down to Sonnet for cost.'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.2rem 0.55rem',
-                background: useSonnet ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 140, 0, 0.18)',
-                border: `1px solid ${useSonnet ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 140, 0, 0.5)'}`,
-                color: useSonnet ? '#a78bfa' : '#ff8c00',
-                borderRadius: '999px',
-                fontSize: '0.75rem',
-                fontWeight: 'bold',
-                letterSpacing: '0.03em',
-                cursor: 'pointer'
-              }}
-            >
-              {useSonnet ? 'Sonnet' : 'Opus'}
-            </button>
           )}
 
           {/* Spell Slots Display */}
@@ -3175,14 +3074,7 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
       character={character}
       onBack={onBack}
       llmStatus={llmStatus}
-      providerPreference={providerPreference}
-      onProviderChange={(next) => { setProviderPreference(next); checkLLMStatus(next); }}
       onCheckStatus={() => checkLLMStatus()}
-      useSonnet={useSonnet}
-      onUseSonnetChange={updateUseSonnet}
-      modelCheck={modelCheck}
-      onCheckModelUpdates={checkModelUpdates}
-      onApplyModelUpdate={applyModelUpdate}
       campaignContext={campaignContext}
       continueCampaign={continueCampaign}
       onContinueCampaignChange={setContinueCampaign}

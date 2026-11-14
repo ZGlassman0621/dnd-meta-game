@@ -1,73 +1,19 @@
 import { aggregateCampaignContext, dayToHarptosDate } from './metaGame.js';
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { extractLLMJson } from '../utils/llmJson.js';
 import { loggedChat } from './aiCallLogger.js';
-
-// Ollama API endpoint (runs locally) - fallback when Claude is unavailable
-const OLLAMA_API = 'http://localhost:11434/api/generate';
-const ADVENTURE_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';  // Fast model for adventure generation
-const NARRATIVE_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';  // Better model for narrative generation
+import { modelFor } from './localModels.js';
 
 /**
- * Unified LLM call - uses Claude when available, Ollama as fallback
+ * One LLM call for adventure generation, on the local model (generation role).
+ * Errors propagate to the caller, which already handles a failed generation.
  */
-async function callLLM(prompt, temperature = 0.8) {
-  // Try Claude first if available
-  if (isClaudeAvailable()) {
-    try {
-      console.log('Using Claude for adventure generation...');
-      const response = await loggedChat(
-        { call_purpose: 'adventure_gen', prompt_builder: 'adventureGenerator' },
-        'You are a D&D adventure generator. Return ONLY valid JSON, no other text.',
-        [{ role: 'user', content: prompt }],
-        3, 'opus'
-      );
-      return response;
-    } catch (error) {
-      console.error('Claude error, falling back to Ollama:', error.message);
-    }
-  }
-
-  // Fall back to Ollama
-  return callOllama(prompt, ADVENTURE_MODEL, temperature);
-}
-
-async function callOllama(prompt, modelName = ADVENTURE_MODEL, temperature = 0.8) {
-  try {
-    console.log('Using Ollama for adventure generation...');
-    const response = await fetch(OLLAMA_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: modelName,
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: temperature,
-          top_p: 0.9,
-          num_predict: 800,  // Increased for longer JSON responses
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Ollama API error response:', errorText);
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.response;
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Ollama is not running. Start it with: ollama serve');
-    } else if (error.message.includes('model')) {
-      console.error(`Model ${modelName} may not be installed. Try: ollama pull ${modelName}`);
-    }
-    throw error;
-  }
+async function callLLM(prompt) {
+  return loggedChat(
+    { call_purpose: 'adventure_gen', prompt_builder: 'adventureGenerator' },
+    'You are a D&D adventure generator. Return ONLY valid JSON, no other text.',
+    [{ role: 'user', content: prompt }],
+    3, 'generation'
+  );
 }
 
 export async function generateAdventureOptions(character, riskLevel) {
@@ -78,7 +24,7 @@ export async function generateAdventureOptions(character, riskLevel) {
   console.log('Location:', current_location);
   console.log('Quest:', current_quest);
   console.log('Risk Level:', riskLevel);
-  console.log('Using Ollama model:', ADVENTURE_MODEL);
+  console.log('Using local model:', modelFor('generation'));
 
   // If character is injured, prioritize recovery options
   const injuriesArray = JSON.parse(injuries || '[]');
@@ -121,7 +67,7 @@ Make the adventures interesting, varied, and thematically appropriate. Return ON
     console.log('LLM call successful!');
     console.log('Response text:', responseText.substring(0, 200) + '...');
 
-    // Opus may emit either { adventures: [...] } or a bare [...] — try object first, fall back to array.
+    // The model may emit either { adventures: [...] } or a bare [...] — try object first, fall back to array.
     let adventures;
     try {
       const parsed = extractLLMJson(responseText);
@@ -280,7 +226,7 @@ Return ONLY valid JSON in this format:
 
   try {
     console.log('Generating contextual adventures...');
-    const responseText = await callLLM(prompt, 0.8);
+    const responseText = await callLLM(prompt);
     console.log('LLM call successful!');
 
     let adventures;
@@ -490,7 +436,7 @@ Return ONLY valid JSON (no comments, no trailing commas):
 
   try {
     console.log('Generating adventures for all risk levels...');
-    const responseText = await callLLM(prompt, 0.8);
+    const responseText = await callLLM(prompt);
 
     const parsed = extractLLMJson(responseText);
     const adventures = parsed.adventures;
@@ -604,7 +550,7 @@ Write ONLY the narrative:`;
 
   try {
     console.log('Generating adventure narrative...');
-    const narrative = await callLLM(prompt, 0.7);  // Lower temperature for more coherent text
+    const narrative = await callLLM(prompt);
 
     // Clean up the response - sometimes models add extra commentary
     const cleaned = narrative

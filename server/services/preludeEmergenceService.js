@@ -1,7 +1,7 @@
 /**
  * Prelude emergence service.
  *
- * Handles the lifecycle of mechanical emergence offers that Sonnet
+ * Handles the lifecycle of mechanical emergence offers that the model
  * fires via markers during a prelude session: [STAT_HINT], [SKILL_HINT],
  * [CLASS_HINT], [THEME_HINT], [ANCESTRY_HINT].
  *
@@ -15,7 +15,7 @@
  *     share this table keyed by `kind`.
  *
  * Caps enforced server-side (rejected hints get a [SYSTEM] cap-violation
- * message injected back to Sonnet so it knows to stop):
+ * message injected back to the model so it knows to stop):
  *   - +2 max per stat across the whole prelude
  *   - 2 accepted skills max total
  *   - Class/theme/ancestry hints: no cap on firing; winner determined at
@@ -384,7 +384,7 @@ export async function getValues(characterId) {
 }
 
 /**
- * Build a compact EMERGENCE SO FAR block for injection into the Sonnet/Opus
+ * Build a compact EMERGENCE SO FAR block for injection into the model
  * system prompt. Shows accepted stats/skills + leading class/theme/ancestry
  * trajectories + top values — the AI consults it when composing upcoming
  * scenes so it can lean toward emerging strengths. Runs on every turn so

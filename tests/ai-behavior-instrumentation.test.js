@@ -10,7 +10,7 @@
  */
 
 import { initDatabase, dbAll, dbGet, dbRun } from '../server/database.js'
-import { logAiCall, logAiCallWithId, annotateAiCallLog, wrapClaudeCall } from '../server/services/aiCallLogger.js'
+import { logAiCall, logAiCallWithId, annotateAiCallLog, wrapLlmCall } from '../server/services/aiCallLogger.js'
 import {
   computePromptSections,
   estimateTokens,
@@ -205,20 +205,22 @@ console.log('\n=== SC-4a.1 — logAiCallWithId + annotateAiCallLog ===\n')
 // ============================================================
 // SC-4a.1 — onApiMeta hook captures token counts
 // ============================================================
-console.log('\n=== SC-4a.1 — wrapClaudeCall onApiMeta token capture ===\n')
+console.log('\n=== SC-4a.1 — wrapLlmCall onApiMeta capture (model, role, tokens) ===\n')
 {
-  // Synthesize a fake claudeFn that invokes its passed chatOptions.onApiMeta
-  // the way real claude.chat does after receiving an API response.
-  await wrapClaudeCall(
+  // Synthesize a fake call fn that invokes its passed chatOptions.onApiMeta
+  // the way llm.chat does after Ollama answers.
+  await wrapLlmCall(
     {
       call_purpose: 'TEST_PHASE4A_with_meta',
       system_prompt: 'sys',
-      user_message: 'ask'
+      user_message: 'ask',
+      metadata: { note: 'kept' }
     },
     async (chatOptions) => {
       chatOptions.onApiMeta({
-        model: 'claude-opus-4-7',
-        usage: { input_tokens: 1234, output_tokens: 567, cache_read_input_tokens: 1000 }
+        model: 'TEST_local_model',
+        role: 'extraction',
+        usage: { input_tokens: 1234, output_tokens: 567 }
       })
       return 'reply'
     }
@@ -226,10 +228,12 @@ console.log('\n=== SC-4a.1 — wrapClaudeCall onApiMeta token capture ===\n')
   const row = await dbGet(
     `SELECT * FROM ai_call_log WHERE call_purpose = 'TEST_PHASE4A_with_meta' ORDER BY id DESC LIMIT 1`
   )
-  assert(row?.model_id === 'claude-opus-4-7', 'model_id captured via onApiMeta')
+  assert(row?.model_id === 'TEST_local_model', 'model_id captured via onApiMeta')
   assert(row?.input_tokens === 1234, 'input_tokens captured')
   assert(row?.output_tokens === 567, 'output_tokens captured')
-  assert(row?.cache_read_input_tokens === 1000, 'cache_read_input_tokens captured')
+  const meta = JSON.parse(row?.metadata || '{}')
+  assert(meta.role === 'extraction', `the call's role is recorded in metadata.role (got ${meta.role})`)
+  assert(meta.note === 'kept', "the caller's own metadata survives the role merge")
 }
 
 // ============================================================

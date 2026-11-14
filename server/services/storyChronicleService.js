@@ -13,7 +13,6 @@
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
-import { chat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
 import { estimateTokens } from '../utils/contextManager.js';
 import { tryExtractLLMJson } from '../utils/llmJson.js';
@@ -210,7 +209,7 @@ Guidelines for npc_deaths:
       chroniclePrompt,
       [{ role: 'user', content: input }],
       2,
-      'sonnet',
+      'extraction',
       4000,
       true // raw response for JSON
     );
@@ -724,7 +723,7 @@ export async function getCampaignRollup(campaignId, characterId) {
  * chronicles than the verbatim tail, and again whenever no chronicle has aged
  * out since the last roll. Short campaigns never pay for it at all.
  *
- * Uses Sonnet, matching `generateSessionChronicle` — this is extraction and
+ * Uses the model, matching `generateSessionChronicle` — this is extraction and
  * compression, not gameplay prose.
  *
  * @returns {Promise<{rolled: boolean, reason?: string, throughSession?: number, sessionsRolled?: number, newlyRolled?: number}>}
@@ -843,7 +842,7 @@ Rules:
       systemPrompt,
       [{ role: 'user', content: userContent }],
       2,
-      'sonnet',
+      'summary',
       2000,
       true // raw — this is prose, and cleanupResponse strips trailing parentheticals
     );

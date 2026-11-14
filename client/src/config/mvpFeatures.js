@@ -13,7 +13,7 @@
 
 /**
  * The Prelude — a guided origin-story play session (6-step setup wizard →
- * Opus-planned arc → Sonnet play loop → handoff into the main creator with
+ * AI-planned arc → DM play loop → handoff into the main creator with
  * race/subrace/theme/ancestry-feat pre-committed).
  *
  * OFF for the MVP. It is a second, longer path to the same destination, and

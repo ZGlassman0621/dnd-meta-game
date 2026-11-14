@@ -8135,23 +8135,13 @@ router.post('/:id/generate-campaign-notes', async (req, res) => {
     }
 
     // Import LLM services dynamically to avoid circular dependencies
-    const claude = (await import('../services/claude.js')).default;
-    const ollama = (await import('../services/ollama.js')).default;
+    const llm = (await import('../services/llm.js')).default;
     const { loggedChat } = await import('../services/aiCallLogger.js');
 
-    // Determine which LLM provider to use
-    let provider = null;
-    if (claude.isClaudeAvailable()) {
-      const status = await claude.checkClaudeStatus();
-      if (status.available) provider = 'claude';
-    }
-    if (!provider) {
-      const ollamaStatus = await ollama.checkOllamaStatus();
-      if (ollamaStatus.available) provider = 'ollama';
-    }
-
-    if (!provider) {
-      return res.status(503).json({ error: 'No LLM provider available' });
+    // The local model must be up before we build a long prompt for it.
+    const llmStatus = await llm.checkStatus();
+    if (!llmStatus.available) {
+      return res.status(503).json({ error: 'Local AI not available', details: llmStatus.error });
     }
 
     // Build context from session summaries and key messages
@@ -8208,20 +8198,13 @@ Format your response as organized notes under these categories (skip empty categ
 
 Be concise but specific. Use names and details from the sessions. Only include things that actually happened.`;
 
-    let generatedNotes = '';
-    if (provider === 'claude') {
-      generatedNotes = await loggedChat(
-        { call_purpose: 'character_notes_gen', prompt_builder: 'character_route',
-          character_id: parseInt(req.params.id) },
-        'You are a helpful assistant organizing campaign notes for a D&D character.',
-        [{ role: 'user', content: extractionPrompt }]
-      );
-    } else {
-      generatedNotes = await ollama.chat([
-        { role: 'system', content: 'You are a helpful assistant organizing campaign notes for a D&D character.' },
-        { role: 'user', content: extractionPrompt }
-      ]);
-    }
+    const generatedNotes = await loggedChat(
+      { call_purpose: 'character_notes_gen', prompt_builder: 'character_route',
+        character_id: parseInt(req.params.id) },
+      'You are a helpful assistant organizing campaign notes for a D&D character.',
+      [{ role: 'user', content: extractionPrompt }],
+      3, 'extraction'
+    );
 
     // Prepend with a header indicating this was auto-generated
     const existingNotes = character.campaign_notes || '';

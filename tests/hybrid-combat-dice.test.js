@@ -12,9 +12,9 @@
  *      what counts as absent, what counts as malformed, and the exact wording
  *      that reaches the model.
  *   2. The real `POST /:sessionId/message` route over HTTP against a real
- *      database with only the Anthropic transport stubbed, per CLAUDE.md rule 3
+ *      database with only the model transport (Ollama) stubbed, per CLAUDE.md rule 3
  *      and `tests/helpers/llmHarness.js`. No billed calls: the stub intercepts
- *      every api.anthropic.com request and forwards none.
+ *      every Ollama request and forwards none.
  *
  * The route-level claims are the ones worth having. A directive that is built
  * correctly but never reaches the model, or one that reaches the model and then

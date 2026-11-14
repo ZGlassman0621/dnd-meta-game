@@ -19,9 +19,7 @@ What's in the build today, counted from the code:
 
 ## The AI model
 
-The decided DM model is **gemma4:12b, run offline through [Ollama](https://ollama.com) on your own PC**. No API key or internet connection is needed for it.
-
-The code hasn't fully caught up with that decision yet. It still prefers Claude when an `ANTHROPIC_API_KEY` is present, and falls back to Ollama otherwise. To run on gemma4:12b today, leave the key out and point Ollama at the model. See [LLM_SETUP.md](LLM_SETUP.md).
+The whole game runs on **gemma4:12b, offline through [Ollama](https://ollama.com) on your own PC**. The DM, summaries, the memory between sessions, and every generator all use it. No API key or internet connection is needed. Each AI job (DM, summary, extraction, generation) can be pointed at a different local model with one setting. See [LLM_SETUP.md](LLM_SETUP.md).
 
 ## Running it on the PC
 
@@ -37,11 +35,10 @@ You need Node.js, npm and Ollama.
    ```bash
    npm run install-all
    ```
-3. Pull the model and tell the app to use it:
+3. Pull the model (gemma4:12b is the default, so no settings are needed):
    ```bash
    ollama pull gemma4:12b
-   cp .env.example .env
-   # in .env, set: OLLAMA_MODEL=gemma4:12b   (and leave ANTHROPIC_API_KEY unset)
+   cp .env.example .env    # optional settings; see LLM_SETUP.md
    ```
 4. Start the server (port 3000) and the client (port 5173):
    ```bash
@@ -58,7 +55,7 @@ npm test                 # the full suite, against a throwaway database
 npm test <name>          # one file, e.g. npm test character-hp
 ```
 
-The suite never touches the real database (`server/scripts/run-tests.js` redirects it). It runs green on Windows; the runner names any file it had to treat specially there.
+The suite never touches the real database or the real model (`server/scripts/run-tests.js` redirects both). It runs green on Windows; the runner names any file it had to treat specially there. The model's acceptance check, the secret-holding leak test, runs on its own against Ollama: `npm run test:leak`.
 
 ## Scripts
 

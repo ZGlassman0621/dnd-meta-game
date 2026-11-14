@@ -5,9 +5,7 @@
  * Extracts characters, locations, factions, events, and story hooks.
  */
 
-import { isClaudeAvailable, chat as claudeChat } from './claude.js';
 import { loggedChat } from './aiCallLogger.js';
-import { checkOllamaStatus, chat as ollamaChat } from './ollama.js';
 import { dbGet, dbRun } from '../database.js';
 import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
@@ -310,36 +308,14 @@ IMPORTANT:
 // ============================================================
 
 async function generateWithAI(prompt) {
-  // Try Claude first
-  if (isClaudeAvailable()) {
-    try {
-      const response = await loggedChat(
-        { call_purpose: 'backstory_parse', prompt_builder: 'backstoryParserService' },
-        'You are a D&D backstory analyst. Return ONLY valid JSON, no explanation or markdown code fences.',
-        [{ role: 'user', content: prompt }],
-        3, 'opus'
-      );
-      return response;
-    } catch (error) {
-      console.error('Claude backstory parsing failed:', error.message);
-    }
-  }
-
-  // Try Ollama as fallback
-  const ollamaStatus = await checkOllamaStatus();
-  if (ollamaStatus.available) {
-    try {
-      const response = await ollamaChat([
-        { role: 'system', content: 'You are a D&D backstory analyst. Return ONLY valid JSON, no explanation or markdown code fences.' },
-        { role: 'user', content: prompt }
-      ]);
-      return response;
-    } catch (error) {
-      console.error('Ollama backstory parsing failed:', error.message);
-    }
-  }
-
-  throw new Error('No AI provider available for backstory parsing');
+  // Local model (extraction role). Errors propagate: the caller reports a
+  // failed backstory parsing rather than inventing content.
+  return loggedChat(
+    { call_purpose: 'backstory_parse', prompt_builder: 'backstoryParserService' },
+    'You are a D&D backstory analyst. Return ONLY valid JSON, no explanation or markdown code fences.',
+    [{ role: 'user', content: prompt }],
+    3, 'extraction'
+  );
 }
 
 // ============================================================

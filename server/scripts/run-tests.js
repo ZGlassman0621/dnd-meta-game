@@ -34,29 +34,19 @@ const TEST_DB = join(SCRATCH, 'test.db')
 // hang rather than fail, and one hang would otherwise stall the whole run.
 const TIMEOUT_MS = Number(process.env.TEST_TIMEOUT_MS || 120000)
 
-// Excluded from the default run because they call the live Anthropic API —
-// they cost real money per run and take minutes. They are prose-quality
-// evaluations, not regression tests, so they do not belong in a pre-push gate.
-// Opt in with TEST_INCLUDE_LLM=1 when deliberately evaluating prompt changes.
-const LLM_TESTS = new Set(['prose-quality.test.js'])
+// No file in tests/*.test.js calls a live model: every AI call is stubbed
+// (tests/helpers/llmHarness.js), and OLLAMA_URL below points at a dead port so
+// an unstubbed call fails in milliseconds instead of reaching Ollama. The one
+// live-model check, the leak test, runs separately: `npm run test:leak`.
 
 const filter = process.argv[2] || ''
-const includeLlm = process.env.TEST_INCLUDE_LLM === '1'
 
 rmSync(SCRATCH, { recursive: true, force: true })
 mkdirSync(SCRATCH, { recursive: true })
 
-const skipped = []
 const files = readdirSync(TEST_DIR)
   .filter((f) => f.endsWith('.test.js'))
   .filter((f) => (filter ? f.includes(filter) : true))
-  .filter((f) => {
-    if (LLM_TESTS.has(f) && !includeLlm) {
-      skipped.push(f)
-      return false
-    }
-    return true
-  })
   .sort()
 
 if (files.length === 0) {
@@ -76,6 +66,12 @@ const env = {
   // would evict the user's real backups. Off by default; a test that wants to
   // exercise the backup path sets it back on for itself.
   FF_SESSION_END_BACKUP: 'false',
+  // SAFETY, like the database redirect: never let a test reach the real local
+  // model. Port 9 on loopback refuses instantly, so a call no stub caught
+  // fails fast (llm.js tags it LOCAL_MODEL_UNAVAILABLE) rather than spending
+  // a minute in Ollama and depending on the model's mood. Tests that exercise
+  // the AI path install the harness stub, which answers this address.
+  OLLAMA_URL: 'http://127.0.0.1:9',
 }
 
 // Windows only: a preload that lets process.exit() settle one short
@@ -210,9 +206,6 @@ console.log(
   `Files: ${results.length - failures.length}/${results.length} green  |  ` +
     `Assertions: ${assertsPassed} passed, ${assertsFailed} failed`
 )
-if (skipped.length > 0) {
-  console.log(`Skipped (live LLM, set TEST_INCLUDE_LLM=1): ${skipped.join(', ')}`)
-}
 const retried = results.filter((r) => r.retriedAfterNativeCrash)
 if (retried.length > 0) {
   console.log(

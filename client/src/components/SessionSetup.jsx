@@ -16,17 +16,9 @@ const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 export default function SessionSetup({
   character,
   onBack,
-  // LLM status
+  // Local AI status (GET /api/dm-session/llm-status)
   llmStatus,
-  providerPreference,
-  onProviderChange,
   onCheckStatus,
-  useSonnet,
-  onUseSonnetChange,
-  // Model updates — manual check, manual adopt. See DMSession for why.
-  modelCheck,
-  onCheckModelUpdates,
-  onApplyModelUpdate,
   // Campaign context
   campaignContext,
   continueCampaign,
@@ -57,10 +49,8 @@ export default function SessionSetup({
   isLoading,
   error
 }) {
-  // The model that will actually serve this session, resolved the same way the
-  // server resolves it: `modelOverride: 'sonnet'` when the toggle is on, Opus
-  // otherwise. `llmStatus.models` is the server's live pin map.
-  const selectedModelId = llmStatus?.models?.[useSonnet ? 'sonnet' : 'opus'] || null;
+  // The model the DM role runs on, as the server resolves it (localModels.js).
+  const dmModelId = llmStatus?.role_models?.dm || null;
 
   return (
     <div className="session-setup">
@@ -94,96 +84,25 @@ export default function SessionSetup({
         <div className="setup">
           <div className="provider">
             <span>
-              <span className="k">AI Provider</span>
-              <span className="v">{llmStatus.provider === 'claude' ? 'Claude (Anthropic)' : 'Ollama (Local)'}</span>
-              {/* Derived from the toggle, not from a `model` field on the status
-                  response. That field was the health check's own ping model —
-                  always Sonnet — so it reported Sonnet while Opus was selected
-                  and actually serving turns. Reading the same map the server
-                  resolves from makes the label unable to disagree with it. */}
-              {selectedModelId && <span className="model">{selectedModelId}</span>}
+              <span className="k">AI</span>
+              <span className="v">
+                {llmStatus.available ? 'Local model (Ollama)' : 'Local AI not available'}
+              </span>
+              {dmModelId && <span className="model">{dmModelId}</span>}
             </span>
-
-            {/* Model selector — Opus is the production default (v1.0.99).
-                The toggle now selects Sonnet as an opt-down for cost.
-                Provider stays on 'auto' so Ollama is still a fallback if
-                Claude is unreachable. Sonnet button = explicit opt-down;
-                Opus button = production default. */}
-            {llmStatus.provider === 'claude' && (
-              <div className="seg-group">
-                <button
-                  className={`seg${useSonnet ? ' on' : ''}`}
-                  onClick={() => onUseSonnetChange?.(true)}
-                  title="Sonnet — opt-down for cost. Cheaper, but thinner prose. Production default is Opus."
-                >
-                  Sonnet
-                </button>
-                <button
-                  className={`seg${!useSonnet ? ' on' : ''}`}
-                  onClick={() => onUseSonnetChange?.(false)}
-                  title="Opus — production default. Better prose at ~$1.50/hour."
-                >
-                  Opus
-                </button>
-                <button
-                  className="seg"
-                  onClick={onCheckModelUpdates}
-                  disabled={modelCheck?.checking}
-                  title="Ask Anthropic which models this API key can reach, and whether a newer one exists. Checks only — nothing is adopted without confirming."
-                >
-                  {modelCheck?.checking ? 'Checking…' : 'Models'}
-                </button>
-                <button
-                  className="seg glyph"
-                  onClick={onCheckStatus}
-                  title="Recheck provider availability"
-                >
-                  ↻
-                </button>
-              </div>
-            )}
+            <div className="seg-group">
+              <button
+                className="seg glyph"
+                onClick={onCheckStatus}
+                title="Check the local AI again"
+              >
+                ↻
+              </button>
+            </div>
           </div>
-
-          {/* Model update result. Renders only after an explicit check. */}
-          {modelCheck && !modelCheck.checking && (
-            <div className={`model-check${modelCheck.error ? ' bad' : ''}`}>
-              {modelCheck.error ? (
-                <span className="msg">Could not check for model updates: {modelCheck.error}</span>
-              ) : modelCheck.comparison?.anyStale ? (
-                <>
-                  <span className="msg">
-                    A newer model is available. Adopting a new generation can change how the
-                    DM behaves — worth reading the release notes first.
-                  </span>
-                  <div className="rows">
-                    {['opus', 'sonnet'].map(family => {
-                      const f = modelCheck.comparison[family];
-                      if (!f?.stale) return null;
-                      return (
-                        <div className="row" key={family}>
-                          <span className="k">{family}</span>
-                          <span className="from">{f.pinned}</span>
-                          <span className="arrow">&rarr;</span>
-                          <span className="to">{f.newest}</span>
-                          <button
-                            className="btn sm"
-                            disabled={modelCheck.applying}
-                            onClick={() => onApplyModelUpdate({ [family]: f.newest })}
-                          >
-                            {modelCheck.applying ? 'Updating…' : 'Update'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <span className="msg">
-                  {modelCheck.applied ? 'Updated. ' : ''}
-                  Both models are the newest available
-                  {modelCheck.pins ? ` — ${modelCheck.pins.opus} / ${modelCheck.pins.sonnet}` : ''}.
-                </span>
-              )}
+          {!llmStatus.available && llmStatus.error && (
+            <div className="model-check bad">
+              <span className="msg">{llmStatus.error}</span>
             </div>
           )}
 

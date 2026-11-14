@@ -28,7 +28,7 @@ import { dbAll, dbGet, dbRun } from '../database.js';
 
 // Race-aware "early childhood" starting age. Prelude begins at Chapter 1 for
 // the character's race — for humans that's 5-8, for elves 25-50, etc.
-// Aligns with the chapter age ranges Opus receives in preludeArcService.
+// Aligns with the chapter age ranges the model receives in preludeArcService.
 function computeStartingAge(race) {
   const key = String(race || '').toLowerCase();
   switch (key) {
@@ -194,7 +194,7 @@ export async function createPreludeCharacter(payload) {
 
   // Age is race-derived in v1.0.43+. We ignore any client-provided
   // starting_age and compute from race instead. Write the computed age back
-  // into the payload before persisting so Opus (and the arc preview) see
+  // into the payload before persisting so the model (and the arc preview) see
   // the same value.
   const age = computeStartingAge(payload.race);
   payload.starting_age = age;

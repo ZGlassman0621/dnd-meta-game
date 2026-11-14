@@ -9,11 +9,11 @@
  *
  * Flow:
  *   startSession(characterId)        → creates a new prelude session,
- *                                      calls Opus for the opening narrative,
+ *                                      calls the model for the opening narrative,
  *                                      returns { sessionId, messages }
  *   getActiveSession(characterId)    → fetch the active session if one
  *                                      exists (for resume)
- *   sendMessage(sessionId, action)   → append player action, call Sonnet,
+ *   sendMessage(sessionId, action)   → append player action, call the model,
  *                                      parse markers, persist, return response
  *   endSession(sessionId, reason?)   → close the session with status
  *                                      'completed' or 'paused'
@@ -24,8 +24,9 @@
  */
 
 import { dbGet, dbRun, dbAll } from '../database.js';
-import { chat, startSession as claudeStartSession, continueSession as claudeContinueSession } from './claude.js';
-import { wrapClaudeCallWithId, logAiCall, annotateAiCallLog } from './aiCallLogger.js';
+import { startSession as llmStartSession, continueSession as llmContinueSession } from './llm.js';
+import { modelFor } from './localModels.js';
+import { wrapLlmCallWithId, logAiCall, annotateAiCallLog } from './aiCallLogger.js';
 import { getPreludeCharacter } from './preludeService.js';
 import { getArcPlan, generateArcPlan } from './preludeArcService.js';
 import {
@@ -57,108 +58,9 @@ const PLAY_SESSION_NUDGE_MESSAGES = 100;   // ~50 exchanges — approaching targ
 const PLAY_SESSION_WRAP_MESSAGES = 130;    // ~65 exchanges — fire cliffhanger soon
 const PLAY_SESSION_FORCE_MESSAGES = 160;   // ~80 exchanges — force cliffhanger NOW
 
-// Player-toggleable model preference. Three modes:
-//   'sonnet' — always Sonnet (default, fast, cheap)
-//   'opus'   — always Opus (richer, slower, ~5x cost)
-//   'auto'   — Sonnet by default, escalate to Opus for heavy scenes.
-//
-// Auto-mode "HARD" triggers (always Opus regardless of consecutive-turn cap):
-//   • current chapter == 4 (finale always Opus — user-directed)
-//   • play-session past PLAY_SESSION_WRAP_MESSAGES (close a big beat well)
-//
-// Auto-mode "SOFT" triggers (Opus, but subject to consecutive-turn cap):
-//   • previous turn tagged [NEXT_SCENE_WEIGHT: heavy]
-//   • previous turn had HP delta ≤ -3 (stakes just spiked)
-//   • previous turn fired [CHAPTER_PROMISE]
-//
-// Auto-mode downgrade (always Sonnet):
-//   • previous turn tagged [NEXT_SCENE_WEIGHT: light] — AI explicitly released
-//   • consecutive soft-opus turns exceeded the cap (safety valve)
-//
-// Consecutive-Opus cap (v1.0.66):
-//   Soft-triggered Opus can only run AUTO_SOFT_OPUS_MAX turns in a row
-//   before auto-dropping back to Sonnet for one cooldown turn. Prevents
-//   the Opus-feedback-loop bug where Opus keeps tagging 'heavy' because
-//   its own prose reads as emotionally loaded and never releases.
-//   Hard triggers (chapter 4, session wrap) bypass the cap — those are
-//   user-directed long-Opus states.
-const VALID_MODES = new Set(['sonnet', 'opus', 'auto']);
-const VALID_CONCRETE_MODELS = new Set(['sonnet', 'opus']);
-const AUTO_SOFT_OPUS_MAX = 2;  // cap of consecutive soft-triggered Opus turns
-
-// Derive the concrete model to call given the current mode + session state.
-// Returns { mode, model, reason, hard } — `reason` is null for plain
-// sonnet/opus modes, or a short string when auto escalates ("chapter-4",
-// "heavy-weight", etc.) so the UI can show "Auto → Opus (chapter-4)".
-// `hard` indicates whether the trigger bypasses the consecutive-Opus cap.
-// Exported for unit tests.
-//
-// SOFT-DEPRECATED v1.0.141 — PM ruling 2026-05-03 generalized the
-// v1.0.99 main DM decision: Opus default for ALL gameplay, including
-// prelude. resolveModel() no longer falls through to this picker by
-// default; new sessions go straight to Opus. The picker is still
-// reachable via legacy session state with model_preference='auto'
-// or an explicit override. Retained as dead code per "deprecate by
-// hiding, not deleting" — drop this function + the 'auto' branch in
-// resolveModel together when the auto pattern is confirmed retired.
-export function pickAutoModel(sessionCfg, runtime, playSessionLength) {
-  // HARD triggers — bypass the consecutive-Opus cap
-  if (runtime?.chapter >= 4) return { model: 'opus', reason: 'chapter-4', hard: true };
-  if (playSessionLength >= PLAY_SESSION_WRAP_MESSAGES) {
-    return { model: 'opus', reason: 'session-wrap', hard: true };
-  }
-
-  // Explicit AI downgrade
-  const lastWeight = sessionCfg?.lastSceneWeight;
-  if (lastWeight === 'light') return { model: 'sonnet', reason: 'light-weight', hard: false };
-
-  // SOFT Opus triggers (subject to consecutive-turn cap)
-  let softTrigger = null;
-  if (lastWeight === 'heavy') softTrigger = 'heavy-weight';
-  else if (typeof sessionCfg?.lastHpDelta === 'number' && sessionCfg.lastHpDelta <= -3) {
-    softTrigger = 'hp-drop';
-  }
-  else if (sessionCfg?.lastChapterPromiseTurn === true) softTrigger = 'chapter-promise';
-
-  if (softTrigger) {
-    // Cap check: if we've already run Opus on N consecutive soft-triggered
-    // turns, force Sonnet this turn for a cooldown. This breaks the
-    // feedback loop where Opus keeps tagging 'heavy' on its own output
-    // because the prose reads as loaded.
-    const consecutive = sessionCfg?.consecutiveSoftOpusTurns || 0;
-    if (consecutive >= AUTO_SOFT_OPUS_MAX) {
-      return { model: 'sonnet', reason: 'soft-opus-cap', hard: false };
-    }
-    return { model: 'opus', reason: softTrigger, hard: false };
-  }
-
-  return { model: 'sonnet', reason: null, hard: false };
-}
-
-// v1.0.141 — Default mode for new sessions is now 'opus' (previously 'auto').
-// PM call 2026-05-03: prelude gameplay generalizes the v1.0.99 main DM
-// session decision (Opus everywhere for live gameplay). Auto-picker logic
-// (pickAutoModel) is RETAINED as soft-deprecated dead code per
-// "deprecate by hiding, not deleting" — the resolver no longer falls
-// through to it for new sessions, but explicit 'auto' opt-ins (legacy
-// session state with model_preference='auto', or a body override) still
-// work. If the auto pattern is genuinely retired in a future cleanup,
-// drop pickAutoModel + the 'auto' branch here together.
-//
-// History: v1.0.66 added the auto picker; v1.0.75 made auto the default;
-// v1.0.141 demotes auto in favor of opus.
-function resolveModel(override, sessionCfg, runtime, playSessionLength) {
-  const stored = sessionCfg?.model_preference;
-  const mode = (override && VALID_MODES.has(override))
-    ? override
-    : (stored && VALID_MODES.has(stored)) ? stored : 'opus';
-  if (mode === 'sonnet') return { mode, model: 'sonnet', reason: null };
-  if (mode === 'opus') return { mode, model: 'opus', reason: null };
-  // 'auto' branch — retained for legacy session state but no longer
-  // the default. See pickAutoModel comment for retirement path.
-  const { model, reason } = pickAutoModel(sessionCfg, runtime, playSessionLength);
-  return { mode, model, reason };
-}
+// Every prelude turn runs on the local model's DM role (localModels.js).
+// The old per-turn model picker (the model/auto, with an the model cap) was
+// removed with the cloud-model path in the local-model-only job.
 
 // Race-aware starting HP for the current chapter. Mirrors
 // preludeService.computeStartingHP but takes the current chapter as input.
@@ -232,7 +134,7 @@ async function getSessionOrdinal(sessionId) {
 }
 
 /**
- * Start a new prelude session. Rejects if one is already active. Uses Opus
+ * Start a new prelude session. Rejects if one is already active. Uses the model
  * for the opening scene (better at establishing) and returns session data
  * ready for UI rendering.
  */
@@ -269,7 +171,7 @@ export async function startSession(characterId) {
   const runtime = { ...buildRuntime(character), themeDepartureMap: THEME_DEPARTURE_MAP };
 
   // v1.0.60 — canon facts block. Empty on first session, populated as
-  // Sonnet emits [CANON_FACT] markers across turns.
+  // the model emits [CANON_FACT] markers across turns.
   const canonBlock = await canonService.buildCanonFactsBlock(characterId);
 
   // v1.0.63 — emergence snapshot. Empty-but-structured on first session
@@ -289,9 +191,8 @@ export async function startSession(characterId) {
   const systemPrompt = createPreludeSystemPrompt(character, setup, arcPlan, runtime, canonBlock, emergenceBlock);
   const openingPrompt = createPreludeOpeningPrompt(character, setup, arcPlan, runtime);
 
-  // Opus for the opening — like the main DM's first session.
   // Phase 4a SC-4a.1 — wrap with the call logger.
-  const wrappedStart = await wrapClaudeCallWithId(
+  const wrappedStart = await wrapLlmCallWithId(
     {
       character_id: character?.id,
       campaign_id: character?.campaign_id,
@@ -302,7 +203,7 @@ export async function startSession(characterId) {
       user_message: openingPrompt,
       metadata: { initialChapter: runtime.chapter, initialAge: runtime.age }
     },
-    (chatOptions) => claudeStartSession(systemPrompt, openingPrompt, 'opus', chatOptions)
+    (chatOptions) => llmStartSession(systemPrompt, openingPrompt, 'dm', chatOptions)
   );
   const result = wrappedStart.result;
 
@@ -329,7 +230,7 @@ export async function startSession(characterId) {
       title,
       setup?.home_setting || '',
       (setup?.tone_tags || []).join(', '),
-      'opus',
+      modelFor('dm'),
       JSON.stringify(result.messages),
       JSON.stringify(sessionConfig),
       1,
@@ -361,14 +262,7 @@ export async function startSession(characterId) {
     opening: result.response,
     messages: result.messages,
     runtime: { ...buildRuntime(refreshedCharacter), sessionNumber },
-    // v1.0.75 — mode = 'auto' by default for a fresh session (was 'sonnet').
-    // The opening narrative was already generated with Opus (hardcoded above
-    // like the main DM's first session); `model` here is the mode going
-    // forward. Auto escalates to Opus on heavy beats and stays on Sonnet
-    // for everything else.
-    model: 'auto',
-    resolvedModel: 'sonnet',
-    resolveReason: null
+    model: modelFor('dm')
   };
 }
 
@@ -399,7 +293,7 @@ function safeJsonParse(raw, fallback) {
 
 /**
  * Resume an existing prelude session. If a cliffhanger is stored on the
- * session config, the Sonnet call prepends a resume prompt so the model
+ * session config, the model call prepends a resume prompt so the model
  * re-orients.
  *
  * For Phase 2b-i this is mostly a read — we just hand back the message
@@ -428,17 +322,15 @@ export async function getResumePayload(sessionId) {
     runtime: { ...buildRuntime(character), sessionNumber },
     lastCliffhanger: cfg.lastCliffhanger || null,
     lastSessionRecap: cfg.lastSessionRecap || null,
-    model: VALID_MODES.has(cfg.model_preference) ? cfg.model_preference : 'auto'
+    model: modelFor('dm')
   };
 }
 
 /**
  * Send a player action and get the AI's response. Processes markers on the
- * AI response and persists everything. Accepts an optional `modelOverride`
- * ('sonnet' | 'opus') that becomes the new stored preference for this and
- * future turns until the player toggles again.
+ * AI response and persists everything.
  */
-export async function sendMessage(sessionId, action, modelOverride = null) {
+export async function sendMessage(sessionId, action) {
   const session = await dbGet(
     `SELECT * FROM dm_sessions WHERE id = ? AND session_type = 'prelude_arc'`,
     [sessionId]
@@ -463,7 +355,7 @@ export async function sendMessage(sessionId, action, modelOverride = null) {
   const runtime = { ...buildRuntime(character, playSessionLength), themeDepartureMap: THEME_DEPARTURE_MAP };
 
   // v1.0.60 — fetch the current canon-facts block. Injected into the
-  // system prompt as ground truth so Sonnet checks against named details
+  // system prompt as ground truth so the model checks against named details
   // (ages, relationships, traits, past events) before generating.
   // Wrapped: if the ledger DB query fails, we'd rather run the turn without
   // ground-truth than fail the player's whole message. Drift risk is lower
@@ -571,25 +463,11 @@ If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker
     ? [...nonSystemMessages, ...injectedMessages]
     : nonSystemMessages;
 
-  // Resolve which model to call for THIS turn. If the player passed an
-  // override (toggle flip), persist it as the new mode preference. The
-  // resolver inspects runtime + last-turn markers when mode == 'auto'.
-  if (modelOverride && VALID_MODES.has(modelOverride) && modelOverride !== sessionCfg.model_preference) {
-    sessionCfg.model_preference = modelOverride;
-    // Write early so the preference survives a failed API call.
-    await dbRun(
-      `UPDATE dm_sessions SET session_config = ? WHERE id = ?`,
-      [JSON.stringify(sessionCfg), sessionId]
-    );
-  }
-  const resolved = resolveModel(modelOverride, sessionCfg, runtime, playSessionLength);
-  const modelChoice = resolved.model;
-
   // Phase 4a SC-4a.1 — wrap with the call logger. Prelude turns capture
   // the same fields as gameplay_turn but with prelude-specific tags.
   // Turn number derives from message count (rough; refine in Phase 4b).
   const __preludeTurnNumber = Math.ceil(augmentedMessages.length / 2);
-  const __preludeWrapped = await wrapClaudeCallWithId(
+  const __preludeWrapped = await wrapLlmCallWithId(
     {
       character_id: character?.id,
       campaign_id: character?.campaign_id,
@@ -600,10 +478,10 @@ If YES to any you haven't yet logged, emit the corresponding [CANON_FACT] marker
       system_prompt: systemPrompt,
       user_message: action,
       conversation_history: augmentedMessages.filter(m => m.role !== 'system'),
-      metadata: { model_choice: modelChoice, chapter: runtime?.chapter, age: runtime?.age }
+      metadata: { chapter: runtime?.chapter, age: runtime?.age }
     },
-    (chatOptions) => claudeContinueSession(
-      systemPrompt, augmentedMessages, action, modelChoice,
+    (chatOptions) => llmContinueSession(
+      systemPrompt, augmentedMessages, action, 'dm',
       { ...chatOptions, sessionId }
     )
   );
@@ -647,7 +525,7 @@ INSTEAD, describe:
 Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowledgment — just the clean response the player should see.`;
     // Phase 4a SC-4a.1 — log the retry separately with a distinct
     // call_purpose so signals can count rule-2 retries cleanly.
-    const __retryWrapped = await wrapClaudeCallWithId(
+    const __retryWrapped = await wrapLlmCallWithId(
       {
         character_id: character?.id,
         campaign_id: character?.campaign_id,
@@ -660,8 +538,8 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
         conversation_history: augmentedMessages.filter(m => m.role !== 'system'),
         metadata: { violating_matches: violation.matches.slice(0, 3) }
       },
-      (chatOptions) => claudeContinueSession(
-        systemPrompt, augmentedMessages, correctionAction, modelChoice,
+      (chatOptions) => llmContinueSession(
+        systemPrompt, augmentedMessages, correctionAction, 'dm',
         { ...chatOptions, sessionId }
       )
     );
@@ -803,32 +681,14 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
     nextCfg.pendingViolationNote = buildViolationCorrectionNote(violation.matches);
   }
 
-  // v1.0.62 — stash this turn's signals for the auto-mode resolver on the
-  // NEXT turn. lastSceneWeight is null → absent when the AI didn't tag.
-  // lastHpDelta is the most negative delta (worst hit) from HP_CHANGE markers.
-  // lastChapterPromiseTurn reflects whether this turn fired the promise — the
-  // resolution happens over the next 2-3 scenes so we leave a one-turn flag.
-  if (markerResults.nextSceneWeight) {
-    nextCfg.lastSceneWeight = markerResults.nextSceneWeight;
-  } else {
-    delete nextCfg.lastSceneWeight;
-  }
-  if (typeof markerResults.hpDelta === 'number') {
-    nextCfg.lastHpDelta = markerResults.hpDelta;
-  } else {
-    delete nextCfg.lastHpDelta;
-  }
-  nextCfg.lastChapterPromiseTurn = !!markerResults.chapterPromise;
-
-  // v1.0.66 — track consecutive soft-triggered Opus turns so the cap in
-  // pickAutoModel() can force a Sonnet cooldown turn. Resets on any Sonnet
-  // turn OR on a hard-triggered Opus turn (chapter-4 / session-wrap — those
-  // are user-directed long-Opus states, not candidates for cooldown).
-  if (resolved.mode === 'auto' && resolved.model === 'opus' && resolved.reason !== 'chapter-4' && resolved.reason !== 'session-wrap') {
-    nextCfg.consecutiveSoftOpusTurns = (nextCfg.consecutiveSoftOpusTurns || 0) + 1;
-  } else {
-    nextCfg.consecutiveSoftOpusTurns = 0;
-  }
+  // The old auto-model signals (lastSceneWeight, lastHpDelta,
+  // lastChapterPromiseTurn, consecutiveSoftOpusTurns) fed only the removed
+  // model picker; clear any left on older sessions.
+  delete nextCfg.lastSceneWeight;
+  delete nextCfg.lastHpDelta;
+  delete nextCfg.lastChapterPromiseTurn;
+  delete nextCfg.consecutiveSoftOpusTurns;
+  delete nextCfg.model_preference;
 
   await dbRun(
     `UPDATE dm_sessions SET session_config = ? WHERE id = ?`,
@@ -837,15 +697,15 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
 
   // Handle session-ending cliffhangers specially — save the cliffhanger on
   // session_config, generate a narrative recap for the player, and flip
-  // status to 'paused'. Recap is a 1-2 paragraph Sonnet-written summary
+  // status to 'paused'. Recap is a 1-2 paragraph the model-written summary
   // that appears in the paused banner so the player has a memory aid
   // between play-sessions.
   if (markerResults.cliffhanger) {
     const sessionConfig = safeJsonParse(session.session_config, {});
     sessionConfig.lastCliffhanger = markerResults.cliffhanger;
 
-    // Build a recap from the current session's transcript. Uses Sonnet
-    // (cheaper/faster than Opus for summarization) with a tuned prompt.
+    // Build a recap from the current session's transcript. Uses the model
+    // (cheaper/faster than the model for summarization) with a tuned prompt.
     // Also pass this session's accepted emergences (stats/skills accepted
     // mid-session) so the recap can mention them naturally.
     let recap = null;
@@ -926,12 +786,7 @@ Produce ONLY the rewritten response. No apology, no meta-commentary, no acknowle
     markers: markerResults,
     runtime: { ...buildRuntime(updatedCharacter), sessionNumber },
     sessionEnded: !!markerResults.cliffhanger,
-    // mode = what the player has selected ('auto' | 'sonnet' | 'opus').
-    // resolvedModel = what we actually called ('sonnet' | 'opus').
-    // resolveReason = why auto picked what it picked (or null).
-    model: resolved.mode,
-    resolvedModel: resolved.model,
-    resolveReason: resolved.reason
+    model: modelFor('dm')
   };
 }
 
@@ -1249,7 +1104,7 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
   }
 
   // v1.0.60 — canon facts. Retire first, then record new ones. Order
-  // matters: if Sonnet retires "age 9" in the same response where it
+  // matters: if the model retires "age 9" in the same response where it
   // records "age 12", we want the retire to run first so the new one
   // lands cleanly (and so a same-turn CANON_FACT that happens to match
   // the retire pattern doesn't get immediately retired).
@@ -1374,7 +1229,7 @@ async function processMarkersForSession(characterId, sessionId, aiResponse) {
 
 /**
  * Generate a 1-2 paragraph narrative recap of the just-ended play-session.
- * Sonnet-powered; uses the session's message history. Called at session
+ * the model-powered; uses the session's message history. Called at session
  * pause (cliffhanger fire) so the player has a memory aid when they come
  * back for the next session — "what happened last time."
  *
@@ -1393,7 +1248,7 @@ async function generateSessionRecap(character, messages, opts = {}) {
     .join('\n\n');
 
   // Phase 3 — if the player accepted any emergences this session, let
-  // Sonnet weave them in naturally. "You found you had a knack for X."
+  // the model weave them in naturally. "You found you had a knack for X."
   const emergenceLines = acceptedEmergences
     .filter(e => e.kind === 'stat' || e.kind === 'skill')
     .map(e => {
@@ -1430,7 +1285,7 @@ Output ONLY the recap prose. No preamble, no signoff.`;
 
   const raw = await loggedChat(
     { call_purpose: 'prelude_chapter_recap', prompt_builder: 'preludeSessionService' },
-    systemPrompt, [{ role: 'user', content: userPrompt }], 3, 'sonnet', 800, true
+    systemPrompt, [{ role: 'user', content: userPrompt }], 3, 'summary', 800, true
   );
   return String(raw || '').trim();
 }

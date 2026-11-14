@@ -2,11 +2,11 @@
  * Prelude Phase 2a — arc plan service unit tests.
  *
  * Tests the pure, non-network pieces of preludeArcService:
- *   - JSON extraction from Opus-style responses (with/without fences,
+ *   - JSON extraction from model-style responses (with/without fences,
  *     with/without surrounding prose)
  *   - Shape validation — rejects missing required fields
  *
- * The full end-to-end (DB + Opus) is covered by manual smoke-test because
+ * The full end-to-end (DB + model) is covered by manual smoke-test because
  * it requires an API key and spends tokens.
  */
 

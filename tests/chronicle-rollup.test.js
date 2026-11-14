@@ -72,7 +72,7 @@ async function makeSession(label, startDay) {
   const r = await dbRun(
     `INSERT INTO dm_sessions
        (character_id, title, status, messages, model, game_start_day, game_start_year)
-     VALUES (?, ?, 'active', ?, 'claude-opus-4-7', ?, 1492)`,
+     VALUES (?, ?, 'active', ?, 'TEST_model', ?, 1492)`,
     [
       CHARACTER_ID,
       `TEST_ROLLUP ${label}`,

@@ -4,7 +4,7 @@
  * `client/src/data/preludeSetup.js` (`SIBLING_OPTIONS`, `AUTHORITY_FIGURES`).
  *
  * Mirrored here so the server can render setup answers into prompt prose
- * without importing client code. Keep in sync — drift means Opus / Sonnet
+ * without importing client code. Keep in sync — drift means the model / the model
  * see different labels than the player picked, which weakens the
  * "anchored to setup" promise of the arc plan.
  *
