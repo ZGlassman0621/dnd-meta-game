@@ -23,6 +23,7 @@
 12. Multi-Campaign Timeline
 13. Implementation Checklist
 14. Open Design Questions
+15. Design Debt and Re-grounding
 
 ---
 
@@ -893,6 +894,21 @@ These questions don't need answers now but should be resolved before implementat
 9. **Death and resurrection at mythic tier:** How do we maintain stakes when characters can self-resurrect? What threats are genuinely dangerous to Tier 4-5 characters?
 
 10. **Player buy-in:** When does the conversation about mythic progression happen with the player? After Campaign I ends? During Campaign I if multi-campaign arc is planned?
+
+---
+
+## 15. DESIGN DEBT AND RE-GROUNDING (added 2026-11-14)
+
+*Folded in from `Claude PM Review Docs/MYTHIC_REVIEW.md` (merge-and-archive job). That review is not archived and was not edited. Mythic is post-MVP (Zach, 2026-11-11). Nothing above this section was changed.*
+
+**Tier 5 flags (carried from the review, severity as the review marked it).**
+
+- 🔴 **Lich "Final Equation" (Tier 5) is broken.** The ability: "1/year, you can either permanently resurrect someone (true reversal of death, not a copy) or permanently kill something (no resurrection possible by any means)." Permanent, unrevokable resurrection bypasses the entire stakes framework, and a permanent kill exits a creature from the universe with no recovery path; the once-a-year limiter does not address the consequence space. The flavor (a Lich understands death as an equation) is good; the mechanic is too unbounded. **Needs redesign before any Lich gameplay is possible.**
+- 🔴 **Trickster "Narrative Authority" (Tier 5) is also too unbounded.** "1/day, declare that something is true, and it becomes true. Limitations: must be theoretically possible, can be resisted by Tier 5 beings, universe will impose ironic consequences for excessive use." "Ironic consequences" is game-master art, not a mechanic; with an AI as the game master it becomes "the player can bend reality once per day with no real check." Same shape of problem as Final Equation: **needs structural bounds.**
+- 🟡 **Tier 5 abilities are systemically over-scoped.** Hierophant (quasi-deity, immortality, rewrite history once per year), Lich (Final Equation), Demon (all physical stats become 30 while raging, dominion over an Abyss layer), Trickster (Narrative Authority, immune to fate, cannot be killed), Devil (rule a portion of the Nine Hells, bind deities to contracts) and Angel (parallel patterns based on the trajectory): every Tier 5 character is a quasi-deity with a "cannot be permanently killed" capstone. If several party members reach Tier 5 (the Multi-Campaign Timeline anticipates this by Campaign IV), the world has a small pantheon of effectively-deities adventuring together. The review's instruction: bound the power, preserve the flavor. This connects to Open Question #9 in this document.
+- Also flagged in the same review but not carried here (see the file): the Legend path's Level 24 to Level 40 progression with no stat cap breaks 5e bounded accuracy.
+
+**Campaign framing needs re-grounding.** This guide is written around the Order of Dawn's Light campaign: its characters (Riv, Jakob, Garrick, The Master, Silas, Thane), a Lathander-centred piety section and a campaign-specific Multi-Campaign Timeline. That framing predates the MVP campaign, Embervale. The review's longer-term note is that the document should split into a system spec and a campaign application ("not a now-task"). Re-ground it before any Mythic work starts.
 
 ---
 
