@@ -170,11 +170,11 @@ Features at L6/L11/L15. Keepers who skip subclass gain Polymath instead.
 ### Keeper — Integrated
 - [x] DB migration (020) for keeper_texts, keeper_recitations, keeper_genre_domain, keeper_specialization columns
 - [x] Server character routes (POST/PUT/level-up) handle Keeper fields
-- [x] Character creation wizard: text + recitation selection in Step 2, subclass note in Step 1
+- [ ] Character creation: the old wizard's text + recitation selection is gone with that wizard. The six-stage creator (`client/src/components/creator-next/`) has no Keeper text or recitation picker; only `LevelUpPage.jsx` offers those picks (checked 2026-11-13)
 - [x] Level-up flow: Genre Domain at L3, Subclass/Polymath at L6, text/recitation selection at each level
 - [x] AI DM prompt (dmPromptBuilder.js): Keeper abilities section with rules summary
 - [x] AI DM Mode prompt (dmModePromptBuilder.js): Keeper abilities block in character sheets
-- [x] levelProgression.js: CLASS_FEATURES, SUBCLASS_LEVELS (6), HIT_DICE (8), MULTICLASS_REQUIREMENTS (CHA 13 + INT 13), CASTER_TYPE (none), KEEPER_PROGRESSION
+- [x] levelProgression.js: CLASS_FEATURES, SUBCLASS_LEVELS (6), HIT_DICE (8), CASTER_TYPE (`'third'`), KEEPER_PROGRESSION. There are no multiclass prerequisites: they were removed for every class on 2026-11-08 (Zach), and `levelProgression.js` has no `MULTICLASS_REQUIREMENTS` table
 
 ### Keeper — Balance & Subclass Enhancement (Done)
 - [x] Keeper's Study (L2): PB/LR bonus action to mark creature, extra 1d4/1d6/1d8 damage + learn one fact

@@ -5,7 +5,7 @@
 **Roles:** Muse is the project manager. Claude Code builds. Zach decides and gates. The PM guide (`pm-guide.md`, in Muse's workspace) states the overarching goals, systems, and MVP — this document states how a single job moves between PM and builder.
 
 **Where things live:**
-- Repo: `~/Documents/DnD Meta Game/` on the Mac, live branch `phase-4-hybrid-combat` (main is stale since June 2026 — never use it). Claude Code works on the PC copy of the repo; the two copies stay in sync via GitHub (Zach keeps both updated).
+- Repo: the PC copy is the live one (`E:\DnD Meta Game\dnd-meta-game`), live branch `phase-4-hybrid-combat` (main is stale since June 2026 — never use it). Staging is PC-only (Zach, 2026-11-12: no longer staging on the Mac); the Mac copy is backup/sync only. The two copies stay in sync via GitHub (Zach keeps both updated).
 - Briefs: `docs/pm/<job-slug>/BRIEF.md` (PM writes). Reports: all in one folder, `docs/pm/reports/<job-slug>-REPORT.md` (Claude Code writes), so Zach knows exactly which file to carry back (Zach, 2026-11-12).
 - This handoff doc: `docs/pm/HANDOFF.md` in the repo (copy in Muse's workspace as `claude-code-handoff.md`).
 - The PM's live state note stays in Muse's workspace (`current-build-state.md`). Each brief carries the settled decisions its job needs — do not go hunting for them elsewhere.
@@ -18,9 +18,9 @@
 2. **Claude Code pulls the latest on the live branch first** (`git pull origin phase-4-hybrid-combat`), so it builds on the newest code. Then it reads the brief + this handoff doc, then the files the brief names. If the brief is unclear or contradicts the live build, stop and say so in the report — do not guess past it.
 3. **Claude Code implements** on the live branch, in small targeted edits (see §4).
 4. **Claude Code runs the full test suite itself** (`npm test` in the repo on the PC) and iterates until it is green — or until it hits a genuine blocker, which it reports instead of working around.
-5. **Claude Code writes the report** (`docs/pm/reports/<job-slug>-REPORT.md`) in the format in §3, and pushes the work to GitHub so it reaches the Mac (Zach keeps the Mac copy synced).
+5. **Claude Code writes the report** (`docs/pm/reports/<job-slug>-REPORT.md`) in the format in §3, and pushes the work to GitHub.
 6. **Zach carries the report back to Muse.** The PM reads it, verifies it against the brief, and tells Zach what's next and when to run the gate.
-7. **Zach runs the gate** (his full `npm test` on the Mac). Green closes the job. Red goes back to step 1 with a fix brief.
+7. **Zach runs the gate** (his full `npm test` on the PC, plus :5173 checks). Green closes the job. Red goes back to step 1 with a fix brief.
 
 **One job at a time.** One migration sequence, one serial gate, no parallel edits to the same file. A second job starts only when the first is built + pushed, or the PM explicitly says otherwise.
 
@@ -65,6 +65,7 @@ These are lessons paid for in failed gates. Follow them on every job.
 - **Test raw INSERTs must list EVERY NOT NULL column with no default.** The insert helper fills them automatically; hand-written SQL does not.
 - **Test asserts on system-rolled outcomes must model EVERY branch** — crits double damage dice; a companion opportunity attack can kill; death saves nat-1 = two failure pips, nat-20 = revive; HP pools floor at 0. Enumerate the outcome space before asserting.
 - **Never invent data.** No invented spell numbers, no invented lists, no invented prices. A gap is stated plainly as a gap, with what would resolve it. The 2024 book wins on conflict.
+- **Rules provenance — homebrew stays separate from the 2024 rules.** Every rule you implement carries its source: the 2024 book, another named book, or homebrew (registry ID + source). Book tables and validators stay pure 2024 — never edit a homebrew effect into them. A homebrew rule lives in its own marked module/section (`// HOMEBREW R-0X — <name>, <source>`), wraps or branches around the book behavior, and rides its own feature flag where it changes book behavior, so it can be listed, toggled, and audited separately. If a brief asks for a rule and doesn't say which source it is, stop and ask in the report — never guess. Homebrew overrides the book only where a registry entry says so, never silently.
 - **Small targeted edits only.** Never a full-file rewrite. One edit, verify, next edit.
 - **Never build on assumptions.** If the brief doesn't settle it and the live build doesn't answer it, stop and put it in the report as a blocking question. A guess that has to be fixed later is more work than asking.
 - **Fix-as-you-find-it:** when a fix reveals the same defect in a sibling, fix it in the same job and report it.
@@ -148,5 +149,5 @@ Per-suite counts for touched suites. Exact failures, if any.>
 
 - Claude Code is installed on Zach's PC. Zach couriers briefs from Muse to Claude Code and carries Claude Code's reports back to Muse.
 - Briefs live in the repo under `docs/pm/<job-slug>/`. Reports live together in `docs/pm/reports/`, one `<job-slug>-REPORT.md` per job; Claude Code writes it there and Zach carries it back.
-- Repo sync CONFIRMED 2026-11-10 (Zach): the project lives on GitHub; Zach keeps the Mac and PC copies in sync. Claude Code pushes to GitHub; Zach pulls to the Mac for the gate test.
+- Repo sync CONFIRMED 2026-11-10 (Zach): the project lives on GitHub; Zach keeps the Mac and PC copies in sync. Claude Code pushes to GitHub; Zach gates on the PC. The Mac copy is backup only (Zach, 2026-11-12: no longer staging on the Mac).
 - Git remote (recorded 2026-11-11, from Zach): `https://github.com/ZGlassman0621/dnd-meta-game.git`. A pull needs no URL — the clone stores it under `origin`. A FRESH clone: `git clone https://github.com/ZGlassman0621/dnd-meta-game.git`, then `git checkout phase-4-hybrid-combat` (the live branch — do not stay on main, stale since June 2026).

@@ -72,7 +72,7 @@ NPC voice / personality / mannerism / motivation / appearance / age description 
 
 A companion does not have to be on-screen at all times. The Activities system lets the player send an active companion away on an independent task: `training`, `scouting`, `personal_quest`, `guarding`, `researching`, `shopping`, `socializing`, or `resting`. The companion's status flips to `away`, an `companion_activities` row tracks the assignment, and the world tick checks for completion based on game-day elapsed.
 
-When the activity resolves, Opus generates a structured outcome — success level, story summary, reunion narrative, mood change, loyalty change, XP, items found, injuries, story development. Personality is fed in: a cautious companion may succeed at scouting but fumble at socializing; a brave one may take risks during training. A meaningful reunion narrative is queued for the next session, so the companion comes back with a story.
+When the activity resolves, the AI generates a structured outcome (today's code uses Claude when an API key is set and a non-AI fallback otherwise, in `companionActivityService.js`; the decided model is gemma4:12b via Ollama, and the code hasn't moved yet) — success level, story summary, reunion narrative, mood change, loyalty change, XP, items found, injuries, story development. Personality is fed in: a cautious companion may succeed at scouting but fumble at socializing; a brave one may take risks during training. A meaningful reunion narrative is queued for the next session, so the companion comes back with a story.
 
 The player can `recall` an activity early (partial outcomes scaled by completion ratio) or `cancel` it (companion returns clean, no outcomes). Activities below 20% completion auto-cancel rather than partially resolve.
 
@@ -82,7 +82,9 @@ This is the foundational hook for **off-screen companion plotlines**: the person
 
 ## Companion choice in synergies and tactics
 
-Synergies (Theme × Theme combos) and Team Tactics fire automatically when narrative conditions are met — both characters attacking the same target, both succeeding on the same skill check, both engaging in the same conversation. Crucially, a companion *chooses* whether to engage in the qualifying action based on their personality:
+> **Status (2026-11-13): unbuilt as an AI behavior.** Party Synergies' AI integration doesn't exist. Team tactics are seeded into the database (`progressionSeedService.js`), but nothing puts them, or Theme × Theme synergies, into the DM prompt, so nothing below "fires" in play today. The one synergy the DM prompt does show is the separate Subclass × Theme resonant synergy. This section is the design intent. Party Synergies is a post-MVP system (`PARTY_SYNERGIES.md`).
+
+Synergies (Theme × Theme combos) and Team Tactics are designed to fire automatically when narrative conditions are met — both characters attacking the same target, both succeeding on the same skill check, both engaging in the same conversation. Crucially, a companion *chooses* whether to engage in the qualifying action based on their personality:
 
 - A loyal cleric companion with the Acolyte theme will reliably set up Soldier-Cleric coordinated attacks
 - A reckless barbarian companion with the Soldier theme might never play into flanking synergies because they prefer to charge alone
@@ -120,7 +122,9 @@ The open design question (flagged in AI_NARRATIVE_PERSISTENCE.md) is what happen
 
 ## Garrison & base roles
 
-Once a party has a base (see CLAUDE.md "Party bases / fortresses"), companions can be assigned to officer roles in the `base_officers` table. A companion stationed at a base contributes to the base's `defense_rating` based on their level, class, and assigned role. They're not "with the party" while assigned, but they're not on an Activity either — they're stationed, available for raid defense, contributing income or upkeep relief, and visible on the base management screen.
+> **Post-MVP: part of the fortress/domain system** (Zach, 2026-11-11). The code below exists, but bases and garrisons aren't in MVP scope.
+
+Once a party has a base (`partyBaseService.js`), companions can be assigned to officer roles in the `base_officers` table. A companion stationed at a base contributes to the base's `defense_rating` based on their level, class, and assigned role. They're not "with the party" while assigned, but they're not on an Activity either — they're stationed, available for raid defense, contributing income or upkeep relief, and visible on the base management screen.
 
 This is the third lifecycle channel for a companion (active / away / stationed) and lets the player keep recruited NPCs alive in the world without dragging them through every adventure.
 
@@ -154,8 +158,8 @@ The `[RECIPE_GIFT]` marker fires when a companion (or NPC) gifts the player a re
 Implementation lives across:
 
 - `server/services/companionBackstoryService.js` — backstory CRUD, loyalty, secrets, threads, mood
-- `server/services/companionBackstoryGenerator.js` — Opus generation at recruit time
-- `server/services/companionActivityService.js` — Activities lifecycle + Opus outcome generation
+- `server/services/companionBackstoryGenerator.js` — AI generation at recruit time (Claude when a key is set, Ollama otherwise)
+- `server/services/companionActivityService.js` — Activities lifecycle + AI outcome generation (Claude when a key is set, a non-AI fallback otherwise)
 - `server/services/companionTriggerChecker.js` — event-driven thread activation
 - `server/services/progressionCompanionService.js` — auto theme + ancestry feat selection
 - `server/migrations/001` (companions, companion_backstories), `004` (mood), `006` (activities), `028` (theme + ancestry feat), `029` (rest + spell slots), `030` (combat safety), `031` (multiclass), `032` (party inventory merge)

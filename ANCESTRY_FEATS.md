@@ -1,6 +1,6 @@
 # Ancestry Feats Design
 
-Status: 195 feats implemented across 13 lists (15 per list × 13). The 4th L13 option per list ("Path Less Walked" cross-pick, 13 feats) is documented in this doc but **deferred for Phase 7** — revisit during playing-mode evaluation, no commitment in either direction (decision logged 2026-04-29). Balance pass applied to the 195 implemented feats. Pending: cross-system integration check, AI memory architecture decisions.
+Status (checked against `server/data/ancestryFeats.js`, 2026-11-13): **210 feats implemented across 14 lists**, 15 per list (5 tiers × 3 choices). The 14th list, **Gnome**, is in the code but has no section in this document yet; the code is its only source. The 4th L13 option per list ("Path Less Walked" cross-pick) is still **not implemented**: no list has a 4th choice, and nothing in the code names it. Its design text below stays as a parked idea (deferred 2026-04-29). Wiring in play: creator pick at L1, tier picks at L3/7/13/18, shown on the character sheet and in the DM prompt.
 
 ## System Overview
 
@@ -25,7 +25,7 @@ Ancestry Feats are a progression layer parallel to class and theme. Each charact
 - 10 major races + Drow as a distinct list + Aasimar's three paths each as a distinct progression tree = **13 lists total**
 - 5 tiers × 3 feats baseline = **15 feats per list × 13 lists = 195 implemented feats**
 - A 4th L13 option per list ("Path Less Walked" cross-pick) is documented for each race but **deferred for Phase 7** — design content remains in this doc as a parked idea, not currently implemented in code (decision logged 2026-04-29).
-- Total currently implemented: **195 ancestry feats**. With the deferred Path Less Walked cross-pick, the eventual cap would be 208.
+- Total currently implemented: **210 ancestry feats** in 14 lists. The 13 lists above, plus Gnome, which has been added in code but not documented here. See the status line at the top.
 
 **Design principles:**
 1. **Complement, don't duplicate.** Feats expand on existing racial traits; they don't repeat them.

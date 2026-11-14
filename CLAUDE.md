@@ -1,10 +1,12 @@
 # CLAUDE.md — Project Instructions
 
-D&D Meta Game: AI-powered solo D&D 5e campaign management system.
+D&D Meta Game: a solo D&D 2024 campaign game with an AI Dungeon Master.
 
-**This file is a present-tense snapshot, not a history.** Version-by-version detail belongs in `CHANGELOG.md`. Update this file when architecture changes, not when a bug is fixed.
+**This file is a present-tense snapshot, not a history.** What each job changed belongs in its report under `docs/pm/reports/`. Update this file when architecture changes, not when a bug is fixed.
 
-> **Status: mid-refactor.** The project is executing a "scale back to scale up" plan — cut to a stable core, harden the data layer, then reintroduce mechanics deliberately. Phases 1–4 have landed, then the MVP pass changed the posture: **progression on, simulation off**. Campaign memory is compressed rather than truncated. Several subsystems are switched off. See **Feature flags** below before assuming one is live.
+> **Status: building the MVP under a PM workflow.** The product is a solo D&D 2024 "forever game": one human player character, with the DM, NPCs, companions and enemies all played by AI, in a persistent Forgotten Realms world. The MVP is a self-contained one-shot test campaign (Embervale) covering core play: create, play, leave, return, loot, XP, level, quests, companions, roleplay, combat, story, memory. Prologue (Prelude), full downtime, fortress/domain, Mythic and legacy are **post-MVP** (Zach, 2026-11-11), even where code for them exists. The posture is still **progression on, simulation off**, and several subsystems are switched off; see **Feature flags** below before assuming one is live.
+>
+> **How work arrives:** read `docs/pm/HANDOFF.md` before every job. Muse (the PM) writes each brief at `docs/pm/<job-slug>/BRIEF.md`; Claude Code builds on the PC copy of the repo (`E:\DnD Meta Game\dnd-meta-game`, branch `phase-4-hybrid-combat`) and writes the report at `docs/pm/reports/<job-slug>-REPORT.md`. Zach gates with `npm test` on the PC. Old plans, audits and the v1-era `CHANGELOG.md` / `DECISION_LOG.md` are in `archive/`, which is history, not guidance.
 
 ---
 
@@ -13,7 +15,7 @@ D&D Meta Game: AI-powered solo D&D 5e campaign management system.
 - **Frontend**: React 18 + Vite (SPA at `client/`)
 - **Backend**: Node.js + Express, ES modules (`server/`)
 - **Database**: SQLite via `@libsql/client` — Turso cloud when `TURSO_DATABASE_URL` is set, local `file:local.db` otherwise
-- **AI**: Claude (Opus for gameplay) with an Ollama fallback path
+- **AI**: the decided DM model is **gemma4:12b, run offline through Ollama on Zach's PC** (Zach, 2026-11-10; its acceptance check is a secret-holding leak test, and per-role models are still open). **The code has not caught up yet:** it prefers Claude when `ANTHROPIC_API_KEY` is set and falls back to Ollama otherwise. See **Which model runs** below.
 
 Conventions: ES modules only, no TypeScript. React function components with hooks, inline styles, no CSS framework. Parameterized `?` SQL. JSON stored in TEXT columns. REST routes at `/api/<resource>`.
 
@@ -48,9 +50,9 @@ The suite runs against a throwaway SQLite file — **never** the live database. 
 - Build the client when you touch `client/`.
 - `prose-quality.test.js` is excluded by default — it makes **billed** Anthropic API calls. Opt in with `TEST_INCLUDE_LLM=1`.
 
-**Known failing (pre-existing, not yours):** `integration.test.js` — 3 assertions expecting `410 Gone` from retired give-item / take-item / companion-merchant endpoints that now `404`. It is also intermittently flaky under the shared test DB, as is `turn-e2e.test.js`.
+**Known failing: none.** The full suite ran 247/247 files green on the PC on 2026-11-12 (`docs/pm/reports/windows-test-portability-REPORT.md`, `docs/pm/reports/creation-solidification-REPORT.md`). On Windows the runner names any file it counted as `pass*` or retried once after libSQL's native `0xC0000005` crash; see `server/scripts/run-tests.js`. macOS/Linux never take those branches.
 
-**"Needs a running dev server" was wrong** and cost real time. Neither `campaign-import.test.js` nor `integration.test.js` talks to the dev server — each builds its own Express app on port 3001. `campaign-import` failed because that app never mounted the middleware populating `req.user`, so `getAllCampaigns` correctly returned `[]`; it is green as of v1.0.173. `world-event-npcs.test.js` was fixed earlier and passes.
+**No test needs a running dev server.** `campaign-import.test.js` and `integration.test.js` each build their own Express app on port 3001.
 
 **Testing anything that calls an LLM** — use `tests/helpers/llmHarness.js`. `installLlmStub()` swaps `globalThis.fetch`, so it intercepts every `api.anthropic.com` request without touching production code, and the real `claude.js` still runs (cache-tier splitting, retry triage, error tagging). `startTurnServer()` mounts the DM router on an ephemeral port — never import `server/index.js` in a test, it calls `app.listen(3000)` at import time. Cost safety is structural: no request escapes, and in the default strict mode an unscripted call throws instead of reaching the network. Don't script `429`/`529`/`503`/`500` — `claude.js` retries those with real backoff, up to ~60s; use `401` for the error path.
 
@@ -63,12 +65,12 @@ process.env.FF_LIVING_WORLD_TICK = 'true'   // works even after imports
 
 Never destructure a flag into a module-level constant.
 
-### 5. One version bump per phase
-Version + `CHANGELOG.md` entry at each atomic phase boundary, not per edit. Bump `package.json` and `client/package.json` together.
+### 5. One version bump per job
+Bump `package.json` and `client/package.json` together, once per job that changes the app, not per edit. The job's report in `docs/pm/reports/` is the record of what changed. `CHANGELOG.md` was retired to `archive/` on 2026-11-13 (its last entry is 1.0.0.194); don't revive it.
 
 ### 6. Don't
 - No TypeScript, no CSS framework.
-- Don't split `DMSession.jsx`, `CharacterSheet.jsx`, or `CharacterCreationWizard.jsx` unless asked.
+- Don't split `DMSession.jsx` or `CharacterSheet.jsx` unless asked. (The creator is `client/src/components/creator-next/`, six stage components plus `CreatorNextShell.jsx`; the old `CharacterCreationWizard.jsx` is gone.)
 - Don't write ad-hoc JSON parsers — use `server/utils/llmJson.js` (LLM output) and `server/utils/safeParse.js` (DB TEXT columns).
 - Don't modify the primacy/recency prompt structure without understanding it (critical rules appear at both the top and bottom of the DM prompt on purpose).
 - Don't add new root-level documentation files unless asked.
@@ -85,8 +87,9 @@ All defaults live in `server/config/featureFlags.js`.
 | `NPC_AGING` | off | NPC absence/disposition decay at session start |
 | `COMPANION_MOOD_DECAY` | off | Companion mood decay at session start |
 | `SURVIVAL_DAY_CHANGE` | off | Food spoilage + exhaustion application |
+| `COLD_EXPOSURE` | on | Frost exhaustion / Cold Level on time advance and rest, on its own switch (not tied to `SURVIVAL_DAY_CHANGE` or the tick) |
 | `DEFERRED_RESOLUTION_ACTIONS` | off | Companion away-activities, merchant commissions, fortress threats |
-| `PROGRESSION_AWARDS` | **on** (MVP) | Mythic tier auto-advance, quest/achievement XP. Ancestry feats ride on this and are wired end to end — creator pick at L1, tier picks at L3/7/13/18, `character_ancestry_feats`, character sheet, DM prompt |
+| `PROGRESSION_AWARDS` | **on** (MVP) | Quest/achievement XP. It also gates the `MYTHIC_TRIAL` auto-advance in `mythicService.js`; that code exists, but Mythic is post-MVP. Ancestry feats are wired end to end: creator pick at L1, tier picks at L3/7/13/18, `character_ancestry_feats`, character sheet, DM prompt |
 | `NPC_DEATH_SYNC` | on | Canon-fact death reconciler — a reconciler, not simulation |
 | `SESSION_END_BACKUP` | on | Fire-and-forget snapshot after session end. Forced off in `run-tests.js` |
 
@@ -126,17 +129,26 @@ Two tests cover this path, and they cover different things:
 
 Schemas without handlers are a legitimate end state — validation alone provides correction-loop feedback. Malformed markers queue a correction on `session_config` that is injected into the next turn.
 
-### Which model runs — `server/services/modelRegistry.js`
+### Which model runs
 
-**Every model ID in `server/` resolves through `opusModel()` / `sonnetModel()`.** A grep for `claude-opus-` or `claude-sonnet-` under `server/` should return exactly two lines, both in that file. It is a registry rather than two constants because the IDs had already drifted into four other call sites, two of which were a generation stale by the time anyone noticed.
+**Decided vs. live.** The decided DM model is gemma4:12b, offline via Ollama on Zach's PC (Zach, 2026-11-10). Moving the code to it is open work; nothing in `server/` names gemma4 as a default yet. What the code does today:
+- **Gameplay sessions** pick a provider in `getLLMProvider()` (`server/routes/dmSession.js`). With the player's preference on auto, it uses Claude if `ANTHROPIC_API_KEY` is set and Claude answers, and Ollama otherwise. The Ollama model is `OLLAMA_MODEL`, default `gpt-oss:20b` (`server/services/llmClient.js`, `server/routes/dmSession.js`), at `OLLAMA_URL`, default `http://localhost:11434`. So running gemma4:12b today means no Anthropic key plus `OLLAMA_MODEL=gemma4:12b`.
+- **Some features are Claude-only** and do nothing useful without a key, for example DM Mode's AI calls (`server/routes/dmMode.js` guards on `claude.isClaudeAvailable()`).
+- There is no cloud fallback pool in the code.
+
+The Claude-specific sections below (the model registry and the Claude 5 request contract) describe the Claude path that still exists in the code. They are not the decided production model.
+
+#### The Claude model registry — `server/services/modelRegistry.js`
+
+**Every Claude model ID in `server/` resolves through `opusModel()` / `sonnetModel()`.** A grep for `claude-opus-` or `claude-sonnet-` under `server/` should find them only in that file: the two `DEFAULT_*_MODEL` constants, plus one explanatory comment. It is a registry rather than two constants because the IDs had already drifted into four other call sites, two of which were a generation stale by the time anyone noticed.
 
 Accessors are **synchronous** — `claude.chat()` is on the per-turn hot path and must not await a database read to learn what to call. Pins live in a module-level cache: `hydratePins()` fills it from `_app_settings` at boot, `persistPins()` writes through. Tests never hydrate, so they get the compiled-in defaults; nothing here needs a reachable database.
 
 **Staleness is reported, never applied.** `logStalenessCheck()` runs fire-and-forget at boot and logs when a newer model exists; the UI has a manual check-and-adopt in the provider strip. This is deliberate: a new generation can change request semantics, and adopting one silently is how you ship a broken turn loop. See the Claude 5 notes below for what that looked like in practice.
 
-### The Claude 5 request contract — `server/services/claude.js`
+#### The Claude 5 request contract — `server/services/claude.js`
 
-Three things about the current models that the code depends on. Break any of them and the failure is quiet.
+When the Claude path runs, the code depends on three things about the current Claude models. Break any of them and the failure is quiet.
 
 1. **Adaptive thinking is on by default.** Omitting `thinking` does not disable it. The response is `content: [{type:'thinking'}, {type:'text'}]`, so the reader **collects text blocks** — indexing `content[0].text` yields `undefined` and returns an empty narrative for every turn, with a `200` and `stop_reason: end_turn`. `tests/helpers/llmHarness.js` emits a leading thinking block for exactly this reason; a stub that leads with text lets this bug pass the whole suite.
 2. **`max_tokens` bounds thinking + response text together.** Gameplay runs at 16000 (`DM_MAX_TOKENS`). A truncated turn loses the markers at the end of the response, so effects the narrative already described never apply.
@@ -213,7 +225,9 @@ There is no sign-in. The account system (register, bcrypt, JWT, per-request Bear
 
 **Gameplay** — `weatherService.js`, `survivalService.js`, `craftingService.js`, `merchant*Service.js`, `mythicService.js`, `pietyService.js`, `notorietyService.js`, `baseThreatService.js`, `partyBaseService.js`
 
-**Prelude creator** — `server/routes/prelude.js`, `preludeSessionService.js`, `preludeMarkerDetection.js`, `preludeArcService.js`, `preludeCanonService.js`
+**Character creator (MVP)**: `client/src/components/creator-next/` (six stages), committed through `POST /api/character/:id/commit` in `server/routes/character.js`
+
+**Prelude (post-MVP; the code exists but is out of MVP scope)**: `server/routes/prelude.js`, `preludeSessionService.js`, `preludeMarkerDetection.js`, `preludeArcService.js`, `preludeCanonService.js`
 
 ---
 
@@ -225,6 +239,6 @@ Verified during the Phase 1–4 refactor; none of it is scheduled yet.
 - **`dm_sessions` has no `campaign_id` column**, so `session.campaign_id` in `dmSession.js` is always `undefined` — it reaches `ai_call_log` as a null. The campaign is only reachable via `characters.campaign_id`. This is what broke `generateSessionChronicle` for its entire life before Phase 4; check the column exists before selecting it.
 - **The prelude runs two parsers** over the same text (`validateDmMarkers` + `detectPreludeMarkers`) and carries an ordering invariant (`AGE_ADVANCE` → `HP_CHANGE`) that the pipeline's declaration-order dispatch cannot express.
 - **Marker lists drift by hand** — `MARKER_SCHEMAS`, the prompt text, the strip regexes, and the handler registry are maintained separately. `preludeMarkerDetection.js` already has a catch-all strip regex worth adopting.
-- **`ai_call_log` has no archival job.** It stores full prompts and full conversation history per call, growing quadratically within a session. This makes backups progressively more expensive.
+- **`ai_call_log` is pruned, not archived.** It stores full prompts and full conversation history per call. Session end runs `pruneAiCallLog()` (`server/services/aiCallLogger.js`), which clears the heavy content columns of rows older than `AI_CALL_LOG_RETENTION_DAYS` (default 30). There is no export of old rows before pruning.
 - **`validateDmMarkers` runs twice per turn** over the same narrative.
 - **No trigger advances the campaign act.** The lookup is dynamic as of Phase 4, but `POST /api/campaign/:id/act/advance` is the only thing that moves the pointer.

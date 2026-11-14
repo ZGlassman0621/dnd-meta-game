@@ -64,9 +64,11 @@ The bar for any individual feature: **functional first, polish always.** Get it 
 
 These are the lenses that should shape "what should we build next" and "how should we build it":
 
-1. **Narrative beats mechanics.** The prose-quality investigation (v1.0.96) is the central evidence. When in doubt, choose the option that produces a better story. The AI DM's voice and atmospheric writing is the heart of the experience; mechanical systems exist to support that, not vice versa.
+1. **Nothing mechanical is narrative-only** (Zach, 2026-11-08, a system-wide rule). If something has a mechanical effect (HP, a condition, a spell slot, an item, gold, XP, time), the server tracks and applies it. The AI narrates and signals changes, but a rule never lives only in the prose. Good writing still matters; it sits on top of real mechanics, not in place of them.
+1a. **The 2024 book wins on conflict.** Where the rules text and anything else disagree, the 2024 D&D rules are right. Homebrew stays separate from book rules and is marked as homebrew.
+1b. **Don't guess; never invent data** (Zach, 2026-11-07). No invented spell numbers, lists, prices, counts or endpoints. A gap is stated plainly as a gap, along with what would resolve it.
 2. **Don't remove systems — hide or mark them inactive.** Even when something seems unused, keep the option to come back. The user's words; durable feedback from earlier in the project.
-3. **Cost-aware.** AI inference isn't free. Architecture decisions that affect token cost (caching, prompt size, model selection) get weighed carefully. The Opus-as-default conversation only became possible after the cache architecture fix made the math work.
+3. **Runs locally.** The decided DM model is gemma4:12b, offline through Ollama on the player's own PC (Zach, 2026-11-10), so play doesn't depend on a paid API or an internet connection. Prompt size still matters: a smaller local model has a smaller context window. Some code still calls Claude; see `LLM_SETUP.md`.
 4. **No half-finished implementations.** From `CLAUDE.md`: "Three similar lines is better than a premature abstraction." Don't add features for hypothetical futures. Either ship it complete or don't ship it.
 5. **Hi-fi designs over wireframes for handoff.** When designs come in for implementation (via Claude Design or otherwise), expect them at hi-fi level. Wireframes leave too much interpretation to the implementer; hi-fi locks the visual language.
 
@@ -90,8 +92,8 @@ When in doubt, ask the user. He's the only stakeholder.
 Engineering depth lives in [`CLAUDE.md`](CLAUDE.md). Use this as the strategic map:
 
 - **Player Mode DM sessions** — chat-based AI DM with ~25 game-state markers (combat, loot, merchants, conditions, promises, weather, etc.). Three-tier prompt caching. Rolling summary compaction for long sessions.
-- **DM Mode** — user-as-DM with AI playing 4 distinct characters. Separate prompt builder. Bond tracking. Coaching tips.
-- **Prelude character creator** — Phases 1-4 shipped (5 sessions, 4 chapters in early design; reframed in 2026-04 to 4 sessions across 3 chapters, v4 plan). Phase 5 (handoff to main campaign + character creator rebuild) shipped 2026-05-02 at v1.0.114 — see `PHASE_2_CREATOR_SPEC.md`. The 8-step rebuilt creator (manual + handoff modes) is now the live entry path; old `CharacterCreationWizard.jsx` is hidden but retained for fallback during initial playtest.
+- **DM Mode** — exists in code but is out of MVP scope.
+- **Prelude** (the prologue) — post-MVP. Code from earlier phases exists but isn't part of the MVP. The live character creator is the six-stage creator in `client/src/components/creator-next/`; the earlier 8-step creator and `CharacterCreationWizard.jsx` are gone.
 - **Living world** — between-session tick pipeline (weather → factions → events → quests → companions → mail → consequences → survival → bases → notoriety).
 - **Companions** — full 5e progression mirror, multiclass, spell slots, conditions, mood, loyalty, off-screen activities.
 - **Merchants & economy** — persistent inventories from loot tables (not AI-generated per visit), DMG + XGtE magic items across 5 rarities, bargaining, custom commissions, price modifiers.

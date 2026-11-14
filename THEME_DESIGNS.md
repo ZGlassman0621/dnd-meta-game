@@ -1,6 +1,6 @@
 # Theme Progression Designs
 
-Status: In review — first batch of 4 archetypes for pattern approval.
+Status: Built. All 21 themes are in the code (`server/data/themes.js`), each with its four tier abilities (L1/L5/L11/L17, 84 in all), and the creator offers them on Stage 3. This document is their design catalog (status checked 2026-11-13).
 
 Design principles:
 - Theme abilities complement class features, never replicate them

@@ -117,11 +117,13 @@ The DM Mode session screen exposes:
 - **PartyView** (slide-in). Stats, spells, personality, current relationships per character. The DM uses this to remind themselves who has Bond X with Whom, what the secret is, what the AC is.
 - **DiceRoller** (slide-in). Pending rolls queue from AI markers + free-roll palette + roll history. This is the DM's mechanical workbench — every check / attack / spell the AI declared is here, ready to resolve.
 - **DMCoachingPanel** (slide-in). Sonnet-generated tips: a scene tip ("what's working, what could be better"), an encounter suggestion, a character hook (a specific opportunity to engage one of the four PCs based on their personality / secret / flaw). Plus a static DC reference table (Trivial 5 → Nearly Impossible 30) and beginner-DM tips. Sonnet is used here for cost — coaching is high-frequency and needs to feel cheap.
-- **Reference panels.** Equipment, Spells (300+), Rules, Effect tracker (round countdown + concentration). Same panels available in Player Mode, scoped to the AI's party.
+- **Reference panels.** Equipment, Spells (297, from `client/src/data/spells/`, a separate, smaller list than the 583-spell server catalog), Rules, Effect tracker (round countdown + concentration). Same panels available in Player Mode, scoped to the AI's party.
 
 ---
 
 ## Session lifecycle
+
+> **Model note (2026-11-13):** the project's decided DM model is gemma4:12b, run offline through Ollama (Zach, 2026-11-10). DM Mode's code has not moved yet: its AI calls go to Claude only (`server/routes/dmMode.js` guards on `claude.isClaudeAvailable()`), with the Opus/Sonnet split shown below. That split describes today's code, not the decided model. DM Mode is out of MVP scope.
 
 ```
 1. Generate party (Opus)         →  4 characters with diverse class/alignment/voice + tensions
@@ -155,6 +157,8 @@ The failure modes the system is built against:
 ---
 
 ## Cost & model split
+
+> The split below is what DM Mode's code calls today (Claude only). The decided model is gemma4:12b via Ollama; moving DM Mode to it is open, post-MVP work.
 
 - **Party generation**: Opus. One-time per party. High-stakes — bad generation taints the whole campaign.
 - **First session opening**: Opus. Highest-leverage prose moment.

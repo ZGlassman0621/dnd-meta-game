@@ -1,121 +1,88 @@
 # D&D Meta Game
 
-A comprehensive AI-powered solo D&D 5e campaign management system. Create characters, generate living world campaign plans, and play through adventures with an AI Dungeon Master powered by Claude.
+A solo D&D game meant to be played essentially forever. You play one character; the Dungeon Master, NPCs, companions and enemies are all run by AI. The world is persistent and built on canonical Forgotten Realms history, and the rules are the 2024 D&D rules. When the book and anything else disagree, the book wins.
 
-## Two Ways to Play
+The server owns the rules: hit points, death saves, spell slots, rests, gear, XP and the in-game clock. The AI narrates and makes changes through short tags in its replies, which the server checks and applies. The standing rule is that nothing mechanical is left to narration alone.
 
-### Player Mode
-```
-Create Character → Write Backstory → Create Campaign → Auto-Pipeline → Play!
-```
-You are the player. The AI runs the world, NPCs, combat, and story. Your character sheet, inventory, companions, and world state persist across sessions.
+## Status: building the MVP
 
-### DM Mode
-```
-Generate Party → Campaign Prep → Run Session → AI Plays the Party
-```
-You are the Dungeon Master. The AI controls a party of 4 characters with distinct personalities, relationships, and tensions. You narrate the world and the party responds in character.
+The MVP is a self-contained one-shot test campaign, **Embervale**, covering core play: create a character, play, leave and come back, loot, XP, levelling, quests, companions, roleplay, combat, story, and the world remembering what happened.
 
-## Features
+Out of MVP scope, even where code exists: the prologue (Prelude), full downtime, fortress/domain management, Mythic progression, legacy characters, and DM Mode (where you run the game and the AI plays a party).
 
-### Character Management
-- **Character Sheet** — Full D&D 5e characters with race, class, background, stats, equipment, and leveling
-- **Spell Management** — 284 spells (1st-9th level), spell slot tracker, prepared/known spells, level-up spell selection
-- **Backstory Parser** — AI parses freeform backstories into structured elements that feed into campaign generation
-- **Companions** — Recruit and manage companion characters with emotional states and activities
+What's in the build today, counted from the code:
+- A six-stage character creator for the 2024 rules
+- **583 spells**, **23 classes**, **181 subclasses**
+- **29 species**, 11 of them available to player characters now
+- **21 themes**, replacing backgrounds
+- **210 ancestry feats** in 14 lists
 
-### Player Mode — AI Dungeon Master
-- **AI DM Sessions** — Play through your campaign with an AI DM that uses your campaign plan as context
-- **Campaign Continuity** — Sessions build on previous adventures with persistent world state, NPC memory, and story chronicles
-- **Living World** — Weather, factions, world events, NPC aging, economy simulation, and consequences all tick between sessions
-- **Combat & Conditions** — Initiative tracking, 15 D&D 5e conditions + exhaustion, skill checks, companion actions
-- **Crafting & Survival** — 112 recipes, weather exposure, hunger/thirst, foraging, shelter
-- **Mythic Progression** — Post-level-20 system with 14 paths, piety, epic boons, legendary items
+## The AI model
 
-### DM Mode — You Run the Game
-- **Party Generation** — Opus generates 4 unique characters with interlocking backstories and genuine tensions
-- **Campaign Prep** — Full-screen workspace for NPCs, enemies (full D&D 5e stat blocks), locations, lore, treasure, session notes
-- **Session Memory** — Structured chronicles extract NPCs, plot threads, locations, decisions, and character moments across sessions
-- **NPC Codex** — Auto-tracks every NPC with voice notes extracted from your narration style
-- **Plot Thread Tracker** — Auto-synced from chronicles with manual override for status management
-- **Reference Panels** — Equipment & prices, 300+ spell lookup, rules quick reference (conditions, combat, resting, cover, travel, environment)
-- **Effect Tracker** — Track spell/condition durations with round countdown, concentration management, auto-decrement
-- **DM Coaching** — On-demand tips and DC reference
-- **OOC System** — Talk to "players" out of character about their characters
+The decided DM model is **gemma4:12b, run offline through [Ollama](https://ollama.com) on your own PC**. No API key or internet connection is needed for it.
 
-### Campaign System
-- **Campaign Plan Generation** — Claude Opus generates living world plans with main quest arcs, NPCs, factions, locations, world events, and DM notes woven around your backstory
-- **Campaign Import** — Import externally-planned campaigns via JSON template
-- **Spoiler System** — Campaign plan viewer hides DM-sensitive content behind toggleable covers
+The code hasn't fully caught up with that decision yet. It still prefers Claude when an `ANTHROPIC_API_KEY` is present, and falls back to Ollama otherwise. To run on gemma4:12b today, leave the key out and point Ollama at the model. See [LLM_SETUP.md](LLM_SETUP.md).
 
-## Tech Stack
+## Running it on the PC
 
-- **Frontend:** React 18 + Vite
-- **Backend:** Node.js + Express (ES modules)
-- **Database:** SQLite (local file, with optional Turso cloud sync)
-- **AI:** Claude API (Opus for generation, Sonnet for sessions) with Ollama fallback for offline play
+You need Node.js, npm and Ollama.
 
-## Setup
-
-### Prerequisites
-- Node.js (v18 or higher)
-- npm
-- Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
-
-### Installation
-
-1. Install dependencies:
+1. Get the code. The live branch is `phase-4-hybrid-combat`; `main` is stale.
+   ```bash
+   git clone https://github.com/ZGlassman0621/dnd-meta-game.git
+   cd dnd-meta-game
+   git checkout phase-4-hybrid-combat
+   ```
+2. Install dependencies for the server and the client:
    ```bash
    npm run install-all
    ```
-
-2. Create a `.env` file with your Anthropic API key:
+3. Pull the model and tell the app to use it:
    ```bash
+   ollama pull gemma4:12b
    cp .env.example .env
-   # Edit .env and add your ANTHROPIC_API_KEY
+   # in .env, set: OLLAMA_MODEL=gemma4:12b   (and leave ANTHROPIC_API_KEY unset)
    ```
-
-3. Start the development server:
+4. Start the server (port 3000) and the client (port 5173):
    ```bash
    npm run dev
    ```
+5. Open **http://localhost:5173**. That's the game; port 3000 is only the API.
 
-4. Open http://localhost:5173 in your browser
+A local SQLite database (`local.db`) is created on first run.
 
-### Troubleshooting
+## Tests
 
-- **Can't connect:** Ensure ports 3000 (server) and 5173 (client) aren't in use
-- **AI errors:** Verify your `ANTHROPIC_API_KEY` in `.env` and check usage limits at [console.anthropic.com](https://console.anthropic.com)
-- **Database:** SQLite database (`local.db`) is created automatically on first run. Delete to reset all data.
-- **Offline play:** Install [Ollama](https://ollama.ai) and run `ollama pull gpt-oss:20b` — see [LLM_SETUP.md](LLM_SETUP.md)
+```bash
+npm test                 # the full suite, against a throwaway database
+npm test <name>          # one file, e.g. npm test character-hp
+```
+
+The suite never touches the real database (`server/scripts/run-tests.js` redirects it). It runs green on Windows; the runner names any file it had to treat specially there.
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start both server and client in development mode |
-| `npm run server` | Start only the Express server (with --watch) |
-| `npm run client` | Start only the Vite client |
+| Command | What it does |
+|---|---|
+| `npm run dev` | Server and client together, in development mode |
+| `npm run server` | Only the Express server (restarts on change) |
+| `npm run client` | Only the Vite client |
 | `npm run build` | Build the client for production |
 | `npm run start` | Start the production server |
-| `npm run offline` | Build and start in offline/production mode |
-
-## Windows Distribution
-
-A portable Windows build is available via GitHub Actions — no Node.js installation required.
-
-1. Go to the repo's **Actions** tab → **Build Windows Release** → **Run workflow**
-2. Download the `DnD-Meta-Game-Windows` artifact from the completed run
-3. Unzip, add a `.env` file with `ANTHROPIC_API_KEY=your-key`, double-click `Start DnD Meta Game.bat`
+| `npm run offline` | Build, then start in production mode |
+| `npm run backup` | Take a verified database snapshot into `backups/` |
+| `npm test` | Run the test suite |
+| `npm run lint` | Lint the server code |
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [CLAUDE.md](CLAUDE.md) | Comprehensive technical reference (architecture, key files, conventions) |
-| [LLM_SETUP.md](LLM_SETUP.md) | AI model configuration (Claude + Ollama) |
-| [MYTHIC_PROGRESSION_GUIDE.md](MYTHIC_PROGRESSION_GUIDE.md) | Mythic progression game design reference |
-| [FUTURE_FEATURES.md](FUTURE_FEATURES.md) | Planned enhancements |
+| Document | What it is |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Technical reference for builders: architecture, rules, feature flags |
+| [LLM_SETUP.md](LLM_SETUP.md) | How the AI model is configured |
+| [docs/pm/HANDOFF.md](docs/pm/HANDOFF.md) | How work moves between the project manager and the builder |
+| `docs/pm/reports/` | One report per finished job: the record of what was built |
+| `archive/` | Old plans, audits and logs, kept as history. Not current guidance |
 
 ## License
 
