@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Sonnet 5.5). Brief: `docs/pm/dm-mode-removal/BRIEF.md` (v2, head `a04d39f`).
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version 1.0.195 → **1.0.196**.
-Commit: <<COMMIT>>.
+Commit: `f7a0324` (the build); the commit that adds the final hash line to this report follows it.
 
 ## Understanding
 This project is a solo D&D 2024 "forever game": one human player character, with the DM, NPCs, companions and enemies all played by an AI (gemma4:12b on the PC), in a persistent Forgotten Realms world. The MVP is core play: create, play, leave, return, loot, XP, level, quests, companions, roleplay, combat, story, memory.
