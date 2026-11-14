@@ -1,9 +1,9 @@
 /**
  * Standing-scalar abstraction (Phase 3 SC-1).
  *
- * A behavioral library — not a schema, not a single source of truth. Five
+ * A behavioral library — not a schema, not a single source of truth. Four
  * existing standing systems (companion loyalty, faction standing, NPC
- * disposition, Mythic piety, DM Mode bond-shifts) all track "an integer
+ * disposition, Mythic piety) all track "an integer
  * score representing a relationship + a label + an audit trail of changes."
  * Each does this with a different schema, different range, different
  * label cuts, and different audit-trail strategy. This module provides

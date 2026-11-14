@@ -27,7 +27,6 @@ const CompanionBackstoryPage = lazy(() => import('./components/CompanionBackstor
 const NarrativeQueuePage = lazy(() => import('./components/NarrativeQueuePage'))
 const GenerationControlsPage = lazy(() => import('./components/GenerationControlsPage'))
 const PlayerJournalPage = lazy(() => import('./components/PlayerJournalPage'))
-const DMMode = lazy(() => import('./components/DMMode'))
 const MythicProgressionPage = lazy(() => import('./components/MythicProgressionPage'))
 const PartyBasePage = lazy(() => import('./components/PartyBasePage'))
 // Phase 4a SC-4a.4 — diagnostic surface for AI behavior. Lazy-loaded;
@@ -388,9 +387,7 @@ function App() {
 
       <ErrorBoundary>
       <Suspense fallback={<div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>Loading...</div>}>
-      {activeView === 'showDMMode' ? (
-        <DMMode onBack={goHome} />
-      ) : activeView === 'showNPCGenerator' ? (
+      {activeView === 'showNPCGenerator' ? (
         <NPCGenerator
           onBack={goHome}
           character={selectedCharacter}
@@ -610,7 +607,6 @@ function App() {
                 { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
                 { key: 'showPlayerJournal', label: 'Player Journal', desc: 'NPCs met, places visited, faction standings, and quests', color: '#10b981' },
                 { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
-                { key: 'showDMMode', label: 'DM Mode', desc: 'You DM for 4 AI player characters', color: '#e67e22' },
                 { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
                 { key: 'showMythicProgression', label: 'Mythic Progression', desc: 'Mythic tiers, paths, piety, epic boons, and legendary items', color: '#ff6b35' },
                 { key: 'showPartyBase', label: 'Stronghold', desc: 'Manage your base, upgrades, staff, projects, and notoriety', color: '#b45309' },

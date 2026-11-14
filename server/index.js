@@ -24,7 +24,6 @@ import worldEventRoutes from './routes/worldEvent.js';
 import travelRoutes from './routes/travel.js';
 import npcRelationshipRoutes from './routes/npcRelationship.js';
 import livingWorldRoutes from './routes/livingWorld.js';
-import dmModeRoutes from './routes/dmMode.js';
 import achievementRoutes from './routes/achievement.js';
 import chronicleRoutes from './routes/chronicle.js';
 import weatherRoutes from './routes/weather.js';
@@ -112,7 +111,6 @@ app.use('/api/world-event', worldEventRoutes);
 app.use('/api/travel', travelRoutes);
 app.use('/api/npc-relationship', npcRelationshipRoutes);
 app.use('/api/living-world', livingWorldRoutes);
-app.use('/api/dm-mode', dmModeRoutes);
 app.use('/api/achievement', achievementRoutes);
 app.use('/api/chronicle', chronicleRoutes);
 app.use('/api/weather', weatherRoutes);
@@ -136,6 +134,9 @@ app.use('/api/fighting-styles', fightingStylesRoutes);
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
     res.sendFile(join(clientDistPath, 'index.html'));
+  } else {
+    // An unmatched API path must answer. Without this the request hung forever.
+    res.status(404).json({ error: 'Not found' });
   }
 });
 

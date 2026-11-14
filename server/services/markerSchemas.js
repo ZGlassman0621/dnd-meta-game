@@ -872,9 +872,10 @@ PERCEPTION_PREROLL: {
     }
   },
 
-  // Phase 3 SC-5 — DM Mode bond-shift marker. Replaces
-  // dmModeService::detectBondShifts's silent-skip-on-no-op pattern with
-  // schema validation. Warmth and Trust are independently signed deltas
+  // Phase 3 SC-5 — bond-shift marker. No prompt emits it and no handler is
+  // registered: its only emitter and handler were in DM Mode, removed in the
+  // dm-mode-removal job. The schema stays because tests/sc6-4a-survival-crafting-schemas
+  // still asserts it validates; see that job's report. Warmth and Trust are independently signed deltas
   // bounded to [-5, +5] (matches the per-turn delta range — the absolute
   // warmth/trust scores are clamped to [-5, +5] by the abstraction's
   // range config; per-shift deltas in [-5, +5] keep the marker schema

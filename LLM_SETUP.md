@@ -15,7 +15,7 @@ Every AI call goes through one client, `server/services/llm.js`, to Ollama's `/a
 
 | Role | Used for | Default model |
 |---|---|---|
-| `dm` | Narrative turns: DM sessions, DM Mode, Prelude sessions, rest narration | gemma4:12b |
+| `dm` | Narrative turns: DM sessions, Prelude sessions, rest narration | gemma4:12b |
 | `summary` | Session summaries, recaps, rolling summaries, context compression | gemma4:12b |
 | `extraction` | Chronicles (memory between sessions), notes, NPCs, memories, XP scoring, backstory parsing, relationship and transition reads | gemma4:12b |
 | `generation` | Campaign plans, quests, locations, living world, adventures, companions, parties, NPC voices, letters, Prelude arcs | gemma4:12b |

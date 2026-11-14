@@ -12,7 +12,7 @@
  * a model here, so a later "summaries on a smaller model" decision is one
  * `.env` line, not a code change. All roles default to gemma4:12b.
  *
- *   dm          — narrative turns: DM sessions, DM Mode, Prelude sessions
+ *   dm          — narrative turns: DM sessions, Prelude sessions
  *   summary     — summaries and compression: session summaries, recaps,
  *                 rolling summaries, context compression
  *   extraction  — structured reads of what happened: chronicles, notes,

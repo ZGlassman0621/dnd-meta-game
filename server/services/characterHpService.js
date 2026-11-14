@@ -250,8 +250,8 @@ export async function getHpState(characterId) {
  * on the prelude side; the player session neither detected nor handled it.
  * Registering it here is what finally makes damage real during play.
  *
- * Returns null without a characterId: DM Mode shares this registry and
- * dispatches without one, and a null return is the pipeline's no-op.
+ * Returns null without a characterId: a dispatch with no character is
+ * the pipeline's no-op, not an error.
  */
 registerMarkerHandler('HP_CHANGE', async (parsed, context) => {
   if (!context?.characterId) return null;

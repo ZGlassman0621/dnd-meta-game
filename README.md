@@ -8,7 +8,7 @@ The server owns the rules: hit points, death saves, spell slots, rests, gear, XP
 
 The MVP is a self-contained one-shot test campaign, **Embervale**, covering core play: create a character, play, leave and come back, loot, XP, levelling, quests, companions, roleplay, combat, story, and the world remembering what happened.
 
-Out of MVP scope, even where code exists: the prologue (Prelude), full downtime, fortress/domain management, Mythic progression, legacy characters, and DM Mode (where you run the game and the AI plays a party).
+Out of MVP scope, even where code exists: the prologue (Prelude), full downtime, fortress/domain management, Mythic progression, and legacy characters.
 
 What's in the build today, counted from the code:
 - A six-stage character creator for the 2024 rules

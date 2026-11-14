@@ -24,7 +24,6 @@
  *     showCampaignPlan     — Campaign Plan viewer (generated during campaign
  *                            creation; the plan is used, just not browsable)
  *     showPlayerJournal    — Player Journal
- *     showDMMode           — DM Mode (tooling, not play)
  *
  *   Cut earlier:
  *     showLocations, showFactions, showTravel, showWorldEvents, showLivingWorld,

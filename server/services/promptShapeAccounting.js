@@ -44,8 +44,8 @@ export function estimateTokens(text) {
 // ============================================================
 //
 // The prompt builders use a recognizable pattern of `=== SECTION NAME ===`
-// markers (consistent across `dmPromptBuilder.js`, `dmModePromptBuilder.js`,
-// and `preludeArcPromptBuilder.js`). Some sections also use uppercase
+// markers (consistent across `dmPromptBuilder.js` and
+// `preludeArcPromptBuilder.js`). Some sections also use uppercase
 // header lines without the equals decoration ("CARDINAL RULES:", "WORLD
 // SETTING:", "ACTIVE QUESTS:" etc.). The inference recognizes both.
 //
