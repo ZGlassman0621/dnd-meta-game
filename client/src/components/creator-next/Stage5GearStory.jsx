@@ -909,15 +909,25 @@ export default function Stage5GearStory({ state, set, themes = null, speciesEntr
             </label>
             {goldBaseline != null && (
               <div style={{ fontFamily: 'var(--serif)', fontSize: 15, marginTop: 6 }}>
-                Class baseline {goldBaseline} GP
-                {theme && (
-                  <> · {theme.name} {(() => {
-                    const mod = THEME_GOLD_MODIFIERS[themeId] ?? 0
-                    if (mod === 0) return '— no change'
-                    const pct = Math.round(Math.abs(mod) * 100)
-                    return mod > 0 ? `+${pct}%` : `−${pct}%`
-                  })()} → <strong>{goldTotal} GP</strong></>
-                )}
+                Your class starts with {goldBaseline} GP.
+                {theme && (() => {
+                  const mod = THEME_GOLD_MODIFIERS[themeId] ?? 0
+                  const delta = (goldTotal ?? goldBaseline) - goldBaseline
+                  const pct = Math.round(Math.abs(mod) * 100)
+                  const change = mod === 0
+                    ? '0% (no change)'
+                    : (mod > 0 ? `+${pct}% (+${delta} GP)` : `−${pct}% (−${Math.abs(delta)} GP)`)
+                  const why = mod >= 0.25 ? 'People with this background left home well supported, so they start with extra funds.'
+                    : mod > 0 ? 'People with this background set out modestly resourced, a little ahead of the class norm.'
+                    : mod === 0 ? 'People with this background set out with exactly what the class normally gets — no more, no less.'
+                    : 'People with this background set out with less than the class normally gets.'
+                  return (
+                    <>
+                      {' '}Your {theme.name} background changes that by {change}. {why}{' '}
+                      You would start with <strong>{goldTotal} GP</strong>.
+                    </>
+                  )
+                })()}
                 {!theme && <> · no theme picked yet — pick one on Stage 3 and its gold modifier lands here</>}
               </div>
             )}

@@ -17,13 +17,19 @@ import { isOutsideFR, resolveOriginSetting } from './speciesAdapter.js'
 export function themeLocationOptions(theme, state) {
   const creationOptions = Array.isArray(theme?.creation_choice_options) ? theme.creation_choice_options : []
   const originSetting = resolveOriginSetting(state?.origin_setting, state?.origin_setting_custom)
-  const originRegions = theme?.creation_choice_source === 'origin_regions' && originSetting && isOutsideFR(originSetting)
+  // A non-FR origin always gets its own regions. An FR origin keeps the theme's
+  // served list (Home City: city_watch, urchin) — but a theme that serves NO list
+  // (hermit, folk_hero) has nothing else to offer, so it gets the origin's region
+  // list too. Without this the picker never rendered, while the server still
+  // required a non-empty pick at Review.
+  const originRegions = theme?.creation_choice_source === 'origin_regions' && originSetting
+      && (isOutsideFR(originSetting) || creationOptions.length === 0)
     ? regionsForSetting(originSetting)
     : []
   const options = originRegions.length > 0
     ? originRegions.map(r => ({ value: r.name, label: r.name, description: r.description || '' }))
     : creationOptions
-  const label = originRegions.length > 0
+  const label = originRegions.length > 0 && isOutsideFR(originSetting)
     ? 'Home Region'
     : (theme?.creation_choice_label || 'Path choice')
   return { options, label }

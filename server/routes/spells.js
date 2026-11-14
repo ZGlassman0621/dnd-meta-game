@@ -179,6 +179,12 @@ router.get('/', (req, res) => {
       school: entry.school || null,
       classes: entry.classes || [],
       description: entry.description || '',
+      // Cast facts for the creator's picker rows (read straight from the catalog).
+      castTime: entry.castTime || null,
+      range: entry.range || null,
+      duration: entry.duration || null,
+      save: entry.save || null,
+      ritual: entry.ritual === true,
     });
   }
   spells.sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));

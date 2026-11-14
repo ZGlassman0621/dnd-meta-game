@@ -140,7 +140,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "Your blessing bolsters up to three creatures: each one's hit point maximum and current hit points increase by 5 for 8 hours. Each higher slot raises the bonus by 5. Druids gained this spell in 2024."
+      "description": "Your blessing bolsters up to three creatures: each one's hit point maximum and current hit points increase by 5 for 8 hours. Each higher slot raises the bonus by 5."
     },
     {
       "key": "air bubble",
@@ -500,7 +500,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A new 2024 spell for emergencies: as a bonus action you spend some of your own vitality, rolling up to half your Hit Dice and regaining hit points equal to the total plus your spellcasting modifier."
+      "description": "As a bonus action you spend some of your own vitality, rolling up to half your Hit Dice and regaining hit points equal to the total plus your spellcasting modifier."
     },
     {
       "key": "arcing arrow",
@@ -653,7 +653,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You cast sticks, bones, or cards and receive an omen — weal, woe, weal-and-woe, or nothing — about a course of action planned within the next 30 minutes. Repeat castings within a day grow unreliable. Druids and wizards gained this spell in 2024."
+      "description": "You cast sticks, bones, or cards and receive an omen — weal, woe, weal-and-woe, or nothing — about a course of action planned within the next 30 minutes. Repeat castings within a day grow unreliable."
     },
     {
       "key": "aura of life",
@@ -806,7 +806,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "Cast as a bonus action right after you hit with a weapon: the target takes an extra 5d10 force damage, and if it has 50 hit points or fewer it makes a Charisma save or is banished to a harmless demiplane. Numbers flagged for Zach's physical PHB check (approved Hexblade ruling 2026-11-03)."
+      "description": "Cast as a bonus action right after you hit with a weapon: the target takes an extra 5d10 force damage, and if it has 50 hit points or fewer it makes a Charisma save or is banished to a harmless demiplane."
     },
     {
       "key": "banishment",
@@ -856,7 +856,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "Reworked in 2024: a quick bonus action with no concentration — the touched creature's skin becomes bark-like and its AC is 17 if it would otherwise be lower, lasting an hour."
+      "description": "A bonus action with no concentration: the touched creature's skin becomes bark-like and its AC is 17 if it would otherwise be lower, lasting an hour."
     },
     {
       "key": "beacon of hope",
@@ -943,7 +943,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "The 2024 reworking of Feeblemind: a psychic blast that deals 10d12 psychic damage on a failed Intelligence save (half on a success) and, on a failure, leaves the victim unable to cast spells or take Magic actions for 30 days, when the save can be repeated. Heal, Greater Restoration, or Wish ends it sooner."
+      "description": "A psychic blast that deals 10d12 psychic damage on a failed Intelligence save (half on a success) and, on a failure, leaves the victim unable to cast spells or take Magic actions for 30 days, when the save can be repeated. Heal, Greater Restoration, or Wish ends it sooner."
     },
     {
       "key": "bestow curse",
@@ -1059,7 +1059,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "In the 2024 revision this ward no longer grants resistance; instead, while you concentrate, every attack roll made against you is reduced by 1d4, blunting incoming blows before they land."
+      "description": "While you concentrate, every attack roll made against you is reduced by 1d4, blunting incoming blows before they land."
     },
     {
       "key": "bless",
@@ -1128,7 +1128,7 @@
         "Blackguard"
       ],
       "source": "Libris Mortis",
-      "description": "The next time you hit a creature with a melee weapon attack during the spell, the attack deals an extra 3d8 radiant damage and the target must make a Constitution save or be blinded until the spell ends. Higher slots add 1d8 per slot level above 3rd. (Casting details from PHB 2014 standard text — verify before merge.)"
+      "description": "The next time you hit a creature with a melee weapon attack during the spell, the attack deals an extra 3d8 radiant damage and the target must make a Constitution save or be blinded until the spell ends. Higher slots add 1d8 per slot level above 3rd."
     },
     {
       "key": "blindness/deafness",
@@ -1305,7 +1305,7 @@
         "Blackguard"
       ],
       "source": "Libris Mortis",
-      "description": "The next time you hit a creature with a weapon attack during the spell, the attack deals an extra 2d6 radiant damage, and the target sheds dim light in a 5-foot radius and cannot benefit from invisibility until the spell ends. Higher slots add 1d6 per slot level above 2nd. (Casting details from PHB 2014 standard text — verify before merge.)"
+      "description": "The next time you hit a creature with a weapon attack during the spell, the attack deals an extra 2d6 radiant damage, and the target sheds dim light in a 5-foot radius and cannot benefit from invisibility until the spell ends. Higher slots add 1d6 per slot level above 2nd."
     },
     {
       "key": "burning hands",
@@ -1631,7 +1631,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You hurl a 4-inch sphere of energy with a ranged spell attack for 3d8 damage of a type you choose (acid, cold, fire, lightning, poison, or thunder). In 2024, if two or more damage dice show the same number, the orb leaps to another creature nearby."
+      "description": "You hurl a 4-inch sphere of energy with a ranged spell attack for 3d8 damage of a type you choose (acid, cold, fire, lightning, poison, or thunder). If two or more damage dice show the same number, the orb leaps to another creature nearby."
     },
     {
       "key": "circle of death",
@@ -1746,7 +1746,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A glittering storm of spinning daggers fills a 5-foot cube: a creature takes 4d4 slashing damage when it enters the cube or starts its turn there — no save — and in 2024 you can move the cloud 30 feet as a Magic action. Each higher slot adds 2d4."
+      "description": "A glittering storm of spinning daggers fills a 5-foot cube: a creature takes 4d4 slashing damage when it enters the cube or starts its turn there — no save. You can move the cloud 30 feet as a Magic action. Each higher slot adds 2d4."
     },
     {
       "key": "cloudkill",
@@ -1795,7 +1795,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A dazzling array of flashing color sprays from your hand. In 2024 the hit-point pool is gone: every creature in the 15-foot cone simply makes a Constitution save or is blinded until the end of its next turn."
+      "description": "A dazzling array of flashing color sprays from your hand. Every creature in the 15-foot cone simply makes a Constitution save or is blinded until the end of its next turn."
     },
     {
       "key": "command",
@@ -2732,7 +2732,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "Your touch closes wounds: a creature regains 2d8 hit points plus your spellcasting modifier — doubled from the 2014 version in the 2024 revision — and 2d8 more for each slot level above 1st."
+      "description": "Your touch closes wounds: a creature regains 2d8 hit points plus your spellcasting modifier, and 2d8 more for each slot level above 1st."
     },
     {
       "key": "cushidra's freezing beam",
@@ -2870,7 +2870,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You touch a willing creature and grant it darkvision out to 150 feet for 8 hours — in 2024 the range of the granted sight was notably extended."
+      "description": "You touch a willing creature and grant it darkvision out to 150 feet for 8 hours."
     },
     {
       "key": "dawn",
@@ -3391,7 +3391,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "Your weapon strikes are blessed for a minute, dealing an extra 1d4 radiant damage on a hit. In 2024 the spell no longer requires concentration."
+      "description": "Your weapon strikes are blessed for a minute, dealing an extra 1d4 radiant damage on a hit. No concentration required."
     },
     {
       "key": "divine smite",
@@ -3410,7 +3410,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "New as a spell in 2024 (formerly only a class feature): cast it the moment you hit with a melee weapon or unarmed strike to deal an extra 2d8 radiant damage, plus 1d8 more against a fiend or undead. Each higher slot adds 1d8."
+      "description": "Cast it the moment you hit with a melee weapon or unarmed strike to deal an extra 2d8 radiant damage, plus 1d8 more against a fiend or undead. Each higher slot adds 1d8."
     },
     {
       "key": "divine word",
@@ -3577,7 +3577,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You touch a willing creature and gift it a breath weapon of acid, cold, fire, lightning, or poison: as an action it can exhale a 15-foot cone for 3d6 damage of that type on a failed Dexterity save (half on a success). Absorbed into the PHB in 2024; each higher slot adds 1d6."
+      "description": "You touch a willing creature and gift it a breath weapon of acid, cold, fire, lightning, or poison: as an action it can exhale a 15-foot cone for 3d6 damage of that type on a failed Dexterity save (half on a success). Each higher slot adds 1d6."
     },
     {
       "key": "drain",
@@ -3898,7 +3898,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A new 2024 cantrip of small elemental tricks: fan a fire, stir a breeze, mist the air, dampen earth, or light a flame with a gesture — the elements answer in minor, mostly harmless ways."
+      "description": "Small elemental tricks: fan a fire, stir a breeze, mist the air, dampen earth, or light a flame with a gesture — the elements answer in minor, mostly harmless ways."
     },
     {
       "key": "elminster's elusion",
@@ -4015,7 +4015,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Simplified in 2024: you touch a creature and choose an ability score; for up to an hour it has advantage on ability checks using that score. Each higher slot touches one more creature."
+      "description": "You touch a creature and choose an ability score; for up to an hour it has advantage on ability checks using that score. Each higher slot touches one more creature."
     },
     {
       "key": "enlarge/reduce",
@@ -4292,7 +4292,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A necromantic facsimile of life bolsters you: in 2024 you gain 2d4 + 4 temporary hit points (up from 1d4 + 4), plus 5 more for each slot level above 1st."
+      "description": "A necromantic facsimile of life bolsters you: you gain 2d4 + 4 temporary hit points, plus 5 more for each slot level above 1st."
     },
     {
       "key": "far step",
@@ -4473,7 +4473,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "In 2024 this is a quick action rather than a long ritual: an otherworldly steed — a warhorse, elk, or similar mount with a telepathic bond to you — appears beside you, loyal unto death and resummonable if it falls."
+      "description": "An otherworldly steed — a warhorse, elk, or similar mount with a telepathic bond to you — appears beside you, loyal unto death and resummonable if it falls."
     },
     {
       "key": "find the path",
@@ -5023,7 +5023,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Reworked in 2024: you magically influence one creature you can see, which makes a Wisdom save or is charmed by you for the duration. When the spell ends, the target knows it was charmed."
+      "description": "You magically influence one creature you can see, which makes a Wisdom save or is charmed by you for the duration. When the spell ends, the target knows it was charmed."
     },
     {
       "key": "frost fingers",
@@ -5360,7 +5360,7 @@
         "Magus"
       ],
       "source": "Sterling Vermin (Magus/Scholar)",
-      "description": "You place your hand on another creature and transfer your own life force to it: you spend and roll one of your hit dice, add your spellcasting modifier, and the creature regains hit points equal to the total. (Catalog ruling 2026-11-06, item 14: the Scholar printing's formula is adopted — its class line includes Magus (Sylvan Circle), so it claims to govern the Magus caster too, and the +mod is not the Theologian differentiator; Martyr's Magic is. The Magus printing's no-modifier formula is superseded.) Scholar access for the Scholar class itself comes via the Martyr's Magic erudite application, not via this classes array."
+      "description": "You place your hand on another creature and transfer your own life force to it: you spend and roll one of your hit dice, add your spellcasting modifier, and the creature regains hit points equal to the total."
     },
     {
       "key": "glibness",
@@ -5541,7 +5541,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Slick grease coats a 10-foot square (and yes, the 2024 text confirms it was never flammable). Creatures in the area, and any that enter or end their turn there, make Dexterity saves or fall prone."
+      "description": "Slick grease coats a 10-foot square (it is not flammable). Creatures in the area, and any that enter or end their turn there, make Dexterity saves or fall prone."
     },
     {
       "key": "greater invisibility",
@@ -5698,7 +5698,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "You touch a willing creature and, in the 2024 version, choose a skill when you cast. For the duration, the creature adds 1d4 to ability checks made with that chosen skill."
+      "description": "You touch a willing creature and choose one skill. For the duration (up to 1 minute, concentration), whenever the creature makes an ability check with that skill, it can roll a d4 and add the number rolled to the check."
     },
     {
       "key": "guiding bolt",
@@ -5786,7 +5786,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "In 2024 this is a bonus action that triggers instantly on your next ranged hit, with no concentration: the projectile bursts into thorns, and the target and each creature within 5 feet of it make Dexterity saves, taking 1d10 piercing damage on a failure (half on a success). Each higher slot adds 1d10."
+      "description": "A bonus action that triggers instantly on your next ranged hit, with no concentration: the projectile bursts into thorns, and the target and each creature within 5 feet of it make Dexterity saves, taking 1d10 piercing damage on a failure (half on a success). Each higher slot adds 1d10."
     },
     {
       "key": "hallow",
@@ -5940,7 +5940,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "A word of comfort knits wounds at range: one creature regains 2d4 hit points plus your spellcasting modifier — buffed in 2024 — leaving your action free, and gains 2d4 more per higher slot."
+      "description": "A word of comfort knits wounds at range: one creature regains 2d4 hit points plus your spellcasting modifier — leaving your action free, and gains 2d4 more per higher slot."
     },
     {
       "key": "heat metal",
@@ -6262,7 +6262,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You throw a shard of ice with a ranged spell attack for 1d10 piercing damage; hit or miss, the shard explodes, and the target and each creature within 5 feet make Dexterity saves or take 2d6 cold damage. Absorbed into the PHB in 2024; the cold damage rises 1d6 per higher slot."
+      "description": "You throw a shard of ice with a ranged spell attack for 1d10 piercing damage; hit or miss, the shard explodes, and the target and each creature within 5 feet make Dexterity saves or take 2d6 cold damage. The cold damage rises 1d6 per higher slot."
     },
     {
       "key": "ice storm",
@@ -6536,7 +6536,7 @@
         "Cleric"
       ],
       "source": "PHB 2024",
-      "description": "Reworked in 2024: your touch channels necrotic energy into a creature, which now makes a Constitution save (instead of you making an attack roll), taking 3d10 necrotic damage on a failure or half on a success. Each higher slot adds 1d10."
+      "description": "Your touch channels necrotic energy into a creature, which makes a Constitution save, taking 3d10 necrotic damage on a failure or half on a success. Each higher slot adds 1d10."
     },
     {
       "key": "insect plague",
@@ -6821,7 +6821,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "In 2024 this is a bonus action: you touch a creature and, once on each of its turns for a minute, it can jump up to 30 feet by spending only 10 feet of movement."
+      "description": "As a bonus action you touch a creature and, once on each of its turns for a minute, it can jump up to 30 feet by spending only 10 feet of movement."
     },
     {
       "key": "kinetic jaunt",
@@ -7007,7 +7007,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "Now a bonus action in 2024: your touch ends one condition afflicting a creature — blinded, deafened, paralyzed, or poisoned."
+      "description": "As a bonus action, your touch ends one condition afflicting a creature — blinded, deafened, paralyzed, or poisoned."
     },
     {
       "key": "levitate",
@@ -7476,7 +7476,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "In 2024 a bonus action with no concentration: a nonmagical weapon you touch becomes magical with a +1 bonus to attack and damage rolls for an hour, rising to +2 or +3 in higher slots."
+      "description": "A bonus action with no concentration: a nonmagical weapon you touch becomes magical with a +1 bonus to attack and damage rolls for an hour, rising to +2 or +3 in higher slots."
     },
     {
       "key": "magnify gravity",
@@ -7923,7 +7923,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Brought into the PHB in 2024: a disorienting spike of psychic static assails one creature, which makes an Intelligence save or takes 1d6 psychic damage and subtracts 1d4 from its next saving throw before the end of your next turn."
+      "description": "A disorienting spike of psychic static assails one creature, which makes an Intelligence save or takes 1d6 psychic damage and subtracts 1d4 from its next saving throw before the end of your next turn."
     },
     {
       "key": "mind spike",
@@ -7945,7 +7945,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You drive a spike of psychic energy into one creature's mind: Wisdom save or 3d8 psychic damage (half on a success), and on a failure you always know its location while you concentrate, and it cannot hide or turn invisible from you. Absorbed into the PHB in 2024; each higher slot adds 1d8."
+      "description": "You drive a spike of psychic energy into one creature's mind: Wisdom save or 3d8 psychic damage (half on a success), and on a failure you always know its location while you concentrate, and it cannot hide or turn invisible from you. Each higher slot adds 1d8."
     },
     {
       "key": "minor illusion",
@@ -8543,7 +8543,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You craft a phantasm in one creature's mind — a creature, fire, a collapsing bridge no bigger than a 10-foot cube — that it alone perceives and rationalizes as real. On a failed Intelligence save it takes 2d8 psychic damage each round from the illusion (doubled in 2024) and can disbelieve only with an Investigation check; the 2024 version can even grip undead and constructs."
+      "description": "You craft a phantasm in one creature's mind — a creature, fire, a collapsing bridge no bigger than a 10-foot cube — that it alone perceives and rationalizes as real. On a failed Intelligence save it takes 2d8 psychic damage each round from the illusion and can disbelieve only with an Investigation check. It works even on undead and constructs."
     },
     {
       "key": "phantasmal killer",
@@ -8704,7 +8704,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Reworked in 2024: now Necromancy with a 30-foot range, you project a puff of noxious gas with a ranged spell attack instead of forcing a save. On a hit the target takes 1d12 poison damage, scaling at higher levels."
+      "description": "With a 30-foot range, you project a puff of noxious gas with a ranged spell attack. On a hit the target takes 1d12 poison damage, scaling at higher levels."
     },
     {
       "key": "polymorph",
@@ -8749,7 +8749,7 @@
         "Cleric"
       ],
       "source": "PHB 2024",
-      "description": "A single word of power, newly added in the 2024 handbook, that wraps allies in protective magic. You bestow 120 temporary hit points divided as you choose among up to six creatures you can see."
+      "description": "A single word of power that wraps allies in protective magic. You bestow 120 temporary hit points divided as you choose among up to six creatures you can see."
     },
     {
       "key": "power word heal",
@@ -8857,7 +8857,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "A 10-minute prayer restores up to five creatures: in 2024 each regains 2d8 hit points (no modifier added) and also gains the benefit of a short rest. Each higher slot adds 1d8 healing."
+      "description": "A 10-minute prayer restores up to five creatures: each regains 2d8 hit points (no modifier added) and also gains the benefit of a short rest. Each higher slot adds 1d8 healing."
     },
     {
       "key": "prestidigitation",
@@ -8985,7 +8985,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "A flame blooms in your hand, shedding light like a torch. In 2024 you conjure it with a bonus action and can hurl it with an action as a ranged spell attack dealing 1d8 fire damage; the damage grows at higher levels."
+      "description": "A flame blooms in your hand, shedding light like a torch. You conjure it with a bonus action and can hurl it with an action as a ranged spell attack dealing 1d8 fire damage; the damage grows at higher levels."
     },
     {
       "key": "programmed illusion",
@@ -9197,7 +9197,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Absorbed into the PHB in 2024: you target an open flame and make it burst — either as blinding fireworks (creatures within 10 feet make Constitution saves or are blinded until the end of their next turn) or as a thick smoke cloud that heavily obscures a 20-foot sphere."
+      "description": "You target an open flame and make it burst — either as blinding fireworks (creatures within 10 feet make Constitution saves or are blinded until the end of their next turn) or as a thick smoke cloud that heavily obscures a 20-foot sphere."
     },
     {
       "key": "raise dead",
@@ -9312,7 +9312,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "In 2024 a black beam forces a Constitution save instead of an attack roll: on a failure the creature is weakened — its Strength-based attack damage is halved and it has disadvantage on Strength checks and saves — repeating the save at the end of each turn."
+      "description": "A black beam forces a Constitution save instead of an attack roll: on a failure the creature is weakened — its Strength-based attack damage is halved and it has disadvantage on Strength checks and saves — repeating the save at the end of each turn."
     },
     {
       "key": "ray of frost",
@@ -9471,7 +9471,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "Reworked in 2024: when you cast it you choose a damage type, and while you concentrate, whenever the touched creature takes damage of that type, the damage is reduced by 1d4."
+      "description": "You touch one willing creature and choose a damage type: acid, bludgeoning, cold, fire, lightning, necrotic, piercing, poison, radiant, slashing, or thunder. While you concentrate (up to 1 minute), when the creature takes damage of that type, it reduces the damage by 1d4. The creature can benefit from this only once per turn."
     },
     {
       "key": "resurrection",
@@ -9965,7 +9965,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A sudden ringing noise like a struck bell erupts in a 10-foot sphere: Constitution save or 3d8 thunder damage (half on a success). Creatures of crystal, stone, or metal save at disadvantage, and loose objects take the damage too. Note: warlocks lost this spell in 2024. Each higher slot adds 1d8."
+      "description": "A sudden ringing noise like a struck bell erupts in a 10-foot sphere: Constitution save or 3d8 thunder damage (half on a success). Creatures of crystal, stone, or metal save at disadvantage, and loose objects take the damage too. Each higher slot adds 1d8."
     },
     {
       "key": "shield",
@@ -10030,7 +10030,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "The club or quarterstaff in your hand is imbued with nature's power: you can use your spellcasting ability for its attacks, and in 2024 its damage becomes force damage with a die that grows as you level."
+      "description": "The club or quarterstaff in your hand is imbued with nature's power: you can use your spellcasting ability for its attacks, and its damage becomes force damage with a die that grows as you level."
     },
     {
       "key": "shining smite",
@@ -10049,7 +10049,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "A new smite for 2024, replacing Branding Smite: cast as you hit, your weapon blazes — the target takes an extra 2d6 radiant damage, sheds bright light, and cannot benefit from invisibility; until the spell ends, attacks against it have advantage. Each higher slot adds 1d6."
+      "description": "Cast as you hit, your weapon blazes — the target takes an extra 2d6 radiant damage, sheds bright light, and cannot benefit from invisibility; until the spell ends, attacks against it have advantage. Each higher slot adds 1d6."
     },
     {
       "key": "shocking grasp",
@@ -10253,7 +10253,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Fully reworked in 2024: no hit-point pool — each creature in a 5-foot-radius sphere makes a Wisdom save or is incapacitated, and repeats the save at the end of its next turn, falling unconscious for the duration on a second failure. Damage or a slap wakes a sleeper early."
+      "description": "Each creature in a 5-foot-radius sphere makes a Wisdom save or is incapacitated, and repeats the save at the end of its next turn, falling unconscious for the duration on a second failure. Damage or a slap wakes a sleeper early."
     },
     {
       "key": "sleet storm",
@@ -10370,7 +10370,7 @@
         "Sorcerer"
       ],
       "source": "PHB 2024",
-      "description": "A brand-new 2024 cantrip: you loose a bolt of raw magic of a damage type you choose (acid, cold, fire, lightning, poison, psychic, or thunder) with a ranged spell attack for 1d8 damage — and whenever a damage die rolls its maximum, you can roll another and add it."
+      "description": "You loose a bolt of raw magic of a damage type you choose (acid, cold, fire, lightning, poison, psychic, or thunder) with a ranged spell attack for 1d8 damage — and whenever a damage die rolls its maximum, you can roll another and add it."
     },
     {
       "key": "soul cage",
@@ -10414,7 +10414,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "You stabilize a dying creature at range — 15 feet in 2024, growing to 30, 60, and finally 120 feet as you reach higher levels — so it no longer needs death saving throws."
+      "description": "You stabilize a dying creature at range — 15 feet, growing to 30, 60, and finally 120 feet as you reach higher levels — so it no longer needs death saving throws."
     },
     {
       "key": "speak with animals",
@@ -10437,7 +10437,7 @@
         "Warlock"
       ],
       "source": "PHB 2024",
-      "description": "For 10 minutes you can comprehend and verbally communicate with beasts, learning what they have seen and enlisting simple favors — what they tell you is limited by their intelligence and senses. Warlocks gained this spell in 2024."
+      "description": "For 10 minutes you can comprehend and verbally communicate with beasts, learning what they have seen and enlisting simple favors — what they tell you is limited by their intelligence and senses."
     },
     {
       "key": "speak with dead",
@@ -10680,7 +10680,7 @@
         "Cleric"
       ],
       "source": "PHB 2024",
-      "description": "A floating weapon of force — often your deity's favored arm — appears and strikes on a melee spell attack for 1d8 + your spellcasting modifier force damage; as a bonus action you can move it 20 feet and strike again. Note: the 2024 version requires concentration. Higher slots raise the damage every two levels."
+      "description": "A floating weapon of force — often your deity's favored arm — appears and strikes on a melee spell attack for 1d8 + your spellcasting modifier force damage; as a bonus action you can move it 20 feet and strike again. Requires concentration. Higher slots raise the damage every two levels."
     },
     {
       "key": "spore cloud",
@@ -10767,7 +10767,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "A new 2024 cantrip: a mote of starlight streaks at a creature with a ranged spell attack for 1d8 radiant damage, and the target sheds dim light and cannot benefit from invisibility until the start of your next turn."
+      "description": "A mote of starlight streaks at a creature with a ranged spell attack for 1d8 radiant damage, and the target sheds dim light and cannot benefit from invisibility until the start of your next turn."
     },
     {
       "key": "steel wind strike",
@@ -10955,7 +10955,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You suggest a course of activity of up to 25 words, phrased to sound reasonable: Wisdom save or the charmed creature pursues it to the best of its ability — the 2024 wording notably drops the old ban on obviously harmful suggestions. The spell ends if you or allies damage the target."
+      "description": "You suggest a course of activity of up to 25 words, phrased to sound reasonable: Wisdom save or the charmed creature pursues it to the best of its ability. The spell ends if you or allies damage the target."
     },
     {
       "key": "summon aberration",
@@ -10999,7 +10999,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "Absorbed into the PHB in 2024: you call a bestial spirit that takes the form of a beast of the land, air, or water. It is friendly, shares your initiative, and fights at your side with attacks that grow stronger in higher slots."
+      "description": "You call a bestial spirit that takes the form of a beast of the land, air, or water. It is friendly, shares your initiative, and fights at your side with attacks that grow stronger in higher slots."
     },
     {
       "key": "summon celestial",
@@ -11482,7 +11482,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A creature perceives everything as hilariously funny and collapses: Wisdom save or it falls prone and is incapacitated by laughter, repeating the save at the end of each of its turns and whenever it takes damage (with advantage). Warlocks gained this spell in 2024."
+      "description": "A creature perceives everything as hilariously funny and collapses: Wisdom save or it falls prone and is incapacitated by laughter, repeating the save at the end of each of its turns and whenever it takes damage (with advantage)."
     },
     {
       "key": "tasha's mind whip",
@@ -11986,7 +11986,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A dolorous bell tolls for one creature, which makes a Wisdom save or takes 1d8 necrotic damage — or 1d12 if it is already missing hit points. Brought into the PHB in 2024; the damage scales at higher levels."
+      "description": "A dolorous bell tolls for one creature, which makes a Wisdom save or takes 1d8 necrotic damage — or 1d12 if it is already missing hit points. The damage scales at higher levels."
     },
     {
       "key": "tongues",
@@ -12171,7 +12171,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Fully reworked in 2024: as part of casting, you make one attack with a weapon, using your spellcasting ability for the attack and damage rolls. The damage can be radiant instead of the weapon's normal type, and extra radiant damage is added at higher levels, up to +3d6 at 17th."
+      "description": "As part of casting, you make one attack with a weapon, using your spellcasting ability for the attack and damage rolls. The damage can be radiant instead of the weapon's normal type, and extra radiant damage is added at higher levels, up to +3d6 at 17th."
     },
     {
       "key": "tuturis' venomous sting",
@@ -12360,7 +12360,7 @@
         "Bard"
       ],
       "source": "PHB 2024",
-      "description": "A string of magically laced insults: the target makes a Wisdom save or takes psychic damage (1d6 in 2024) and has disadvantage on the next attack roll it makes before the end of its next turn."
+      "description": "A string of magically laced insults: the target makes a Wisdom save or takes psychic damage (1d6) and has disadvantage on the next attack roll it makes before the end of its next turn."
     },
     {
       "key": "vitriolic sphere",
@@ -12826,7 +12826,7 @@
         "Cleric"
       ],
       "source": "Libris Mortis",
-      "description": "You create an aura of negative energy that weakens nearby life force. Creatures within 15 feet of you cannot regain hit points and have disadvantage on death saving throws, saves against exhaustion, and saves against effects that would reduce their hit point maximum. On each of your turns before the spell ends you may use a bonus action to temporarily disable the field until the start of your next turn. (Note: the printed range line says 30 feet; the effect radius printed in the body is 15 feet — recorded as printed, not reconciled.)"
+      "description": "You create an aura of negative energy that weakens nearby life force. Creatures within 15 feet of you cannot regain hit points and have disadvantage on death saving throws, saves against exhaustion, and saves against effects that would reduce their hit point maximum. On each of your turns before the spell ends you may use a bonus action to temporarily disable the field until the start of your next turn."
     },
     {
       "key": "web",
@@ -12984,7 +12984,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A beam of crackling energy tethers you to a target on a ranged spell attack hit for 1d12 lightning damage, and in 2024 you can use a bonus action on later turns to deal the damage again automatically. Each higher slot adds 1d12 to the initial damage."
+      "description": "A beam of crackling energy tethers you to a target on a ranged spell attack hit for 1d12 lightning damage, and you can use a bonus action on later turns to deal the damage again automatically. Each higher slot adds 1d12 to the initial damage."
     },
     {
       "key": "wither and bloom",
@@ -13116,7 +13116,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "Reworked in 2024 (now Necromancy): cast as you hit, the strike deals an extra 1d6 psychic damage and the target makes a Wisdom save or is frightened of you until it gathers its nerve with a Wisdom check as an action. Each higher slot adds 1d6."
+      "description": "Cast as you hit, the strike deals an extra 1d6 psychic damage and the target makes a Wisdom save or is frightened of you until it gathers its nerve with a Wisdom check as an action. Each higher slot adds 1d6."
     },
     {
       "key": "wristpocket",

@@ -28,6 +28,11 @@
  * ============================================================ */
 
 .creator-v2 {
+  /* Darker text on the white cards (Zach, 2026-11-14: the grey body and help text was
+     hard to read for long creation sessions). Scoped here so no other screen changes. */
+  --ink: #0e0e10;
+  --ink-2: #26262b;
+  --ink-3: #4b4b52;
   /* Apply the editorial palette to the creator surface itself */
   background: var(--bg);
   color: var(--ink);
@@ -1252,4 +1257,18 @@
   font-size: 14px;
   color: var(--accent);
   letter-spacing: 0;
+}
+
+/* Form controls inside the creator. index.css has global `input { width: 100%; padding: .75rem }`
+   and `label { color: #f39c12 }` rules written for the dark session screens; without these resets a
+   checkbox/radio stretches across its row (pushing its label to the far right) and labels render orange. */
+.creator-v2 input[type="checkbox"],
+.creator-v2 input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin: 0 2px 0 0;
+  flex: 0 0 auto;
+}
+.creator-v2 label {
+  color: var(--ink);
 }

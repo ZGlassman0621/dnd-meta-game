@@ -4,7 +4,7 @@ import classesData from '../../data/classes.json'
 import deitiesData from '../../data/deities.json'
 import { deferredNoteFor, isDeferredSpecies, resolveOriginSetting } from './speciesAdapter.js'
 import { subclassOriginSuffix } from './subclassOrigin.js'
-import { shortSpellBlurb } from './spellBlurb.js'
+import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
 
 /**
  * Creator-next Stage 2 — Class & Calling (2026-11-04, overnight build).
@@ -655,7 +655,7 @@ export default function Stage2ClassCalling({
             <Tip text={`Pick ${classCantripCount} cantrip${classCantripCount === 1 ? '' : 's'} from your class list${speciesPendingTotal ? `, plus ${speciesPendingTotal} species choice${speciesPendingTotal === 1 ? '' : 's'}` : ''}. Granted cantrips never count against these picks — one already granted shows checked and grayed out, never hidden, and it is never picked again here.`} />
           </h2>
           <p className="help" style={{ fontStyle: 'normal' }}>
-            {classPickKeys.length} of {maxCantripPicks} picked
+            {classPickKeys.length} of {maxCantripPicks} picked — {Math.max(0, maxCantripPicks - classPickKeys.length)} left
             {speciesPendingTotal > 0 ? ` (${classCantripCount} class + ${speciesPendingTotal} species choice${speciesPendingTotal === 1 ? '' : 's'})` : ''}.
             Granted cantrips never count against these picks.
           </p>
@@ -682,18 +682,17 @@ export default function Stage2ClassCalling({
                   : null
                 const checked = grantedHere || classPickKeys.includes(s.key)
                 const disabled = grantedHere || (!checked && classPickKeys.length >= maxCantripPicks)
-                const blurb = shortSpellBlurb(s.description)
+                const desc = spellDescriptionText(s.description)
+                const facts = spellFactsLine(s)
                 return (
-                  <div key={s.key} style={{ margin: '10px 0', opacity: grantedHere ? 0.6 : 1 }}>
+                  <div key={s.key} style={{ margin: '10px 0', opacity: grantedHere ? 0.6 : (disabled ? 0.45 : 1) }}>
                     <label style={{ ...checkRowStyle, margin: 0, fontWeight: 600 }}>
                       <input type="checkbox" style={checkInputStyle} checked={checked} disabled={disabled} onChange={() => toggleCantrip(s.key)} />
                       <span>{s.name}</span>
                     </label>
-                    {(blurb || grantedHere) && (
-                      <div className="help" style={{ fontStyle: 'normal', margin: '2px 0 0 26px' }}>
-                        {blurb}{grantedHere ? `${blurb ? ' ' : ''}Granted by ${grantedSource} — it never counts against your ${maxCantripPicks} picks.` : ''}
-                      </div>
-                    )}
+                    {desc ? <div style={{ fontSize: 15, lineHeight: 1.5, color: 'var(--ink-2)', margin: '2px 0 0 26px' }}>{desc}</div> : null}
+                    {facts ? <div style={{ fontSize: 13, color: 'var(--ink-3)', margin: '2px 0 0 26px' }}>{facts}</div> : null}
+                    {grantedHere ? <div style={{ fontSize: 14, color: 'var(--ink-2)', margin: '2px 0 0 26px' }}>Granted by {grantedSource} — it never counts against your {maxCantripPicks} picks.</div> : null}
                   </div>
                 )
               })}

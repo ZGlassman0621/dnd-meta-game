@@ -135,7 +135,12 @@ export function bundledSpellsForClass(classId) {
       level: Number(s.level),
       school: s.school || '',
       classes: s.classes || [],
-      description: s.description || ''
+      description: s.description || '',
+      castTime: s.castTime || null,
+      range: s.range || null,
+      duration: s.duration || null,
+      save: s.save || null,
+      ritual: s.ritual === true
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

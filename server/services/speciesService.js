@@ -295,6 +295,11 @@ export function toClientShape(entry) {
     sizes: entry.sizes || null,
     speed: entry.speeds?.walk ?? null,
     speeds: entry.speeds || {},
+    // Species-level innate spells (Aasimar Light, Tiefling, Firbolg). Variant-level
+    // ones ride on variants[]. The creator needs these to know which cantrips are
+    // GRANTED; without them the final cantrip list omits them and the server refuses
+    // the commit ("must include the granted cantrip 'Light'").
+    innateSpells: entry.innateSpells || [],
     languages: entry.languages || [],
     traits: entry.traits || [],
     grants: entry.grants || null,

@@ -167,6 +167,32 @@ group('(1) theme choices: labelled lines, snapshot, DM prompt, stale clear');
   const shell = readRepo('client/src/components/creator-next/CreatorNextShell.jsx');
   check(shell.includes('isStaleThemePathChoice(theme, state)') && shell.includes("themePathChoice: ''"),
     'the shell clears a stale pick with the shared rule');
+
+  // Hermit / Folk Hero serve NO fixed list. Under an FR origin the picker used to render
+  // nothing while the server still demanded a non-empty pick at Review (Zach's commit error:
+  // "theme 'Folk Hero' requires a Home Region at Review").
+  for (const id of ['folk_hero', 'hermit']) {
+    const t = toClientShape(resolveTheme(id));
+    const fr = themeLocationOptions(t, { origin_setting: 'Forgotten Realms' });
+    check(fr.options.length > 40, `${id} under an FR origin offers the origin's region list (${fr.options.length})`);
+    check(fr.options.some((o) => o.value === 'Amn'), `${id} FR list includes Amn`);
+    check(fr.label === t.creation_choice_label, `${id} under FR keeps the theme's own label (${fr.label})`);
+    check(themeLocationOptions(t, { origin_setting: 'Eberron' }).label === 'Home Region', `${id} under Eberron reads Home Region`);
+    check(themeLocationOptions(t, { origin_setting: '' }).options.length === 0, `${id} with no origin yet offers nothing`);
+  }
+  // A theme with its own FR list is unchanged by the fallback.
+  check(themeLocationOptions(cityTheme, frState).options.length === 10, 'city_watch under FR still shows its own 10 cities');
+}
+
+// Species-level innate spells must reach the creator, or granted cantrips are dropped from the final list.
+group('(2b) species-level innate spells reach the client');
+{
+  const { resolveSpecies, toClientShape: speciesClientShape } = await import(fromRepo('server/services/speciesService.js'));
+  for (const [id, expectNames] of [['aasimar', ['Light']], ['tiefling', ['Thaumaturgy']], ['firbolg', ['Detect Magic']]]) {
+    const shaped = speciesClientShape(resolveSpecies(id).entry);
+    const names = (shaped.innateSpells || []).map((s) => s.name);
+    check(expectNames.every((n) => names.includes(n)), `${id} client shape carries its species-level innate spells (${names.join(', ')})`);
+  }
 }
 
 // ===========================================================================

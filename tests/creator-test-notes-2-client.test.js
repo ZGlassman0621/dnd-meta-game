@@ -367,7 +367,9 @@ group('R2-11(b)-(g) generic path choice, origin regions, Soldier second field');
   ok(isOutsideFR('Forgotten Realms') === false, 'isOutsideFR: the Realms are not outside the Realms');
   ok(isOutsideFR('') === true, 'isOutsideFR: an unset origin counts as outside (served list kept)');
   ok(themeLocationSrc.includes("creation_choice_source === 'origin_regions'"), 'Stage 3 keys the region resolution on creation_choice_source (via themeLocation.js)');
-  ok(themeLocationSrc.includes("&& originSetting && isOutsideFR(originSetting)"), 'Stage 3 offers regions exactly to non-FR origins (never FR cities as local)');
+  // Non-FR origins always get regions; an FR origin keeps the theme's served list (FR cities)
+  // and only falls back to the region list when the theme serves none (hermit, folk_hero).
+  ok(/&& originSetting\s*&& \(isOutsideFR\(originSetting\) \|\| creationOptions\.length === 0\)/.test(themeLocationSrc), 'Stage 3 offers regions to non-FR origins, and to an FR origin only when the theme serves no list of its own (never FR cities as local)');
   ok(themeLocationSrc.includes("'Home Region'"), 'a non-FR origin labels the field "Home Region"');
   // Soldier second field (e): the SERVER shape — creation_choice_second_field
   // { key, label, options } — bound to path_data as a JSON string.

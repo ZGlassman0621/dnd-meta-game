@@ -254,40 +254,56 @@ group('Subclass picker only for level-1 classes (polish note 6 + 2024 audit)');
   ok(!stage2Src.includes('quickBuild'), 'no Quick Build auto-fill remains in Stage 2 (creator test-notes #9)');
 }
 
-group('spell picker rows (layout + short descriptions)');
+group('spell picker rows (layout, full descriptions, facts line, no ruleset talk)');
 {
-  const stage2Src = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage2ClassCalling.jsx'), 'utf8');
-  // Checkboxes must reset the global `input { width: 100% }` rule, or the label is pushed to the far right.
-  ok(/const checkInputStyle = \{[^}]*width: 'auto'[^}]*padding: 0/.test(stage2Src), 'checkbox style resets the global input width and padding');
-  const rowStart = stage2Src.indexOf('const blurb = shortSpellBlurb(s.description)');
-  const rowEnd = stage2Src.indexOf('Granted cantrips', rowStart);
-  const row = stage2Src.slice(rowStart, rowEnd);
-  ok(rowStart > 0 && !row.includes('<Tip'), 'a cantrip row has no tooltip; the description renders under the name');
-  ok(row.includes('{blurb}'), 'the cantrip row renders the short description');
-  // Stage 4's known / spellbook / prepared rows must read the same way.
-  const stage4Src = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage4AbilitiesSkillsSpells.jsx'), 'utf8');
-  ok(stage2Src.includes("from './spellBlurb.js'") && stage4Src.includes("from './spellBlurb.js'"), 'Stage 2 cantrips and Stage 4 spells share one blurb helper');
-  ok(/const checkInputStyle = \{[^}]*width: 'auto'[^}]*padding: 0/.test(stage4Src), 'Stage 4 checkboxes also reset the global input width and padding');
+  const CN = 'client/src/components/creator-next/';
+  const stage2Src = fs.readFileSync(path.join(REPO, CN + 'Stage2ClassCalling.jsx'), 'utf8');
+  const stage4Src = fs.readFileSync(path.join(REPO, CN + 'Stage4AbilitiesSkillsSpells.jsx'), 'utf8');
+  // Layout: the creator stylesheet resets the global `input { width: 100% }` and orange `label` rules.
+  const css = fs.readFileSync(path.join(REPO, 'client/src/styles/creator-theme.css'), 'utf8');
+  ok(/\.creator-v2 input\[type="checkbox"\][\s\S]*?\.creator-v2 input\[type="radio"\]\s*\{[^}]*width:\s*auto/.test(css), 'creator CSS resets checkbox/radio width for every picker');
+  ok(/\.creator-v2 label\s*\{\s*color:\s*var\(--ink\)/.test(css), 'creator CSS stops labels rendering in the global orange');
+  ok(/--ink-3:\s*#4b4b52/.test(css) && /--ink-2:\s*#26262b/.test(css), 'creator text tokens are darker than the global greys');
+  ok(/const checkInputStyle = \{[^}]*width: 'auto'[^}]*padding: 0/.test(stage2Src) && /const checkInputStyle = \{[^}]*width: 'auto'[^}]*padding: 0/.test(stage4Src), 'Stage 2 and Stage 4 checkbox styles also reset width and padding');
+  // Rows: description in full + facts line, no tooltip.
+  const c2Start = stage2Src.indexOf('const desc = spellDescriptionText(s.description)');
+  const c2 = stage2Src.slice(c2Start, stage2Src.indexOf('Granted cantrips', c2Start));
+  ok(c2Start > 0, 'the cantrip row builds its description with the shared helper');
+  ok(c2.includes('{desc}') && c2.includes('{facts}') && !c2.includes('<Tip'), 'a cantrip row shows the description and the facts line, with no tooltip');
   const rowSrc = stage4Src.slice(stage4Src.indexOf('function SpellPickRow'), stage4Src.indexOf('function prettify'));
-  ok(rowSrc.includes('shortSpellBlurb(spell.description)') && !rowSrc.includes('<Tip'), 'Stage 4 spell rows show the short description under the name, no tooltip');
+  ok(rowSrc.includes('spellDescriptionText(spell.description)') && rowSrc.includes('spellFactsLine(spell)') && !rowSrc.includes('<Tip'), 'Stage 4 spell rows show the description and facts line, no tooltip');
   ok((stage4Src.match(/<SpellPickRow /g) || []).length === 3, 'known, spellbook and prepared pickers all use the shared row');
-  // Run the REAL helper (the shared module's own text) against the real cantrip and level-1 data.
-  const fnSrc = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/spellBlurb.js'), 'utf8');
-  const shortSpellBlurb = new Function(fnSrc.replace('export function', 'function') + '\nreturn shortSpellBlurb')();
-  ok(shortSpellBlurb('') === '' && shortSpellBlurb(undefined) === '', 'no description gives an empty blurb, never an invented one');
-  ok(shortSpellBlurb('You hurl a bubble of acid. Two creatures take damage.') === 'You hurl a bubble of acid.', 'blurb is the first sentence');
-  const longText = 'word '.repeat(80).trim();
-  const cut = shortSpellBlurb(longText);
-  ok(cut.length <= 171 && cut.endsWith('…') && !/\s…$/.test(cut), 'an over-long first sentence is cut at a word boundary with an ellipsis');
-  const cantrips = JSON.parse(fs.readFileSync(path.join(REPO, 'client/src/data/spells/cantrips.json'), 'utf8'));
-  const all = Object.values(cantrips).flat();
-  ok(all.length > 50, `real cantrip data loaded (${all.length} entries)`);
-  ok(all.every(c => c.description && shortSpellBlurb(c.description).length > 0 && shortSpellBlurb(c.description).length <= 171), 'every real cantrip yields a non-empty blurb of at most 171 characters');
-  ok(all.every(c => c.description.startsWith(shortSpellBlurb(c.description).replace(/…$/, ''))), 'every blurb is a verbatim prefix of the book description');
-  const level1 = JSON.parse(fs.readFileSync(path.join(REPO, 'client/src/data/spells/spells-1st.json'), 'utf8'));
-  ok(level1.length > 40, `real level-1 spell data loaded (${level1.length} entries)`);
-  ok(level1.every(c => c.description && shortSpellBlurb(c.description).length > 0 && shortSpellBlurb(c.description).length <= 171), 'every real level-1 spell yields a non-empty blurb of at most 171 characters');
-  ok(level1.every(c => c.description.replace(/\s+/g, ' ').trim().startsWith(shortSpellBlurb(c.description).replace(/…$/, ''))), 'every level-1 blurb is a verbatim prefix of the book description');
+  // Counters and gray-out once the picks are used up.
+  ok(stage2Src.includes('left\n') || /left\s*\n?\s*\{speciesPendingTotal/.test(stage2Src), 'the cantrip counter says how many picks are left');
+  ok((stage4Src.match(/ — \{Math\.max\(0, \w+ - \w+\.length\)\} left\./g) || []).length === 3, 'known, book and prepared counters each say how many are left');
+  ok((stage4Src.match(/atLimit=\{!checked && /g) || []).length === 3 && rowSrc.includes('disabled={held || atLimit}'), 'unpicked spells gray out and disable once the limit is reached');
+  ok(/opacity: grantedHere \? 0\.6 : \(disabled \? 0\.45 : 1\)/.test(stage2Src), 'unpicked cantrips gray out once the limit is reached');
+
+  // Helpers: run the REAL module text.
+  const modSrc = fs.readFileSync(path.join(REPO, CN + 'spellBlurb.js'), 'utf8');
+  const { spellDescriptionText, spellFactsLine } = new Function(modSrc.replace(/export function/g, 'function') + '\nreturn { spellDescriptionText, spellFactsLine }')();
+  ok(spellDescriptionText('') === '' && spellDescriptionText(undefined) === '', 'no description gives empty text, never an invented one');
+  const longText = 'Sentence one is here. ' + 'word '.repeat(120).trim() + '.';
+  ok(spellDescriptionText(longText) === longText, 'descriptions are shown in full, never cut (the old 170-character cut dropped mechanics)');
+  ok(spellFactsLine({ castTime: '1 action', range: 'Touch', duration: '1 hour' }) === 'Cast: 1 action · Range: Touch · Duration: 1 hour', 'facts line reads cast time, range, duration');
+  ok(spellFactsLine({ castTime: '1 action', save: 'wis', ritual: true }) === 'Cast: 1 action · Wisdom save · Ritual', 'facts line adds the saving throw and ritual tag');
+  ok(spellFactsLine({}) === '' && spellFactsLine(null) === '', 'a spell with no facts gets no facts line');
+
+  // Data: what the pickers actually show.
+  const { SPELL_DATA_ENTRIES } = await import(svc('server/data/spellCatalogData.js'));
+  const entries = Object.entries(SPELL_DATA_ENTRIES);
+  const talk = /\b(2024|2014)\b|reworked|buffed|nerfed|\bedition\b|\bPHB\b|verify before|ruling|flagged for|Hexblade/i;
+  const dirty = entries.filter(([, v]) => talk.test(v.description || '')).map(([k]) => k);
+  ok(dirty.length === 0, `no spell description names a ruleset version or carries a developer note (offenders: ${dirty.join(', ') || 'none'})`);
+  const res = SPELL_DATA_ENTRIES['resistance'].description;
+  ok(/choose a damage type/.test(res) && /1d4/.test(res) && !/…$/.test(res), 'Resistance explains the choice and the 1d4 reduction in full');
+  ok(/choose one skill/.test(SPELL_DATA_ENTRIES['guidance'].description) && /d4/.test(SPELL_DATA_ENTRIES['guidance'].description), 'Guidance says what it does: pick a skill, add a d4 to its checks');
+  ok(/1d6 radiant/.test(SPELL_DATA_ENTRIES['word of radiance'].description) && /5 feet/.test(SPELL_DATA_ENTRIES['word of radiance'].description), 'Word of Radiance states its damage and reach');
+  const cantripEntries = entries.filter(([, v]) => v.level === 0);
+  ok(cantripEntries.length > 50, `real cantrip catalog loaded (${cantripEntries.length})`);
+  ok(cantripEntries.every(([, v]) => spellFactsLine(v).length > 0 && v.castTime && v.range && v.duration), 'every cantrip carries cast time, range and duration, so each shows its mechanics');
+  const gen = JSON.parse(fs.readFileSync(path.join(REPO, 'client/src/data/spellCatalog.generated.json'), 'utf8'));
+  ok(gen.spells.every(s => SPELL_DATA_ENTRIES[s.key] && SPELL_DATA_ENTRIES[s.key].description === s.description), 'the generated client catalog carries the same cleaned descriptions as the server');
 }
 
 console.log(`\ncreator-next-stage2: ${passed} passed, ${failed} failed`);

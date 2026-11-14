@@ -3,7 +3,7 @@ import Tip from './Tooltip.jsx'
 import classesData from '../../data/classes.json'
 import { ABILITY_SCORES, SKILLS, TOOLS, LANGUAGES, concreteLanguages, skillKey } from '../../data/references.js'
 import { isHeldOption } from './choiceOptions.js'
-import { shortSpellBlurb } from './spellBlurb.js'
+import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
 import { deferredNoteFor, isDeferredSpecies, resolveSpeciesGrants } from './speciesAdapter.js'
 import { isMagicInitiateOriginFeat } from './stage1Persistence.js'
 import { bundledSpellData, knownCountFor, loadCachedSpellData, preparedCountFor, preparedCountRuleText, saveCachedSpellData, spellbookSizeFor, spellcastingAbilityForClass } from './spellCatalogFallback.js'
@@ -133,19 +133,21 @@ const ABILITY_SHORT = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wi
  * name, and the first sentence of the book description under it. The
  * checkbox resets the global `input { width: 100% }` rule (inputStyle).
  */
-function SpellPickRow({ spell, held, checked, onToggle, inputStyle, note }) {
-  const blurb = shortSpellBlurb(spell.description)
+function SpellPickRow({ spell, held, checked, onToggle, inputStyle, note, atLimit = false }) {
+  const desc = spellDescriptionText(spell.description)
+  const facts = spellFactsLine(spell)
   return (
-    <div style={{ margin: '10px 0', opacity: held ? 0.55 : 1 }}>
+    <div style={{ margin: '10px 0', opacity: held ? 0.55 : (atLimit ? 0.45 : 1) }}>
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, margin: 0, fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 600, color: 'inherit' }}>
-        <input type="checkbox" style={inputStyle} disabled={held} checked={checked} onChange={onToggle} />
+        <input type="checkbox" style={inputStyle} disabled={held || atLimit} checked={checked} onChange={onToggle} />
         <span>
           {held ? `${spell.name} — already granted` : spell.name}
           {note ? <span style={{ fontWeight: 400, opacity: 0.75 }}> {note}</span> : null}
           {spell.school ? <span style={{ fontWeight: 400, opacity: 0.75 }}> ({spell.school})</span> : null}
         </span>
       </label>
-      {blurb ? <div className="help" style={{ fontStyle: 'normal', margin: '2px 0 0 26px' }}>{blurb}</div> : null}
+      {desc ? <div style={{ fontSize: 15, lineHeight: 1.5, color: 'var(--ink-2)', margin: '2px 0 0 26px' }}>{desc}</div> : null}
+      {facts ? <div style={{ fontSize: 13, color: 'var(--ink-3)', margin: '2px 0 0 26px' }}>{facts}</div> : null}
     </div>
   )
 }
@@ -740,7 +742,12 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
         key: spellKeyOf(s),
         name: s.name,
         school: s.school || '',
-        description: s.description || ''
+        description: s.description || '',
+        castTime: s.castTime || null,
+        range: s.range || null,
+        duration: s.duration || null,
+        save: s.save || null,
+        ritual: s.ritual === true
       }))
   }, [spellData])
   const spellSlots = spellData?.spellSlots ?? spellData?.slots ?? null
@@ -1193,7 +1200,9 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
         <Tip text="Proficiencies your feats already granted — the ancestry feat from Stage 1 and the origin feat from Stage 3. They were picked on those stages and arrive here as held, never re-picked: a duplicate in the class picker above becomes a replacement pick instead." />
         <div className="help" style={{ fontStyle: 'normal', marginTop: 4 }}>
           {featPicks.skills.length === 0 && featPicks.tools.length === 0 && featPicks.languages.length === 0 ? (
-            'No feat-granted proficiencies yet — ancestry and origin feat subchoices land here once picked.'
+            ((state.originFeat || state.ancestry_feat_id)
+              ? 'Your feats do not grant any skill, tool, or language proficiencies, so nothing is added here.'
+              : 'Once you pick your ancestry feat (Stage 1) and origin feat (Stage 3), any skill, tool, or language they grant will show up here.')
           ) : (
             <>
               {featPicks.skills.length > 0 && (
@@ -1273,7 +1282,7 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 <Tip text="Spells your class knows at level 1. These lock at creation — you cannot swap a known spell freely later — so pick the ones you want to keep. Granted spells above never count against this total." />
               </span>
               <div className="help" style={{ fontStyle: 'normal' }}>
-                {knownSpells.length} of {knownCount} known spells picked.
+                {knownSpells.length} of {knownCount} known spells picked — {Math.max(0, knownCount - knownSpells.length)} left.
               </div>
               {spellOptions.length === 0 ? (
                 <div className="help" style={{ fontStyle: 'normal' }}>
@@ -1284,6 +1293,7 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 const checked = knownSpells.includes(s.key)
                 return (
                   <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
+                    atLimit={!checked && knownSpells.length >= knownCount}
                     onToggle={() => toggleSpell('known_spells', s.key, knownCount)} />
                 )
               })}
@@ -1295,7 +1305,7 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 <Tip text="Your spellbook: the spells you OWN. At level 1 it holds exactly 6 first-level wizard spells, and it grows by 2 every wizard level after that. You prepare spells FROM this book — a spell must be in the book before it can be marked prepared below. The book is what you start with: in play you copy new spells into it for 50 gold and 2 hours per spell level, and if the book is lost you cannot change your prepared spells until it is recovered or replaced. Cantrips are never book spells — they stay in Stage 2." />
               </span>
               <div className="help" style={{ fontStyle: 'normal' }}>
-                {knownSpells.length} of {bookCount} spells in the book.
+                {knownSpells.length} of {bookCount} spells in the book — {Math.max(0, bookCount - knownSpells.length)} left.
               </div>
               {spellOptions.length === 0 ? (
                 <div className="help" style={{ fontStyle: 'normal' }}>
@@ -1308,6 +1318,7 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 return (
                   <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
                     note={isPrepared ? '— prepared ✓' : ''}
+                    atLimit={!checked && knownSpells.length >= bookCount}
                     onToggle={() => toggleBookSpell(s.key)} />
                 )
               })}
@@ -1322,7 +1333,7 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 {preparedFromScores != null && spellcastingAbility
                   ? `${ABILITY_FULL[spellcastingAbility]} ${formatModifier(castingMod)}, level 1 → prepare ${preparedCount}. `
                   : ''}
-                {preparedSpells.length} of {preparedCount} prepared spells picked.
+                {preparedSpells.length} of {preparedCount} prepared spells picked — {Math.max(0, preparedCount - preparedSpells.length)} left.
               </div>
               {isWizard && knownSpells.length === 0 && (
                 <div className="help" style={{ fontStyle: 'normal' }}>
@@ -1349,6 +1360,7 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 const checked = preparedSpells.includes(s.key)
                 return (
                   <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
+                    atLimit={!checked && preparedSpells.length >= preparedCount}
                     onToggle={() => toggleSpell('prepared_spells', s.key, preparedCount)} />
                 )
               })}
