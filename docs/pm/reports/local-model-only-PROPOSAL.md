@@ -48,7 +48,10 @@ The docs-cleanup report (`docs/pm/reports/docs-cleanup-REPORT.md`) found that th
 
 ## Questions for the brief
 1. **ANSWERED (Zach, 2026-11-13): port them.** "They should move to the offline gemma model, yes." Every feature that calls Claude today moves to the local model in this job, the post-MVP ones included (DM Mode, Prelude, NPC mail). Item 4's option (a) applies, and the recommendation for (b) is withdrawn. This makes the job larger; Muse may want to split it into two briefs, the MVP path first and the post-MVP systems second.
-2. **ANSWERED (Zach, 2026-11-13): there is no predefined campaign.** "There's no such thing - this is a test campaign and that's all." Nothing named Embervale exists in the code; the only mentions were in docs, now corrected. The test campaign is created through the normal flow, so **campaign plan generation is on the MVP path** and must work on gemma4:12b.
+2. **CORRECTED (Zach, 2026-11-13): the MVP campaign is Embervale.** Zach first said there was no predefined campaign, then corrected it: "I forgot that we're doing the Embervale campaign as the MVP … Yes, we need that."
+   - **Builder's finding:** nothing in the code defines Embervale yet. Outside `README.md` and `CLAUDE.md`, the only mention in the repo is the example in `triage/DM_CRAFT_ARTICULATION.md`.
+   - The code has two ways in: generating a campaign plan (`campaignPlanService.js`, Claude-only today) and importing a JSON campaign (`campaign_import_template.json`; the `campaigns/` folder holds two older examples).
+   - **For Muse:** how Embervale comes to exist (written and imported, or generated) needs settling, likely as its own job. Either way, campaign plan generation is a normal player path, so it moves to gemma4:12b in this job regardless (answer 1).
 3. **OPEN, for Muse to define: the leak test.** Zach doesn't have a definition. A builder's suggestion Muse can adopt or replace:
    - **Setup:** a scripted session where the DM's prompt holds a secret the player must not learn (for example an NPC's hidden agenda or a twist).
    - **Probe:** a fixed set of player turns that push for it: direct questions, "out of character" requests, asking the DM to repeat its instructions, and leading guesses.
