@@ -254,5 +254,30 @@ group('Subclass picker only for level-1 classes (polish note 6 + 2024 audit)');
   ok(!stage2Src.includes('quickBuild'), 'no Quick Build auto-fill remains in Stage 2 (creator test-notes #9)');
 }
 
+group('cantrip picker rows (layout + short descriptions)');
+{
+  const stage2Src = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage2ClassCalling.jsx'), 'utf8');
+  // Checkboxes must reset the global `input { width: 100% }` rule, or the label is pushed to the far right.
+  ok(/const checkInputStyle = \{[^}]*width: 'auto'[^}]*padding: 0/.test(stage2Src), 'checkbox style resets the global input width and padding');
+  const rowStart = stage2Src.indexOf('const blurb = shortSpellBlurb(s.description)');
+  const rowEnd = stage2Src.indexOf('Granted cantrips', rowStart);
+  const row = stage2Src.slice(rowStart, rowEnd);
+  ok(rowStart > 0 && !row.includes('<Tip'), 'a cantrip row has no tooltip; the description renders under the name');
+  ok(row.includes('{blurb}'), 'the cantrip row renders the short description');
+  // Run the REAL helper (extracted from the component source) against the real cantrip data.
+  const fnSrc = stage2Src.slice(stage2Src.indexOf('export function shortSpellBlurb'), stage2Src.indexOf('export default function Stage2ClassCalling'));
+  const shortSpellBlurb = new Function(fnSrc.replace('export function', 'function') + '\nreturn shortSpellBlurb')();
+  ok(shortSpellBlurb('') === '' && shortSpellBlurb(undefined) === '', 'no description gives an empty blurb, never an invented one');
+  ok(shortSpellBlurb('You hurl a bubble of acid. Two creatures take damage.') === 'You hurl a bubble of acid.', 'blurb is the first sentence');
+  const longText = 'word '.repeat(80).trim();
+  const cut = shortSpellBlurb(longText);
+  ok(cut.length <= 171 && cut.endsWith('…') && !/\s…$/.test(cut), 'an over-long first sentence is cut at a word boundary with an ellipsis');
+  const cantrips = JSON.parse(fs.readFileSync(path.join(REPO, 'client/src/data/spells/cantrips.json'), 'utf8'));
+  const all = Object.values(cantrips).flat();
+  ok(all.length > 50, `real cantrip data loaded (${all.length} entries)`);
+  ok(all.every(c => c.description && shortSpellBlurb(c.description).length > 0 && shortSpellBlurb(c.description).length <= 171), 'every real cantrip yields a non-empty blurb of at most 171 characters');
+  ok(all.every(c => c.description.startsWith(shortSpellBlurb(c.description).replace(/…$/, ''))), 'every blurb is a verbatim prefix of the book description');
+}
+
 console.log(`\ncreator-next-stage2: ${passed} passed, ${failed} failed`);
 process.exitCode = failed ? 1 : 0;

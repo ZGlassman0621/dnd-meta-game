@@ -192,6 +192,20 @@ function spellKeyOf(name) {
   return String(name || '').toLowerCase().trim().replace(/\s+/g, ' ')
 }
 
+/**
+ * One-line summary of a spell for a picker row: the first sentence of the
+ * book description, cut at a word boundary if still long. Never invents
+ * text; returns '' when the spell has no description.
+ */
+export function shortSpellBlurb(text, max = 170) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!t) return ''
+  const m = t.match(/^.*?[.!?](?=\s|$)/)
+  const first = m ? m[0] : t
+  if (first.length <= max) return first
+  return first.slice(0, max).replace(/\s+\S*$/, '') + '…'
+}
+
 export default function Stage2ClassCalling({
   state, set, classes = null, subclassesByClass = null, subclasses = null,
   speciesEntry = null, featCantrips = [], characterLevel = 1, classLevels = null
@@ -481,8 +495,11 @@ export default function Stage2ClassCalling({
   // a flex row keeps the checkbox on the same horizontal plane as
   // its name, in every picker on this stage. The checkbox never
   // shrinks; the label text takes the rest of the row.
-  const checkRowStyle = { display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }
-  const checkInputStyle = { flex: '0 0 auto' }
+  // The global `input { width: 100%; padding: .75rem }` and `label { color; display: block }`
+  // rules in index.css would stretch a bare checkbox across the row and push its
+  // text to the far right, so every checkbox here resets width/padding explicitly.
+  const checkRowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0', color: 'inherit', fontWeight: 400 }
+  const checkInputStyle = { flex: '0 0 auto', width: 'auto', padding: 0, margin: 0 }
 
   return (
     <div className="card">
@@ -678,11 +695,19 @@ export default function Stage2ClassCalling({
                   : null
                 const checked = grantedHere || classPickKeys.includes(s.key)
                 const disabled = grantedHere || (!checked && classPickKeys.length >= maxCantripPicks)
+                const blurb = shortSpellBlurb(s.description)
                 return (
-                  <label key={s.key} style={{ ...checkRowStyle, opacity: grantedHere ? 0.6 : 1 }}>
-                    <input type="checkbox" style={checkInputStyle} checked={checked} disabled={disabled} onChange={() => toggleCantrip(s.key)} /> {s.name}
-                    <Tip text={`${s.description || s.name}${grantedHere ? ` Granted by ${grantedSource} — it never counts against your ${maxCantripPicks} picks.` : ''}`} />
-                  </label>
+                  <div key={s.key} style={{ margin: '10px 0', opacity: grantedHere ? 0.6 : 1 }}>
+                    <label style={{ ...checkRowStyle, margin: 0, fontWeight: 600 }}>
+                      <input type="checkbox" style={checkInputStyle} checked={checked} disabled={disabled} onChange={() => toggleCantrip(s.key)} />
+                      <span>{s.name}</span>
+                    </label>
+                    {(blurb || grantedHere) && (
+                      <div className="help" style={{ fontStyle: 'normal', margin: '2px 0 0 26px' }}>
+                        {blurb}{grantedHere ? `${blurb ? ' ' : ''}Granted by ${grantedSource} — it never counts against your ${maxCantripPicks} picks.` : ''}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
