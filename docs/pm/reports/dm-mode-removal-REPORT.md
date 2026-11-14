@@ -118,11 +118,15 @@ DM Mode is gone. The home screen shows every other card exactly as before, with 
 - **Static import check** (script, every named import against the target's real exports): `server/` **1,876 imports across 429 files, 0 problems** (was 1,941 / 438 before; the nine deleted server files account for the difference). `tests/`: 4 "problems", **identical on the pre-change tree** (805 imports / 252 files before, 792 / 250 after). They are `import` lines inside test source strings (creator-next, spellbook), not real imports, and have nothing to do with DM Mode.
 
 ## Grep proof
-Command: `grep -rnP "dmMode(?!l)|DMMode|dm-mode|DM Mode|dmCoaching|DMCoaching|showDMMode" server client/src tests`, excluding `server/migrations/` (migrations are history and stay untouched).
-- **Result: 0 hits.**
-- The brief's looser pattern `dmMode` also matches `dmModelId` / `dmModel` (the DM model's id) in `client/src/App.jsx` (lines 360, 363, 371) and `client/src/components/SessionSetup.jsx` (53, 91). These are the lookahead-excluded false positives, justified remainders: they mean "DM *model*", unrelated to DM Mode.
-- Other remainders: `server/scripts/purge-gameplay-state.js:30` mentions the `dm_mode_*` table names in a comment (it matches `dm_mode`, not the pattern, so it is not a grep hit; named here for completeness).
+**Correction, 2026-11-14:** the first version of this section said "Result: 0 hits". That was wrong. It used `grep -P`, which errors in this shell's locale; the error was hidden, so the check never ran. It was re-run on 2026-11-14 with plain `grep -E`:
+
+Command: `grep -rnE "dmMode|DMMode|dm-mode|DM Mode|dmCoaching|DMCoaching|showDMMode" server client/src tests -I | grep -v "^server/migrations/" | grep -vE "dmModel(Id)?"`
+
+- **Result: 2 hits, both in one comment I wrote:** `server/services/markerSchemas.js:876-877` ("its only emitter and handler were in DM Mode, removed in the dm-mode-removal job"). They are an explanation of why the `BOND_SHIFT` schema is orphaned, so they are justified remainders, not live DM Mode code.
+- The brief's looser pattern `dmMode` also matches `dmModelId` / `dmModel` (the DM *model's* id) in `client/src/App.jsx` (about lines 359, 362, 370) and `client/src/components/SessionSetup.jsx` (53, 91). I excluded them with `grep -vE "dmModel(Id)?"`. They are false positives and mean "DM model", unrelated to DM Mode.
+- Other remainders: `server/scripts/purge-gameplay-state.js:30` mentions the `dm_mode_*` table names in a comment (it matches `dm_mode`, not the pattern; named for completeness).
 - `server/migrations/`: 9 files still mention DM Mode (001, 014, 015, 016, 017, 018, 021, 022, 079). Excluded and untouched, per the brief.
+- No DM Mode file, import, route or component remains. Beyond this grep, that rests on the static import check (0 problems), the client build, the full suite (244/244) and the server boot probe (`/api/dm-mode/*` returns 404), all reported in this document.
 
 ## Verification: server and `:5173`
 **Booted the real `server/index.js`** as a child process on port 3077 with a throwaway DB and `OLLAMA_URL` on a dead port (script: scratchpad `boot-probe.mjs`; it stops only its own child). Output, verbatim:
