@@ -273,16 +273,17 @@ export async function resolveEnemyAttack(sessionId, encounterSeq, enemyName, tar
   }
   let hpResult = null;
   if (damage > 0) {
-    if (target.type === 'player') hpResult = await applyHpChange(target.id, -damage, `enemy attack: ${enemy.name}`);
+    // S2: the engine judged the crit; at 0 HP it counts as two failed death saves.
+    if (target.type === 'player') hpResult = await applyHpChange(target.id, -damage, `enemy attack: ${enemy.name}`, { crit: isCrit });
     else if (target.type === 'companion') {
       // Companions store HP in companion_current_hp (there is no
       // companions.current_hp — writing it threw, the marker handler
       // swallowed the throw, and enemy hits on companions silently did
       // nothing in live play until v1.0.189).
-      const beforeComp = await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [target.id]);
-      await dbRun(`UPDATE companions SET companion_current_hp = MAX(0, companion_current_hp - ?) WHERE id = ?`, [damage, target.id]);
-      const u = await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [target.id]);
-      hpResult = { applied: true, currentHp: u?.companion_current_hp, damage, hpDamage: Math.max(0, (beforeComp?.companion_current_hp ?? 0) - (u?.companion_current_hp ?? 0)) };
+      // S2: one companion damage path (temp HP, drop reset, damage at 0 HP).
+      const { applyCompanionDamage } = await import('./characterHpService.js');
+      const comp = await applyCompanionDamage(target.id, damage, { crit: isCrit });
+      hpResult = { ...comp, applied: true, damage, hpDamage: comp.applied ?? 0 };
       // Companion concentration (combat-real B4): damage taken forces
       // the same CON save the PC makes in characterHpService.
       try {

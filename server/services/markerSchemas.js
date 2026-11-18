@@ -985,7 +985,9 @@ PERCEPTION_PREROLL: {
       Severity: { type: 'string', required: false },
       Type: { type: 'string', required: false },
       Save: { type: 'string', required: false },
-      Target: { type: 'string', required: false }
+      Target: { type: 'string', required: false },
+      // S2: a critical hit. At 0 HP it counts as two failed death saves.
+      crit: { type: 'bool', required: false }
     }
   },
 

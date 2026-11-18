@@ -429,7 +429,7 @@ export async function postPendingSave(sessionId, characterId, abilityFull, dc, e
  *  never fails the damage call. The returned `resistance` names the
  *  source when one applied, so the damage line can say what halved it.
  */
-export async function damageToPc(sessionId, encounterSeq, pcId, amount, { type = null, attacker = null, spell = '' } = {}) {
+export async function damageToPc(sessionId, encounterSeq, pcId, amount, { type = null, attacker = null, spell = '', crit = false } = {}) {
   const { applyHpChange } = await import('./characterHpService.js');
   let adjusted = Number(amount) || 0;
   let resistance = { amount: adjusted, result: null, source: null, featureKey: null, featureName: null, cancelled: false, originalAmount: adjusted };
@@ -441,7 +441,8 @@ export async function damageToPc(sessionId, encounterSeq, pcId, amount, { type =
     adjusted = r.amount;
     resistance = r;
   } catch { /* resistance is best-effort; the damage proceeds unadjusted */ }
-  const res = await applyHpChange(pcId, -adjusted, `enemy spell: ${spell}`);
+  // S2: a crit (a spell attack that rolled a 20) counts twice at 0 HP.
+  const res = await applyHpChange(pcId, -adjusted, `enemy spell: ${spell}`, { crit });
   const hpDamage = Math.max(0, (res?.previousHp ?? 0) - (res?.currentHp ?? 0));
   if (hpDamage > 0) {
     const { recordDamage } = await import('./lastDamageService.js');
@@ -456,7 +457,7 @@ export async function damageToPc(sessionId, encounterSeq, pcId, amount, { type =
 /** Damage to a companion: direct HP update + companion concentration.
  *  Family 6 (D9): same resistance read as damageToPc, companion side.
  */
-export async function damageToCompanion(sessionId, encounterSeq, compId, amount, { type = null, attacker = null, spell = '' } = {}) {
+export async function damageToCompanion(sessionId, encounterSeq, compId, amount, { type = null, attacker = null, spell = '', crit = false } = {}) {
   const row = await dbGet('SELECT companion_current_hp, companion_max_hp FROM companions WHERE id = ?', [compId]);
   if (!row) return { applied: 0 };
   let adjusted = Number(amount) || 0;
@@ -470,9 +471,11 @@ export async function damageToCompanion(sessionId, encounterSeq, compId, amount,
     adjusted = r.amount;
     resistance = r;
   } catch { /* resistance is best-effort; the damage proceeds unadjusted */ }
-  const next = Math.max(0, row.companion_current_hp - adjusted);
-  await dbRun('UPDATE companions SET companion_current_hp = ? WHERE id = ?', [next, compId]);
-  const applied = row.companion_current_hp - next;
+  // S2: one companion damage path (temp HP, drop reset, damage at 0 HP).
+  const { applyCompanionDamage } = await import('./characterHpService.js');
+  const comp = await applyCompanionDamage(compId, adjusted, { crit });
+  const next = comp.currentHp ?? row.companion_current_hp;
+  const applied = comp.applied ?? 0;
   let concentrationCheck = null;
   if (applied > 0) {
     try {
@@ -485,7 +488,7 @@ export async function damageToCompanion(sessionId, encounterSeq, compId, amount,
       attackerName: attacker?.name || null, encounterSeq,
     });
   }
-  return { applied, currentHp: next, concentrationCheck, resistance };
+  return { applied, currentHp: next, concentrationCheck, resistance, ...(comp.deathSaveFailuresAdded ? { deathSaveFailuresAdded: comp.deathSaveFailuresAdded, deathSaveFailures: comp.deathSaveFailures, dead: comp.dead } : {}) };
 }
 
 /** Healing to an enemy ally: clamped at max; the dead stay dead. */
@@ -498,13 +501,13 @@ export async function healEnemy(sessionId, encounterSeq, enemyName, amount) {
 }
 
 /** Damage to any target kind, through the right application path. */
-export async function damageToTarget(sessionId, encounterSeq, target, amount, { type = null, attacker = null, spell = '', sessionCharacterId = null } = {}) {
+export async function damageToTarget(sessionId, encounterSeq, target, amount, { type = null, attacker = null, spell = '', sessionCharacterId = null, crit = false } = {}) {
   if (!target || !(amount > 0)) return { applied: 0 };
   if (target.kind === 'player') {
-    return damageToPc(sessionId, encounterSeq, target.id, amount, { type, attacker, spell });
+    return damageToPc(sessionId, encounterSeq, target.id, amount, { type, attacker, spell, crit });
   }
   if (target.kind === 'companion') {
-    return damageToCompanion(sessionId, encounterSeq, target.id, amount, { type, attacker, spell });
+    return damageToCompanion(sessionId, encounterSeq, target.id, amount, { type, attacker, spell, crit });
   }
   const res = await applyPartyDamageToEnemy(sessionId, encounterSeq, target.name, amount, sessionCharacterId, {
     damageType: type, magical: true,
@@ -1151,7 +1154,7 @@ export async function resolveEnemyCast(sessionId, encounterSeq, enemyRow, enemyK
         total = spec.flat
           ? (spec.flatAmount === 'full' ? 0 : spec.flatAmount + (spec.addCastingMod ? mod : 0))
           : rollSpecString(specStr) + (spec.addCastingMod ? mod : 0);
-        const dmg = await damageToTarget(sessionId, encounterSeq, target, total, { type: spec.damageType, attacker: caster, spell: spellName, sessionCharacterId });
+        const dmg = await damageToTarget(sessionId, encounterSeq, target, total, { type: spec.damageType, attacker: caster, spell: spellName, sessionCharacterId, crit: isCrit });
         applied = dmg.applied;
         killed = dmg.killed || false;
       }

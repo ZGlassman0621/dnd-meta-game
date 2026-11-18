@@ -418,7 +418,11 @@ export async function strikeHazard(lairKey, hazard, { sessionId = null, encounte
         const after = await dbGet('SELECT current_hp FROM characters WHERE id = ?', [c.id]).catch(() => null);
         hpAfter = after ? after.current_hp : Math.max(0, c.hp - damage);
       } else if (c.type === 'companion') {
-        await dbRun('UPDATE companions SET companion_current_hp = MAX(0, companion_current_hp - ?) WHERE id = ?', [damage, c.id]).catch(() => null);
+        // S2: one companion damage path (temp HP, drop reset, damage at 0 HP).
+        try {
+          const { applyCompanionDamage } = await import('./characterHpService.js');
+          await applyCompanionDamage(c.id, damage);
+        } catch { /* best-effort: the recorded result still stands */ }
         const after = await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [c.id]).catch(() => null);
         hpAfter = after ? after.companion_current_hp : Math.max(0, c.hp - damage);
       } else if (c.type === 'enemy') {

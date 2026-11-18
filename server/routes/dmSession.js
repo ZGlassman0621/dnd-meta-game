@@ -1908,6 +1908,18 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     let deathSave = null;
     try {
       const hpState = await getHpState(session.character_id);
+      // S2: a hit taken while already at 0 HP adds failed death saves (two on a
+      // crit) inside the HP service. When that killed the player this turn, say
+      // so the same way a fatal rolled save does — the dice are not rolled again.
+      const fatalHit = (pipelineResult.handlerResults || []).some((hr) => hr?.ok && hr.result
+        && ((hr.result.characterId === session.character_id && hr.result.died === true)
+          || (hr.result.targetType === 'player' && hr.result.hpResult?.died === true)));
+      if (hpState && hpState.is_dead && fatalHit) {
+        result.messages.push({
+          role: 'user',
+          content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The player took damage while at 0 HP. Failures ${hpState.death_save_failures || 3}/3. THE PLAYER CHARACTER HAS DIED.`
+        });
+      }
       if (hpState && hpState.current_hp === 0 && !hpState.is_dead) {
         deathSave = await rollDeathSave(session.character_id);
         if (deathSave) {

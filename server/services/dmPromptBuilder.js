@@ -672,7 +672,10 @@ export function formatCompanionDeathSavesLine(companion) {
   const f = companion.death_save_failures || 0;
   const sLabel = s === 1 ? 'success' : 'successes';
   const fLabel = f === 1 ? 'failure' : 'failures';
-  const edge = f >= 2
+  // S2 fix-along: three failures is death, not "one more" away from it.
+  const edge = f >= 3
+    ? ' — three failures: dead'
+    : f >= 2
     ? ' — one more failure = dead'
     : s >= 2
       ? ' — one more success stabilizes'
@@ -2109,9 +2112,18 @@ It only changes when you say so, using this marker:
   sheet carries the number. "Bloodied" (about half) and "barely standing"
   (near death) remain the right register.
 
+• crit=true is ONLY for a critical hit — the attack roll was a natural 20:
+  [HP_CHANGE: delta=-14 crit=true reason="the ogre's critical blow"].
+  An ordinary hit never carries crit, and neither does a trap, a fall, or a
+  spell the player saved against. When unsure, leave crit off.
+
 AT 0 HIT POINTS: the player falls unconscious and begins making death saving
 throws. The system rolls these — narrate the fall and the tension, then STOP.
 Do not roll, do not announce the result, and do not decide whether they live.
+A downed player can still be hit: keep emitting HP_CHANGE for every hit on them
+(an ordinary hit: [HP_CHANGE: delta=-5 reason="the goblin's scimitar"]).
+Each hit while at 0 HP is one failed death save (crit=true makes it two), and
+three failures kill. There is no instant death from a single big hit.
 `;
 }
 
