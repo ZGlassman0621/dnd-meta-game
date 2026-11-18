@@ -24,11 +24,10 @@
 // ORIGIN NOTE: Hoard entries are Forgotten Realms except Warrior
 // of Waves, whose source places it with the sea elves of the
 // coast of Deva'lamirusandia (a Hoard-invented place, not FR),
-// so it carries a non-FR origin and requires an origin
-// explanation — flagged for Zach to confirm/override. No other
-// S4 entry takes the outside-FR explanation requirement, and no
-// outside-FR origin is invented for any entry the source leaves
-// setting-neutral.
+// so it carries a non-FR origin label. Since Zach's 2026-11-12
+// ruling ("a class is a class") no subclass needs an origin
+// explanation, Waves included. No outside-FR origin is invented
+// for any entry the source leaves setting-neutral.
 //
 // INVOCATIONS NOTE: the Hoard Eldritch Invocations section tied
 // to the two new patrons (9 invocations, extract p.16) is a
@@ -183,13 +182,12 @@ for (const [cls, name] of S4) {
   const fr = S4.filter(([cls, name]) => name !== 'Warrior of Waves');
   for (const [cls, name] of fr) {
     const e = ss.getSubclass(cls, name);
-    ok(e.origin_setting === 'Forgotten Realms' && e.origin_region === 'Forgotten Realms', `${name} is Forgotten Realms origin, no explanation required`);
-    ok(ss.validateSelection({ className: cls, subclassName: name, level: 3, originExplanation: '' }).complete, `${name} at level 3 with no explanation is complete (FR origin)`);
+    ok(e.origin_setting === 'Forgotten Realms' && e.origin_region === 'Forgotten Realms', `${name} is Forgotten Realms origin`);
+    ok(ss.validateSelection({ className: cls, subclassName: name, level: 3 }).complete, `${name} at level 3 with no explanation is complete (FR origin)`);
   }
   const waves = ss.getSubclass('monk', 'Warrior of Waves');
   ok(waves.origin_setting === 'Hoard of Heroes' && waves.origin_region === "Deva'lamirusandia", 'Warrior of Waves origin is Hoard of Heroes / Deva\'lamirusandia (source-placed, not FR)');
-  ok(!ss.validateSelection({ className: 'monk', subclassName: 'Warrior of Waves', level: 3, originExplanation: '' }).complete, 'Warrior of Waves with blank origin explanation is incomplete (non-FR origin)');
-  ok(ss.validateSelection({ className: 'monk', subclassName: 'Warrior of Waves', level: 3, originExplanation: 'A sea-elf Waves monk who sailed from Deva\'lamirusandia to the Sword Coast.' }).complete, 'Warrior of Waves with an origin explanation is complete');
+  ok(ss.validateSelection({ className: 'monk', subclassName: 'Warrior of Waves', level: 3 }).complete, 'Warrior of Waves (non-FR origin) is complete with no origin explanation');
   for (const [cls, name] of S4) {
     ok(!ss.validateSelection({ className: cls, subclassName: name, level: 2 }).complete, `${name} at level 2 is incomplete (selection is 3rd)`);
   }
@@ -285,7 +283,8 @@ group('8. Prompt-contains (origins, entity honesty, PC reported-total rule)');
   const sand = ss.buildSubclassPromptSection({ class: 'Druid', subclass: 'Circle of Sand', level: 3 }, []);
   ok(sand.includes('Servant of the Desert') && sand.includes('no entity row'), 'Prompt names the Sand spirit and its no-entity-row honesty note');
   const waves = ss.buildSubclassPromptSection({ class: 'Monk', subclass: 'Warrior of Waves', level: 6 }, []);
-  ok(waves.includes('Warrior of Waves') && waves.includes("Deva'lamirusandia") && waves.includes('origin explanation required'), 'Prompt names Waves, its Deva\'lamirusandia origin, and the explanation requirement');
+  ok(waves.includes('Warrior of Waves') && waves.includes("Deva'lamirusandia"), 'Prompt names Waves and its Deva\'lamirusandia origin label');
+  ok(!waves.includes('origin explanation'), 'Prompt no longer tells the DM an origin explanation is required (Zach 2026-11-12)');
   ok(!waves.includes('Way of Waves'), 'Prompt uses the 2024 name Warrior of Waves, not the 2014 Way name');
   const beholder = ss.buildSubclassPromptSection({ class: 'Warlock', subclass: 'The Beholder', level: 14 }, []);
   ok(beholder.includes('Extraneous Ego') && beholder.includes('DM-tracked'), 'Prompt names Extraneous Ego and its DM-tracked honesty note');

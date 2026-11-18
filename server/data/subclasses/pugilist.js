@@ -13,10 +13,10 @@
  *
  * Origin: same setting-neutral note as magus.js — the digest
  * names no setting for Sterling Vermin material, so entries carry
- * origin_setting 'Sterling Vermin (setting-neutral)' and are
- * flagged by the existing validator as requiring an origin
- * explanation until the coordinator rules otherwise. Do NOT
- * silently flip this to 'Forgotten Realms' at merge.
+ * origin_setting 'Sterling Vermin (setting-neutral)' as an
+ * informational label only (no subclass needs an origin explanation,
+ * ("a class is a class", Zach 2026-11-12)). Do NOT silently flip this
+ * to 'Forgotten Realms' (the label would lie).
  *
  * UNRESOLVED, carried forward (digest §UNRESOLVED):
  * - General moxie-feature progression beyond the 3 starters is

@@ -19,10 +19,10 @@
  * Warrior and Survivor as written). Other mechanics bodies remain
  * gateCheck.
  *
- * Origin: PHB core subclasses are treated as Forgotten Realms
- * available, so no origin explanation is required for them. The
- * origin fields exist on every entry so later outside-FR batches
- * can carry a different setting and require an explanation.
+ * Origin: PHB core subclasses are treated as Forgotten Realms. The
+ * origin fields exist on every entry so other batches can carry a
+ * different setting; that is an informational label only. No
+ * subclass needs an origin explanation ("a class is a class", Zach 2026-11-12).
  */
 
 export const FIGHTER_SUBCLASSES = [

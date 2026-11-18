@@ -9,10 +9,10 @@
  * follows server/data/subclasses/fighter.js.
  *
  * Origin: no Forgotten Realms setting is printed for this
- * third-party class, so origin_setting / origin_region are null —
- * under subclassService.isOutsideFr that reads as outside-FR, i.e.
- * an origin explanation is required at selection. Deliberate: do
- * not silently default a third-party class to the Forgotten Realms.
+ * third-party class, so origin_setting / origin_region are null
+ * (shown as 'unspecified setting'). Deliberate: do not silently
+ * default a third-party class to the Forgotten Realms. No subclass
+ * needs an origin explanation ("a class is a class", Zach 2026-11-12).
  * gateCheckRequired is true (2014-era source, no 2024 reprint).
  * Kinds: B = resource pool, D = spell access, E = passive /
  * DM-prompt, G = stored choice.

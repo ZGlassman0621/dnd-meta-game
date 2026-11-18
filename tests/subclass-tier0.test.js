@@ -113,11 +113,12 @@ ok(!ss.validateChoice('fighter', 'Champion', 'draconic_ancestry', 'Red').valid, 
 ok(!ss.validateChoice('cleric', 'Life Domain', 'additional_fighting_style', 'Defense').valid, 'Life Domain has no stored choices');
 
 group('4. Origin / selection completeness');
-ok(ss.validateSelection({ className: 'fighter', subclassName: 'Champion', level: 3, originExplanation: '' }).complete, 'Forgotten Realms subclass needs no origin explanation');
+ok(ss.validateSelection({ className: 'fighter', subclassName: 'Champion', level: 3 }).complete, 'Forgotten Realms subclass is complete with no origin explanation');
 ok(!ss.validateSelection({ className: 'fighter', subclassName: 'Champion', level: 2 }).complete, 'level below selection level is incomplete');
 ok(!ss.validateSelection({ className: 'fighter', subclassName: 'Unknown Subclass', level: 3 }).complete, 'unknown subclass selection is incomplete');
-ok(ss.isOutsideFr({ origin_setting: 'Exandria' }), 'isOutsideFr flags a non-FR setting');
-ok(!ss.isOutsideFr(ss.getSubclass('fighter', 'Champion')), 'isOutsideFr does not flag Champion');
+// "A class is a class" (Zach, 2026-11-12): origin never affects completeness.
+// isOutsideFr was removed with the origin rule (it had no other caller).
+ok(ss.isOutsideFr === undefined, 'the dead isOutsideFr helper is gone from the subclass service');
 
 group('5. Life Domain math (kinds D/E/C)');
 ok(ss.lifeDomainSpellsAtLevel(3).join(',') === 'Aid,Bless,Cure Wounds,Lesser Restoration', 'Life L3 always-prepared spells');

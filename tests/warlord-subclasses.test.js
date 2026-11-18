@@ -227,21 +227,20 @@ group('(b) selectionLevel derived from SUBCLASS_LEVELS, not stored');
     check(entry.selectionLevel === derived,
       `${entry.name} selectionLevel is the derived value (${String(derived)}, got ${String(entry.selectionLevel)})`);
   }
-  if (derived === 1) {
-    check(validateSelection({ className: 'warlord', subclassName: 'Commander', level: 1, originExplanation: 'Came to Faerûn as a mercenary captain.' }).complete === true,
-      'Commander at L1 with an origin explanation is a complete selection');
-    check(validateSelection({ className: 'warlord', subclassName: 'Commander', level: 1, originExplanation: '' }).complete === false,
-      'Commander at L1 without an origin explanation is incomplete (setting-neutral origin needs one)');
-  } else {
-    check(true, `SKIP: selection-level gate asserts need the staged SUBCLASS_LEVELS patch (SUBCLASS_LEVELS.warlord is ${String(derived)})`);
+  // "A class is a class" (Zach, 2026-11-12): every Warlord Presence is
+  // outside the Forgotten Realms (KibblesTasty, setting-neutral), and none
+  // needs an origin explanation — complete at level 1 with none given.
+  check(listed.length === 8, `the Warlord has 8 Presences (got ${listed.length})`);
+  for (const entry of listed) {
+    check(entry.origin_setting !== 'Forgotten Realms', `${entry.name} carries an outside-FR origin label (${entry.origin_setting})`);
+    const sel = validateSelection({ className: 'warlord', subclassName: entry.name, level: derived === 1 ? 1 : 20 });
+    check(sel.found === true && sel.complete === true && sel.reasons.length === 0,
+      `${entry.name} is a complete selection with no origin explanation (got ${sel.reasons.join(' | ') || 'no reasons'})`);
   }
-  // The origin rule itself does not depend on the patch: a
-  // setting-neutral Presence always needs an explanation.
-  const noExpl = validateSelection({ className: 'warlord', subclassName: 'Commander', level: 20, originExplanation: '' });
-  check(noExpl.found === true && noExpl.complete === false && noExpl.reasons.join(' ').includes('origin explanation'),
-    'Commander without an origin explanation is incomplete at any level');
-  const withExpl = validateSelection({ className: 'warlord', subclassName: 'Commander', level: 20, originExplanation: 'Came to Faerûn as a mercenary captain.' });
-  check(withExpl.found === true && withExpl.complete === true, 'Commander with an origin explanation is complete');
+  // The DM prompt shows the origin label but never says an explanation is required.
+  const prompt = buildSubclassPromptSection({ name: 'Test Warlord', class: 'warlord', subclass: 'Commander', level: 1 }, []);
+  check(prompt.includes('KibblesTasty') && !prompt.includes('origin explanation'),
+    'the DM prompt carries the Presence origin label and no explanation requirement');
 }
 
 // ===========================================================================

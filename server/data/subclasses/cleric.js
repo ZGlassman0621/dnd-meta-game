@@ -25,9 +25,9 @@
  * lists corrected in this patch (they were the 2014 lists). Life
  * matches. Mechanics bodies remain gateCheck.
  *
- * Origin: see fighter.js — PHB core, Forgotten Realms available,
- * no origin explanation required. Origin fields exist on every
- * entry for later outside-FR batches.
+ * Origin: see fighter.js — PHB core, Forgotten Realms. The origin
+ * fields are an informational label only: no subclass needs an origin
+ * explanation ("a class is a class", Zach 2026-11-12).
  *
  * Spell-access distinction (kind D, and the whole point of this
  * pilot): Life Domain spells are ALWAYS PREPARED when the cleric

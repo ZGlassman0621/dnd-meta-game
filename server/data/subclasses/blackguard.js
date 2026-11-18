@@ -30,8 +30,8 @@
  * patron "The Dread Lord" (a different thing entirely).
  *
  * origin_setting / origin_region are null: the digest states NO setting for the
- * Blackguard. Coordinator must decide how validateSelection treats null
- * (recommendation: FR-neutral) before these entries gate. sourceTier
+ * Blackguard (shown as 'unspecified setting'). It gates nothing: no subclass
+ * needs an origin explanation ("a class is a class", Zach 2026-11-12). sourceTier
  * 'fan-conversion' is this batch's label; no existing tier vocabulary for it
  * was found in the survey — coordinator to confirm.
  */

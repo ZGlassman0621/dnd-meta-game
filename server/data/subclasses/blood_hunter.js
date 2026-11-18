@@ -27,9 +27,9 @@
  * check the numbers against — Zach's gate IS the PDF check.
  *
  * origin_setting / origin_region are null (blackguard precedent): the
- * document prints NO setting for the Blood Hunter. Under validateSelection
- * (isOutsideFr = setting !== 'Forgotten Realms') a null origin requires
- * an origin explanation — fail-closed per the outside-FR ruling.
+ * document prints NO setting for the Blood Hunter. The origin is an
+ * informational label only; no subclass needs an origin explanation
+ * ("a class is a class", Zach 2026-11-12).
  *
  * Variant NOT built (PDF, "Variant: Hemocraft Ability Score"): with the
  * DM's permission a blood hunter may use Wisdom instead of Intelligence

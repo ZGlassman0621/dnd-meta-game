@@ -15,11 +15,9 @@
  * Origin: the digest names NO setting for Sterling Vermin material.
  * Entries therefore carry origin_setting 'Sterling Vermin
  * (setting-neutral)' rather than an invented Forgotten Realms
- * origin. Under the existing validator (isOutsideFr = setting !==
- * 'Forgotten Realms') that flags these as requiring an origin
- * explanation until the coordinator rules whether setting-neutral
- * third-party classes count as FR-available. Do NOT silently flip
- * this to 'Forgotten Realms' at merge.
+ * origin. It is an informational label only: no subclass needs an
+ * origin explanation ("a class is a class", Zach 2026-11-12). Do NOT
+ * silently flip this to 'Forgotten Realms' (the label would lie).
  *
  * UNRESOLVED, carried forward (digest §UNRESOLVED):
  * - Sidereal Cabal multiclass prerequisite not printed.

@@ -347,7 +347,9 @@ group('14. DM prompt section');
 {
   const fresh = art.artificerPromptSection(art.defaultArtificerState(), { level: 2, intMod: 3 });
   assert(fresh.includes("Tinker's Magic uses left: 3/3"), 'fresh state displays full tinker uses');
-  assert(fresh.includes('origin explanation REQUIRED'), 'missing origin flagged in prompt');
+  // "A class is a class" (Zach, 2026-11-12): no origin explanation is required,
+  // so a missing one is not flagged to the DM; the origin label still shows.
+  assert(!fresh.includes('origin explanation') && fresh.includes('origin: Eberron/Khorvaire)'), 'no explanation demanded; origin label shown');
   const withOrigin = art.artificerPromptSection(
     { ...art.defaultArtificerState(), origin: { setting: 'Eberron', region: 'Khorvaire', explanation: 'Fell through a faulty portal' } },
     { level: 6, intMod: 3 }

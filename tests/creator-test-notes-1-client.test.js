@@ -260,7 +260,8 @@ group('#5 follow-up — resume prefers stored feat_id, name-match as fallback');
 // REVERSAL of the client worker's #12 decision ("never the origin
 // suffix"): the server worker proved the requirement is otherwise
 // invisible at pick time — Stage 2 showed no suffix for null-origin
-// entries and validateSelection has no callers in the creator flow.
+// entries. (Since Zach's 2026-11-12 ruling the suffix is informational:
+// no subclass needs an origin explanation.)
 // The suffix now renders AFTER the description, only for non-FR/null
 // origins. Description rendering is untouched.
 group('#12 subclass description + follow-up origin suffix');
@@ -274,7 +275,7 @@ group('#12 subclass description + follow-up origin suffix');
   ok(subclassOriginSuffix({ origin_setting: null }) === ' · origin unspecified setting',
     'null origin: suffix reads "unspecified setting"');
   ok(subclassOriginSuffix({}) === ' · origin unspecified setting',
-    'missing origin field: same null treatment (fail-closed, like isOutsideFr)');
+    'missing origin field: same null treatment as a null origin');
   ok(subclassOriginSuffix({ origin_setting: 'Eberron', origin_region: 'Khorvaire' }) === ' · origin Eberron (Khorvaire)',
     'named non-FR origin: setting + region');
   ok(subclassOriginSuffix({ origin_setting: 'KibblesTasty (setting-neutral)', origin_region: 'KibblesTasty (setting-neutral)' }) === ' · origin KibblesTasty (setting-neutral)',

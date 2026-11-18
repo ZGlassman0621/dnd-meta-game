@@ -29,9 +29,9 @@
  * directly; PC callers surface them as instructions and let the
  * player apply them.
  *
- * Origin: PHB core, Forgotten Realms available, no origin
- * explanation required. Origin fields exist on every entry for
- * later outside-FR batches.
+ * Origin: PHB core, Forgotten Realms. The origin fields are an
+ * informational label only: no subclass needs an origin explanation
+ * ("a class is a class", Zach 2026-11-12).
  */
 
 export const SORCERER_SUBCLASSES = [

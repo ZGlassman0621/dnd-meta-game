@@ -583,7 +583,7 @@ export function artificerPromptSection(state, { level, intMod, name }) {
   const lines = [`Artificer (level ${level}, Int mod ${intMod}):`];
   lines.push(`- Plans known (${s.plansKnown.length}/${plansKnownForLevel(level)}): ${s.plansKnown.join(', ') || 'none'}`);
   lines.push(`- Created items (${s.createdItems.length}/${magicItemsForLevel(level)}): ${s.createdItems.map(i => `${i.name}${i.attuned ? ' [attuned]' : ''}`).join(', ') || 'none'}`);
-  lines.push(`- Attuned ${attunedCount(s)}/${attunementCapForLevel(level)} (origin: Eberron/Khorvaire${s.origin ? ` — ${s.origin.explanation}` : ' — origin explanation REQUIRED, not yet recorded'})`);
+  lines.push(`- Attuned ${attunedCount(s)}/${attunementCapForLevel(level)} (origin: Eberron/Khorvaire${s.origin?.explanation ? ` — ${s.origin.explanation}` : ''})`);
   lines.push(`- Flash of Genius uses left: ${fLeft}/${fMax} (Reaction after a known failure within 30 ft, add Int mod; spend with [ARTIFICER_FLASH: Target="Name" Total="13" DC="15"])`);
   lines.push(`- Tinker's Magic uses left: ${tLeft}/${tMax} (create a mundane item with Tinker's Tools in hand; item vanishes at Long Rest)`);
   if ((Math.trunc(level) || 1) >= 6) lines.push(`- Tool Expertise: double proficiency bonus on tool checks (base +${pb}, doubled +${pb * 2}) — apply to the reported total, never silently added`);

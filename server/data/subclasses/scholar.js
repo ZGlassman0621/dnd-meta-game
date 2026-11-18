@@ -8,11 +8,9 @@
  * "14th" is recorded as a likely typo (digest UNRESOLVED 1), wired as 13th here.
  *
  * origin_setting / origin_region are null: the digest states NO setting for the
- * Scholar or its fields, and inventing 'Forgotten Realms' would wrongly clear the
- * outside-FR explanation check while inventing another setting would wrongly
- * trigger it. The coordinator must decide how validateSelection treats a null
- * setting (recommendation: FR-neutral, neither requiring nor waiving explanation)
- * before these entries gate. sourceTier 'third-party' is this batch's label for
+ * Scholar or its fields, and none is invented. The origin is an informational
+ * label only; no subclass needs an origin explanation ("a class is a class", Zach 2026-11-12).
+ * sourceTier 'third-party' is this batch's label for
  * non-WotC published material; no existing tier vocabulary for it was found in
  * the survey — coordinator to confirm.
  *

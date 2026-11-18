@@ -138,18 +138,12 @@ ok(ss.getSubclass('artificer', 'Artillerist').origin_setting === 'Eberron', 'Art
 ok(ss.getSubclass('artificer', 'Battle Smith').origin_setting === 'Eberron', 'Battle Smith origin stays Eberron');
 ok(ss.getSubclass('artificer', 'Armorer').origin_setting === 'Eberron', 'Armorer origin is Eberron (micro-push #4: artificers are Eberron-origin per Zach 2026-11-08)');
 ok(ss.getSubclass('artificer', 'Cartographer').origin_setting === 'Eberron', 'Cartographer origin is Eberron (micro-push #4: artificers are Eberron-origin per Zach 2026-11-08)');
-ok(!ss.validateSelection({ className: 'artificer', subclassName: 'Alchemist', level: 3, originExplanation: '' }).complete,
-  'Alchemist with a blank origin explanation is incomplete (outside-FR rule)');
-ok(!ss.validateSelection({ className: 'artificer', subclassName: 'Battle Smith', level: 3, originExplanation: '' }).complete,
-  'Battle Smith with a blank origin explanation is incomplete (outside-FR rule)');
-ok(ss.validateSelection({ className: 'artificer', subclassName: 'Alchemist', level: 3, originExplanation: 'Came through a manifest zone.' }).complete,
-  'Alchemist with an origin explanation is complete');
-ok(!ss.validateSelection({ className: 'artificer', subclassName: 'Armorer', level: 3, originExplanation: '' }).complete,
-  'Armorer with a blank origin explanation is incomplete (outside-FR rule, micro-push #4)');
-ok(!ss.validateSelection({ className: 'artificer', subclassName: 'Cartographer', level: 3, originExplanation: '' }).complete,
-  'Cartographer with a blank origin explanation is incomplete (outside-FR rule, micro-push #4)');
-ok(ss.validateSelection({ className: 'artificer', subclassName: 'Armorer', level: 3, originExplanation: 'Came through a manifest zone.' }).complete,
-  'Armorer with an origin explanation is complete');
+// "A class is a class" (Zach, 2026-11-12): an Eberron-origin subclass is a
+// complete selection at its level with no origin explanation at all.
+for (const name of ['Alchemist', 'Battle Smith', 'Armorer', 'Cartographer']) {
+  const sel = ss.validateSelection({ className: 'artificer', subclassName: name, level: 3 });
+  ok(sel.found && sel.complete && sel.reasons.length === 0, `${name} (Eberron origin) at level 3 is complete with no origin explanation`);
+}
 ok(!ss.validateSelection({ className: 'artificer', subclassName: 'Alchemist', level: 2 }).complete,
   'Alchemist below selection level 3 is incomplete');
 

@@ -456,7 +456,7 @@ export const MONK_SUBCLASSES = [
     origin_region: "Deva'lamirusandia",
     gateCheckRequired: true,
     conversionCheck: 'Hoard grants ran 3/6/11/17, which coincide exactly with the built 2024 Monk cadence 3/6/11/17 — no re-pointing. 2024 naming applied: Warrior of Waves (the source, 2014-pattern, calls it Way of Waves); the old name is kept in this conversion note only. No 2024 reprint exists: every number is gateCheck for Zach.',
-    sourceNote: 'Hoard of Heroes is third-party/homebrew (Zach: ABSOLUTELY NECESSARY, plan section 13). Mechanics paraphrased in the app\'s own wording from the Hoard extract; never verbatim book prose. ORIGIN JUDGMENT, flagged for Zach: the source places this tradition with the sea elves of the coast of Deva\'lamirusandia — a Hoard-invented place, not a Forgotten Realms place — so it is carried as a non-FR origin and validateSelection requires an origin explanation for its holder. If Zach wants Deva\'lamirusandia treated as a FR coast instead, flip origin_setting/origin_region to Forgotten Realms.',
+    sourceNote: 'Hoard of Heroes is third-party/homebrew (Zach: ABSOLUTELY NECESSARY, plan section 13). Mechanics paraphrased in the app\'s own wording from the Hoard extract; never verbatim book prose. ORIGIN JUDGMENT, flagged for Zach: the source places this tradition with the sea elves of the coast of Deva\'lamirusandia — a Hoard-invented place, not a Forgotten Realms place — so it is carried as a non-FR origin label. No subclass needs an origin explanation ("a class is a class", Zach 2026-11-12). If Zach wants Deva\'lamirusandia treated as a FR coast instead, flip origin_setting/origin_region to Forgotten Realms.',
     features: [
       {
         key: 'waves_bonus_proficiencies',

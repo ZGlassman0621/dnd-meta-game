@@ -8,9 +8,9 @@
  * NO NPC/DM guidance, NO multiclass rules (see duelistService header).
  *
  * origin_setting / origin_region are null: the Overview states NO setting,
- * and inventing one would corrupt the outside-FR explanation check either way.
- * Coordinator must decide how validateSelection treats null (recommendation:
- * FR-neutral) before these entries gate. sourceTier 'fan' is this batch's label
+ * and none is invented. The origin is an informational label only; no subclass
+ * needs an origin explanation ("a class is a class", Zach 2026-11-12).
+ * sourceTier 'fan' is this batch's label
  * for Fan Content material; no existing tier vocabulary for it was found in
  * the survey — coordinator to confirm.
  *

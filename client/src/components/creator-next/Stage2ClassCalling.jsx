@@ -457,8 +457,9 @@ export default function Stage2ClassCalling({
   }
   const pickSubclass = (name) => {
     prevGrantedRef.current = []
-    // A new subclass is a new tradition — its origin explanation is
-    // written for the old one, so it clears with the pick.
+    // subclassOriginExplanation is stored but unused (no subclass needs an
+    // origin explanation, Zach 2026-11-12); it is per-subclass, so it
+    // clears with the pick. The queued calling question reuses it.
     update({ subclassName: name, subclassChoices: {}, knownCantrips: [], subclassOriginExplanation: '' })
   }
   const setChoice = (key, value) => update({

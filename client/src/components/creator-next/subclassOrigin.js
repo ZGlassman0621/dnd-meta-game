@@ -7,11 +7,10 @@
  * comes from, rendered IN ADDITION to the subclass description, only
  * for non-FR/null origins. It is informational: per Zach's ruling
  * 2026-11-12 ("a class is a class"), no subclass needs an origin
- * explanation, and the creator commit enforces only validateSelection's
- * found + level halves.
+ * explanation; at commit the server checks only that the subclass
+ * exists and its selection level.
  *
- * Rules (mirror server/services/subclassService.js formatSubclassOrigin
- * + isOutsideFr):
+ * Rules (mirror server/services/subclassService.js formatSubclassOrigin):
  * - Forgotten Realms → '' (no suffix).
  * - Null/empty origin_setting → 'unspecified setting' (the text
  *   formatSubclassOrigin already produces).

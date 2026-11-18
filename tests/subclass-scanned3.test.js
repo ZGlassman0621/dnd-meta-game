@@ -10,8 +10,8 @@
 // labeled as it is, concepts intact, NOT reskinned (dunamis, Kryn
 // Dynasty, Ravnica guilds, Theros all stay as themselves). Every S3
 // entry carries origin_setting/origin_region outside the Forgotten
-// Realms, and validateSelection must treat a blank origin
-// explanation for these as incomplete — asserted in group 7.
+// Realms as an informational label. They need NO origin explanation:
+// "a class is a class" (Zach, 2026-11-12) — asserted in group 7.
 //
 // CONVERSION NOTE: Wildemount is 2020-era, Ravnica/Theros are
 // 2019/2020-era. No 2024 reprint exists for any S3 subclass, so
@@ -189,11 +189,11 @@ ok(ss.validateChoice('cleric', 'Order Domain', 'order_bonus_skill', 'Persuasion'
 ok(ss.validateChoice('cleric', 'Order Domain', 'order_bonus_skill', 'persuasion').valid, 'Order bonus skill validation is normalized');
 ok(!ss.validateChoice('cleric', 'Order Domain', 'order_bonus_skill', 'Stealth').valid, 'Stealth is not an Order bonus skill');
 for (const [cls, name] of S3) {
-  ok(!ss.validateSelection({ className: cls, subclassName: name, level: 3, originExplanation: '' }).complete, `${name} with blank origin explanation is incomplete (outside-FR)`);
-  ok(ss.validateSelection({ className: cls, subclassName: name, level: 3, originExplanation: 'Arrived in the Forgotten Realms by a portal mishap.' }).complete, `${name} with an origin explanation is complete`);
-  ok(!ss.validateSelection({ className: cls, subclassName: name, level: 2, originExplanation: 'Arrived in the Forgotten Realms by a portal mishap.' }).complete, `${name} at level 2 is incomplete (selection is 3rd)`);
+  const sel = ss.validateSelection({ className: cls, subclassName: name, level: 3 });
+  ok(sel.complete && sel.reasons.length === 0, `${name} (outside-FR origin) at level 3 is complete with no origin explanation`);
+  ok(!ss.validateSelection({ className: cls, subclassName: name, level: 2 }).complete, `${name} at level 2 is incomplete (selection is 3rd)`);
 }
-ok(ss.validateSelection({ className: 'fighter', subclassName: 'Champion', level: 3, originExplanation: '' }).complete, 'Forgotten Realms subclass still needs no origin explanation');
+ok(ss.validateSelection({ className: 'fighter', subclassName: 'Champion', level: 3 }).complete, 'Forgotten Realms subclass is complete with no origin explanation');
 
 group('8. Prompt-contains (origin labels, no reskin, no invented features)');
 {

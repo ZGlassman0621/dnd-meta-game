@@ -2485,10 +2485,9 @@ export async function validateCreatorNextStage6(merged = {}, ctx = {}) {
     // callers — displayed, never enforced). The level is the stored
     // row's (1 for a fresh draft; an edit-mode commit keeps its real
     // level, so a level-5 character's level-3 subclass passes). Only
-    // the found + level halves are enforced: Zach's ruling 2026-11-12,
-    // "a class is a class" — no subclass, from any setting, needs an
-    // origin explanation, so validateSelection's origin reason is
-    // ignored here.
+    // validateSelection checks only that the subclass exists and its
+    // selection level: Zach's ruling 2026-11-12, "a class is a class" —
+    // no subclass, from any setting, needs an origin explanation.
     if (subclass && isClassPcCreatable(cls) && isSubclassPcCreatable(cls, subclass)) {
       const selLevel = Number(row?.level) || 1;
       const sel = validateSelection({ className: cls, subclassName: subclass, level: selLevel });
@@ -4606,8 +4605,9 @@ router.put('/:id', async (req, res) => {
       // Creator-next Stage 1 (migration 105) — origin facts, so Stage 1
       // draft PUTs persist instead of being silently dropped.
       'origin_setting', 'origin_region', 'origin_explanation',
-      // Creation-solidification item 5 (migration 114) — the SUBCLASS's
-      // origin explanation (outside-FR subclasses, validateSelection).
+      // Migration 114 — subclass_origin_explanation. Stored but unused:
+      // no subclass needs an origin explanation (Zach, 2026-11-12). The
+      // column and its plumbing are kept for the queued calling question.
       'subclass_origin_explanation',
       // Phase 3.3 SC-7.6.5 (v1.0.162) — player-tunable survival intensity
       // per spec §3.3.10. Validated against the four-value enum below;
@@ -4725,8 +4725,9 @@ router.put('/:id', async (req, res) => {
 
     // Artificer base class: the creator's origin explanation is not a
     // column, so it bypasses the allowlist and merges into
-    // class_resources_json.artificer.origin (Eberron/Khorvaire, per the
-    // outside-FR ruling). Only when the resulting class is artificer;
+    // class_resources_json.artificer.origin (Eberron/Khorvaire). It is an
+    // optional record: no class or subclass needs an origin explanation
+    // ("a class is a class", Zach 2026-11-12). Only when the resulting class is artificer;
     // other classes silently ignore the field. Counts as an update so
     // a progress PUT carrying only this field is not a validation error.
     let originMerged = false;

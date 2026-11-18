@@ -223,7 +223,7 @@ export const ARTIFICER_SUBCLASSES = [
     origin_setting: 'Eberron',
     origin_region: 'Eberron',
     gateCheckRequired: true,
-    sourceNote: 'Job 1 (2026-11-07): full Forge feature set, authored from subclass-sources/forge-artificer/forge-artificer.txt and paraphrased in the app\'s own wording. Forge governs per the settled Forge-wins decision. Prior source was Tasha\'s Cauldron of Everything (spells-only entry, 2026-11-06, which named the features Armor Modifications / Armor Specialization — Forge prints Improved Armorer / Perfected Armor with the three-model Dreadnaught / Guardian / Infiltrator set). The always-prepared list is unchanged (Forge and Tasha\'s agree). Every level and number is gateCheck for Zach against the Forge book. Micro-push #4 (2026-11-08): origin corrected to Eberron per Zach (2026-11-08) — artificers are Eberron-origin; a holder in the Forgotten Realms records an origin explanation under the outside-FR ruling (no reskin).',
+    sourceNote: 'Job 1 (2026-11-07): full Forge feature set, authored from subclass-sources/forge-artificer/forge-artificer.txt and paraphrased in the app\'s own wording. Forge governs per the settled Forge-wins decision. Prior source was Tasha\'s Cauldron of Everything (spells-only entry, 2026-11-06, which named the features Armor Modifications / Armor Specialization — Forge prints Improved Armorer / Perfected Armor with the three-model Dreadnaught / Guardian / Infiltrator set). The always-prepared list is unchanged (Forge and Tasha\'s agree). Every level and number is gateCheck for Zach against the Forge book. Micro-push #4 (2026-11-08): origin corrected to Eberron per Zach (2026-11-08) — artificers are Eberron-origin; it is not reskinned, and no origin explanation is needed ("a class is a class", Zach 2026-11-12).',
     features: [
       {
         key: 'tools_of_the_trade',
@@ -527,7 +527,7 @@ export const ARTIFICER_SUBCLASSES = [
     origin_setting: 'Eberron',
     origin_region: 'Eberron',
     gateCheckRequired: true,
-    sourceNote: 'Job 1 (2026-11-07): full Forge feature set, authored from subclass-sources/forge-artificer/forge-artificer.txt and paraphrased in the app\'s own wording. The prior spells-only entry (2026-11-06) listed these features as not yet in the server registry; they are now built. The always-prepared list is unchanged (Forge, incl. three spells at 3rd level). Every level and number is gateCheck for Zach against the Forge book. Micro-push #4 (2026-11-08): origin corrected to Eberron per Zach (2026-11-08) — artificers are Eberron-origin; a holder in the Forgotten Realms records an origin explanation under the outside-FR ruling (no reskin).',
+    sourceNote: 'Job 1 (2026-11-07): full Forge feature set, authored from subclass-sources/forge-artificer/forge-artificer.txt and paraphrased in the app\'s own wording. The prior spells-only entry (2026-11-06) listed these features as not yet in the server registry; they are now built. The always-prepared list is unchanged (Forge, incl. three spells at 3rd level). Every level and number is gateCheck for Zach against the Forge book. Micro-push #4 (2026-11-08): origin corrected to Eberron per Zach (2026-11-08) — artificers are Eberron-origin; it is not reskinned, and no origin explanation is needed ("a class is a class", Zach 2026-11-12).',
     features: [
       {
         key: 'tools_of_the_trade',

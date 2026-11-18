@@ -11,10 +11,10 @@
  *
  * Entry shape follows server/data/subclasses/fighter.js. Origin:
  * no setting is printed for this homebrew class, so origin_setting /
- * origin_region are null — under subclassService.isOutsideFr that
- * reads as outside-FR, i.e. an origin explanation is required at
- * selection. That is deliberate: do not silently default a homebrew
- * class to the Forgotten Realms. gateCheckRequired is true because
+ * origin_region are null (shown as 'unspecified setting'). That is
+ * deliberate: do not silently default a homebrew class to the Forgotten
+ * Realms. No subclass needs an origin explanation ("a class is a class", Zach 2026-11-12).
+ * gateCheckRequired is true because
  * the source-PDF re-check (Arcane Tinkerer, two-column spell list)
  * is still pending.
  * Kinds follow the existing registry letters: B = resource pool,

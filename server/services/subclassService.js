@@ -36,9 +36,10 @@
  * were already in the index).
  * Scanned Batch S3 adds outside-FR scanned subclasses (Wildemount
  * 3, Ravnica 2, Theros Eloquence 1 — 6 new, registry 75 -> 81).
- * Outside-FR entries carry origin_setting/origin_region and require
- * an origin explanation (validateSelection already enforces this);
- * concepts are kept as themselves, not reskinned (plan section 12).
+ * Outside-FR entries carry origin_setting/origin_region as an
+ * informational label; no subclass needs an origin explanation
+ * ("a class is a class", Zach 2026-11-12). Concepts are kept as
+ * themselves, not reskinned (plan section 12).
  * No new class file is indexed (all five classes were already in
  * the index).
  * Scanned Batch S4 adds Hoard of Heroes (third-party/homebrew,
@@ -248,16 +249,11 @@ export function featuresAtLevel(className, subclassName, level) {
     .sort((a, b) => Number(a.level) - Number(b.level));
 }
 
-export function isOutsideFr(entry) {
-  if (!entry) return false;
-  return entry.origin_setting !== 'Forgotten Realms';
-}
-
 // Render an entry's origin for reason/prompt messages. Null/unspecified
 // origins (Warden, Scholar, and other outside-FR entries with no setting
 // printed) render as 'unspecified setting' — never 'null (null)'. The
-// null itself stays in the data: an unspecified origin still requires an
-// explanation at selection, per the outside-FR ruling.
+// null itself stays in the data. The origin is an informational label:
+// no subclass needs an origin explanation (Zach, 2026-11-12).
 export function formatSubclassOrigin(entry) {
   if (!entry) return 'unspecified setting';
   if (entry.origin_setting === 'Forgotten Realms') return 'Forgotten Realms';
@@ -274,16 +270,14 @@ export function formatSubclassOrigin(entry) {
 }
 
 /**
- * Selection completeness, per plan section 12 (outside-FR ruling):
+ * Selection completeness:
  * - subclass must exist in the registry
  * - level must be at or above the selection level
- * - an outside-FR subclass with a blank origin explanation is
- *   INCOMPLETE, the same as a choice feature with no stored choice
- * - a Forgotten Realms subclass never needs an explanation, so a
- *   blank explanation does not block it
+ * A subclass's origin never affects completeness: no subclass, from any
+ * setting, needs an origin explanation ("a class is a class", Zach 2026-11-12).
  * Returns { found, complete, reasons } — reasons is empty when complete.
  */
-export function validateSelection({ className, subclassName, level, originExplanation } = {}) {
+export function validateSelection({ className, subclassName, level } = {}) {
   const reasons = [];
   const entry = getSubclass(className, subclassName);
   if (!entry) {
@@ -292,11 +286,6 @@ export function validateSelection({ className, subclassName, level, originExplan
   const l = Number(level) || 0;
   if (l < Number(entry.selectionLevel || 0)) {
     reasons.push(`${entry.name} is selected at ${entry.selectionLevel}th level (actor is level ${l})`);
-  }
-  if (isOutsideFr(entry) && !String(originExplanation || '').trim()) {
-    reasons.push(
-      `${entry.name} comes from ${formatSubclassOrigin(entry)} and needs an origin explanation for how its holder came to be in the Forgotten Realms`
-    );
   }
   return { found: true, complete: reasons.length === 0, reasons };
 }
@@ -1341,9 +1330,9 @@ function sectionForActor(actor) {
   }
   const feats = featuresAtLevel(actor.className, actor.subclassName, actor.level);
   const lines = feats.map((f) => `  L${f.level} ${f.prompt}`);
-  const origin = entry.origin_setting === 'Forgotten Realms'
-    ? 'Forgotten Realms'
-    : `${formatSubclassOrigin(entry)} — origin explanation required`;
+  // Informational origin label only — no subclass needs an origin
+  // explanation ("a class is a class", Zach 2026-11-12).
+  const origin = formatSubclassOrigin(entry);
   return [
     `${actor.isCompanion ? 'Companion' : 'Player'} ${actor.name}: ${entry.name} (${actor.className}, level ${actor.level}, origin: ${origin})`,
     ...lines,
@@ -1522,7 +1511,6 @@ export default {
   listSubclasses,
   getSubclass,
   featuresAtLevel,
-  isOutsideFr,
   validateSelection,
   validateChoice,
   critThresholdFor,

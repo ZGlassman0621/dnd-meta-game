@@ -154,7 +154,7 @@ for (const [cls, name] of S5) {
   ok(e.features.every((f) => f.kind && f.prompt && f.gateCheck === true), `${name} every feature has a kind, a prompt, and gateCheck`);
   ok(e.features.every((f) => ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].includes(f.kind)), `${name} every feature kind is in the plan taxonomy`);
   ok(!ss.validateSelection({ className: cls, subclassName: name, level: 2 }).complete, `${name} at level 2 is incomplete (selection is 3rd)`);
-  ok(ss.validateSelection({ className: cls, subclassName: name, level: 3, originExplanation: '' }).complete, `${name} at level 3 with no explanation is complete (FR origin)`);
+  ok(ss.validateSelection({ className: cls, subclassName: name, level: 3 }).complete, `${name} at level 3 with no explanation is complete (FR origin)`);
 }
 
 group('4. Features at level');
