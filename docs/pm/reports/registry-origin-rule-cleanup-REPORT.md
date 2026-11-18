@@ -11,7 +11,15 @@ On 2026-11-12 Zach ruled "a class is a class": no subclass, from any setting, ne
 
 **Where my understanding differs from the brief:**
 1. **More residue than the brief listed.** Besides `validateSelection`, about 9 test files and the fighter/spellshot/warden comments, the live repo had: the **DM prompt still telling the AI "origin explanation required"** after every outside-FR subclass (`subclassService.js:1346`); a now-uncalled helper `isOutsideFr`; the same "no origin explanation required … later outside-FR batches" comment in eight more class files; five more subclass files (blackguard, blood hunter, duelist, magus, pugilist, scholar) whose comments said the validator would demand an explanation; and two registry `sourceNote` strings (artificer ×2, monk). All fixed (fix-as-you-find-it).
-2. **One sibling at class level, flagged for your veto.** The DM prompt told the AI that every Artificer's "origin explanation [is] REQUIRED, not yet recorded" (`artificerService.js:586`). That is the same defect one level up: an Artificer's class origin (Eberron) explanation that nothing enforces and the client never sends. I removed the "REQUIRED" text and kept the recorded explanation when one exists. See Decision 3.
+2. **One sibling at class level — now ruled on by Zach.** The DM prompt told the AI that every Artificer's "origin explanation [is] REQUIRED, not yet recorded" (`artificerService.js:586`). That is the same defect one level up: an Artificer's class origin (Eberron) explanation that nothing enforces and the client never sends. I removed the "REQUIRED" text and kept the recorded explanation when one exists. **Zach confirmed this on 2026-11-17: "No, Artificer doesn't need an explanation."** This is Zach's choice, not a builder call; see "Zach's ruling on the Artificer" below.
+
+## Zach's ruling on the Artificer (2026-11-17) — for Muse
+**Ruling (Zach, 2026-11-17, in chat after this job): "No, Artificer doesn't need an explanation."** The Artificer *class*, which is Eberron in origin, needs no explanation of how its holder came to the Forgotten Realms, exactly like every subclass under the 2026-11-12 "a class is a class" ruling. This is Zach's decision. It is not open for the PM to reverse, and it is not one of this job's reversible builder calls. The change it settles is already built (the Artificer DM-prompt line no longer says an explanation is required). The optional storage path (`class_resources_json.artificer.origin`) stays and still prints a recorded explanation if one exists.
+
+**What Muse needs to change in plan §12 (workspace, PM-owned):**
+1. **Remove the explanation requirement entirely.** No subclass from any setting needs an origin explanation (Zach, 2026-11-12), and the Artificer class does not either (Zach, 2026-11-17).
+2. **Keep the no-reskin rule.** Settings stay as themselves (Theros, Ravnica, Wildemount, Eberron and so on are not reskinned into Forgotten Realms material). Repo text still cites §12 for that part (Item 4 below), so that half must stay in §12.
+3. **Keep the character's own Stage 1 origin explanation.** A character whose origin setting is outside the Forgotten Realms is still asked how *they* came to the Realms. That is unchanged and separate from §12's subclass rule.
 
 ## Verdict
 **BUILT + GREEN** on the builder's run (Files 245/245 green, assertions 19,556 passed, 0 failed). Not a gate: Zach's own `npm test` and the `:5173` checks gate it.
@@ -66,7 +74,7 @@ Search run over `server/`, `client/src/`, `tests/`, `scripts/` and root `*.md` (
 ## Item 4 — the ruling text, and plan §12 pointers
 Each corrected site now says, in one line, that the origin is an informational label and that no subclass needs an origin explanation ("a class is a class", Zach 2026-11-12), keeping any still-true meaning (for example "do not silently flip this to Forgotten Realms", now "the label would lie").
 
-**Repo text that still points at plan §12, for Muse** (not edited; the workspace doc is PM-owned). These cite §12 for the part of the old ruling that still stands, **settings kept as themselves, not reskinned**, not for the explanation requirement: `server/services/subclassService.js` S3 header ("not reskinned (plan section 12)"), `tests/subclass-scanned3.test.js:9` ("OUTSIDE-FR RULING (Zach, plan section 12): … NOT reskinned"), and the `conversionCheck` strings in `bard.js:467`, `cleric.js:597`, `druid.js:574`, `fighter.js:663`, `wizard.js:450, 515`. **Muse should correct plan §12 in the workspace** to drop the explanation requirement and keep the no-reskin rule, so these pointers stay accurate.
+**Repo text that still points at plan §12, for Muse** (not edited; the workspace doc is PM-owned). These cite §12 for the part of the old ruling that still stands, **settings kept as themselves, not reskinned**, not for the explanation requirement: `server/services/subclassService.js` S3 header ("not reskinned (plan section 12)"), `tests/subclass-scanned3.test.js:9` ("OUTSIDE-FR RULING (Zach, plan section 12): … NOT reskinned"), and the `conversionCheck` strings in `bard.js:467`, `cleric.js:597`, `druid.js:574`, `fighter.js:663`, `wizard.js:450, 515`. **Muse should correct plan §12 in the workspace** as set out in "Zach's ruling on the Artificer" above: drop the explanation requirement for every subclass and for the Artificer class, and keep the no-reskin rule, so these pointers stay accurate.
 
 ## Zero-hits check
 **Dead-rule search terms** (`grep -rnIE`, same exclusions as the survey, plus `server/migrations/` reported separately): `needs an origin explanation for how`, `origin explanation required`, `origin explanation is required`, `origin explanation REQUIRED`, `requires? an origin explanation`, `requiring an origin explanation`, `require an explanation`, `outside-FR ruling`, `outside-FR rule`, `outside-FR explanation`, `explanation requirement`, `fail-closed per the outside`, `isOutsideFr`, `originExplanation: '' }`, `subclassNeedsOriginExplanation`, `validateSelection treats`.
@@ -138,18 +146,18 @@ A player who picks a Warlord, or any subclass from outside the Forgotten Realms,
 
 ## Not done / still open
 - **`:5173` click-through:** not done by me (no browser). Route-level tests cover the same behavior (above); steps for Zach are below.
-- **Plan §12 in Muse's workspace** still states the reversed rule (see Item 4). Muse corrects it.
+- **Plan §12 in Muse's workspace** still states the reversed rule. Muse corrects it as set out in "Zach's ruling on the Artificer" (near the top).
 - Cost and usage against the $30/month cap: not measurable from inside the session.
 
 ## Decisions made (reversible, for veto)
 1. **Kept `validateSelection`**, removing only the origin half, because the commit path still uses it for existence and selection level. Reversal: restore the parameter and check from commit `329f534` (the head before this job; a few lines).
 2. **Deleted `isOutsideFr`** (no caller left). Reversal: four lines; restore from git.
-3. **Removed "origin explanation REQUIRED" from the Artificer DM-prompt line.** The ruling was spoken about subclasses; I applied it to the Artificer *class* origin because "a class is a class", nothing enforces that explanation, and the client never sends it. The storage path (`class_resources_json.artificer.origin`) is unchanged, and a recorded explanation is still printed. **If Zach or Muse wants the AI to keep prompting for an Artificer's origin, revert this one line** (`server/services/artificerService.js:586`) and the matching assertion in `tests/artificer-class.test.js`.
+3. **Removed "origin explanation REQUIRED" from the Artificer DM-prompt line.** I made this call during the build; **Zach then confirmed it on 2026-11-17** ("No, Artificer doesn't need an explanation"), so it is now Zach's ruling, not a reversible builder decision. The storage path (`class_resources_json.artificer.origin`) is unchanged, and a recorded explanation is still printed.
 4. **Corrected comments to state the ruling** rather than deleting them where they carried other meaning (for example, "do not silently flip a homebrew class to the Forgotten Realms" stays).
 5. **Version bump to 1.0.199** (the DM prompt text changes, so the app changes). Reversal: two lines.
 
 ## Needs Zach's decision
-1. **Should the AI still be told an Artificer's arrival from Eberron needs explaining?** Until today the DM prompt said "origin explanation REQUIRED, not yet recorded" for every Artificer, though the game never asks for one. I removed that line as part of "a class is a class" (Decision 3). Keep the removal, or restore the prompt? I checked: the creator never sends the field (`artificer_origin_explanation` has no client sender), and nothing refuses a commit without it.
+None open. The one question this job raised (does the Artificer need an origin explanation?) was answered by Zach on 2026-11-17: **no** (see "Zach's ruling on the Artificer"). Zach's remaining part is the gate.
 
 ## How to verify
 **Gate:** `npm test` on the PC (expect 245 files).
