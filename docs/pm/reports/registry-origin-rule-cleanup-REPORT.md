@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Opus 5.5). Brief: `docs/pm/registry-origin-rule-cleanup/BRIEF.md`.
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version 1.0.198 → **1.0.199**.
-Commit: (recorded in a follow-up commit; see `git log`).
+Commit: `969bd6e` (the build); a follow-up commit adds this line.
 
 ## Understanding
 The project is a solo D&D 2024 "forever game": one human player character; the DM, NPCs, companions and enemies are played by an AI (gemma4:12b on the PC). The six-stage creator builds the character.
