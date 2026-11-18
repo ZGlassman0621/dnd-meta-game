@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Opus 5.5). Brief: `docs/pm/s1-campaign-at-creation/BRIEF.md`.
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version 1.0.199 → **1.0.200**.
-Commit: (recorded in a follow-up commit; see `git log`).
+Commit: `ee70403` (the build); a follow-up commit adds this line.
 
 ## Understanding
 The project is a solo D&D 2024 "forever game": one human player character; the DM, NPCs, companions and enemies are played by an AI (gemma4:12b on the PC) in a persistent world. A campaign is what holds that world for a character: session memory (the chronicle), the shops, and the calendar.
